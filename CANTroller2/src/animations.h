@@ -638,7 +638,7 @@ class AnimationManager {
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
     }
-    void init(LGFX* _lgfx, Simulator* _sim, Touchscreen* _touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
+    void setup(LGFX* _lgfx, Simulator* _sim, Touchscreen* _touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
         Serial.printf("  animations init ..");
         mylcd = _lgfx;
         sim = _sim;
@@ -646,17 +646,15 @@ class AnimationManager {
         set_vp(_cornerx, _cornery, _sprwidth, _sprheight);
         _width = vp.w << SHIFTSIZE;
         _height = vp.h << SHIFTSIZE;
+        Serial.printf(" screensavers .. ");
+        eSaver.setup(&framebuf[flip], &vp);
+        cSaver.setup(&framebuf[flip], &vp);
+        Serial.printf("set up\n");
     }
     void reset() {
         if (nowsaver == Eraser) eSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
         else if (nowsaver == Collisions) cSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
         anim_reset_request = false;
-    }
-    void setup() {
-        Serial.printf(" screensavers .. ");
-        eSaver.setup(&framebuf[flip], &vp);
-        cSaver.setup(&framebuf[flip], &vp);
-        Serial.printf("set up\n");
     }
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint8_t color) {
         if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32x32x8, BLK);

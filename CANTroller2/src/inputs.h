@@ -67,7 +67,10 @@ class MomentaryButton {
     }
     bool shortpress() {  // code may call this to check for short press and if so act upon it. Resets the long press if asserted
         bool ret = (_sw_action == swSHORT);
-        if (ret) _sw_action = swNONE;
+        if (ret) {
+            _sw_action = swNONE;
+            if (run.mode == ASLEEP) sleep_request - REQ_ON;
+        }
         return ret;
     }
     void setup(int pin = -1) {

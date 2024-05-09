@@ -134,8 +134,8 @@ class Display {
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
     bool fullscreen_last = false;
+    int runmode_last = -1;
   public:
-    volatile int nowmode = SHUTDOWN;   // So we can tell when  the mode has just changed. start as different to trigger_mode start algo    
     std::string disp_values[disp_lines];  // Holds previously drawn value strings for each line
     volatile bool disp_bool_values[6];
     volatile bool disp_bargraphs[disp_lines];
@@ -211,10 +211,10 @@ class Display {
         for (int32_t row=0; row<arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
         for (int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
         for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
-        yield();
+        datapage = prefs.getUInt("dpage", PG_RUN);
+        datapage_last = prefs.getUInt("dpage", PG_TEMP);
         init_framebuffers(disp_width_pix, disp_height_pix);
-        animations.init(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
-        animations.setup();
+        animations.setup(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         sprptr = &framebuf[flip];
         reset_request = true;
         Serial.printf("  display initialized\n");
@@ -618,8 +618,8 @@ class Display {
     }
     void disp_menu_bools() {
         // if (!disp_bools_dirty) return;
-        draw_bool((nowmode == CAL), 2, disp_bools_dirty);
-        draw_bool((nowmode == BASIC), 3, disp_bools_dirty);
+        draw_bool((run.mode == CAL), 2, disp_bools_dirty);
+        draw_bool((run.mode == BASIC), 3, disp_bools_dirty);
         draw_bool(ignition.signal, 4, disp_bools_dirty);
         draw_bool(syspower, 5, disp_bools_dirty);
         disp_bools_dirty = false;
@@ -791,23 +791,24 @@ class Display {
         disp_values_dirty = false;
     }
   public:
-    void update(int _nowmode = -1) {
-        if (_nowmode >= 0) nowmode = _nowmode;
-    }
     bool draw_all(LGFX_Sprite* spr) {
         if (reset_request) reset(spr);
         if (!display_enabled) return false;
+        if (run.mode == ASLEEP && (run.can_run_autosaver != auto_saver_enabled)) auto_saver(run.can_run_autosaver);
         if (!auto_saver_enabled) {
             tiny_text();
             update_idiots(disp_idiots_dirty);
             if (disp_datapage_dirty) draw_datapage(datapage, datapage_last, true);
             if (disp_sidemenu_dirty) draw_touchgrid(false);
             if (disp_selected_val_dirty) draw_selected_name(tunctrl, sel_val, sel_val_last, sel_val_last_last);
-            if (disp_runmode_dirty) draw_runmode(nowmode, NON);
-            if (disp_values_dirty || valuesRefreshTimer.expireset()) {
+            
+            if (run.mode != runmode_last) disp_runmode_dirty = true;
+            if (disp_values_dirty || disp_runmode_dirty || valuesRefreshTimer.expireset()) {
                 disp_menu_bools();
                 disp_datapage_values();
             }
+            if (disp_runmode_dirty) draw_runmode(run.mode, NON);
+            runmode_last = run.mode;            
         }
         fps = animations.update(spr, disp_simbuttons_dirty);
         disp_simbuttons_dirty = false;

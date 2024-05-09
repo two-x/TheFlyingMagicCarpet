@@ -171,8 +171,6 @@ class ToggleSwitch {
         if (last != val) kick_inactivity_timer(8);
     }
 };
-ToggleSwitch basicsw(basicsw_pin, sens::basicsw);
-
 class Ignition {
   private:
     int ign_req = REQ_NA, panic_req = REQ_NA, pin;
@@ -219,8 +217,6 @@ class Ignition {
         panic_req = ign_req = REQ_NA;  // cancel outstanding requests
     }
 };
-static Ignition ignition(ignition_pin);
-
 class Starter {
   private:
     uint32_t pushbrake_timeout = 6000000;
@@ -276,6 +272,9 @@ class Starter {
     }
     // src source() { return pin_outputting ? src::CALC : src::PIN; }
 };
+
+static ToggleSwitch basicsw(basicsw_pin, sens::basicsw);
+static Ignition ignition(ignition_pin);
 static Starter starter(starter_pin);
 
 class FuelPump {  // drives power to the fuel pump when the engine is turning
@@ -358,18 +357,21 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
         }
     }
 };
+
 static FuelPump fuelpump(tp_cs_fuel_pin);
+
 #include "diag.h"
 static LoopTimer looptimer;
-#include "web.h"
-static WebManager web(&looptimer);
 static BootMonitor watchdog(&prefs, &looptimer);
-static SdCard sdcard;
 static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition);
 
-#include "display.h"  // includes neopixel.h, touch.h
+#include "web.h"
+static WebManager web(&looptimer);
+
 #include "runmodes.h"
-static RunModeManager run(&screen, &encoder);
+static RunModeManager run;
+
+#include "display.h"  // includes neopixel.h, touch.h
 
 void update_web(void *parameter) {
     while (true) {

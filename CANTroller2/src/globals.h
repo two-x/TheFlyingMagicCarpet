@@ -63,24 +63,7 @@
 #define tft_rst_pin -1     // tft reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
 #define tft_ledk_pin -1    // output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
 #define touch_irq_pin -1   // input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - set to 255 if not used
-// bm2023 pins: tft_dc_pin 3, onewire_pin 19, hotrc_ch3_pin 20, hotrc_ch4_pin 21, tach_pin 36, ignition_pin 37, syspower_pin 38, encoder_b_pin 40, encoder_a_pin 41, encoder_sw_pin 42, starter_pin 45, sdcard_cs_pin 46, touch_cs_pin 47
-#if USE_BM23_PINS          // for testing using box from bm23, override new pin assignments with old ones
-#define steer_enc_a_pin 1  // not used in bm23, but moving to an unused pin
-#define steer_enc_b_pin 2  // not used in bm23, but moving to an unused pin
-#define tft_dc_pin 3
-#define onewire_pin 19
-#define hotrc_ch3_pin 20`
-#define hotrc_ch4_pin 21
-#define tach_pin 36
-#define ignition_pin 37
-#define syspower_pin 38
-#define encoder_b_pin 40
-#define encoder_a_pin 41
-#define encoder_sw_pin 42
-#define starter_pin 45
-#define sdcard_cs_pin 46
-#define tp_cs_fuel_pin 47
-#endif
+// bm2023 box compatibility: steer_enc_a_pin 1, steer_enc_b_pin 2, tft_dc_pin 3, onewire_pin 19, hotrc_ch3_pin 20, hotrc_ch4_pin 21, tach_pin 36, ignition_pin 37, syspower_pin 38, encoder_b_pin 40, encoder_a_pin 41, encoder_sw_pin 42, starter_pin 45, sdcard_cs_pin 46, tp_cs_fuel_pin 47
 
 #define adcbits 12
 #define adcrange_adc 4095     // = 2^adcbits-1

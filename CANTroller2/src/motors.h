@@ -628,17 +628,17 @@ class BrakeMotor : public JagMotor {
     }
     void set_pidtarg(float targ_pc) {  // pass in desired brake target as an overall percent, will set pressure and position pid targets consistent with current configuration
         pid_targ_pc = targ_pc;
-
-        // This all was a mistake - we don't want to apply hybrid ratio to target settings (right?)
+        pids[PressurePID].set_target(pressure->min_human() + pid_targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
+        pids[PositionPID].set_target(brkpos->min_human() + (100.0 - pid_targ_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0);        
+    }
+        // // These old set_pidtarg() contents are just a mistake - we don't want to apply hybrid ratio to target settings (right?)
+        // pid_targ_pc = targ_pc;
         // if (brake_linearize_target_extremes) hybrid_targ_ratio = pid_targ_pc / 100.0;
         // else hybrid_targ_ratio = calc_hybrid_ratio(pressure_pc_to_si(pid_targ_pc));
         // pids[PressurePID].set_target(pressure->min_human() + hybrid_targ_ratio * (pressure->max_human() - pressure->min_human()));
         // pids[PositionPID].set_target(brkpos->min_human() + (1.0 - hybrid_targ_ratio) * (brkpos->max_human() - brkpos->min_human()));
-        // hybrid_targ_ratio_pc = 100.0 * hybrid_targ_ratio;  // for display
+        // hybrid_targ_ratio_pc = 100.0 * hybrid_targ_ratio;  // for display        
         
-        pids[PressurePID].set_target(pressure->min_human() + pid_targ_pc * (pressure->max_human() - pressure->min_human()) / 100.0);
-        pids[PositionPID].set_target(brkpos->min_human() + (100.0 - pid_targ_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0);        
-    }
     void pid_out() {  // returns motor output percent calculated using dynamic combination of position and pressure influence
         hybrid_out_ratio = calc_hybrid_ratio(pressure->filt());  // calculate pressure vs. position multiplier based on the sensed values
         hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display

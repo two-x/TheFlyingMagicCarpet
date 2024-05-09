@@ -6,22 +6,15 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     Timer gestureFlyTimer{1250000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
     Timer pwrup_timer{1500000};  // Timeout when parking motors if they don't park for whatever reason (in us)
     Timer shutdown_timer{5000000};
-    Encoder* encoder;
-    Display* display;
     int oldmode = ASLEEP, last_conscious_mode;
     bool still_interactive = true;
     uint32_t initial_inactivity;
   public:
     int mode = SHUTDOWN;
     bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
-    bool joy_centered = false;  // minor state variable for hold mode
-    RunModeManager(Display* _display, Encoder* _encoder) {
-        display = _display;
-        encoder = _encoder;
-    }
-    void setup() {  // we don't really need to set up anything, unless we need to recover to a specific runmode after crash
-        mode = watchdog.boot_to_runmode;
-    }
+    bool joy_centered = false, can_run_autosaver = false;
+    RunModeManager() {}
+    void setup() { mode = watchdog.boot_to_runmode; }  // we don't really need to set up anything, unless we need to recover to a specific runmode after crash
     int mode_logic() {
         if (mode != ASLEEP && mode != CAL) {
             if (basicsw.val) mode = BASIC;  // if basicmode switch on --> Basic Mode
@@ -29,10 +22,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (tach.engine_stopped()) mode = STALL;  // otherwise if engine not running --> Stall Mode
         }
         we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
-        if (we_just_switched_modes) {
-            display->disp_runmode_dirty = true;
-            cleanup_state_variables();
-        }
+        if (we_just_switched_modes) cleanup_state_variables();
         oldmode = mode;        
         // common to almost all the modes, so i put it here
         if (mode != ASLEEP) {
@@ -63,7 +53,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (oldmode == FLY) car_hasnt_moved = false;
         else if (oldmode == CRUISE) cruise_adjusting = false;
         else if (oldmode == CAL) cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;
-        display->disp_bools_dirty = true;
     }
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {
@@ -72,7 +61,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(OpenLoop);
             powering_up = basicmode_request = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from asleep mode
             watchdog.set_codestatus(Parked);
-            display->disp_bools_dirty = true;
         }
         if (hotrc.sw_event(CH4) && !ignition.signal) mode = ASLEEP;
         if (!basicsw.val && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
@@ -84,8 +72,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             initial_inactivity = (uint32_t)sleep_inactivity_timer.elapsed();  // if entered asleep mode manually rather than timeout, start screensaver countdown
             still_interactive = true;
             sleep_request = REQ_NA;
-            powering_up = false;
-            display->disp_bools_dirty = true;
+            powering_up = can_run_autosaver = false;
             brake.setmode(Halt);
             steer.setmode(Halt);
             set_syspower(LOW); // Power down devices to save battery
@@ -93,20 +80,19 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (still_interactive) {
             if ((uint32_t)sleep_inactivity_timer.elapsed() < initial_inactivity) screenSaverTimer.reset();  // keep resetting the screen saver timer if user is looking at data, etc.
             if (saver_on_sleep && screenSaverTimer.expired()) {
-                display->auto_saver(true);  // after a bit turn on the screen saver
+                can_run_autosaver = true;
                 still_interactive = false;
             }
         }
-        if (hotrc.sw_event(CH4) || encoder->button.pressed() || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // if we've been triggered to wake up
+        if (hotrc.sw_event(CH4) || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // if we've been triggered to wake up
             set_syspower(HIGH);              // switch on control system devices
             pwrup_timer.reset();  // stay in asleep mode for a delay to allow devices to power up
             powering_up = true;
-            display->auto_saver(false);      // turn off screensaver
+            can_run_autosaver = false;
         }
         sleep_request = REQ_NA;
         if (powering_up && pwrup_timer.expired()) {
             mode = (basicsw.val || (last_conscious_mode == BASIC)) ? BASIC : SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
-            display->disp_bools_dirty = true;
         }
     }
     void run_shutdownMode(bool recovering=false) { // In shutdown mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
@@ -191,7 +177,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_calMode(bool recovering=false) {  // calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration - don't use it unless you know how.
         if (we_just_switched_modes) {
             calmode_request = cal_gasmode_request = cal_brakemode_request = false;
-            display->disp_bools_dirty = true;
             gas.setmode(Idle);
             brake.setmode(Halt);
             steer.setmode(Halt);
