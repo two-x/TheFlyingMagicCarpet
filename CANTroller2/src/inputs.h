@@ -67,10 +67,7 @@ class MomentaryButton {
     }
     bool shortpress() {  // code may call this to check for short press and if so act upon it. Resets the long press if asserted
         bool ret = (_sw_action == swSHORT);
-        if (ret) {
-            _sw_action = swNONE;
-            if (run.mode == ASLEEP) sleep_request - REQ_ON;
-        }
+        if (ret) _sw_action = swNONE;
         return ret;
     }
     void setup(int pin = -1) {
@@ -142,6 +139,9 @@ class Encoder {
     }
     void update() {
         button.update();
+        if (run.mode == ASLEEP) {
+            if (button.shortpress()) sleep_request = REQ_OFF;
+        }
     }
     int32_t rotation(bool accel = false) {  // Returns detents spun since last call, accelerated by spin rate or not
         int32_t d = 0;
