@@ -116,7 +116,6 @@ void semaphore_setup() {
     }
     Serial.printf("\n");
 }
-volatile int disp_oldmode = SHUTDOWN;
 LGFX_Sprite* sprptr;
 std::string nulstr = "";
 std::string* nulstrptr = &nulstr;
@@ -501,13 +500,13 @@ class Display {
     }
     void draw_runmode(int32_t _nowmode, uint8_t color_override=NON) {  // color_override = -1 uses default color
         sprptr->setTextDatum(textdatum_t::top_left);
-        sprptr->fillRect(disp_runmode_text_x, disp_vshift_pix, (modecard[disp_oldmode].length() + 5) * disp_font_width, disp_font_height, BLK);
+        sprptr->fillRect(disp_runmode_text_x, disp_vshift_pix, (modecard[runmode_last].length() + 5) * disp_font_width, disp_font_height, BLK);
         sprptr->setTextColor((color_override == NON) ? colorcard[_nowmode] : color_override);  
         sprptr->setCursor(disp_runmode_text_x, disp_vshift_pix);
         sprptr->print(modecard[_nowmode].c_str());
         sprptr->print(" Mode");
         disp_runmode_dirty = false;
-        disp_oldmode = _nowmode;
+        runmode_last = _nowmode;
     }
     void draw_datapage(int32_t page, int32_t page_last, bool forced=false) {
         if (forced) {
@@ -809,7 +808,6 @@ class Display {
                 disp_datapage_values();
             }
             if (disp_runmode_dirty) draw_runmode(run.mode, NON);
-            runmode_last = run.mode;            
         }
         fps = animations.update(spr, disp_simbuttons_dirty);
         disp_simbuttons_dirty = false;
