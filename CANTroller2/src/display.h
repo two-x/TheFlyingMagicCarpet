@@ -1073,6 +1073,19 @@ static void draw_task_wrapper(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
     }
 }
+// triple buffer scheme:
+// Time  Description       Draw Ref  Push  Buf0  Buf1  Buf2    draw_task (coreA)       push_task (coreB)
+//  0    initialize        Buf0 Buf1 Buf2  black black black
+//  1    start push_task     
+//  1                                           drawing                 pushing
+//  2    Drawing done
+//
+//
+// push_task:
+//   1. take ref and push 
+//   2. diffpush
+//   3. block take 
+
 // The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
 // See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com

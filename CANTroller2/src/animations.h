@@ -59,7 +59,7 @@ volatile int32_t refresh_limit = 16666; // 16666; // = 60 Hz
 volatile bool auto_saver_enabled = false;
 Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
 LGFX lcd;
-LGFX_Sprite framebuf[2];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
+LGFX_Sprite framebuf[3];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
 struct viewport {
     int32_t x;
     int32_t y;
