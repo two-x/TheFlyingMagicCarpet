@@ -75,7 +75,7 @@ class DiagRuntime {
             // Detect sensors disconnected or giving out-of-range readings.
             // TODO : The logic of this for each sensor should be moved to devices.h objects
             err_sens[RANGE][_BrakeMotor] = (brake->pc[OUT] < brake->pc[OPMIN] || brake->pc[OUT] > brake->pc[OPMAX]);
-            err_sens[RANGE][_GasServo] = (gas->pc[OUT] < gas->pc[OPMIN] || gas->pc[OUT] > gas->pc[OPMAX]);
+            err_sens[RANGE][_GasServo] = (gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
             err_sens[RANGE][_BrakeMotor] = (steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
             err_sens[RANGE][_BrakePosn] = (brkpos->in() < brkpos->op_min() || brkpos->in() > brkpos->op_max());
             err_sens[LOST][_BrakePosn] = (brkpos->raw() < err_margin_adc);

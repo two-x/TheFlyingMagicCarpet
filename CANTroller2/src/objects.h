@@ -34,13 +34,17 @@ int rn(int values=256) {  // Generate a random number between 0 and values-1
     std::uniform_int_distribution<> dis(0, values - 1);
     return dis(gen);
 }
-void initialize_pins() {  // set up those straggler pins which aren't taken care of inside class objects
-    Serial.printf("** Setup begin..\nInitialize misc pins..\n");
+void initialize_pins_and_console() {  // set up those straggler pins which aren't taken care of inside class objects
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);    // deasserting unused cs line ensures available spi bus
     set_pin(syspower_pin, OUTPUT, syspower);
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);         // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);         // avoid voltage level contention
     set_pin(uart_tx_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
+    fun_flag = (read_pin(uart_tx_pin));       // detect bit at boot, can be used for any hardware devation we might need
+    Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
+    delay(1000);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    Serial.printf("** Setup begin..\nSerial console started..\n");
+    Serial.printf("Syspower turned %s. fun_flag is %s.\n", syspower ? "on" : "off", fun_flag ? "high" : "low");    
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
     sim.set_can_sim(sens::joy, false);

@@ -3,10 +3,7 @@
 TaskHandle_t temptask = nullptr, webtask = nullptr, pushTaskHandle = NULL, drawTaskHandle = NULL;
 
 void setup() {
-    initialize_pins();
-    fun_flag = (read_pin(uart_tx_pin));       // detect bit at boot, can be used for any hardware devation we might need
-    Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
-    delay(1000);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    initialize_pins_and_console();
     running_on_devboard = !tempsens.setup();  // onewire bus and temp sensors
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 4096 works, 3072 failed,  priority is from 0 to 24=highest    
     print_partition_table();
