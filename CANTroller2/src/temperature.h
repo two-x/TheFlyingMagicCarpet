@@ -140,7 +140,28 @@ private:
     // Assigns known addresses to Sensors. The sensors will have locations like engine or ambient
     void assign_known_addresses() {
         int lost_sensors = 0;
+        DeviceAddress thomson_brake_address = {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e};
+        DeviceAddress lae_brake_address = {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc};
+        bool brake_assigned = false;
+
+        // First handle brake sensors
+        for (auto& detected_address : detected_addresses) {
+            if (std::equal(detected_address.begin(), detected_address.end(), thomson_brake_address.begin()) ||
+                std::equal(detected_address.begin(), detected_address.end(), lae_brake_address.begin())) {
+                if (!brake_assigned) {
+                    sensors.emplace(loc::BRAKE, TemperatureSensor(loc::BRAKE, detected_address, &tempsensebus));
+                    Serial.printf("  assigned brake sensor at addr: ");
+                    sensors.at(loc::BRAKE).print_address();
+                    brake_assigned = true;
+                }
+                continue;
+            }
+        }
+
+        // Then handle other sensors
         for (auto& known_address : known_addresses) {
+            if (known_address.first == loc::BRAKE) continue; // Skip brake because it's already handled
+
             // check to see if we have a known address that wasn't detected, print a warning if yes
             auto detected_address_it = std::find_if(detected_addresses.begin(), detected_addresses.end(), [&](const DeviceAddress& detected_address) {
                 return std::equal(detected_address.begin(), detected_address.end(), known_address.second.begin());
@@ -148,10 +169,12 @@ private:
 
             if (detected_address_it != detected_addresses.end()) {
                 // The known address was detected, so assign it to the corresponding sensor
-                auto sensor_it = sensors.find(known_address.first);
+                loc location = known_address.first;
+                
+                auto sensor_it = sensors.find(location);
                 if (sensor_it == sensors.end()) {
                     // The sensor doesn't exist yet, so create it and add it to the map
-                    sensors.emplace(known_address.first, TemperatureSensor(known_address.first, *detected_address_it, &tempsensebus));
+                    sensors.emplace(location, TemperatureSensor(location, *detected_address_it, &tempsensebus));
                     // Print the sensor address for debugging purposes
                     Serial.printf("  assigned known sensor %s at addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
                     sensors.at(known_address.first).print_address();
