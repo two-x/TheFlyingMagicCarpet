@@ -95,8 +95,8 @@ enum telemetry_full { _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14, 
 enum err_type { LOST=0, RANGE=1, NUM_ERR_TYPES=2 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
 
 // global configuration settings
-bool brake_hybrid_pid = true;        // should the brake use different pid loops for each end of its travel? 
-int brake_default_pid = PressurePID; // if hybrid pid is disabled, do we use PressurePID or PositionPID?
+bool brake_hybrid_pid = false;        // should the brake use different pid loops for each end of its travel? 
+int brake_default_pid = PositionPID; // if hybrid pid is disabled, do we use PressurePID or PositionPID?
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
 bool allow_rolling_start = true;     // are we lenient that it's ok to go to fly mode if the car is already moving? may be a smart prerequisite, may be us putting obstacles in our way
 bool flip_the_screen = false;        // did you mount your screen upside-down?

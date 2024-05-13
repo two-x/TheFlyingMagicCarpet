@@ -1023,8 +1023,8 @@ class Tuner {
                 else if (sel_val == 6) { sim.set_can_sim(sens::mapsens, idelta); screen->disp_simbuttons_dirty = true; } // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
                 else if (sel_val == 7) { sim.set_can_sim(sens::basicsw, idelta); screen->disp_simbuttons_dirty = true; }
                 else if (sel_val == 8) { sim.set_potmap((sens)(adj_val(sim.potmap(), idelta, 0, (int)(sens::starter) - 1))); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 9) adj_bool(&(cal_brakemode_request), idelta);
-                else if (sel_val == 10) adj_bool(&(cal_gasmode_request), idelta);
+                else if (sel_val == 9) adj_bool(&(cal_brakemode_request), (idelta > 0) ? REQ_ON : REQ_OFF);
+                else if (sel_val == 10) adj_bool(&(cal_gasmode_request), (idelta > 0) ? REQ_ON : REQ_OFF);
             }
             else if (datapage == PG_UI) {
                 if (sel_val == 7) { adj_bool(&flashdemo, idelta); neo->enable_flashdemo(flashdemo); }

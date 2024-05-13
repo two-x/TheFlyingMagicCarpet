@@ -184,9 +184,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (calmode_request) mode = SHUTDOWN;
         // if (cal_brakemode) brake.setmode(Calibrate);
         // else if (brake.motormode == Calibrate) brake.setmode(Halt);
-        if (cal_gasmode_request && gas.motormode != Calibrate) gas.setmode(Calibrate);
+        if (cal_gasmode_request && gas.motormode != Calibrate) { gas.setmode(Calibrate); Serial.printf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode); }
         else if (!cal_gasmode_request && gas.motormode == Calibrate) gas.setmode(Idle);
-        if (cal_brakemode_request && brake.motormode != Calibrate) brake.setmode(Calibrate);
+        if (cal_brakemode_request && brake.motormode != Calibrate) { brake.setmode(Calibrate); Serial.printf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode); }
         else if (!cal_brakemode_request && brake.motormode == Calibrate) brake.setmode(Halt);
         cal_gasmode_request = cal_brakemode_request = false;
     }
