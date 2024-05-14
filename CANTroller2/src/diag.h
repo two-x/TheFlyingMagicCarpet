@@ -32,11 +32,11 @@ class DiagRuntime {
     // diag tunable values
     uint32_t err_margin_adc = 5;
     char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
-    char err_sens_card[NumTelemetryFull+2][7] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA and None tacked on the end
+    char err_sens_card[NumTelemetryFull+3][7] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA, None, and Hybrid tacked on the end.  access these names using ascii_name() function
         "Throtl", "BkMotr", "Steer", "HotRC", "Speedo", "Tach", "BkPres", "BkPosn", "Temps", "Other", "GPIO", 
         "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4", "Batery", "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR",
         "TmpWRL", "TmpWRR", "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
-        "NA", "None"
+        "NA", "None", "Hybrid",
     };
     // diag non-tunable values
     bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
@@ -56,6 +56,12 @@ class DiagRuntime {
         for (int32_t i=0; i<NUM_ERR_TYPES; i++)
             for (int32_t j=0; j<NumTelemetryFull; j++)
                 err_sens[i][j] = err_last[i][j] = false; // Initialize sensor error flags to false
+    }
+    std::string ascii_name(int sensor) {
+        if (sensor == _NA) return err_sens_card[NumTelemetryFull];
+        if (sensor == _None) return err_sens_card[NumTelemetryFull + 1];
+        if (sensor == _Hybrid) return err_sens_card[NumTelemetryFull + 2];
+        return err_sens_card[NumTelemetryFull];        
     }
     void update(int _runmode) {
         runmode = _runmode;
