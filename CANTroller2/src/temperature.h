@@ -3,6 +3,7 @@
 #include <DallasTemperature.h>
 
 enum class loc { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR, BRAKE, NUM_LOCATIONS };  // , SOREN_DEV0, SOREN_DEV1, };
+enum brakemotor_types { NIL=-1, Thomson=0, LAE=1 };
 
 class TemperatureSensor {
 public:
@@ -85,6 +86,14 @@ public:
         }
     }
 };
+static std::string brakemotor_type_to_string(int motortype) {
+    switch(motortype) {
+            case NIL: return "undetected";
+            case Thomson: return "Thomson";
+            case LAE: return "LAE";
+            default: return "undetected";
+    }
+}
 
 // Class to manage OneWire temperature sensors
 class TemperatureSensorManager {
@@ -94,12 +103,13 @@ public:
         READY_TO_READ
     };
     bool vehicle_detected = true;
+    int brakemotor_type_detected = NIL;  // default value
     int32_t temperature_precision = 11;  // 9-12 bit resolution
     int detected_devices_ct = 0;
 private:
     // Replace DeviceAddress with std::array<uint8_t, 8>
     using DeviceAddress = std::array<uint8_t, 8>;
-
+    bool brake_assigned;
     unsigned long last_read_request_time;
     int sensor_index;
     State _state;
@@ -146,16 +156,19 @@ private:
 
         // First handle brake sensors
         for (auto& detected_address : detected_addresses) {
-            if (std::equal(detected_address.begin(), detected_address.end(), thomson_brake_address.begin()) ||
-                std::equal(detected_address.begin(), detected_address.end(), lae_brake_address.begin())) {
-                if (!brake_assigned) {
-                    sensors.emplace(loc::BRAKE, TemperatureSensor(loc::BRAKE, detected_address, &tempsensebus));
-                    Serial.printf("  assigned brake sensor at addr: ");
-                    sensors.at(loc::BRAKE).print_address();
-                    brake_assigned = true;
-                }
-                continue;
+            if (std::equal(detected_address.begin(), detected_address.end(), thomson_brake_address.begin())) {
+                 brakemotor_type_detected = Thomson;  // default value
             }
+            else if (std::equal(detected_address.begin(), detected_address.end(), lae_brake_address.begin())) {
+                brakemotor_type_detected = LAE;  // default value
+            }
+            if (!brake_assigned && (brakemotor_type_detected != NIL)) {
+                sensors.emplace(loc::BRAKE, TemperatureSensor(loc::BRAKE, detected_address, &tempsensebus));
+                Serial.printf("  detected %s brake sensor at addr: ", brakemotor_type_to_string(brakemotor_type_detected));
+                sensors.at(loc::BRAKE).print_address();
+                brake_assigned = true;
+            }
+            continue;
         }
 
         // Then handle other sensors
@@ -348,4 +361,5 @@ public:
     float val(int locat) { return val(static_cast<loc>(locat)); }
     bool detected(int locat) { return detected(static_cast<loc>(locat)); }
     src source() { return src::PIN; }
+    int brake_type() { return brakemotor_type_detected; }
 };

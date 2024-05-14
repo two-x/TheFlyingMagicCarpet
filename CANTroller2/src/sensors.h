@@ -776,7 +776,7 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
 class PressureSensor : public AnalogSensor<int32_t, float> {
   public:
     sens senstype = sens::pressure;
-    int32_t op_min_adc, op_max_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+    int32_t op_min_adc, op_max_adc, abs_min_adc, abs_max_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
     float hold_initial_psi, hold_increment_psi, panic_initial_psi, panic_increment_psi, margin_psi;
     std::string _long_name = "Brake pressure sensor";
@@ -789,6 +789,8 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         _b_offset = -from_native(op_min_adc);
         _invert = false;
         _ema_alpha = 0.15;
+        abs_min_adc = 0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+        abs_max_adc = adcrange_adc; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
         op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
         op_max_adc = 2080; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
         hold_initial_psi = 120.0;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
@@ -797,8 +799,8 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         panic_increment_psi = 5.0; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
         margin_psi = 1;  // Max acceptible error when checking psi levels
 
-        set_native_limits(op_min_adc, op_max_adc);
-        set_human_limits(from_native(op_min_adc), from_native(op_max_adc));
+        set_native_limits(abs_min_adc, abs_max_adc);
+        set_human_limits(from_native(abs_min_adc), from_native(abs_max_adc));
         set_native(op_min_adc);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);            
@@ -832,23 +834,40 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     std::string _human_units_name = "in";
 
     BrakePositionSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
-        _m_factor = 3.3 * 10000.0 / (3.3 * adcrange_adc * 557); // 3.3 v * 10k ohm * 1/5 1/v * 1/4095 1/adc * 1/557 in/ohm = 0.0029 in/adc
+        #if BrakeThomson
+            // _m_factor = 8.0 / adcrange_adc; // 8 in * 1/4096 1/adc * 0.00195 in/adc
+            // _b_offset = 0.0;
+            _ema_alpha = 0.35;
+            _zeropoint = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
+            abs_min_retract_adc = 0;
+            abs_max_extend_adc = adcrange_adc;
+            abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
+            abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
+            op_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+            op_max_extend_in = 4.234;  // 4.624  //TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)  
+        #else  // if LAE motor
+            // 240513 cal data LAE actuator:  measured to tip of piston
+            // fully retracted 0.95 in, Vpot = 0.83 V (1179 adc), fully extended 8.85 in (), Vpot = 2.5 V (3103 adc)
+            // calc (2.5 - 0.83) / 3.3 = 0.506 . 0.506 * 4096 = 2072 . (8.85 - 0.95) / 2072 = .00381 in/adc or 262 adc/in
+            // 
+            abs_min_retract_adc = 979; // TUNED 240513 - pot measured with 3.3V applied, converted to adc
+            abs_max_extend_adc = 3103;  // TUNED 240513 - pot measured with 3.3V applied, converted to adc
+            abs_min_retract_in = 0.95;  // TUNED 240513 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
+            abs_max_extend_in = 8.85;   // TUNED 240513 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
+            op_min_retract_in = 2.0;    // TUNE. - Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+            op_max_extend_in = 6.0;     // TUNE. - Best position to park the actuator out of the way so we can use the pedal (in)  
+            _zeropoint = 5.5;           // TUNE. - Brake position value corresponding to the point where fluid PSI hits zero (in)
+        #endif
         _invert = false;
-        _b_offset = 0.0;
         _ema_alpha = 0.35;
-        _zeropoint = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
         _margin = .01;  // TODO: add description
-        _parkpos = 4.234;  // TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
-        op_min_retract_adc = 76;  // Calculated on windows calculator. Calculate it here, silly
-        op_max_extend_adc = 965;  // Calculated on windows calculator. Calculate it here, silly
-        abs_min_retract_adc = 0;
-        abs_max_extend_adc = adcrange_adc;
-        abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
-        abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
-        op_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-        op_max_extend_in = _parkpos; // 4.624;  // TUNED 230602 - Extend limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-        set_human_limits(op_min_retract_in, op_max_extend_in);            
-        set_native_limits(op_min_retract_adc, op_max_extend_adc);
+        _m_factor = (abs_max_extend_in - abs_min_retract_in) / (abs_max_extend_adc - abs_min_retract_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
+        _b_offset = -2.69;  // 
+        _parkpos = op_max_extend_in;
+        op_min_retract_adc = to_native(op_min_retract_in);
+        op_max_extend_adc = to_native(op_max_extend_in);
+        set_human_limits(abs_min_retract_in, abs_max_extend_in);
+        set_native_limits(abs_min_retract_adc, abs_max_extend_adc);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);
     }

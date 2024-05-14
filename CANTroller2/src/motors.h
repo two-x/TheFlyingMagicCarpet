@@ -524,7 +524,7 @@ class BrakeMotor : public JagMotor {
     float press_kp = 0.142;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float press_ki = 0.000;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_kd = 0.000;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    float posn_kp = 6.5;           // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float posn_kp = 14.5;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float posn_ki = 0.000;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_kd = 0.000;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr uint32_t pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
@@ -722,6 +722,7 @@ class BrakeMotor : public JagMotor {
         motor_park_timer.reset();
         active_pids = HybridPID;
         motormode = _mode;
+        Serial.printf("brakemode: %d\n",motormode);
     }
     void update() {  // Brakes - Determine motor output and write it to motor
         if (volt_check_timer.expireset()) derive();
