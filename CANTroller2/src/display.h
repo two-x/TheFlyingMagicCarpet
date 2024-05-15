@@ -136,7 +136,7 @@ class Display {
     Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
-    bool fullscreen_last = false;
+    bool sim_last = false, fullscreen_last = false;
     int runmode_last = -1;
   public:
     std::string disp_values[disp_lines];  // Holds previously drawn value strings for each line
@@ -712,7 +712,7 @@ class Display {
         else if (datapage == PG_BPID) {
             drange = brake.us[ABSMIN]-brake.us[ABSMAX];
             draw_asciiname(9, motormodecard[brake.pid_status]);
-            draw_asciiname(10, diag.err_sens_card[brake.active_sensor]);
+            draw_asciiname(10, diag.ascii_name(brake.active_sensor));
             draw_dynamic(11, brkpos.filt(), brkpos.op_min(), brkpos.op_max(), brake.pids[_BrakePosn].target());
             // draw_asciiname(10, motormodecard[brake.motormode]);
             draw_dynamic(12, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
@@ -821,6 +821,8 @@ class Display {
             }
             if (disp_runmode_dirty) draw_runmode(run.mode, NON);
         }
+        if (sim->enabled() != sim_last) disp_simbuttons_dirty = true;
+        sim_last = sim->enabled();
         fps = animations.update(spr, disp_simbuttons_dirty);
         disp_simbuttons_dirty = false;
         return true;

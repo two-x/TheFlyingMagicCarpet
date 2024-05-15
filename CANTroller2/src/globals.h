@@ -69,7 +69,7 @@
 #define adcrange_adc 4095     // = 2^adcbits-1
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
 
-// these global enums are super convenient, just take care when making changes
+// these global enums are super convenient, just don't change any values without checking that everywhere it's used won't get broken
 enum hotrc_axis { HORZ=0, VERT=1, CH3=2, CH4=3 };
 enum hotrc_val { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
 enum motor_val { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, NUM_MOTORVALS=8 }; // IDLE=8, NUM_MOTORVALS=9 };
@@ -82,7 +82,7 @@ enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler a
 enum cruise_modes { SuspendFly, TriggerPull, TriggerHold, NumCruiseSchemes };
 enum sw_presses { swNONE, swSHORT, swLONG };
 enum motor_modes { NA=-1, Halt=0, Idle=1, Release=2, OpenLoop=3, ActivePID=4, AutoStop=5, AutoHold=6, ParkMotor=7, Cruise=8, Calibrate=9, Starting=10, NumMotorModes=11 };
-enum brake_pid_modes { PosnInfluence=0, PresInfluence=1, NumBrakeInfluences=2 };  // OpenLoop=3
+enum brake_pid_modes { NoInfluence=-1, PosnInfluence=0, PresInfluence=1, NumBrakeInfluences=2 };  // OpenLoop=3
 enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum boolean_states { ON=1 };
 enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_MOTR, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
@@ -90,9 +90,21 @@ enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, BRAKE=3, NUM_TEMP_CATEGORIE
 enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
 enum ui_modes { DatapagesUI=0, ScreensaverUI=1 };
 enum codestatus { Confused=0, Booting=1, Parked=2, Stopped=3, Driving=4, NumCodeStatuses=5 };
-enum telemetry_idiots { _Hybrid=-3, _None=-2, _NA=-1, _GasServo=0, _BrakeMotor=1, _SteerMotor=2, _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7, _Temps=8, _Other=9, _GPIO=10, NumTelemetryIdiots=11 };  // _MuleBatt, _MAP, _MAF, _Pot,
-enum telemetry_full { _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14, _MuleBatt=15, _AirVelo=16, _MAP=17, _Pot=18, _TempEng=19, _TempWhFL=20, _TempWhFR=21, _TempWhRL=22, _TempWhRR=23, _TempBrake=24, _TempAmb=25, _Ignition=26, _Starter=27, _BasicSw=28, _FuelPump=29, NumTelemetryFull=30 };  // 10 per line
-enum err_type { LOST=0, RANGE=1, NUM_ERR_TYPES=2 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
+enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
+enum telemetry_idiots {                              // list of transducers which have onscreen idiotlights showing status
+    _Hybrid=-3, _None=-2, _NA=-1,                    // these values indicate no transducer, useful for some contexts  
+    _GasServo=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are actuators, driven by us
+    _Speedo=3, _Tach=4, _BrakePres=5, _BrakePosn=6,  // these transducers are sensors, we read from
+    _HotRC=7, _Temps=8, _Other=9, _GPIO=10,          // these are actually groups of multiple sensors (see below)
+    NumTelemetryIdiots=11,                           // size of this list
+};                        
+enum telemetry_full {                                                                                 // complete list expanding sensor groups
+    _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14,                                         // _HotRC sensor group
+    _MuleBatt=15, _AirVelo=16, _MAP=17, _Pot=18,                                                      // _Other sensor group
+    _TempEng=19, _TempWhFL=20, _TempWhFR=21, _TempWhRL=22, _TempWhRR=23, _TempBrake=24, _TempAmb=25,  // _Temps sensor group
+    _Ignition=26, _Starter=27, _BasicSw=28, _FuelPump=29,                                             // _GPIO sensor group (with simple boolean values)
+    NumTelemetryFull=30,                                                                              // size of both telemetry lists combined
+};
 
 // global configuration settings
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
@@ -299,38 +311,40 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
         return true;
     }    
 };
-class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regular intervals
-  protected:
-    volatile int64_t end, timeout_us;
-  public:
-    AbsTimer() { reset(); }
-    AbsTimer(uint32_t arg_timeout) { set ((int64_t)arg_timeout); }
-    void IRAM_ATTR set (int64_t arg_timeout) {
-        timeout_us = arg_timeout;
-        end = esp_timer_get_time() + timeout_us;
-    }
-    void IRAM_ATTR set() { end = esp_timer_get_time() + timeout_us; }  // use to rezero the timer phase
-    void IRAM_ATTR reset() {  // move expiration to the next timeout multiple
-        int64_t now = esp_timer_get_time();
-        if (now >= end) end += timeout_us * (1 + (now - end) / timeout_us);
-    }
-    bool IRAM_ATTR expired() { return esp_timer_get_time() >= end; }
-    int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() + timeout_us - end; }
-    int64_t timeout() { return timeout_us; }    
-    // never finished writing this ...
-    //
-    // uint32_t IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
-    //     int64_t now_us = esp_timer_get_time();
-    //     if (now >= end) 
-    //     end += timeout_us * (1 + (now - end) / timeout_us);
-    //     if (now_us < start_us + timeout_us) return false;
-    //     start_us = now_us;
-    //     return true;
-    // }
-};
+
 Timer sleep_inactivity_timer(300000000);
 
 void kick_inactivity_timer(int source=0) {
     sleep_inactivity_timer.reset();  // evidence of user activity
     // Serial.printf("kick%d ", source);
 }
+
+// class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regular intervals
+//   protected:
+//     volatile int64_t end, timeout_us;
+//   public:
+//     AbsTimer() { reset(); }
+//     AbsTimer(uint32_t arg_timeout) { set ((int64_t)arg_timeout); }
+//     void IRAM_ATTR set (int64_t arg_timeout) {
+//         timeout_us = arg_timeout;
+//         end = esp_timer_get_time() + timeout_us;
+//     }
+//     void IRAM_ATTR set() { end = esp_timer_get_time() + timeout_us; }  // use to rezero the timer phase
+//     void IRAM_ATTR reset() {  // move expiration to the next timeout multiple
+//         int64_t now = esp_timer_get_time();
+//         if (now >= end) end += timeout_us * (1 + (now - end) / timeout_us);
+//     }
+//     bool IRAM_ATTR expired() { return esp_timer_get_time() >= end; }
+//     int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() + timeout_us - end; }
+//     int64_t timeout() { return timeout_us; }    
+//     // never finished writing this ...
+//     //
+//     // uint32_t IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
+//     //     int64_t now_us = esp_timer_get_time();
+//     //     if (now >= end) 
+//     //     end += timeout_us * (1 + (now - end) / timeout_us);
+//     //     if (now_us < start_us + timeout_us) return false;
+//     //     start_us = now_us;
+//     //     return true;
+//     // }
+// };

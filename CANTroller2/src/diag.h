@@ -31,7 +31,7 @@ class DiagRuntime {
   public:
     // diag tunable values
     uint32_t err_margin_adc = 5;
-    char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
+    char err_type_card[NUM_ERR_TYPES][5] = { "Lost", "Rang", "Warn" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
     char err_sens_card[NumTelemetryFull+3][7] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA, None, and Hybrid tacked on the end.  access these names using ascii_name() function
         "Throtl", "BkMotr", "Steer", "HotRC", "Speedo", "Tach", "BkPres", "BkPosn", "Temps", "Other", "GPIO", 
         "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4", "Batery", "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR",
@@ -39,11 +39,11 @@ class DiagRuntime {
         "NA", "None", "Hybrid",
     };
     // diag non-tunable values
-    bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL]
-    bool err_sens_alarm[NUM_ERR_TYPES] = { false, false };
-    int8_t err_sens_fails[NUM_ERR_TYPES] = { 0, 0 };
-    bool err_sens[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
-    bool err_last[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
+    bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL/BRAKE]
+    bool err_sens_alarm[NUM_ERR_TYPES] = { false, false, false, };  //  [LOST/RANGE/WARN]
+    int8_t err_sens_fails[NUM_ERR_TYPES] = { 0, 0, 0, };
+    bool err_sens[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE/WARN] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
+    bool err_last[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE/WARN] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
     uint8_t most_critical_sensor[NUM_ERR_TYPES];
     uint8_t most_critical_last[NUM_ERR_TYPES];
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
@@ -90,11 +90,12 @@ class DiagRuntime {
             err_sens[RANGE][_MuleBatt] = (mulebatt->v() < mulebatt->op_min_v() || mulebatt->v() > mulebatt->op_max_v());
             HotRCFailure();
             err_sens[LOST][_Ignition] = (!ignition->signal && !tach->engine_stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
-            err_sens[LOST][_Speedo] = SpeedoFailure();
-            err_sens[LOST][_Tach] = TachFailure();
+            SpeedoFailure();
+            TachFailure();
             err_sens[RANGE][_Speedo] = (speedo->mph() < speedo->min_human() || speedo->mph() > speedo->max_human());;
             err_sens[RANGE][_Tach] = (tach->rpm() < tach->min_human() || tach->rpm() > tach->max_human());
-            
+            BrakeMotorFailure();
+
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != ASLEEP));
             set_sensorgroups();
             set_sensidiots();
@@ -162,7 +163,13 @@ class DiagRuntime {
             printf("\n");
         }
     }
-    bool SpeedoFailure() {  // checks if speedo isn't zero when stopped, or doesn't increase when we drive
+    void BrakeMotorFailure() {  // checks if any sensor the brake is expecting to use in its current mode are posting errors
+        bool found_err = false;
+        if ((brake->active_sensor != _BrakePres) && (err_sens[LOST][_BrakePosn] || err_sens[RANGE][_BrakePosn])) found_err = true;
+        if ((brake->active_sensor != _BrakePosn) && (err_sens[LOST][_BrakePres] || err_sens[RANGE][_BrakePres])) found_err = true;
+        err_sens[WARN][_BrakeMotor] = found_err;
+    }
+    void SpeedoFailure() {  // checks if speedo isn't zero when stopped, or doesn't increase when we drive
         static bool gunning_it, gunning_last = true;
         static float baseline_speed;
         bool fail = false;
@@ -179,9 +186,9 @@ class DiagRuntime {
             else if (speedoTimer.expired()) fail = (speedo->filt() - baseline_speed < speedo->margin_mph());  // the car should be moving by now
         }
         gunning_last = gunning_it;
-        return fail;
+        err_sens[LOST][_Speedo] = fail;
     }
-    bool TachFailure() {  // checks if tach isn't low when throttle is released, or doesn't increase when we gun it
+    void TachFailure() {  // checks if tach isn't low when throttle is released, or doesn't increase when we gun it
         static bool running_it, running_last = true;
         static float baseline_rpm;
         bool fail = false;
@@ -198,7 +205,7 @@ class DiagRuntime {
             else if (tachTimer.expired()) fail = (tach->filt() - baseline_rpm < tach->margin_rpm());  // the car should be moving by now
         }
         running_last = running_it;
-        return fail;
+        err_sens[LOST][_Tach] =  fail;
     }
     void HotRCFailure() {
         for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors

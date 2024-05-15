@@ -571,6 +571,7 @@ class BrakeMotor : public JagMotor {
     float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, target_pc, pid_err_pc;
     float hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0;  // , hybrid_targ_ratio_pc = 100.0;
     float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
+    float blind_mode_attenuation_pc = 50.0;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
     void derive() {
         JagMotor::derive();
         parkpos_pc = map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
@@ -657,8 +658,13 @@ class BrakeMotor : public JagMotor {
         // pids[PressurePID].set_target(pressure->min_human() + hybrid_targ_ratio * (pressure->max_human() - pressure->min_human()));
         // pids[PositionPID].set_target(brkpos->min_human() + (1.0 - hybrid_targ_ratio) * (brkpos->max_human() - brkpos->min_human()));
         // hybrid_targ_ratio_pc = 100.0 * hybrid_targ_ratio;  // for display        
-        
+
+    void blind_trigger_out() {  // push trigger out less than 1/2way, motor extends (release brake), or more than halfway to retract (push brake), w/ speed proportional to distance from halfway point 
+        if (hotrc->joydir() == JOY_DN) pc[OUT] = blind_mode_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], pc[OPMIN], pc[OPMAX]);
+        else pc[OUT] = pc[STOP];
+    }
     void calc_out() {  // returns motor output percent calculated using dynamic combination of position and pressure influence
+        if (active_sensor == _None) blind_trigger_out();  // control brake using trigger without any sensors
         hybrid_out_ratio = calc_hybrid_ratio(pressure->filt());  // calculate pressure vs. position multiplier based on the sensed values
         hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
         set_dominant_sensor(((int)hybrid_out_ratio + 0.5) ? _BrakePres : _BrakePosn);  // round to 0 (posn pid) or 1 (pressure pid)
@@ -677,7 +683,7 @@ class BrakeMotor : public JagMotor {
         calc_out();
     }
     bool goto_fixed_point(float tgt_point, bool at_position) {  // goes to a fixed position (hopefully) or pressure (if posn is unavailable) then stops.  useful for parking and releasing modes
-        if (enabled_sensor != _BrakePres) active_sensor = _BrakePosn;
+        active_sensor = (enabled_sensor == _BrakePres) ? _BrakePres : _BrakePosn;  // use posn sensor for this unless we are specifically forcing pressure only
         bool in_progress = (!at_position && !motor_park_timer.expired());
         if (in_progress) set_target(tgt_point);  // Flipped to 100-value because function argument subtracts back for position pid
         else setmode(Halt);
@@ -748,6 +754,7 @@ class BrakeMotor : public JagMotor {
     int val_index(int _sens) {  // provide a sensor int in context of telemetry enum range, get back 0 or 1 index consistent with storage of sensor values
         if (_sens == _BrakePosn) return PosnInfluence;
         else if (_sens == _BrakePres) return PresInfluence;
+        return NoInfluence;
     }
     void set_pid_config(int newconf) {
         pid_config = newconf;

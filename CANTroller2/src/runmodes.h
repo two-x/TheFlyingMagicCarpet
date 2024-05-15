@@ -6,7 +6,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     Timer gestureFlyTimer{1250000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
     Timer pwrup_timer{1500000};  // Timeout when parking motors if they don't park for whatever reason (in us)
     Timer shutdown_timer{5000000};
-    int oldmode = ASLEEP, last_conscious_mode;
+    int oldmode = ASLEEP;
     bool still_interactive = true;
     uint32_t initial_inactivity;
   public:
@@ -26,7 +26,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         oldmode = mode;        
         // common to almost all the modes, so i put it here
         if (mode != ASLEEP) {
-            last_conscious_mode = mode;
             if (hotrc.sw_event(CH3)) ignition.request(REQ_TOG);  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         }
         if (mode == BASIC) run_basicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
@@ -66,7 +65,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (!basicsw.val && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
         if (basicmode_request) mode = SHUTDOWN;  // if fully shut down and cal mode requested, go to cal mode
     }
-    void run_asleepMode(bool recovering=false) {  // turns off syspower and just idles. sleep_request are handled here or in shutdown mode below
+    void run_asleepMode() {  // turns off syspower and just idles. sleep_request are handled here or in shutdown mode below
         if (we_just_switched_modes) {
             screenSaverTimer.reset();
             initial_inactivity = (uint32_t)sleep_inactivity_timer.elapsed();  // if entered asleep mode manually rather than timeout, start screensaver countdown
@@ -92,10 +91,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         sleep_request = REQ_NA;
         if (powering_up && pwrup_timer.expired()) {
-            mode = (basicsw.val || (last_conscious_mode == BASIC)) ? BASIC : SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
+            mode = (basicsw.val) ? BASIC : SHUTDOWN;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
         }
     }
-    void run_shutdownMode(bool recovering=false) { // In shutdown mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
+    void run_shutdownMode() { // In shutdown mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
             shutdown_incomplete = !powering_up;   // if waking up from sleep shutdown is already complete
             powering_up = calmode_request = basicmode_request = false;
@@ -122,7 +121,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if ((speedo.car_stopped() || allow_rolling_start) && ignition.signal && !panicstop && !tach.engine_stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         sleep_request = REQ_NA;
     }
-    void run_stallMode(bool recovering=false) {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
+    void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
         if (we_just_switched_modes) {
             gas.setmode(OpenLoop);     // throttle always runs open loop in stall mode, b/c there's no rpm for the pid to measure anyway
             brake.setmode(ActivePID);
@@ -144,7 +143,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (hotrc.joydir(VERT) != JOY_UP) joy_centered = true;  // mark joystick at or below center, now pushing up will go to fly mode
         else if (joy_centered && !starter.motor && !hotrc.radiolost()) mode = FLY;  // Enter Fly Mode upon joystick movement from center to above center  // Possibly add "&& car_stopped()" to above check?
     }
-    void run_flyMode(bool recovering=false) {
+    void run_flyMode() {
         if (we_just_switched_modes) {
             car_hasnt_moved = speedo.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
             gas.setmode(throttle_ctrl_mode);
@@ -161,7 +160,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) mode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
         if (hotrc.sw_event(CH4)) mode = CRUISE;                                     // enter fly mode by pressing hrc ch4 button
     }
-    void run_cruiseMode(bool recovering=false) {
+    void run_cruiseMode() {
         if (we_just_switched_modes) {  // upon first entering cruise mode, initialize things
             gas.setmode(Cruise);
             brake.setmode(Release);
@@ -174,7 +173,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (gestureFlyTimer.expired()) mode = FLY;  // new gesture to drop to fly mode is hold the brake all the way down for more than X ms
         if (speedo.car_stopped()) mode = (hotrc.joydir(VERT) == JOY_UP) ? FLY : HOLD;  // in case we slam into camp Q woofer stack, get out of cruise mode.
     }
-    void run_calMode(bool recovering=false) {  // calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration - don't use it unless you know how.
+    void run_calMode() {  // calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration - don't use it unless you know how.
         if (we_just_switched_modes) {
             calmode_request = cal_gasmode_request = cal_brakemode_request = false;
             gas.setmode(Idle);
@@ -182,13 +181,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(Halt);
         }
         else if (calmode_request) mode = SHUTDOWN;
-        // if (cal_brakemode) brake.setmode(Calibrate);
-        // else if (brake.motormode == Calibrate) brake.setmode(Halt);
         if (cal_gasmode_request && gas.motormode != Calibrate) { gas.setmode(Calibrate); Serial.printf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode); }
         else if (!cal_gasmode_request && gas.motormode == Calibrate) gas.setmode(Idle);
         if (cal_brakemode_request && brake.motormode != Calibrate) { brake.setmode(Calibrate); Serial.printf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode); }
         else if (!cal_brakemode_request && brake.motormode == Calibrate) brake.setmode(Halt);
-        // cal_gasmode_request = cal_brakemode_request = false;
     }
 };
 // Here are the different runmodes documented
