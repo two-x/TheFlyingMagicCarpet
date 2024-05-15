@@ -571,7 +571,7 @@ class BrakeMotor : public JagMotor {
     float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, target_pc, pid_err_pc;
     float hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0;  // , hybrid_targ_ratio_pc = 100.0;
     float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
-    float blind_mode_attenuation_pc = 50.0;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
+    float open_loop_attenuation_pc = 50.0;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
     void derive() {
         JagMotor::derive();
         parkpos_pc = map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
@@ -633,7 +633,7 @@ class BrakeMotor : public JagMotor {
         }
         // that's great to have some idea whether the motor is hot. but we need to take some actions in response
     }
-    // the influence on the final output from the pressure and position pids is weighted based on the pressure reading
+    // the brake can be controlled by a pid or open loop. either way it will use all enabled sensors as     // the influence on the final output from the pressure and position pids is weighted based on the pressure reading
     // as the brakes are pressurized beyond X psi, use pressure reading, otherwise use position as feedback, because
     // near either extreme only one of the two sensors is accurate. So at lower psi, control is 100% position-based, fade to 100% pressure-based at mid/high pressures
     // "dominant" PID means the PID loop (pressure or position) that has the majority influence over the motor
@@ -647,29 +647,39 @@ class BrakeMotor : public JagMotor {
     }
     void set_target(float targ_pc) {  // pass in desired brake target as an overall percent, will set pressure and position pid targets consistent with current configuration
         target_pc = targ_pc;
-        brake_target[val_index(_BrakePres)] = pressure->min_human() + target_pc * (pressure->max_human() - pressure->min_human()) / 100.0;
-        brake_target[val_index(_BrakePosn)] = brkpos->min_human() + (100.0 - target_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0;        
+        brake_target[PresInfluence] = pressure->min_human() + target_pc * (pressure->max_human() - pressure->min_human()) / 100.0;
+        brake_target[PosnInfluence] = brkpos->min_human() + (100.0 - target_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0;        
         for (int mypid=PosnInfluence; mypid<=PresInfluence; mypid++) pids[mypid].set_target(brake_target[mypid]);
     }
-        // // These old set_target() contents are just a mistake - we don't want to apply hybrid ratio to target settings (right?)
-        // target_pc = targ_pc;
-        // if (brake_linearize_target_extremes) hybrid_targ_ratio = target_pc / 100.0;
-        // else hybrid_targ_ratio = calc_hybrid_ratio(pressure_pc_to_si(target_pc));
-        // pids[PressurePID].set_target(pressure->min_human() + hybrid_targ_ratio * (pressure->max_human() - pressure->min_human()));
-        // pids[PositionPID].set_target(brkpos->min_human() + (1.0 - hybrid_targ_ratio) * (brkpos->max_human() - brkpos->min_human()));
-        // hybrid_targ_ratio_pc = 100.0 * hybrid_targ_ratio;  // for display        
-
+    float read_sensors() {
+        float ret;
+        float pres = map(pressure->human(), pressure->min_human(), pressure->max_human(), 0.0, 100.0);
+        float posn = map(brkpos->human(), brkpos->max_human(), brkpos->min_human(), 0.0, 100.0);
+        if (active_sensor == _BrakePres) return pres;
+        else if (active_sensor == _BrakePosn) return posn;
+        else if (active_sensor == _Hybrid) return hybrid_out_ratio * pres + (1.0 - hybrid_out_ratio) * posn;
+        else return NAN;
+    }
     void blind_trigger_out() {  // push trigger out less than 1/2way, motor extends (release brake), or more than halfway to retract (push brake), w/ speed proportional to distance from halfway point 
-        if (hotrc->joydir() == JOY_DN) pc[OUT] = blind_mode_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], pc[OPMIN], pc[OPMAX]) / 100.0;
+        if (hotrc->joydir() == JOY_DN) pc[OUT] = open_loop_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], pc[OPMIN], pc[OPMAX]) / 100.0;
         else pc[OUT] = pc[STOP];
     }
     void calc_out() {  // returns motor output percent calculated using dynamic combination of position and pressure influence
         if (active_sensor == _None) blind_trigger_out();  // control brake using trigger without any sensors
-        hybrid_out_ratio = calc_hybrid_ratio(pressure->filt());  // calculate pressure vs. position multiplier based on the sensed values
-        hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
-        set_dominant_sensor(((int)hybrid_out_ratio + 0.5) ? _BrakePres : _BrakePosn);  // round to 0 (posn pid) or 1 (pressure pid)
-        if (pid_status == OpenLoop) pc[OUT] = hybrid_out_ratio * brake_target[val_index(_BrakePres)] + (1.0 - hybrid_out_ratio) * brake_target[val_index(_BrakePosn)];
-        else pc[OUT] = hybrid_out_ratio * pids[val_index(_BrakePres)].compute() + (1.0 - hybrid_out_ratio) * pids[val_index(_BrakePosn)].compute();  // combine pid outputs weighted by the multiplier
+        else {
+            hybrid_out_ratio = calc_hybrid_ratio(pressure->filt());  // calculate pressure vs. position multiplier based on the sensed values
+            hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
+            set_dominant_sensor(((int)hybrid_out_ratio + 0.5) ? _BrakePres : _BrakePosn);  // round to 0 (posn pid) or 1 (pressure pid)
+            if (pid_status == OpenLoop) {
+                float now = read_sensors();
+                if (std::isnan(now)) pc[OUT] = pc[STOP];
+                else if (target_pc < now) pc[OUT] = open_loop_attenuation_pc * pc[OPMIN];
+                else if (target_pc > now) pc[OUT] = open_loop_attenuation_pc * pc[OPMAX];
+                else pc[OUT] = pc[STOP];
+                // pc[OUT] = hybrid_out_ratio * brake_target[PresInfluence] + (1.0 - hybrid_out_ratio) * brake_target[PosnInfluence];
+            }
+            else pc[OUT] = hybrid_out_ratio * pids[PresInfluence].compute() + (1.0 - hybrid_out_ratio) * pids[PosnInfluence].compute();  // combine pid outputs weighted by the multiplier
+        }
     }
     void carstop(bool panic_support=true) {
         bool panic = panic_support && panicstop;

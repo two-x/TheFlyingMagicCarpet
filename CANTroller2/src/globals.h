@@ -77,15 +77,15 @@ enum stop_val { STOP=1 };
 enum steer_val { SAFE=1 };
 enum size_enums { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
 enum joydirs { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
-enum runmode { BASIC, ASLEEP, SHUTDOWN, STALL, HOLD, FLY, CRUISE, CAL, NUM_RUNMODES };
+enum runmode { BASIC=0, ASLEEP=1, SHUTDOWN=2, STALL=3, HOLD=4, FLY=5, CRUISE=6, CAL=7, NUM_RUNMODES=8 };
 enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
-enum cruise_modes { SuspendFly, TriggerPull, TriggerHold, NumCruiseSchemes };
-enum sw_presses { swNONE, swSHORT, swLONG };
+enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes=3 };
+enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
 enum motor_modes { NA=-1, Halt=0, Idle=1, Release=2, OpenLoop=3, ActivePID=4, AutoStop=5, AutoHold=6, ParkMotor=7, Cruise=8, Calibrate=9, Starting=10, NumMotorModes=11 };
 enum brake_pid_modes { NoInfluence=-1, PosnInfluence=0, PresInfluence=1, NumBrakeInfluences=2 };  // OpenLoop=3
 enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum boolean_states { ON=1 };
-enum datapages { PG_RUN, PG_JOY, PG_SENS, PG_PWMS, PG_IDLE, PG_MOTR, PG_BPID, PG_GPID, PG_CPID, PG_TEMP, PG_SIM, PG_UI, NUM_DATAPAGES };
+enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PWMS=3, PG_IDLE=4, PG_MOTR=5, PG_BPID=6, PG_GPID=7, PG_CPID=8, PG_TEMP=9, PG_SIM=10, PG_UI=11, NUM_DATAPAGES=12 };
 enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, BRAKE=3, NUM_TEMP_CATEGORIES=4 };  // 
 enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
 enum ui_modes { DatapagesUI=0, ScreensaverUI=1 };

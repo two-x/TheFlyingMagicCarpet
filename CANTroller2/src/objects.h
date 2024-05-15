@@ -42,7 +42,7 @@ void initialize_pins_and_console() {  // set up those straggler pins which aren'
     set_pin(uart_tx_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     fun_flag = (read_pin(uart_tx_pin));       // detect bit at boot, can be used for any hardware devation we might need
     Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
-    delay(1000);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    delay(1200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     Serial.printf("** Setup begin..\nSerial console started..\n");
     Serial.printf("Syspower turned %s. fun_flag is %s.\n", syspower ? "on" : "off", fun_flag ? "high" : "low");    
 }
@@ -88,6 +88,13 @@ void sim_setup() {
     // sim.register_device(sens::engtemp, temp, temp.source());
     // sim.register_device(sens::starter, starter, starter.source());
     sim.set_potmap();
+}
+void stop_console() {
+    printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
+    if (!console_enabled) {
+        delay(200);  // give time for serial to print everything in its buffer
+        Serial.end();  // close serial console to prevent crashes due to error printing
+    }
 }
 // RTOS task that updates temp sensors in a separate task
 void update_temperature_sensors(void *parameter) {

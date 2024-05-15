@@ -55,7 +55,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "PressRaw", "BkPosRaw", "TachPuls", " Pot Raw", __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
-    { __________, __________, __________, __________, __________, __________, "BkEnaPID", "BEnaSens", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
+    { "Brk Heat", __________, __________, __________, __________, __________, "BkEnaPID", "BEnaSens", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
     { "PID Stat", "ActvSens", brAk"Posn", "Pn|PrErr", "Pres Tgt", "Posn Tgt", "HybrdTgt", "OutRatio", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "PID Stat", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { "PID Stat", spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
@@ -69,7 +69,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "adc",  "adc",  "ms",   "adc",  ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    "%",    degree, degree, degreF, degreF, },  // PG_IDLE
-    { ______, ______, ______, ______, ______, ______, scroll, scroll, scroll, scroll, scroll, },  // PG_MOTR
+    { degreF, ______, ______, ______, ______, ______, scroll, scroll, scroll, scroll, scroll, },  // PG_MOTR
     { scroll, scroll, "in",   "psin", "psin", "%",    "%",    "%",    ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "rpm",  "rpm",  "%",    "%",    "%",    degsec, ______, "Hz",   "s",    },  // PG_GPID
     { scroll, "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",     "%/s", ______, "Hz",   "s",    },  // PG_CPID
@@ -702,7 +702,8 @@ class Display {
             draw_dynamic(19, gas.idletemp_f[OPMAX], gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX]); // gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4); 
         }
         else if (datapage == PG_MOTR) {
-            for (int myline=9; myline<=14; myline++) draw_eraseval(myline);
+            draw_dynamic(9, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
+            for (int myline=10; myline<=14; myline++) draw_eraseval(myline);
             draw_asciiname(15, motormodecard[brake.pid_status]);
             draw_asciiname(16, diag.ascii_name(brake.active_sensor));
             draw_asciiname(17, motormodecard[gas.pid_status]);
@@ -720,7 +721,6 @@ class Display {
             draw_dynamic(14, brake.brake_target[PosnInfluence], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
             draw_dynamic(15, brake.target_pc, 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
             draw_dynamic(16, brake.hybrid_out_ratio_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
-            // draw_dynamic(16, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
             draw_dynamic(17, brake.pid_dom->kp(), 0.0f, 8.0);
             draw_dynamic(18, brake.pid_dom->ki(), 0.0f, 8.0);
             draw_dynamic(19, brake.pid_dom->kd(), 0.0f, 8.0);
@@ -960,6 +960,10 @@ class Tuner {
         touch->increment_sel_val = touch->increment_datapage = false;
         idelta += idelta_encoder + touch->idelta;  // Allow edits using the encoder or touchscreen
         touch->idelta = idelta_encoder = 0;
+        if (!sim.potmapping()) {  // use pot to control level of acceleration
+            if (pot.val() < 50.0) idelta = (int)((float)idelta / map(pot.val(), 50.0, 0.0, 1.0, 5.0));
+            else idelta = (int)((float)idelta * map(pot.val(), 50.0, 100.0, 1.0, 5.0));
+        }
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningAbandonmentTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
         else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
         datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
