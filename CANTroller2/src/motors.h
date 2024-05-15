@@ -660,7 +660,7 @@ class BrakeMotor : public JagMotor {
         // hybrid_targ_ratio_pc = 100.0 * hybrid_targ_ratio;  // for display        
 
     void blind_trigger_out() {  // push trigger out less than 1/2way, motor extends (release brake), or more than halfway to retract (push brake), w/ speed proportional to distance from halfway point 
-        if (hotrc->joydir() == JOY_DN) pc[OUT] = blind_mode_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], pc[OPMIN], pc[OPMAX]);
+        if (hotrc->joydir() == JOY_DN) pc[OUT] = blind_mode_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], pc[OPMIN], pc[OPMAX]) / 100.0;
         else pc[OUT] = pc[STOP];
     }
     void calc_out() {  // returns motor output percent calculated using dynamic combination of position and pressure influence
