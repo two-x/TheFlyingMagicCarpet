@@ -21,6 +21,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (!ignition.signal) mode = SHUTDOWN;
             else if (tach.engine_stopped()) mode = STALL;  // otherwise if engine not running --> Stall Mode
         }
+        if (mode == HOLD && (brake.feedback == _None)) mode = FLY;  // can not go to hold mode when running brake open loop, go directly to fly mode
         we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) cleanup_state_variables();
         oldmode = mode;        
@@ -148,6 +149,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             car_hasnt_moved = speedo.car_stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
             gas.setmode(throttle_ctrl_mode);
             brake.setmode(ActivePID);
+            steer.setmode(OpenLoop);
         }
         if (car_hasnt_moved) {
             if (hotrc.joydir(VERT) != JOY_UP) mode = HOLD;            // must keep pulling trigger until car moves, or it drops back to hold mode

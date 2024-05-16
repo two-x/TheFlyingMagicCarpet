@@ -81,7 +81,8 @@ enum runmode { BASIC=0, ASLEEP=1, SHUTDOWN=2, STALL=3, HOLD=4, FLY=5, CRUISE=6, 
 enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes=3 };
 enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
-enum motor_modes { NA=-1, Halt=0, Idle=1, Release=2, OpenLoop=3, ActivePID=4, AutoStop=5, AutoHold=6, ParkMotor=7, Cruise=8, Calibrate=9, Starting=10, NumMotorModes=11 };
+enum motor_modes { NA=-1, Halt=0, Idle=1, Release=2, OpenLoop=3, ThreshLoop=4, ActivePID=5, AutoStop=6, AutoHold=7, ParkMotor=8, Cruise=9, Calibrate=10, Starting=11, NumMotorModes=12 };
+// enum motor_ctrlstatus { OpenLoop=11, ThreshLoop=12, ActivePID=13, NumModesAndStatus=14 };
 enum brake_pid_modes { NoInfluence=-1, PosnInfluence=0, PresInfluence=1, NumBrakeInfluences=2 };  // OpenLoop=3
 enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum boolean_states { ON=1 };

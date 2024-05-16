@@ -778,7 +778,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     sens senstype = sens::pressure;
     int32_t op_min_adc, op_max_adc, abs_min_adc, abs_max_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-    float hold_initial_psi, hold_increment_psi, panic_initial_psi, panic_increment_psi, margin_psi, zeropoint;
+    float hold_initial_psi, hold_increment_psi, panic_initial_psi, panic_increment_psi, margin_psi, _zeropoint;
     std::string _long_name = "Brake pressure sensor";
     std::string _short_name = "presur";
     std::string _native_units_name = "adc";
@@ -798,7 +798,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         panic_initial_psi = 140.0; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
         panic_increment_psi = 5.0; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
         margin_psi = 1;  // Max acceptible error when checking psi levels
-        zeropoint = from_native(op_min_adc);  // used when releasing the brake in case position is not available
+        _zeropoint = from_native(op_min_adc);  // used when releasing the brake in case position is not available
         set_native_limits(abs_min_adc, abs_max_adc);
         set_human_limits(from_native(abs_min_adc), from_native(abs_max_adc));
         set_native(op_min_adc);
@@ -815,7 +815,8 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     float max_psi() { return _human.max(); }
     float op_min() { return from_native(op_min_adc); }
     float op_max() { return from_native(op_max_adc); }
-    bool released() { return (_val_filt.val() <= zeropoint + margin_psi); }
+    bool released() { return (_val_filt.val() <= _zeropoint + margin_psi); }
+    float zeropoint() { return _zeropoint; }
 };
 // BrakePositionSensor represents a linear position sensor
 // for measuring brake position (TODO which position? pad? pedal?)

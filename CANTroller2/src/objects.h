@@ -248,6 +248,7 @@ class Starter {
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         // if (now_req != NA) Serial.printf("m:%d r:%d\n", motor, now_req);
         if (now_req == REQ_TOG) now_req = !motor;  // translate a toggle request to a drive request opposite to the current drive state
+        if ((brake.feedback == _None) && (now_req == REQ_ON)) now_req = REQ_NA;  // never run the starter if brake is in openloop mode
         req_active = (now_req != REQ_NA);                   // for display
         if (motor && ((now_req == REQ_OFF) || starterTimer.expired()))  {  // if we're driving the motor but need to stop or in the process of stopping
             motor = LOW;             // we will turn it off

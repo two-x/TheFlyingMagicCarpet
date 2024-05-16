@@ -165,8 +165,8 @@ class DiagRuntime {
     }
     void BrakeMotorFailure() {  // checks if any sensor the brake is expecting to use in its current mode are posting errors
         bool found_err = false;
-        if ((brake->active_sensor != _BrakePres) && (err_sens[LOST][_BrakePosn] || err_sens[RANGE][_BrakePosn])) found_err = true;
-        if ((brake->active_sensor != _BrakePosn) && (err_sens[LOST][_BrakePres] || err_sens[RANGE][_BrakePres])) found_err = true;
+        if ((brake->feedback != _BrakePres) && (err_sens[LOST][_BrakePosn] || err_sens[RANGE][_BrakePosn])) found_err = true;
+        if ((brake->feedback != _BrakePosn) && (err_sens[LOST][_BrakePres] || err_sens[RANGE][_BrakePres])) found_err = true;
         err_sens[WARN][_BrakeMotor] = found_err;
     }
     void SpeedoFailure() {  // checks if speedo isn't zero when stopped, or doesn't increase when we drive
