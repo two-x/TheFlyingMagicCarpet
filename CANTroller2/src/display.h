@@ -44,7 +44,8 @@ std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tac
 #define horfailsaf "HFails\x83""f"
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%", "%", "%" };  // Fixed rows
-static std::string brake_pid_card[2] = { "presur", "positn" };
+// static std::string brakefeedbackcard[2] = { "none", "presur", "positn", "hybrid" };
+// static std::string brake_pid_card[2] = { "presur", "positn" };
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 static std::string motormodecard[NumMotorModes+1] = { "Halt", "Idle", "Releas", "OpLoop", "Thresh", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start", "NA" };
 static std::string cruiseschemecard[NumCruiseSchemes] = { "FlyPID", "TrPull", "TrHold" };
@@ -78,16 +79,16 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "us",   "us",   "Hz",   "fps",  "us",   "us",   "us",   b1nary, "%",    "of10", "eyes", },  // PG_UI
 };
 static std::string unitmapnames[11] = { "usps", "us", "rpms", scroll, b1nary, "%", "ohm", "eyes", "psin", degree, "of10" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
-static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for where units use symbols not present in the font, are longer than 3 characters, or are just special
+static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for exceptions where some unit strings can't be well represented by any set of 3 font characters
     { 0x7e, 0x20, 0x20, 0x3c, 0x00, 0x24, 0x2a, 0x2a, 0x12, 0x00, 0x70, 0x0e, 0x00, 0x24, 0x2a, 0x2a, 0x12, },  // usps - microseconds per second
-    { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, },  // us - b/c the font's "mu" character doesn't work
+    { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, },  // us - b/c the font's lowercase mu character doesn't work
     { 0x1f, 0x01, 0x00, 0x3f, 0x09, 0x0e, 0x00, 0x0f, 0x01, 0x0e, 0x01, 0x0e, 0x60, 0x1c, 0x00, 0x58, 0x74, },  // rpm/s (or rot/m*s) - rate of change of engine rpm
-    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x02, 0x7f, 0x02, 0x04, 0x00, 0x10, 0x20, 0x7f, 0x20, 0x10, 0x00, },  // scroll arrows - to indicate multiple choice
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x02, 0x7f, 0x02, 0x04, 0x00, 0x10, 0x20, 0x7f, 0x20, 0x10, 0x00, },  // scroll arrows - to indicate multiple choices
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
-    { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - just because the font one is feeble
+    { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - we use this a lot and the font % looks feeble
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
     { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x41, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
-    { 0x3d, 0x00, 0x3e, 0x02, 0x3c, 0x00, 0x7f, 0x00, 0x3e, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi "in|psi" - that's right SIX characters in the space of 3 haha, it's pretty squished
+    { 0x3d, 0x00, 0x3e, 0x02, 0x3c, 0x00, 0x7f, 0x00, 0x3e, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi "in|psi" - that's right SIX characters in a 3 font-width space, haha.  get a microscope
     { 0x02, 0x05, 0x45, 0x62, 0x50, 0x48, 0x4c, 0x72, 0x41, 0x40, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // angular degrees
     { 0x30, 0x48, 0x48, 0x30, 0x00, 0x10, 0x7c, 0x12, 0x04, 0x00, 0x02, 0x7f, 0x00, 0x3e, 0x51, 0x49, 0x3e, },  // of 10
 };  // These bitmaps are in the same format as the idiot light bitmaps, described in neopixel.h
@@ -984,9 +985,9 @@ class Tuner {
         sim.set_potmap((sens)(adj_val(sim.potmap(), idelta, 0, (int)(sens::starter) - 1)));
         screen->disp_simbuttons_dirty = true;
     }
-    void adj_active_brake_sensor() {  // active brake sensors scroll select custom adjust function. allows scroll select of valid values even tho they are not contiguous in the enum
+    void adj_brake_feedback(int _idelta) {  // active brake sensors scroll select custom adjust function. allows scroll select of valid values even tho they are not contiguous in the enum
         int t = brake.feedback;
-        adj_val(&t, idelta, _BrakePres - 1, _BrakePosn + 1);
+        adj_val(&t, _idelta, _BrakePres - 1, _BrakePosn + 1);
         if (t == _BrakePosn + 1) t = _Hybrid;
         else if (t == _BrakePres - 1) t = _None;        
         brake.update_ctrl_config(brake.pid_enabled, t);
@@ -1030,7 +1031,7 @@ class Tuner {
             }
             else if (datapage == PG_MOTR) {
                 if (sel_val == 6) brake.update_ctrl_config((int)idelta);
-                else if (sel_val == 7) adj_active_brake_sensor();
+                else if (sel_val == 7) adj_brake_feedback(idelta);
                 else if (sel_val == 8) gas.update_ctrl_config((int)idelta);
                 else if (sel_val == 9) gas.update_cruise_ctrl_config((int)idelta);
                 else if (sel_val == 10) adj_cruise_scheme();
@@ -1103,7 +1104,7 @@ static void push_task_wrapper(void *parameter) {
                 xSemaphoreGive(drawbuf_sem);
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(1));
+        vTaskDelay(pdMS_TO_TICKS(2));
         // vTaskDelete(NULL);
     }
 }
@@ -1113,7 +1114,7 @@ static void draw_task_wrapper(void *parameter) {
             screen.draw_task();
             xSemaphoreGive(drawbuf_sem);
         }
-        vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
+        vTaskDelay(pdMS_TO_TICKS(2));  //   || sim.enabled()
     }
 }
 // The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.

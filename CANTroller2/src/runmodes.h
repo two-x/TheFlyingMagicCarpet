@@ -21,7 +21,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (!ignition.signal) mode = SHUTDOWN;
             else if (tach.engine_stopped()) mode = STALL;  // otherwise if engine not running --> Stall Mode
         }
-        if (mode == HOLD && (brake.feedback == _None)) mode = FLY;  // can not go to hold mode when running brake open loop, go directly to fly mode
+        if (mode == HOLD && (brake.feedback == _None)) mode = FLY;  // we can not autohold the brake when running brake open loop, so go directly to fly mode
         we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) cleanup_state_variables();
         oldmode = mode;        
@@ -37,10 +37,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (mode == FLY) run_flyMode();
         else if (mode == CRUISE) run_cruiseMode();
         else if (mode == CAL) run_calMode();
-        else {  // Obviously this should never happen
-            Serial.println (F("Error: Invalid runmode entered"));
-            mode = SHUTDOWN;
-        }
+        else Serial.println(F("Error: Invalid runmode entered"));  // Obviously this should never happen
         return mode;
     }
   private:
@@ -183,9 +180,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(Halt);
         }
         else if (calmode_request) mode = SHUTDOWN;
-        if (cal_gasmode_request && gas.motormode != Calibrate) { gas.setmode(Calibrate); Serial.printf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode); }
+        if (cal_gasmode_request && gas.motormode != Calibrate) gas.setmode(Calibrate);  // Serial.printf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode);
         else if (!cal_gasmode_request && gas.motormode == Calibrate) gas.setmode(Idle);
-        if (cal_brakemode_request && brake.motormode != Calibrate) { brake.setmode(Calibrate); Serial.printf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode); }
+        if (cal_brakemode_request && brake.motormode != Calibrate) brake.setmode(Calibrate);  // Serial.printf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode);
         else if (!cal_brakemode_request && brake.motormode == Calibrate) brake.setmode(Halt);
     }
 };

@@ -284,14 +284,14 @@ class Transducer : public Device {
         float min_f = static_cast<float>(_native.min());
         float max_f = static_cast<float>(_native.max());
         float ret = -1;
-        if (!_invert) {
-            if (dir == TransducerDirection::REV) {
+        if (!_invert) {  // if human unit (generally si units) has a proportional relationship to native unit (like miles to inches)
+            if (dir == TransducerDirection::REV) {  // if higher human values translate to lower native values
                 ret = min_f + max_f - _b_offset - _m_factor * arg_val_f;  // Serial.printf("%lf = %lf + %lf - %lf - %lf * %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
             }
-            else {
+            else {  // if higher human values also translate to higher native values
                 ret = _b_offset + _m_factor * arg_val_f; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _b_offset, _m_factor, arg_val_f);
             }
-        } else if (std::abs(arg_val_f) > 0.000001) { // NOTE: isn't 0.0 a valid value tho?  Soren: Only if the pulley can rotate all the way around in under 1 planck time
+        } else if (std::abs(arg_val_f) > 0.000001) { // if human unit has a reciprocal (inverse) relationship to native unit (like hours to hertz)
             if (dir == TransducerDirection::REV) {
                 ret = min_f + max_f - _b_offset - _m_factor / arg_val_f;  // Serial.printf("%lf = %lf + %lf - %lf - %lf / %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
             }
@@ -900,15 +900,15 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
   protected:
     int32_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
     Timer _stop_timer;
-    bool _negative = false, _pin_activity;
+    bool _low_pulse = false, _pin_activity;
     float _stop_thresh;
     float _last_read_time_us;
     int32_t _min_us = 100000.0;  // default. overwrite in children
     volatile int64_t _isr_us = 0;
-    volatile int64_t _isr_timer_start_us = 0;
-    volatile int64_t _isr_timer_read_us = 0;
+    volatile int64_t _isr_time_last_us = 0;
+    volatile int64_t _isr_time_current_us = 0;
     int32_t _isr_buf_us = 0;
-    int64_t _delta_abs_min_us; // must be passed into constructor
+    int64_t _debounce_threshold_us; // must be passed into constructor
     // bool _pin_activity = LOW;  // _invert = true,
 
     // Shadows a hall sensor being triggered by a passing magnet once per pulley turn. The ISR calls
@@ -916,10 +916,10 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     // to about 0.750 mph which is as fast as I can move the magnet with my hand, and it works.
     // Update: Janky bench test appeared to work up to 11000 rpm.
     void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
-        _isr_timer_read_us = esp_timer_get_time();
-        int64_t time_us = _isr_timer_read_us - _isr_timer_start_us;
-        if (time_us > _delta_abs_min_us) {  // ignore spurious triggers or bounces
-            _isr_timer_start_us = _isr_timer_read_us;
+        _isr_time_current_us = esp_timer_get_time();
+        int64_t time_us = _isr_time_current_us - _isr_time_last_us;
+        if (time_us > _debounce_threshold_us) {  // ignore spurious triggers or bounces
+            _isr_time_last_us = _isr_time_current_us;
             _isr_us = time_us;
             _pin_activity = !_pin_activity;
         }
@@ -944,8 +944,8 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     }
 
   public:
-    PulseSensor(uint8_t arg_pin, int64_t delta_abs_min_us_arg, float stop_thresh_arg)
-      : Sensor<int32_t, HUMAN_T>(arg_pin), _stop_timer(_stop_timeout_us), _delta_abs_min_us(delta_abs_min_us_arg), _stop_thresh(stop_thresh_arg) {}
+    PulseSensor(uint8_t arg_pin, int64_t debounce_arg, float stop_thresh_arg)
+      : Sensor<int32_t, HUMAN_T>(arg_pin), _stop_timer(_stop_timeout_us), _debounce_threshold_us(debounce_arg), _stop_thresh(stop_thresh_arg) {}
     PulseSensor() = delete;
     std::string _long_name = "Unknown Hall Effect sensor";
     std::string _short_name = "pulsen";
@@ -954,7 +954,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
 
     void setup() {
         set_pin(this->_pin, INPUT_PULLUP);
-        attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _negative ? FALLING : RISING);
+        attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
         this->set_source(src::PIN);
     }
     bool stopped() { return this->_val_filt.val() < _stop_thresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
@@ -969,7 +969,7 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
 class Tachometer : public PulseSensor<float> {
   protected:
-    int64_t _delta_abs_min_us = 6500;;
+    int64_t _debounce_threshold = 6500;  // corresponds to 1000000 us/sec / 6500 us = 154 Hz max pulse frequency
     float _stop_thresh_rpm = 0.2;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
     float _abs_max_rpm, _redline_rpm, _initial_rpm;
     int32_t _min_us, _zerovalue, _stop_timeout_us;
@@ -977,13 +977,13 @@ class Tachometer : public PulseSensor<float> {
     sens senstype = sens::tach;
     float _idle_rpm = 600.0, _idle_cold_rpm = 750.0, _idle_hot_rpm = 500.0;
     float _margin, _govern_rpm; 
-    Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_rpm) {
-        _abs_max_rpm = 7000.0;  // Max possible engine rotation speed
-        _redline_rpm = 5500.0;  // Max possible engine rotation speed
-        _min_us = 110000;  // corresponds to 5500 rpm
-        _negative = true;
-        _invert = true;
-        _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm)
+    Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _debounce_threshold_us, _stop_thresh_rpm) {
+        _abs_max_rpm = 4500.0;  // Max possible engine rotation speed
+        _redline_rpm = 3600.0;  // Max possible engine rotation speed  corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        _min_us = _redline_rpm * 1000000.0 / 60.0;  // at 3600 rpm gives 16666 us
+        _low_pulse = true;
+        _invert = true;  // will use the math:  human_rpm = b_offset + m_factor / native_us
+        _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm), (or 60000000 rpm per magnet-per-us)
         _b_offset = 0.0;
         _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         _govern_rpm = _redline_rpm;
@@ -991,7 +991,7 @@ class Tachometer : public PulseSensor<float> {
         _margin = 10;
         _initial_rpm = 50.0;
         _zerovalue = 999999;
-        _stop_timeout_us = 1250000;
+        _stop_timeout_us = 250000;
         set_human_limits(0.0, _redline_rpm);
         set_native_limits(_min_us, _stop_timeout_us);
         set_human(_initial_rpm);
@@ -1034,25 +1034,25 @@ class Tachometer : public PulseSensor<float> {
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to MPH
 class Speedometer : public PulseSensor<float> {
   protected:
-    int64_t _delta_abs_min_us; 
+    int64_t _debounce_threshold_us; 
     float _stop_thresh_mph, _min_mph, _max_mph, _min_us, _initial_mph, _redline_mph, _govern_mph, _idle_mph, _margin;
     bool _pin_activity = LOW;
     int32_t _zerovalue;
   public:
     sens senstype = sens::speedo;
-    Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _delta_abs_min_us, _stop_thresh_mph) {
-        _delta_abs_min_us = 4500;  // 4500 us corresponds to about 40 mph, which isn't possible. Use to reject retriggers
+    Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _debounce_threshold_us, _stop_thresh_mph) {
+        _debounce_threshold_us = 40000;  // 40000 us corresponds to about 45 mph, which a mule can't go. Use to reject retriggers
         _min_mph = 0.0;
         _max_mph = 25.0; // What is max speed car can ever go
-        _min_us = 119000;  // corresponds to 25.0 mph
         _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
         _redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
         _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        _invert = true;
+        _invert = true;  // will use the math:  human_mph = b_offset + m_factor / native_us
         // new math with two magnets on the rear axle:
-        _m_factor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 magnet/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/magnet * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr (mph)    
+        _m_factor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 magnet/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/magnet * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr,  (or 1785000 mph per magnet-per-us)     
         _b_offset = 0.0;
         _margin = 0.2;
+        _min_us = _m_factor / _redline_mph;  // 15.0 mph gives 119000 us.  25.0 mph gives 71400 us
         _stop_thresh_mph = 0.2;  // Below which the car is considered stopped
         _zerovalue = 9999999;
         set_human_limits(_min_mph, _redline_mph);

@@ -1,6 +1,6 @@
 #pragma once
 
-#if !WIFI_SUPPORTED  // if wifi/web disabled, only set up the filesystem and a shell of a web manager
+#if !WIFI_SUPPORTED  // if wifi/web disabled, only set up the filesystem and nonfunctional dummy web manager
 
 #define FORMAT_LITTLEFS_IF_FAILED true
 #include <FS.h>
