@@ -55,7 +55,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "PressRaw", "BkPosRaw", "TachPuls", " Pot Raw", __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
-    { "Brk Heat", "Comb"brAk, __________, __________, __________, __________, "BkEnaPID", "BkFeedbk", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
+    { "Brk Heat", "HybBrake", __________, __________, __________, __________, "BkEnaPID", "BkFeedbk", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
     { "MotrMode", "Feedback", brAk"Posn", "Pn|PrErr", "Pres Tgt", "Posn Tgt", "HybrdTgt", "OutRatio", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "MotrMode", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
@@ -1029,10 +1029,10 @@ class Tuner {
                 else if (sel_val == 10) gas.add_temphot(fdelta);
             }
             else if (datapage == PG_MOTR) {
-                if (sel_val == 6) brake.update_ctrl_config((idelta > 0) ? ON : OFF);
+                if (sel_val == 6) brake.update_ctrl_config((int)idelta);
                 else if (sel_val == 7) adj_active_brake_sensor();
-                else if (sel_val == 8) gas.update_ctrl_config((idelta > 0) ? ON : OFF);
-                else if (sel_val == 9) gas.update_cruisepid_config((idelta > 0) ? ON : OFF);
+                else if (sel_val == 8) gas.update_ctrl_config((int)idelta);
+                else if (sel_val == 9) gas.update_cruise_ctrl_config((int)idelta);
                 else if (sel_val == 10) adj_cruise_scheme();
             }
             else if (datapage == PG_BPID) {

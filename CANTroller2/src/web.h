@@ -1,8 +1,64 @@
 #pragma once
-#if WIFI_SUPPORTED
-#include <Arduino.h>
+
+#if !WIFI_SUPPORTED  // if wifi/web disabled, only set up the filesystem and a shell of a web manager
+
+#define FORMAT_LITTLEFS_IF_FAILED true
 #include <FS.h>
 #include <LittleFS.h>
+class FileSystem {
+  private:
+    void cleanLittleFS() {
+        Serial.println("Cleaning LittleFS...");
+        LittleFS.format();
+        Serial.println("LittleFS cleaned.");
+    }
+  public:
+    FileSystem() {}
+    void setup() {
+        printf("Littlefs mount %s", LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED) ? "point " : "failed ");
+        
+        // esp_vfs_fat_sdmmc_mount("/", );  // esp_vfs_fat_sdmmc_mount(const char *base_path, const sdmmc_host_t *host_config, const void *slot_config, const esp_vfs_fat_mount_config_t *mount_config, sdmmc_card_t **out_card)
+
+        listDir(LittleFS, "/", 3);
+    }
+    void listDir(fs::FS &fs, const char * dirname, uint8_t levels) {
+        printf("%s", dirname);
+        File root = fs.open(dirname);
+        if(!root) {
+            printf("\n  failed to open directory");
+            return;
+        }
+        if (!root.isDirectory()) {
+            printf("\n  not a directory");
+            return;
+        }
+        File file = root.openNextFile();
+        while(file) {
+            if(file.isDirectory()) {
+                printf("\n  dir: %s", file.name());
+                if(levels) listDir(fs, file.path(), levels -1);
+            }
+            else printf("\n  file: %s  size: %d", file.name(), file.size());
+            file = root.openNextFile();
+        }
+        printf("\n");
+    }
+};
+class WebManager {  // just a useless dummy version for code compatibility 
+  private:
+    FileSystem fs;
+  public:
+    WebManager(LoopTimer* unused) {}
+    void setup() {
+        fs.setup();
+        printf("Wifi/Web features are disabled..\n");
+    }
+    void update() { web_disabled = true; }
+};
+
+#else  // if WIFI_SUPPORTED == true  // (from here to the end of the file)
+
+#include <Arduino.h>
 // #include <FFat.h>
 #include <WiFi.h>  // "Wifi.h"
 #include <ESPAsyncWebServer.h>  // To run wifi in Soft Access Point (SAP) mode (standalone w/o router)
@@ -10,7 +66,7 @@
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>  // <AsyncJson.h>  // "json.h"  needed for JSON encapsulation (send multiple variables with one string)
 #include <ElegantOTA.h>  // includes <AsyncTCP.h>
-#define FORMAT_LITTLEFS_IF_FAILED true
+
 // create a callback function, triggered by web socket events
 void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {  // the parameters of this callback function are always the same -> num: id of the client who send the event, type: type of message, payload: actual data sent and length: length of payload
     switch (type) {                                     // switch on the type of information sent
@@ -59,45 +115,6 @@ void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {
     //     break;
     }
 }
-class FileSystem {
-  private:
-    void cleanLittleFS() {
-        Serial.println("Cleaning LittleFS...");
-        LittleFS.format();
-        Serial.println("LittleFS cleaned.");
-    }
-  public:
-    FileSystem() {}
-    void setup() {
-        printf("Littlefs mount %s", LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED) ? "point " : "failed ");
-        
-        // esp_vfs_fat_sdmmc_mount("/", );  // esp_vfs_fat_sdmmc_mount(const char *base_path, const sdmmc_host_t *host_config, const void *slot_config, const esp_vfs_fat_mount_config_t *mount_config, sdmmc_card_t **out_card)
-
-        listDir(LittleFS, "/", 3);
-    }
-    void listDir(fs::FS &fs, const char * dirname, uint8_t levels) {
-        printf("%s", dirname);
-        File root = fs.open(dirname);
-        if(!root) {
-            printf("\n  failed to open directory");
-            return;
-        }
-        if (!root.isDirectory()) {
-            printf("\n  not a directory");
-            return;
-        }
-        File file = root.openNextFile();
-        while(file) {
-            if(file.isDirectory()) {
-                printf("\n  dir: %s", file.name());
-                if(levels) listDir(fs, file.path(), levels -1);
-            }
-            else printf("\n  file: %s  size: %d", file.name(), file.size());
-            file = root.openNextFile();
-        }
-        printf("\n");
-    }
-};
 class AccessPoint {
   private:
     IPAddress localip, gateway, subnet, primarydns, secondarydns;
@@ -222,11 +239,5 @@ class WebManager {
         // if (<activity in web page is detected>) sleep_inactivity_timer.reset();  // evidence of user activity
     }
 };
-#else
-class WebManager {  // just a useless dummy version for code compatibility 
-  public:
-    WebManager(LoopTimer* unused) {}
-    void setup() { printf("Wifi/Web features are disabled..\n"); }
-    void update() { web_disabled = true; }
-};
+
 #endif

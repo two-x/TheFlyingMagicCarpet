@@ -114,8 +114,8 @@ class QPID {
     }
     // set_tunings  This function allows the controller's dynamic performance to be adjusted. It's called 
     // automatically from the constructor, but tunings can also be adjusted on the fly during normal operation.
-    void set_tunings(float a_kp, float a_ki, float a_kd, pmod a_pmode = pmod::onerr,
-      dmod a_dmode = dmod::onmeas, awmod a_awmode = awmod::cond) {
+    // void set_tunings(float a_kp, float a_ki, float a_kd, pmod a_pmode = pmod::onerr, dmod a_dmode = dmod::onmeas, awmod a_awmode = awmod::cond) {
+    void set_tunings(float a_kp, float a_ki, float a_kd, pmod a_pmode, dmod a_dmode, awmod a_awmode) {
         if (a_kp < 0 || a_ki < 0 || a_kd < 0 || !sampletime) return;  // added divide by zero protection
         if (a_ki == 0) _outsum = 0;
         _pmode = a_pmode; _dmode = a_dmode; _awmode = a_awmode;
@@ -126,6 +126,7 @@ class QPID {
         _kd = a_kd / sampletime_sec;
     }
     // set_tunings  Set Tunings using the last remembered pmode, dmode and awmode settings.
+    // void set_tunings(float a_kp, float a_ki, float a_kd) {
     void set_tunings(float a_kp, float a_ki, float a_kd) {
         set_tunings(a_kp, a_ki, a_kd, _pmode, _dmode, _awmode);
     }
@@ -180,6 +181,12 @@ class QPID {
     void set_awmode(int a_awmode) { _awmode = (awmod)a_awmode; }
     // sets the output summation value
     void set_outsum(float a_outsum) { _outsum = a_outsum; }
+    void set_limits(float* a_min, float* a_max) {
+        _outmin = a_min;
+        _outmax = a_max;
+        _output = constrain(_output, *_outmin, *_outmax);
+        _outsum = constrain(_outsum, *_outmin, *_outmax);
+    }
     // Getter functions
     float err() { return _err; }
     float kp() { return dispkp; }
@@ -315,7 +322,7 @@ class GasServo : public ServoMotor {
     float gas_kd = 0.000;             // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
     float cruise_ctrl_extent_pc, adjustpoint, ctrlratio;  // During cruise adjustments, saves farthest trigger position read
     Timer cruiseDeltaTimer, throttleRateTimer;
-    bool pid_ena_last = false, cruuise_pid_ena_last = false;
+    bool pid_ena_last = false, cruise_pid_ena_last = false;
   public:
     using ServoMotor::ServoMotor;
     QPID pid, cruisepid;
@@ -483,10 +490,18 @@ class GasServo : public ServoMotor {
     }
     void update_ctrl_config(int new_pid_ena=-5) {   // run w/o arguments each loop to update status, or call with either argument to change config and update. do not change feedback or pid_enabled anywhere else!
         if (new_pid_ena != -5) pid_enabled = (bool)new_pid_ena;     // receive new pid enable setting (ON/OFF) if given
-        if (!pid_enabled && pid_ena_last) setmode(motormode);  // ensure current motor mode is consistent with configs set here
+        if (!pid_enabled && pid_ena_last) {
+            setmode(motormode);  // ensure current motor mode is consistent with configs set here
+            cruisepid.set_limits(&pc[OPMIN], &pc[OPMAX]);
+            cruisepid.set_tunings(cruise_opengas_kp, cruise_opengas_ki, cruise_opengas_kd);
+        }
+        else if (pid_enabled && !pid_ena_last) {
+            cruisepid.set_limits(tach->idle_rpm_ptr(), tach->govern_rpm_ptr());
+            cruisepid.set_tunings(cruise_pidgas_kp, cruise_pidgas_ki, cruise_pidgas_kd);
+        }
         pid_ena_last = pid_enabled;
     }
-    void update_cruisepid_config(int new_pid_ena=-5) {  // pass in OFF or ON (for compatibility with brake function)
+    void update_cruise_ctrl_config(int new_pid_ena=-5) {  // pass in OFF or ON (for compatibility with brake function)
         if (new_pid_ena != -5) cruise_pid_enabled = (bool)new_pid_ena;     // otherwise receive new pid enable setting (ON/OFF) if given
     }
     void set_cruise_scheme(int newscheme) {
@@ -579,23 +594,39 @@ class BrakeMotor : public JagMotor {
     float hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0;  // , hybrid_targ_ratio_pc = 100.0;
     float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
     float open_loop_attenuation_pc = 50.0, thresh_loop_attenuation_pc = 50.0, thresh_loop_hysteresis_pc = 1.0;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
-    void derive() {
+    void derive() {  // to-do below: need stop/hold values for posn only operation!
         JagMotor::derive();
+        pc[MARGIN] = 100.0 * pressure->margin_psi / (pressure->max_human() - pressure->min_human());
+        hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_hi + brake_pid_trans_threshold_lo);
+        hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
+
         panic_initial_pc = map(pressure->panic_initial_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
         hold_initial_pc = map(pressure->hold_initial_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
         panic_increment_pc = 100.0 * pressure->panic_increment_psi / (pressure->max_human() - pressure->min_human());
         hold_increment_pc = 100.0 * pressure->hold_increment_psi / (pressure->max_human() - pressure->min_human());
-        pc[MARGIN] = 100.0 * pressure->margin_psi / (pressure->max_human() - pressure->min_human());
-        hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_hi + brake_pid_trans_threshold_lo);
-        hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
-        if (feedback == _BrakePres) {
-            zeropoint_pc = map(pressure->zeropoint(), pressure->min_human(), pressure->max_human(), 100.0, 0.0);
-            parkpos_pc = zeropoint_pc;            
-        }
-        else {
-            zeropoint_pc = map(brkpos->zeropoint(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
-            parkpos_pc = map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
-        }
+        zeropoint_pc = map(brkpos->zeropoint(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
+        parkpos_pc = map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
+        // do we want to have specific psi and inch values for these depending on present sensors?
+        // if (feedback == _BrakePres) {  // use these if only pressure sensor available
+        //     zeropoint_pc = map(pressure->zeropoint(), pressure->min_human(), pressure->max_human(), 100.0, 0.0);
+        //     parkpos_pc = zeropoint_pc;            
+        // }
+        // else {  // use these by default
+        //     zeropoint_pc = map(brkpos->zeropoint(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
+        //     parkpos_pc = map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
+        // }
+        // if (feedback == _BrakePosn) {  // use these if only position sensor available
+        //     panic_initial_pc = map(brkpos->panic_initial_psi, brkpos->max_human(), brkpos->min_human(), 0.0, 100.0);
+        //     hold_initial_pc = map(brkpos->hold_initial_psi, brkpos->max_human(), brkpos->min_human(), 0.0, 100.0);
+        //     panic_increment_pc = 100.0 * brkpos->panic_increment_psi / (brkpos->max_human() - brkpos->min_human());
+        //     hold_increment_pc = 100.0 * brkpos->hold_increment_psi / (brkpos->max_human() - brkpos->min_human());
+        // }
+        // else {  // use these by default
+        //     panic_initial_pc = map(pressure->panic_initial_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
+        //     hold_initial_pc = map(pressure->hold_initial_psi, pressure->min_human(), pressure->max_human(), 0.0, 100.0);
+        //     panic_increment_pc = 100.0 * pressure->panic_increment_psi / (pressure->max_human() - pressure->min_human());
+        //     hold_increment_pc = 100.0 * pressure->hold_increment_psi / (pressure->max_human() - pressure->min_human());
+        // }
     }
     bool detect_tempsens() {
         float trytemp = tempsens->val(loc::BRAKE);
