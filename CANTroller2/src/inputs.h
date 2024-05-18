@@ -91,38 +91,49 @@ class Encoder {
 
     // instance vars
     volatile uint32_t _spinrate_isr_us = 100000;  // Time elapsed between last two detents
-    volatile int32_t _bounce_danger = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
+    volatile int32_t _bounce_lock = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
     volatile int32_t _delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
     int _a_pin, _b_pin, _sw_pin;
     int32_t _state = 0;
     uint32_t _spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-    Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
+    TimerIRAM _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
     //  ---- tunable ----
 
-    void IRAM_ATTR _a_isr() {
-        if (_bounce_danger != Encoder::ENC_A) {
-            if (!enc_a_debounced) {
-                _spinrate_isr_us = _spinspeedTimer.elapsed();
-                _spinspeedTimer.reset();
-                // _spinrate_isr_us = _spinspeedTimer.elapset();
-                enc_b_debounced = !digitalRead(_b_pin);
-                _delta += enc_b ? -1 : 1;
+    // Encoder isr. note you gotta set the define EncoderPanasonicType to match your encoder
+    // If true, supports one type of cheap amazon black-pcb. 2024 one of these is mounted in the vehicle control enclosure
+    //   * these guys hit a detent around each B transition, and A transitions in between detents
+    //   * on an A transition, you're going CCW if the new value of A and the [now stable] B value are the same
+    //   * if your encoder is the wrong kind for this algorithm, it'll act all squirrely, giving spurious double-actions etc., switch over to this algorithm
+    // if false, supports a different type of cheap amazon black-pcb encoders
+    //   * the A signal starts low at each detent, and goes high then back low before the next detent 
+    //   * the value of the B signal on the falling edge of the A signal is high if going CW, otherwise low
+    //   * if your encoder is the wrong kind for this algorithm, it'll behave all sluggish, like usually ignoring every other detent, switch over to this algorithm
+    void IRAM_ATTR _a_isr() {                             // A isr has been triggered by A signal transition event (either rising or falling). A will now bounce for a while and can't be trusted
+        if (_bounce_lock == Encoder::ENC_A) return;       // if A isr is bounce locked then bail
+        #if EncoderPanasonicType
+            _spinrate_isr_us = _spinspeedTimer.elapsed(); // save elapsed time since last trigger, to calculate spin rate
+            _spinspeedTimer.reset();                      // reset spin rate timer for next time
+            val_b_isr = digitalRead(_b_pin);              // get a stable reading of B signal
+            _delta += (val_a_isr == val_b_isr) ? -1 : 1;  // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
+        #else
+            if (!val_a_isr) {                                  // if the A signal is now low (i.e. recent B isr read A pin as high)
+                _spinrate_isr_us = _spinspeedTimer.elapsed();  // save elapsed time since last trigger, to calculate spin rate
+                _spinspeedTimer.reset();                       // reset spin rate timer for next time
+                val_b_isr = !digitalRead(_b_pin);              // Get a clean reading of the B signal
+                _delta += val_b_isr ? -1 : 1;                  // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
             }
-            _bounce_danger = Encoder::ENC_A;
-        }
+        #endif
+        _bounce_lock = Encoder::ENC_A;               // bounce lock this isr, and unlock the B isr
     }
-
-    void IRAM_ATTR _b_isr() {
-        if (_bounce_danger != Encoder::ENC_B) {
-            enc_a_debounced = !digitalRead(_a_pin);
-            _bounce_danger = Encoder::ENC_B;
-        }
+    void IRAM_ATTR _b_isr() {                        // B isr has been triggered by B signal transition event (either rising or falling). B will now bounce for a while and can't be trusted
+        if (_bounce_lock == Encoder::ENC_B) return;  // if B isr is bounce locked then bail
+        val_a_isr = !digitalRead(_a_pin);            // get a clean reading of A signal, forecasting it will invert
+        _bounce_lock = Encoder::ENC_B;               // bounce lock this isr, and unlock the A isr
     }
-
   public:
     MomentaryButton button;
-    bool enc_a, enc_a_debounced = LOW;  // if initializing HIGH sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
-    bool enc_b, enc_b_debounced = HIGH;
+    bool enc_a, val_a_isr = LOW;  // if initializing HIGH sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
+    bool enc_b, val_b_isr = HIGH;
     Encoder(int a, int b, int sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) {
         button.setup(_sw_pin);
     }

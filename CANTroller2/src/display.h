@@ -44,8 +44,6 @@ std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tac
 #define horfailsaf "HFails\x83""f"
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%", "%", "%" };  // Fixed rows
-// static std::string brakefeedbackcard[2] = { "none", "presur", "positn", "hybrid" };
-// static std::string brake_pid_card[2] = { "presur", "positn" };
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 6, 6, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
@@ -715,7 +713,6 @@ class Display {
             draw_asciiname(9, motormodecard[brake.motormode]);
             draw_asciiname(10, brakefeedbackcard[brake.feedback]);
             draw_dynamic(11, brkpos.filt(), brkpos.op_min(), brkpos.op_max(), brake.pids[_BrakePosn].target());
-            // draw_asciiname(10, motormodecard[brake.motormode]);
             draw_dynamic(12, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
             draw_dynamic(13, brake.target[PressureFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
             draw_dynamic(14, brake.target[PositionFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());

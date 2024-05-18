@@ -590,7 +590,7 @@ class BrakeMotor : public JagMotor {
     }
   public:
     using JagMotor::JagMotor;
-    bool pid_enabled = true, pid_ena_last = true, ctrl_status = ActivePID;    // default for use of pid allowed
+    bool pid_enabled = true, pid_ena_last = true;    // default for use of pid allowed
     int feedback = PositionFB, feedback_last = PositionFB;  // this is the default for sensors to use as feedback
     int dominantsens, motormode = Halt, oldmode = Halt;  // not tunable
     bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == PositionFB);
@@ -647,7 +647,7 @@ class BrakeMotor : public JagMotor {
         return brake_tempsens_exists;
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, GasServo* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-        Serial.printf("Brake motor.. pid is %s, feedback is %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback]);
+        Serial.printf("Brake motor.. pid is %s, feedback is %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
         JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         // duty_fwd_pc = brakemotor_duty_spec_pc;
@@ -716,8 +716,6 @@ class BrakeMotor : public JagMotor {
         // if (active_sensor == NoneFB) combined_read_pc = NAN;
         combined_read_pc = get_hybrid_brake_pc(pres, posn);  // else
     }
-    void blind_trigger_out() {  // scheme for open loop control (no sensor feedback). push trigger out less than 1/2way, motor extends (release brake), or more than halfway to retract (push brake), w/ speed proportional to distance from halfway point 
-    }
     float calc_thresh_loop_out() {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
         float err = (combined_read_pc - target_pc);
         if (std::abs(err) < thresh_loop_hysteresis_pc) return pc[STOP];
@@ -756,9 +754,11 @@ class BrakeMotor : public JagMotor {
             pc[OUT] = target_pc;  // this is openloop (blind trigger) control scheme
             return;  // open loop should skip calculating hybrid ratio, so just return
         }
+
         hybrid_out_ratio = calc_hybrid_ratio(pressure->filt());  // calculate pressure vs. position multiplier based on the sensed values
         hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
         set_dominant_sensor(hybrid_out_ratio);  // round to 0 (posn pid) or 1 (pressure pid). this is for idiot light display
+        
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             carstop(false);
             autoholding = !autostopping && (pressure->filt() >= pressure->hold_initial_psi - pressure->margin_psi);  // this needs to be tested  // if (!speedo->car_stopped()) {            
@@ -808,10 +808,10 @@ class BrakeMotor : public JagMotor {
     }
   public:
     void setmode(int _mode, bool force_init=false) {     // motormode is beholden to the current config
-        if (feedback == NoneFB) {                         // if there is no feedback
-            if (_mode == ActivePID) _mode = OpenLoop;    // attempt to use pid mode drops to openloop instead
-            else if (_mode == AutoStop || _mode == AutoHold) _mode = OpenLoop;
-            else if (_mode == Release || _mode == ParkMotor) _mode = Halt;  // lack of pid eliminates most modes
+        if (feedback == NoneFB) {                        // if there is no feedback
+            if (_mode == ActivePID) _mode = OpenLoop;    // can't use pid mode, drop to openloop instead
+            else if (_mode == AutoStop || _mode == AutoHold) _mode = OpenLoop;  // lack of feedback eliminates most modes
+            else if (_mode == Release || _mode == ParkMotor) _mode = Halt;      // in openloop we lose some safeties, only use if necessary 
         }
         else if (!pid_enabled) {                         // if we have feedback but pid is disabled in config
             if (_mode == ActivePID) _mode = ThreshLoop;  // drop to simple threshold-based loop scheme

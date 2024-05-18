@@ -291,12 +291,34 @@ T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
 uint8_t rando_color() {
     return ((uint8_t)random(0x7) << 5) | ((uint8_t)random(0x7) << 2) | (uint8_t)random(0x3); 
 }
+
 class Timer {  // !!! beware, this 54-bit microsecond timer overflows after every 571 years
   protected:
     volatile int64_t start_us, timeout_us;
   public:
     Timer() { reset(); }
     Timer(uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
+    void set (int64_t arg_timeout_us) {
+        timeout_us = arg_timeout_us;
+        start_us = esp_timer_get_time();
+    }
+    void reset() { start_us = esp_timer_get_time(); }
+    bool expired() { return esp_timer_get_time() >= start_us + timeout_us; }
+    int64_t elapsed() { return esp_timer_get_time() - start_us; }
+    int64_t timeout() { return timeout_us; }
+    bool expireset() {  // Like expired() but immediately resets if expired
+        int64_t now_us = esp_timer_get_time();
+        if (now_us < start_us + timeout_us) return false;
+        start_us = now_us;
+        return true;
+    }    
+};
+class TimerIRAM {  // same timer but stuck in better RAM, (no idea if it really matters).  Use for irqs etc.
+  protected:
+    volatile int64_t start_us, timeout_us;
+  public:
+    TimerIRAM() { reset(); }
+    TimerIRAM(uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
     void IRAM_ATTR set (int64_t arg_timeout_us) {
         timeout_us = arg_timeout_us;
         start_us = esp_timer_get_time();
