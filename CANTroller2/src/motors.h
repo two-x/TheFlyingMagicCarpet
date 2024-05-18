@@ -210,6 +210,11 @@ class QPID {
     int centmode() { return static_cast<int>(_centmode); }
     float* target_ptr() { return &_target; }
 };
+
+static std::string motormodecard[NumMotorModes+1] = { "Halt", "Idle", "Releas", "OpLoop", "Thresh", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start", "NA" };
+static std::string cruiseschemecard[NumCruiseSchemes] = { "FlyPID", "TrPull", "TrHold" };
+static std::string brakefeedbackcard[NumBrakeFB] = { "BkPosn", "BkPres", "Hybrid", "None" };
+
 // ServoMotor - a parent class providing common elements for motor manager child classes. These subclasses each
 // coordinate all aspects of one motor, including related sensors & pid, having a standard control interface
 class ServoMotor {
@@ -374,7 +379,8 @@ class GasServo : public ServoMotor {
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
-        printf("Gas servo..\n");
+        Serial.printf("Throttle servo.. pid is %s\n", pid_enabled ? "enabled" : "disabled");
+        Serial.printf("  Cruise control pid is %s, using %s adjustment scheme\n", cruise_pid_enabled ? "enabled" : "disabled", cruiseschemecard[cruise_adjust_scheme].c_str());
         ServoMotor::setup(_hotrc, _speedo);
         throttleRateTimer.reset();
         derive();
@@ -490,23 +496,29 @@ class GasServo : public ServoMotor {
     }
     void update_ctrl_config(int new_pid_ena=-5) {   // run w/o arguments each loop to enforce configuration limitations, or call with an argument to enable/disable pid and update. do not change pid_enabled anywhere else!
         if (new_pid_ena != -5) pid_enabled = (bool)new_pid_ena;     // receive new pid enable setting (ON/OFF) if given
-        if (!pid_enabled && pid_ena_last) {
-            cruisepid.set_limits(&pc[OPMIN], &pc[OPMAX]);  // switch cruise pid parameters to feed valid rpm targets to gas pid
-            cruisepid.set_tunings(cruise_opengas_kp, cruise_opengas_ki, cruise_opengas_kd);
-            setmode(motormode);  // ensure current motor mode is consistent with configs set here
-        }
-        else if (pid_enabled && !pid_ena_last) {
-            cruisepid.set_limits(tach->idle_rpm_ptr(), tach->govern_rpm_ptr());  // switch cruise pid parameters to feed valid throttle angle values to openloop gas
-            cruisepid.set_tunings(cruise_pidgas_kp, cruise_pidgas_ki, cruise_pidgas_kd);
+        if (pid_enabled != pid_ena_last) {
+            if (pid_enabled) {
+                cruisepid.set_limits(tach->idle_rpm_ptr(), tach->govern_rpm_ptr());  // switch cruise pid parameters to feed valid throttle angle values to openloop gas
+                cruisepid.set_tunings(cruise_pidgas_kp, cruise_pidgas_ki, cruise_pidgas_kd);
+            }
+            else {
+                cruisepid.set_limits(&pc[OPMIN], &pc[OPMAX]);  // switch cruise pid parameters to feed valid rpm targets to gas pid
+                cruisepid.set_tunings(cruise_opengas_kp, cruise_opengas_ki, cruise_opengas_kd);
+                setmode(motormode);  // ensure current motor mode is consistent with configs set here
+            }
+            Serial.printf("throttle config: pid %s\n", pid_enabled ? "enabled" : "disabled");
         }
         pid_ena_last = pid_enabled;
     }
     void update_cruise_ctrl_config(int new_pid_ena=-5) {  // pass in OFF or ON (for compatibility with brake function)
         if (new_pid_ena != -5) cruise_pid_enabled = (bool)new_pid_ena;     // otherwise receive new pid enable setting (ON/OFF) if given
+        if (cruise_pid_enabled != cruise_pid_ena_last) Serial.printf("cruise config: pid %s\n", cruise_pid_enabled ? "enabled" : "disabled");
+        cruise_pid_ena_last = cruise_pid_enabled;
     }
     void set_cruise_scheme(int newscheme) {
         // if (cruise_pid_enabled) cruise_adjust_scheme = SuspendFly;  else // in pid mode cruise must use SuspendFly adjustment scheme (not sure if this restriction is necessary?)
         cruise_adjust_scheme = newscheme;  // otherwise anything goes
+        Serial.printf("cruise config: using %s adjustment scheme\n", cruiseschemecard[cruise_adjust_scheme].c_str());
     }
     int parked() {
         return (std::abs(out_pc_to_si(pc[OUT]) - si[PARKED]) < 1);
@@ -561,17 +573,17 @@ class BrakeMotor : public JagMotor {
     float posn_kd = 0.000;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr uint32_t pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
-    int dominantsens_last = _BrakePosn;    // float posn_inflect, pres_inflect, pc_inflect;
+    int dominantsens_last = PositionFB;    // float posn_inflect, pres_inflect, pc_inflect;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
     Timer stopcar_timer{10000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000};
     bool stopped_last = false;
-    bool feedback_enabled[NumBrakeInfluences];
+    bool feedback_enabled[NumBrakeSens];
     void set_dominant_sensor(float _hybrid_ratio) {
         if (std::isnan(_hybrid_ratio)) return;
-        dominantsens = (int)(_hybrid_ratio + 0.5) ? _BrakePres : _BrakePosn;  // round to 0 or 1, the indices of posn and pres respectively
-        if (dominantsens == _BrakePosn) pid_dom = &(pids[PosnInfluence]);
-        else pid_dom = &(pids[PresInfluence]);
-        posn_pid_active = (dominantsens == _BrakePosn);  // for display
+        dominantsens = (int)(_hybrid_ratio + 0.5) ? PressureFB : PositionFB;  // round to 0 or 1, the indices of posn and pres respectively
+        if (dominantsens == PositionFB) pid_dom = &(pids[PositionFB]);
+        else pid_dom = &(pids[PressureFB]);
+        posn_pid_active = (dominantsens == PositionFB);  // for display
     }
     float pressure_pc_to_si(float pc) {
         return map(pc, 0.0, 100.0, pressure->min_human(), pressure->max_human());
@@ -579,16 +591,16 @@ class BrakeMotor : public JagMotor {
   public:
     using JagMotor::JagMotor;
     bool pid_enabled = true, pid_ena_last = true, ctrl_status = ActivePID;    // default for use of pid allowed
-    int feedback = _BrakePosn, feedback_last = _BrakePosn;  // this is the default for sensors to use as feedback
+    int feedback = PositionFB, feedback_last = PositionFB;  // this is the default for sensors to use as feedback
     int dominantsens, motormode = Halt, oldmode = Halt;  // not tunable
-    bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == _BrakePosn);
-    QPID pids[NumBrakeInfluences];  // brake changes from pressure target to position target as pressures decrease, and vice versa
-    QPID* pid_dom = &(pids[PosnInfluence]);  // AnalogSensor sensed[2];
-    float combined_brake_pc;       // Reading of current brake level percent, by combining readings of the enabled sensors
+    bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == PositionFB);
+    QPID pids[NumBrakeSens];  // brake changes from pressure target to position target as pressures decrease, and vice versa
+    QPID* pid_dom = &(pids[PositionFB]);  // AnalogSensor sensed[2];
+    float combined_read_pc;
     float brake_pid_trans_threshold_lo = 0.25;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
     float brake_pid_trans_threshold_hi = 0.50;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
     bool autostopping = false, autoholding = false, reverse = false;
-    float brake_target[NumBrakeInfluences];  // this value is the posn and pressure setting if openloop, or fed into pid to calculate setting if pid enabled
+    float target[NumBrakeSens];  // this value is the posn and pressure (and hybrid combined) target settings, or fed into pid to calculate setting if pid enabled
     float panic_initial_pc, hold_initial_pc, panic_increment_pc, hold_increment_pc, parkpos_pc, zeropoint_pc;
     float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, target_pc, pid_err_pc;
     float hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0, hybrid_targ_ratio = 1.0;  // , hybrid_targ_ratio_pc = 100.0;
@@ -607,7 +619,7 @@ class BrakeMotor : public JagMotor {
         zeropoint_pc = map(brkpos->zeropoint(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
         parkpos_pc = map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
         // do we want to have specific psi and inch values for these depending on present sensors?
-        // if (feedback == _BrakePres) {  // use these if only pressure sensor available
+        // if (feedback == PressureFB) {  // use these if only pressure sensor available
         //     zeropoint_pc = map(pressure->zeropoint(), pressure->min_human(), pressure->max_human(), 100.0, 0.0);
         //     parkpos_pc = zeropoint_pc;            
         // }
@@ -615,7 +627,7 @@ class BrakeMotor : public JagMotor {
         //     zeropoint_pc = map(brkpos->zeropoint(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
         //     parkpos_pc = map(brkpos->parkpos(), brkpos->min_human(), brkpos->max_human(), 100.0, 0.0);
         // }
-        // if (feedback == _BrakePosn) {  // use these if only position sensor available
+        // if (feedback == PositionFB) {  // use these if only position sensor available
         //     panic_initial_pc = map(brkpos->panic_initial_psi, brkpos->max_human(), brkpos->min_human(), 0.0, 100.0);
         //     hold_initial_pc = map(brkpos->hold_initial_psi, brkpos->max_human(), brkpos->min_human(), 0.0, 100.0);
         //     panic_increment_pc = 100.0 * brkpos->panic_increment_psi / (brkpos->max_human() - brkpos->min_human());
@@ -635,7 +647,7 @@ class BrakeMotor : public JagMotor {
         return brake_tempsens_exists;
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, GasServo* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-        Serial.printf("Brake motor..");
+        Serial.printf("Brake motor.. pid is %s, feedback is %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback]);
         JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         // duty_fwd_pc = brakemotor_duty_spec_pc;
@@ -646,9 +658,9 @@ class BrakeMotor : public JagMotor {
         if (!std::isnan(tempsens->val(loc::AMBIENT))) motor_heat_min = tempsens->val(loc::AMBIENT);
         derive();
         update_ctrl_config();
-        pids[PresInfluence].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), press_kp, press_ki, press_kd, QPID::pmod::onerr,
+        pids[PressureFB].init(pressure->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), press_kp, press_ki, press_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
-        pids[PosnInfluence].init(brkpos->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_kp, posn_ki, posn_kd, QPID::pmod::onerr, 
+        pids[PositionFB].init(brkpos->filt_ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_kp, posn_ki, posn_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
     }
   private:
@@ -680,9 +692,9 @@ class BrakeMotor : public JagMotor {
     // near either extreme only one of the two sensors is accurate. So at lower psi, control is 100% position-based, fade to 100% pressure-based at mid/high pressures
     // "dominant" PID means the PID loop (pressure or position) that has the majority influence over the motor
     float calc_hybrid_ratio(float pressure_val) {  // returns pressure influence as a ratio (from 0.0 to 1.0) for a given pressure level in percent 
-        if (feedback == _None) return NAN;             // this should not happen, maybe print an error message
-        if (feedback == _BrakePres) return 1.0;
-        if (feedback == _BrakePosn) return 0.0;
+        if (feedback == NoneFB) return NAN;             // this should not happen, maybe print an error message
+        if (feedback == PressureFB) return 1.0;
+        if (feedback == PositionFB) return 0.0;
         float pressure_ratio = (pressure_val - pressure->min_human()) / (pressure->max_human() - pressure->min_human());  // calculate ratio of output to range
         if (pressure_ratio >= brake_pid_trans_threshold_hi) return 1.0;  // at pressure above hi threshold, pressure has 100% influence
         if (pressure_ratio <= brake_pid_trans_threshold_lo) return 0.0;  // at pressure below lo threshold, position has 100% influence
@@ -693,29 +705,29 @@ class BrakeMotor : public JagMotor {
     }
     void set_target(float targ_pc) {  // sets brake target percent. if hybrid, will set pressue and posn targets per current hybrid ratio, and set both pid targets in case pids are used
         target_pc = targ_pc;
-        if (feedback == _None) return;  // target_pc is overall, (or desired or combined ?) value is used if running openloop
-        brake_target[PresInfluence] = pressure->min_human() + target_pc * (pressure->max_human() - pressure->min_human()) / 100.0;  // feed this into pid if enabled, (otherwise could use as a motor cutoff threshold? this mode not implemented)
-        brake_target[PosnInfluence] = brkpos->min_human() + (100.0 - target_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0;  // (saved into variables for display)
-        for (int mypid=PosnInfluence; mypid<=PresInfluence; mypid++) pids[mypid].set_target(brake_target[mypid]);  // feed target vals to pid loops. this is harmless if pids disabled, it will have no effect
+        if (feedback == NoneFB) return;  // target_pc is overall, (or desired or combined ?) value is used if running openloop
+        target[PressureFB] = pressure->min_human() + target_pc * (pressure->max_human() - pressure->min_human()) / 100.0;  // feed this into pid if enabled, (otherwise could use as a motor cutoff threshold? this mode not implemented)
+        target[PositionFB] = brkpos->min_human() + (100.0 - target_pc) * (brkpos->max_human() - brkpos->min_human()) / 100.0;  // (saved into variables for display)
+        for (int mypid=PositionFB; mypid<=PressureFB; mypid++) pids[mypid].set_target(target[mypid]);  // feed target vals to pid loops. this is harmless if pids disabled, it will have no effect
     }
     void read_sensors() {  // calculates and saves combined brake value percent, based on readings of the feedback sensors. harmless to call even if running openloop
         float pres = map(pressure->human(), pressure->min_human(), pressure->max_human(), 0.0, 100.0);
         float posn = map(brkpos->human(), brkpos->max_human(), brkpos->min_human(), 0.0, 100.0);
-        // if (active_sensor == _None) combined_brake_pc = NAN;
-        combined_brake_pc = get_hybrid_brake_pc(pres, posn);  // else
+        // if (active_sensor == NoneFB) combined_read_pc = NAN;
+        combined_read_pc = get_hybrid_brake_pc(pres, posn);  // else
     }
     void blind_trigger_out() {  // scheme for open loop control (no sensor feedback). push trigger out less than 1/2way, motor extends (release brake), or more than halfway to retract (push brake), w/ speed proportional to distance from halfway point 
     }
     float calc_thresh_loop_out() {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
-        float err = (combined_brake_pc - target_pc);
+        float err = (combined_read_pc - target_pc);
         if (std::abs(err) < thresh_loop_hysteresis_pc) return pc[STOP];
         if (err > 0.0) return thresh_loop_attenuation_pc * pc[OPMIN];
         return thresh_loop_attenuation_pc * pc[OPMAX];
     }
-    float calc_loop_out() {  // returns motor output percent calculated based on current target_pc or brake_target[] values, in a way consistent w/ current config
+    float calc_loop_out() {  // returns motor output percent calculated based on current target_pc or target[] values, in a way consistent w/ current config
         read_sensors();
         if (motormode == ThreshLoop) return calc_thresh_loop_out();
-        else if (motormode == ActivePID) return get_hybrid_brake_pc(pids[PresInfluence].compute(), pids[PosnInfluence].compute());  // combine pid outputs weighted by the multiplier
+        else if (motormode == ActivePID) return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // combine pid outputs weighted by the multiplier
         else return pc[STOP];  // this should not happen, maybe print an error message
     }
     void carstop(bool panic_support=true) {  // autogenerates motor target values with the goal of stopping the car
@@ -730,7 +742,7 @@ class BrakeMotor : public JagMotor {
         pc[OUT] = calc_loop_out();
     }
     bool goto_fixed_point(float tgt_point, bool at_position) {  // goes to a fixed position (hopefully) or pressure (if posn is unavailable) then stops.  useful for parking and releasing modes
-        // active_sensor = (enabled_sensor == _BrakePres) ? _BrakePres : _BrakePosn;  // use posn sensor for this unless we are specifically forcing pressure only
+        // active_sensor = (enabled_sensor == PressureFB) ? PressureFB : PositionFB;  // use posn sensor for this unless we are specifically forcing pressure only
         bool in_progress = (!at_position && !motor_park_timer.expired());
         if (in_progress) set_target(tgt_point);  // Flipped to 100-value because function argument subtracts back for position pid
         else setmode(Halt);
@@ -786,17 +798,17 @@ class BrakeMotor : public JagMotor {
     }
     void constrain_output() {  // keep within the operational range, or to full absolute range if calibrating (caution don't break anything!)
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
-        else if (feedback_enabled[PosnInfluence]
+        else if (feedback_enabled[PositionFB]
           && ((pc[OUT] < pc[STOP] && brkpos->filt() > brkpos->parkpos() - brkpos->margin()) 
           || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin())))  // if brake is at position limits and we're tring to go further, stop the motor
             pc[OUT] = pc[STOP];
         else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // send to the actuator. refuse to exceed range
         if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;  // prevent stupidly small values which i was seeing
-        for (int p = PosnInfluence; p <= PresInfluence; p++) pids[p].set_output(pc[OUT]);  // Feed the final value back into the pids
+        for (int p = PositionFB; p <= PressureFB; p++) pids[p].set_output(pc[OUT]);  // Feed the final value back into the pids
     }
   public:
     void setmode(int _mode, bool force_init=false) {     // motormode is beholden to the current config
-        if (feedback == _None) {                         // if there is no feedback
+        if (feedback == NoneFB) {                         // if there is no feedback
             if (_mode == ActivePID) _mode = OpenLoop;    // attempt to use pid mode drops to openloop instead
             else if (_mode == AutoStop || _mode == AutoHold) _mode = OpenLoop;
             else if (_mode == Release || _mode == ParkMotor) _mode = Halt;  // lack of pid eliminates most modes
@@ -813,13 +825,16 @@ class BrakeMotor : public JagMotor {
         // Serial.printf("brakemode: %d\n",motormode);
     }
     void update_ctrl_config(int new_pid_ena=-5, int new_feedback=-5) {   // run w/o arguments each loop to enforce configuration limitations, or call with argument(s) to change config and update. do not change feedback or pid_enabled anywhere else!
-        if (new_feedback != -5) feedback = new_feedback;                 // receive new feedback sensors setting (_None/_BrakePres/_BrakePosn/_Hybrid) if given
-        if (feedback == _None) pid_enabled = false;                      // if there are no feedback sensors then we must force disable pid
+        if (new_feedback != -5) feedback = new_feedback;                 // receive new feedback sensors setting (NoneFB/PressureFB/PositionFB/_Hybrid) if given
+        if (feedback == NoneFB) pid_enabled = false;                      // if there are no feedback sensors then we must force disable pid
         else if (new_pid_ena != -5) pid_enabled = (bool)new_pid_ena;     // otherwise receive new pid enable setting (ON/OFF) if given
-        feedback_enabled[PosnInfluence] = ((feedback == _BrakePosn) || (feedback == _Hybrid));  // set sensor enable consistent with feedback config
-        feedback_enabled[PresInfluence] = ((feedback == _BrakePres) || (feedback == _Hybrid));  // set sensor enable consistent with feedback config
+        feedback_enabled[PositionFB] = ((feedback == PositionFB) || (feedback == HybridFB));  // set sensor enable consistent with feedback config
+        feedback_enabled[PressureFB] = ((feedback == PressureFB) || (feedback == HybridFB));  // set sensor enable consistent with feedback config
         if (!pid_enabled) setmode(motormode);                            // ensure current motor mode is consistent with configs set here
-        if ((feedback != feedback_last) || (pid_enabled != pid_ena_last)) derive();  // on change need to recalculate some values
+        if ((feedback != feedback_last) || (pid_enabled != pid_ena_last)) {
+            derive();  // on change need to recalculate some values
+            Serial.printf("brake motor config: pid %s w/ feedback = %d\n", pid_enabled ? "enabled" : "disabled", feedback);        
+        }
         feedback_last = feedback;
         pid_ena_last = pid_enabled;
     }
@@ -836,17 +851,17 @@ class BrakeMotor : public JagMotor {
         }
     }
     bool parked() {
-        if (feedback_enabled[PosnInfluence]) return brkpos->parked();
-        if (feedback_enabled[PresInfluence]) return pressure->released();  // pressure doesn't have a parked() function yet
+        if (feedback_enabled[PositionFB]) return brkpos->parked();
+        if (feedback_enabled[PressureFB]) return pressure->released();  // pressure doesn't have a parked() function yet
         return false;  // really without sensors we have no idea if we're parked. Print an error message
     }
     bool released() {
-        if (feedback_enabled[PosnInfluence]) return brkpos->released();
-        if (feedback_enabled[PresInfluence]) return pressure->released();  // pressure doesn't have a parked() function yet
+        if (feedback_enabled[PositionFB]) return brkpos->released();
+        if (feedback_enabled[PressureFB]) return pressure->released();  // pressure doesn't have a parked() function yet
         return false;  // really without sensors we have no idea if we're released. Print an error message
     }
-    float sensmin() { return (dominantsens == _BrakePres) ? pressure->op_min() : brkpos->op_min(); }
-    float sensmax() { return (dominantsens == _BrakePosn) ? pressure->op_max() : brkpos->op_max(); }
+    float sensmin() { return (dominantsens == PressureFB) ? pressure->op_min() : brkpos->op_min(); }
+    float sensmax() { return (dominantsens == PositionFB) ? pressure->op_max() : brkpos->op_max(); }
     float motorheat() { return motor_heat; }
     float motorheatmin() { return motor_heat_min; }
     float motorheatmax() { return motor_heat_max; }

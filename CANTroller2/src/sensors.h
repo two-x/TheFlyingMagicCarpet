@@ -972,6 +972,7 @@ class Tachometer : public PulseSensor<float> {
     int64_t _debounce_threshold = 6500;  // corresponds to 1000000 us/sec / 6500 us = 154 Hz max pulse frequency
     float _stop_thresh_rpm = 0.2;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
     float _abs_max_rpm, _redline_rpm, _initial_rpm;
+    float _freq_div = 8.0;  // an external ripple counter divides pulse stream frequency by this, we need to compensate
     int32_t _min_us, _zerovalue, _stop_timeout_us;
   public:
     sens senstype = sens::tach;
@@ -980,10 +981,10 @@ class Tachometer : public PulseSensor<float> {
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _debounce_threshold_us, _stop_thresh_rpm) {
         _abs_max_rpm = 4500.0;  // Max possible engine rotation speed
         _redline_rpm = 3600.0;  // Max possible engine rotation speed  corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
-        _min_us = _redline_rpm * 1000000.0 / 60.0;  // at 3600 rpm gives 16666 us
         _low_pulse = true;
         _invert = true;  // will use the math:  human_rpm = b_offset + m_factor / native_us
-        _m_factor = 60.0 * 1000000.0;  // 1 rot/us * 60 sec/min * 1000000 us/sec = 60000000 rot/min (rpm), (or 60000000 rpm per magnet-per-us)
+        _m_factor = 60.0 * _freq_div * 1000000.0;  // 1 pulse/us * 8 rot/pulse * 60 sec/min * 1000000 us/sec = 480000000 rot/min (rpm), (or 480000000 rpm per pulse-per-us)
+        _min_us = _m_factor / _redline_rpm;  // at 3600 rpm gives 133333 us
         _b_offset = 0.0;
         _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         _govern_rpm = _redline_rpm;
@@ -991,7 +992,7 @@ class Tachometer : public PulseSensor<float> {
         _margin = 10;
         _initial_rpm = 50.0;
         _zerovalue = 999999;
-        _stop_timeout_us = 250000;
+        _stop_timeout_us = 1750000;  // how long to wait w/o a pulse before assuming the engine is stopped
         set_human_limits(0.0, _redline_rpm);
         set_native_limits(_min_us, _stop_timeout_us);
         set_human(_initial_rpm);

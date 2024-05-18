@@ -82,8 +82,8 @@ enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler a
 enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes=3 };
 enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
 enum motor_modes { NA=-1, Halt=0, Idle=1, Release=2, OpenLoop=3, ThreshLoop=4, ActivePID=5, AutoStop=6, AutoHold=7, ParkMotor=8, Cruise=9, Calibrate=10, Starting=11, NumMotorModes=12 };
-// enum motor_ctrlstatus { OpenLoop=11, ThreshLoop=12, ActivePID=13, NumModesAndStatus=14 };
-enum brake_pid_modes { NoInfluence=-1, PosnInfluence=0, PresInfluence=1, NumBrakeInfluences=2 };  // OpenLoop=3
+enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
+enum brakeextra { NumBrakeSens=2 };
 enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum boolean_states { ON=1 };
 enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PWMS=3, PG_IDLE=4, PG_MOTR=5, PG_BPID=6, PG_GPID=7, PG_CPID=8, PG_TEMP=9, PG_SIM=10, PG_UI=11, NUM_DATAPAGES=12 };
