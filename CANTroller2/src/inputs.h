@@ -87,16 +87,17 @@ class Encoder {
     // TODO: these are all currently private const, if we ever actually want to tune them live we would need to change this
     static const uint32_t _spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
     static const uint32_t _accel_thresh_us = 60000;  // Spins faster than this will be accelerated
-    static const int32_t _accel_max = 15;  // Maximum acceleration factor
+    static const int _accel_max = 15;  // Maximum acceleration factor
 
     // instance vars
     volatile uint32_t _spinrate_isr_us = 100000;  // Time elapsed between last two detents
-    volatile int32_t _bounce_lock = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
-    volatile int32_t _delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
+    volatile uint32_t isr_time_last;
+    volatile int _bounce_lock = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
+    static const uint32_t _bounce_expire_us = 10000;  // need to let bounce lock expire to reliably catch turn events in either direction on direction reversals
+    volatile int _delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
     int _a_pin, _b_pin, _sw_pin;
-    int32_t _state = 0;
+    int _state = 0;
     uint32_t _spinrate_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-    TimerIRAM _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
     //  ---- tunable ----
 
     // Encoder isr. note you gotta set the define EncoderPanasonicType to match your encoder
@@ -109,16 +110,22 @@ class Encoder {
     //   * the value of the B signal on the falling edge of the A signal is high if going CW, otherwise low
     //   * if your encoder is the wrong kind for this algorithm, it'll behave all sluggish, like usually ignoring every other detent, switch over to this algorithm
     void IRAM_ATTR _a_isr() {                             // A isr has been triggered by A signal transition event (either rising or falling). A will now bounce for a while and can't be trusted
-        if (_bounce_lock == Encoder::ENC_A) return;       // if A isr is bounce locked then bail
-        #if EncoderPanasonicType
-            _spinrate_isr_us = _spinspeedTimer.elapsed(); // save elapsed time since last trigger, to calculate spin rate
-            _spinspeedTimer.reset();                      // reset spin rate timer for next time
+        #if EncoderPanasonicType                          // eg the vehicle control box encoder
+            uint32_t time_now = esp_timer_get_time();
+            uint32_t elapsed = time_now - isr_time_last;  // note time elapsed since last valid event on A isr   
+            if (_bounce_lock == Encoder::ENC_A) {         // if A isr is bounce locked, B isr hasn't yet triggered since our last trigger
+                if (elapsed <= _bounce_expire_us) return; // if bouncing is still a thing then bail
+                val_a_isr = digitalRead(_a_pin);          // otherwise since B isr hasn't triggered, we are reversing direction and must update our own value
+            }
+            _spinrate_isr_us = elapsed;                   // save elapsed time since last trigger, to calculate spin rate
+            isr_time_last = time_now;                     // reset spin rate timer for next time
             val_b_isr = digitalRead(_b_pin);              // get a stable reading of B signal
             _delta += (val_a_isr == val_b_isr) ? -1 : 1;  // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
-        #else
+        #else                                             // eg soren's dev board encoder
+            if (_bounce_lock == Encoder::ENC_A) return;       // if A isr is bounce locked then bail
             if (!val_a_isr) {                                  // if the A signal is now low (i.e. recent B isr read A pin as high)
-                _spinrate_isr_us = _spinspeedTimer.elapsed();  // save elapsed time since last trigger, to calculate spin rate
-                _spinspeedTimer.reset();                       // reset spin rate timer for next time
+                _spinrate_isr_us = time_now - isr_time_last;;  // save elapsed time since last trigger, to calculate spin rate
+                isr_time_last = time_now;                      // reset spin rate timer for next time
                 val_b_isr = !digitalRead(_b_pin);              // Get a clean reading of the B signal
                 _delta += val_b_isr ? -1 : 1;                  // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
             }

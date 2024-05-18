@@ -311,28 +311,6 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
         return true;
     }    
 };
-class TimerIRAM {  // same timer but stuck in better RAM, (no idea if it really matters).  Use for irqs etc.
-  protected:
-    volatile int64_t start_us, timeout_us;
-  public:
-    TimerIRAM() { reset(); }
-    TimerIRAM(uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
-    void IRAM_ATTR set (int64_t arg_timeout_us) {
-        timeout_us = arg_timeout_us;
-        start_us = esp_timer_get_time();
-    }
-    void IRAM_ATTR reset() { start_us = esp_timer_get_time(); }
-    bool IRAM_ATTR expired() { return esp_timer_get_time() >= start_us + timeout_us; }
-    int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() - start_us; }
-    int64_t timeout() { return timeout_us; }
-    bool IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
-        int64_t now_us = esp_timer_get_time();
-        if (now_us < start_us + timeout_us) return false;
-        start_us = now_us;
-        return true;
-    }    
-};
-
 Timer sleep_inactivity_timer(300000000);
 
 void kick_inactivity_timer(int source=0) {

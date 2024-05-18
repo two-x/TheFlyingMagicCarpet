@@ -4,7 +4,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     int _joydir;
     Timer screenSaverTimer{15000000};  // Time after entering sleep mode where screensaver turns on
     Timer gestureFlyTimer{1250000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-    Timer pwrup_timer{1500000};  // Timeout when parking motors if they don't park for whatever reason (in us)
+    Timer pwrup_timer{3000000};  // Timeout when parking motors if they don't park for whatever reason (in us)
     Timer standby_timer{5000000};
     int oldmode = POWERDN;
     bool still_interactive = true;
