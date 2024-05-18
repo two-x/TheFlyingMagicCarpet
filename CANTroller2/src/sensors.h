@@ -979,11 +979,11 @@ class Tachometer : public PulseSensor<float> {
     float _idle_rpm = 600.0, _idle_cold_rpm = 750.0, _idle_hot_rpm = 500.0;
     float _margin, _govern_rpm; 
     Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _debounce_threshold_us, _stop_thresh_rpm) {
-        _abs_max_rpm = 4500.0;  // Max possible engine rotation speed
-        _redline_rpm = 3600.0;  // Max possible engine rotation speed  corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        _abs_max_rpm = 4500.0;  // Max recognized engine rotation speed
+        _redline_rpm = 3600.0;  // Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         _low_pulse = true;
         _invert = true;  // will use the math:  human_rpm = b_offset + m_factor / native_us
-        _m_factor = 60.0 * _freq_div * 1000000.0;  // 1 pulse/us * 8 rot/pulse * 60 sec/min * 1000000 us/sec = 480000000 rot/min (rpm), (or 480000000 rpm per pulse-per-us)
+        _m_factor = 60.0 * _freq_div * 1000000.0;  // 1 pulse/us * 8 rot/pulse * 60 sec/min * 1000000 us/sec = 480000000 rot/min (rpm), (so 480M rpm per pulse-per-us)
         _min_us = _m_factor / _redline_rpm;  // at 3600 rpm gives 133333 us
         _b_offset = 0.0;
         _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
@@ -1050,7 +1050,7 @@ class Speedometer : public PulseSensor<float> {
         _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         _invert = true;  // will use the math:  human_mph = b_offset + m_factor / native_us
         // new math with two magnets on the rear axle:
-        _m_factor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 magnet/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/magnet * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr,  (or 1785000 mph per magnet-per-us)     
+        _m_factor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 pulse/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr,  (so 1.8M mph per pulse-per-us)     
         _b_offset = 0.0;
         _margin = 0.2;
         _min_us = _m_factor / _redline_mph;  // 15.0 mph gives 119000 us.  25.0 mph gives 71400 us

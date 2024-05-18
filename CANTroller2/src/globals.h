@@ -77,7 +77,7 @@ enum stop_val { STOP=1 };
 enum steer_val { SAFE=1 };
 enum size_enums { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
 enum joydirs { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
-enum runmode { BASIC=0, ASLEEP=1, SHUTDOWN=2, STALL=3, HOLD=4, FLY=5, CRUISE=6, CAL=7, NUM_RUNMODES=8 };
+enum runmode { BASIC=0, POWERDN=1, STANDBY=2, STALL=3, HOLD=4, FLY=5, CRUISE=6, CAL=7, NUM_RUNMODES=8 };
 enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes=3 };
 enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
@@ -93,7 +93,7 @@ enum ui_modes { DatapagesUI=0, ScreensaverUI=1 };
 enum codestatus { Confused=0, Booting=1, Parked=2, Stopped=3, Driving=4, NumCodeStatuses=5 };
 enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
 enum telemetry_idiots {                              // list of transducers which have onscreen idiotlights showing status
-    _Hybrid=-3, _None=-2, _NA=-1,                    // these values indicate no transducer, useful for some contexts  
+    _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
     _GasServo=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are actuators, driven by us
     _Speedo=3, _Tach=4, _BrakePres=5, _BrakePosn=6,  // these transducers are sensors, we read from
     _HotRC=7, _Temps=8, _Other=9, _GPIO=10,          // these are actually groups of multiple sensors (see below)
@@ -103,7 +103,7 @@ enum telemetry_full {                                                           
     _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14,                                         // _HotRC sensor group
     _MuleBatt=15, _AirVelo=16, _MAP=17, _Pot=18,                                                      // _Other sensor group
     _TempEng=19, _TempWhFL=20, _TempWhFR=21, _TempWhRL=22, _TempWhRR=23, _TempBrake=24, _TempAmb=25,  // _Temps sensor group
-    _Ignition=26, _Starter=27, _BasicSw=28, _FuelPump=29,                                             // _GPIO sensor group (with simple boolean values)
+    _Ignition=26, _Starter=27, _BasicSw=28, _FuelPump=29,                                             // _GPIO signal group (with simple boolean values)
     NumTelemetryFull=30,                                                                              // size of both telemetry lists combined
 };
 
@@ -129,16 +129,14 @@ bool keep_system_powered = false;    // equivalent to syspower always being high
 bool looptime_print = false;         // makes code write out timestamps throughout loop to serial port. for analyzing what parts of the code take the most time
 bool touch_reticles = true;          // draws tiny little plus reticles to aim at for doing touchscreen calibration
 bool button_test_heartbeat_color = false; // makes boot button short press change heartbeat color. useful for testing code on bare esp
-// bool wifi_web_supported = false;     // use to completely disable wifi and web
 bool wifi_client_mode = false;       // should wifi be in client or access point mode?
-bool saver_on_sleep = true;          // does fullscreen screensaver start automatically when asleep, after a delay?
+bool saver_on_sleep = true;          // does fullscreen screensaver start automatically when in powerdown, after a delay?
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
 
 // global tunable variables
 int sprite_color_depth = 8;
 uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode
-int cruise_scheme = TriggerHold;
 int32_t cruise_delta_max_pc_per_s = 16;  // (in TriggerHold mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.016;   // (in TriggerPull mode) Limits the change of each adjust trigger pull to this fraction of what's possible
 float temp_lims_f[NUM_TEMP_CATEGORIES][6]{
@@ -161,7 +159,7 @@ float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change va
 uint32_t codestatus = Booting;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool fun_flag = false;                  // since now using temp sensor address to detect vehicle, our tx resistor can be used for who knows what else!
-bool shutdown_incomplete = true;        // minor state variable for shutdown mode - Shutdown mode has not completed its work and can't yet stop activity
+bool standby_incomplete = true;        // minor state variable for standby mode - standby mode has not completed its work and can't yet stop activity
 bool parking = false;                   // indicates in process of parking the brake & gas motors so the pedals can be used manually without interference
 bool releasing = false;                 // indicates in process of releasing the brake to the zero brake point
 bool cruise_adjusting = false;
@@ -170,7 +168,7 @@ bool cal_brakemode_request = false;     // allows direct control of brake motor 
 bool cal_gasmode = false;               // allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
 bool cal_gasmode_request = false;
 bool car_hasnt_moved = false;           // minor state variable for fly mode - Whether car has moved at all since entering fly mode
-bool powering_up = false;               // minor state variable for asleep mode
+bool powering_up = false;               // minor state variable for powerdn mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
 bool screensaver = false;                // can enable experiment with animated screen draws

@@ -23,7 +23,7 @@ static MomentaryButton bootbutton(boot_sw_pin, false);
 #define disp_bargraphs_x 122
 #define disp_datapage_title_x 83
 uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
-std::string modecard[NUM_RUNMODES] = { "Basic", "Asleep", "Shutdn", "Stall", "Hold", "Fly", "Cruise", "Cal" };
+std::string modecard[NUM_RUNMODES] = { "Basic", "PwrDwn", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
@@ -85,7 +85,7 @@ static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for excepti
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
     { 0x08, 0x1c, 0x2a, 0x08, 0x00, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x41, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
     { 0x3d, 0x00, 0x3e, 0x02, 0x3c, 0x00, 0x7f, 0x00, 0x3e, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi "in|psi" - that's right SIX characters in a 3 font-width space, haha.  get a microscope
-    { 0x02, 0x05, 0x45, 0x62, 0x50, 0x48, 0x4c, 0x72, 0x41, 0x40, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // angular degrees
+    { 0x06, 0x0f, 0x09, 0x4f, 0x66, 0x50, 0x48, 0x4c, 0x72, 0x41, 0x40, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, },  // angular degrees
     { 0x30, 0x48, 0x48, 0x30, 0x00, 0x10, 0x7c, 0x12, 0x04, 0x00, 0x02, 0x7f, 0x00, 0x3e, 0x51, 0x49, 0x3e, },  // of 10
 };  // These bitmaps are in the same format as the idiot light bitmaps, described in neopixel.h
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
@@ -542,10 +542,10 @@ class Display {
     void draw_touchgrid(bool side_only = false) {  // draws edge buttons with names in 'em. If replace_names, just updates names
         sprptr->setTextDatum(textdatum_t::top_left);
         int32_t namelen = 0;
-        sprptr->setTextColor(WHT);
+        sprptr->setTextColor(LGRY);
         for (int32_t row = 0; row < arraysize(side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
             sprptr->fillRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
-            sprptr->drawRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LYEL);
+            sprptr->drawRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LGRY);
             namelen = 0;
             for (uint32_t x = 0 ; x < side_menu_buttons[row].length() ; x++ ) {
                 if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
@@ -558,7 +558,7 @@ class Display {
         if (!side_only) {
             for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
                 sprptr->fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
-                sprptr->drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LYEL);  // sprptr->width()-9, 3, 18, (sprptr->height()/5)-6, 8, LYEL);
+                sprptr->drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LGRY);  // sprptr->width()-9, 3, 18, (sprptr->height()/5)-6, 8, LGRY);
             }
         }
         disp_sidemenu_dirty = false;
@@ -804,7 +804,11 @@ class Display {
     bool draw_all(LGFX_Sprite* spr) {
         if (reset_request) reset(spr);
         if (!display_enabled) return false;
-        if (run.mode == ASLEEP && (run.can_run_autosaver != auto_saver_enabled)) auto_saver(run.can_run_autosaver);
+        if (run.mode == POWERDN) {
+            if (run.autosaver_requested != auto_saver_enabled) auto_saver(run.autosaver_requested);
+            if (run.display_reset_requested) reset(spr);
+            run.display_reset_requested = false;
+        }
         if (!auto_saver_enabled) {
             tiny_text();
             update_idiots(disp_idiots_dirty);

@@ -96,7 +96,7 @@ class DiagRuntime {
             err_sens[RANGE][_Tach] = (tach->rpm() < tach->min_human() || tach->rpm() > tach->max_human());
             BrakeMotorFailure();
 
-            // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != ASLEEP));
+            // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != POWERDN));
             set_sensorgroups();
             set_sensidiots();
             set_idiot_blinks();
@@ -173,9 +173,9 @@ class DiagRuntime {
         static bool gunning_it, gunning_last = true;
         static float baseline_speed;
         bool fail = false;
-        if (runmode == SHUTDOWN) {  // || runmode == HOLD  // check that the speed is zero when stopped
+        if (runmode == STANDBY) {  // || runmode == HOLD  // check that the speed is zero when stopped
             // if (gunning_last) speedoTimer.reset();       // if we just stopped driving, allow time for car to stop
-            // else if (speedoTimer.expired()) {            // if it has been enough time since entering shutdown, we should be stopped
+            // else if (speedoTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
             fail = (baseline_speed > speedo->margin_mph());  // when stopped the speedo reading should be zero, otherwise fail
             baseline_speed = speedo->filt();         // store the speed value when we are stopped
             // }
@@ -192,9 +192,9 @@ class DiagRuntime {
         static bool running_it, running_last = true;
         static float baseline_rpm;
         bool fail = false;
-        if (runmode == SHUTDOWN) {  // || runmode == STALL  // check that the speed is zero when stopped
+        if (runmode == STANDBY) {  // || runmode == STALL  // check that the speed is zero when stopped
             // if (running_last) tachTimer.reset();       // if we just stopped driving, allow time for car to stop
-            // else if (tachTimer.expired()) {            // if it has been enough time since entering shutdown, we should be stopped
+            // else if (tachTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
             fail = (baseline_rpm > tach->margin_rpm());  // when stopped the speedo reading should be zero, otherwise fail
             baseline_rpm = tach->filt();         // store the speed value when we are stopped
             // }
@@ -295,7 +295,7 @@ class DiagRuntime {
 // * A tunable value suspected to be out of tune.
 // * Check regularly for ridiculous shit. Compare our variable values against a predetermined list of conditions which shouldn't be possible or are at least very suspect. For example:
 //   A) Sensor reading is out of range, or has changed faster than it ever should.
-//   B) Stopping the car on entering hold/shutdown mode is taking longer than it ever should.
+//   B) Stopping the car on entering hold/standby mode is taking longer than it ever should.
 //   C) Mule seems to be accelerating like a Tesla.
 //   D) Car is accelerating yet engine is at idle.
 // * The control system has nonsensical values in its variables.
@@ -396,7 +396,7 @@ class BootMonitor {
     UBaseType_t highWaterBytes;
     bool was_panicked = false;
   public:
-    int boot_to_runmode = SHUTDOWN;
+    int boot_to_runmode = STANDBY;
     BootMonitor(Preferences* _prefs, LoopTimer* _loop) : myprefs(_prefs), myloop(_loop) {}
     void set_codestatus(int _mode) {
         codestatus = _mode;

@@ -152,7 +152,7 @@ class Encoder {
         button.update();
         enc_a = !digitalRead(_a_pin);
         enc_b = !digitalRead(_b_pin);
-        if (run.mode == ASLEEP) {
+        if (run.mode == POWERDN) {
             if (button.shortpress()) sleep_request = REQ_OFF;
         }
     }
@@ -304,7 +304,7 @@ class Touchscreen {
         else if (tquad == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
         else if (tquad == 0x20 && sim.enabled() && longpress()) calmode_request = true;
         else if (tquad == 0x40 && sim.enabled() && longpress()) ignition.request(REQ_TOG);
-        else if (tquad == 0x50 && sim.enabled() && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by shutdown or asleep mode, otherwise will be ignored
+        else if (tquad == 0x50 && sim.enabled() && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by standby or powerdn mode, otherwise will be ignored
         else if (tquad == 0x30 && sim.simulating(sens::basicsw) && longpress()) basicmode_request = true;
         else if (tquad == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(tedit); // (+= 25) Pressed the increase brake pressure button
         else if (tquad == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_human(-tedit); // (-= 25) Pressed the decrease brake pressure button

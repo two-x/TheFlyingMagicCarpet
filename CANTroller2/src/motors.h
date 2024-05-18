@@ -441,9 +441,7 @@ class GasServo : public ServoMotor {
     float rate_limiter(float val) {  // give it where you would want the throttle (%), it gives you back where you're allowed to put it, respecting max angular velocity
         float max_change = (float)throttleRateTimer.elapsed() * max_throttle_angular_velocity_pcps / 1000000.0;
         throttleRateTimer.reset();  // Serial.printf(" new:%lf pc0:%lf mx:%lf", throttle_target_pc, pc[OUT], max_change);
-        if (val > pc[OUT] + max_change) return pc[OUT] + max_change;
-        else if (val < pc[OUT] - max_change) return pc[OUT] - max_change;
-        else return val;  // Serial.printf(" tgt:%lf pc1:%lf\n", throttle_target_pc, pc[OUT]);
+        return constrain(val, pc[OUT] - max_change, pc[OUT] + max_change);  // Serial.printf(" tgt:%lf pc1:%lf\n", throttle_target_pc, pc[OUT]);
     }
     void set_output() {
         // Serial.printf("mode");
@@ -889,7 +887,7 @@ class SteerMotor : public JagMotor {
     void setmode(int _mode) { motormode = _mode; }
   private:
     void set_output() {
-        if (motormode == Halt) pc[OUT] = pc[STOP];  // Stop the steering motor if in shutdown mode and shutdown is complete
+        if (motormode == Halt) pc[OUT] = pc[STOP];  // Stop the steering motor if in standby mode and standby is complete
         else if (motormode == OpenLoop) {
             int _joydir = hotrc->joydir(HORZ);
             if (_joydir == JOY_RT)

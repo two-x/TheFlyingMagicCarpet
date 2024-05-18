@@ -221,7 +221,7 @@ class Ignition {
         }
         paniclast = panicstop;
         if (panicstop) ign_req = REQ_OFF;  // panic stop causes ignition cut
-        if (ign_req != REQ_NA && runmode != ASLEEP) {
+        if (ign_req != REQ_NA && runmode != POWERDN) {
             signal = (bool)ign_req;
             write_pin(pin, signal);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
         }

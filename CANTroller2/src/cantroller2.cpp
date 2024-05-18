@@ -65,7 +65,7 @@ void loop() {                  // arduino-style loop() is like main() but with a
     mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
     maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
     hotrc.update();            // ~100us for all hotrc functions
-    run.mode_logic();          // runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in shutdown mode with no activity
+    run.mode_logic();          // runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in standby mode with no activity
     gas.update();              // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
     brake.update();            // drive motor output based on controller inputs, feedback, run mode, etc.
     steer.update();            // drive motor output based on controller inputs, run mode, etc.

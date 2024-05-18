@@ -188,7 +188,7 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
 class LightingBox {  // represents the lighting controller i2c slave endpoint
   private:
     Timer send_timer = Timer(250000);
-    int runmode_last = SHUTDOWN;
+    int runmode_last = STANDBY;
     uint16_t speed_last;
     uint8_t status_nibble_last;
     I2C* i2c;
