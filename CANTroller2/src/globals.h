@@ -77,7 +77,7 @@ enum stop_val { STOP=1 };
 enum steer_val { SAFE=1 };
 enum size_enums { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
 enum joydirs { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
-enum runmode { BASIC=0, POWERDN=1, STANDBY=2, STALL=3, HOLD=4, FLY=5, CRUISE=6, CAL=7, NUM_RUNMODES=8 };
+enum runmode { BASIC=0, LOWPOWER=1, STANDBY=2, STALL=3, HOLD=4, FLY=5, CRUISE=6, CAL=7, NUM_RUNMODES=8 };
 enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes=3 };
 enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
@@ -168,7 +168,7 @@ bool cal_brakemode_request = false;     // allows direct control of brake motor 
 bool cal_gasmode = false;               // allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
 bool cal_gasmode_request = false;
 bool car_hasnt_moved = false;           // minor state variable for fly mode - Whether car has moved at all since entering fly mode
-bool powering_up = false;               // minor state variable for powerdn mode
+bool powering_up = false;               // minor state variable for lowpower mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
 bool screensaver = false;                // can enable experiment with animated screen draws

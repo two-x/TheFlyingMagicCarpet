@@ -23,7 +23,7 @@ static MomentaryButton bootbutton(boot_sw_pin, false);
 #define disp_bargraphs_x 122
 #define disp_datapage_title_x 83
 uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
-std::string modecard[NUM_RUNMODES] = { "Basic", "PwrDwn", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
+std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
@@ -45,14 +45,14 @@ std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tac
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 6, 6, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 6, 5, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
     { "PressRaw", "BkPosRaw", "TachPuls", " Pot Raw", __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
-    { "Brk Heat", "HybBrake", __________, __________, __________, __________, "BkEnaPID", "BkFeedbk", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
+    { "Brk Heat", "HybBrake", __________, __________, __________, "BkEnaPID", "BkFeedbk", "BkPosLim", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
     { "MotrMode", "Feedback", brAk"Posn", "Pn|PrErr", "Pres Tgt", "Posn Tgt", "HybrdTgt", "OutRatio", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "MotrMode", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
@@ -66,7 +66,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "adc",  "adc",  "ms",   "adc",  ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    "%",    degree, degree, degreF, degreF, },  // PG_IDLE
-    { degreF, "%",    ______, ______, ______, ______, b1nary, scroll, b1nary, b1nary, scroll, },  // PG_MOTR
+    { degreF, "%",    ______, ______, ______, b1nary, scroll, b1nary, b1nary, b1nary, scroll, },  // PG_MOTR
     { scroll, scroll, "in",   "psin", "psin", "%",    "%",    "%",    ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "rpm",  "rpm",  "%",    "%",    "%",    degsec, ______, "Hz",   "s",    },  // PG_GPID
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",     "%/s", ______, ______, "Hz",   "s",    },  // PG_CPID
@@ -701,9 +701,10 @@ class Display {
         else if (datapage == PG_MOTR) {
             draw_dynamic(9, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
             draw_dynamic(10, brake.combined_read_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
-            for (int myline=11; myline<=14; myline++) draw_eraseval(myline);
-            draw_truth(15, brake.pid_enabled, 1);
-            draw_asciiname(16, brakefeedbackcard[brake.feedback]);
+            for (int myline=11; myline<=13; myline++) draw_eraseval(myline);
+            draw_truth(14, brake.pid_enabled, 1);
+            draw_asciiname(15, brakefeedbackcard[brake.feedback]);
+            draw_truth(16, brake.enforce_positional_limits, 1);
             draw_truth(17, gas.pid_enabled, 1);
             draw_truth(18, gas.cruise_pid_enabled, 1);
             draw_asciiname(19, cruiseschemecard[gas.cruise_adjust_scheme]);
@@ -804,7 +805,7 @@ class Display {
     bool draw_all(LGFX_Sprite* spr) {
         if (reset_request) reset(spr);
         if (!display_enabled) return false;
-        if (run.mode == POWERDN) {
+        if (run.mode == LOWPOWER) {
             if (run.autosaver_requested != auto_saver_enabled) auto_saver(run.autosaver_requested);
             if (run.display_reset_requested) reset(spr);
             run.display_reset_requested = false;
@@ -1027,8 +1028,9 @@ class Tuner {
                 else if (sel_val == 10) gas.add_temphot(fdelta);
             }
             else if (datapage == PG_MOTR) {
-                if (sel_val == 6) brake.update_ctrl_config((int)(idelta>0));
-                else if (sel_val == 7) adj_brake_feedback(idelta);
+                if (sel_val == 5) brake.update_ctrl_config((int)(idelta>0));
+                else if (sel_val == 6) adj_brake_feedback(idelta);
+                else if (sel_val == 7) adj_bool(&brake.enforce_positional_limits, idelta);
                 else if (sel_val == 8) gas.update_ctrl_config((int)(idelta>0));
                 else if (sel_val == 9) gas.update_cruise_ctrl_config((int)(idelta>0));
                 else if (sel_val == 10) adj_cruise_scheme();

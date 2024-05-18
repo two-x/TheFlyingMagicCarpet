@@ -96,7 +96,7 @@ class DiagRuntime {
             err_sens[RANGE][_Tach] = (tach->rpm() < tach->min_human() || tach->rpm() > tach->max_human());
             BrakeMotorFailure();
 
-            // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != POWERDN));
+            // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LOWPOWER));
             set_sensorgroups();
             set_sensidiots();
             set_idiot_blinks();

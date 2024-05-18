@@ -588,7 +588,7 @@ class BrakeMotor : public JagMotor {
     }
   public:
     using JagMotor::JagMotor;
-    bool pid_enabled = true, pid_ena_last = true;    // default for use of pid allowed
+    bool pid_enabled = true, pid_ena_last = true, enforce_positional_limits = true;    // default for use of pid allowed
     int feedback = PositionFB, feedback_last = PositionFB;  // this is the default for sensors to use as feedback
     int dominantsens, motormode = Halt, oldmode = Halt;  // not tunable
     bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == PositionFB);
@@ -796,7 +796,7 @@ class BrakeMotor : public JagMotor {
     }
     void constrain_output() {  // keep within the operational range, or to full absolute range if calibrating (caution don't break anything!)
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
-        else if (feedback_enabled[PositionFB]
+        else if (enforce_positional_limits
           && ((pc[OUT] < pc[STOP] && brkpos->filt() > brkpos->parkpos() - brkpos->margin()) 
           || (pc[OUT] > pc[STOP] && brkpos->filt() < brkpos->min_in() + brkpos->margin())))  // if brake is at position limits and we're tring to go further, stop the motor
             pc[OUT] = pc[STOP];

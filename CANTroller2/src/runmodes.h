@@ -6,7 +6,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     Timer gestureFlyTimer{1250000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
     Timer pwrup_timer{3000000};  // Timeout when parking motors if they don't park for whatever reason (in us)
     Timer standby_timer{5000000};
-    int oldmode = POWERDN;
+    int oldmode = LOWPOWER;
     bool still_interactive = true;
     uint32_t initial_inactivity;
   public:
@@ -17,7 +17,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     RunModeManager() {}
     void setup() { mode = watchdog.boot_to_runmode; }  // we don't really need to set up anything, unless we need to recover to a specific runmode after crash
     int mode_logic() {
-        if (mode != POWERDN && mode != CAL) {
+        if (mode != LOWPOWER && mode != CAL) {
             if (basicsw.val) mode = BASIC;  // if basicmode switch on --> Basic Mode
             else if (!ignition.signal) mode = STANDBY;
             else if (tach.engine_stopped()) mode = STALL;  // otherwise if engine not running --> Stall Mode
@@ -27,11 +27,11 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (we_just_switched_modes) cleanup_state_variables();
         oldmode = mode;        
         // common to almost all the modes, so i put it here
-        if (mode != POWERDN) {
+        if (mode != LOWPOWER) {
             if (hotrc.sw_event(CH3)) ignition.request(REQ_TOG);  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         }
         if (mode == BASIC) run_basicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
-        else if (mode == POWERDN) run_powerdnMode();
+        else if (mode == LOWPOWER) run_lowpowerMode();
         else if (mode == STANDBY) run_standbyMode();
         else if (mode == STALL) run_stallMode();
         else if (mode == HOLD) run_holdMode();
@@ -44,7 +44,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
   private:
     void cleanup_state_variables() {
         if (oldmode == BASIC);
-        else if (oldmode == POWERDN);
+        else if (oldmode == LOWPOWER);
         else if (oldmode == STANDBY) standby_incomplete = false;
         else if (oldmode == STALL);
         else if (oldmode == HOLD) joy_centered = false;  // starter.request(REQ_OFF);  // Stop any in-progress startings
@@ -58,7 +58,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void start_powering_up() {
         set_syspower(HIGH);              // switch on control system devices
-        pwrup_timer.reset();  // stay in powerdn mode for a delay to allow devices to power up
+        pwrup_timer.reset();  // stay in lowpower mode for a delay to allow devices to power up
         powering_up = true;
         autosaver_requested = false;
     }
@@ -71,17 +71,17 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             gas.setmode(ParkMotor);  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             brake.setmode(ParkMotor);
             steer.setmode(OpenLoop);
-            powering_up = basicmode_request = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from powerdn mode
+            powering_up = basicmode_request = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from lowpower mode
             watchdog.set_codestatus(Parked);
         }
-        if (hotrc.sw_event(CH4) && !ignition.signal) mode = POWERDN;
+        if (hotrc.sw_event(CH4) && !ignition.signal) mode = LOWPOWER;
         if (!basicsw.val && !tach.engine_stopped()) mode = speedo.car_stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
         if (basicmode_request) mode = STANDBY;  // if fully shut down and cal mode requested, go to cal mode
     }
-    void run_powerdnMode() {  // turns off syspower and just idles. sleep_request are handled here or in standby mode below
+    void run_lowpowerMode() {  // turns off syspower and just idles. sleep_request are handled here or in standby mode below
         if (we_just_switched_modes) {
             screenSaverTimer.reset();
-            initial_inactivity = (uint32_t)sleep_inactivity_timer.elapsed();  // if entered powerdn mode manually rather than timeout, start screensaver countdown
+            initial_inactivity = (uint32_t)sleep_inactivity_timer.elapsed();  // if entered lowpower mode manually rather than timeout, start screensaver countdown
             still_interactive = true;
             sleep_request = REQ_NA;
             powering_up = autosaver_requested = display_reset_requested = false;
@@ -117,7 +117,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(Halt);  // disable steering, in case it was left on while we were panic stopping
             brake.setmode(Halt);
             watchdog.set_codestatus(Parked);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
-            if (hotrc.sw_event(CH4) || sleep_inactivity_timer.expired() || sleep_request == REQ_TOG || sleep_request == REQ_ON) mode = POWERDN;
+            if (hotrc.sw_event(CH4) || sleep_inactivity_timer.expired() || sleep_request == REQ_TOG || sleep_request == REQ_ON) mode = LOWPOWER;
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
             if (basicmode_request) mode = BASIC;  // if fully shut down and basic mode requested, go to basic mode
         }
@@ -200,7 +200,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
 // works, so use the pedals. This mode is enabled by a switch on the controller box. The only way to 
 // leave Basic Mode is by turning off the basic switch, or turning off the syspower signal.
 //
-// ** Powerdn Mode **
+// ** Lowpower Mode **
 // - Required: Request with hotrc ch4 button when shut down
 // Turns off power to the system. This includes all sensors/actuators and the screen, but not the hotrc receiver.
 // When requested to power up (same ch4 hotrc button), it re-powers everything and goes to standby mode.
@@ -209,7 +209,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
 // - Required: BasicMode switch Off & Ignition Off
 // This mode is active at boot, or whenever the ignition is off or when panic stopping. If the car is
 // moving, then like hold mode, standby mode will try to stop the car. Once stopped, then like basic mode,
-// it will park the motors out of the way and all systems stop. After a timeout it will go to powerdn mode.
+// it will park the motors out of the way and all systems stop. After a timeout it will go to lowpower mode.
 //
 // ** Stall Mode **
 // - Required: Engine stopped & BasicMode switch Off & Ignition On
