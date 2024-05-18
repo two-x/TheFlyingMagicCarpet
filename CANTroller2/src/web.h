@@ -236,7 +236,7 @@ class WebManager {
         if (!web_started) setup();
         wifi.enable(syspower);
         if (syspower) server.update();
-        // if (<activity in web page is detected>) sleep_inactivity_timer.reset();  // evidence of user activity
+        // if (<activity in web page is detected>) kick_inactivity_timer(3);  // evidence of user activity
     }
 };
 

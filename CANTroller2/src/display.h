@@ -190,19 +190,23 @@ class Display {
         }
         Serial.printf(" made 2x %dx%d sprites in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
     }
-    void setup() {
-        if (!display_enabled) return;
-        Serial.printf("Display..");  //
-        lcd.init();
-        #ifdef BOARD_HAS_PSRAM
-        // lcd.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM - (this is only relevant for TFT_eSPI display library)
-        #endif
+    void init() {  // init() is necessary after any power interruption
         lcd.setColorDepth(8);
         lcd.begin();  // lcd.begin();
         lcd.initDMA();
         // lcd.setRotation((flip_the_screen) ? 3 : 1);  // 0: Portrait, USB Top-Rt, 1: Landscape, usb=Bot-Rt, 2: Portrait, USB=Bot-Rt, 3: Landscape, USB=Top-Lt
         if (lcd.width() < lcd.height()) lcd.setRotation(lcd.getRotation() ^ 1);
         lcd.setSwapBytes(true);  // rearranges color ordering of 16bit colors when displaying image files
+        reset_request = true;
+    }    
+    void setup() {  // setup() only happens once at system boot
+        if (!display_enabled) return;
+        Serial.printf("Display..");  //
+        lcd.init();
+        #ifdef BOARD_HAS_PSRAM
+        // lcd.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM - (this is only relevant for TFT_eSPI display library)
+        #endif
+        init();
         for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
             disp_age_quanta[lineno] = -1;
             disp_values[lineno] = "";
@@ -216,7 +220,6 @@ class Display {
         init_framebuffers(disp_width_pix, disp_height_pix);
         animations.setup(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         sprptr = &framebuf[flip];
-        reset_request = true;
         Serial.printf("  display initialized\n");
     }
     void reset(LGFX_Sprite* spr) {
@@ -803,13 +806,11 @@ class Display {
     }
   public:
     bool draw_all(LGFX_Sprite* spr) {
-        if (reset_request) reset(spr);
         if (!display_enabled) return false;
-        if (run.mode == LOWPOWER) {
-            if (run.autosaver_requested != auto_saver_enabled) auto_saver(run.autosaver_requested);
-            if (run.display_reset_requested) reset(spr);
-            run.display_reset_requested = false;
-        }
+        if (reset_request) reset(spr);
+        if (run.autosaver_requested != auto_saver_enabled) auto_saver(run.autosaver_requested);
+            // if (run.display_reset_requested) init();
+            // run.display_reset_requested = false;
         if (!auto_saver_enabled) {
             tiny_text();
             update_idiots(disp_idiots_dirty);

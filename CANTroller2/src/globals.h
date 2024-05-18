@@ -130,7 +130,7 @@ bool looptime_print = false;         // makes code write out timestamps througho
 bool touch_reticles = true;          // draws tiny little plus reticles to aim at for doing touchscreen calibration
 bool button_test_heartbeat_color = false; // makes boot button short press change heartbeat color. useful for testing code on bare esp
 bool wifi_client_mode = false;       // should wifi be in client or access point mode?
-bool saver_on_sleep = true;          // does fullscreen screensaver start automatically when in powerdown, after a delay?
+bool screensaver_enabled = true;          // does fullscreen screensaver start automatically when in powerdown, after a delay?
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
 
 // global tunable variables
@@ -311,11 +311,20 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
         return true;
     }    
 };
-Timer sleep_inactivity_timer(300000000);
-
+Timer user_inactivity_timer;  // how long of not touching it before it goes to low power mode
+// note when kicking the activity timer, send an int to identify yourself:
+// 0 = momentary button down
+// 1 = momentary button up
+// 2 = encoder turn
+// 3 = web activity detected
+// 4 = touchscreen touch
+// 5 = hotrc buttons
+// 6 = hotrc trigger or joystick push
+// 7 = pot movement
+// 8 = toggle switch
 void kick_inactivity_timer(int source=0) {
-    sleep_inactivity_timer.reset();  // evidence of user activity
-    // Serial.printf("kick%d ", source);
+    user_inactivity_timer.reset();  // evidence of user activity
+    Serial.printf("kick%d ", source);
 }
 
 // class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regular intervals

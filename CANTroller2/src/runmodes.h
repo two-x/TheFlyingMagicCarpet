@@ -2,7 +2,8 @@
 class RunModeManager {  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in standby mode with no activity
   private:
     int _joydir;
-    Timer screenSaverTimer{15000000};  // Time after entering sleep mode where screensaver turns on
+    int64_t lowpower_delay = 900000000;  // Time of inactivity after entering standby mode before going to lowpower mode
+    int64_t screensaver_delay = 300000000;  // Time of inactivity after entering standby mode before starting screensaver turns on
     Timer gestureFlyTimer{1250000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
     Timer pwrup_timer{3000000};  // Timeout when parking motors if they don't park for whatever reason (in us)
     Timer standby_timer{5000000};
@@ -52,20 +53,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (oldmode == CRUISE) cruise_adjusting = false;
         else if (oldmode == CAL) cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;
     }
-    void power_down() {
-        autosaver_requested = true;
-        still_interactive = false;
-    }
-    void start_powering_up() {
-        set_syspower(HIGH);              // switch on control system devices
-        pwrup_timer.reset();  // stay in lowpower mode for a delay to allow devices to power up
-        powering_up = true;
-        autosaver_requested = false;
-    }
-    void finish_powering_up() {
-        display_reset_requested = true;
-        mode = (basicsw.val) ? BASIC : STANDBY;  // display->all_dirty();  // tells display to redraw everything. display must set back to false
-    }
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (we_just_switched_modes) {
             gas.setmode(ParkMotor);  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
@@ -80,27 +67,24 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_lowpowerMode() {  // turns off syspower and just idles. sleep_request are handled here or in standby mode below
         if (we_just_switched_modes) {
-            screenSaverTimer.reset();
-            initial_inactivity = (uint32_t)sleep_inactivity_timer.elapsed();  // if entered lowpower mode manually rather than timeout, start screensaver countdown
-            still_interactive = true;
             sleep_request = REQ_NA;
-            powering_up = autosaver_requested = display_reset_requested = false;
+            powering_up = autosaver_requested = false;
             brake.setmode(Halt);
             steer.setmode(Halt);
-            set_syspower(LOW); // Power down devices to save battery
+            set_syspower(LOW);     // Power down devices to save battery
         }
-        if (still_interactive) {
-            if ((uint32_t)sleep_inactivity_timer.elapsed() < initial_inactivity) screenSaverTimer.reset();  // keep resetting the screen saver timer if user is looking at data, etc.
-            if (saver_on_sleep && screenSaverTimer.expired()) power_down();
+        if (hotrc.sw_event(CH4) || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // start powering up
+            set_syspower(HIGH);    // switch on control system devices
+            pwrup_timer.reset();   // stay in lowpower mode for a delay to allow devices to power up
+            powering_up = true;
         }
-        if (hotrc.sw_event(CH4) || sleep_request == REQ_TOG || sleep_request == REQ_OFF) start_powering_up();  // if we've been triggered to wake up
-        if (powering_up && pwrup_timer.expired()) finish_powering_up();
+        if (powering_up && pwrup_timer.expired()) mode = (basicsw.val) ? BASIC : STANDBY;  // finish powering up . display->all_dirty();  // tells display to redraw everything. display must set back to false
         sleep_request = REQ_NA;
     }
     void run_standbyMode() { // In standby mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
             standby_incomplete = !powering_up;   // if waking up from sleep standby is already complete
-            powering_up = calmode_request = basicmode_request = false;
+            powering_up = calmode_request = basicmode_request = autosaver_requested = false;
             gas.setmode(ParkMotor);                 // carburetor parked 
             brake.setmode(AutoStop);                // if car is moving begin autostopping
             standby_timer.reset();
@@ -117,9 +101,11 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(Halt);  // disable steering, in case it was left on while we were panic stopping
             brake.setmode(Halt);
             watchdog.set_codestatus(Parked);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
-            if (hotrc.sw_event(CH4) || sleep_inactivity_timer.expired() || sleep_request == REQ_TOG || sleep_request == REQ_ON) mode = LOWPOWER;
+            if (hotrc.sw_event(CH4) || (user_inactivity_timer.elapsed() > lowpower_delay) || sleep_request == REQ_TOG || sleep_request == REQ_ON) mode = LOWPOWER;
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
             if (basicmode_request) mode = BASIC;  // if fully shut down and basic mode requested, go to basic mode
+            if (user_inactivity_timer.elapsed() > screensaver_delay) autosaver_requested = true;
+            // else if (encoder.button.shortpress()) autosaver_requested = false;
         }
         if ((speedo.car_stopped() || allow_rolling_start) && ignition.signal && !panicstop && !tach.engine_stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         sleep_request = REQ_NA;

@@ -164,8 +164,11 @@ class Encoder {
         button.update();
         enc_a = !digitalRead(_a_pin);
         enc_b = !digitalRead(_b_pin);
-        if (run.mode == LOWPOWER) {
+        if (run.mode == LOWPOWER && !syspower) {
             if (button.shortpress()) sleep_request = REQ_OFF;
+        }
+        else if (run.mode == STANDBY && run.autosaver_requested) {
+            if (button.shortpress()) run.autosaver_requested = false;
         }
     }
     int32_t rotation(bool accel = false) {  // Returns detents spun since last call, accelerated by spin rate or not

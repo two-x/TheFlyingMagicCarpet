@@ -57,7 +57,7 @@ void set_board_defaults() {          // true for dev boards, false for printed b
         sim.set_potmap(sens::none);        
         looptime_print = false;      // Makes code write out timestamps throughout loop to serial port
         touch_reticles = false;
-        console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
+        // console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
         wifi_client_mode = false;       // Should wifi be in client or access point mode?
         keep_system_powered = false; // Use true during development
         dont_take_temperatures = false;
