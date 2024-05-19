@@ -211,7 +211,7 @@ class QPID {
     float* target_ptr() { return &_target; }
 };
 
-static std::string motormodecard[NumMotorModes+1] = { "Halt", "Idle", "Releas", "OpLoop", "Thresh", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start", "NA" };
+static std::string motormodecard[NumMotorModes] = { "NA", "Halt", "Idle", "Releas", "OpLoop", "Thresh", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start" };
 static std::string cruiseschemecard[NumCruiseSchemes] = { "FlyPID", "TrPull", "TrHold" };
 static std::string brakefeedbackcard[NumBrakeFB] = { "BkPosn", "BkPres", "Hybrid", "None" };
 

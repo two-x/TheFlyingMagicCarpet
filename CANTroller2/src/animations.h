@@ -57,7 +57,8 @@ static constexpr std::uint32_t SHIFTSIZE = 8;
 volatile bool flip = 0;
 volatile int32_t refresh_limit = 16666; // 16666; // = 60 Hz
 volatile bool auto_saver_enabled = false;
-Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
+volatile int32_t screen_refresh_time;
+// Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
 LGFX lcd;
 LGFX_Sprite framebuf[2];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
 struct viewport {
@@ -260,7 +261,7 @@ class CollisionsSaver {
         ball_thismax = BALL_MAX - rn(25);
         for (std::uint32_t i = 0; i < ball_count; ++i) new_ball(i);
         refresh_limit = 20000;  // 50 Hz limit
-        screenRefreshTimer.set(refresh_limit);
+        // screenRefreshTimer.set(refresh_limit);
         _is_running = true;
     }
     int update(LGFX_Sprite* _nowspr, viewport* _vp) {
@@ -315,7 +316,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         change_pattern(-2);  // randomize new pattern whenever turned off and on
         saverCycleTimer.set(saver_cycletime_us);
         refresh_limit = 11111;  // 90 Hz limit
-        screenRefreshTimer.set(refresh_limit);
+        // screenRefreshTimer.set(refresh_limit);
         seasontimer.set(3000000);
         scaler = std::max(1, (vp->w + vp->h)/200);
         erpos_max[HORZ] = (int32_t)vp->w / 2 - eraser_rad;
@@ -706,6 +707,7 @@ class AnimationManager {
         // spr->setTextDatum(textdatum_t::top_left);
         // spr->setFont(&fonts::Font0);
         spr->setTextColor(BLK);
+
     }
     void calc_fps() {
         int64_t now = fps_timer.elapsed();
@@ -734,7 +736,7 @@ class AnimationManager {
             mule_drawn = false;
         }
         if (screensaver) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
-            mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
+            // mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
             if (nowsaver == Eraser) {
                 still_running = eSaver.update(spr, &vp);
                 if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));

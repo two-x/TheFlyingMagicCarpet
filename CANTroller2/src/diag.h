@@ -142,9 +142,9 @@ class DiagRuntime {
             for (int32_t j=0; j<NumTelemetryFull; j++) {
                 if (report_error_changes) {
                     if (err_sens[i][j] && !err_last[i][j])
-                        Serial.printf("!diag: %s %s err\n", err_sens_card[j], err_type_card[i]);
+                        Serial.printf("!diag: %s %s err\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
                     else if (!err_sens[i][j] && err_last[i][j])
-                        Serial.printf("!diag: %s %s ok\n", err_sens_card[j], err_type_card[i]);
+                        Serial.printf("!diag: %s %s ok\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
                 }
                 err_last[i][j] = err_sens[i][j];
             }

@@ -105,11 +105,11 @@ class Encoder {
     // If true, supports one type of cheap amazon black-pcb. 2024 one of these is mounted in the vehicle control enclosure
     //   * these guys hit a detent around each B transition, and A transitions in between detents
     //   * on an A transition, you're going CCW if the new value of A and the [now stable] B value are the same
-    //   * if your encoder is the wrong kind for this algorithm, it'll act all squirrely, giving spurious double-actions etc., switch over to this algorithm
+    //   * if your encoder is the wrong kind for this algorithm, it'll act all squirrely, giving spurious double-actions etc., switch to the other algorithm
     // if false, supports a different type of cheap amazon black-pcb encoders
     //   * the A signal starts low at each detent, and goes high then back low before the next detent 
     //   * the value of the B signal on the falling edge of the A signal is high if going CW, otherwise low
-    //   * if your encoder is the wrong kind for this algorithm, it'll behave all sluggish, like usually ignoring every other detent, switch over to this algorithm
+    //   * if your encoder is the wrong kind for this algorithm, it'll behave all sluggish, like usually ignoring every other detent, switch to the other algorithm
     #if EncoderPanasonicType                              // eg the vehicle control box encoder
     void IRAM_ATTR _a_isr() {                             // A isr has been triggered by A signal rise or fall transition. A will now bounce for a while and can't be trusted
         isr_time_now = esp_timer_get_time();              // put some flavor in your flav
@@ -183,10 +183,11 @@ class Encoder {
                 }
                 else d = constrain (_delta, -1, 1);  // Only change one at a time when selecting or turning pages
             }
-            _delta = 0;  // Our responsibility to reset this flag after handling events
+            // _delta = 0;  // [not] our responsibility to reset this flag after handling events
         }
         return d;
     }
+    void rezero() { _delta = 0; }  // Handling code needs to call to rezero after reading rotations
 };
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button

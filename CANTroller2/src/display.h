@@ -100,6 +100,7 @@ volatile bool reset_request = false;
 volatile bool pushtime = 0;
 volatile bool drawn = false;
 volatile bool pushed = true;
+volatile bool tuner_waiting_for_screen_sync = false;
 
 SemaphoreHandle_t pushbuf_sem;  // StaticSemaphore_t push_semaphorebuf_sem;
 SemaphoreHandle_t drawbuf_sem;  // StaticSemaphore_t draw_semaphorebuf_sem;
@@ -829,6 +830,7 @@ class Display {
         sim_last = sim->enabled();
         fps = animations.update(spr, disp_simbuttons_dirty);
         disp_simbuttons_dirty = false;
+        tuner_waiting_for_screen_sync = false;
         return true;
     }
     void push_task() {
@@ -840,13 +842,13 @@ class Display {
         diffpush(&framebuf[flip], &framebuf[!flip]);
         flip = !flip;
         sprptr = &framebuf[flip];
-        pushclock = (int32_t)screenRefreshTimer.elapsed();
+        pushclock = (int32_t)(esp_timer_get_time() - screen_refresh_time);
     }
     void draw_task() {
-        int32_t mark = (int32_t)screenRefreshTimer.elapsed();
+        int32_t mark = (int32_t)esp_timer_get_time();
         // Serial.printf("f%d draw@ 0x%08x\n", flip, &framebuf[flip]);
         draw_all(&framebuf[flip]);
-        drawclock = (int32_t)screenRefreshTimer.elapsed() - mark;
+        drawclock = (int32_t)(esp_timer_get_time() - mark);
         idleclock = refresh_limit - pushclock - drawclock;
     }
     void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
@@ -935,14 +937,15 @@ class Tuner {
     Timer tuningEditTimer{50000};  // Control frequency of polling for new edits
   public:
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
-    int32_t idelta = 0, idelta_encoder = 0;
+    int32_t rdelta = 0, rdelta_encoder = 0, idelta = 0, idelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
+    float fdelta = 0.0;  // fdelta is float edit value accelerated
     void update(int rmode) {
         process_inputs();
         edit_values(rmode);
     }
   private:
     void process_inputs() {
-        if (!tuningEditTimer.expired()) return;
+        if (!tuningEditTimer.expired() && !tuner_waiting_for_screen_sync) return;
         tuningEditTimer.reset();
         sel_val_last = sel_val;
         datapage_last = datapage;
@@ -956,23 +959,29 @@ class Tuner {
             }
             else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
         }
-        if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
-        else if (tunctrl == SELECT) sel_val += encoder.rotation();  // If overflow constrain will fix in general handler below
-        else if (tunctrl == OFF) datapage += encoder.rotation();  // If overflow tconstrain will fix in general below
+        rdelta_encoder = encoder.rotation(false);  // unaccelerated encoder turn
+        idelta_encoder = encoder.rotation(true);   // accelerated
+        encoder.rezero();
+        // if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
+        if (tunctrl == SELECT) sel_val += rdelta_encoder;  // If overflow constrain will fix in general handler below
+        else if (tunctrl == OFF) datapage += idelta_encoder;  // If overflow tconstrain will fix in general below
         if (touch->increment_sel_val) ++sel_val %= disp_tuning_lines;
         if (touch->increment_datapage) ++datapage %= NUM_DATAPAGES;
         touch->increment_sel_val = touch->increment_datapage = false;
-        idelta += idelta_encoder + touch->idelta;  // Allow edits using the encoder or touchscreen
-        touch->idelta = idelta_encoder = 0;
-        if (!sim.potmapping()) {  // use pot to control level of acceleration
-            if (pot.val() < 50.0) idelta = (int)((float)idelta / map(pot.val(), 50.0, 0.0, 1.0, 5.0));
-            else idelta = (int)((float)idelta * map(pot.val(), 50.0, 100.0, 1.0, 5.0));
+        rdelta = constrain(rdelta_encoder + touch->idelta, -1, 1);  // combine unaccelerated values
+        idelta = idelta_encoder + touch->idelta;  // Allow edits using the encoder or touchscreen
+        fdelta = float(idelta);
+        touch->idelta = 0;  // touch->rdelta = 0;
+        if (pot_tuner_acceleration && !sim.potmapping()) {  // use pot to control level of acceleration
+            if (pot.val() < 50.0) fdelta /= map(pot.val(), 50.0, 0.0, 1.0, 5.0);
+            else fdelta *= map(pot.val(), 50.0, 100.0, 1.0, 10.0);
         }
+        idelta = (int)fdelta;
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningAbandonmentTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
         else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
         datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (datapage != datapage_last) {
-            if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
+            if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drßop back to select mode
             screen->disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
             prefs.putUInt("dpage", datapage);
         }
@@ -981,23 +990,23 @@ class Tuner {
             if (sel_val != sel_val_last) screen->disp_selected_val_dirty = true;
         }
         if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selected_val_dirty = true;
+        tuner_waiting_for_screen_sync = true;
     }
     void adj_potmap() {  // potmap scroll select custom adjust function. includes potentially needed refresh of sim buttons content
-        sim.set_potmap((sens)(adj_val(sim.potmap(), idelta, 0, (int)(sens::starter) - 1)));
+        sim.set_potmap((sens)(adj_val(sim.potmap(), rdelta, 0, (int)(sens::starter) - 1)));
         screen->disp_simbuttons_dirty = true;
     }
-    void adj_brake_feedback(int _idelta) {  // active brake sensors scroll select custom adjust function. allows scroll select of valid values even tho they are not contiguous in the enum
+    void adj_brake_feedback(int _rdelta) {  // active brake sensors scroll select custom adjust function. allows scroll select of valid values even tho they are not contiguous in the enum
         int t = brake.feedback;
-        adj_val(&t, _idelta, 0, NumBrakeFB);
+        adj_val(&t, _rdelta, 0, NumBrakeFB-1);
         brake.update_ctrl_config(brake.pid_enabled, t);
     }
     void adj_cruise_scheme() {
         int t = gas.cruise_adjust_scheme;
-        adj_val(&t, idelta, 0, NumCruiseSchemes);
+        adj_val(&t, rdelta, 0, NumCruiseSchemes-1);
         gas.set_cruise_scheme(t);
     }
     void edit_values(int rmode) {
-        float fdelta = (float)idelta;
         if (tunctrl == EDIT && idelta) {  // Change tunable values when editing
             if (datapage == PG_RUN) {
                 if (sel_val == 9) { adj_val(&(gas.governor), idelta, 0, 100); gas.derive(); }
@@ -1029,11 +1038,11 @@ class Tuner {
                 else if (sel_val == 10) gas.add_temphot(fdelta);
             }
             else if (datapage == PG_MOTR) {
-                if (sel_val == 5) brake.update_ctrl_config((int)(idelta>0));
-                else if (sel_val == 6) adj_brake_feedback(idelta);
-                else if (sel_val == 7) adj_bool(&brake.enforce_positional_limits, idelta);
-                else if (sel_val == 8) gas.update_ctrl_config((int)(idelta>0));
-                else if (sel_val == 9) gas.update_cruise_ctrl_config((int)(idelta>0));
+                if (sel_val == 5) brake.update_ctrl_config((int)(rdelta>0));
+                else if (sel_val == 6) adj_brake_feedback(rdelta);
+                else if (sel_val == 7) adj_bool(&brake.enforce_positional_limits, rdelta);
+                else if (sel_val == 8) gas.update_ctrl_config((int)(rdelta>0));
+                else if (sel_val == 9) gas.update_cruise_ctrl_config((int)(rdelta>0));
                 else if (sel_val == 10) adj_cruise_scheme();
             }
             else if (datapage == PG_BPID) {
@@ -1054,27 +1063,27 @@ class Tuner {
                 else if (sel_val == 10) gas.cruisepid.add_kd(0.001f * fdelta);
             }
             else if (datapage == PG_TEMP) {
-                if (sel_val == 10) adj_bool(&web_disabled, -1 * idelta);  // note this value is inverse to how it's displayed, same for the value display entry
+                if (sel_val == 10) adj_bool(&web_disabled, -1 * rdelta);  // note this value is inverse to how it's displayed, same for the value display entry
                 // else if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
             }
             else if (datapage == PG_SIM) {
-                if (sel_val == 0) { sim.set_can_sim(sens::joy, idelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 1) { sim.set_can_sim(sens::pressure, idelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 2) { sim.set_can_sim(sens::brkpos, idelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 3) { sim.set_can_sim(sens::speedo, idelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 4) { sim.set_can_sim(sens::tach, idelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 5) { sim.set_can_sim(sens::airvelo, idelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 6) { sim.set_can_sim(sens::mapsens, idelta); screen->disp_simbuttons_dirty = true; } // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
-                else if (sel_val == 7) { sim.set_can_sim(sens::basicsw, idelta); screen->disp_simbuttons_dirty = true; }
+                if (sel_val == 0) { sim.set_can_sim(sens::joy, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 1) { sim.set_can_sim(sens::pressure, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 2) { sim.set_can_sim(sens::brkpos, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 3) { sim.set_can_sim(sens::speedo, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 4) { sim.set_can_sim(sens::tach, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 5) { sim.set_can_sim(sens::airvelo, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel_val == 6) { sim.set_can_sim(sens::mapsens, rdelta); screen->disp_simbuttons_dirty = true; } // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
+                else if (sel_val == 7) { sim.set_can_sim(sens::basicsw, rdelta); screen->disp_simbuttons_dirty = true; }
                 else if (sel_val == 8) adj_potmap();
-                else if (sel_val == 9) adj_bool(&cal_brakemode_request, idelta);
-                else if (sel_val == 10) adj_bool(&cal_gasmode_request, idelta);
+                else if (sel_val == 9) adj_bool(&cal_brakemode_request, rdelta);
+                else if (sel_val == 10) adj_bool(&cal_gasmode_request, rdelta);
             }
             else if (datapage == PG_UI) {
-                if (sel_val == 7) { adj_bool(&flashdemo, idelta); neo->enable_flashdemo(flashdemo); }
-                else if (sel_val == 8) { adj_val(&neobright, idelta, 1, 100); neo->setbright(neobright); }
-                else if (sel_val == 9) { adj_val(&neodesat, idelta, 0, 10); neo->setdesaturation(neodesat); }
-                else if (sel_val == 10) adj_bool(&screensaver, idelta);
+                if (sel_val == 7) { adj_bool(&flashdemo, rdelta); neo->enable_flashdemo(flashdemo); }
+                else if (sel_val == 8) { adj_val(&neobright, rdelta, 1, 100); neo->setbright(neobright); }
+                else if (sel_val == 9) { adj_val(&neodesat, rdelta, 0, 10); neo->setdesaturation(neodesat); }
+                else if (sel_val == 10) adj_bool(&screensaver, rdelta);
             }
             idelta = 0;
         }
@@ -1096,9 +1105,9 @@ bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickT
 // drawbuf_sem = xSemaphoreCreateMutexStatic(&draw_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&draw_semaphorebuf_sem);
 static void push_task_wrapper(void *parameter) {
     while (true) {
-        if (screenRefreshTimer.expired() || always_max_refresh || auto_saver_enabled) {
+        if ((esp_timer_get_time() - screen_refresh_time > refresh_limit) || always_max_refresh || auto_saver_enabled) {
             if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY)) {
-                screenRefreshTimer.reset();
+                screen_refresh_time = esp_timer_get_time();
                 screen.push_task();
                 xSemaphoreGive(pushbuf_sem);
                 xSemaphoreGive(drawbuf_sem);

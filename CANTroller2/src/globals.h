@@ -81,7 +81,7 @@ enum runmode { BASIC=0, LOWPOWER=1, STANDBY=2, STALL=3, HOLD=4, FLY=5, CRUISE=6,
 enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes=3 };
 enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
-enum motor_modes { NA=-1, Halt=0, Idle=1, Release=2, OpenLoop=3, ThreshLoop=4, ActivePID=5, AutoStop=6, AutoHold=7, ParkMotor=8, Cruise=9, Calibrate=10, Starting=11, NumMotorModes=12 };
+enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, ThreshLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, NumMotorModes=13 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
 enum brakeextra { NumBrakeSens=2 };
 enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
@@ -97,7 +97,7 @@ enum telemetry_idiots {                              // list of transducers whic
     _GasServo=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are actuators, driven by us
     _Speedo=3, _Tach=4, _BrakePres=5, _BrakePosn=6,  // these transducers are sensors, we read from
     _HotRC=7, _Temps=8, _Other=9, _GPIO=10,          // these are actually groups of multiple sensors (see below)
-    NumTelemetryIdiots=11,                           // size of this list
+    NumTelemetryIdiots=11,                           // size of the list of values with idiot lights
 };                        
 enum telemetry_full {                                                                                 // complete list expanding sensor groups
     _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14,                                         // _HotRC sensor group
@@ -122,6 +122,7 @@ int throttle_ctrl_mode = OpenLoop;   // should gas servo use the rpm-sensing pid
 bool print_task_stack_usage = true;  // enable to have remaining heap size and free task memory printed to console every so often. for tuning memory allocation
 bool autosaver_display_fps = true;   // do you want to see the fps performance of the fullscreen saver in the corner?
 bool crash_driving_recovery = true;  // if code crashes while driving, should it continue driving after reboot?
+bool pot_tuner_acceleration = true;  // when editing values, can we use the pot to control acceleration of value changes? (assuming we aren't pot mapping some sensor at the time)
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool dont_take_temperatures = false; // disables temp sensors. in case debugging dallas sensors or causing problems
 bool console_enabled = true;         // completely disables the console serial output. idea being, it may be safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
@@ -312,19 +313,21 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
     }    
 };
 Timer user_inactivity_timer;  // how long of not touching it before it goes to low power mode
-// note when kicking the activity timer, send an int to identify yourself:
-// 0 = momentary button down
-// 1 = momentary button up
-// 2 = encoder turn
-// 3 = web activity detected
-// 4 = touchscreen touch
-// 5 = hotrc buttons
-// 6 = hotrc trigger or joystick push
-// 7 = pot movement
-// 8 = toggle switch
+
+// kick_inactivity_timer() function to call whenever human activity occurs, for accurate inactivity timeout feature
+//   integer argument encodes which source of human activity has kicked the timer. Here are the codes:
+//   0 = momentary button down (encoder sw or boot button)
+//   1 = momentary button up (encoder sw or boot button)
+//   2 = encoder turned
+//   3 = web interactivity
+//   4 = touchscreen touching
+//   5 = hotrc button presses
+//   6 = hotrc trigger or joystick off center
+//   7 = pot movement
+//   8 = toggle switch flipped (basic switch)
 void kick_inactivity_timer(int source=0) {
     user_inactivity_timer.reset();  // evidence of user activity
-    Serial.printf("kick%d ", source);
+    // Serial.printf("kick%d ", source);
 }
 
 // class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regular intervals
