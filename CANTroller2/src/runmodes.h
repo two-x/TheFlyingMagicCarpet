@@ -29,6 +29,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         oldmode = mode;        
         // common to almost all the modes, so i put it here
         if (mode != LOWPOWER) {
+            autosaver_requested = false;
             if (hotrc.sw_event(CH3)) ignition.request(REQ_TOG);  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         }
         if (mode == BASIC) run_basicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.

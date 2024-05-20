@@ -805,11 +805,14 @@ class BrakeMotor : public JagMotor {
         for (int p = PositionFB; p <= PressureFB; p++) pids[p].set_output(pc[OUT]);  // Feed the final value back into the pids
     }
   public:
-    void setmode(int _mode, bool force_init=false) {     // motormode is beholden to the current config
-        if (feedback == NoneFB) {                        // if there is no feedback
-            if (_mode == ActivePID) _mode = OpenLoop;    // can't use pid mode, drop to openloop instead
-            else if (_mode == AutoStop || _mode == AutoHold) _mode = OpenLoop;  // lack of feedback eliminates most modes
-            else if (_mode == Release || _mode == ParkMotor) _mode = Halt;      // in openloop we lose some safeties, only use if necessary 
+    void setmode(int _mode, bool force_init=false) {                         // motormode is beholden to the current config
+        if (feedback == NoneFB) {                                            // if there is no feedback
+            if (_mode == ActivePID || _mode == ThreshLoop) _mode = OpenLoop; // can't use loops, drop to openloop instead
+            else if (_mode == AutoStop || _mode == AutoHold) {               // todo: rethink these scenarios 
+                Serial.print("Warn: auto braking unavailable\n");
+                return;  // keep current mode
+            }
+            else if (_mode == Release || _mode == ParkMotor) _mode = Halt;   // in openloop we lose some safeties, only use if necessary 
         }
         else if (!pid_enabled) {                         // if we have feedback but pid is disabled in config
             if (_mode == ActivePID) _mode = ThreshLoop;  // drop to simple threshold-based loop scheme

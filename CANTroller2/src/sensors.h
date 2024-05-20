@@ -284,14 +284,14 @@ class Transducer : public Device {
         float min_f = static_cast<float>(_native.min());
         float max_f = static_cast<float>(_native.max());
         float ret = -1;
-        if (!_invert) {  // if human unit (generally si units) has a proportional relationship to native unit (like miles to inches)
-            if (dir == TransducerDirection::REV) {  // if higher human values translate to lower native values
+        if (!_invert) {  // do the human units (generally si) have a proportional relationship to the native units? (like miles to inches)
+            if (dir == TransducerDirection::REV) {  // do higher human values translate to lower native values?
                 ret = min_f + max_f - _b_offset - _m_factor * arg_val_f;  // Serial.printf("%lf = %lf + %lf - %lf - %lf * %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
             }
-            else {  // if higher human values also translate to higher native values
+            else {  // otherwise if higher human values translate to higher native values
                 ret = _b_offset + _m_factor * arg_val_f; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _b_offset, _m_factor, arg_val_f);
             }
-        } else if (std::abs(arg_val_f) > 0.000001) { // if human unit has a reciprocal (inverse) relationship to native unit (like hours to hertz)
+        } else if (std::abs(arg_val_f) > 0.000001) { // otherwise if the human units have a reciprocal (inverse) relationship to the native units (like hours to hertz)
             if (dir == TransducerDirection::REV) {
                 ret = min_f + max_f - _b_offset - _m_factor / arg_val_f;  // Serial.printf("%lf = %lf + %lf - %lf - %lf / %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
             }
@@ -785,15 +785,25 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     std::string _human_units_name = "psi";
 
     PressureSensor(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
-        _m_factor = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc 
-        _b_offset = -from_native(op_min_adc);
+        // the sensor output voltage spec range is 0.5-4.5 V to indicate 0-1000 psi.
+        // Our ADC top is just 3.3V tho, so we can sense up to 695 psi (calculated) at our max adc
+        // calculated using spec values:
+        //   sensor gives:  1000 psi / (4.5 V - 0.5 V) = 250 psi/V   (or 0.004 V/psi)
+        //   our adc:  4096 adc / 3.3 V = 1241 adc/V   (or 0.000806 V/adc)
+        //   resulting slope:  250 psi/V * 0.000806 V/adc = 0.2 psi/adc  (or 5 adc/psi)
+        //   zero psi point:  0.5 V * 1241 adc/V = 621 adc
+        //   fullscale reading:  0.2 psi/adc * (4095 adc - 621 adc) = 695 psi
+        // math to convert (based on spec values):
+        //   psi = 0.2 * (adc - 621)  ->  psi = 0.2 * adc - 124  ->  adc = 5 * psi + 621
+        op_min_adc = 658.0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+        op_max_adc = 2080.0; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+        _m_factor = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
+        _b_offset = -op_min_adc * _m_factor;  // -658 adc * 0.2 psi/adc = -131.6 psi
         _invert = false;
         _ema_alpha = 0.15;
         abs_min_adc = 0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
         abs_max_adc = adcrange_adc; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-        op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-        op_max_adc = 2080; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-        hold_initial_psi = 120.0;  // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
+        hold_initial_psi = 120.0;  // Pressure applied when brakes are hit to auto-stop or auto-hold the car (ADC count 0-4095)
         hold_increment_psi = 3.0;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
         panic_initial_psi = 140.0; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
         panic_increment_psi = 5.0; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
@@ -839,20 +849,18 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         #if BrakeThomson
             // _m_factor = 8.0 / adcrange_adc; // 8 in * 1/4096 1/adc * 0.00195 in/adc
             // _b_offset = 0.0;
-            _ema_alpha = 0.35;
-            _zeropoint = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
+            _zeropoint = 3.179;         // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
             abs_min_retract_adc = 0;
             abs_max_extend_adc = adcrange_adc;
-            abs_min_retract_in = 0.335;  // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
+            abs_min_retract_in = 0.335; // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
             abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
             op_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-            op_max_extend_in = 4.234;  // 4.624  //TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)  
+            op_max_extend_in = 4.234;   // 4.624  //TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)  
         #else  // if LAE motor
             // 240513 cal data LAE actuator:  measured to tip of piston
             // fully retracted 0.95 in, Vpot = 0.83 V (1179 adc), fully extended 8.85 in (), Vpot = 2.5 V (3103 adc)
             // calc (2.5 - 0.83) / 3.3 = 0.506 . 0.506 * 4096 = 2072 . (8.85 - 0.95) / 2072 = .00381 in/adc or 262 adc/in
-            // 
-            abs_min_retract_adc = 979; // TUNED 240513 - pot measured with 3.3V applied, converted to adc
+            abs_min_retract_adc = 979;  // TUNED 240513 - pot measured with 3.3V applied, converted to adc
             abs_max_extend_adc = 3103;  // TUNED 240513 - pot measured with 3.3V applied, converted to adc
             abs_min_retract_in = 0.95;  // TUNED 240513 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
             abs_max_extend_in = 8.85;   // TUNED 240513 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
