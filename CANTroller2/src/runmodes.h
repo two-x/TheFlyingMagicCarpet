@@ -68,7 +68,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_lowpowerMode() {  // turns off syspower and just idles. sleep_request are handled here or in standby mode below
         if (we_just_switched_modes) {
             sleep_request = REQ_NA;
-            powering_up = autosaver_requested = false;
+            powering_up = false;
             brake.setmode(Halt);
             steer.setmode(Halt);
             set_syspower(LOW);     // Power down devices to save battery
@@ -77,6 +77,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             set_syspower(HIGH);    // switch on control system devices
             pwrup_timer.reset();   // stay in lowpower mode for a delay to allow devices to power up
             powering_up = true;
+            autosaver_requested = false;
         }
         if (powering_up && pwrup_timer.expired()) mode = (basicsw.val) ? BASIC : STANDBY;  // finish powering up . display->all_dirty();  // tells display to redraw everything. display must set back to false
         sleep_request = REQ_NA;
