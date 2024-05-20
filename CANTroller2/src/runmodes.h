@@ -2,8 +2,8 @@
 class RunModeManager {  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in standby mode with no activity
   private:
     int _joydir;
-    int64_t lowpower_delay = 900000000;  // Time of inactivity after entering standby mode before going to lowpower mode
-    int64_t screensaver_delay = 300000000;  // Time of inactivity after entering standby mode before starting screensaver turns on
+    int64_t lowpower_delay = 9000000;  // Time of inactivity after entering standby mode before going to lowpower mode
+    int64_t screensaver_delay = 3000000;  // Time of inactivity after entering standby mode before starting screensaver turns on
     Timer gestureFlyTimer{1250000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
     Timer pwrup_timer{3000000};  // Timeout when parking motors if they don't park for whatever reason (in us)
     Timer standby_timer{5000000};
