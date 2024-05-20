@@ -272,55 +272,44 @@ class Transducer : public Device {
     TransducerDirection dir = TransducerDirection::FWD; // NOTE: whats ts for, exactly?
     
     // these linear conversion functions change native values to human and back - overwrite in child classes as needed
-    //   _m_factor : is conversion rate in human/native units (in normal noninverted case)
-    //   _b_offset : (in human units) is added to result of multiplying native value by _m_factor
+    //   _m_factor : non-inverted: is conversion rate in human/native units  (eg for feet (human) and inches (native) would be 12)
+    //                   inverted: is human-unit to inverted-native-unit ratio  (eg for Hz (human) and ms (native), would be 1000)
+    //   _b_offset : human value to add after native-to-human conversion, or subtract before human-to-native conversion
     //   _invert : if set true, before multiplying the math will invert the given native value. 
     //             intended if native and human are inverse values like time (eg us) and frequency (eg mph, rpm). 
-    //             e.g. for native in sec/in and human in ft/minute, then use _m_factor of 60 / 12 = 5 ft/min (per in/sec)
-    //   dir : optional mirroring of result around min/max range center point. set to REV if native value increases as human decreases
+    //             e.g. for sec/in (native) and ft/min (human), _m_factor is:  60 / 12 = 5 ft/min (per in/sec)
+    //   dir : optional mirroring of human value range, around min/max range center point. set to REV if native value increases as human decreases
+    //         going from native to human, the range flip is applied to the human value after b_offset is applied, and vice versa
     // note, to avoid crashes, divide by zero attempts result in return of max value in lieu of infinity
     virtual HUMAN_T from_native(NATIVE_T arg_val_native) {
         float arg_val_f = static_cast<float>(arg_val_native); // convert everything to floats so we don't introduce rounding errors
-        float min_f = static_cast<float>(_native.min());
-        float max_f = static_cast<float>(_native.max());
-        float ret = -1;
-        if (!_invert) {  // do the human units (generally si) have a proportional relationship to the native units? (like miles to inches)
-            if (dir == TransducerDirection::REV) {  // do higher human values translate to lower native values?
-                ret = min_f + max_f - _b_offset - _m_factor * arg_val_f;  // Serial.printf("%lf = %lf + %lf - %lf - %lf * %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
+        float min_f = static_cast<float>(_human.min());
+        float max_f = static_cast<float>(_human.max());
+        float ret = NAN;
+        if (_invert) {
+            if (std::abs(arg_val_f) > 0.000001) { // otherwise if the human units have a reciprocal (inverse) relationship to the native units (like hours to hertz)
+                printf ("err: from_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", max_f, dir, _invert, arg_val_f, _m_factor, _b_offset);
+                return static_cast<HUMAN_T>(_human.max());  // Best return given division would be infinite  // Serial.printf("%lf = %lf\n", ret, max_f);
             }
-            else {  // otherwise if higher human values translate to higher native values
-                ret = _b_offset + _m_factor * arg_val_f; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _b_offset, _m_factor, arg_val_f);
-            }
-        } else if (std::abs(arg_val_f) > 0.000001) { // otherwise if the human units have a reciprocal (inverse) relationship to the native units (like hours to hertz)
-            if (dir == TransducerDirection::REV) {
-                ret = min_f + max_f - _b_offset - _m_factor / arg_val_f;  // Serial.printf("%lf = %lf + %lf - %lf - %lf / %lf\n", ret, min_f, max_f, _b_offset, _m_factor, arg_val_f);
-            }
-            else {
-                ret = _b_offset + _m_factor / arg_val_f;  // Serial.printf("%lf = %lf + %lf / %lf\n", ret, _b_offset, _m_factor, arg_val_f);
-            }
-        } else {
-            printf ("err: from_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", max_f, dir, _invert, arg_val_f, _m_factor, _b_offset);
-            ret = max_f;  // Best return given division would be infinite  // Serial.printf("%lf = %lf\n", ret, max_f);
+            else arg_val_f = 1 / arg_val_f;
         }
+        ret = _b_offset + _m_factor * arg_val_f; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _b_offset, _m_factor, arg_val_f);
+        if (dir == TransducerDirection::REV) ret = min_f + max_f - ret;
         return static_cast<HUMAN_T>(ret);
     }
     virtual NATIVE_T to_native(HUMAN_T arg_val_human) {
         float arg_val_f = static_cast<float>(arg_val_human); // convert everything to floats so we don't introduce rounding errors
         float min_f = static_cast<float>(_human.min());
         float max_f = static_cast<float>(_human.max());
-        float ret = -1;
-        if (dir == TransducerDirection::REV) {
-            arg_val_f = min_f + max_f - arg_val_f;
-        }
-        if (_invert && std::abs(arg_val_f - _b_offset) > 0.000001) {  // trying to dodge risk of floating point error comparing near-zero values
-            ret = _m_factor / (arg_val_f - _b_offset);
-        } else if (!_invert && std::abs(_m_factor) > 0.000001) {  // risk here of floating point error comparing near-zero values
-            ret = (arg_val_f - _b_offset) / _m_factor;
-        } else if (!std::isnan(_zerovalue)) {
-            ret = _zerovalue;
-        } else {
-            printf ("err: to_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", max_f, dir, _invert, arg_val_f, _m_factor, _b_offset);
-            ret = max_f;  // Best return given division would be infinite
+        float ret = NAN;
+        if (dir == TransducerDirection::REV) arg_val_f = min_f + max_f - arg_val_f;
+        ret = (arg_val_f - _b_offset) / _m_factor;
+        if (_invert) {
+            if (std::abs(ret) < 0.000001) {
+                printf ("err: to_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", max_f, dir, _invert, arg_val_f, _m_factor, _b_offset);
+                return static_cast<NATIVE_T>(_native.max());            
+            }
+            else ret = 1 / ret;
         }
         return static_cast<NATIVE_T>(ret);
     }
