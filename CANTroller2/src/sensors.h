@@ -272,7 +272,7 @@ class Transducer : public Device {
     TransducerDirection dir = TransducerDirection::FWD; // NOTE: whats ts for, exactly?
     
     // these linear conversion functions change native values to human and back - overwrite in child classes as needed
-    //   _m_factor : non-inverted: is conversion rate in human/native units  (eg for feet (human) and inches (native) would be 12)
+    //   _m_factor : non-inverted: is conversion rate in human/native units  (eg for feet (human) and yards (native) would be 3)
     //               inverted: is human-unit to inverted-native-unit ratio  (eg for Hz (human) and ms (native), would be 1000)
     //   _b_offset : human value to add after native-to-human conversion, or subtract before human-to-native conversion
     //   _invert : if true, before converting native to human, native value is inverted, or if converting human to native, the result is inverted
