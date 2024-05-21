@@ -1112,25 +1112,25 @@ bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickT
 // drawbuf_sem = xSemaphoreCreateMutexStatic(&draw_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&draw_semaphorebuf_sem);
 static void push_task_wrapper(void *parameter) {
     while (true) {
-        if ((esp_timer_get_time() - screen_refresh_time > refresh_limit) || always_max_refresh || auto_saver_enabled) {
-            if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
-                screen_refresh_time = esp_timer_get_time();
-                screen.push_task();
-                xSemaphoreGive(pushbuf_sem);
-                xSemaphoreGive(drawbuf_sem);
-            }
+        if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
+            screen.push_task();
+            xSemaphoreGive(pushbuf_sem);
+            xSemaphoreGive(drawbuf_sem);
         }
-        vTaskDelay(pdMS_TO_TICKS(2));
+        vTaskDelay(pdMS_TO_TICKS(2)); 
         // vTaskDelete(NULL);
     }
 }
 static void draw_task_wrapper(void *parameter) {
     while (true) {
+        // if ((esp_timer_get_time() - screen_refresh_time > refresh_limit) || always_max_refresh || auto_saver_enabled) {
         if (xSemaphoreTake(drawbuf_sem, portMAX_DELAY) == pdTRUE) {
+            screen_refresh_time = esp_timer_get_time();
             screen.draw_task();
             xSemaphoreGive(drawbuf_sem);
         }
-        vTaskDelay(pdMS_TO_TICKS(2));  //   || sim.enabled()
+        vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
+        if (!always_max_refresh && !auto_saver_enabled) vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit / 1000 - 1)));  //   || sim.enabled()
     }
 }
 // The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.

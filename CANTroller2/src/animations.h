@@ -55,7 +55,7 @@ volatile bool _is_running;
 volatile std::uint32_t _loop_count;
 static constexpr std::uint32_t SHIFTSIZE = 8;
 volatile bool flip = 0;
-volatile int32_t refresh_limit = 16666; // 16666; // = 60 Hz
+volatile int32_t refresh_limit = 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
 volatile bool auto_saver_enabled = false;
 volatile int32_t screen_refresh_time;
 // Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
@@ -260,7 +260,6 @@ class CollisionsSaver {
         }
         ball_thismax = BALL_MAX - rn(25);
         for (std::uint32_t i = 0; i < ball_count; ++i) new_ball(i);
-        refresh_limit = 20000;  // 50 Hz limit
         // screenRefreshTimer.set(refresh_limit);
         _is_running = true;
     }
@@ -315,7 +314,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         change_pattern(-2);  // randomize new pattern whenever turned off and on
         saverCycleTimer.set(saver_cycletime_us);
-        refresh_limit = 11111;  // 90 Hz limit
+        // refresh_limit = 11111;  // 90 Hz limit
         // screenRefreshTimer.set(refresh_limit);
         seasontimer.set(3000000);
         scaler = std::max(1, (vp->w + vp->h)/200);
