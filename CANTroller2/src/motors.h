@@ -588,7 +588,7 @@ class BrakeMotor : public JagMotor {
     }
   public:
     using JagMotor::JagMotor;
-    bool pid_enabled = true, pid_ena_last = true, enforce_positional_limits = true;    // default for use of pid allowed
+    bool pid_enabled = true, pid_ena_last = true, enforce_positional_limits = true, no_feedback = false;    // default for use of pid allowed
     int feedback = PositionFB, feedback_last = PositionFB;  // this is the default for sensors to use as feedback
     int dominantsens, motormode = Halt, oldmode = Halt;  // not tunable
     bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == PositionFB);
@@ -831,6 +831,7 @@ class BrakeMotor : public JagMotor {
         else if (new_pid_ena != -5) pid_enabled = (bool)new_pid_ena;     // otherwise receive new pid enable setting (ON/OFF) if given
         feedback_enabled[PositionFB] = ((feedback == PositionFB) || (feedback == HybridFB));  // set sensor enable consistent with feedback config
         feedback_enabled[PressureFB] = ((feedback == PressureFB) || (feedback == HybridFB));  // set sensor enable consistent with feedback config
+        no_feedback = (feedback == NoneFB);                              // for idiot light display
         if (!pid_enabled) setmode(motormode);                            // ensure current motor mode is consistent with configs set here
         if ((feedback != feedback_last) || (pid_enabled != pid_ena_last)) {
             derive();  // on change need to recalculate some values
