@@ -287,7 +287,7 @@ class Transducer : public Device {
         if (_invert) {
             if (std::abs(xnative) > 0.000001) xnative = 1 / xnative; //  // otherwise if the xhuman units have a reciprocal (inverse) relationship to the native units (like hours to hertz)
             else {
-                printf ("err: from_xnative conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", _human.max(), dir, _invert, xnative, _m_factor, _b_offset);
+                printf ("err: from_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", _human.max(), dir, _invert, xnative, _m_factor, _b_offset);
                 return static_cast<HUMAN_T>(_human.max());  // Best return given division would be infinite  // Serial.printf("%lf = %lf\n", ret, max_f);
             }
         }
@@ -299,7 +299,7 @@ class Transducer : public Device {
         float xhuman = static_cast<float>(arg_val_human); // convert everything to floats so we don't introduce rounding errors
         float xnative = -1.0;  // this holds our return value
         if (dir == TransducerDirection::REV) xhuman = _human.min() + _human.max() - xhuman;
-        xnative = (xhuman - _b_offset) / _m_factor;
+        xnative = (xhuman - _b_offset) / _m_factor;  // you must be sure m_factor isn't zero
         if (_invert) {
             if (std::abs(xnative) > 0.000001) xnative = 1 / xnative;
             else {
@@ -763,7 +763,8 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     sens senstype = sens::pressure;
     int32_t op_min_adc, op_max_adc, abs_min_adc, abs_max_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-    float hold_initial_psi, hold_increment_psi, panic_initial_psi, panic_increment_psi, margin_psi, _zeropoint;
+    float hold_initial_psi, hold_increment_psi, panic_initial_psi, panic_increment_psi, margin_psi, _zeropoint;  //, op_min_psi;
+    float op_min_psi, op_max_psi;
     std::string _long_name = "Brake pressure sensor";
     std::string _short_name = "presur";
     std::string _native_units_name = "adc";
@@ -780,9 +781,10 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         //   fullscale reading:  0.2 psi/adc * (4095 adc - 621 adc) = 695 psi
         // math to convert (based on spec values):
         //   psi = 0.2 * (adc - 621)  ->  psi = 0.2 * adc - 124  ->  adc = 5 * psi + 621
-        op_min_adc = 658.0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-        op_max_adc = 2080.0; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-        _m_factor = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
+        // op_min_psi = 0.0;  // zero op min is built in to b offset calculation below 
+        op_min_adc = 658; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes. Make this easily tunable so math can be recalibrated
+        op_max_adc = 2080; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+        _m_factor = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - (float)op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
         _b_offset = -op_min_adc * _m_factor;  // -658 adc * 0.2 psi/adc = -131.6 psi
         _invert = false;
         _ema_alpha = 0.15;
@@ -793,9 +795,9 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         panic_initial_psi = 140.0; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
         panic_increment_psi = 5.0; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
         margin_psi = 1;  // Max acceptible error when checking psi levels
-        _zeropoint = from_native(op_min_adc);  // used when releasing the brake in case position is not available
-        set_native_limits(abs_min_adc, abs_max_adc);
-        set_human_limits(from_native(abs_min_adc), from_native(abs_max_adc));
+        _zeropoint = 
+        set_native_limits(abs_min_adc, abs_max_adc);                          // set_native_limits(abs_min_adc, abs_max_adc);
+        set_human_limits(from_native(abs_min_adc), from_native(abs_max_adc)); // set_human_limits(from_native(abs_min_adc), from_native(abs_max_adc));
         set_native(op_min_adc);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);            
@@ -808,10 +810,10 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     float psi() { return _human.val(); }
     float min_psi() { return _human.min(); }
     float max_psi() { return _human.max(); }
-    float op_min() { return from_native(op_min_adc); }
-    float op_max() { return from_native(op_max_adc); }
+    float op_min_human() { return from_native(op_min_adc); }
+    float op_max_human() { return from_native(op_max_adc); }
     bool released() { return (_val_filt.val() <= _zeropoint + margin_psi); }
-    float zeropoint() { return _zeropoint; }
+    float zeropoint() { return op_min(); }
 };
 // BrakePositionSensor represents a linear position sensor
 // for measuring brake position (TODO which position? pad? pedal?)
@@ -857,8 +859,7 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         _ema_alpha = 0.35;
         _margin = .01;  // TODO: add description
         _m_factor = (abs_max_extend_in - abs_min_retract_in) / (abs_max_extend_adc - abs_min_retract_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
-        _b_offset = -2.69;  //  979 adc * 0.00372 in/adc - 0.95 in = -2.69 in
-        _parkpos = op_max_extend_in;
+        _b_offset = abs_min_retract_adc * _m_factor - abs_min_retract_in;  //  979 adc * 0.00372 in/adc - 0.95 in = -2.69 in
         op_min_retract_adc = to_native(op_min_retract_in);
         op_max_extend_adc = to_native(op_max_extend_in);
         set_human_limits(abs_min_retract_in, abs_max_extend_in);
@@ -876,11 +877,11 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     float in() { return _human.val(); }
     float min_in() { return _human.min(); }
     float max_in() { return _human.max(); }
-    float op_min() { return op_min_retract_in; }
-    float op_max() { return op_max_extend_in; }
+    float op_min_human() { return op_min_retract_in; }
+    float op_max_human() { return op_max_extend_in; }
     // float absmin_in() { return abs_min_retract_in; }
     // float absmax_in() { return abs_max_extend_in; }
-    float parkpos() { return _parkpos; }
+    float parkpos() { return op_max_human(); }
     float margin() { return _margin; }
     float zeropoint() { return _zeropoint; }
     float* zeropoint_ptr() { return &_zeropoint; }
@@ -1030,6 +1031,7 @@ class Speedometer : public PulseSensor<float> {
   protected:
     int64_t _debounce_threshold_us; 
     float _stop_thresh_mph, _min_mph, _max_mph, _min_us, _initial_mph, _redline_mph, _govern_mph, _idle_mph, _margin;
+    int64_t _stop_thresh_us;
     bool _pin_activity = LOW;
     int32_t _zerovalue;
   public:
@@ -1047,7 +1049,8 @@ class Speedometer : public PulseSensor<float> {
         _b_offset = 0.0;
         _margin = 0.2;
         _min_us = _m_factor / _redline_mph;  // 15.0 mph gives 119000 us.  25.0 mph gives 71400 us
-        _stop_thresh_mph = 0.2;  // Below which the car is considered stopped
+        // _stop_thresh_mph = 0.2;  // Below which the car is considered stopped in mph (old method)
+        _stop_thresh_us = 2000000;  // Below which the car is considered stopped in us (new method)
         _zerovalue = 9999999;
         set_human_limits(_min_mph, _redline_mph);
         set_native_limits(_min_us, _stop_timeout_us);
@@ -1068,7 +1071,10 @@ class Speedometer : public PulseSensor<float> {
     // Query/getter functions
     float mph() { return _human.val(); }
     // bool car_stopped() { return stopped(); }
-    bool car_stopped() { return _val_filt.val() < _stop_thresh_mph ; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    bool car_stopped() {
+        return esp_timer_get_time() - _isr_time_last_us > _stop_thresh_us;  // new method based on time since last interrupt
+        // return _val_filt.val() < _stop_thresh_mph;  // old method based on calculated speed
+    }
     float margin_mph() { return _margin; }
     float redline_mph() { return _human.max(); }
     float govern_mph() { return _govern_mph; }
