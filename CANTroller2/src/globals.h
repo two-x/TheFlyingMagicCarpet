@@ -174,6 +174,7 @@ bool calmode_request = false;
 bool flycruise_toggle_request = false;
 bool screensaver = false;                // can enable experiment with animated screen draws
 bool basicmode_request = false;
+int autosaver_request = REQ_NA;
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN, datapage_last = PG_TEMP;  // which of the dataset pages is currently displayed and available to edit?
 volatile int sel_val = 0;               // in the real time tuning UI, which of the editable values is selected. -1 for none 

@@ -10,18 +10,18 @@ const uint8_t DGRY = 0x49;  // pseudo-greyscale: very dark grey (blueish)
 const uint8_t MGRY = 0x6d;  // pseudo-greyscale: medium grey (yellowish)
 const uint8_t LGRY = 0xb6;  // greyscale: very light grey
 const uint8_t WHT  = 0xff;  // greyscale: full white (RGB elements full on)
-const uint8_t RED  = 0xe0;  // primary red (R element full on)
-const uint8_t YEL  = 0xfc;  // Secondary yellow (RG elements full on)
-const uint8_t GRN  = 0x1c;  // primary green (G element full on)
-const uint8_t CYN  = 0x1f;  // secondary cyan (GB elements full on)  (00000)(111 111)(11111) = 07 ff
-const uint8_t BLU  = 0x03;  // primary blue (B element full on)
-const uint8_t MGT  = 0xe2;  // secondary magenta (RB elements full on)
+const uint8_t RED  = 0xe0;  // red (R element full on)
+const uint8_t YEL  = 0xfc;  // yellow (RG elements full on)
+const uint8_t GRN  = 0x1c;  // green (G element full on)
+const uint8_t CYN  = 0x1f;  // cyan (GB elements full on)
+const uint8_t BLU  = 0x03;  // blue (B element full on)
+const uint8_t MGT  = 0xe2;  // magenta (RB elements full on)
 const uint8_t DRED = 0x80;  // dark red
 const uint8_t BORG = 0xe8;  // blood orange (very reddish orange)
 const uint8_t BRN  = 0x88;  // dark orange aka brown
 const uint8_t DBRN = 0x44;  // dark brown
-const uint8_t ORG  = 0xf0;  // 
-const uint8_t LYEL = 0xfe;  // 
+const uint8_t ORG  = 0xf0;  // orange
+const uint8_t LYEL = 0xfe;  // lemon yellow
 const uint8_t GGRN = 0x9e;  // a low saturation greyish pastel green
 const uint8_t TEAL = 0x1e;  // this teal is barely distinguishable from cyan
 const uint8_t STBL = 0x9b;  // steel blue is desaturated light blue
@@ -30,8 +30,8 @@ const uint8_t RBLU = 0x0b;  // royal blue
 const uint8_t MBLU = 0x02;  // midnight blue
 const uint8_t INDG = 0x43;  // indigo (deep blue with a hint of purple)
 const uint8_t ORCD = 0x8f;  // orchid (lighter and less saturated purple)
-const uint8_t VIO  = 0x83;  // 
-const uint8_t PUR  = 0x63;
+const uint8_t VIO  = 0x83;  // violet
+const uint8_t PUR  = 0x63;  // purple
 const uint8_t GPUR = 0x6a;  // a low saturation greyish pastel purple
 const uint8_t LPUR = 0xb3;  // a light pastel purple
 const uint8_t PNK  = 0xe3;  // pink is the best color
@@ -409,11 +409,13 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             else if (rotate == Rings) {
                 int d = 6 + rn(45);
+                uint8_t sat, brt, c, c2;
                 uint16_t hue = spothue + 32768 * rn(2);
-                uint8_t sat = 255 - ((uint8_t)(spothue >> (7+season)));  // + rn(63) 
-                uint8_t brt = 150 + (30 * season) + rn(156 - 30 * season);
-                uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, brt);
-                uint8_t c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
+                sat = 255 - ((uint8_t)(spothue >> (7+season)));  // + rn(63) 
+                brt = 200 + rn(56);
+                if (season > 1) { sat = 180; brt -= 25; }
+                c = hsv_to_rgb<uint8_t>(hue, sat, brt);
+                c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
                 // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
                 for (int xo = -1; xo <= 1; xo += 2) {
                     sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler, c);
@@ -457,7 +459,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                     uint16_t hue = point[VERT] * 65535 / vp->h;
                     uint8_t sat = point[HORZ] * 255 / vp->w;
                     String letter = (String)((char)(0x21 + rn(0x5d)));
-                    uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, 100 + 100 * (spothue > 32767) + rn(56));
+                    uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, 100 + 100 * (spothue < (32767 / (season+1))) + rn(56));
                     sprite->drawString(letter, point[HORZ]+1 + vp->x, point[VERT]+1 + vp->y);
                     sprite->drawString(letter, point[HORZ]-1 + vp->x, point[VERT]-1 + vp->y);
                     sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 100 + 100 * (spothue > 32767) + rn(56)));
@@ -474,7 +476,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 uint8_t c = (!wormstripe) ? BLK : pencolor;
                 if (wormstripetimer.expired()) {
                     ++wormstripe %= 2;
-                    wormstripetimer.set(500000 * ((!wormstripe) ? 1 : 3));
+                    wormstripetimer.set(300000 * ((!wormstripe) ? 1 : 4));
                 }
                 // if ((spothue >> 5) & 3 == 3) {
                 //     if (season == 3) c = BLK;
@@ -559,51 +561,10 @@ class DiagConsole {
     LGFX_Sprite* nowspr_ptr;
     static constexpr int num_lines = 16;
     // std::string textlines[num_lines];
-    int usedlines = 0;
+    int usedlines = 0, last_drawn = -1, newest_content = -1;
     std::vector<std::string> textlines; // Ring buffer array
     size_t bufferSize; // Size of the ring buffer
-    size_t nextIndex; // Index for the next insertion
-  public:
-    void init() {
-        this->printf("Temperature: %d, Humidity: %.2f", 25, 50.67);
-        this->printf("Error Code: %d", 404);
-        for (size_t i = 0; i < 5; ++i) {
-            std::cout << "Element " << i << ": " << this->getBufferElement(i) << std::endl;
-        }
-    }
-    void setup() {}
-    // void redraw() {
-    //     panel->diffpush(&framebuf[flip], &framebuf[!flip]);
-    // }
-    // void add_errorline(std::string type, std::string item) {
-    //     std::string newerr = type + ": " + item;
-    //     if (newerr.length() > 15) newerr = newerr.substr(0, 15);
-    //     textlines[usedlines++] = newerr;
-    // }
-    void update() {
-        // int flip = panel->setflip(false);
-        // nowspr_ptr = &(framebuf[flip]);
-        // panel->diffpush(&framebuf[flip], &framebuf[!flip]);
-    }
-    // DiagConsole(size_t size) : bufferSize(size), nextIndex(0) {
-    //     textlines.resize(size);
-    // }
-    DiagConsole() {
-        nextIndex = 0;
-        textlines.resize(bufferSize);
-    }
-
-    // Function similar to Serial.printf()
-    void printf(const char* format, ...) {
-        va_list args;
-        va_start(args, format);
-        char temp[100]; // Assuming maximum length of output string
-        vsnprintf(temp, sizeof(temp), format, args);
-        va_end(args);
-        textlines[nextIndex] = temp; // Store formatted output into buffer
-        nextIndex = (nextIndex + 1) % bufferSize; // Update next insertion index
-    }
-
+    size_t nextIndex = 0; // Index for the next insertion
     // Function to retrieve the stored strings
     std::string getBufferElement(size_t index) {
         if (index < bufferSize) {
@@ -611,6 +572,57 @@ class DiagConsole {
         } else {
             return ""; // Return empty string if index is out of range
         }
+    }
+  public:
+    bool dirty = true;
+    // Function similar to Serial.printf()
+    void dprintf(const char* format, ...) {
+        va_list args;
+        va_start(args, format);
+        char temp[100]; // Assuming maximum length of output string
+        vsnprintf(temp, sizeof(temp), format, args);
+        va_end(args);
+        textlines[nextIndex] = temp; // Store formatted output into buffer
+        nextIndex = (nextIndex + 1) % bufferSize; // Update next insertion index
+        dirty = true;
+    }
+    void init() {
+        this->dprintf("Temperature: %d, Humidity: %.2f", 25, 50.67);
+        this->dprintf("Error Code: %d", 404);
+        for (size_t i = 0; i < 5; ++i) {
+            std::cout << "Element " << i << ": " << this->getBufferElement(i) << std::endl;
+        }
+    }
+    void setup() {
+        std::string blank = "";
+        for (int i=0; i<num_lines; i++) this->dprintf("%s", blank.c_str());
+
+    }
+
+    // void redraw() {
+    //     panel->diffpush(&framebuf[flip], &framebuf[!flip]);
+    // }
+    // void add_errorline(std::string type, std::string item) {
+    //     std::string newerr = type + ": " + item;
+    //     if (newerr.length() > 15) newerr = newerr.substr(0, 15);
+    //     textlines[usedlines++] = newerr;
+    // // }
+    void draw(LGFX_Sprite* buf, bool force=false) {
+    //     if (!dirty && !force) return;
+    //     int new_lines = newest_content - last_drawn;
+    //     int drawline = std::min
+        
+    //     // int flip = panel->setflip(false);
+    //     // nowspr_ptr = &(framebuf[flip]);
+    //     // panel->diffpush(&framebuf[flip], &framebuf[!flip]);
+    //     usedlines += num
+    //     dirty = false;
+    }
+    // DiagConsole(size_t size) : bufferSize(size), nextIndex(0) {
+    //     textlines.resize(size);
+    // }
+    DiagConsole() {
+        textlines.resize(bufferSize);
     }
 };
 class AnimationManager {

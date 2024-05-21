@@ -392,7 +392,7 @@ void update_web(void *parameter) {
     }
 }
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
-    if (bootbutton.longpress()) screen.auto_saver(!auto_saver_enabled);
+    if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
     if (bootbutton.shortpress()) {
         if (auto_saver_enabled) animations.change_saver();
         else sim.toggle();

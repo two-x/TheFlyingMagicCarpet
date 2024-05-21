@@ -809,7 +809,7 @@ class Display {
     bool draw_all(LGFX_Sprite* spr) {
         if (!display_enabled) return false;
         if (reset_request) reset(spr);
-        if (run.autosaver_requested != auto_saver_enabled) auto_saver(run.autosaver_requested);
+        auto_saver();
             // if (run.display_reset_requested) init();
             // run.display_reset_requested = false;
         if (!auto_saver_enabled) {
@@ -886,9 +886,15 @@ class Display {
         } while (++y < sprheight);
         lcd.endWrite();   // lcd->display();
     }
-    void auto_saver(bool enable) {
+    void auto_saver() {
+        if (autosaver_request == REQ_NA) return;
+        if (autosaver_request == REQ_TOG) autosaver_request = (int)(!auto_saver_enabled);
+        if (autosaver_request == (int)(auto_saver_enabled)) {
+            autosaver_request = REQ_NA;
+            return;
+        }
         static bool was_simulating;
-        if (enable) {
+        if (autosaver_request == REQ_ON) {
             was_simulating = sim->enabled();
             sim->disable();
             animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
@@ -896,13 +902,14 @@ class Display {
             animations.anim_reset_request = true;
             ui_context = ScreensaverUI;
         }
-        else {
+        else if (autosaver_request == REQ_OFF) {
             screensaver = auto_saver_enabled = false;
             animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
             reset_request = true;
             if (was_simulating) sim->enable();
             ui_context = DatapagesUI;
         }
+        autosaver_request = REQ_NA;
     }
     void printframebufs(int reduce = 2, bool ascii = false) {  // reduce is how many times to shrink the screen by half (0, 1, 2, 3, or 4). ascii=true gives ascii art output
         std::string brites[16] = {" ", ".", ",", ":", ";", "+", "=", ">", "%", "#", "*", "$", "@", "&", "M", "W"};
@@ -1096,17 +1103,17 @@ static Display screen(&neo, &touch, &idiots, &sim);
 static Tuner tuner(&screen, &neo, &touch);
 bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickType_t waittime=portMAX_DELAY) {   // pdMS_TO_TICKS(1)
     if (xSemaphoreTake(*sem1, waittime) == pdTRUE) {
-        if (xSemaphoreTake(*sem2, waittime) == pdTRUE) return true;
+        if (xSemaphoreTake(*sem2, waittime) == pdTRUE) return pdTRUE;
         xSemaphoreGive(*sem1);
     }
-    return false;
+    return pdFALSE;
 }
 // pushbuf_sem = xSemaphoreCreateMutexStatic(&push_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&push_semaphorebuf_sem);
 // drawbuf_sem = xSemaphoreCreateMutexStatic(&draw_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&draw_semaphorebuf_sem);
 static void push_task_wrapper(void *parameter) {
     while (true) {
         if ((esp_timer_get_time() - screen_refresh_time > refresh_limit) || always_max_refresh || auto_saver_enabled) {
-            if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY)) {
+            if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
                 screen_refresh_time = esp_timer_get_time();
                 screen.push_task();
                 xSemaphoreGive(pushbuf_sem);

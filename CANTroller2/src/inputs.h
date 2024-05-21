@@ -167,8 +167,8 @@ class Encoder {
         if (run.mode == LOWPOWER && !syspower) {
             if (button.shortpress()) sleep_request = REQ_OFF;
         }
-        else if (run.mode == STANDBY && run.autosaver_requested) {
-            if (button.shortpress()) run.autosaver_requested = false;
+        else if (run.mode == STANDBY) {
+            if (button.shortpress()) autosaver_request = REQ_OFF;
         }
     }
     int32_t rotation(bool accel = false) {  // Returns detents spun since last call, accelerated by spin rate or not
