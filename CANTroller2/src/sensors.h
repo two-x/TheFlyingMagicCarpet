@@ -297,17 +297,17 @@ class Transducer : public Device {
     }
     virtual NATIVE_T to_native(HUMAN_T arg_val_human) {
         float xhuman = static_cast<float>(arg_val_human); // convert everything to floats so we don't introduce rounding errors
-        float native = -1.0;  // this holds our return value
+        float xnative = -1.0;  // this holds our return value
         if (dir == TransducerDirection::REV) xhuman = _human.min() + _human.max() - xhuman;
-        native = (xhuman - _b_offset) / _m_factor;
+        xnative = (xhuman - _b_offset) / _m_factor;
         if (_invert) {
-            if (std::abs(native) > 0.000001) native = 1 / native;
+            if (std::abs(xnative) > 0.000001) xnative = 1 / xnative;
             else {
                 printf ("err: to_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", _native.max(), dir, _invert, xhuman, _m_factor, _b_offset);
                 return static_cast<NATIVE_T>(_native.max());            
             }
         }
-        return static_cast<NATIVE_T>(native);
+        return static_cast<NATIVE_T>(xnative);
     }
 
     // NOTE: do we really need two values? or should this just be a single value and get converted wherever needed?
