@@ -25,7 +25,7 @@ class Potentiometer {
     float _pc_max = 100.0;
     float _pc_activity_margin = 7.5;
     uint8_t _pin;
-    float _val = 0.0, _activity_ref;
+    float _val = 0.0, _activity_ref, _filt;
     Timer pot_timer{100000};  // adc cannot read too fast w/o errors, so give some time between readings
   public:
     // tune these by monitoring adc_raw and twist pot to each limit. set min at the highest value seen when turned full CCW, and vice versas for max, then trim each toward adc_midrange until you get full 0 to 100% range
@@ -38,18 +38,19 @@ class Potentiometer {
     void setup() {
         printf("Pot setup..\n");
         set_pin(_pin, INPUT);
-        _activity_ref = _val;
+        _filt = _val;
+        _activity_ref = _filt;
     }
     void update() {
         if (pot_timer.expireset()) {
             adc_raw = static_cast<float>(analogRead(_pin));
-            float new_val = map(adc_raw, adc_min, adc_max, _pc_min, _pc_max);
-            ema_filt(new_val, &_val, _ema_alpha);
-            _val = constrain(_val, _pc_min, _pc_max); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
-            if (std::abs(_val - _activity_ref) > _pc_activity_margin) {
+            float _val = map(adc_raw, adc_min, adc_max, _pc_min, _pc_max);
+            ema_filt(_val, &_filt, _ema_alpha);
+            _filt = constrain(_val, _pc_min, _pc_max); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
+            if (std::abs(_filt - _activity_ref) > _pc_activity_margin) {
                 // Serial.printf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
                 kick_inactivity_timer(7);  // evidence of user activity
-                _activity_ref = _val;
+                _activity_ref = _filt;
                 // Serial.printf("r2:%lf\n", _activity_ref);
             }
         }
@@ -59,8 +60,10 @@ class Potentiometer {
         return static_cast<VAL_T>(map(_val, _pc_min, _pc_max, static_cast<float>(min), static_cast<float>(max)));
     }
     float val() { return _val; }
-    float min() { return _pc_min; }
-    float max() { return _pc_max; }
+    // float min() { return _pc_min; }
+    // float max() { return _pc_max; }
+    float op_min() { return _pc_min; }
+    float op_max() { return _pc_max; }
 };
 // NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
 //       a little cleaner organization-wise, since all the configs would be consolidated. It would also allow us to read Configs from storage somewhere, so we could have persistent
@@ -373,7 +376,6 @@ class Transducer : public Device {
         // _human.set_native_limits(from_human(_human.min()), from_human(_human.max()));
 
     }
-
     bool set_native(NATIVE_T arg_val_native) {
         _val_raw = arg_val_native;
         if (_native.set(arg_val_native)) {
@@ -472,6 +474,12 @@ class Sensor : public Transducer<NATIVE_T, HUMAN_T> {
     HUMAN_T filt() { return _val_filt.val(); }
     HUMAN_T* filt_ptr() { return _val_filt.ptr(); }
     std::shared_ptr<HUMAN_T> filt_shptr() { return _val_filt.shptr(); } // NOTE: should just be public?
+    float absmin() { return _human.min(); }
+    float absmax() { return _human.max(); }
+    float* absmin_ptr() { return _human.min_ptr(); }
+    float* absmax_ptr() { return _human.max_ptr(); }
+    std::shared_ptr<float> absmin_shptr() { return _human.min_shptr(); }
+    std::shared_ptr<float> absmax_shptr() { return _human.max_shptr(); }
 };
 
 // Base class for sensors which communicate using i2c.
@@ -510,6 +518,14 @@ class I2CSensor : public Sensor<float,float> {
         _detected = _i2c->detected_by_addr(addr);
         set_source(src::PIN); // we aren't actually reading from a pin but the point is the same...
     }
+    float absmin() { return _human.min(); }
+    float absmax() { return _human.max(); }
+    float opmin() { return absmin(); }
+    float opmax() { return absmax(); }
+    float* absmin_ptr() { return _human.min_ptr(); }
+    float* absmax_ptr() { return _human.max_ptr(); }
+    std::shared_ptr<float> absmin_shptr() { return _human.min_shptr(); }
+    std::shared_ptr<float> absmax_shptr() { return _human.max_shptr(); }
 };
 
 // AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
@@ -568,12 +584,6 @@ class AirVeloSensor : public I2CSensor {
             set_source(src::UNDEF); // don't even have a device at all...
         }
     }
-    // Getter functions
-    float min_mph() { return _human.min(); }
-    float max_mph() { return _human.max(); }
-    float abs_max_mph() { return _abs_max_mph; }
-    float* max_mph_ptr() { return _human.max_ptr(); }
-    std::shared_ptr<float> max_mph_shptr() { return _human.max_shptr(); }
 };
 
 // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
@@ -642,15 +652,6 @@ class MAPSensor : public I2CSensor {
             set_source(src::UNDEF); // don't even have a device at all...
         }
     }
-    // Getter functions
-    float min_atm() { return _human.min(); }
-    float max_atm() { return _human.max(); }
-    float abs_min_atm() { return _abs_min_atm; }
-    float abs_max_atm() { return _abs_max_atm; }
-    float* min_atm_ptr() { return _human.min_ptr(); }
-    float* max_atm_ptr() { return _human.max_ptr(); }
-    std::shared_ptr<float> min_atm_shptr() { return _human.min_shptr(); }
-    std::shared_ptr<float> max_atm_shptr() { return _human.max_shptr(); }
 };
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
@@ -675,9 +676,9 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
         set_pin(this->_pin, INPUT);
         this->set_source(src::PIN);
     }
-    int32_t adc() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
-    int32_t min_adc() { return this->_native.min(); }
-    int32_t max_adc() { return this->_native.max(); }
+    // int32_t adc() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
+    // int32_t min_adc() { return this->_native.min(); }
+    // int32_t max_adc() { return this->_native.max(); }
 };
 
 // CarBattery reads the voltage level from the Mule battery
@@ -749,11 +750,11 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
     std::string _native_units_name = "adc";
     std::string _human_units_name = "V";
 
-    float v() { return _human.val(); }
-    float min_v() { return _human.min(); }
-    float max_v() { return _human.max(); }
-    float op_min_v() { return _op_min_v; }
-    float op_max_v() { return _op_max_v; }
+    // float v() { return _human.val(); }
+    // float min_v() { return _human.min(); }
+    // float max_v() { return _human.max(); }
+    float op_min() { return _op_min_v; }
+    float op_max() { return _op_max_v; }
 };
 // PressureSensor represents a brake fluid pressure sensor.
 // It extends AnalogSensor to handle reading an analog pin
@@ -763,7 +764,7 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     sens senstype = sens::pressure;
     int32_t op_min_adc, op_max_adc, abs_min_adc, abs_max_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-    float hold_initial_psi, hold_increment_psi, panic_initial_psi, panic_increment_psi, margin_psi, _zeropoint;  //, op_min_psi;
+    float hold_initial_psi, hold_increment_psi, panic_initial_psi, panic_increment_psi, margin_psi;  //, op_min_psi;
     float op_min_psi, op_max_psi;
     std::string _long_name = "Brake pressure sensor";
     std::string _short_name = "presur";
@@ -795,7 +796,6 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         panic_initial_psi = 140.0; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
         panic_increment_psi = 5.0; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
         margin_psi = 1;  // Max acceptible error when checking psi levels
-        _zeropoint = 
         set_native_limits(abs_min_adc, abs_max_adc);                          // set_native_limits(abs_min_adc, abs_max_adc);
         set_human_limits(from_native(abs_min_adc), from_native(abs_max_adc)); // set_human_limits(from_native(abs_min_adc), from_native(abs_max_adc));
         set_native(op_min_adc);
@@ -810,9 +810,9 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
     float psi() { return _human.val(); }
     float min_psi() { return _human.min(); }
     float max_psi() { return _human.max(); }
-    float op_min_human() { return from_native(op_min_adc); }
-    float op_max_human() { return from_native(op_max_adc); }
-    bool released() { return (_val_filt.val() <= _zeropoint + margin_psi); }
+    float op_min() { return from_native(op_min_adc); }
+    float op_max() { return from_native(op_max_adc); }
+    bool released() { return (_val_filt.val() <= margin_psi); }
     float zeropoint() { return op_min(); }
 };
 // BrakePositionSensor represents a linear position sensor
@@ -877,11 +877,11 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
     float in() { return _human.val(); }
     float min_in() { return _human.min(); }
     float max_in() { return _human.max(); }
-    float op_min_human() { return op_min_retract_in; }
-    float op_max_human() { return op_max_extend_in; }
+    float op_min() { return op_min_retract_in; }
+    float op_max() { return op_max_extend_in; }
     // float absmin_in() { return abs_min_retract_in; }
     // float absmax_in() { return abs_max_extend_in; }
-    float parkpos() { return op_max_human(); }
+    float parkpos() { return op_max(); }
     float margin() { return _margin; }
     float zeropoint() { return _zeropoint; }
     float* zeropoint_ptr() { return &_zeropoint; }

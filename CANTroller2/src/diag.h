@@ -83,17 +83,17 @@ class DiagRuntime {
             err_sens[RANGE][_BrakeMotor] = (brake->pc[OUT] < brake->pc[OPMIN] || brake->pc[OUT] > brake->pc[OPMAX]);
             err_sens[RANGE][_GasServo] = (gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
             err_sens[RANGE][_BrakeMotor] = (steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
-            err_sens[RANGE][_BrakePosn] = (brkpos->in() < brkpos->op_min() || brkpos->in() > brkpos->op_max());
+            err_sens[RANGE][_BrakePosn] = (brkpos->filt() < brkpos->op_min() || brkpos->filt() > brkpos->op_max());
             err_sens[LOST][_BrakePosn] = (brkpos->raw() < err_margin_adc);
-            err_sens[RANGE][_BrakePres] = (pressure->psi() < pressure->op_min() || pressure->psi() > pressure->op_max());
+            err_sens[RANGE][_BrakePres] = (pressure->filt() < pressure->op_min() || pressure->filt() > pressure->op_max());
             err_sens[LOST][_BrakePres] = (pressure->raw() < err_margin_adc);
-            err_sens[RANGE][_MuleBatt] = (mulebatt->v() < mulebatt->op_min_v() || mulebatt->v() > mulebatt->op_max_v());
+            err_sens[RANGE][_MuleBatt] = (mulebatt->filt() < mulebatt->op_min() || mulebatt->filt() > mulebatt->op_max());
             HotRCFailure();
             err_sens[LOST][_Ignition] = (!ignition->signal && !tach->engine_stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
             SpeedoFailure();
             TachFailure();
-            err_sens[RANGE][_Speedo] = (speedo->mph() < speedo->min_human() || speedo->mph() > speedo->max_human());;
-            err_sens[RANGE][_Tach] = (tach->rpm() < tach->min_human() || tach->rpm() > tach->max_human());
+            err_sens[RANGE][_Speedo] = (speedo->mph() < speedo->op_min() || speedo->filt() > speedo->op_max());;
+            err_sens[RANGE][_Tach] = (tach->rpm() < tach->op_min() || tach->filt() > tach->op_max());
             BrakeMotorFailure();
 
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LOWPOWER));
