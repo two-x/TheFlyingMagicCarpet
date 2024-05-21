@@ -640,6 +640,7 @@ class AnimationManager {
     int corner[2], sprsize[2];
     Timer fps_timer, fps_timer2{250000};
     float myfps = 0.0;
+    int oldfps = 0;
     int64_t fps_mark;
     bool screensaver_last = false, simulating_last = false, mule_drawn = false;
   public:
@@ -729,12 +730,23 @@ class AnimationManager {
     void display_fps(LGFX_Sprite* spr) {
         if (auto_saver_enabled && autosaver_display_fps) {
             if (fps_timer2.expireset()) dispfps = (int)myfps;
-            spr->fillRect(9, 9, 20, 10, BLK);
             spr->setFont(&fonts::Font0);
             spr->setTextDatum(textdatum_t::top_left);
+            spr->setTextColor(BLK);
+            spr->setCursor(9, 9);
+            spr->print(std::to_string(oldfps).c_str());
+            spr->setCursor(11, 11);
+            spr->print(std::to_string(oldfps).c_str());
             spr->setCursor(10, 10);
+            spr->print(std::to_string(oldfps).c_str());
+            // for (int x=9; x<=11; x++) {
+            //     spr->setCursor(x, x);
+            //     spr->print(std::to_string(oldfps).c_str());
+            // }
             spr->setTextColor(WHT);
+            spr->setCursor(10, 10);
             spr->print(std::to_string(dispfps).c_str());
+            oldfps = dispfps;
         }
     }
     float update(LGFX_Sprite* spr, bool dirty=false) {
