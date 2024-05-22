@@ -83,17 +83,17 @@ class DiagRuntime {
             err_sens[RANGE][_BrakeMotor] = (brake->pc[OUT] < brake->pc[OPMIN] || brake->pc[OUT] > brake->pc[OPMAX]);
             err_sens[RANGE][_GasServo] = (gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
             err_sens[RANGE][_BrakeMotor] = (steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
-            err_sens[RANGE][_BrakePosn] = (brkpos->in() < brkpos->op_min() || brkpos->in() > brkpos->op_max());
+            err_sens[RANGE][_BrakePosn] = (brkpos->filt() < brkpos->opmin() || brkpos->filt() > brkpos->opmax());
             err_sens[LOST][_BrakePosn] = (brkpos->raw() < err_margin_adc);
-            err_sens[RANGE][_BrakePres] = (pressure->psi() < pressure->op_min() || pressure->psi() > pressure->op_max());
+            err_sens[RANGE][_BrakePres] = (pressure->filt() < pressure->opmin() || pressure->filt() > pressure->opmax());
             err_sens[LOST][_BrakePres] = (pressure->raw() < err_margin_adc);
-            err_sens[RANGE][_MuleBatt] = (mulebatt->v() < mulebatt->op_min_v() || mulebatt->v() > mulebatt->op_max_v());
+            err_sens[RANGE][_MuleBatt] = (mulebatt->filt() < mulebatt->opmin() || mulebatt->filt() > mulebatt->opmax());
             HotRCFailure();
             err_sens[LOST][_Ignition] = (!ignition->signal && !tach->engine_stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
             SpeedoFailure();
             TachFailure();
             err_sens[RANGE][_Speedo] = (speedo->mph() < speedo->min_human() || speedo->mph() > speedo->max_human());;
-            err_sens[RANGE][_Tach] = (tach->rpm() < tach->min_human() || tach->rpm() > tach->max_human());
+            err_sens[RANGE][_Tach] = (tach->filt() < tach->min_human() || tach->filt() > tach->max_human());
             BrakeMotorFailure();
 
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LOWPOWER));
@@ -195,14 +195,14 @@ class DiagRuntime {
         if (runmode == STANDBY) {  // || runmode == STALL  // check that the speed is zero when stopped
             // if (running_last) tachTimer.reset();       // if we just stopped driving, allow time for car to stop
             // else if (tachTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
-            fail = (baseline_rpm > tach->margin_rpm());  // when stopped the speedo reading should be zero, otherwise fail
+            fail = (baseline_rpm > tach->margin());  // when stopped the speedo reading should be zero, otherwise fail
             baseline_rpm = tach->filt();         // store the speed value when we are stopped
             // }
         }
         running_it = (gas->pc[OUT] > 20.0 && (runmode == FLY || runmode == CRUISE));
         if (running_it) {                                               // if we're attempting to drive
             if (!running_last) tachTimer.reset();                     // delay our rpm comparison so car can respond
-            else if (tachTimer.expired()) fail = (tach->filt() - baseline_rpm < tach->margin_rpm());  // the car should be moving by now
+            else if (tachTimer.expired()) fail = (tach->filt() - baseline_rpm < tach->margin());  // the car should be moving by now
         }
         running_last = running_it;
         err_sens[LOST][_Tach] =  fail;

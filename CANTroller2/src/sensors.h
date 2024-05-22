@@ -267,6 +267,7 @@ class Transducer : public Device {
     NATIVE_T _val_raw;  // Keep track of the most recent unfiltered and unconstrained native value, for monitoring and diag purposes
     float _m_factor = 1.0;
     float _b_offset = 0.0;
+    float _opmin, _opmax;
     float _zerovalue = NAN;  // value to return from to_native conversion when val is zero (needed for speedometer)
     bool _invert = false;  // Flag to indicated if unit conversion math should multiply or divide
     TransducerDirection dir = TransducerDirection::FWD; // NOTE: whats ts for, exactly?
@@ -482,7 +483,7 @@ class I2CSensor : public Sensor<float,float> {
   protected:
     bool _detected = false;
     I2C* _i2c;
-
+    float _opmin, _opmax, _margin;
     // implement in child classes using the appropriate i2c sensor
     virtual float read_sensor() = 0;
     virtual void set_val_from_pin() {
@@ -510,16 +511,20 @@ class I2CSensor : public Sensor<float,float> {
         _detected = _i2c->detected_by_addr(addr);
         set_source(src::PIN); // we aren't actually reading from a pin but the point is the same...
     }
+    float raw() { return this->_human.val(); }
+    float filt() { return this->_val_filt.val(); }
+    float absmin() { return this->_human.min(); }
+    float absmax() { return this->_human.max(); }
+    float opmin() { return this->_opmin; }
+    float opmax() { return this->_opmax; }
+    float margin() { return this->_margin; }
 };
 
 // AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
 class AirVeloSensor : public I2CSensor {
   protected:
     // NOTE: would all AirVeloSensors have the same address? how does this get determined?
-    float _min_mph = 0.0;
-    float _abs_max_mph = 33.55; // Sensor maximum mph reading.  Our sensor mounted in 2-in ID intake tube
-    float _op_max_mph = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
-    float _initial_airvelo_mph = 0.0;
+    float _initial_airvelo_mph = 0.0, _absmin, _absmax;
     FS3000 _sensor;
     float goodreading = NAN;
     int64_t airvelo_read_period_us = 35000;
@@ -534,8 +539,13 @@ class AirVeloSensor : public I2CSensor {
     static constexpr uint8_t addr = 0x28;
     sens senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
+        _opmin = _absmin = 0.0;
+        _absmax = 33.55; // Sensor maximum mph reading.  Our sensor mounted in 2-in ID intake tube
+        _opmax = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
         _ema_alpha = 0.2;
-        set_human_limits(_min_mph, _abs_max_mph);
+        _m_factor = 1.0;
+        _b_offset = 0.0;
+        set_human_limits(_absmin, _absmax);
         set_human(_initial_airvelo_mph);
         set_can_source(src::POT, true);
         airveloTimer.set(airvelo_read_period_us);
@@ -550,8 +560,6 @@ class AirVeloSensor : public I2CSensor {
         if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
     }
     void setup() {
-        _m_factor = 1.0;
-        _b_offset = 0.0;
         printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
         printf(" %sdetected", _detected ? "" : "not ");
@@ -569,22 +577,17 @@ class AirVeloSensor : public I2CSensor {
         }
     }
     // Getter functions
-    float min_mph() { return _human.min(); }
-    float max_mph() { return _human.max(); }
-    float abs_max_mph() { return _abs_max_mph; }
-    float* max_mph_ptr() { return _human.max_ptr(); }
-    std::shared_ptr<float> max_mph_shptr() { return _human.max_shptr(); }
+    float* opmin_ptr() { return &_opmin; }
+    float* opmax_ptr() { return &_opmax; }
+    float* absmax_ptr() { return _human.max_ptr(); }
+    std::shared_ptr<float> absmax_shptr() { return _human.max_shptr(); }
 };
 
 // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
 class MAPSensor : public I2CSensor {
   protected:
     // NOTE: would all MAPSensors have the same address? how does this get determined?
-    float _abs_min_atm = 0.06;  // Sensor min
-    float _abs_max_atm = 2.46;  // Sensor max
-    float _op_min_atm = 0.68;  // Typical low map for a car is 10.8 psi = 22 inHg, 1 psi = 0.068 atm
-    float _op_max_atm = 1.02;
-    float _initial_atm = 1.00;  // 1 atm = 14.6959 psi
+    float _absmax, _absmin, _initial_atm = 1.00;  // 1 atm = 14.6959 psi
     Timer map_read_timer;
     uint32_t map_read_timeout = 100000, map_retry_timeout = 10000;
     float goodreading = NAN;
@@ -608,8 +611,14 @@ class MAPSensor : public I2CSensor {
     static constexpr uint8_t addr = 0x18;
     sens senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
+        _absmin = 0.06;  // Sensor min
+        _absmax = 2.46;  // Sensor max
+        _opmin = 0.68;  // Typical low map for a car is 10.8 psi = 22 inHg, 1 psi = 0.068 atm
+        _opmax = 1.02;
         _ema_alpha = 0.2;
-        set_human_limits(_abs_min_atm, _abs_max_atm);
+        _m_factor = 1.0;
+        _b_offset = 0.0;
+        set_human_limits(_absmin, _absmax);
         set_human(_initial_atm);
         set_can_source(src::POT, true);
         map_read_timer.set(map_read_timeout);
@@ -624,8 +633,6 @@ class MAPSensor : public I2CSensor {
         if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
     }
     void setup() {
-        _m_factor = 1.0;
-        _b_offset = 0.0;
         printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
         printf(" %sdetected", _detected ? "" : "not ");
@@ -643,20 +650,21 @@ class MAPSensor : public I2CSensor {
         }
     }
     // Getter functions
-    float min_atm() { return _human.min(); }
-    float max_atm() { return _human.max(); }
-    float abs_min_atm() { return _abs_min_atm; }
-    float abs_max_atm() { return _abs_max_atm; }
-    float* min_atm_ptr() { return _human.min_ptr(); }
-    float* max_atm_ptr() { return _human.max_ptr(); }
-    std::shared_ptr<float> min_atm_shptr() { return _human.min_shptr(); }
-    std::shared_ptr<float> max_atm_shptr() { return _human.max_shptr(); }
+    float* opmin_ptr() { return &_opmin; }
+    float* opmax_ptr() { return &_opmax; }
+    float* absmin_ptr() { return _human.min_ptr(); }
+    float* absmax_ptr() { return _human.max_ptr(); }
+    std::shared_ptr<float> absmin_shptr() { return _human.min_shptr(); }
+    std::shared_ptr<float> absmax_shptr() { return _human.max_shptr(); }
 };
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
 template<typename NATIVE_T, typename HUMAN_T>
 class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
   protected:
+    float _opmin, _opmax, _absmin, _absmax, _margin;
+    int32_t _opmin_adc, _opmax_adc;
+    int32_t _absmin_adc = 0, _absmax_adc = adcrange_adc;
     Timer read_timer{25000};  // adc cannot read too fast w/o errors, so give some time between readings
     virtual void set_val_from_pin() {
         if (read_timer.expireset()) {
@@ -675,9 +683,18 @@ class AnalogSensor : public Sensor<NATIVE_T, HUMAN_T> {
         set_pin(this->_pin, INPUT);
         this->set_source(src::PIN);
     }
-    int32_t adc() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
-    int32_t min_adc() { return this->_native.min(); }
-    int32_t max_adc() { return this->_native.max(); }
+    int32_t raw_adc() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
+    int32_t absmin_adc() { return this->_native.min(); }
+    int32_t absmax_adc() { return this->_native.max(); }
+    int32_t opmin_adc() { return this->_opmin_adc; }
+    int32_t opmax_adc() { return this->_opmax_adc; }
+    float raw() { return this->_human.val(); }
+    float filt() { return this->_val_filt.val(); }
+    float absmin() { return this->_human.min(); }
+    float absmax() { return this->_human.max(); }
+    float opmin() { return this->_opmin; }
+    float opmax() { return this->_opmax; }
+    float margin() { return this->_margin; }
 };
 
 // CarBattery reads the voltage level from the Mule battery
@@ -685,17 +702,17 @@ class CarBattery : public AnalogSensor<int32_t, float> {
   protected:
     // float _initial_adc = adcmidscale_adc;
     float _initial_v = 10.0;
-    float _abs_min_v = 0.0; // The min vehicle voltage we can sense
-    float _abs_max_v = 16.0; // The min vehicle voltage we can sense
-    float _op_min_v = 7.0; // The min vehicle voltage we expect to see
-    float _op_max_v = 13.8;  // The max vehicle voltage we expect to see.
   public:
     sens senstype = sens::mulebatt;
     CarBattery(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+        _absmin = 0.0; // The min vehicle voltage we can sense
+        _absmax = 16.0; // The min vehicle voltage we can sense
+        _opmin = 7.0; // The min vehicle voltage we expect to see
+        _opmax = 13.8;  // The max vehicle voltage we expect to see.
         _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        _m_factor = _abs_max_v / adcrange_adc;
-        _human.set_limits(_abs_min_v, _abs_max_v);
-        _native.set_limits(0.0, adcrange_adc);
+        _m_factor = _absmax / adcrange_adc;
+        _human.set_limits(_absmin, _absmax);
+        _native.set_limits(_absmin_adc, _absmax_adc);
         set_human(_initial_v);
         set_can_source(src::PIN, true);
     }
@@ -707,17 +724,10 @@ class CarBattery : public AnalogSensor<int32_t, float> {
     void set_val_from_touch() {
         set_human(12.0);
     }
-
     std::string _long_name = "Vehicle battery voltage";
     std::string _short_name = "mulbat";
     std::string _native_units_name = "adc";
     std::string _human_units_name = "V";
-
-    float v() { return _human.val(); }
-    float min_v() { return _human.min(); }
-    float max_v() { return _human.max(); }
-    float op_min_v() { return _op_min_v; }
-    float op_max_v() { return _op_max_v; }
 };
 
 // LiPoBatt reads the voltage level from a LiPo cell
@@ -725,16 +735,16 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
   protected:
     float _initial_adc = adcmidscale_adc;
     float _initial_v = 10.0;
-    float _abs_min_v = 0.0; // The min lipo voltage we can sense
-    float _abs_max_v = 4.8; // The min lipo voltage we can sense
-    float _op_min_v = 3.2; // The min lipo voltage we expect to see
-    float _op_max_v = 4.3;  // The max lipo voltage we expect to see
   public:
     sens senstype = sens::none;
     LiPoBatt(uint8_t arg_pin) : AnalogSensor<int32_t, float>(arg_pin) {
+        _absmin = 0.0; // The min lipo voltage we can sense
+        _absmax = 4.8; // The min lipo voltage we can sense
+        _opmin = 3.2; // The min lipo voltage we expect to see
+        _opmax = 4.3;  // The max lipo voltage we expect to see  
         _ema_alpha = 0.01;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        _m_factor = _abs_max_v / adcrange_adc;
-        _human.set_limits(_abs_min_v, _abs_max_v);
+        _m_factor = _absmax / adcrange_adc;
+        _human.set_limits(_absmin, _absmax);
         _native.set_limits(0.0, adcrange_adc);
         set_native(_initial_adc);
         set_can_source(src::PIN, true);
@@ -748,12 +758,6 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
     std::string _short_name = "lipo";
     std::string _native_units_name = "adc";
     std::string _human_units_name = "V";
-
-    float v() { return _human.val(); }
-    float min_v() { return _human.min(); }
-    float max_v() { return _human.max(); }
-    float op_min_v() { return _op_min_v; }
-    float op_max_v() { return _op_max_v; }
 };
 // PressureSensor represents a brake fluid pressure sensor.
 // It extends AnalogSensor to handle reading an analog pin
@@ -761,9 +765,9 @@ class LiPoBatt : public AnalogSensor<int32_t, float> {
 class PressureSensor : public AnalogSensor<int32_t, float> {
   public:
     sens senstype = sens::pressure;
-    int32_t op_min_adc, op_max_adc, abs_min_adc, abs_max_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+    // int32_t opmin_adc, opmax_adc, absmin_adc, absmax_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-    float hold_initial_psi, hold_increment_psi, panic_initial_psi, panic_increment_psi, margin_psi, _zeropoint;
+    float hold_initial_psi, hold_increment_psi, panic_initial_psi, panic_increment_psi, _zeropoint_psi;  // , _margin_psi, _zeropoint_psi;
     std::string _long_name = "Brake pressure sensor";
     std::string _short_name = "presur";
     std::string _native_units_name = "adc";
@@ -780,23 +784,23 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         //   fullscale reading:  0.2 psi/adc * (4095 adc - 621 adc) = 695 psi
         // math to convert (based on spec values):
         //   psi = 0.2 * (adc - 621)  ->  psi = 0.2 * adc - 124  ->  adc = 5 * psi + 621
-        op_min_adc = 658.0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-        op_max_adc = 2080.0; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-        _m_factor = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - op_min_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
-        _b_offset = -op_min_adc * _m_factor;  // -658 adc * 0.2 psi/adc = -131.6 psi
+        _opmin_adc = 658.0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+        _opmax_adc = 2080.0; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+        _m_factor = 1000.0 * (3.3 - 0.554) / ( (adcrange_adc - _opmin_adc) * (4.5 - 0.554) ); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
+        _b_offset = -_opmin_adc * _m_factor;  // -658 adc * 0.2 psi/adc = -131.6 psi
         _invert = false;
         _ema_alpha = 0.15;
-        abs_min_adc = 0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-        abs_max_adc = adcrange_adc; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+        _absmin_adc = 0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+        _absmax_adc = adcrange_adc; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
         hold_initial_psi = 120.0;  // Pressure applied when brakes are hit to auto-stop or auto-hold the car (ADC count 0-4095)
         hold_increment_psi = 3.0;  // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
         panic_initial_psi = 140.0; // Pressure initially applied when brakes are hit to auto-stop the car (ADC count 0-4095)
         panic_increment_psi = 5.0; // Incremental pressure added periodically when auto stopping (ADC count 0-4095)
-        margin_psi = 1;  // Max acceptible error when checking psi levels
-        _zeropoint = from_native(op_min_adc);  // used when releasing the brake in case position is not available
-        set_native_limits(abs_min_adc, abs_max_adc);
-        set_human_limits(from_native(abs_min_adc), from_native(abs_max_adc));
-        set_native(op_min_adc);
+        _margin = 1;  // Max acceptible error when checking psi levels
+        _zeropoint_psi = from_native(_opmin_adc);  // used when releasing the brake in case position is not available
+        set_native_limits(_absmin_adc, _absmax_adc);
+        set_human_limits(from_native(_absmin_adc), from_native(_absmax_adc));
+        set_native(_opmin_adc);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);            
     }
@@ -805,13 +809,14 @@ class PressureSensor : public AnalogSensor<int32_t, float> {
         printf("%s..\n", this->_long_name.c_str());
         AnalogSensor::setup();
     }
-    float psi() { return _human.val(); }
-    float min_psi() { return _human.min(); }
-    float max_psi() { return _human.max(); }
-    float op_min() { return from_native(op_min_adc); }
-    float op_max() { return from_native(op_max_adc); }
-    bool released() { return (_val_filt.val() <= _zeropoint + margin_psi); }
-    float zeropoint() { return _zeropoint; }
+    // float psi() { return _human.val(); }
+    // float absmin_psi() { return _human.min(); }
+    // float absmax_psi() { return _human.max(); }
+    // float opmin_psi() { return from_native(opmin_adc); }
+    // float opmax_psi() { return from_native(opmax_adc); }
+    bool released() { return (std::abs(_val_filt.val() - _zeropoint_psi) <= _margin); }
+    float zeropoint() { return _zeropoint_psi; }
+    // float margin_psi() { return _margin_psi; }
 };
 // BrakePositionSensor represents a linear position sensor
 // for measuring brake position (TODO which position? pad? pedal?)
@@ -820,11 +825,12 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
   protected:
     // TODO: add description
     // std::shared_ptr<float> _zeropoint;
-    // void set_val_from_touch() { _val_filt.set((op_min_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
+    // void set_val_from_touch() { _val_filt.set((opmin_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
   public:
     sens senstype = sens::brkpos;
-    int32_t abs_min_retract_adc, abs_max_extend_adc, op_min_retract_adc, op_max_extend_adc;
-    float op_min_retract_in, op_max_extend_in, _parkpos, _margin, _zeropoint, abs_min_retract_in, abs_max_extend_in;
+    // int32_t absmin_retract_adc, absmax_extend_adc, opmin_retract_adc, opmax_extend_adc;
+    // float opmin_retract_in, opmax_extend_in, absmin_retract_in, absmax_extend_in;
+    float _parkpos_in, _margin_in, _zeropoint_in;
     std::string _long_name = "Brake position sensor";
     std::string _short_name = "brkpos";
     std::string _native_units_name = "adc";
@@ -834,35 +840,35 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         #if BrakeThomson
             // _m_factor = 8.0 / adcrange_adc; // 8 in * 1/4096 1/adc * 0.00195 in/adc
             // _b_offset = 0.0;
-            _zeropoint = 3.179;         // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
-            abs_min_retract_adc = 0;
-            abs_max_extend_adc = adcrange_adc;
-            abs_min_retract_in = 0.335; // TUNED 230602 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
-            abs_max_extend_in = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
-            op_min_retract_in = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-            op_max_extend_in = 4.234;   // 4.624  //TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)  
+            _zeropoint_in = 3.179;         // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
+            _absmin_adc = 0;        // fully retracted
+            _absmax_adc = adcrange_adc;  // fully extended
+            _absmin = 0.335; // TUNED 230602 - inches, Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
+            _absmax = 8.300;  // TUNED 230602 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
+            _opmin = 0.506;  // Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+            _opmax = 4.234;   // 4.624  //TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)  
         #else  // if LAE motor
             // 240513 cal data LAE actuator:  measured to tip of piston
             // fully retracted 0.95 in, Vpot = 0.83 V (1179 adc), fully extended 8.85 in (), Vpot = 2.5 V (3103 adc)
             // calc (2.5 - 0.83) / 3.3 = 0.506 . 0.506 * 4096 = 2072 . (8.85 - 0.95) / 2072 = .00381 in/adc or 262 adc/in
-            abs_min_retract_adc = 979;  // TUNED 240513 - pot measured with 3.3V applied, converted to adc
-            abs_max_extend_adc = 3103;  // TUNED 240513 - pot measured with 3.3V applied, converted to adc
-            abs_min_retract_in = 0.95;  // TUNED 240513 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
-            abs_max_extend_in = 8.85;   // TUNED 240513 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
-            op_min_retract_in = 2.0;    // TUNE. - Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
-            op_max_extend_in = 6.0;     // TUNE. - Best position to park the actuator out of the way so we can use the pedal (in)  
-            _zeropoint = 5.5;           // TUNE. - Brake position value corresponding to the point where fluid PSI hits zero (in)
+            _absmin_adc = 979;  // TUNED 240513 - pot measured with 3.3V applied, converted to adc
+            _absmax_adc = 3103;  // TUNED 240513 - pot measured with 3.3V applied, converted to adc
+            _absmin = 0.95;  // TUNED 240513 - Retract value corresponding with the absolute minimum retract actuator is capable of. ("in"sandths of an inch)
+            _absmax = 8.85;   // TUNED 240513 - Extend value corresponding with the absolute max extension actuator is capable of. (in)
+            _opmin = 2.0;    // TUNE. - Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
+            _opmax = 6.0;     // TUNE. - Best position to park the actuator out of the way so we can use the pedal (in)  
+            _zeropoint_in = 5.5;           // TUNE. - Brake position value corresponding to the point where fluid PSI hits zero (in)
         #endif
         _invert = false;
         _ema_alpha = 0.35;
-        _margin = .01;  // TODO: add description
-        _m_factor = (abs_max_extend_in - abs_min_retract_in) / (abs_max_extend_adc - abs_min_retract_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
+        _margin_in = .01;  // TODO: add description
+        _m_factor = (_absmax - _absmin) / (_absmax_adc - _absmin_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
         _b_offset = -2.69;  //  979 adc * 0.00372 in/adc - 0.95 in = -2.69 in
-        _parkpos = op_max_extend_in;
-        op_min_retract_adc = to_native(op_min_retract_in);
-        op_max_extend_adc = to_native(op_max_extend_in);
-        set_human_limits(abs_min_retract_in, abs_max_extend_in);
-        set_native_limits(abs_min_retract_adc, abs_max_extend_adc);
+        _parkpos_in = _opmax;
+        _opmin_adc = to_native(_opmin);
+        _opmax_adc = to_native(_opmax);
+        set_human_limits(_absmin, _absmax);
+        set_native_limits(_absmin_adc, _absmax_adc);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);
     }
@@ -871,19 +877,19 @@ class BrakePositionSensor : public AnalogSensor<int32_t, float> {
         printf("%s..\n", this->_long_name.c_str());
         AnalogSensor::setup();
     }
-    bool parked() { return (_val_filt.val() >= _parkpos - _margin); }  // is tha brake motor parked?
-    bool released() { return (_val_filt.val() >= _zeropoint - _margin); }
-    float in() { return _human.val(); }
-    float min_in() { return _human.min(); }
-    float max_in() { return _human.max(); }
-    float op_min() { return op_min_retract_in; }
-    float op_max() { return op_max_extend_in; }
-    // float absmin_in() { return abs_min_retract_in; }
-    // float absmax_in() { return abs_max_extend_in; }
-    float parkpos() { return _parkpos; }
-    float margin() { return _margin; }
-    float zeropoint() { return _zeropoint; }
-    float* zeropoint_ptr() { return &_zeropoint; }
+    // float filt_in() { return _val_filt(); }
+    // float raw_in() { return _human.val(); }
+    // float raw_adc() { return _native.val(); }
+    bool parked() { return (std::abs(_val_filt.val() - _parkpos_in) <= _margin_in); }  // is tha brake motor parked?
+    bool released() { return (std::abs(_val_filt.val() - _zeropoint_in) <= _margin_in); }
+    // float opmin_in() { return opmin_retract_in; }
+    // float opmax_in() { return opmax_extend_in; }
+    // float absmin_in() { return _human.min(); }
+    // float absmax_in() { return _human.max();; }
+    float parkpos() { return _parkpos_in; }
+    // float margin_in() { return _margin_in; }
+    float zeropoint() { return _zeropoint_in; }
+    float* zeropoint_ptr() { return &_zeropoint_in; }
     // std::shared_ptr<float> zeropoint_shptr() { return _zeropoint; }
 };
 
@@ -894,7 +900,8 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     int32_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
     Timer _stop_timer;
     bool _low_pulse = false, _pin_activity;
-    float _stop_thresh;
+    int32_t _opmin_us, _opmax_us, _absmin_us, _absmax_us, _stopthresh_us;
+    float _opmin, _opmax, _absmin, _absmax, _margin, _stopthresh;
     float _last_read_time_us;
     int32_t _min_us = 100000.0;  // default. overwrite in children
     volatile int64_t _isr_us = 0;
@@ -937,8 +944,8 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
     }
 
   public:
-    PulseSensor(uint8_t arg_pin, int64_t debounce_arg, float stop_thresh_arg)
-      : Sensor<int32_t, HUMAN_T>(arg_pin), _stop_timer(_stop_timeout_us), _debounce_threshold_us(debounce_arg), _stop_thresh(stop_thresh_arg) {}
+    PulseSensor(uint8_t arg_pin, int64_t debounce_arg, float stopthresh_arg)
+      : Sensor<int32_t, HUMAN_T>(arg_pin), _stop_timer(_stop_timeout_us), _debounce_threshold_us(debounce_arg), _stopthresh(stopthresh_arg) {}
     PulseSensor() = delete;
     std::string _long_name = "Unknown Hall Effect sensor";
     std::string _short_name = "pulsen";
@@ -950,12 +957,22 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
         attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
         this->set_source(src::PIN);
     }
-    bool stopped() { return this->_val_filt.val() < _stop_thresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    bool stopped() { return this->_val_filt.val() < _stopthresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
     float last_read_time() { return _last_read_time_us; }
 
-    int32_t us() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
-    int32_t min_us() { return this->_native.min(); }
-    int32_t max_us() { return this->_native.max(); }
+    // int32_t raw_us() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
+    int32_t raw_us() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
+    int32_t absmin_us() { return this->_native.min(); }
+    int32_t absmax_us() { return this->_native.max(); }
+    int32_t opmin_us() { return this->_opmin_us; }
+    int32_t opmax_us() { return this->_opmax_us; }
+    float raw() { return this->_human.val(); }
+    float filt() { return this->_val_filt.val(); }
+    float absmin() { return this->_human.min(); }
+    float absmax() { return this->_human.max(); }
+    float opmin() { return this->_opmin; }
+    float opmax() { return this->_opmax; }
+    float margin() { return this->_margin; }
 };
 
 // Tachometer represents a magnetic pulse measurement of the enginge rotation.
@@ -963,31 +980,31 @@ class PulseSensor : public Sensor<int32_t, HUMAN_T> {
 class Tachometer : public PulseSensor<float> {
   protected:
     int64_t _debounce_threshold = 6500;  // corresponds to 1000000 us/sec / 6500 us = 154 Hz max pulse frequency
-    float _stop_thresh_rpm = 0.2;  // 6500 us corresponds to about 10000 rpm, which isn't possible. Use to reject retriggers
-    float _abs_max_rpm, _redline_rpm, _initial_rpm;
+    float _initial_rpm;
     float _freq_div = 8.0;  // an external ripple counter divides pulse stream frequency by this, we need to compensate
-    int32_t _min_us, _zerovalue, _stop_timeout_us;
   public:
     sens senstype = sens::tach;
     float _idle_rpm = 600.0, _idle_cold_rpm = 750.0, _idle_hot_rpm = 500.0;
-    float _margin, _govern_rpm; 
-    Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _debounce_threshold_us, _stop_thresh_rpm) {
-        _abs_max_rpm = 4500.0;  // Max recognized engine rotation speed
-        _redline_rpm = 3600.0;  // Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+    // float _govern_rpm; 
+    Tachometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _debounce_threshold_us, _stopthresh) {
+        _absmax = 4500.0;  // Max recognized engine rotation speed
+        _opmin = 0.0;
+        _opmax = 3600.0;  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         _low_pulse = true;
         _invert = true;  // will use the math:  human_rpm = b_offset + m_factor / native_us
         _m_factor = 60.0 * _freq_div * 1000000.0;  // 1 pulse/us * 8 rot/pulse * 60 sec/min * 1000000 us/sec = 480000000 rot/min (rpm), (so 480M rpm per pulse-per-us)
-        _min_us = _m_factor / _redline_rpm;  // at 3600 rpm gives 133333 us
+        _opmin_us = _m_factor / _opmax;  // at 3600 rpm gives 133333 us
         _b_offset = 0.0;
         _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        _govern_rpm = _redline_rpm;
-        _stop_thresh_rpm = 0.2;
+        // _govern_rpm = _opmax;
         _margin = 10;
         _initial_rpm = 50.0;
-        _zerovalue = 999999;
-        _stop_timeout_us = 1750000;  // how long to wait w/o a pulse before assuming the engine is stopped
-        set_human_limits(0.0, _redline_rpm);
-        set_native_limits(_min_us, _stop_timeout_us);
+        // _zerovalue = 999999;
+        _stopthresh_us = 1750000;  // how long to wait w/o a pulse before assuming the engine is stopped
+        _absmin_us = _m_factor / _absmax;
+        set_human_limits(_opmin, _opmax);
+        set_native_limits(_absmin_us, _stop_timeout_us);
+        _stopthresh = from_native(_stopthresh_us);
         set_human(_initial_rpm);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);
@@ -1003,53 +1020,53 @@ class Tachometer : public PulseSensor<float> {
     std::string _human_units_name = "rpm";
 
     // Query/getter functions
-    float rpm() { return _human.val(); }
+    // float rpm() { return _human.val(); }
     // bool engine_stopped() { return stopped(); }
-    bool engine_stopped() { return _val_filt.val() < _stop_thresh_rpm ; }  // Note due to weird float math stuff, can not just check if tach == 0.0
-    float margin_rpm() { return _margin; }
-    float redline_rpm() { return _human.max(); }
-    float govern_rpm() { return _govern_rpm; }
-    float* govern_rpm_ptr() { return &_govern_rpm; }
-    float idle_rpm() { return _idle_rpm; }
-    float idle_cold_rpm() { return _idle_cold_rpm; }
-    float idle_hot_rpm() { return _idle_hot_rpm; }
-    float* idle_rpm_ptr() { return &_idle_rpm; }
-    void set_idle_rpm(float newidle) { _idle_rpm = constrain(newidle, _human.min(), _govern_rpm); }
-    void set_govern_rpm(float newgovern) { _govern_rpm = constrain(newgovern, _idle_rpm, _human.max()); }
-    void set_idlecold_rpm(float newidlecold) { _idle_cold_rpm = constrain(newidlecold, _idle_hot_rpm + 1.0, _human.max()); }
-    void set_idlehot_rpm(float newidlehot) { _idle_hot_rpm = constrain(newidlehot, _human.min(), _idle_cold_rpm - 1.0); }
-    float abs_max_rpm() { return _abs_max_rpm; }
-    float* redline_rpm_ptr() { return _human.max_ptr(); }
-    std::shared_ptr<float> redline_rpm_shptr() { return _human.max_shptr(); }
+    bool engine_stopped() { return (std::abs(_val_filt.val() - _stopthresh) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    // float govern() { return _govern_rpm; }
+    // float* govern_ptr() { return &_govern_rpm; }
+    float* opmax_ptr() { return &_opmax; }
+    float idle() { return _idle_rpm; }
+    float idle_cold() { return _idle_cold_rpm; }
+    float idle_hot() { return _idle_hot_rpm; }
+    float* idle_ptr() { return &_idle_rpm; }
+    void set_idle(float newidle) { _idle_rpm = constrain(newidle, _opmin, _opmax); }
+    // void set_govern(float newgovern) { _govern_rpm = constrain(newgovern, _idle_rpm, _human.max()); }
+    void set_idlecold(float newidlecold) { _idle_cold_rpm = constrain(newidlecold, _idle_hot_rpm + 1.0, _opmax); }
+    void set_idlehot(float newidlehot) { _idle_hot_rpm = constrain(newidlehot, _opmin, _idle_cold_rpm - 1.0); }
     bool* pin_activity_ptr() { return &_pin_activity; }
+    // float margin_rpm() { return _margin; }
+    // float redline_rpm() { return _human.max(); }
+    // float absmax_rpm() { return _absmax_rpm; }
+    // float* redline_ptr() { return _human.max_ptr(); }
+    // std::shared_ptr<float> redline_shptr() { return _human.max_shptr(); }
 };
 
 // Speedometer represents a magnetic pulse measurement of the enginge rotation.
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to MPH
 class Speedometer : public PulseSensor<float> {
   protected:
-    int64_t _debounce_threshold_us; 
-    float _stop_thresh_mph, _min_mph, _max_mph, _min_us, _initial_mph, _redline_mph, _govern_mph, _idle_mph, _margin;
+    int64_t _debounce_threshold_us;
+    float _stopthresh, _initial_mph = 0.0, _idle_mph, _govern_mph;
     bool _pin_activity = LOW;
-    int32_t _zerovalue;
+    // int32_t _zerovalue;
   public:
     sens senstype = sens::speedo;
-    Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _debounce_threshold_us, _stop_thresh_mph) {
+    Speedometer(uint8_t arg_pin) : PulseSensor<float>(arg_pin, _debounce_threshold_us, _stopthresh) {
         _debounce_threshold_us = 40000;  // 40000 us corresponds to about 45 mph, which a mule can't go. Use to reject retriggers
-        _min_mph = 0.0;
-        _max_mph = 25.0; // What is max speed car can ever go
-        _initial_mph = 0.0; // Current speed, raw value converted to mph (in mph)
-        _redline_mph = 15.0; // What is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
+        _absmin = _opmin = 0.0;
+        _absmax = 25.0; // What is max speed car can ever go
+        _opmax = 15.0; // aka redline, is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
         _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         _invert = true;  // will use the math:  human_mph = b_offset + m_factor / native_us
         // new math with two magnets on the rear axle:
         _m_factor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 pulse/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr,  (so 1.8M mph per pulse-per-us)     
         _b_offset = 0.0;
         _margin = 0.2;
-        _min_us = _m_factor / _redline_mph;  // 15.0 mph gives 119000 us.  25.0 mph gives 71400 us
-        _stop_thresh_mph = 0.2;  // Below which the car is considered stopped
-        _zerovalue = 9999999;
-        set_human_limits(_min_mph, _redline_mph);
+        _opmin_us = _m_factor / _opmax;  // 15.0 mph gives 119000 us.  25.0 mph gives 71400 us
+        _stopthresh = 0.6;  // Below which the car is considered stopped
+        // _zerovalue = 9999999;
+        set_human_limits(_absmin, _absmax);
         set_native_limits(_min_us, _stop_timeout_us);
         set_human(_initial_mph);
         set_can_source(src::PIN, true);
@@ -1068,16 +1085,17 @@ class Speedometer : public PulseSensor<float> {
     // Query/getter functions
     float mph() { return _human.val(); }
     // bool car_stopped() { return stopped(); }
-    bool car_stopped() { return _val_filt.val() < _stop_thresh_mph ; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    bool car_stopped() { return (std::abs(_val_filt.val() - _stopthresh) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     float margin_mph() { return _margin; }
-    float redline_mph() { return _human.max(); }
-    float govern_mph() { return _govern_mph; }
-    float idle_mph() { return _idle_mph; }
-    float* idle_mph_ptr() { return &_idle_mph; }
-    void set_govern_mph(float newgovern) { _govern_mph = newgovern; }
-    float max_mph() { return _max_mph; }
-    float* redline_mph_ptr() { return _human.max_ptr(); }
-    std::shared_ptr<float> redline_mph_shptr() { return _human.max_shptr(); }
+    float redline_mph() { return _opmax; }
+    // float govern_mph() { return _govern_mph; }
+    float idle() { return _idle_mph; }
+    float* idle_ptr() { return &_idle_mph; }
+    // void set_govern(float newgovern) { _govern_mph = newgovern; }
+    // float absmax_mph() { return _absmax_mph; }
+    float* absmax_ptr() { return _human.max_ptr(); }
+    float* opmax_ptr() { return &_opmax; }
+    std::shared_ptr<float> absmax_shptr() { return _human.max_shptr(); }
     bool* pin_activity_ptr() { return &_pin_activity; }
 };
 // NOTE: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
@@ -1101,7 +1119,7 @@ class Speedometer : public PulseSensor<float> {
 //     ServoPWM(uint8_t pin, uint8_t freq) : Transducer<NATIVE_T, HUMAN_T>(pin) {
 //         _servo.setPeriodHertz(freq);
 //         _servo.attach(this->_pin, this->_native.min(), this->_native.max());
-//         // _servo.attach(this->_pin, this->_native.abs_min(), this->_native.abs_max());
+//         // _servo.attach(this->_pin, this->_native.absmin(), this->_native.absmax());
 //     }
 //     ServoPWM() = delete;
 //     std::string _long_name = "Unknown PWM motor output";

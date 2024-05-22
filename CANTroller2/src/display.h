@@ -49,7 +49,7 @@ static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = 
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
-    { "PressRaw", "BkPosRaw", "TachPuls", " Pot Raw", __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
+    { "PressRaw", "BkPosRaw", "TachPuls", spEd"Puls", " Pot Raw", "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { "Brk Heat", "HybBrake", __________, __________, __________, "BkEnaPID", "BkFeedbk", "BkPosLim", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
@@ -63,7 +63,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "%",    "%",    },  // PG_RUN
     { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, "us",   "us",   },  // PG_JOY
-    { "adc",  "adc",  "ms",   "adc",  ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
+    { "adc",  "adc",  "ms",   "ms",   "adc",  "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    "%",    degree, degree, degreF, degreF, },  // PG_IDLE
     { degreF, "%",    ______, ______, ______, b1nary, scroll, b1nary, b1nary, b1nary, scroll, },  // PG_MOTR
@@ -633,18 +633,18 @@ class Display {
         float drange;
         draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
         draw_dynamic(2, speedo.filt(), 0.0f, speedo.redline_mph(), gas.cruisepid.target());
-        draw_dynamic(3, tach.filt(), 0.0f, tach.redline_rpm(), gas.pid.target());
+        draw_dynamic(3, tach.filt(), 0.0f, tach.opmax(), gas.pid.target());
         draw_dynamic(4, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], gas.throttle_target_pc);
-        draw_dynamic(5, pressure.filt(), pressure.min_human(), pressure.max_human(), brake.pids[PressureFB].target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
+        draw_dynamic(5, pressure.filt(), pressure.opmin(), pressure.opmax(), brake.pids[PressureFB].target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
         draw_dynamic(6, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
         draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
         draw_dynamic(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
         if (datapage == PG_RUN) {
-            draw_dynamic(9, brkpos.filt(), brkpos.op_min(), brkpos.op_max());
-            draw_dynamic(10, mulebatt.filt(), mulebatt.op_min_v(), mulebatt.op_max_v());
+            draw_dynamic(9, brkpos.filt(), brkpos.opmin(), brkpos.opmax());
+            draw_dynamic(10, mulebatt.filt(), mulebatt.opmin(), mulebatt.opmax());
             draw_dynamic(11, pot.val(), pot.min(), pot.max());
-            draw_dynamic(12, airvelo.human(), airvelo.min_mph(), airvelo.max_mph());
-            draw_dynamic(13, mapsens.human(), mapsens.min_atm(), mapsens.max_atm());
+            draw_dynamic(12, airvelo.filt(), airvelo.opmin(), airvelo.opmax());
+            draw_dynamic(13, mapsens.filt(), mapsens.opmin(), mapsens.opmax());
             draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
             draw_asciiname(15, motormodecard[gas.motormode]);
             draw_asciiname(16, motormodecard[brake.motormode]);
@@ -664,17 +664,17 @@ class Display {
             draw_dynamic(19, hotrc.deadband_us, 0, 100);
         }
         else if (datapage == PG_SENS) {
-            draw_dynamic(9, pressure.raw(), pressure.min_native(), pressure.max_native());                    
-            draw_dynamic(10, brkpos.raw(), brkpos.min_native(), brkpos.max_native());                    
-            draw_dynamic(11, tach.native()/1000, tach.min_native()/1000, tach.max_native()/1000);                    
-            draw_dynamic(12, pot.adc_raw, pot.adc_min, pot.adc_max);
-            draw_eraseval(13);
-            draw_dynamic(14, airvelo.max_mph(), 0.0f, airvelo.abs_max_mph());
-            draw_dynamic(15, mapsens.min_atm(), mapsens.abs_min_atm(), mapsens.abs_max_atm());
-            draw_dynamic(16, mapsens.max_atm(), mapsens.abs_min_atm(), mapsens.abs_max_atm());
-            draw_dynamic(17, speedo.idle_mph(), 0.0f, speedo.redline_mph());
-            draw_dynamic(18, speedo.redline_mph(), 0.0f, speedo.max_human());
-            draw_dynamic(19, brkpos.zeropoint(), brkpos.min_human(), brkpos.max_human());  // BrakePositionSensor::abs_min_retract_in, BrakePositionSensor::abs_max_extend_in);
+            draw_dynamic(9, pressure.raw_adc(), pressure.opmin_adc(), pressure.opmax_adc());
+            draw_dynamic(10, brkpos.raw_adc(), brkpos.opmin_adc(), brkpos.opmax_adc());
+            draw_dynamic(11, tach.raw_us()/1000, tach.opmin_us()/1000, tach.opmax_us()/1000);
+            draw_dynamic(12, speedo.raw_us()/1000, speedo.opmin_us()/1000, speedo.opmax_us()/1000);
+            draw_dynamic(13, pot.adc_raw, pot.adc_min, pot.adc_max);
+            draw_dynamic(14, airvelo.opmax(), 0.0f, airvelo.absmax());
+            draw_dynamic(15, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
+            draw_dynamic(16, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
+            draw_dynamic(17, speedo.idle(), speedo.opmin(), speedo.opmax());
+            draw_dynamic(18, speedo.opmax(), speedo.absmin(), speedo.absmax());
+            draw_dynamic(19, brkpos.zeropoint(), brkpos.opmin(), brkpos.opmax());  // BrakePositionSensor::absmin_retract_in, BrakePositionSensor::absmax_extend_in);
         }
         else if (datapage == PG_PWMS) {
             draw_dynamic(9, gas.deg[OUT], gas.deg[OPMIN], gas.deg[OPMAX]);
@@ -691,10 +691,10 @@ class Display {
         }
         else if (datapage == PG_IDLE) {
             draw_asciiname(9, motormodecard[gas.motormode]);
-            draw_dynamic(10, gas.pid.target(), 0.0f, tach.redline_rpm());
+            draw_dynamic(10, gas.pid.target(), tach.opmin(), tach.opmax());
             draw_dynamic(11, gas.idle_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
             draw_dynamic(12, gas.idle_si[OUT], gas.si[OPMIN], gas.si[OPMAX]);
-            draw_dynamic(13, tach.idle_rpm(), tach.min_human(), tach.max_human());
+            draw_dynamic(13, tach.idle(), tach.opmin(), tach.opmax());
             draw_dynamic(14, fuelpump.volts, fuelpump.off_v, fuelpump.on_max_v);
             draw_dynamic(15, gas.starting_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
             draw_dynamic(16, gas.idle_si[OPMAX], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
@@ -717,7 +717,7 @@ class Display {
             drange = brake.us[ABSMIN]-brake.us[ABSMAX];
             draw_asciiname(9, motormodecard[brake.motormode]);
             draw_asciiname(10, brakefeedbackcard[brake.feedback]);
-            draw_dynamic(11, brkpos.filt(), brkpos.op_min(), brkpos.op_max(), brake.pids[_BrakePosn].target());
+            draw_dynamic(11, brkpos.filt(), brkpos.opmin(), brkpos.opmax(), brake.pids[_BrakePosn].target());
             draw_dynamic(12, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
             draw_dynamic(13, brake.target[PressureFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
             draw_dynamic(14, brake.target[PositionFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
@@ -732,9 +732,9 @@ class Display {
         }
         else if (datapage == PG_GPID) {
             draw_asciiname(9, motormodecard[gas.motormode]);
-            draw_dynamic(10, gas.throttle_target_pc, 0.0f, tach.redline_rpm());
-            draw_dynamic(11, gas.pid.target(), 0.0f, tach.redline_rpm());
-            draw_dynamic(12, gas.pid.err(), tach.idle_rpm() - tach.govern_rpm(), tach.govern_rpm() - tach.idle_rpm());
+            draw_dynamic(10, gas.throttle_target_pc, tach.opmin(), tach.opmax());
+            draw_dynamic(11, gas.pid.target(), tach.opmin(), tach.opmax());
+            draw_dynamic(12, gas.pid.err(), tach.idle() - tach.opmax(), tach.opmax() - tach.idle());
             draw_dynamic(13, gas.pid.pterm(), -100.0f, 100.0f);
             draw_dynamic(14, gas.pid.iterm(), -100.0f, 100.0f);
             draw_dynamic(15, gas.pid.dterm(), -100.0f, 100.0f);
@@ -745,10 +745,10 @@ class Display {
             draw_dynamic(19, gas.pid.kd(), 0.0f, 1.0);
         }
         else if (datapage == PG_CPID) {
-            drange = tach.govern_rpm() - tach.idle_rpm();
+            drange = tach.opmax() - tach.idle();
             // draw_truth(9, gas.cruise_pid_enabled, 1);
-            draw_dynamic(9, gas.cruisepid.target(), 0.0f, speedo.govern_mph());
-            draw_dynamic(10, gas.cruisepid.err(), speedo.idle_mph()-speedo.govern_mph(), speedo.govern_mph()-speedo.idle_mph());
+            draw_dynamic(9, gas.cruisepid.target(), speedo.idle(), speedo.opmax());
+            draw_dynamic(10, gas.cruisepid.err(), speedo.idle()-speedo.opmax(), speedo.opmax()-speedo.idle());
             draw_dynamic(11, gas.cruisepid.pterm(), -drange, drange);
             draw_dynamic(12, gas.cruisepid.iterm(), -drange, drange);
             draw_dynamic(13, gas.cruisepid.dterm(), -drange, drange);
@@ -1024,12 +1024,12 @@ class Tuner {
                 else if (sel_val == 10) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
             }
             else if (datapage == PG_SENS) {
-                if (sel_val == 5) adj_val(airvelo.max_mph_ptr(), fdelta, 0, airvelo.abs_max_mph());
-                else if (sel_val == 6) adj_val(mapsens.min_atm_ptr(), fdelta, mapsens.abs_min_atm(), mapsens.abs_max_atm());
-                else if (sel_val == 7) adj_val(mapsens.max_atm_ptr(), fdelta, mapsens.abs_min_atm(), mapsens.abs_max_atm());
-                else if (sel_val == 8) adj_val(speedo.idle_mph_ptr(), fdelta, 0, speedo.redline_mph() - 1);
-                else if (sel_val == 9) adj_val(speedo.redline_mph_ptr(), fdelta, speedo.idle_mph(), 20);
-                else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.op_min(), brkpos.op_max());
+                if (sel_val == 5) adj_val(airvelo.opmax_ptr(), fdelta, airvelo.absmin(), airvelo.absmax());
+                else if (sel_val == 6) adj_val(mapsens.opmin_ptr(), fdelta, mapsens.absmin(), mapsens.absmax());
+                else if (sel_val == 7) adj_val(mapsens.opmax_ptr(), fdelta, mapsens.absmin(), mapsens.absmax());
+                else if (sel_val == 8) adj_val(speedo.idle_ptr(), fdelta, speedo.opmin(), speedo.opmax() - 1);
+                else if (sel_val == 9) adj_val(speedo.opmax_ptr(), fdelta, speedo.idle(), speedo.absmax());
+                else if (sel_val == 10) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.opmin(), brkpos.opmax());
             }
             else if (datapage == PG_PWMS) {
                 if (sel_val == 7) { adj_val(&(gas.si[OPMIN]), fdelta, gas.si[PARKED] + 1, gas.si[OPMAX] - 1); gas.derive(); }
