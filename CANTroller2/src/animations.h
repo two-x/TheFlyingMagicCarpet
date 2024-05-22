@@ -607,7 +607,7 @@ class DiagConsole {
     //     textlines[usedlines++] = newerr;
     // // }
     void draw(LGFX_Sprite* buf, bool force=false) {
-    //     if (!dirty && !force) return;
+         if (!dirty && !force) return;
     //     int new_lines = newest_content - last_drawn;
     //     int drawline = std::min
         
@@ -662,6 +662,8 @@ class AnimationManager {
         Serial.printf(" screensavers .. ");
         eSaver.setup(&framebuf[flip], &vp);
         cSaver.setup(&framebuf[flip], &vp);
+        // Serial.printf(" diag console .. ");
+        // diagconsole.setup();
         Serial.printf("set up\n");
     }
     void reset() {
@@ -743,7 +745,7 @@ class AnimationManager {
             //     spr->setCursor(x, x);
             //     spr->print(std::to_string(oldfps).c_str());
             // }
-            spr->setTextColor(WHT);
+            spr->setTextColor(LGRY);
             spr->setCursor(10, 10);
             spr->print(std::to_string(dispfps).c_str());
             oldfps = dispfps;

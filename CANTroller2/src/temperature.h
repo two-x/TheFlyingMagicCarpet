@@ -164,7 +164,7 @@ private:
             }
             if (!brake_assigned && (brakemotor_type_detected != NIL)) {
                 sensors.emplace(loc::BRAKE, TemperatureSensor(loc::BRAKE, detected_address, &tempsensebus));
-                Serial.printf("  detected %s brake sensor at addr: ", brakemotor_type_to_string(brakemotor_type_detected));
+                Serial.printf("  detected %s brake sensor at addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
                 sensors.at(loc::BRAKE).print_address();
                 brake_assigned = true;
             }
