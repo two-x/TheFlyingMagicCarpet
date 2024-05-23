@@ -135,6 +135,7 @@ bool screensaver_enabled = true;          // does fullscreen screensaver start a
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
 
 // global tunable variables
+float float_zero = 0.0000069;        // if two floats being compared are closer than this, we consider them equal
 int sprite_color_depth = 8;
 uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode

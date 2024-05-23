@@ -21,14 +21,14 @@ int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF
 class Potentiometer {
   protected:
     float _ema_alpha = .95;
-    float _opmin = 0.0;  // in percent
-    float _opmax = 100.0;  // in percent
-    float _opmin_adc = 380; // TUNED 230603 - Used only in determining theconversion factor
-    float _opmax_adc = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
-    float _absmin_adc = 0.0, _absmax_adc = (float)adcrange_adc;
+    float _opmin = 0.0, _opmax = 100.0 ;  // in percent
+    float _opmin_native = 380; // TUNED 230603 - Used only in determining theconversion factor
+    float _opmax_native = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+    float _absmin_native = 0.0, _absmax_native = static_cast<float>(adcrange_adc);
+    float _absmin = 0.0, _absmax = 100.0;
     float _activity_margin_pc = 7.5;
     uint8_t _pin;
-    float _raw, _raw_adc, _filt = 0.0, _activity_ref;
+    float _pc = 50.0, _raw, _native, _activity_ref;  // values in filtered percent, raw percent, raw adc
     Timer pot_timer{100000};  // adc cannot read too fast w/o errors, so give some time between readings
   public:
     // tune these by monitoring adc_raw and twist pot to each limit. set min at the highest value seen when turned full CCW, and vice versas for max, then trim each toward adc_midrange until you get full 0 to 100% range
@@ -38,32 +38,32 @@ class Potentiometer {
     void setup() {
         Serial.printf("Pot setup..\n");
         set_pin(_pin, INPUT);
-        _activity_ref = _filt;
+        _activity_ref = _pc;
     }
     void update() {
         if (pot_timer.expireset()) {
-            _raw_adc = static_cast<float>(analogRead(_pin));
-            _raw = map(_raw_adc, _opmin_adc, _opmax_adc, _opmin, _opmax);
-            ema_filt(_raw, &_filt, _ema_alpha);
-            _filt = constrain(_filt, _opmin, _opmax); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
-            if (std::abs(_filt - _activity_ref) > _activity_margin_pc) {
+            _native = static_cast<float>(analogRead(_pin));
+            _raw = map(_native, _opmin_native, _opmax_native, _opmin, _opmax);
+            ema_filt(_raw, &_pc, _ema_alpha);
+            _pc = constrain(_pc, _absmin, _absmax); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
+            if (std::abs(_pc - _activity_ref) > _activity_margin_pc) {
                 // Serial.printf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
                 kick_inactivity_timer(7);  // evidence of user activity
-                _activity_ref = _filt;
+                _activity_ref = _pc;
                 // Serial.printf("r2:%lf\n", _activity_ref);
             }
         }
     }
     float mapToRange(float argmin, float argmax) {
-        return map(_filt, _opmin, _opmax, argmin, argmax);
+        return map(_pc, _opmin, _opmax, argmin, argmax);
     }
-    float filt() { return _filt; }
+    float val() { return _pc; }
     float raw() { return _raw; }
-    float raw_adc() { return _raw_adc; }
+    float native() { return _native; }
     float opmin() { return _opmin; }
     float opmax() { return _opmax; }
-    float opmin_adc() { return _opmin_adc; }
-    float opmax_adc() { return _opmax_adc; }
+    float opmin_native() { return _opmin_native; }
+    float opmax_native() { return _opmax_native; }
 };
 // NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
 //       a little cleaner organization-wise, since all the configs would be consolidated. It would also allow us to read Configs from storage somewhere, so we could have persistent
@@ -78,49 +78,34 @@ class Param {
     float _val, _last;  // this is our primary value and its previous value
     float* _min_ptr = &_min_internal;
     float* _max_ptr = &_max_internal;
-    bool _saturated = false; // keeps track of whether the value has been constrained by the limits or not
-    void constrain_value() {
-        _saturated = false;
-        if (_val < *_min_ptr) {
-            _val = *_min_ptr;
-            _saturated = true;  // Constraint was necessary
-        }
-        else if (_val > *_max_ptr) {
-            _val = *_max_ptr;
-            _saturated = true;  // Constraint was necessary
-        }
-    }
+    void constrain_value() { _val = constrain(_val, *_min_ptr, *_max_ptr); }
   public:
     std::string _long_name = "Unnamed value";
     std::string _short_name = "noname";
     std::string _native_units_name = "";
     std::string _si_units_name = "";
-    // Creates a constant Param with the default value for VALUE_T
-    // NOTE: this is really only needed for initalization cases where we don't have a valid starting value when we first make the Param
     Param() { _last = _val; }
-    // Creates a regular constrained Param
-    Param(float arg_val, float arg_min, float arg_max) {
+    Param(float arg_val, float arg_min, float arg_max) {  // Creates a regular constrained Param
         _val = arg_val;
         *_min_ptr = arg_min;
         *_max_ptr = arg_max;
         set_limits(*_min_ptr, *_max_ptr);
         _last = _val;
     } 
-    Param(float arg_val) { Param(arg_val, arg_val, arg_val); }  // Creates a constant Param (with min/max == val)
-    // Creates a constraned Param which uses external limits.
-    // NOTE: if using external limits, it's (currently) possible to get stale values, since there is no
-    //       callback mechanism in place. We could get around this by calling constrain_value() on every
-    //       get() call, but that seems like overkill...
-    Param(float arg_val, float* arg_min_ptr, float* arg_max_ptr) {
+    Param(float arg_val) { Param(arg_val, arg_val, arg_val); }  // Creates a constant Param (with min/max == val) which cannot be changed
+    Param(float arg_val, float* arg_min_ptr, float* arg_max_ptr) {  // Creates a constraned Param which uses external limits.
         _val = arg_val;
         _min_ptr = arg_min_ptr;
         _max_ptr = arg_max_ptr;
         set_limits(*_min_ptr, *_max_ptr);
         _last = _val;
-    } 
+    }
+    // NOTE: if using external limits, it's (currently) possible to get stale values, since there is no
+    //       callback mechanism in place. We could get around this by calling constrain_value() on every
+    //       get() call, but that seems like overkill...
     void set_limits(float arg_min, float arg_max) {  // Use if min/max are kept in-class
         if (arg_min > arg_max) {
-            Serial.printf("Error: min is >= max\n");
+            Serial.printf("Err: Param set_limits(): %lf (min) is >= %lf (max)\n", arg_min, arg_max);
             return;
         }
         *_min_ptr = arg_min;
@@ -129,7 +114,7 @@ class Param {
     }
     void set_limits(float* arg_min_ptr, float* arg_max_ptr) { // Use if min/max are external
         if (*arg_min_ptr > *arg_max_ptr) {
-            Serial.printf("Error: *min is > *max\n");
+            Serial.printf("Err: Param set_limits(): %lf (*min) is >= %lf (*max)\n", *arg_min_ptr, *arg_max_ptr);
             return;
         }
         _min_ptr = arg_min_ptr;
@@ -138,14 +123,13 @@ class Param {
     }
     // return value indicates if the value actually changed or not
     bool set(float arg_val) {
+        if (std::abs(_val - arg_val) < float_zero) return false;
         _last = _val;
         _val = arg_val;
         constrain_value();
-        return (_val != _last);
+        return true;
     }
-    bool add(float arg_add) {
-        return set(_val + arg_add);
-    }
+    bool add(float arg_add) { return set(_val + arg_add); }
     float val() { return _val; }
     float min() { return *_min_ptr; }
     float max() { return *_max_ptr; }
@@ -153,7 +137,6 @@ class Param {
     float* min_ptr() { return _min_ptr; }
     float* max_ptr() { return _max_ptr; }
     float last() { return _last; } // NOTE: currently unused, do we still need this for drawing purposes?
-    bool saturated() { return _saturated; }
 };
 // Device class - is a base class for any connected system device or signal associated with a pin
 class Device {
@@ -236,16 +219,16 @@ class Device {
 enum class TransducerDirection : uint8_t {REV, FWD}; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
 
 // Transducer class: (240522 soren)
-// This class holds key device values, converts between different units they might use, and manages their constraint within range limits
+// This class holds key device values, converts between different units they might use, and manages their constraint within specified range limits
 // Some definitions:
 // Each xducer has a primary value associated with it, eg for the speedo this is our speed. That value takes multiple forms:
 //   UNITS:  units of measure appropriate to the device. these appear in variable and function names, or when absent the default "si" is assumed. Here are the possibilities:  
-//     "si": (default) values kept in standard units of measure which humans like to use, such as mph, feet-per-second, etc.
-//     "native": values kept in whatever units are "native" to the specific device, usually adc counts or microseconds (of a pulse width)... depends on the sensor type
+//     "si": (default) values kept in standard units of measure which humans prefer, such as mph, feet-per-second, etc.
+//     "native": values kept in whatever units are native to the specific device/driver, usually adc counts (for analog sensors) or microseconds (for pwm)... depends on the sensor type
 //     "pc": values scaled to a percentage of the operational range, where opmin = 0% and opmax = 100%
 //   LIMITS:
-//     "absmin"/"absmax": define the whole range the transducer is capable of. all values are auto-constrained to this range, also tunability of operational limits are confined to this range
-//     "opmin"/"opmax": define the healthy operational range the transducer. Actuators should be constrained to this range, Sensors should be expected to read within this range if things are working right
+//     "absmin"/"absmax": defines the whole range the transducer is capable of. all values are auto-constrained to this range, also tunability of operational limits are confined to this range
+//     "opmin"/"opmax": defines the healthy operational range the transducer. Actuators should be constrained to this range, Sensors should be expected to read within this range or flag an error
 class Transducer : public Device {
   private:
     std::string _long_name = "Unknown transducer";
@@ -254,7 +237,7 @@ class Transducer : public Device {
     // Multiplier and adder values to plug in for unit conversion math
     // float _raw_native;  // Keep track of the most recent unfiltered and unconstrained native value, for monitoring and diag purposes
     float _mfactor = 1.0, _boffset = 0.0;
-    float _opmin = NAN, _opmax = NAN, _margin = 0.0;  //     float _opmin, _opmax, _absmin, _absmax, _margin, _raw, _filt;
+    float _opmin = NAN, _opmax = NAN, _margin = 0.0;  // float _opmin, _opmax, _absmin, _absmax, _margin, _raw, _filt;
     // float _zerovalue = NAN;  // value to return from to_native conversion when val is zero (needed for speedometer)
     bool _invert = false;  // Flag to indicated if unit conversion math should multiply or divide
     TransducerDirection _dir = TransducerDirection::FWD; // NOTE: whats ts for, exactly?
@@ -273,7 +256,7 @@ class Transducer : public Device {
         float xnative = static_cast<float>(arg_val_native); // convert everything to floats so we don't introduce rounding errors
         float xsi = NAN;  // this holds our return value.  there should be no case that the initial NAN value survives the duration of this function
         if (_invert) {
-            if (std::abs(xnative) > 0.000001) xnative = 1 / xnative; //  // otherwise if the xsi units have a reciprocal (inverse) relationship to the native units (like hours to hertz)
+            if (std::abs(xnative) > float_zero) xnative = 1 / xnative; //  // otherwise if the xsi units have a reciprocal (inverse) relationship to the native units (like hours to hertz)
             else {
                 Serial.printf("err: from_xnative conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", _si.max(), _dir, _invert, xnative, _mfactor, _boffset);
                 return static_cast<float>(_si.max());  // Best return given division would be infinite  // Serial.printf("%lf = %lf\n", ret, max_f);
@@ -289,7 +272,7 @@ class Transducer : public Device {
         if (_dir == TransducerDirection::REV) xsi = _si.min() + _si.max() - xsi;
         xnative = (xsi - _boffset) / _mfactor;
         if (_invert) {
-            if (std::abs(xnative) > 0.000001) xnative = 1 / xnative;
+            if (std::abs(xnative) > float_zero) xnative = 1 / xnative;
             else {
                 Serial.printf("err: to_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", _native.max(), _dir, _invert, xsi, _mfactor, _boffset);
                 return static_cast<float>(_native.max());            
@@ -314,7 +297,7 @@ class Transducer : public Device {
     virtual void update_si_limits() {}
   public:
     Transducer(uint8_t arg_pin) : Device(arg_pin) {}
-    Transducer() = delete;
+    Transducer() = delete;  // this ensures a pin is always provided
 
     // To set limits : call either one of set_abslimits() or set_abslimits_native(), whichever one you have
     // the values to define the range, and all si and native abs values will be set automatically.
@@ -328,7 +311,6 @@ class Transducer : public Device {
             tempmax = arg_min;
         }
         _si.set_limits(tempmin, tempmax);
-        update_si_limits();
         tempmin = to_native(_si.min());
         tempmax = to_native(_si.max());
         _native.set_limits(std::min(tempmin, tempmax), std::max(tempmin, tempmax));
@@ -342,7 +324,6 @@ class Transducer : public Device {
             tempmax = arg_min;
         }
         _native.set_limits(tempmin, tempmax);
-        update_native_limits();
         tempmin = from_native(_native.min());
         tempmax = from_native(_native.max());
         _si.set_limits(std::min(tempmin, tempmax), std::max(tempmin, tempmax));
@@ -392,7 +373,7 @@ class Transducer : public Device {
         return false;
     }
     bool add_si(float arg_add_si) {
-        float delta = (float)(arg_add_si * tuning_rate_pcps * loop_avg_us * (_opmax - _opmin) / (100.0 * 1000000));
+        float delta = (float)(arg_add_si * tuning_rate_pcps * loop_avg_us * (_opmax - _opmin) / (100.0 * 1000000));  // this acceleration logic doesn't belong here
         if (_si.add(delta)) {
             _si_raw = _si.val();
             _native.set(to_native(_si_raw));
@@ -410,9 +391,11 @@ class Transducer : public Device {
     }
     // float si() { return _si.val(); }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)
+    float* ptr() { return _si.ptr(); }
     float raw() { return _si_raw; }  // this is the si-unit raw value, constrained to abs range but otherwise unfiltered
     float pc() { return map(_si.val(), _opmin, _opmax, 0.0, 100.0); }  // get value as a percent of the operational range
     float native() { return _native.val(); }  // This is a native unit value, constrained to abs range but otherwise unfiltered
+    float* native_ptr() { return _native.ptr(); }
     float absmin_native() { return _native.min(); }
     float absmax_native() { return _native.max(); }
     float absmin() { return _si.min(); }
@@ -428,81 +411,68 @@ class Transducer : public Device {
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
 
 // Sensor class notes:  Some definitions (240522 soren)
-// If a transducer is a sensor usually it needs some filtering. So now we have to distinuish raw values from processed ones
-//   FILTERING:  here are the possibilities:
-//     "raw": this value is as read from the sensor. Usually we deal in native units when using raw values but not necessarily, a raw value can be in si units, for example
-//     "filt": t
-//   Param Transducer::_native  is in whatever units are "native" to the machine, usually adc counts or us.
+// Sensors typically apply filtering to the incoming values read. Postprocessing is done to the _si Param value accessible externally by val()
+//   the values are described below. all this is inherited from Transducer, just with filtering applied:
+//     "_native": this unfiltered value is in units direct from the sensor/driver, constrained to abs range. get externally using native()
+//     "_raw": this is the same unfiltered value just converted to the default si units. get externally using raw()
+//     "_si": this is the value after filtering is applied, in default si units, externally accessible using val()
+//     "pc()": the filtered value is available scaled as a percentage of the operatioal range. It's not stored, but accessible using pc()
 class Sensor : public Transducer {
   private:
     std::string _long_name = "Unknown sensor";
     std::string _short_name = "sensor";
   protected:
     float _ema_alpha = 0.1;
-    Param _val_filt;
-    bool _should_filter = true;
+    bool _first_filter_run = false;
 
     void calculate_ema() { // Exponential Moving Average
-        if (_should_filter) {
-            float cur_val = static_cast<float>(this->_si.val());
-            float filt_val = static_cast<float>(_val_filt.val());
-            _val_filt.set(ema_filt(cur_val, filt_val, _ema_alpha));
-        } else {
-            _val_filt.set(this->_si.val());
-            // _should_filter = true;  // soren: I commented this out, wouldn't this always turn on filtering?
+        if (this->_first_filter_run) {
+            this->set_si(this->_si_raw);
+            this->_first_filter_run = false;  // soren: I commented this out, wouldn't this always turn on filtering?
         }
+        else this->set_si(ema_filt(this->_si_raw, this->_si.val(), _ema_alpha));
     }
-
-    virtual void set_val_from_touch() {
-        this->_val_filt.set(this->_si.val());
+    virtual void set_val_from_touch() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
+        this->set_si(this->_si.val());                  // wtf is this supposed to do?
+        // set_si(_si.val + touch.fdelta);  // i would think this should look something like this (needs some coding on the other side to support)
     }
     virtual void set_val_from_pot() {
-        this->_si.set(this->_pot->mapToRange(this->_opmin, this->_opmax));
-        this->_raw = this->_si.val();  // Pot will spoof both raw and filtered si values, but not any native values
-        this->_val_filt.set(this->_si.val()); // don't filter the value we get from the pot, the pot output is already filtered
+        this->set_si(_pot->mapToRange(this->_opmin, this->_opmax));  // as currently written, the pot will spoof both si and native raw values in addition to the filtered si value.  do we want this?
     }
-
-    virtual void update_si_limits() { _val_filt.set_limits(this->_si.min_shptr(), this->_si.max_shptr()); } // make sure our filtered value has the same limits as our regular value
-    virtual void update_source() { if (this->_source == src::PIN) _should_filter = false; } // if we just switched to pin input, the old filtered value is not valid
-
+    // virtual void update_si_limits() { _val_filt.set_limits(this->_si.min_shptr(), this->_si.max_shptr()); } // make sure our filtered value has the same limits as our regular value
+    virtual void update_source() { if (this->_source == src::PIN) this->_first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
   public:
-    Sensor(uint8_t pin) : Transducer<float, float>(pin) {}  
-    void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
-    float ema_alpha() { return _ema_alpha; }
-    float filt() { return _val_filt.val(); }
-    float* filt_ptr() { return _val_filt.ptr(); }
-    std::shared_ptr<float> filt_shptr() { return _val_filt.shptr(); } // NOTE: should just be public?
+    Sensor(uint8_t pin) : Transducer(pin) {}  
+    void set_ema_alpha(float arg_alpha) { this->_ema_alpha = arg_alpha; }
+    float ema_alpha() { return this->_ema_alpha; }
 };
 
 // Base class for sensors which communicate using i2c.
 // NOTE: this is a strange type of Sensor, it's not really a Transducer but it does do filtering. maybe we should rethink the hierarchy a little?
 //       I think we can move Param to common.h and add a class ExponentialMovingAverage there as well that just has the ema functionality, then make
 //       I2CSensor a child of -> Device, ExponentialMovingAverage and not a Sensor at all.
-class I2CSensor : public Sensor<float,float> {
+class I2CSensor : public Sensor {
   protected:
     bool _detected = false;
     I2C* _i2c;
-    float _opmin, _opmax, _margin;
     // implement in child classes using the appropriate i2c sensor
     virtual float read_sensor() = 0;
     virtual void set_val_from_pin() {
         this->set_native(read_sensor());
         calculate_ema();  // Sensor EMA filter
     }
-
-    virtual void set_val_from_pot() {
-        this->_si.set(this->_pot->mapToRange(this->_si.min(), this->_si.max()));
-        // this->_val_raw = this->_native.val();
-        this->_val_filt.set(this->_si.val()); // don't filter the value we get from the pot, the pot output is already filtered
-    }
-
-    virtual void update_si_limits() {
-        _native.set_limits(_si.min_shptr(), _si.max_shptr());  // Our two i2c sensors (airvelo & MAP) don't reveal low-level readings, so we only get si units
-        _val_filt.set_limits(_si.min_shptr(), _si.max_shptr());
-    }
+    // virtual void set_val_from_pot() {
+    //     this->_si.set(this->_pot->mapToRange(this->_si.min(), this->_si.max()));
+    //     // this->_val_raw = this->_native.val();
+    //     this->set_si(this->_si.val()); // don't filter the value we get from the pot, the pot output is already filtered
+    // }
+    // virtual void update_si_limits() {
+    //     _native.set_limits(_si.min_shptr(), _si.max_shptr());  // Our two i2c sensors (airvelo & MAP) don't reveal low-level readings, so we only get si units
+    //     _val_filt.set_limits(_si.min_shptr(), _si.max_shptr());
+    // }
   public:
     uint8_t addr;
-    I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor<float,float>(-1), _i2c(i2c_arg), addr(i2c_address_arg) { set_can_source(src::PIN, true); }
+    I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor(-1), _i2c(i2c_arg), addr(i2c_address_arg) { set_can_source(src::PIN, true); }
     I2CSensor() = delete;
     std::string _long_name = "Unknown I2C device";
     std::string _short_name = "i2cdev";
@@ -510,20 +480,11 @@ class I2CSensor : public Sensor<float,float> {
         _detected = _i2c->detected_by_addr(addr);
         set_source(src::PIN); // we aren't actually reading from a pin but the point is the same...
     }
-    float raw() { return this->_si.val(); }
-    float filt() { return this->_val_filt.val(); }
-    float absmin() { return this->_si.min(); }
-    float absmax() { return this->_si.max(); }
-    float opmin() { return this->_opmin; }
-    float opmax() { return this->_opmax; }
-    float margin() { return this->_margin; }
 };
 
 // AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
 class AirVeloSensor : public I2CSensor {
   protected:
-    // NOTE: would all AirVeloSensors have the same address? how does this get determined?
-    float _initial_airvelo_mph = 0.0, _absmin, _absmax;
     FS3000 _sensor;
     float goodreading = NAN;
     int64_t airvelo_read_period_us = 35000;
@@ -538,14 +499,10 @@ class AirVeloSensor : public I2CSensor {
     static constexpr uint8_t addr = 0x28;
     sens senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        _opmin = _absmin = 0.0;
-        _absmax = 33.55; // Sensor maximum mph reading.  Our sensor mounted in 2-in ID intake tube
-        _opmax = 28.5;  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
-        _ema_alpha = 0.2;
-        _mfactor = 1.0;
-        _boffset = 0.0;
-        set_si_limits(_absmin, _absmax);
-        set_si(_initial_airvelo_mph);
+        set_si(0.0);  // initialize value
+        set_abslimits(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
+        set_oplimits(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
+        set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         airveloTimer.set(airvelo_read_period_us);
     }
@@ -559,68 +516,56 @@ class AirVeloSensor : public I2CSensor {
         if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
     }
     void setup() {
-        printf("%s..", this->_long_name.c_str());
+        Serial.printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
-        printf(" %sdetected", _detected ? "" : "not ");
+        Serial.printf(" %sdetected", _detected ? "" : "not ");
         if (_detected) {
-            if (_sensor.begin() == false) {
+            if (!_sensor.begin()) {
                 printf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
                 set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
-            } else {
+            }
+            else {
                 _sensor.setRange(AIRFLOW_RANGE_15_MPS);
                 printf (" and responding properly\n");
             }
-        } else {
+        }
+        else {
             printf("\n");
             set_source(src::UNDEF); // don't even have a device at all...
         }
     }
-    // Getter functions
-    float* opmin_ptr() { return &_opmin; }
-    float* opmax_ptr() { return &_opmax; }
-    float* absmax_ptr() { return _si.max_ptr(); }
-    std::shared_ptr<float> absmax_shptr() { return _si.max_shptr(); }
 };
 
 // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
 class MAPSensor : public I2CSensor {
   protected:
-    // NOTE: would all MAPSensors have the same address? how does this get determined?
-    float _absmax, _absmin, _initial_atm = 1.00;  // 1 atm = 14.6959 psi
-    Timer map_read_timer;
-    uint32_t map_read_timeout = 100000, map_retry_timeout = 10000;
-    float goodreading = NAN;
     SparkFun_MicroPressure _sensor;
+    float goodreading = NAN;
+    Timer mapreadTimer;
+    uint32_t mapread_timeout = 100000, mapretry_timeout = 10000;
     virtual float read_sensor() {
         if (!_i2c->detected(i2c_map)) return NAN;
         else if (_i2c->not_my_turn(i2c_map)) return goodreading;
-        else if (map_read_timer.expired()) {
+        else if (mapreadTimer.expired()) {
             float temp = _sensor.readPressure(ATM, true);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
             if (!std::isnan(temp)) {
                 goodreading = temp;
-                map_read_timer.set(map_read_timeout);
+                mapreadTimer.set(mapread_timeout);
             }
-            else map_read_timer.set(map_retry_timeout);
-            // Serial.printf("av:%f\n", goodreading);
-            // this->_val_raw = this->si_val();  // (float)goodreading; // note, this returns a float from 0-33.55 for the FS3000-1015             
+            else mapreadTimer.set(mapretry_timeout);  // Serial.printf("av:%f\n", goodreading);
         }
         return goodreading;
     }
   public:
-    static constexpr uint8_t addr = 0x18;
+    static constexpr uint8_t addr = 0x18;  // NOTE: would all MAPSensors have the same address?  ANS: yes by default, or an alternate fixed addr can be hardware-selected by hooking a pin low or something
     sens senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        _absmin = 0.06;  // Sensor min
-        _absmax = 2.46;  // Sensor max
-        _opmin = 0.68;  // Typical low map for a car is 10.8 psi = 22 inHg, 1 psi = 0.068 atm
-        _opmax = 1.02;
-        _ema_alpha = 0.2;
-        _mfactor = 1.0;
-        _boffset = 0.0;
-        set_si_limits(_absmin, _absmax);
-        set_si(_initial_atm);
+        set_si(1.0);  // initialize value
+        set_abslimits(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
+        set_oplimits(0.68, 1.02);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
+        set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
-        map_read_timer.set(map_read_timeout);
+        mapreadTimer.set(mapread_timeout);
     }
     MAPSensor() = delete;
     std::string _long_name = "Manifold Air Pressure sensor";
@@ -632,29 +577,21 @@ class MAPSensor : public I2CSensor {
         if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
     }
     void setup() {
-        printf("%s..", this->_long_name.c_str());
+        Serial.printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
-        printf(" %sdetected", _detected ? "" : "not ");
+        Serial.printf(" %sdetected", _detected ? "" : "not ");
         if (_detected) {
-            if (_sensor.begin() == false) {
-                printf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
+            if (!_sensor.begin()) {
+                Serial.printf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
                 set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
-            } else {
-                printf(" and reading %f atm\n", _sensor.readPressure(ATM));
-                // printf("  Sensor responding properly\n");
             }
-        } else {
-            printf("\n");
+            else Serial.printf(" and reading %f atm\n", _sensor.readPressure(ATM));
+        }
+        else {
+            Serial.printf("\n");
             set_source(src::UNDEF); // don't even have a device at all...
         }
     }
-    // Getter functions
-    float* opmin_ptr() { return &_opmin; }
-    float* opmax_ptr() { return &_opmax; }
-    float* absmin_ptr() { return _si.min_ptr(); }
-    float* absmax_ptr() { return _si.max_ptr(); }
-    std::shared_ptr<float> absmin_shptr() { return _si.min_shptr(); }
-    std::shared_ptr<float> absmax_shptr() { return _si.max_shptr(); }
 };
 
 // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
