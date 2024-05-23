@@ -54,9 +54,8 @@ class Potentiometer {
             }
         }
     }
-    template<typename VAL_T>
-    VAL_T mapToRange(VAL_T argmin, VAL_T argmax) {
-        return static_cast<VAL_T>(map(_filt, _opmin, _opmax, static_cast<float>(argmin), static_cast<float>(argmax)));
+    float mapToRange(float argmin, float argmax) {
+        return map(_filt, _opmin, _opmax, argmin, argmax);
     }
     float filt() { return _filt; }
     float raw() { return _raw; }
