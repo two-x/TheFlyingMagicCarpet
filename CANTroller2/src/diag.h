@@ -92,8 +92,8 @@ class DiagRuntime {
             err_sens[LOST][_Ignition] = (!ignition->signal && !tach->engine_stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
             SpeedoFailure();
             TachFailure();
-            err_sens[RANGE][_Speedo] = (speedo->mph() < speedo->min_human() || speedo->mph() > speedo->max_human());;
-            err_sens[RANGE][_Tach] = (tach->filt() < tach->min_human() || tach->filt() > tach->max_human());
+            err_sens[RANGE][_Speedo] = (speedo->filt() < speedo->opmin() || speedo->filt() > speedo->opmax());;
+            err_sens[RANGE][_Tach] = (tach->filt() < tach->opmin() || tach->filt() > tach->opmax());
             BrakeMotorFailure();
 
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LOWPOWER));

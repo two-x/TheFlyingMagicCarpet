@@ -642,7 +642,7 @@ class Display {
         if (datapage == PG_RUN) {
             draw_dynamic(9, brkpos.filt(), brkpos.opmin(), brkpos.opmax());
             draw_dynamic(10, mulebatt.filt(), mulebatt.opmin(), mulebatt.opmax());
-            draw_dynamic(11, pot.val(), pot.min(), pot.max());
+            draw_dynamic(11, pot.filt(), pot.opmin(), pot.opmax());
             draw_dynamic(12, airvelo.filt(), airvelo.opmin(), airvelo.opmax());
             draw_dynamic(13, mapsens.filt(), mapsens.opmin(), mapsens.opmax());
             draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
@@ -664,11 +664,11 @@ class Display {
             draw_dynamic(19, hotrc.deadband_us, 0, 100);
         }
         else if (datapage == PG_SENS) {
-            draw_dynamic(9, pressure.raw_adc(), pressure.opmin_adc(), pressure.opmax_adc());
-            draw_dynamic(10, brkpos.raw_adc(), brkpos.opmin_adc(), brkpos.opmax_adc());
-            draw_dynamic(11, tach.raw_us()/1000, tach.opmin_us()/1000, tach.opmax_us()/1000);
-            draw_dynamic(12, speedo.raw_us()/1000, speedo.opmin_us()/1000, speedo.opmax_us()/1000);
-            draw_dynamic(13, pot.adc_raw, pot.adc_min, pot.adc_max);
+            draw_dynamic(9, pressure.raw_native(), pressure.opmin_native(), pressure.opmax_native());
+            draw_dynamic(10, brkpos.raw_native(), brkpos.opmin_native(), brkpos.opmax_native());
+            draw_dynamic(11, tach.raw_native()/1000, tach.opmin_native()/1000, tach.opmax_native()/1000);
+            draw_dynamic(12, speedo.raw_native()/1000, speedo.opmin_native()/1000, speedo.opmax_native()/1000);
+            draw_dynamic(13, pot.raw_native(), pot.opmin_native(), pot.opmax_native());
             draw_dynamic(14, airvelo.opmax(), 0.0f, airvelo.absmax());
             draw_dynamic(15, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
             draw_dynamic(16, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
