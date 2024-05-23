@@ -540,14 +540,7 @@ class AirVeloSensor : public I2CSensor {
   public:
     static constexpr uint8_t addr = 0x28;
     sens senstype = sens::airvelo;
-    AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        set_si(0.0);  // initialize value
-        set_abslimits(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
-        set_oplimits(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
-        set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
-        set_can_source(src::POT, true);
-        airveloTimer.set(airvelo_read_period_us);
-    }
+    AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {}
     AirVeloSensor() = delete;
     std::string _long_name = "Air velocity sensor";
     std::string _short_name = "airvel";
@@ -560,6 +553,12 @@ class AirVeloSensor : public I2CSensor {
     void setup() {
         // Serial.printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
+        set_si(0.0);  // initialize value
+        set_abslimits(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
+        set_oplimits(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
+        set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
+        set_can_source(src::POT, true);
+        airveloTimer.set(airvelo_read_period_us);
         Serial.printf("  airvelo sensor %sdetected", _detected ? "" : "not ");
         if (_detected) {
             if (!_sensor.begin()) {
@@ -601,14 +600,7 @@ class MAPSensor : public I2CSensor {
   public:
     static constexpr uint8_t addr = 0x18;  // NOTE: would all MAPSensors have the same address?  ANS: yes by default, or an alternate fixed addr can be hardware-selected by hooking a pin low or something
     sens senstype = sens::mapsens;
-    MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        set_si(1.0);  // initialize value
-        set_abslimits(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
-        set_oplimits(0.68, 1.02);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
-        set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
-        set_can_source(src::POT, true);
-        mapreadTimer.set(mapread_timeout);
-    }
+    MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {}
     MAPSensor() = delete;
     std::string _long_name = "Manifold Air Pressure sensor";
     std::string _short_name = "map";
@@ -621,6 +613,13 @@ class MAPSensor : public I2CSensor {
     void setup() {
         // Serial.printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
+        set_si(1.0);  // initialize value
+        set_abslimits(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
+        set_oplimits(0.68, 1.02);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
+        set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
+        set_can_source(src::POT, true);
+        mapreadTimer.set(mapread_timeout);
+
         Serial.printf("  map sensor %sdetected", _detected ? "" : "not ");
         if (_detected) {
             if (!_sensor.begin()) {
@@ -665,17 +664,16 @@ class AnalogSensor : public Sensor {
 class CarBattery : public AnalogSensor {
   public:
     sens senstype = sens::mulebatt;
-    CarBattery(uint8_t arg_pin) : AnalogSensor(arg_pin) {
+    CarBattery(uint8_t arg_pin) : AnalogSensor(arg_pin) {}
+    CarBattery() = delete;
+    void setup() {  // printf("%s..\n", this->_long_name.c_str());
+        AnalogSensor::setup();
         set_si(12.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
         set_abslimits(0.0, 16.0);  // set abs range. dictated in this case by the max voltage a battery charger might output
         set_oplimits(9.8, 13.8);  // set op range. dictated by the range of voltage of a healthy lead-acid battery across its discharge curve
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         _mfactor = _si.max() / adcrange_adc;  // replace with a calibrated value based on measurements, and/or adjust and optimize voltage divider
-    }
-    CarBattery() = delete;
-    void setup() {  // printf("%s..\n", this->_long_name.c_str());
-        AnalogSensor::setup();
     }
     void set_val_from_touch() { set_si(12.0); }  // what exactly is going on here? maybe an attempt to prevent always showing battery errors on dev boards?
     std::string _long_name = "Vehicle battery voltage";
@@ -696,22 +694,25 @@ class PressureSensor : public AnalogSensor {
     std::string _short_name = "presur";
     std::string _native_units_name = "adc";
     std::string _si_units_name = "psi";
-    PressureSensor(uint8_t arg_pin) : AnalogSensor(arg_pin) {
-        // the sensor output voltage spec range is 0.5-4.5 V to indicate 0-1000 psi.
-        // Our ADC top is just 3.3V tho, so we can sense up to 695 psi (calculated) at our max adc
-        // calculated using spec values:
-        //   sensor gives:  1000 psi / (4.5 V - 0.5 V) = 250 psi/V   (or 0.004 V/psi)
-        //   our adc:  4096 adc / 3.3 V = 1241 adc/V   (or 0.000806 V/adc)
-        //   resulting slope:  250 psi/V * 0.000806 V/adc = 0.2 psi/adc  (or 5 adc/psi)
-        //   zero psi point:  0.5 V * 1241 adc/V = 621 adc
-        //   fullscale reading:  0.2 psi/adc * (4095 adc - 621 adc) = 695 psi
-        // math to convert (based on spec values):
-        //   psi = 0.2 * (adc - 621)  ->  psi = 0.2 * adc - 124  ->  adc = 5 * psi + 621
+    PressureSensor(uint8_t arg_pin) : AnalogSensor(arg_pin) {}
+    // the sensor output voltage spec range is 0.5-4.5 V to indicate 0-1000 psi.
+    // Our ADC top is just 3.3V tho, so we can sense up to 695 psi (calculated) at our max adc
+    // calculated using spec values:
+    //   sensor gives:  1000 psi / (4.5 V - 0.5 V) = 250 psi/V   (or 0.004 V/psi)
+    //   our adc:  4096 adc / 3.3 V = 1241 adc/V   (or 0.000806 V/adc)
+    //   resulting slope:  250 psi/V * 0.000806 V/adc = 0.2 psi/adc  (or 5 adc/psi)
+    //   zero psi point:  0.5 V * 1241 adc/V = 621 adc
+    //   fullscale reading:  0.2 psi/adc * (4095 adc - 621 adc) = 695 psi
+    // math to convert (based on spec values):
+    //   psi = 0.2 * (adc - 621)  ->  psi = 0.2 * adc - 124  ->  adc = 5 * psi + 621
 
-        // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-        // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
-        // _absmin_adc = 0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-        // _absmax_adc = adcrange_adc; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+    // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+    // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+    // _absmin_adc = 0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+    // _absmax_adc = adcrange_adc; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+    PressureSensor() = delete;
+    void setup() {
+        AnalogSensor::setup();
         set_oplimits_native(658, 2080);
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - opmin_native()) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
         float b = -1.0 * opmin_native() * m;  // -658 adc * 0.2 psi/adc = -131.6 psi
@@ -726,10 +727,6 @@ class PressureSensor : public AnalogSensor {
         set_native(_opmin_native);
         set_can_source(src::POT, true);            
     }
-    PressureSensor() = delete;
-    void setup() {
-        AnalogSensor::setup();
-    }
     bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
     float zeropoint() { return _zeropoint; }
 };
@@ -737,10 +734,6 @@ class PressureSensor : public AnalogSensor {
 // for measuring brake position (TODO which position? pad? pedal?)
 // Extends AnalogSensor for handling analog pin reading and conversion.
 class BrakePositionSensor : public AnalogSensor {
-  protected:
-    // TODO: add description
-    // std::shared_ptr<float> _zeropoint;
-    // void set_val_from_touch() { _val_filt.set((opmin_retract_in + *_zeropoint) / 2); } // To keep brake position in legal range during simulation
   public:
     sens senstype = sens::brkpos;
     float _parkpos, _zeropoint;  // in inches
@@ -749,7 +742,11 @@ class BrakePositionSensor : public AnalogSensor {
     std::string _native_units_name = "adc";
     std::string _si_units_name = "in";
 
-    BrakePositionSensor(uint8_t arg_pin) : AnalogSensor(arg_pin) {
+    BrakePositionSensor(uint8_t arg_pin) : AnalogSensor(arg_pin) {}
+    BrakePositionSensor() = delete;
+    void setup() {
+        // printf("%s..\n", this->_long_name.c_str());
+        AnalogSensor::setup();
         conversion_method = AbsLimMap;
         #if BrakeThomson
             set_abslim(0.335, 8.3);  // TUNED 230602
@@ -780,11 +777,6 @@ class BrakePositionSensor : public AnalogSensor {
         set_native_limits(_absmin_adc, _absmax_adc);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);
-    }
-    BrakePositionSensor() = delete;
-    void setup() {
-        // printf("%s..\n", this->_long_name.c_str());
-        AnalogSensor::setup();
     }
     bool parked() { return (std::abs(val() - _parkpos) <= _margin); }  // is tha brake motor parked?
     bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
