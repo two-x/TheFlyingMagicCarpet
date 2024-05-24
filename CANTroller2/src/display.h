@@ -63,7 +63,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "%",    "%",    },  // PG_RUN
     { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, "us",   "us",   },  // PG_JOY
-    { "adc",  "adc",  "ms",   "ms",   "adc",  "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
+    { "adc",  "adc",  "Hz",   "Hz",   "adc",  "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    "%",    degree, degree, degreF, degreF, },  // PG_IDLE
     { degreF, "%",    ______, ______, ______, b1nary, scroll, b1nary, b1nary, b1nary, scroll, },  // PG_MOTR
@@ -632,19 +632,19 @@ class Display {
         // if (!disp_values_dirty) return;
         float drange;
         draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        draw_dynamic(2, speedo.filt(), 0.0f, speedo.redline_mph(), gas.cruisepid.target());
-        draw_dynamic(3, tach.filt(), 0.0f, tach.opmax(), gas.pid.target());
+        draw_dynamic(2, speedo.val(), 0.0f, speedo.opmax(), gas.cruisepid.target());
+        draw_dynamic(3, tach.val(), 0.0f, tach.opmax(), gas.pid.target());
         draw_dynamic(4, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], gas.throttle_target_pc);
-        draw_dynamic(5, pressure.filt(), pressure.opmin(), pressure.opmax(), brake.pids[PressureFB].target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
+        draw_dynamic(5, pressure.val(), pressure.opmin(), pressure.opmax(), brake.pids[PressureFB].target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
         draw_dynamic(6, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
         draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
         draw_dynamic(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
         if (datapage == PG_RUN) {
-            draw_dynamic(9, brkpos.filt(), brkpos.opmin(), brkpos.opmax());
-            draw_dynamic(10, mulebatt.filt(), mulebatt.opmin(), mulebatt.opmax());
-            draw_dynamic(11, pot.filt(), pot.opmin(), pot.opmax());
-            draw_dynamic(12, airvelo.filt(), airvelo.opmin(), airvelo.opmax());
-            draw_dynamic(13, mapsens.filt(), mapsens.opmin(), mapsens.opmax());
+            draw_dynamic(9, brkpos.val(), brkpos.opmin(), brkpos.opmax());
+            draw_dynamic(10, mulebatt.val(), mulebatt.opmin(), mulebatt.opmax());
+            draw_dynamic(11, pot.val(), pot.opmin(), pot.opmax());
+            draw_dynamic(12, airvelo.val(), airvelo.opmin(), airvelo.opmax());
+            draw_dynamic(13, mapsens.val(), mapsens.opmin(), mapsens.opmax());
             draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
             draw_asciiname(15, motormodecard[gas.motormode]);
             draw_asciiname(16, motormodecard[brake.motormode]);
@@ -664,11 +664,11 @@ class Display {
             draw_dynamic(19, hotrc.deadband_us, 0, 100);
         }
         else if (datapage == PG_SENS) {
-            draw_dynamic(9, pressure.raw_native(), pressure.opmin_native(), pressure.opmax_native());
-            draw_dynamic(10, brkpos.raw_native(), brkpos.opmin_native(), brkpos.opmax_native());
-            draw_dynamic(11, tach.raw_native()/1000, tach.opmin_native()/1000, tach.opmax_native()/1000);
-            draw_dynamic(12, speedo.raw_native()/1000, speedo.opmin_native()/1000, speedo.opmax_native()/1000);
-            draw_dynamic(13, pot.raw_native(), pot.opmin_native(), pot.opmax_native());
+            draw_dynamic(9, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
+            draw_dynamic(10, brkpos.native(), brkpos.opmin_native(), brkpos.opmax_native());
+            draw_dynamic(11, tach.native(), tach.opmin_native(), tach.opmax_native());
+            draw_dynamic(12, speedo.native(), speedo.opmin_native(), speedo.opmax_native());
+            draw_dynamic(13, pot.native(), pot.opmin_native(), pot.opmax_native());
             draw_dynamic(14, airvelo.opmax(), 0.0f, airvelo.absmax());
             draw_dynamic(15, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
             draw_dynamic(16, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
@@ -717,7 +717,7 @@ class Display {
             drange = brake.us[ABSMIN]-brake.us[ABSMAX];
             draw_asciiname(9, motormodecard[brake.motormode]);
             draw_asciiname(10, brakefeedbackcard[brake.feedback]);
-            draw_dynamic(11, brkpos.filt(), brkpos.opmin(), brkpos.opmax(), brake.pids[_BrakePosn].target());
+            draw_dynamic(11, brkpos.val(), brkpos.opmin(), brkpos.opmax(), brake.pids[_BrakePosn].target());
             draw_dynamic(12, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
             draw_dynamic(13, brake.target[PressureFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
             draw_dynamic(14, brake.target[PositionFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());

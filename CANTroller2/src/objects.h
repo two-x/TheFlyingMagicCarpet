@@ -119,8 +119,8 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
     static float maf_map_last;
     static float maf_velo_last;
     float temp = _ambient;
-    float new_velo = airvelo.human();
-    float new_map = mapsens.human();
+    float new_velo = airvelo.val();
+    float new_map = mapsens.val();
     if (std::isnan(_ambient)) {
         if (new_velo == maf_velo_last && new_map == maf_map_last) return maf_gps;  // if no new sensor readings, don't recalculate the same value
         temp = tempsens.val(loc::AMBIENT);
@@ -326,7 +326,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     FuelPump(int _pin) : pin(_pin) {}
     void update() {
         if (!fuelpump_supported || !captouch) return;
-        float tachnow = tach.filt();
+        float tachnow = tach.val();
         pump_last = status;
         if (starter.motor || (ignition.signal && (tachnow >= turnon_rpm))) {
             volts = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], on_min_v, on_max_v);

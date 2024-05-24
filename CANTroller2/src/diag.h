@@ -83,17 +83,17 @@ class DiagRuntime {
             err_sens[RANGE][_BrakeMotor] = (brake->pc[OUT] < brake->pc[OPMIN] || brake->pc[OUT] > brake->pc[OPMAX]);
             err_sens[RANGE][_GasServo] = (gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
             err_sens[RANGE][_BrakeMotor] = (steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
-            err_sens[RANGE][_BrakePosn] = (brkpos->filt() < brkpos->opmin() || brkpos->filt() > brkpos->opmax());
+            err_sens[RANGE][_BrakePosn] = (brkpos->val() < brkpos->opmin() || brkpos->val() > brkpos->opmax());
             err_sens[LOST][_BrakePosn] = (brkpos->raw() < err_margin_adc);
-            err_sens[RANGE][_BrakePres] = (pressure->filt() < pressure->opmin() || pressure->filt() > pressure->opmax());
+            err_sens[RANGE][_BrakePres] = (pressure->val() < pressure->opmin() || pressure->val() > pressure->opmax());
             err_sens[LOST][_BrakePres] = (pressure->raw() < err_margin_adc);
-            err_sens[RANGE][_MuleBatt] = (mulebatt->filt() < mulebatt->opmin() || mulebatt->filt() > mulebatt->opmax());
+            err_sens[RANGE][_MuleBatt] = (mulebatt->val() < mulebatt->opmin() || mulebatt->val() > mulebatt->opmax());
             HotRCFailure();
             err_sens[LOST][_Ignition] = (!ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
             SpeedoFailure();
             TachFailure();
-            err_sens[RANGE][_Speedo] = (speedo->filt() < speedo->opmin() || speedo->filt() > speedo->opmax());;
-            err_sens[RANGE][_Tach] = (tach->filt() < tach->opmin() || tach->filt() > tach->opmax());
+            err_sens[RANGE][_Speedo] = (speedo->val() < speedo->opmin() || speedo->val() > speedo->opmax());;
+            err_sens[RANGE][_Tach] = (tach->val() < tach->opmin() || tach->val() > tach->opmax());
             BrakeMotorFailure();
 
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LOWPOWER));
@@ -176,14 +176,14 @@ class DiagRuntime {
         if (runmode == STANDBY) {  // || runmode == HOLD  // check that the speed is zero when stopped
             // if (gunning_last) speedoTimer.reset();       // if we just stopped driving, allow time for car to stop
             // else if (speedoTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
-            fail = (baseline_speed > speedo->margin_mph());  // when stopped the speedo reading should be zero, otherwise fail
-            baseline_speed = speedo->filt();         // store the speed value when we are stopped
+            fail = (baseline_speed > speedo->margin());  // when stopped the speedo reading should be zero, otherwise fail
+            baseline_speed = speedo->val();         // store the speed value when we are stopped
             // }
         }
         gunning_it = (gas->pc[OUT] > 20.0 && (runmode == FLY || runmode == CRUISE));
         if (gunning_it) {                                                             // if we're attempting to drive
             if (!gunning_last) speedoTimer.reset();                     // delay our speed comparison so car can accelerate
-            else if (speedoTimer.expired()) fail = (speedo->filt() - baseline_speed < speedo->margin_mph());  // the car should be moving by now
+            else if (speedoTimer.expired()) fail = (speedo->val() - baseline_speed < speedo->margin());  // the car should be moving by now
         }
         gunning_last = gunning_it;
         err_sens[LOST][_Speedo] = fail;
@@ -196,13 +196,13 @@ class DiagRuntime {
             // if (running_last) tachTimer.reset();       // if we just stopped driving, allow time for car to stop
             // else if (tachTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
             fail = (baseline_rpm > tach->margin());  // when stopped the speedo reading should be zero, otherwise fail
-            baseline_rpm = tach->filt();         // store the speed value when we are stopped
+            baseline_rpm = tach->val();         // store the speed value when we are stopped
             // }
         }
         running_it = (gas->pc[OUT] > 20.0 && (runmode == FLY || runmode == CRUISE));
         if (running_it) {                                               // if we're attempting to drive
             if (!running_last) tachTimer.reset();                     // delay our rpm comparison so car can respond
-            else if (tachTimer.expired()) fail = (tach->filt() - baseline_rpm < tach->margin());  // the car should be moving by now
+            else if (tachTimer.expired()) fail = (tach->val() - baseline_rpm < tach->margin());  // the car should be moving by now
         }
         running_last = running_it;
         err_sens[LOST][_Tach] =  fail;
@@ -228,15 +228,15 @@ class DiagRuntime {
             tel[dic][_GasServo][index] = gas->pc[OUT];
             tel[dic][_BrakeMotor][index] = brake->pc[OUT];
             tel[dic][_SteerMotor][index] = steer->pc[OUT];
-            tel[dic][_BrakePres][index] = pressure->filt();
-            tel[dic][_BrakePosn][index] = brkpos->filt();
-            tel[dic][_Speedo][index] = speedo->filt();
-            tel[dic][_Tach][index] = tach->filt();
+            tel[dic][_BrakePres][index] = pressure->val();
+            tel[dic][_BrakePosn][index] = brkpos->val();
+            tel[dic][_Speedo][index] = speedo->val();
+            tel[dic][_Tach][index] = tach->val();
             // tel[dic][_HotRCHorz][index] = hotrc->pc[HORZ][FILT];
             // tel[dic][_HotRCVert][index] = hotrc->pc[VERT][FILT];
-            // tel[dic][_MuleBatt][index] = mulebatt->filt();
-            // tel[dic][_AirVelo][index] = airvelo->filt(); 
-            // tel[dic][_MAP][index] = mapsens->filt();
+            // tel[dic][_MuleBatt][index] = mulebatt->val();
+            // tel[dic][_AirVelo][index] = airvelo->val(); 
+            // tel[dic][_MAP][index] = mapsens->val();
             // tel[dic][_MAF][index] = *maf;
             // tel[dic][_Pot][index] = pot->val();
             // bools[dic][_Ignition][index] = *ignition;

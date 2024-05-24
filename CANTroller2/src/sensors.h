@@ -261,7 +261,9 @@ class Transducer : public Device {
         if (conversion_method == AbsLimMap) xsi = map(xnative, _native.min(), _native.max(), _si.min(), _si.max());
         else if (conversion_method == OpLimMap) xsi = map(xnative, _opmin_native, _opmax_native, _opmin, _opmax);
         else if (conversion_method == LinearMath) xsi = _boffset + _mfactor * xnative; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
-        return xsi;
+        if (!std::isnan(xsi)) return xsi;
+        Serial.printf("Err: from_native unable to convert %lf (min %lf, max %lf)\n", xnative, _native.min(), _native.max());
+        return NAN;
     }
     virtual float to_native(float arg_val_si) {  // convert an absolute si value to native units
         float xsi = static_cast<float>(arg_val_si); // convert everything to floats so we don't introduce rounding errors
@@ -269,7 +271,9 @@ class Transducer : public Device {
         if (conversion_method == AbsLimMap) xnative = map(xsi, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
         else if (conversion_method == OpLimMap) xnative = map(xsi, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
         else if (conversion_method == LinearMath) xnative = (xsi - _boffset) / _mfactor;
-        return xnative;
+        if (!std::isnan(xnative)) return xnative;
+        Serial.printf("Err: to_native unable to convert %lf (min %lf, max %lf)\n", xsi, _si.min(), _si.max());
+        return NAN;
     }
     // NOTE: do we really need two values? or should this just be a single value and get converted wherever needed?
     // To hold val/min/max display values in display units (like V, mph, etc.)
@@ -295,44 +299,44 @@ class Transducer : public Device {
     // the values to define the range, and all si and native abs values will be set automatically.
     // op limits will also be reconstrained to the updated abs values, however if you have a specific op range then
     // call one of set_oplim() or set_oplim_native() separately as well (which works similarly).
-    void set_abslim(float argmin=NAN, float argmax=NAN, bool calc_native=true) {  // these are absmin and absmax limits. values where NAN is passed in won't get set
-        if (std::isnan(argmin)) argmin = _si.min();  // to handle autoconversions where _dir == REV
-        if (std::isnan(argmax)) argmax = _si.max();  // to handle autoconversions where _dir == REV
-        _si.set_limits(argmin, argmax);
-        if ((conversion_method == LinearMath) && calc_native) {  // if we know our linear relationship we can auto calculate the native limits
-            _native.set_limits(to_native(_si.min()), to_native(_si.max()));
+    void set_abslim(float argmin=NAN, float argmax=NAN, bool calc_native=true) {  // these are absmin and absmax limits. values where NAN is passed in won't be used
+        if (std::isnan(argmin)) argmin = _si.min();                               // use incumbent min value if none was passed in
+        if (std::isnan(argmax)) argmax = _si.max();                               // use incumbent max value if none was passed in
+        _si.set_limits(argmin, argmax);                                           // commit to the Param accordingly
+        if ((conversion_method == LinearMath) && calc_native) {                   // if we know our conversion formula, and not instructed to skip autocalculation...
+            _native.set_limits(to_native(_si.min()), to_native(_si.max()));       // then convert the new values and ensure si and native stay equivalent
         }
-        set_oplim();  // call just in case op limits require re-constraint if abs limits tightened up
+        set_oplim(NAN, NAN, false);                                               // just to enforce any re-constraints if needed to keep op limits inside abs limits
     }
-    void set_abslim_native(float argmin=NAN, float argmax=NAN, bool calc_si=true) {  // these are absmin and absmax limits
-        if (std::isnan(argmin)) argmin = _native.min();  // to handle autoconversions where _dir == REV
-        if (std::isnan(argmax)) argmax = _native.max();  // to handle autoconversions where _dir == REV
-        _native.set_limits(argmin, argmax);
-        if ((conversion_method == LinearMath) && calc_si) {  // if we know our linear relationship we can auto calculate the si limits
-            _si.set_limits(from_native(_native.min()), from_native(_native.max()));
+    void set_abslim_native(float argmin=NAN, float argmax=NAN, bool calc_si=true) {  // these are absmin and absmax limits. values where NAN is passed in won't be used
+        if (std::isnan(argmin)) argmin = _native.min();                              // use incumbent min value if none was passed in
+        if (std::isnan(argmax)) argmax = _native.max();                              // use incumbent max value if none was passed in
+        _native.set_limits(argmin, argmax);                                          // commit to the Param accordingly
+        if ((conversion_method == LinearMath) && calc_si) {                          // if we know our conversion formula, and not instructed to skip autocalculation...
+            _si.set_limits(from_native(_native.min()), from_native(_native.max()));  // then convert the new values and ensure si and native stay equivalent
         }
-        set_oplim_native();  // call just in case op limits require re-constraint if abs limits tightened up
+        set_oplim_native(NAN, NAN, false);                                           // just to enforce any re-constraints if needed to keep op limits inside abs limits
     }
-    void set_oplim(float argmin=NAN, float argmax=NAN, bool calc_native=true) {  // these are opmin and opmax limits. cal w/o arguments to auto-set
-        if (!std::isnan(argmin)) _opmin = argmin;
-        else if (std::isnan(_opmin)) _opmin = _si.min();
-        if (!std::isnan(argmax)) _opmax = argmax;
-        else if (std::isnan(_opmax)) _opmax = _si.max();
-        _opmin = constrain(_opmin, _si.min(), _opmax);
-        _opmax = constrain(_opmax, _opmin, _si.max());
-        if ((conversion_method == LinearMath) && calc_native) {  // if we know our linear relationship we can auto calculate the native limits
-            set_oplim_native(to_native(_opmin), to_native(_opmax), false);
+    void set_oplim(float argmin=NAN, float argmax=NAN, bool calc_native=true) {  // these are opmin and opmax limits. values where NAN is passed in won't be used
+        if (!std::isnan(argmin)) _opmin = argmin;                                // if min value was passed in then set opmin to it
+        else if (std::isnan(_opmin)) _opmin = _si.min();                         // otherwise if opmin has no value then set it to absmin
+        if (!std::isnan(argmax)) _opmax = argmax;                                // if max value was passed in then set opmax to it
+        else if (std::isnan(_opmax)) _opmax = _si.max();                         // otherwise if opmax has no value then set it to absmax
+        _opmin = constrain(_opmin, _si.min(), _opmax);                           // constrain to ensure absmin <= opmin <= opmax <= absmax
+        _opmax = constrain(_opmax, _opmin, _si.max());                           // constrain to ensure absmin <= opmin <= opmax <= absmax
+        if ((conversion_method == LinearMath) && calc_native) {                  // if we know our conversion formula, and not instructed to skip autocalculation...
+            set_oplim_native(to_native(_opmin), to_native(_opmax), false);       // then convert the new values and ensure si and native stay equivalent
         }
     }
-    void set_oplim_native(float argmin=NAN, float argmax=NAN, bool calc_si=true) {
-        if (!std::isnan(argmin)) _opmin_native = argmin;
-        else if (std::isnan(_opmin_native)) _opmin_native = _native.min();
-        if (!std::isnan(argmax)) _opmax_native = argmax;
-        else if (std::isnan(_opmax_native)) _opmax_native = _native.max();
-        _opmin_native = constrain(_opmin_native, _native.min(), _opmax_native);
-        _opmax_native = constrain(_opmax_native, _opmin_native, _native.max());
-        if ((conversion_method == LinearMath) && calc_si) {  // if we know our linear relationship we can auto calculate the native limits
-            set_oplim(from_native(_opmin_native), from_native(_opmax_native), false);
+    void set_oplim_native(float argmin=NAN, float argmax=NAN, bool calc_si=true) {     // these are opmin and opmax limits. values where NAN is passed in won't be used
+        if (!std::isnan(argmin)) _opmin_native = argmin;                               // if min value was passed in then set opmin to it
+        else if (std::isnan(_opmin_native)) _opmin_native = _native.min();             // otherwise if opmin has no value then set it to absmin
+        if (!std::isnan(argmax)) _opmax_native = argmax;                               // if max value was passed in then set opmax to it
+        else if (std::isnan(_opmax_native)) _opmax_native = _native.max();             // otherwise if opmax has no value then set it to absmax
+        _opmin_native = constrain(_opmin_native, _native.min(), _opmax_native);        // constrain to ensure absmin <= opmin <= opmax <= absmax
+        _opmax_native = constrain(_opmax_native, _opmin_native, _native.max());        // constrain to ensure absmin <= opmin <= opmax <= absmax
+        if ((conversion_method == LinearMath) && calc_si) {                            // if we know our conversion formula, and not instructed to skip autocalculation...
+            set_oplim(from_native(_opmin_native), from_native(_opmax_native), false);  // then convert the new values and ensure si and native stay equivalent
         }
     }
     bool set_native(float arg_val_native) {
@@ -367,6 +371,8 @@ class Transducer : public Device {
     float absmax() { return _si.max(); }
     float opmin() { return _opmin; }
     float opmax() { return _opmax; }
+    float* opmin_ptr() { return &_opmin; }
+    float* opmax_ptr() { return &_opmax; }
     float margin() { return _margin; }
     float raw() { return _si_raw; }  // this is the si-unit raw value, constrained to abs range but otherwise unfiltered
     float native() { return _native.val(); }  // This is a native unit value, constrained to abs range but otherwise unfiltered
@@ -589,7 +595,7 @@ class AnalogSensor : public Sensor {
     std::string _si_units_name = "";
     void setup() {
         Sensor::setup();
-        this->set_pin(this->_pin, INPUT);
+        set_pin(this->_pin, INPUT);
         this->set_can_source(src::PIN, true);
         this->set_source(src::PIN);
         set_abslim_native(0.0, (float)adcrange_adc);
@@ -703,7 +709,7 @@ class BrakePositionSensor : public AnalogSensor {
             set_abslim(0.95, 8.85, false);  // TUNED 240513 - actuator inches measured
             // TUNE. - opmin. Retract limit during nominal operation. Brake motor is prevented from pushing past this. (in)
             // TUNE. - opmax. Best position to park the actuator out of the way so we can use the pedal (in)  
-            set_oplim(2.0, 5.7)
+            set_oplim(2.0, 5.7);
             _zeropoint = 5.5;  // TUNE. - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
         #endif
         set_ema_alpha(0.35);
@@ -722,7 +728,7 @@ class BrakePositionSensor : public AnalogSensor {
 // class PulseSensor are hall-monitor sensors where the value is based on magnetic pulse timing of a rotational Source (eg tachometer, speedometer)
 class PulseSensor : public Sensor {
   protected:
-    volatile int64_t timestamp_last_us;  // _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
+    // volatile int64_t timestamp_last_us;  // _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
     Timer _stop_timer;
     bool _low_pulse = true, _pin_activity;
     float _freqdiv = 1.0, _idle = 600.0, _idle_cold = 750.0, _idle_hot = 500.0;  // an external ripple counter divides pulse stream frequency by this, we need to compensate
@@ -732,45 +738,45 @@ class PulseSensor : public Sensor {
     // we maintain our min and max pulse period, for each pulse sensor
     // absmax_us is the reciprocal of our native absmin value in MHz. once max_us has elapsed since the last pulse our si sets to zero
     // absmin_us is the reciprocal of our native absmax value in MHz. any pulse received within min_us of the previous pulse is ignored
-    int64_t _absmax_us, _absmin_us = 6500; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency
-    
+    float _absmax_us, _absmin_us = 6500; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency
+    volatile int64_t _absmin_us_64 = (int64_t)_absmin_us;
     // Shadows a hall sensor being triggered by a passing magnet once per pulley turn. The ISR calls
     // esp_timer_get_time() on every pulse to know the time since the previous pulse. I tested this on the bench up
     // to about 0.750 mph which is as fast as I can move the magnet with my hand, and it works.
     // Update: Janky bench test appeared to work up to 11000 rpm.
     void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
-        _isr_time_current_us = esp_timer_get_time();
-        int64_t time_us = _isr_time_current_us - _timestamp_last_us;
-        if (time_us > _absmin_us) {  // ignore spurious triggers or bounces
-            _isr_time_last_us = _isr_time_current_us;
-            _isr_us = time_us;
-            _pin_activity = !_pin_activity;
+        this->_isr_time_current_us = esp_timer_get_time();
+        int64_t time_us = this->_isr_time_current_us - this->_isr_time_last_us;
+        if (time_us > this->_absmin_us_64) {  // ignore spurious triggers or bounces
+            this->_isr_time_last_us = this->_isr_time_current_us;
+            this->_isr_us = time_us;
+            this->_pin_activity = !this->_pin_activity;
         }
     }
-    virtual void read_sensor() {
-        int32_t _isr_buf_us = static_cast<int32_t>(_isr_us);  // Copy delta value (in case another interrupt happens during handling)
+    virtual float read_sensor() {
+        int32_t _isr_buf_us = static_cast<int32_t>(this->_isr_us);  // Copy delta value (in case another interrupt happens during handling)
         int64_t now_time = esp_timer_get_time();
         float period_us = static_cast<float>(now_time - this->_isr_time_current_us);
         float new_native;
-        if (period_us <= this->_absmin_us) new_native = this->_absmax_native;  // if it's been too long since last pulse return zero
-        else if (period_us >= this->_absmax_us) new_native = this->_absmin_native;;  // if it's been too long since last pulse return zero
-        else this->new_native = 1000000.0 / this->_isr_buf_us;
-        this->set_native(new_native);
-        this->calculate_ema();
+        if (period_us <= this->_absmin_us) new_native = this->_native.max();  // if it's been too long since last pulse return zero
+        else if (period_us >= this->_absmax_us) new_native = this->_native.max();  // if it's been too long since last pulse return zero
+        else new_native = 1000000.0 / _isr_buf_us;
+        return new_native;
     }
   public:
     PulseSensor(uint8_t arg_pin, float arg_freqdiv=1.0) : Sensor(arg_pin), _freqdiv(arg_freqdiv) {}
     PulseSensor() = delete;
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // overload the normal function so we can also include us calculations 
-    void set_abslims_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
+    void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
         if ((std::abs(arg_min) <= float_zero) || (std::abs(arg_max) <= float_zero)) {
             Serial.printf("Err: pulse sensor can not have limit of 0\n");
             return;  // we can't accept 0 Hz for opmin
         }
-        Transducer::set_abslims_native(arg_min, arg_max, calc_si);
-        absmax_us = 1000000.0 / _native.min();  // also set us limits from here, converting Hz to us, and swap min/max
-        absmin_us = 1000000.0 / _native.max();  // also set us limits from here, converting Hz to us, and swap min/max
+        Transducer::set_abslim_native(arg_min, arg_max, calc_si);
+        this->_absmax_us = 1000000.0 / this->_native.min();  // also set us limits from here, converting Hz to us, and swap min/max
+        this->_absmin_us = 1000000.0 / this->_native.max();  // also set us limits from here, converting Hz to us, and swap min/max
+        this->_absmin_us_64 = (int)this->_absmin_us;         // make an int copy for the isr to use conveniently
     }
     std::string _long_name = "Unknown Hall Effect sensor";
     std::string _short_name = "pulsen";
@@ -778,15 +784,15 @@ class PulseSensor : public Sensor {
     std::string _si_units_name = "";
     void setup() {
         Sensor::setup();
-        this->set_pin(this->_pin, INPUT_PULLUP);
+        set_pin(this->_pin, INPUT_PULLUP);
         this->set_can_source(src::PIN, true);
         this->set_source(src::PIN);
         attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
         this->set_can_source(src::POT, true);
     }
+    // float last_read_time() { return _last_read_time_us; }
     // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
-    bool stopped() { return (std::abs(_val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
-    float last_read_time() { return _last_read_time_us; }
+    bool stopped() { return (std::abs(val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     bool* pin_activity_ptr() { return &_pin_activity; }
     float absmin_us() { return _absmin_us; }
     float absmax_us() { return _absmax_us; }
@@ -830,7 +836,7 @@ class Tachometer : public PulseSensor {
 class Speedometer : public PulseSensor {
   public:
     sens senstype = sens::speedo;
-    Speedometer(uint8_t arg_pin, arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {}
+    Speedometer(uint8_t arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {}
     Speedometer() = delete;
     void setup() {
         // printf("%s..\n", this->_long_name.c_str());
