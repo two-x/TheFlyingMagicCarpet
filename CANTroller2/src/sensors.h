@@ -756,7 +756,7 @@ class PulseSensor : public Sensor {
         float period_us = static_cast<float>(now_time - this->_isr_time_current_us);
         float new_native;
         if (period_us <= this->_absmin_us) new_native = this->_native.max();  // if it's been too long since last pulse return zero
-        else if (period_us >= this->_absmax_us) new_native = this->_native.max();  // if it's been too long since last pulse return zero
+        else if (period_us >= this->_absmax_us) new_native = this->_native.min();  // if it's been too long since last pulse return zero
         else new_native = 1000000.0 / _isr_buf_us;
         return new_native;
     }
