@@ -351,7 +351,14 @@ class Transducer : public Device {
         float delta = (float)(arg_add_si * tuning_rate_pcps * loop_avg_us * (_opmax - _opmin) / (100.0 * 1000000));  // this acceleration logic doesn't belong here
         return set_si(_si.val() + delta);
     }
-    void set_margin(float arg_marg) { _margin = arg_marg; }
+    void set_margin(float arg_marg) {
+        _margin = arg_marg;
+        _margin_native = to_native(_margin);
+    }
+    void set_margin_native(float arg_marg) {
+        _margin_native = arg_marg;
+        _margin = from_native(_margin_native);
+    }
     // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
     void set_conversions(float arg_mfactor, float arg_boffset) {
         if (std::abs(arg_mfactor) < float_zero) {
@@ -735,7 +742,7 @@ class PulseSensor : public Sensor {
     // we maintain our min and max pulse period, for each pulse sensor
     // absmax_us is the reciprocal of our native absmin value in MHz. once max_us has elapsed since the last pulse our si sets to zero
     // absmin_us is the reciprocal of our native absmax value in MHz. any pulse received within min_us of the previous pulse is ignored
-    float _absmax_us, _absmin_us = 6500; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency
+    float _absmax_us = 1500000, _absmin_us = 6500; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency.  max is chosen just arbitrarily
     volatile int64_t _absmin_us_64 = (int64_t)_absmin_us;
     // Shadows a hall sensor being triggered by a passing magnet once per pulley turn. The ISR calls
     // esp_timer_get_time() on every pulse to know the time since the previous pulse. I tested this on the bench up
@@ -760,6 +767,16 @@ class PulseSensor : public Sensor {
         else new_native = 1000000.0 / _isr_buf_us;
         return new_native;
     }
+    float us_to_hz(float arg_us) {
+        if (std::abs(arg_us) > float_zero) return 1000000.0 / arg_us;
+        Serial.printf("Err: us_to_hz() refusing to take reciprocal of zero\n");
+        return absmax();
+    }
+    float hz_to_us(float arg_hz) {
+        if (std::abs(arg_hz) > float_zero) return 1000000.0 / arg_hz;  // math is actually the same in both directions us -> hz or hz -> us
+        Serial.printf("Err: hz_to_us() refusing to take reciprocal of zero\n");
+        return _absmax_us;
+    }
   public:
     PulseSensor(uint8_t arg_pin, float arg_freqdiv=1.0) : Sensor(arg_pin), _freqdiv(arg_freqdiv) {}
     PulseSensor() = delete;
@@ -775,6 +792,17 @@ class PulseSensor : public Sensor {
         this->_absmin_us = 1000000.0 / this->_native.max();  // also set us limits from here, converting Hz to us, and swap min/max
         this->_absmin_us_64 = (int)this->_absmin_us;         // make an int copy for the isr to use conveniently
     }
+    // void set_abslim(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
+    //     Transducer::set_abslim_native(0.0, arg_max, calc_si);  // si abs minimum is unsettable, and always zero
+    // }
+    // float from_native(float arg_native) {
+    //     if (std::abs(arg_native) - _margin_native < _native.min()) return 0.0;  // values below the min native we jump to zero
+    //     return Transducer::from_native(arg_native);  // si abs minimum is unsettable, and always zero
+    // }
+    // float to_native(float arg_si) {
+    //     if (std::abs(arg_si) < float_zero) return _native.min();  // zero value is valid for si, but conversion will divide by zero, so return something realistic
+    //     return Transducer::to_native(arg_si);  //
+    // }
     std::string _long_name = "Unknown Hall Effect sensor";
     std::string _short_name = "pulsen";
     std::string _native_units_name = "Hz";
