@@ -252,27 +252,19 @@ class Transducer : public Device {
     //   _mfactor : non-inverted: is conversion rate in si/native units  (eg for feet (si) and yards (native) would be 3)
     //               inverted: is si-unit to inverted-native-unit ratio  (eg for Hz (si) and ms (native), would be 1000)
     //   _boffset : si value to add after native-to-si conversion, or subtract before si-to-native conversion
-    //   _dir : optional mirroring of si value range, around min/max range center point. set to REV if native value increases as si decreases
-    //          going from native to si, the range flip is applied to the si value after b_offset is applied, and vice versa
     // note, to avoid crashes, divide by zero attempts result in return of max value in lieu of infinity
-    virtual float from_native(float arg_val_native) {
-        float xnative = static_cast<float>(arg_val_native); // convert everything to floats so we don't introduce rounding errors
-        float xsi = NAN;  // this holds our return value.  there should be no case that the initial NAN value survives the duration of this function
-        if (conversion_method == AbsLimMap) xsi = map(xnative, _native.min(), _native.max(), _si.min(), _si.max());
-        else if (conversion_method == OpLimMap) xsi = map(xnative, _opmin_native, _opmax_native, _opmin, _opmax);
-        else if (conversion_method == LinearMath) xsi = _boffset + _mfactor * xnative; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
-        if (!std::isnan(xsi)) return xsi;
-        Serial.printf("Err: from_native unable to convert %lf (min %lf, max %lf)\n", xnative, _native.min(), _native.max());
+    virtual float from_native(float arg_native) {
+        if (conversion_method == AbsLimMap) return map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
+        else if (conversion_method == OpLimMap) return map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
+        else if (conversion_method == LinearMath) return _boffset + _mfactor * arg_native; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
+        Serial.printf("Err: from_native unable to convert %lf (min %lf, max %lf)\n", arg_native, _native.min(), _native.max());
         return NAN;
     }
-    virtual float to_native(float arg_val_si) {  // convert an absolute si value to native units
-        float xsi = static_cast<float>(arg_val_si); // convert everything to floats so we don't introduce rounding errors
-        float xnative = NAN;  // this holds our return value.  there should be no case that the initial NAN value survives the duration of this function
-        if (conversion_method == AbsLimMap) xnative = map(xsi, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
-        else if (conversion_method == OpLimMap) xnative = map(xsi, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
-        else if (conversion_method == LinearMath) xnative = (xsi - _boffset) / _mfactor;
-        if (!std::isnan(xnative)) return xnative;
-        Serial.printf("Err: to_native unable to convert %lf (min %lf, max %lf)\n", xsi, _si.min(), _si.max());
+    virtual float to_native(float arg_si) {  // convert an absolute si value to native units
+        if (conversion_method == AbsLimMap) return map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
+        else if (conversion_method == OpLimMap) return map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
+        else if (conversion_method == LinearMath) return (arg_si - _boffset) / _mfactor;
+        Serial.printf("Err: to_native unable to convert %lf (min %lf, max %lf)\n", arg_si, _si.min(), _si.max());
         return NAN;
     }
     // NOTE: do we really need two values? or should this just be a single value and get converted wherever needed?
@@ -303,6 +295,7 @@ class Transducer : public Device {
         if (std::isnan(argmin)) argmin = _si.min();                               // use incumbent min value if none was passed in
         if (std::isnan(argmax)) argmax = _si.max();                               // use incumbent max value if none was passed in
         _si.set_limits(argmin, argmax);                                           // commit to the Param accordingly
+        _si_raw = constrain(_si_raw, _si.min(), _si.max());                       // in case we have new limits, re-constrain the raw si value we also manage
         if ((conversion_method == LinearMath) && calc_native) {                   // if we know our conversion formula, and not instructed to skip autocalculation...
             _native.set_limits(to_native(_si.min()), to_native(_si.max()));       // then convert the new values and ensure si and native stay equivalent
         }
@@ -361,6 +354,10 @@ class Transducer : public Device {
     void set_margin(float arg_marg) { _margin = arg_marg; }
     // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
     void set_conversions(float arg_mfactor, float arg_boffset) {
+        if (std::abs(arg_mfactor) < float_zero) {
+            Serial.printf("Err: can not support _mfactor of zero\n");
+            return;
+        }
         _mfactor = arg_mfactor;
         _boffset = arg_boffset;
     }
