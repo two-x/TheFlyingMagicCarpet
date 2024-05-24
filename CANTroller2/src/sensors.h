@@ -217,7 +217,7 @@ class Device {
 // value which represents the sensed or driven hardware input/output. It also has a "si" value which represents the logical or human-readable
 // equivalent value. Adjusting either value will automatically change the other one.
 
-enum class TransDir : uint8_t {REV, FWD}; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
+// enum class TransDir : uint8_t {REV, FWD}; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
 
 // Transducer class: (240522 soren)
 // This class holds key device values, converts between different units they might use, and manages their constraint within specified range limits
@@ -240,7 +240,7 @@ class Transducer : public Device {
     float _mfactor = 1.0, _boffset = 0.0;
     float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;  // float _opmin, _opmax, _absmin, _absmax, _margin, _raw, _filt;
     // float _zerovalue = NAN;  // value to return from to_native conversion when val is zero (needed for speedometer)
-    TransDir _dir = TransDir::FWD; // NOTE: whats ts for, exactly?
+    // TransDir _dir = TransDir::FWD; // NOTE: whats ts for, exactly?
     // Set conversion_method to best suit the most reliable data you have for your sensor.
     // This decides what math to do when converting between native and si unit values. Here are the choices:
     //   LinearMath : uses y = mx + b generic linear equation to convert. For this you need to set accurate values for _mfactor, _boffset, and _dir where defaults don't apply. If using this then setting the abs or op range in one unit will auto calc the other
@@ -258,36 +258,18 @@ class Transducer : public Device {
     virtual float from_native(float arg_val_native) {
         float xnative = static_cast<float>(arg_val_native); // convert everything to floats so we don't introduce rounding errors
         float xsi = NAN;  // this holds our return value.  there should be no case that the initial NAN value survives the duration of this function
-        if (conversion_method == AbsLimMap) {
-            if (_dir == TransDir::FWD) xsi = map(xnative, _native.min(), _native.max(), _si.min(), _si.max());
-            else xsi = map(xnative, _native.min(), _native.max(), _si.max(), _si.min());
-        }
-        else if (conversion_method == OpLimMap) {
-            if (_dir == TransDir::FWD) xsi = map(xnative, _opmin_native, _opmax_native, _opmin, _opmax);
-            else xsi = map(xnative, _opmin_native, _opmax_native, _opmax, _opmin);
-        }
-        else if (conversion_method == LinearMath) {
-            xsi = _boffset + _mfactor * xnative; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
-            if (_dir == TransDir::REV) xsi = _si.min() + _si.max() - xsi;
-        }
-        return static_cast<float>(xsi);
+        if (conversion_method == AbsLimMap) xsi = map(xnative, _native.min(), _native.max(), _si.min(), _si.max());
+        else if (conversion_method == OpLimMap) xsi = map(xnative, _opmin_native, _opmax_native, _opmin, _opmax);
+        else if (conversion_method == LinearMath) xsi = _boffset + _mfactor * xnative; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
+        return xsi;
     }
     virtual float to_native(float arg_val_si) {  // convert an absolute si value to native units
         float xsi = static_cast<float>(arg_val_si); // convert everything to floats so we don't introduce rounding errors
         float xnative = NAN;  // this holds our return value.  there should be no case that the initial NAN value survives the duration of this function
-        if (conversion_method == AbsLimMap) {
-            if (_dir == TransDir::FWD) xnative = map(xsi, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
-            else xnative = map(xsi, _si.max(), _si.min(), _native.min(), _native.max());
-        }
-        else if (conversion_method == OpLimMap) {
-            if (_dir == TransDir::FWD) xnative = map(xsi, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
-            else xnative = map(xsi, _opmax, _opmin, _opmin_native, _opmax_native);
-        }
-        else if (conversion_method == LinearMath) {
-            if (_dir == TransDir::REV) xsi = _si.min() + _si.max() - xsi;
-            xnative = (xsi - _boffset) / _mfactor;
-        }
-        return static_cast<float>(xnative);
+        if (conversion_method == AbsLimMap) xnative = map(xsi, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
+        else if (conversion_method == OpLimMap) xnative = map(xsi, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
+        else if (conversion_method == LinearMath) xnative = (xsi - _boffset) / _mfactor;
+        return xnative;
     }
     // NOTE: do we really need two values? or should this just be a single value and get converted wherever needed?
     // To hold val/min/max display values in display units (like V, mph, etc.)
@@ -313,73 +295,44 @@ class Transducer : public Device {
     // the values to define the range, and all si and native abs values will be set automatically.
     // op limits will also be reconstrained to the updated abs values, however if you have a specific op range then
     // call one of set_oplim() or set_oplim_native() separately as well (which works similarly).
-    void set_abslim(float arg_min, float arg_max, bool calc_native=true) {  // these are absmin and absmax limits. values where NAN is passed in won't get set
-        float tempmin = arg_min;
-        float tempmax = arg_max;
-        if (std::isnan(tempmin)) tempmin = _si.min();  // to handle autoconversions where _dir == REV
-        if (std::isnan(tempmin)) tempmin = _si.min();  // to handle autoconversions where _dir == REV
-            tempmin = arg_max;
-            tempmax = arg_min;
-        }
-        _si.set_limits(tempmin, tempmax);
+    void set_abslim(float argmin=NAN, float argmax=NAN, bool calc_native=true) {  // these are absmin and absmax limits. values where NAN is passed in won't get set
+        if (std::isnan(argmin)) argmin = _si.min();  // to handle autoconversions where _dir == REV
+        if (std::isnan(argmax)) argmax = _si.max();  // to handle autoconversions where _dir == REV
+        _si.set_limits(argmin, argmax);
         if ((conversion_method == LinearMath) && calc_native) {  // if we know our linear relationship we can auto calculate the native limits
-            tempmin = to_native(_si.min());
-            tempmax = to_native(_si.max());
-            _native.set_limits(std::min(tempmin, tempmax), std::max(tempmin, tempmax));
+            _native.set_limits(to_native(_si.min()), to_native(_si.max()));
         }
         set_oplim();  // call just in case op limits require re-constraint if abs limits tightened up
     }
-    void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // these are absmin and absmax limits
-        float tempmin = arg_min;
-        float tempmax = arg_max;
-        if (tempmin > tempmax) {  // to handle autoconversions where _dir == REV
-            tempmin = arg_max;
-            tempmax = arg_min;
-        }
-        _native.set_limits(tempmin, tempmax);
+    void set_abslim_native(float argmin=NAN, float argmax=NAN, bool calc_si=true) {  // these are absmin and absmax limits
+        if (std::isnan(argmin)) argmin = _native.min();  // to handle autoconversions where _dir == REV
+        if (std::isnan(argmax)) argmax = _native.max();  // to handle autoconversions where _dir == REV
+        _native.set_limits(argmin, argmax);
         if ((conversion_method == LinearMath) && calc_si) {  // if we know our linear relationship we can auto calculate the si limits
-            tempmin = from_native(_native.min());
-            tempmax = from_native(_native.max());
-            _si.set_limits(std::min(tempmin, tempmax), std::max(tempmin, tempmax));
+            _si.set_limits(from_native(_native.min()), from_native(_native.max()));
         }
         set_oplim_native();  // call just in case op limits require re-constraint if abs limits tightened up
     }
-    void set_oplim(float arg_min=NAN, float arg_max=NAN, bool calc_native=true) {  // these are opmin and opmax limits. cal w/o arguments to auto-set
-        if (std::isnan(_opmin)) _opmin = _si.min();
-        if (std::isnan(_opmax)) _opmax = _si.max();
-        float tempmin = arg_min;
-        float tempmax = arg_max;
-        if (!std::isnan(tempmin) && !std::isnan(tempmax)) {
-            if (tempmin > tempmax) {  // to handle autoconversions where _dir == REV
-                tempmin = arg_max;
-                tempmax = arg_min;
-            }
-            _opmin = tempmin;
-            _opmax = tempmax;
-        }
+    void set_oplim(float argmin=NAN, float argmax=NAN, bool calc_native=true) {  // these are opmin and opmax limits. cal w/o arguments to auto-set
+        if (!std::isnan(argmin)) _opmin = argmin;
+        else if (std::isnan(_opmin)) _opmin = _si.min();
+        if (!std::isnan(argmax)) _opmax = argmax;
+        else if (std::isnan(_opmax)) _opmax = _si.max();
         _opmin = constrain(_opmin, _si.min(), _opmax);
         _opmax = constrain(_opmax, _opmin, _si.max());
         if ((conversion_method == LinearMath) && calc_native) {  // if we know our linear relationship we can auto calculate the native limits
-            set_oplim_native(to_native(arg_min), to_native(arg_max), false);
+            set_oplim_native(to_native(_opmin), to_native(_opmax), false);
         }
     }
-    void set_oplim_native(float arg_min, float arg_max, bool calc_si=true) {
-        if (std::isnan(_opmin_native)) _opmin_native = _native.min();
-        if (std::isnan(_opmax_native)) _opmax_native = _native.max();
-        float tempmin = arg_min;
-        float tempmax = arg_max;
-        if (!std::isnan(tempmin) && !std::isnan(tempmax)) {
-            if (tempmin > tempmax) {  // to handle autoconversions where _dir == REV
-                tempmin = arg_max;
-                tempmax = arg_min;
-            }
-            _opmin_native = tempmin;
-            _opmax_native = tempmax;
-        }
+    void set_oplim_native(float argmin=NAN, float argmax=NAN, bool calc_si=true) {
+        if (!std::isnan(argmin)) _opmin_native = argmin;
+        else if (std::isnan(_opmin_native)) _opmin_native = _native.min();
+        if (!std::isnan(argmax)) _opmax_native = argmax;
+        else if (std::isnan(_opmax_native)) _opmax_native = _native.max();
         _opmin_native = constrain(_opmin_native, _native.min(), _opmax_native);
         _opmax_native = constrain(_opmax_native, _opmin_native, _native.max());
         if ((conversion_method == LinearMath) && calc_si) {  // if we know our linear relationship we can auto calculate the native limits
-            set_oplim(from_native(arg_min), from_native(arg_max), false);
+            set_oplim(from_native(_opmin_native), from_native(_opmax_native), false);
         }
     }
     bool set_native(float arg_val_native) {
@@ -403,10 +356,9 @@ class Transducer : public Device {
     }
     void set_margin(float arg_marg) { _margin = arg_marg; }
     // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
-    void set_conversions(float arg_mfactor, float arg_boffset, TransDir arg_dir=TransDir::FWD) {
+    void set_conversions(float arg_mfactor, float arg_boffset) {
         _mfactor = arg_mfactor;
         _boffset = arg_boffset;
-        _dir = arg_dir;
     }
     // float si() { return _si.val(); }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)
@@ -759,9 +711,6 @@ class BrakePositionSensor : public AnalogSensor {
         // _mfactor = (_absmax - _absmin) / (float)(_absmax_adc - _absmin_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
         // _boffset = -2.69;  //  979 adc * 0.00372 in/adc - 0.95 in = -2.69 in
         _parkpos = _opmax;
-        _dir = TransDir::REV;
-        set_can_source(src::PIN, true);
-        set_can_source(src::POT, true);
     }
     bool parked() { return (std::abs(val() - _parkpos) <= _margin); }  // is tha brake motor parked?
     bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
