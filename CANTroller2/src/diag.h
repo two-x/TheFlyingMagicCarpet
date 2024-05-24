@@ -89,7 +89,7 @@ class DiagRuntime {
             err_sens[LOST][_BrakePres] = (pressure->raw() < err_margin_adc);
             err_sens[RANGE][_MuleBatt] = (mulebatt->filt() < mulebatt->opmin() || mulebatt->filt() > mulebatt->opmax());
             HotRCFailure();
-            err_sens[LOST][_Ignition] = (!ignition->signal && !tach->engine_stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
+            err_sens[LOST][_Ignition] = (!ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
             SpeedoFailure();
             TachFailure();
             err_sens[RANGE][_Speedo] = (speedo->filt() < speedo->opmin() || speedo->filt() > speedo->opmax());;

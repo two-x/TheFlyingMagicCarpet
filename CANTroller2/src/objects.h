@@ -20,8 +20,8 @@ static TemperatureSensorManager tempsens(onewire_pin);
 static CarBattery mulebatt(mulebatt_pin);
 static PressureSensor pressure(pressure_pin);
 static BrakePositionSensor brkpos(brake_pos_pin);
-static Speedometer speedo(speedo_pin);
-static Tachometer tach(tach_pin);
+static Speedometer speedo(speedo_pin, 0.5);  // 0.5x because there are 2 magnets
+static Tachometer tach(tach_pin, 8.0);  // 8.0x frequency divider
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(&i2c);
 static MAPSensor mapsens(&i2c);
@@ -207,8 +207,8 @@ class Ignition {
         if (panic_req == REQ_TOG) panic_req = !panicstop;
         if (ign_req == REQ_TOG) ign_req = !signal;
         // else if (request == signal) request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
-        if (speedo.car_stopped() || panicTimer.expired()) panic_req = REQ_OFF;  // Cancel panic stop if car is stopped
-        if (!speedo.car_stopped() && (runmode == FLY || runmode == CRUISE || runmode == HOLD)) {
+        if (speedo.stopped() || panicTimer.expired()) panic_req = REQ_OFF;  // Cancel panic stop if car is stopped
+        if (!speedo.stopped() && (runmode == FLY || runmode == CRUISE || runmode == HOLD)) {
             if (signal && ign_req == REQ_OFF) panic_req = REQ_ON;  // ignition cut while driving causes panic stop
             if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_req = REQ_ON;
         }

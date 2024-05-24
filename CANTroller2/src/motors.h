@@ -727,7 +727,7 @@ class BrakeMotor : public JagMotor {
     }
     void carstop(bool panic_support=true) {  // autogenerates motor target values with the goal of stopping the car
         bool panic = panic_support && panicstop;
-        bool stopped_now = speedo->car_stopped();
+        bool stopped_now = speedo->stopped();
         if (stopped_last && !stopped_now) stopcar_timer.reset();
         stopped_last = stopped_now;
         if (feedback == NoneFB) {  // to panic stop without any feedback, we just push as hard as we can for a couple seconds then stop
@@ -770,7 +770,7 @@ class BrakeMotor : public JagMotor {
         
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             carstop(false);
-            autoholding = !autostopping && (pressure->filt() >= pressure->hold_initial_psi - pressure->margin());  // this needs to be tested  // if (!speedo->car_stopped()) {            
+            autoholding = !autostopping && (pressure->filt() >= pressure->hold_initial_psi - pressure->margin());  // this needs to be tested  // if (!speedo->stopped()) {            
             // Serial.printf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->filt(), pressure->hold_initial_psi, pressure->margin_psi);
             if (autoholding) pc[OUT] = pc[STOP];
             else if (!autostopping) {

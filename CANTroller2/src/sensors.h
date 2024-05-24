@@ -217,7 +217,7 @@ class Device {
 // value which represents the sensed or driven hardware input/output. It also has a "si" value which represents the logical or human-readable
 // equivalent value. Adjusting either value will automatically change the other one.
 
-enum class XducerDir : uint8_t {REV, FWD}; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
+enum class TransDir : uint8_t {REV, FWD}; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, if we sense fewer us per rotation, the engine is going faster)
 
 // Transducer class: (240522 soren)
 // This class holds key device values, converts between different units they might use, and manages their constraint within specified range limits
@@ -241,7 +241,7 @@ class Transducer : public Device {
     float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;  // float _opmin, _opmax, _absmin, _absmax, _margin, _raw, _filt;
     // float _zerovalue = NAN;  // value to return from to_native conversion when val is zero (needed for speedometer)
     bool _invert = false;  // Flag to indicated if unit conversion math invert the native value in the conversion math. for if the si value has a reciprocal replationship to the native value
-    XducerDir _dir = XducerDir::FWD; // NOTE: whats ts for, exactly?
+    TransDir _dir = TransDir::FWD; // NOTE: whats ts for, exactly?
     // Set conversion_method to best suit the most reliable data you have for your sensor.
     // This decides what math to do when converting between native and si unit values. Here are the choices:
     //   LinearMath : uses y = mx + b generic linear equation to convert. For this you need to set accurate values for _mfactor, _boffset, and _dir where defaults don't apply. If using this then setting the abs or op range in one unit will auto calc the other
@@ -271,16 +271,16 @@ class Transducer : public Device {
             }
         }
         if (conversion_method == AbsLimMap) {
-            if (_dir == XducerDir::FWD) xsi = map(xnative, _native.min(), _native.max(), _si.min(), _si.max());
+            if (_dir == TransDir::FWD) xsi = map(xnative, _native.min(), _native.max(), _si.min(), _si.max());
             else xsi = map(xnative, _native.min(), _native.max(), _si.max(), _si.min());
         }
         else if (conversion_method == OpLimMap) {
-            if (_dir == XducerDir::FWD) xsi = map(xnative, _opmin_native, _opmax_native, _opmin, _opmax);
+            if (_dir == TransDir::FWD) xsi = map(xnative, _opmin_native, _opmax_native, _opmin, _opmax);
             else xsi = map(xnative, _opmin_native, _opmax_native, _opmax, _opmin);
         }
         else if (conversion_method == LinearMath) {
             xsi = _boffset + _mfactor * xnative; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
-            if (_dir == XducerDir::REV) xsi = _si.min() + _si.max() - xsi;
+            if (_dir == TransDir::REV) xsi = _si.min() + _si.max() - xsi;
         }
         return static_cast<float>(xsi);
     }
@@ -288,15 +288,15 @@ class Transducer : public Device {
         float xsi = static_cast<float>(arg_val_si); // convert everything to floats so we don't introduce rounding errors
         float xnative = NAN;  // this holds our return value.  there should be no case that the initial NAN value survives the duration of this function
         if (conversion_method == AbsLimMap) {
-            if (_dir == XducerDir::FWD) xnative = map(xsi, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
+            if (_dir == TransDir::FWD) xnative = map(xsi, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
             else xnative = map(xsi, _si.max(), _si.min(), _native.min(), _native.max());
         }
         else if (conversion_method == OpLimMap) {
-            if (_dir == XducerDir::FWD) xnative = map(xsi, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
+            if (_dir == TransDir::FWD) xnative = map(xsi, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
             else xnative = map(xsi, _opmax, _opmin, _opmin_native, _opmax_native);
         }
         else if (conversion_method == LinearMath) {
-            if (_dir == XducerDir::REV) xsi = _si.min() + _si.max() - xsi;
+            if (_dir == TransDir::REV) xsi = _si.min() + _si.max() - xsi;
             xnative = (xsi - _boffset) / _mfactor;
         }
         if (_invert) {
@@ -421,7 +421,7 @@ class Transducer : public Device {
     }
     void set_margin(float arg_marg) { _margin = arg_marg; }
     // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
-    void set_conversions(float arg_mfactor, float arg_boffset, bool arg_invert=false, XducerDir arg_dir=XducerDir::FWD) {
+    void set_conversions(float arg_mfactor, float arg_boffset, bool arg_invert=false, TransDir arg_dir=TransDir::FWD) {
         _mfactor = arg_mfactor;
         _boffset = arg_boffset;
         _invert = arg_invert;
@@ -673,7 +673,8 @@ class CarBattery : public AnalogSensor {
         set_oplimits(9.8, 13.8);  // set op range. dictated by the range of voltage of a healthy lead-acid battery across its discharge curve
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
-        _mfactor = _si.max() / adcrange_adc;  // replace with a calibrated value based on measurements, and/or adjust and optimize voltage divider
+        float m = _si.max() / (float)adcrange_adc;  // replace with a calibrated value based on measurements, and/or adjust and optimize voltage divider
+        set_conversions(m, 0.0);
     }
     void set_val_from_touch() { set_si(12.0); }  // what exactly is going on here? maybe an attempt to prevent always showing battery errors on dev boards?
     std::string _long_name = "Vehicle battery voltage";
@@ -772,7 +773,7 @@ class BrakePositionSensor : public AnalogSensor {
         // _mfactor = (_absmax - _absmin) / (float)(_absmax_adc - _absmin_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
         // _boffset = -2.69;  //  979 adc * 0.00372 in/adc - 0.95 in = -2.69 in
         _parkpos = _opmax;
-        _dir = XducerDir::REV;
+        _dir = TransDir::REV;
         set_si_limits(_absmin, _absmax);
         set_native_limits(_absmin_adc, _absmax_adc);
         set_can_source(src::PIN, true);
@@ -788,193 +789,131 @@ class BrakePositionSensor : public AnalogSensor {
 // class PulseSensor are hall-monitor sensors where the value is based on magnetic pulse timing of a rotational Source (eg tachometer, speedometer)
 class PulseSensor : public Sensor {
   protected:
-    int32_t _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
+    volatile int64_t timestamp_last_us;  // _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
     Timer _stop_timer;
-    bool _low_pulse = false, _pin_activity;
-    int32_t _opmin_us, _opmax_us, _absmin_us, _absmax_us, _stopthresh_us;
-    float _opmin, _opmax, _absmin, _absmax, _margin, _stopthresh;
-    float _last_read_time_us;
-    int32_t _min_us = 100000.0;  // default. overwrite in children
+    bool _low_pulse = true, _pin_activity;
+    float _freqdiv = 1.0, _idle = 600.0, _idle_cold = 750.0, _idle_hot = 500.0;  // an external ripple counter divides pulse stream frequency by this, we need to compensate
     volatile int64_t _isr_us = 0;
     volatile int64_t _isr_time_last_us = 0;
     volatile int64_t _isr_time_current_us = 0;
-    int32_t _isr_buf_us = 0;
-    int64_t _debounce_threshold_us; // must be passed into constructor
-    // bool _pin_activity = LOW;  // _invert = true,
-
+    // we maintain our min and max pulse period, for each pulse sensor
+    // absmax_us is the reciprocal of our native absmin value in MHz. once max_us has elapsed since the last pulse our si sets to zero
+    // absmin_us is the reciprocal of our native absmax value in MHz. any pulse received within min_us of the previous pulse is ignored
+    int64_t _absmax_us, _absmin_us = 6500; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency
+    
     // Shadows a hall sensor being triggered by a passing magnet once per pulley turn. The ISR calls
     // esp_timer_get_time() on every pulse to know the time since the previous pulse. I tested this on the bench up
     // to about 0.750 mph which is as fast as I can move the magnet with my hand, and it works.
     // Update: Janky bench test appeared to work up to 11000 rpm.
     void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
         _isr_time_current_us = esp_timer_get_time();
-        int64_t time_us = _isr_time_current_us - _isr_time_last_us;
-        if (time_us > _debounce_threshold_us) {  // ignore spurious triggers or bounces
+        int64_t time_us = _isr_time_current_us - _timestamp_last_us;
+        if (time_us > _absmin_us) {  // ignore spurious triggers or bounces
             _isr_time_last_us = _isr_time_current_us;
             _isr_us = time_us;
             _pin_activity = !_pin_activity;
         }
     }
-
-    virtual void set_val_from_pin() {
-        _isr_buf_us = static_cast<int32_t>(_isr_us);  // Copy delta value (in case another interrupt happens during handling)
-        _isr_us = 0;  // Indicates to isr we processed this value
-        if (_isr_buf_us >= _min_us) {  // If a valid rotation has happened since last time, delta will have a value
-            this->set_native(_isr_buf_us);
-            this->calculate_ema();
-            _last_read_time_us = _stop_timer.elapsed();
-            _stop_timer.reset();
-        }
-        else; // TODO: flag an error here, out of range or sensor problem
-
-        // NOTE: should be checking filt here maybe?
-        if (_stop_timer.expired()) {  // If time between pulses is long enough an engine can't run that slow
-            this->_si.set(0.0);
-            this->_val_filt.set(0.0);
-        }        
+    virtual void read_sensor() {
+        int32_t _isr_buf_us = static_cast<int32_t>(_isr_us);  // Copy delta value (in case another interrupt happens during handling)
+        int64_t now_time = esp_timer_get_time();
+        float period_us = static_cast<float>(now_time - this->_isr_time_current_us);
+        float new_native;
+        if (period_us <= this->_absmin_us) new_native = this->_absmax_native;  // if it's been too long since last pulse return zero
+        else if (period_us >= this->_absmax_us) new_native = this->_absmin_native;;  // if it's been too long since last pulse return zero
+        else this->new_native = 1000000.0 / this->_isr_buf_us;
+        this->set_native(new_native);
+        this->calculate_ema();
     }
-
   public:
-    PulseSensor(uint8_t arg_pin, int64_t debounce_arg, float stopthresh_arg)
-      : Sensor(arg_pin), _stop_timer(_stop_timeout_us), _debounce_threshold_us(debounce_arg), _stopthresh(stopthresh_arg) {}
+    PulseSensor(uint8_t arg_pin, float arg_freqdiv=1.0) : Sensor(arg_pin), _freqdiv(arg_freqdiv) {}
     PulseSensor() = delete;
+    // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
+    // overload the normal function so we can also include us calculations 
+    void set_abslims_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
+        if (arg_min <= float_zero) return;  // we can't accept 0 Hz for opmin
+        Transducer::set_oplims_native(arg_min, arg_max, calc_si);
+        void set_lims_us(float arg_min, float arg_max) {
+        if (arg_min > float_zero) _absmin_us = arg_min;
+        _absmax_us = arg_max;         
+    }
     std::string _long_name = "Unknown Hall Effect sensor";
     std::string _short_name = "pulsen";
     std::string _native_units_name = "us";
     std::string _si_units_name = "";
-
     void setup() {
         Sensor::setup();
+        _invert = true;  // will use the math:  si_rpm = b_offset + m_factor / native_us
         this->set_pin(this->_pin, INPUT_PULLUP);
         this->set_can_source(src::PIN, true);
         this->set_source(src::PIN);
         attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
+        this->set_can_source(src::POT, true);
     }
-    bool stopped() { return this->_val_filt.val() < _stopthresh; }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    bool stopped() { return (std::abs(_val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     float last_read_time() { return _last_read_time_us; }
-
-    int32_t raw_us() { return this->_native.val(); }  // Soren: I created these to be available to any child sensors, but untested and not confident it's right
-    int32_t absmin_us() { return this->_native.min(); }
-    int32_t absmax_us() { return this->_native.max(); }
-    int32_t opmin_us() { return this->_opmin_us; }
-    int32_t opmax_us() { return this->_opmax_us; }
-    float raw() { return this->_si.val(); }
-    float filt() { return this->_val_filt.val(); }
-    float absmin() { return this->_si.min(); }
-    float absmax() { return this->_si.max(); }
-    float opmin() { return this->_opmin; }
-    float opmax() { return this->_opmax; }
-    float margin() { return this->_margin; }
+    bool* pin_activity_ptr() { return &_pin_activity; }
+    float absmin_us() { return _absmin_us; }
+    float absmax_us() { return _absmax_us; }
+    float idle() { return _idle; }
+    float* idle_ptr() { return &_idle; }
+    void set_idle(float newidle) { _idle = constrain(newidle, _opmin, _opmax); }
 };
 
 // Tachometer represents a magnetic pulse measurement of the enginge rotation.
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
 class Tachometer : public PulseSensor {
-  private:
-    sens senstype = sens::tach;
-  protected:
-    int64_t _debounce_threshold = 6500;  // corresponds to 1000000 us/sec / 6500 us = 154 Hz max pulse frequency
-    float _initial_rpm;
-    float _freq_div = 8.0;  // an external ripple counter divides pulse stream frequency by this, we need to compensate
   public:
     sens senstype = sens::tach;
-    float _idle_rpm = 600.0, _idle_cold_rpm = 750.0, _idle_hot_rpm = 500.0;
-    Tachometer(uint8_t arg_pin) : PulseSensor(arg_pin, _debounce_threshold_us, _stopthresh) {
-        _absmax = 4500.0;  // Max recognized engine rotation speed
-        _absmin = 0.0;
-        _opmin = 0.0;
-        _opmax = 3600.0;  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
-        _low_pulse = true;
-        _invert = true;  // will use the math:  si_rpm = b_offset + m_factor / native_us
-        _mfactor = 60.0 * _freq_div * 1000000.0;  // 1 pulse/us * 8 rot/pulse * 60 sec/min * 1000000 us/sec = 480000000 rot/min (rpm), (so 480M rpm per pulse-per-us)
-        _opmin_us = (int)(_mfactor / _opmax);  // at 3600 rpm gives 133333 us
-        _boffset = 0.0;
-        _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        _margin = 10;
-        _initial_rpm = 50.0;
-        _stopthresh_us = 1750000;  // how long to wait w/o a pulse before assuming the engine is stopped
-        _absmin_us = _mfactor / _absmax;
-        set_si_limits(_absmin, _absmax);
-        set_native_limits(_absmin_us, _stop_timeout_us);
-        _stopthresh = from_native(_stopthresh_us);
-        set_si(_initial_rpm);
-        set_can_source(src::PIN, true);
-        set_can_source(src::POT, true);
-    }
+    Tachometer(uint8_t arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {}
     Tachometer() = delete;
-    void setup() {
-        printf("%s..\n", this->_long_name.c_str());
+    void setup() {  // printf("%s..\n", this->_long_name.c_str());
         PulseSensor::setup();
+        set_abslims(0.0, 4500.0);  // Max recognized engine rotation speed
+        set_oplims(0.0, 3600.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        float m = 60.0 * _freqdiv * 1000000.0;  // 1 pulse/us * 8 rot/pulse * 60 sec/min * 1000000 us/sec = 480000000 rot/min (rpm), (so 480M rpm per pulse-per-us)
+        set_conversions(m, 0.0);
+        set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        set_margin(10.0);
+        set_si(50.0);
     }
     std::string _long_name = "Tachometer";
     std::string _short_name = "tach";
     std::string _native_units_name = "us";
     std::string _si_units_name = "rpm";
 
-    bool engine_stopped() { return (std::abs(_val_filt.val() - _stopthresh) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
-    float* opmax_ptr() { return &_opmax; }
-    float idle() { return _idle_rpm; }
-    float idle_cold() { return _idle_cold_rpm; }
-    float idle_hot() { return _idle_hot_rpm; }
-    float* idle_ptr() { return &_idle_rpm; }
-    void set_idle(float newidle) { _idle_rpm = constrain(newidle, _opmin, _opmax); }
-    void set_idlecold(float newidlecold) { _idle_cold_rpm = constrain(newidlecold, _idle_hot_rpm + 1.0, _opmax); }
-    void set_idlehot(float newidlehot) { _idle_hot_rpm = constrain(newidlehot, _opmin, _idle_cold_rpm - 1.0); }
-    bool* pin_activity_ptr() { return &_pin_activity; }
+    // float idle() { return _idle; }
+    // float* idle_ptr() { return &_idle; }
+    float idle_cold() { return _idle_cold; }
+    float idle_hot() { return _idle_hot; }
+    void set_idlecold(float newidlecold) { _idle_cold = constrain(newidlecold, _idle_hot + 1.0, _opmax); }
+    void set_idlehot(float newidlehot) { _idle_hot = constrain(newidlehot, _opmin, _idle_cold - 1.0); }
 };
 
 // Speedometer represents a magnetic pulse measurement of the enginge rotation.
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to MPH
 class Speedometer : public PulseSensor {
-  private:
-    sens senstype = sens::speedo;
-  protected:
-    int64_t _debounce_threshold_us;
-    float _stopthresh, _initial_mph = 0.0, _idle_mph, _govern_mph;
-    bool _pin_activity = LOW;
-    // int32_t _zerovalue;
   public:
     sens senstype = sens::speedo;
-    Speedometer(uint8_t arg_pin) : PulseSensor(arg_pin, _debounce_threshold_us, _stopthresh) {
-        _debounce_threshold_us = 40000;  // 40000 us corresponds to about 45 mph, which a mule can't go. Use to reject retriggers
-        _absmin = _opmin = 0.0;
-        _absmax = 25.0; // What is max speed car can ever go
-        _opmax = 15.0; // aka redline, is our steady state speed at redline? Pulley rotation frequency (in milli-mph)
-        _ema_alpha = 0.015;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        _invert = true;  // will use the math:  si_mph = b_offset + m_factor / native_us
-        // new math with two magnets on the rear axle:
-        _mfactor = 1000000.0 * 3600.0 * 20 * M_PI / (2 * 12 * 5280);  // 1 pulse/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr,  (so 1.8M mph per pulse-per-us)     
-        _boffset = 0.0;
-        _margin = 0.2;
-        _opmin_us = (int)(_mfactor / _opmax);  // 15.0 mph gives 119000 us.  25.0 mph gives 71400 us
-        _stopthresh = 0.6;  // Below which the car is considered stopped
-        // _zerovalue = 9999999;
-        set_si_limits(_absmin, _absmax);
-        set_native_limits(_min_us, _stop_timeout_us);
-        set_si(_initial_mph);
-        set_can_source(src::PIN, true);
-        set_can_source(src::POT, true);
-    }
+    Speedometer(uint8_t arg_pin, arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {}
     Speedometer() = delete;
     void setup() {
-        printf("%s..\n", this->_long_name.c_str());
+        // printf("%s..\n", this->_long_name.c_str());
         PulseSensor::setup();
+        set_abslims(0.0, 25.0);  // Max recognized engine rotation speed
+        set_oplims(0.0, 15.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        float m = 1000000.0 * 3600.0 * 20 * M_PI * _freqdiv / (2 * 12 * 5280);  // 1 pulse/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr,  (so 1.8M mph per pulse-per-us)
+        set_conversions(m, 0.0);
+        set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        set_margin(0.2);
+        set_si(50.0);
+        _idle = 3.0;  // estimate speed in mph when idling forward on flat ground
     }
     std::string _long_name = "Speedometer";
     std::string _short_name = "speedo";
     std::string _native_units_name = "us";
     std::string _si_units_name = "mph";
-
-    float mph() { return _si.val(); }
-    bool car_stopped() { return (std::abs(_val_filt.val() - _stopthresh) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
-    float margin_mph() { return _margin; }
-    float redline_mph() { return _opmax; }
-    float idle() { return _idle_mph; }
-    float* idle_ptr() { return &_idle_mph; }
-    float* absmax_ptr() { return _si.max_ptr(); }
-    float* opmax_ptr() { return &_opmax; }
-    std::shared_ptr<float> absmax_shptr() { return _si.max_shptr(); }
-    bool* pin_activity_ptr() { return &_pin_activity; }
 };
 // NOTE: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
 // ServoPWM is a base class for our type of actuators, where by varying a pulse width (in us), motors move.
