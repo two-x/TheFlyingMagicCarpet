@@ -240,36 +240,24 @@ class Transducer : public Device {
     float _mfactor = 1.0, _boffset = 0.0;
     float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;  // float _opmin, _opmax, _absmin, _absmax, _margin, _raw, _filt;
     // float _zerovalue = NAN;  // value to return from to_native conversion when val is zero (needed for speedometer)
-    bool _invert = false;  // Flag to indicated if unit conversion math invert the native value in the conversion math. for if the si value has a reciprocal replationship to the native value
     TransDir _dir = TransDir::FWD; // NOTE: whats ts for, exactly?
     // Set conversion_method to best suit the most reliable data you have for your sensor.
     // This decides what math to do when converting between native and si unit values. Here are the choices:
     //   LinearMath : uses y = mx + b generic linear equation to convert. For this you need to set accurate values for _mfactor, _boffset, and _dir where defaults don't apply. If using this then setting the abs or op range in one unit will auto calc the other
     //   AbsLimMap : runs map() function to scale value from one absolute range to the other. For this you must first have explicitly set abs ranges for both native and si
     //   OpLimMap : same as AbsLimMap but transpose across the operational ranges rather than the absolute ranges
-    // note: all of the above will respect and apply the value of _invert
     int conversion_method = LinearMath;  // the default method
     
     // these linear conversion functions change absolute native values to si and back - overwrite in child classes as needed
     //   _mfactor : non-inverted: is conversion rate in si/native units  (eg for feet (si) and yards (native) would be 3)
     //               inverted: is si-unit to inverted-native-unit ratio  (eg for Hz (si) and ms (native), would be 1000)
     //   _boffset : si value to add after native-to-si conversion, or subtract before si-to-native conversion
-    //   _invert : if true, before converting native to si, native value is inverted, or if converting si to native, the result is inverted
-    //             intended if native and si are inversely related like time (eg us) and frequency (eg mph, rpm)
-    //             e.g. for sec/in (native) and ft/min (si), _mfactor is:  60 / 12 = 5 ft/min (per in/sec)
     //   _dir : optional mirroring of si value range, around min/max range center point. set to REV if native value increases as si decreases
     //          going from native to si, the range flip is applied to the si value after b_offset is applied, and vice versa
     // note, to avoid crashes, divide by zero attempts result in return of max value in lieu of infinity
     virtual float from_native(float arg_val_native) {
         float xnative = static_cast<float>(arg_val_native); // convert everything to floats so we don't introduce rounding errors
         float xsi = NAN;  // this holds our return value.  there should be no case that the initial NAN value survives the duration of this function
-        if (_invert) {
-            if (std::abs(xnative) > float_zero) xnative = 1 / xnative; //  // otherwise if the xsi units have a reciprocal (inverse) relationship to the native units (like hours to hertz)
-            else {
-                Serial.printf("err: from_xnative conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", _si.max(), _dir, _invert, xnative, _mfactor, _boffset);
-                return static_cast<float>(_si.max());  // Best return given division would be infinite  // Serial.printf("%lf = %lf\n", ret, max_f);
-            }
-        }
         if (conversion_method == AbsLimMap) {
             if (_dir == TransDir::FWD) xsi = map(xnative, _native.min(), _native.max(), _si.min(), _si.max());
             else xsi = map(xnative, _native.min(), _native.max(), _si.max(), _si.min());
@@ -299,13 +287,6 @@ class Transducer : public Device {
             if (_dir == TransDir::REV) xsi = _si.min() + _si.max() - xsi;
             xnative = (xsi - _boffset) / _mfactor;
         }
-        if (_invert) {
-            if (std::abs(xnative) > float_zero) xnative = 1 / xnative;
-            else {
-                Serial.printf("err: to_native conversion div/zero attempt. max=%5.2f, d=%d, i=%d, v=%5.2f, m=%5.2f, b=%5.2f\n", _native.max(), _dir, _invert, xsi, _mfactor, _boffset);
-                return static_cast<float>(_native.max());            
-            }
-        }
         return static_cast<float>(xnative);
     }
     // NOTE: do we really need two values? or should this just be a single value and get converted wherever needed?
@@ -328,14 +309,15 @@ class Transducer : public Device {
     Transducer() = delete;  // this ensures a pin is always provided
     void setup() { printf("%s..\n", this->_long_name.c_str()); }
 
-    // To set limits : call either one of set_abslimits() or set_abslimits_native(), whichever one you have
+    // To set limits : call either one of set_abslim() or set_abslim_native(), whichever one you have
     // the values to define the range, and all si and native abs values will be set automatically.
     // op limits will also be reconstrained to the updated abs values, however if you have a specific op range then
-    // call one of set_oplimits() or set_oplimits_native() separately as well (which works similarly).
-    void set_abslimits(float arg_min, float arg_max, bool calc_native=true) {  // these are absmin and absmax limits
+    // call one of set_oplim() or set_oplim_native() separately as well (which works similarly).
+    void set_abslim(float arg_min, float arg_max, bool calc_native=true) {  // these are absmin and absmax limits. values where NAN is passed in won't get set
         float tempmin = arg_min;
         float tempmax = arg_max;
-        if (tempmin > tempmax) {  // to handle autoconversions where _dir == REV
+        if (std::isnan(tempmin)) tempmin = _si.min();  // to handle autoconversions where _dir == REV
+        if (std::isnan(tempmin)) tempmin = _si.min();  // to handle autoconversions where _dir == REV
             tempmin = arg_max;
             tempmax = arg_min;
         }
@@ -345,9 +327,9 @@ class Transducer : public Device {
             tempmax = to_native(_si.max());
             _native.set_limits(std::min(tempmin, tempmax), std::max(tempmin, tempmax));
         }
-        set_oplimits();  // call just in case op limits require re-constraint if abs limits tightened up
+        set_oplim();  // call just in case op limits require re-constraint if abs limits tightened up
     }
-    void set_abslimits_native(float arg_min, float arg_max, bool calc_si=true) {  // these are absmin and absmax limits
+    void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // these are absmin and absmax limits
         float tempmin = arg_min;
         float tempmax = arg_max;
         if (tempmin > tempmax) {  // to handle autoconversions where _dir == REV
@@ -360,9 +342,9 @@ class Transducer : public Device {
             tempmax = from_native(_native.max());
             _si.set_limits(std::min(tempmin, tempmax), std::max(tempmin, tempmax));
         }
-        set_oplimits_native();  // call just in case op limits require re-constraint if abs limits tightened up
+        set_oplim_native();  // call just in case op limits require re-constraint if abs limits tightened up
     }
-    void set_oplimits(float arg_min=NAN, float arg_max=NAN, bool calc_native=true) {  // these are opmin and opmax limits. cal w/o arguments to auto-set
+    void set_oplim(float arg_min=NAN, float arg_max=NAN, bool calc_native=true) {  // these are opmin and opmax limits. cal w/o arguments to auto-set
         if (std::isnan(_opmin)) _opmin = _si.min();
         if (std::isnan(_opmax)) _opmax = _si.max();
         float tempmin = arg_min;
@@ -378,10 +360,10 @@ class Transducer : public Device {
         _opmin = constrain(_opmin, _si.min(), _opmax);
         _opmax = constrain(_opmax, _opmin, _si.max());
         if ((conversion_method == LinearMath) && calc_native) {  // if we know our linear relationship we can auto calculate the native limits
-            set_oplimits_native(to_native(arg_min), to_native(arg_max), false);
+            set_oplim_native(to_native(arg_min), to_native(arg_max), false);
         }
     }
-    void set_oplimits_native(float arg_min, float arg_max, bool calc_si=true) {
+    void set_oplim_native(float arg_min, float arg_max, bool calc_si=true) {
         if (std::isnan(_opmin_native)) _opmin_native = _native.min();
         if (std::isnan(_opmax_native)) _opmax_native = _native.max();
         float tempmin = arg_min;
@@ -397,7 +379,7 @@ class Transducer : public Device {
         _opmin_native = constrain(_opmin_native, _native.min(), _opmax_native);
         _opmax_native = constrain(_opmax_native, _opmin_native, _native.max());
         if ((conversion_method == LinearMath) && calc_si) {  // if we know our linear relationship we can auto calculate the native limits
-            set_oplimits(from_native(arg_min), from_native(arg_max), false);
+            set_oplim(from_native(arg_min), from_native(arg_max), false);
         }
     }
     bool set_native(float arg_val_native) {
@@ -421,10 +403,9 @@ class Transducer : public Device {
     }
     void set_margin(float arg_marg) { _margin = arg_marg; }
     // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
-    void set_conversions(float arg_mfactor, float arg_boffset, bool arg_invert=false, TransDir arg_dir=TransDir::FWD) {
+    void set_conversions(float arg_mfactor, float arg_boffset, TransDir arg_dir=TransDir::FWD) {
         _mfactor = arg_mfactor;
         _boffset = arg_boffset;
-        _invert = arg_invert;
         _dir = arg_dir;
     }
     // float si() { return _si.val(); }
@@ -476,7 +457,10 @@ class Sensor : public Transducer {
         this->set_si(this->_si.val());                  // wtf is this supposed to do?
         // set_si(_si.val + touch.fdelta);  // i would think this should look something like this (needs some coding on the other side to support)
     }
-    virtual float read_sensor() { return (float)analogRead(this->_pin); }
+    virtual float read_sensor() {
+        Serial.printf("Err: sensor does not have an overridden read_sensor() function\n");
+        return NAN;
+    }
     virtual void set_val_from_pin() {
         this->set_native(read_sensor());
         calculate_ema();  // Sensor EMA filter
@@ -554,8 +538,8 @@ class AirVeloSensor : public I2CSensor {
         // Serial.printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
         set_si(0.0);  // initialize value
-        set_abslimits(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
-        set_oplimits(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
+        set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
+        set_oplim(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         airveloTimer.set(airvelo_read_period_us);
@@ -614,8 +598,8 @@ class MAPSensor : public I2CSensor {
         // Serial.printf("%s..", this->_long_name.c_str());
         I2CSensor::setup();
         set_si(1.0);  // initialize value
-        set_abslimits(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
-        set_oplimits(0.68, 1.02);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
+        set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
+        set_oplim(0.68, 1.02);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         mapreadTimer.set(mapread_timeout);
@@ -656,7 +640,7 @@ class AnalogSensor : public Sensor {
         this->set_pin(this->_pin, INPUT);
         this->set_can_source(src::PIN, true);
         this->set_source(src::PIN);
-        set_abslimits_native(0.0, (float)adcrange_adc);
+        set_abslim_native(0.0, (float)adcrange_adc);
     }
 };
 
@@ -669,8 +653,8 @@ class CarBattery : public AnalogSensor {
     void setup() {  // printf("%s..\n", this->_long_name.c_str());
         AnalogSensor::setup();
         set_si(12.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
-        set_abslimits(0.0, 16.0);  // set abs range. dictated in this case by the max voltage a battery charger might output
-        set_oplimits(9.8, 13.8);  // set op range. dictated by the range of voltage of a healthy lead-acid battery across its discharge curve
+        set_abslim(0.0, 16.0);  // set abs range. dictated in this case by the max voltage a battery charger might output
+        set_oplim(9.8, 13.8);  // set op range. dictated by the range of voltage of a healthy lead-acid battery across its discharge curve
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         float m = _si.max() / (float)adcrange_adc;  // replace with a calibrated value based on measurements, and/or adjust and optimize voltage divider
@@ -714,7 +698,7 @@ class PressureSensor : public AnalogSensor {
     PressureSensor() = delete;
     void setup() {
         AnalogSensor::setup();
-        set_oplimits_native(658, 2080);
+        set_oplim_native(658, 2080);
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - opmin_native()) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
         float b = -1.0 * opmin_native() * m;  // -658 adc * 0.2 psi/adc = -131.6 psi
         set_conversions(m, b);
@@ -735,6 +719,8 @@ class PressureSensor : public AnalogSensor {
 // for measuring brake position (TODO which position? pad? pedal?)
 // Extends AnalogSensor for handling analog pin reading and conversion.
 class BrakePositionSensor : public AnalogSensor {
+  protected:
+    
   public:
     sens senstype = sens::brkpos;
     float _parkpos, _zeropoint;  // in inches
@@ -774,8 +760,6 @@ class BrakePositionSensor : public AnalogSensor {
         // _boffset = -2.69;  //  979 adc * 0.00372 in/adc - 0.95 in = -2.69 in
         _parkpos = _opmax;
         _dir = TransDir::REV;
-        set_si_limits(_absmin, _absmax);
-        set_native_limits(_absmin_adc, _absmax_adc);
         set_can_source(src::PIN, true);
         set_can_source(src::POT, true);
     }
@@ -831,19 +815,20 @@ class PulseSensor : public Sensor {
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // overload the normal function so we can also include us calculations 
     void set_abslims_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
-        if (arg_min <= float_zero) return;  // we can't accept 0 Hz for opmin
-        Transducer::set_oplims_native(arg_min, arg_max, calc_si);
-        void set_lims_us(float arg_min, float arg_max) {
-        if (arg_min > float_zero) _absmin_us = arg_min;
-        _absmax_us = arg_max;         
+        if ((std::abs(arg_min) <= float_zero) || (std::abs(arg_max) <= float_zero)) {
+            Serial.printf("Err: pulse sensor can not have limit of 0\n");
+            return;  // we can't accept 0 Hz for opmin
+        }
+        Transducer::set_abslims_native(arg_min, arg_max, calc_si);
+        absmax_us = 1000000.0 / _native.min();  // also set us limits from here, converting Hz to us, and swap min/max
+        absmin_us = 1000000.0 / _native.max();  // also set us limits from here, converting Hz to us, and swap min/max
     }
     std::string _long_name = "Unknown Hall Effect sensor";
     std::string _short_name = "pulsen";
-    std::string _native_units_name = "us";
+    std::string _native_units_name = "Hz";
     std::string _si_units_name = "";
     void setup() {
         Sensor::setup();
-        _invert = true;  // will use the math:  si_rpm = b_offset + m_factor / native_us
         this->set_pin(this->_pin, INPUT_PULLUP);
         this->set_can_source(src::PIN, true);
         this->set_source(src::PIN);
@@ -870,8 +855,8 @@ class Tachometer : public PulseSensor {
     Tachometer() = delete;
     void setup() {  // printf("%s..\n", this->_long_name.c_str());
         PulseSensor::setup();
-        set_abslims(0.0, 4500.0);  // Max recognized engine rotation speed
-        set_oplims(0.0, 3600.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        set_abslim(0.0, 4500.0);  // Max recognized engine rotation speed
+        set_oplim(0.0, 3600.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         float m = 60.0 * _freqdiv * 1000000.0;  // 1 pulse/us * 8 rot/pulse * 60 sec/min * 1000000 us/sec = 480000000 rot/min (rpm), (so 480M rpm per pulse-per-us)
         set_conversions(m, 0.0);
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
@@ -880,7 +865,7 @@ class Tachometer : public PulseSensor {
     }
     std::string _long_name = "Tachometer";
     std::string _short_name = "tach";
-    std::string _native_units_name = "us";
+    std::string _native_units_name = "Hz";
     std::string _si_units_name = "rpm";
 
     // float idle() { return _idle; }
@@ -901,8 +886,8 @@ class Speedometer : public PulseSensor {
     void setup() {
         // printf("%s..\n", this->_long_name.c_str());
         PulseSensor::setup();
-        set_abslims(0.0, 25.0);  // Max recognized engine rotation speed
-        set_oplims(0.0, 15.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        set_abslim(0.0, 25.0);  // Max recognized engine rotation speed
+        set_oplim(0.0, 15.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         float m = 1000000.0 * 3600.0 * 20 * M_PI * _freqdiv / (2 * 12 * 5280);  // 1 pulse/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr,  (so 1.8M mph per pulse-per-us)
         set_conversions(m, 0.0);
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
@@ -912,7 +897,7 @@ class Speedometer : public PulseSensor {
     }
     std::string _long_name = "Speedometer";
     std::string _short_name = "speedo";
-    std::string _native_units_name = "us";
+    std::string _native_units_name = "Hz";
     std::string _si_units_name = "mph";
 };
 // NOTE: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
