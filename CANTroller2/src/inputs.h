@@ -171,23 +171,23 @@ class Encoder {
             if (button.shortpress(false)) autosaver_request = REQ_OFF;
         }
     }
-    int32_t rotation(bool accel = false) {  // Returns detents spun since last call, accelerated by spin rate or not
+    int32_t rotation() {  // Returns detents spun since last call, accelerated by spin rate or not
         int32_t d = 0;
         if (_delta) {  // Now handle any new rotations
             kick_inactivity_timer(2);  // evidence of user activity
             if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
-                if (accel) {
-                    _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
-                    _spinrate_us = map (_spinrate_us, _spinrate_min_us, _accel_thresh_us, _accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
-                    d = _delta * _spinrate_us;  // If a tunable value is being edited, turning the encoder changes the value
-                }
-                else d = constrain (_delta, -1, 1);  // Only change one at a time when selecting or turning pages
+                // if (accel) {
+                _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
+                _spinrate_us = map (_spinrate_us, _spinrate_min_us, _accel_thresh_us, _accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
+                d = _delta * _spinrate_us;  // If a tunable value is being edited, turning the encoder changes the value
+                // }
+                // else d = constrain (_delta, -1, 1);  // Only change one at a time when selecting or turning pages
             }
-            // _delta = 0;  // [not] our responsibility to reset this flag after handling events
+            _delta = 0;  // our responsibility to reset this flag after handling events
         }
         return d;
     }
-    void rezero() { _delta = 0; }  // Handling code needs to call to rezero after reading rotations
+    // void rezero() { _delta = 0; }  // Handling code needs to call to rezero after reading rotations
 };
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
@@ -244,6 +244,11 @@ class Touchscreen {
         bool retval = touch_longpress_valid && touchHoldTimer.expired();
         if (retval) touch_longpress_valid = false;
         return retval;
+    }
+    int get_delta() {
+        int ret = idelta;
+        idelta = 0;
+        return ret;
     }
     void update() {
         if (captouch && _i2c->not_my_turn(i2c_touch)) return;

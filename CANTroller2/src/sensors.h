@@ -83,8 +83,8 @@ class Param {
   public:
     std::string _long_name = "Unnamed value";
     std::string _short_name = "noname";
-    std::string _native_units_name = "";
-    std::string _si_units_name = "";
+    std::string _native_units = "";
+    std::string _si_units = "";
     Param() { _last = _val; }
     Param(float arg_val, float arg_min, float arg_max) {  // Creates a regular constrained Param
         _val = arg_val;
@@ -161,6 +161,8 @@ class Device {
     Timer timer;  // Can be used for external purposes
     std::string _long_name = "Unknown device";
     std::string _short_name = "device";
+    std::string _native_units = "";
+    std::string _si_units = "";
     sens senstype = sens::none;
     Device() = delete; // should always be created with a pin
     // NOTE: should we start in PIN mode?
@@ -351,14 +353,7 @@ class Transducer : public Device {
         float delta = (float)(arg_add_si * tuning_rate_pcps * loop_avg_us * (_opmax - _opmin) / (100.0 * 1000000));  // this acceleration logic doesn't belong here
         return set_si(_si.val() + delta);
     }
-    void set_margin(float arg_marg) {
-        _margin = arg_marg;
-        _margin_native = to_native(_margin);
-    }
-    void set_margin_native(float arg_marg) {
-        _margin_native = arg_marg;
-        _margin = from_native(_margin_native);
-    }
+    void set_margin(float arg_marg) { _margin = arg_marg; }
     // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
     void set_conversions(float arg_mfactor, float arg_boffset) {
         if (std::abs(arg_mfactor) < float_zero) {
@@ -490,8 +485,8 @@ class AirVeloSensor : public I2CSensor {
     AirVeloSensor() = delete;
     std::string _long_name = "Air velocity sensor";
     std::string _short_name = "airvel";
-    std::string _native_units_name = "mph";
-    std::string _si_units_name = "mph";
+    std::string _native_units = "mph";
+    std::string _si_units = "mph";
 
     virtual void set_val_common() {
         if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
@@ -550,8 +545,8 @@ class MAPSensor : public I2CSensor {
     MAPSensor() = delete;
     std::string _long_name = "Manifold Air Pressure sensor";
     std::string _short_name = "map";
-    std::string _native_units_name = "atm";
-    std::string _si_units_name = "atm";
+    std::string _native_units = "atm";
+    std::string _si_units = "atm";
 
     virtual void set_val_common() {
         if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
@@ -595,8 +590,8 @@ class AnalogSensor : public Sensor {
     AnalogSensor(uint8_t arg_pin) : Sensor(arg_pin) {}
     std::string _long_name = "Unknown analog sensor";
     std::string _short_name = "analog";
-    std::string _native_units_name = "adc";
-    std::string _si_units_name = "";
+    std::string _native_units = "adc";
+    std::string _si_units = "";
     void setup() {
         Sensor::setup();
         set_pin(this->_pin, INPUT);
@@ -625,8 +620,8 @@ class CarBattery : public AnalogSensor {
     void set_val_from_touch() { set_si(12.0); }  // what exactly is going on here? maybe an attempt to prevent always showing battery errors on dev boards?
     std::string _long_name = "Vehicle battery voltage";
     std::string _short_name = "mulbat";
-    std::string _native_units_name = "adc";
-    std::string _si_units_name = "V";
+    std::string _native_units = "adc";
+    std::string _si_units = "V";
 };
 // PressureSensor represents a brake fluid pressure sensor.
 // It extends AnalogSensor to handle reading an analog pin
@@ -639,8 +634,8 @@ class PressureSensor : public AnalogSensor {
     float hold_initial, hold_increment, panic_initial, panic_increment, _zeropoint;  // , _margin_psi, _zeropoint_psi;
     std::string _long_name = "Brake pressure sensor";
     std::string _short_name = "presur";
-    std::string _native_units_name = "adc";
-    std::string _si_units_name = "psi";
+    std::string _native_units = "adc";
+    std::string _si_units = "psi";
     PressureSensor(uint8_t arg_pin) : AnalogSensor(arg_pin) {}
     // the sensor output voltage spec range is 0.5-4.5 V to indicate 0-1000 psi.
     // Our ADC top is just 3.3V tho, so we can sense up to 695 psi (calculated) at our max adc
@@ -688,8 +683,8 @@ class BrakePositionSensor : public AnalogSensor {
     float _parkpos, _zeropoint;  // in inches
     std::string _long_name = "Brake position sensor";
     std::string _short_name = "brkpos";
-    std::string _native_units_name = "adc";
-    std::string _si_units_name = "in";
+    std::string _native_units = "adc";
+    std::string _si_units = "in";
 
     BrakePositionSensor(uint8_t arg_pin) : AnalogSensor(arg_pin) {}
     BrakePositionSensor() = delete;
@@ -805,8 +800,8 @@ class PulseSensor : public Sensor {
     // }
     std::string _long_name = "Unknown Hall Effect sensor";
     std::string _short_name = "pulsen";
-    std::string _native_units_name = "Hz";
-    std::string _si_units_name = "";
+    std::string _native_units = "Hz";
+    std::string _si_units = "";
     void setup() {
         Sensor::setup();
         set_pin(this->_pin, INPUT_PULLUP);
@@ -837,7 +832,7 @@ class Tachometer : public PulseSensor {
         PulseSensor::setup();
         set_abslim(0.0, 4500.0);  // Max recognized engine rotation speed
         set_oplim(0.0, 3600.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
-        float m = 60.0 * _freqdiv * 1000000.0;  // 1 pulse/us * 8 rot/pulse * 60 sec/min * 1000000 us/sec = 480000000 rot/min (rpm), (so 480M rpm per pulse-per-us)
+        float m = 60.0 * _freqdiv * 1000000.0;  // 1 pulse/us * 8 rot/pulse * 60 sec/min * 1000000 us/sec = 480000000 rot/min (rpm) per Hz, (so 480M rpm per pulse-per-us)
         set_conversions(m, 0.0);
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(10.0);
@@ -845,8 +840,8 @@ class Tachometer : public PulseSensor {
     }
     std::string _long_name = "Tachometer";
     std::string _short_name = "tach";
-    std::string _native_units_name = "Hz";
-    std::string _si_units_name = "rpm";
+    std::string _native_units = "Hz";
+    std::string _si_units = "rpm";
 
     // float idle() { return _idle; }
     // float* idle_ptr() { return &_idle; }
@@ -877,8 +872,8 @@ class Speedometer : public PulseSensor {
     }
     std::string _long_name = "Speedometer";
     std::string _short_name = "speedo";
-    std::string _native_units_name = "Hz";
-    std::string _si_units_name = "mph";
+    std::string _native_units = "Hz";
+    std::string _si_units = "mph";
 };
 // NOTE: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
 // ServoPWM is a base class for our type of actuators, where by varying a pulse width (in us), motors move.
@@ -906,8 +901,8 @@ class Speedometer : public PulseSensor {
 //     ServoPWM() = delete;
 //     std::string _long_name = "Unknown PWM motor output";
 //     std::string _short_name = "pwmout";
-//     std::string _native_units_name = "us";
-//     std::string _si_units_name = "";
+//     std::string _native_units = "us";
+//     std::string _si_units = "";
 //     void setup() {
 //         set_pin(this->_pin, OUTPUT);
 //     }

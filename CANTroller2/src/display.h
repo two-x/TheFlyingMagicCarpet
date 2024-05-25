@@ -100,7 +100,6 @@ volatile bool reset_request = false;
 volatile bool pushtime = 0;
 volatile bool drawn = false;
 volatile bool pushed = true;
-volatile bool tuner_waiting_for_screen_sync = false;
 
 SemaphoreHandle_t pushbuf_sem;  // StaticSemaphore_t push_semaphorebuf_sem;
 SemaphoreHandle_t drawbuf_sem;  // StaticSemaphore_t draw_semaphorebuf_sem;
@@ -139,11 +138,12 @@ class Display {
   public:
     std::string disp_values[disp_lines];  // Holds previously drawn value strings for each line
     volatile bool disp_bool_values[6];
+    int disp_datapage_last;
     volatile bool disp_bargraphs[disp_lines];
     volatile bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
-    volatile int32_t disp_needles[disp_lines];
-    volatile int32_t disp_targets[disp_lines];
-    volatile int32_t disp_age_quanta[disp_lines];
+    volatile int disp_needles[disp_lines];
+    volatile int disp_targets[disp_lines];
+    volatile int disp_age_quanta[disp_lines];
     volatile uint8_t disp_val_colors[disp_lines];
     volatile bool disp_selected_val_dirty;
     volatile bool disp_datapage_dirty;
@@ -217,7 +217,7 @@ class Display {
         for (int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
         for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         datapage = prefs.getUInt("dpage", PG_RUN);
-        datapage_last = prefs.getUInt("dpage", PG_TEMP);
+        disp_datapage_last = prefs.getUInt("dpage", PG_TEMP);
         init_framebuffers(disp_width_pix, disp_height_pix);
         animations.setup(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         sprptr = &framebuf[flip];
@@ -512,7 +512,7 @@ class Display {
         disp_runmode_dirty = false;
         runmode_last = _nowmode;
     }
-    void draw_datapage(int32_t page, int32_t page_last, bool forced=false) {
+    void draw_datapage(int32_t page, bool forced=false) {
         if (forced) {
             for (int i = disp_fixed_lines; i < disp_lines; i++) {
                 disp_age_quanta[i] = 0;
@@ -521,8 +521,9 @@ class Display {
             }
             disp_values_dirty = true;
         }
-        draw_fixed(page, page_last, true, forced);  // Erase and redraw variable names and units for data on this page
-        draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[page_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
+        draw_fixed(page, disp_datapage_last, true, forced);  // Erase and redraw variable names and units for data on this page
+        draw_string(disp_datapage_title_x, disp_datapage_title_x, disp_vshift_pix, pagecard[page], pagecard[disp_datapage_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
+        disp_datapage_last = page;
         disp_datapage_dirty = false;
     }
     void draw_selected_name(int32_t tun_ctrl, int32_t selected_val, int32_t selected_last, int32_t selected_last_last) {
@@ -815,7 +816,7 @@ class Display {
         if (!auto_saver_enabled) {
             tiny_text();
             update_idiots(disp_idiots_dirty);
-            if (disp_datapage_dirty) draw_datapage(datapage, datapage_last, true);
+            if (disp_datapage_dirty) draw_datapage(datapage, true);
             if (disp_sidemenu_dirty) draw_touchgrid(false);
             if (disp_selected_val_dirty) draw_selected_name(tunctrl, sel_val, sel_val_last, sel_val_last_last);
             
@@ -830,7 +831,6 @@ class Display {
         sim_last = sim->enabled();
         fps = animations.update(spr, disp_simbuttons_dirty);
         disp_simbuttons_dirty = false;
-        tuner_waiting_for_screen_sync = false;
         return true;
     }
     void push_task() {
@@ -942,6 +942,7 @@ class Tuner {
     Touchscreen* touch;
     Timer tuningAbandonmentTimer{25000000};  // This times out edit mode after a a long period of inactivity
     Timer tuningEditTimer{50000};  // Control frequency of polling for new edits
+    int datapage_last;
   public:
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
     int32_t rdelta = 0, rdelta_encoder = 0, idelta = 0, idelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
@@ -952,7 +953,7 @@ class Tuner {
     }
   private:
     void process_inputs() {
-        if (!tuningEditTimer.expired() && !tuner_waiting_for_screen_sync) return;
+        if (!tuningEditTimer.expired()) return;
         tuningEditTimer.reset();
         sel_val_last = sel_val;
         datapage_last = datapage;
@@ -966,19 +967,19 @@ class Tuner {
             }
             else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
         }
-        rdelta_encoder = encoder.rotation(false);  // unaccelerated encoder turn
-        idelta_encoder = encoder.rotation(true);   // accelerated
-        encoder.rezero();
+        // rdelta_encoder = encoder.rotation(false);  // unaccelerated encoder turn
+        idelta_encoder = encoder.rotation();   // accelerated
+        rdelta_encoder = constrain(idelta_encoder, -1, 1);
+        // encoder.rezero();
         // if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
         if (tunctrl == SELECT) sel_val += rdelta_encoder;  // If overflow constrain will fix in general handler below
-        else if (tunctrl == OFF) datapage += idelta_encoder;  // If overflow tconstrain will fix in general below
+        else if (tunctrl == OFF) datapage += rdelta_encoder;  // If overflow tconstrain will fix in general below
         if (touch->increment_sel_val) ++sel_val %= disp_tuning_lines;
         if (touch->increment_datapage) ++datapage %= NUM_DATAPAGES;
         touch->increment_sel_val = touch->increment_datapage = false;
-        rdelta = constrain(rdelta_encoder + touch->idelta, -1, 1);  // combine unaccelerated values
-        idelta = idelta_encoder + touch->idelta;  // Allow edits using the encoder or touchscreen
+        idelta = idelta_encoder + touch->get_delta();  // Allow edits using the encoder or touchscreen
         fdelta = float(idelta);
-        touch->idelta = 0;  // touch->rdelta = 0;
+        rdelta = constrain(idelta, -1, 1);  // combine unaccelerated values
         if (pot_tuner_acceleration && !sim.potmapping()) {  // use pot to control level of acceleration
             if (pot.val() < 50.0) fdelta /= map(pot.val(), 50.0, 0.0, 1.0, 5.0);
             else fdelta *= map(pot.val(), 50.0, 100.0, 1.0, 10.0);
@@ -997,7 +998,6 @@ class Tuner {
             if (sel_val != sel_val_last) screen->disp_selected_val_dirty = true;
         }
         if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selected_val_dirty = true;
-        tuner_waiting_for_screen_sync = true;
     }
     void adj_potmap() {  // potmap scroll select custom adjust function. includes potentially needed refresh of sim buttons content
         sim.set_potmap((sens)(adj_val(sim.potmap(), rdelta, 0, (int)(sens::starter) - 1)));
