@@ -611,11 +611,12 @@ class CarBattery : public AnalogSensor {
         AnalogSensor::setup();
         set_si(12.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
         set_abslim(0.0, 16.0);  // set abs range. dictated in this case by the max voltage a battery charger might output
+        float m = _si.max() / (float)adcrange_adc;  // replace with a calibrated value based on measurements, and/or adjust and optimize voltage divider
+        set_conversions(m, 0.0);
+        set_abslim(NAN, NAN, true);    // re-run this in order to propagate values to the native units, now that we have set up the linear math
         set_oplim(9.8, 13.8);  // set op range. dictated by the range of voltage of a healthy lead-acid battery across its discharge curve
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
-        float m = _si.max() / (float)adcrange_adc;  // replace with a calibrated value based on measurements, and/or adjust and optimize voltage divider
-        set_conversions(m, 0.0);
     }
     void set_val_from_touch() { set_si(12.0); }  // what exactly is going on here? maybe an attempt to prevent always showing battery errors on dev boards?
     std::string _long_name = "Vehicle battery voltage";
@@ -659,6 +660,7 @@ class PressureSensor : public AnalogSensor {
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - opmin_native()) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
         float b = -1.0 * opmin_native() * m;  // -658 adc * 0.2 psi/adc = -131.6 psi
         set_conversions(m, b);
+        set_oplim_native(NAN, NAN, true);  // re-run this in order to propagate values to the si units, now that we have set up the linear math
         set_ema_alpha(0.15);
         set_margin(1.0);  // Max acceptible error when checking psi levels
         hold_initial = 120.0;  // Pressure applied when brakes are hit to auto-stop or auto-hold the car (ADC count 0-4095)
@@ -830,10 +832,10 @@ class Tachometer : public PulseSensor {
     Tachometer() = delete;
     void setup() {  // printf("%s..\n", this->_long_name.c_str());
         PulseSensor::setup();
-        set_abslim(0.0, 4500.0);  // Max recognized engine rotation speed
-        set_oplim(0.0, 3600.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         float m = 60.0 * _freqdiv;  // 1 Hz = 1 pulse/sec * 8 rot/pulse * 60 sec/min = 480 rot/min per pulse/sec, (so 480 rpm per Hz)
         set_conversions(m, 0.0);
+        set_abslim(0.0, 4500.0);  // Max recognized engine rotation speed
+        set_oplim(0.0, 3600.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(10.0);
         set_si(50.0);
@@ -861,10 +863,10 @@ class Speedometer : public PulseSensor {
     void setup() {
         // printf("%s..\n", this->_long_name.c_str());
         PulseSensor::setup();
-        set_abslim(0.0, 25.0);  // Max recognized engine rotation speed
-        set_oplim(0.0, 15.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         float m = 3600.0 * 20 * M_PI * _freqdiv / (2 * 12 * 5280);  // 1 Hz = 1 pulse/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.8 mph per Hz)
         set_conversions(m, 0.0);
+        set_abslim(0.0, 25.0);  // Max recognized engine rotation speed
+        set_oplim(0.0, 15.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(0.2);
         set_si(50.0);
