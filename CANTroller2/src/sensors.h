@@ -832,7 +832,7 @@ class Tachometer : public PulseSensor {
         PulseSensor::setup();
         set_abslim(0.0, 4500.0);  // Max recognized engine rotation speed
         set_oplim(0.0, 3600.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
-        float m = 60.0 * _freqdiv * 1000000.0;  // 1 pulse/us * 8 rot/pulse * 60 sec/min * 1000000 us/sec = 480000000 rot/min (rpm) per Hz, (so 480M rpm per pulse-per-us)
+        float m = 60.0 * _freqdiv;  // 1 Hz = 1 pulse/sec * 8 rot/pulse * 60 sec/min = 480 rot/min per pulse/sec, (so 480 rpm per Hz)
         set_conversions(m, 0.0);
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(10.0);
@@ -863,7 +863,7 @@ class Speedometer : public PulseSensor {
         PulseSensor::setup();
         set_abslim(0.0, 25.0);  // Max recognized engine rotation speed
         set_oplim(0.0, 15.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
-        float m = 1000000.0 * 3600.0 * 20 * M_PI * _freqdiv / (2 * 12 * 5280);  // 1 pulse/us * 1000000 us/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1785000 mi/hr,  (so 1.8M mph per pulse-per-us)
+        float m = 3600.0 * 20 * M_PI * _freqdiv / (2 * 12 * 5280);  // 1 Hz = 1 pulse/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.8 mph per Hz)
         set_conversions(m, 0.0);
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(0.2);
