@@ -293,44 +293,44 @@ class Transducer : public Device {
     // the values to define the range, and all si and native abs values will be set automatically.
     // op limits will also be reconstrained to the updated abs values, however if you have a specific op range then
     // call one of set_oplim() or set_oplim_native() separately as well (which works similarly).
-    void set_abslim(float argmin=NAN, float argmax=NAN, bool calc_native=true) {  // these are absmin and absmax limits. values where NAN is passed in won't be used
+    void set_abslim(float argmin=NAN, float argmax=NAN, bool autocalc=true) {     // these are absmin and absmax limits. values where NAN is passed in won't be used
         if (std::isnan(argmin)) argmin = _si.min();                               // use incumbent min value if none was passed in
         if (std::isnan(argmax)) argmax = _si.max();                               // use incumbent max value if none was passed in
         _si.set_limits(argmin, argmax);                                           // commit to the Param accordingly
         _si_raw = constrain(_si_raw, _si.min(), _si.max());                       // in case we have new limits, re-constrain the raw si value we also manage
-        if ((conversion_method == LinearMath) && calc_native) {                   // if we know our conversion formula, and not instructed to skip autocalculation...
+        if ((conversion_method == LinearMath) && autocalc) {                      // if we know our conversion formula, and not instructed to skip autocalculation...
             _native.set_limits(to_native(_si.min()), to_native(_si.max()));       // then convert the new values and ensure si and native stay equivalent
         }
         set_oplim(NAN, NAN, false);                                               // just to enforce any re-constraints if needed to keep op limits inside abs limits
     }
-    void set_abslim_native(float argmin=NAN, float argmax=NAN, bool calc_si=true) {  // these are absmin and absmax limits. values where NAN is passed in won't be used
+    void set_abslim_native(float argmin=NAN, float argmax=NAN, bool autocalc=true) { // these are absmin and absmax limits. values where NAN is passed in won't be used
         if (std::isnan(argmin)) argmin = _native.min();                              // use incumbent min value if none was passed in
         if (std::isnan(argmax)) argmax = _native.max();                              // use incumbent max value if none was passed in
         _native.set_limits(argmin, argmax);                                          // commit to the Param accordingly
-        if ((conversion_method == LinearMath) && calc_si) {                          // if we know our conversion formula, and not instructed to skip autocalculation...
+        if ((conversion_method == LinearMath) && autocalc) {                         // if we know our conversion formula, and not instructed to skip autocalculation...
             _si.set_limits(from_native(_native.min()), from_native(_native.max()));  // then convert the new values and ensure si and native stay equivalent
         }
         set_oplim_native(NAN, NAN, false);                                           // just to enforce any re-constraints if needed to keep op limits inside abs limits
     }
-    void set_oplim(float argmin=NAN, float argmax=NAN, bool calc_native=true) {  // these are opmin and opmax limits. values where NAN is passed in won't be used
-        if (!std::isnan(argmin)) _opmin = argmin;                                // if min value was passed in then set opmin to it
-        else if (std::isnan(_opmin)) _opmin = _si.min();                         // otherwise if opmin has no value then set it to absmin
-        if (!std::isnan(argmax)) _opmax = argmax;                                // if max value was passed in then set opmax to it
-        else if (std::isnan(_opmax)) _opmax = _si.max();                         // otherwise if opmax has no value then set it to absmax
-        _opmin = constrain(_opmin, _si.min(), _opmax);                           // constrain to ensure absmin <= opmin <= opmax <= absmax
-        _opmax = constrain(_opmax, _opmin, _si.max());                           // constrain to ensure absmin <= opmin <= opmax <= absmax
-        if ((conversion_method == LinearMath) && calc_native) {                  // if we know our conversion formula, and not instructed to skip autocalculation...
-            set_oplim_native(to_native(_opmin), to_native(_opmax), false);       // then convert the new values and ensure si and native stay equivalent
+    void set_oplim(float argmin=NAN, float argmax=NAN, bool autocalc=true) {  // these are opmin and opmax limits. values where NAN is passed in won't be used
+        if (!std::isnan(argmin)) _opmin = argmin;                             // if min value was passed in then set opmin to it
+        else if (std::isnan(_opmin)) _opmin = _si.min();                      // otherwise if opmin has no value then set it to absmin
+        if (!std::isnan(argmax)) _opmax = argmax;                             // if max value was passed in then set opmax to it
+        else if (std::isnan(_opmax)) _opmax = _si.max();                      // otherwise if opmax has no value then set it to absmax
+        _opmin = constrain(_opmin, _si.min(), _opmax);                        // constrain to ensure absmin <= opmin <= opmax <= absmax
+        _opmax = constrain(_opmax, _opmin, _si.max());                        // constrain to ensure absmin <= opmin <= opmax <= absmax
+        if ((conversion_method == LinearMath) && autocalc) {                  // if we know our conversion formula, and not instructed to skip autocalculation...
+            set_oplim_native(to_native(_opmin), to_native(_opmax), false);    // then convert the new values and ensure si and native stay equivalent
         }
     }
-    void set_oplim_native(float argmin=NAN, float argmax=NAN, bool calc_si=true) {     // these are opmin and opmax limits. values where NAN is passed in won't be used
+    void set_oplim_native(float argmin=NAN, float argmax=NAN, bool autocalc=true) {    // these are opmin and opmax limits. values where NAN is passed in won't be used
         if (!std::isnan(argmin)) _opmin_native = argmin;                               // if min value was passed in then set opmin to it
         else if (std::isnan(_opmin_native)) _opmin_native = _native.min();             // otherwise if opmin has no value then set it to absmin
         if (!std::isnan(argmax)) _opmax_native = argmax;                               // if max value was passed in then set opmax to it
         else if (std::isnan(_opmax_native)) _opmax_native = _native.max();             // otherwise if opmax has no value then set it to absmax
         _opmin_native = constrain(_opmin_native, _native.min(), _opmax_native);        // constrain to ensure absmin <= opmin <= opmax <= absmax
         _opmax_native = constrain(_opmax_native, _opmin_native, _native.max());        // constrain to ensure absmin <= opmin <= opmax <= absmax
-        if ((conversion_method == LinearMath) && calc_si) {                            // if we know our conversion formula, and not instructed to skip autocalculation...
+        if ((conversion_method == LinearMath) && autocalc) {                           // if we know our conversion formula, and not instructed to skip autocalculation...
             set_oplim(from_native(_opmin_native), from_native(_opmax_native), false);  // then convert the new values and ensure si and native stay equivalent
         }
     }
@@ -609,12 +609,12 @@ class CarBattery : public AnalogSensor {
     CarBattery() = delete;
     void setup() {  // printf("%s..\n", this->_long_name.c_str());
         AnalogSensor::setup();
-        set_si(12.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
-        set_abslim(0.0, 16.0);  // set abs range. dictated in this case by the max voltage a battery charger might output
-        float m = _si.max() / (float)adcrange_adc;  // replace with a calibrated value based on measurements, and/or adjust and optimize voltage divider
+        float max_volts = 16.0;  // temporarily hold this key value for use in m_factor calculation and abs limit setting below (which must happen in that order) 
+        float m = max_volts / (float)adcrange_adc;  // replace with a calibrated value based on measurements, and/or adjust and optimize voltage divider
         set_conversions(m, 0.0);
-        set_abslim(NAN, NAN, true);    // re-run this in order to propagate values to the native units, now that we have set up the linear math
+        set_abslim(0.0, max_volts);  // set abs range. dictated in this case by the max voltage a battery charger might output
         set_oplim(9.8, 13.8);  // set op range. dictated by the range of voltage of a healthy lead-acid battery across its discharge curve
+        set_si(12.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
     }
@@ -656,11 +656,11 @@ class PressureSensor : public AnalogSensor {
     PressureSensor() = delete;
     void setup() {
         AnalogSensor::setup();
-        set_oplim_native(658, 2080);
-        float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - opmin_native()) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
-        float b = -1.0 * opmin_native() * m;  // -658 adc * 0.2 psi/adc = -131.6 psi
+        float min_adc = 658;  // temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
+        float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
+        float b = -1.0 * min_adc * m;  // -658 adc * 0.2 psi/adc = -131.6 psi
         set_conversions(m, b);
-        set_oplim_native(NAN, NAN, true);  // re-run this in order to propagate values to the si units, now that we have set up the linear math
+        set_oplim_native(min_adc, 2080);
         set_ema_alpha(0.15);
         set_margin(1.0);  // Max acceptible error when checking psi levels
         hold_initial = 120.0;  // Pressure applied when brakes are hit to auto-stop or auto-hold the car (ADC count 0-4095)
@@ -693,7 +693,7 @@ class BrakePositionSensor : public AnalogSensor {
     void setup() {
         // printf("%s..\n", this->_long_name.c_str());
         AnalogSensor::setup();
-        conversion_method = AbsLimMap;
+        conversion_method = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
         #if BrakeThomson
             set_abslim(0.335, 8.3);  // TUNED 230602
             set_oplim(0.506, 4.234)  // 4.624  //TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
@@ -780,7 +780,7 @@ class PulseSensor : public Sensor {
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // overload the normal function so we can also include us calculations 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
-        if ((std::abs(arg_min) <= float_zero) || (std::abs(arg_max) <= float_zero)) {
+        if ((!isnan(arg_min) && (std::abs(arg_min) <= float_zero)) || (!isnan(arg_max) && (std::abs(arg_max) <= float_zero))) {
             Serial.printf("Err: pulse sensor can not have limit of 0\n");
             return;  // we can't accept 0 Hz for opmin
         }
@@ -834,7 +834,11 @@ class Tachometer : public PulseSensor {
         PulseSensor::setup();
         float m = 60.0 * _freqdiv;  // 1 Hz = 1 pulse/sec * 8 rot/pulse * 60 sec/min = 480 rot/min per pulse/sec, (so 480 rpm per Hz)
         set_conversions(m, 0.0);
-        set_abslim(0.0, 4500.0);  // Max recognized engine rotation speed
+        set_abslim(0.0, 4500.0);  // the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
+        
+        // do i need this line?
+        // set_abslim_native(us_to_hz(6000), NAN, false);  // for pulse sensor, set absmin_native to define the stop timeout period. Less Hz means more us which slows our detection of being stopped
+        
         set_oplim(0.0, 3600.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(10.0);
@@ -865,7 +869,11 @@ class Speedometer : public PulseSensor {
         PulseSensor::setup();
         float m = 3600.0 * 20 * M_PI * _freqdiv / (2 * 12 * 5280);  // 1 Hz = 1 pulse/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.8 mph per Hz)
         set_conversions(m, 0.0);
-        set_abslim(0.0, 25.0);  // Max recognized engine rotation speed
+        set_abslim(0.0, 25.0);  // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
+
+        // do i need this line?
+        // set_abslim_native(us_to_hz(10000), NAN, false);  // for pulse sensor, set absmin_native to define the stop timeout period. Less Hz means more us which slows our detection of being stopped
+
         set_oplim(0.0, 15.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(0.2);
