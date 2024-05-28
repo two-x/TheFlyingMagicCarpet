@@ -395,6 +395,14 @@ void bootbutton_actions() {  // temporary (?) functionality added for developmen
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
     if (bootbutton.shortpress()) {
         if (auto_saver_enabled) animations.change_saver();
-        else sim.toggle();
+        // else sim.toggle();
+        else {
+            sim.toggle();
+            pressure.print_config(true);
+            brkpos.print_config(true);
+            speedo.print_config(true);
+            tach.print_config(true);
+            mulebatt.print_config(true);
+        }
     }
 }

@@ -270,8 +270,10 @@ class Transducer : public Device {
     }
     Transducer() = delete;  // this ensures a pin is always provided
     int _transtype;
-    void setup() { print_config(); }  // printf("%s..\n", this->_long_name.c_str()); }
-
+    void setup() {
+        print_config(true, false);  // print header
+        if (_pin < 255) Serial.printf(" on pin %d\n", _pin);
+    }  // printf("%s..\n", this->_long_name.c_str()); }
     // To set limits : call either one of set_abslim() or set_abslim_native(), whichever one you have
     // the values to define the range, and all si and native abs values will be set automatically.
     // op limits will also be reconstrained to the updated abs values, however if you have a specific op range then
@@ -333,14 +335,14 @@ class Transducer : public Device {
         if (_dir == TransDir::FWD) return set_si(map(arg_val_pc, 0.0, 100.0, _opmin, _opmax));
         else return set_si(map(arg_val_pc, 100.0, 0.0, _opmin, _opmax));
     }
-    bool add_native(float arg_add_native) { return set_native(_native.val() + arg_add_native); }
+    bool add_native(float arg_add_native) { return set_native(constrain(_native.val() + arg_add_native, _opmin_native, _opmax_native)); }
     bool add_pc(float arg_add_pc) {
         float delta_pc = arg_add_pc * tuning_rate_pcps * loop_avg_us / 1000000.0;  // this acceleration logic doesn't belong here
-        return set_si(_si.val() + map(delta_pc, 0.0, 100.0, _opmin, _opmax));
+        return set_si(constrain(_si.val() + map(delta_pc, 0.0, 100.0, _opmin, _opmax), _opmin, _opmax));
     }
     bool add_si(float arg_add_si) {
         float delta_si = arg_add_si * tuning_rate_pcps * loop_avg_us * (_opmax - _opmin) / (100.0 * 1000000.0);  // this acceleration logic doesn't belong here
-        return set_si(_si.val() + delta_si);
+        return set_si(constrain(_si.val() + delta_si, _opmin, _opmax));
     }
     void set_margin(float arg_marg) { _margin = arg_marg; }
     // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
@@ -351,11 +353,17 @@ class Transducer : public Device {
         }
         if (!std::isnan(arg_mfactor)) _boffset = arg_boffset;
     }
-    void print_config() {
-        Serial.printf("Initializing %s (%s) %s..\n", this->_long_name.c_str(), this->_short_name.c_str(), transtypecard[this->_transtype].c_str());
-        Serial.printf("  abs range: %4.2lf-%4.2lf %s (%4.2lf-%4.2lf %s)\n", this->_si.min(), this->_si.max(), this->_si_units.c_str(), this->_native.min(), this->_native.max(), this->_native_units.c_str());
-        Serial.printf("  op range: %4.2lf-%4.2lf %s (%4.2lf-%4.2lf %s)\n", this->_opmin, this->_opmax, this->_si_units.c_str(), this->_opmin_native, this->_opmax_native, this->_native_units.c_str());
-        Serial.printf("  current value: %4.2lf %s = %4.2lf %s = %4.2lf %%\n", this->_si.val(), this->_si_units.c_str(), this->_native.val(), this->_native_units.c_str(), pc()); 
+    void print_config(bool header=false, bool ranges=true) {
+        if (header) {
+            Serial.printf("Initializing %s %s%s", this->_long_name.c_str(), this->_short_name.c_str(), transtypecard[this->_transtype].c_str(), (_pin == 255) ? "\n" : "");
+            if (_pin < 255) Serial.printf(" on pin %d\n", _pin);
+        }
+        Serial.printf("  %s current value: %.2lf %s = %.2lf %s = %.2lf %%\n", this->_short_name.c_str(), this->_si.val(), this->_si_units.c_str(), this->_native.val(), this->_native_units.c_str(), pc()); 
+        if (ranges) {
+            Serial.printf("  abs range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", this->_si.min(), this->_si.max(), this->_si_units.c_str(), this->_native.min(), this->_native.max(), this->_native_units.c_str());
+            Serial.printf("  op range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", this->_opmin, this->_opmax, this->_si_units.c_str(), this->_opmin_native, this->_opmax_native, this->_native_units.c_str());
+        }
+
     }
     // float si() { return _si.val(); }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)
@@ -491,6 +499,7 @@ class AirVeloSensor : public I2CSensor {
     }
     void setup() {
         // Serial.printf("%s..", this->_long_name.c_str());
+        I2CSensor::setup();
         set_si(0.0);  // initialize value
         set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
@@ -512,7 +521,7 @@ class AirVeloSensor : public I2CSensor {
             printf("\n");
             set_source(src::UNDEF); // don't even have a device at all...
         }
-        I2CSensor::setup();
+        print_config();
     }
 };
 
@@ -551,6 +560,7 @@ class MAPSensor : public I2CSensor {
     }
     void setup() {
         // Serial.printf("%s..", this->_long_name.c_str());
+        I2CSensor::setup();
         set_si(1.0);  // initialize value
         set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68, 1.02);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
@@ -570,7 +580,7 @@ class MAPSensor : public I2CSensor {
             Serial.printf("\n");
             set_source(src::UNDEF); // don't even have a device at all...
         }
-        I2CSensor::setup();
+        print_config();
     }
 };
 
@@ -591,11 +601,11 @@ class AnalogSensor : public Sensor {
         _native_units = "adc";
     }
     void setup() {
+        Sensor::setup();
         set_pin(this->_pin, INPUT);
         this->set_can_source(src::PIN, true);
         this->set_source(src::PIN);
-        set_abslim_native(0.0, (float)adcrange_adc);
-        Sensor::setup();
+        set_abslim_native(0.0, (float)adcrange_adc, false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
     }
 };
 
@@ -620,6 +630,7 @@ class CarBattery : public AnalogSensor {
         set_si(12.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
+        print_config();
     }
     void set_val_from_touch() { set_si(12.0); }  // what exactly is going on here? maybe an attempt to prevent always showing battery errors on dev boards?
 };
@@ -655,11 +666,14 @@ class PressureSensor : public AnalogSensor {
     // _absmax_adc = adcrange_adc; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
     PressureSensor() = delete;
     void setup() {
-        float min_adc = 658;  // temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
+        AnalogSensor::setup();
+        float min_adc = 658.0;  // temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
         float b = -1.0 * min_adc * m;  // -658 adc * 0.2 psi/adc = -131.6 psi
         set_conversions(m, b);
-        set_oplim_native(min_adc, 2080);
+        set_abslim_native(0.0, (float)adcrange_adc);  // do not autocalc the si units because our math is not set up yet (is in child classes)
+        set_oplim_native(min_adc, 2080.0);
+        // Serial.printf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
         set_ema_alpha(0.15);
         set_margin(1.0);  // max acceptible error when checking psi levels
         hold_initial = 120.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
@@ -669,7 +683,7 @@ class PressureSensor : public AnalogSensor {
         _zeropoint = _opmin;  // used when releasing the brake in case position is not available
         set_native(_opmin_native);
         set_can_source(src::POT, true);
-        AnalogSensor::setup();
+        print_config();
     }
     bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
     float zeropoint() { return _zeropoint; }
@@ -691,6 +705,7 @@ class BrakePositionSensor : public AnalogSensor {
     }
     BrakePositionSensor() = delete;
     void setup() {
+        AnalogSensor::setup();
         // printf("%s..\n", this->_long_name.c_str());
         _dir = TransDir::REV;  // causes percent conversions to use inverted scale 
         conversion_method = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
@@ -717,7 +732,7 @@ class BrakePositionSensor : public AnalogSensor {
         set_margin(0.01);  // TODO: add description
         // _mfactor = (_absmax - _absmin) / (float)(_absmax_adc - _absmin_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
         // _boffset = -2.69;  //  979 adc * 0.00372 in/adc - 0.95 in = -2.69 in
-        AnalogSensor::setup();
+        print_config();
     }
     bool parked() { return (std::abs(val() - _opmax) <= _margin); }  // is tha brake motor parked?
     bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
@@ -737,6 +752,7 @@ class PulseSensor : public Sensor {
     volatile int64_t _isr_us = 0;
     volatile int64_t _isr_time_last_us = 0;
     volatile int64_t _isr_time_current_us = 0;
+    volatile float _us;
     // we maintain our min and max pulse period, for each pulse sensor
     // absmax_us is the reciprocal of our native absmin value in MHz. once max_us has elapsed since the last pulse our si sets to zero
     // absmin_us is the reciprocal of our native absmax value in MHz. any pulse received within min_us of the previous pulse is ignored
@@ -751,7 +767,7 @@ class PulseSensor : public Sensor {
         int64_t time_us = this->_isr_time_current_us - this->_isr_time_last_us;
         if (time_us > this->_absmin_us_64) {  // ignore spurious triggers or bounces
             this->_isr_time_last_us = this->_isr_time_current_us;
-            this->_isr_us = time_us;
+            this->_us = time_us;
             // this->_pin_level = !this->_pin_level;
             this->_pin_level = read_pin(_pin);
         }
@@ -766,15 +782,12 @@ class PulseSensor : public Sensor {
         pinlevel_last = _pin_level;
     }
     virtual float read_sensor() {
-        int64_t now_time = esp_timer_get_time();
-        float period_us = static_cast<float>(now_time - this->_isr_time_current_us);
-        float _isr_buf_us = static_cast<float>(this->_isr_us);  // Copy delta value (in case another interrupt happens during handling)
+        float _isr_buf_us = static_cast<float>(this->_us);  // Copy delta value (in case another interrupt happens during handling)
         float new_native = _native.val();  // initialize our return value to the current native value
-        if (period_us >= this->_absmax_us) new_native = this->_native.min();  // if it's been too long since last pulse return zero
-        else if (period_us > this->_absmin_us) new_native = 1000000.0 / _isr_buf_us;  // otherwise if the pulse isn't too soon after the last one (possible bounce) then convert as a valid reading
+        if (_isr_buf_us >= this->_absmax_us) new_native = this->_native.min();  // if it's been too long since last pulse return zero
+        else if (_isr_buf_us > this->_absmin_us) new_native = 1000000.0 / _isr_buf_us;  // otherwise if the pulse isn't too soon after the last one (possible bounce) then convert as a valid reading
         set_pin_inactive();
         return new_native;  // too-short pulse times are presumably bounces and are ignored, keeping the existing native value
-    
     }
     float us_to_hz(float arg_us) {
         if (std::abs(arg_us) > float_zero) return 1000000.0 / arg_us;
@@ -793,6 +806,10 @@ class PulseSensor : public Sensor {
         _native_units = "Hz";
     }
     PulseSensor() = delete;
+    void print_config(bool header=false, bool ranges=true) {
+        Transducer::print_config(header, ranges);
+        if (ranges) Serial.printf("  pulsewidth now = %.0lf us, abs range: %.0lf-%.0lf us\n", this->_us, this->_absmin_us, this->_absmax_us);
+    }
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // overload the normal function so we can also include us calculations 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
@@ -817,13 +834,12 @@ class PulseSensor : public Sensor {
     //     return Transducer::to_native(arg_si);  //
     // }
     void setup() {
+        Sensor::setup();
         set_pin(this->_pin, INPUT_PULLUP);
         this->set_can_source(src::PIN, true);
         this->set_source(src::PIN);
         attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
         this->set_can_source(src::POT, true);
-        Sensor::setup();
-
     }
     // float last_read_time() { return _last_read_time_us; }
     // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
@@ -834,6 +850,7 @@ class PulseSensor : public Sensor {
     float idle() { return _idle; }
     float* idle_ptr() { return &_idle; }
     void set_idle(float newidle) { _idle = constrain(newidle, _opmin, _opmax); }
+    float us() { return _us; }
 };
 
 // Tachometer represents a magnetic pulse measurement of the enginge rotation.
@@ -849,6 +866,7 @@ class Tachometer : public PulseSensor {
     }
     Tachometer() = delete;
     void setup() {  // printf("%s..\n", this->_long_name.c_str());
+        PulseSensor::setup();
         float m = 60.0 * _freqdiv;  // 1 Hz = 1 pulse/sec * 8 rot/pulse * 60 sec/min = 480 rot/min, (so 480 rpm/Hz)
         set_conversions(m, 0.0);
         set_abslim(0.0, 4500.0);  // the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
@@ -860,7 +878,8 @@ class Tachometer : public PulseSensor {
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(10.0);
         set_si(50.0);
-        PulseSensor::setup();
+        _us = hz_to_us(_native.val());
+        print_config();
     }
     // float idle() { return _idle; }
     // float* idle_ptr() { return &_idle; }
@@ -883,6 +902,7 @@ class Speedometer : public PulseSensor {
     }
     Speedometer() = delete;
     void setup() {
+        PulseSensor::setup();
         // printf("%s..\n", this->_long_name.c_str());
         float m = 3600.0 * 20 * M_PI * _freqdiv / (2 * 12 * 5280);  // 1 Hz = 1 pulse/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.8 mph per Hz)
         set_conversions(m, 0.0);
@@ -895,8 +915,9 @@ class Speedometer : public PulseSensor {
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(0.2);
         set_si(50.0);
+        _us = hz_to_us(_native.val());
         _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
-        PulseSensor::setup();
+        print_config();
     }
 };
 // NOTE: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
