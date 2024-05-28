@@ -403,6 +403,27 @@ void stop_console() {
     diagconsole.dprintf(PNK, "magic carpet is booted");
     diagconsole.dprintf("welcome to diag console");
 }
+void dump_errorcode_update() {
+    static uint16_t status_last[NUM_ERR_TYPES];
+    bool do_print = false;
+    uint8_t color = NON;
+    for (int e=0; e<NUM_ERR_TYPES; e++) {
+        if (diag.errstatus[e] != status_last[e]) {
+            do_print = true;
+            if (diag.errstatus[e] > status_last[e]) {  // there's a new error
+                if (color == LGRN) color = diagconsole.defaultcolor;  // but also another error got cleared, so use default color
+                else if (color == NON) color = SALM;  // use the sad red color
+            }
+            else if (diag.errstatus[e] < status_last[e]) {  // one of the errors got cleared
+                if (color == SALM) color = diagconsole.defaultcolor;  // but there was also a new error, so use default color
+                else if (color == NON) color = LGRN;  // use the happy green color
+            }
+        }
+        status_last[e] = diag.errstatus[e];
+    }
+    if (color == NON) color = diagconsole.defaultcolor;
+    if (do_print) diagconsole.dprintf(color, "flag L:%04x R:%04x W:%04x", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN]);
+}
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
     if (bootbutton.shortpress()) {
@@ -415,8 +436,7 @@ void bootbutton_actions() {  // temporary (?) functionality added for developmen
             speedo.print_config(true);
             tach.print_config(true);
             mulebatt.print_config(true);
-            diagconsole.dprintf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
-
+            // diagconsole.dprintf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
         }
     }
 }

@@ -985,7 +985,7 @@ class Tuner {
         rdelta = constrain(idelta, -1, 1);  // combine unaccelerated values
         if (pot_tuner_acceleration && !sim.potmapping()) {  // use pot to control level of acceleration
             if (pot.val() < 50.0) fdelta /= map(pot.val(), 50.0, 0.0, 1.0, 5.0);
-            else fdelta *= map(pot.val(), 50.0, 100.0, 1.0, 10.0);
+            else fdelta *= map(pot.val(), 50.0, 100.0, 1.0, 25.0);
         }
         idelta = (int)fdelta;
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningAbandonmentTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer

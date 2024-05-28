@@ -71,9 +71,10 @@ void loop() {                  // arduino-style loop() is like main() but with a
     steer.update();            // drive motor output based on controller inputs, run mode, etc.
     touch.update();            // read touchscreen input and do what it tells us to
     tuner.update(run.mode);    // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
-    diag.update(run.mode);                      // notice any screwy conditions or suspicious shenanigans - consistent 200us
-    neo.update(colorcard[run.mode]);            // update/send neopixel colors 
+    diag.update(run.mode);     // notice any screwy conditions or suspicious shenanigans - consistent 200us
+    dump_errorcode_update();   // writes changes to error flags status to onscreen console
+    neo.update(colorcard[run.mode]);          // update/send neopixel colors 
     lightbox.update(run.mode, speedo.val());  // communicate any relevant data to the lighting controller
-    looptimer.update();                         // looptimer.mark("F");
-    vTaskDelay(pdMS_TO_TICKS(2));               // momentarily pause continuous execution for multitasking purposes
+    looptimer.update();                       // looptimer.mark("F");
+    vTaskDelay(pdMS_TO_TICKS(1));             // momentarily pause continuous execution for multitasking purposes
 }
