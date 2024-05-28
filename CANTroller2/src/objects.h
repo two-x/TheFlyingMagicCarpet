@@ -89,13 +89,6 @@ void sim_setup() {
     // sim.register_device(sens::starter, starter, starter.source());
     sim.set_potmap();
 }
-void stop_console() {
-    printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
-    if (!console_enabled) {
-        delay(200);  // give time for serial to print everything in its buffer
-        Serial.end();  // close serial console to prevent crashes due to error printing
-    }
-}
 // RTOS task that updates temp sensors in a separate task
 void update_temperature_sensors(void *parameter) {
     while (true) {
@@ -391,6 +384,14 @@ void update_web(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(20)); // Delay for 20ms, hopefully that's fast enough
     }
 }
+void stop_console() {
+    printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
+    if (!console_enabled) {
+        delay(200);  // give time for serial to print everything in its buffer
+        Serial.end();  // close serial console to prevent crashes due to error printing
+    }
+    animations.diagconsole.dprintf("Magic carpet is booted");
+}
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
     if (bootbutton.shortpress()) {
@@ -403,7 +404,7 @@ void bootbutton_actions() {  // temporary (?) functionality added for developmen
             speedo.print_config(true);
             tach.print_config(true);
             mulebatt.print_config(true);
-            animations.diagconsole.dprintf("%s: %.2lf%s = %.2lf%s = %.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
+            animations.diagconsole.dprintf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
 
         }
     }

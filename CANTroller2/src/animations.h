@@ -602,7 +602,7 @@ class DiagConsole {
     }
     void setup(viewport* _vp) {
         vp = _vp;
-        std::string blank = ">";
+        std::string blank = "";
         for (int i=0; i<num_lines; i++) {
             // linecolors[i] = MGRY;
             this->dprintf("%s", blank.c_str());
@@ -769,6 +769,7 @@ class AnimationManager {
     }
     float update(LGFX_Sprite* spr, bool dirty=false) {
         if ((ui_context_last != ScreensaverUI) && (ui_context == ScreensaverUI)) change_saver();  // ptrsaver->reset();
+        if (ui_context_last != ui_context) dirty = true;
         ui_context_last = ui_context;
         if (anim_reset_request) reset();
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);

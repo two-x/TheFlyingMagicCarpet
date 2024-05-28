@@ -327,16 +327,16 @@ class Touchscreen {
         else if (tquad == 0x40 && sim.enabled() && longpress()) ignition.request(REQ_TOG);
         else if (tquad == 0x50 && sim.enabled() && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
         else if (tquad == 0x30 && sim.simulating(sens::basicsw) && longpress()) basicmode_request = true;
-        else if (tquad == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_si(tedit); // (+= 25) Pressed the increase brake pressure button
-        else if (tquad == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.add_si(-tedit); // (-= 25) Pressed the decrease brake pressure button
-        else if (tquad == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_si(tedit); // (-= 25) Pressed the decrease brake pressure button
-        else if (tquad == 0x34 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.add_si(-tedit); // (-= 25) Pressed the decrease brake pressure button
-        else if (tquad == 0x41 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.add_si(tedit);
-        else if (tquad == 0x42 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.add_si(-tedit);
+        else if (tquad == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(tedit); // (+= 25) Pressed the increase brake pressure button
+        else if (tquad == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(-tedit); // (-= 25) Pressed the decrease brake pressure button
+        else if (tquad == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(tedit); // (-= 25) Pressed the decrease brake pressure button
+        else if (tquad == 0x34 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(-tedit); // (-= 25) Pressed the decrease brake pressure button
+        else if (tquad == 0x41 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.tedit(tedit);
+        else if (tquad == 0x42 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.tedit(-tedit);
         else if (tquad == 0x43 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
         else if (tquad == 0x44 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        else if (tquad == 0x51 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_si(tedit);
-        else if (tquad == 0x52 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.add_si(-tedit);
+        else if (tquad == 0x51 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.tedit(tedit);
+        else if (tquad == 0x52 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.tedit(-tedit);
         else if (tquad == 0x53 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
         else if (tquad == 0x54 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
     }

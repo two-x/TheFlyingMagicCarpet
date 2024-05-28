@@ -218,7 +218,7 @@ class Transducer : public Device {
   protected:
     // Multiplier and adder values to plug in for unit conversion math
     // float _raw_native;  // Keep track of the most recent unfiltered and unconstrained native value, for monitoring and diag purposes
-    float _mfactor = 1.0, _boffset = 0.0;
+    float _mfactor = 1.0, _boffset = 0.0, touch_val;
     float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;  // float _opmin, _opmax, _absmin, _absmax, _margin, _raw, _filt;
     // float _zerovalue = NAN;  // value to return from to_native conversion when val is zero (needed for speedometer)
     TransDir _dir = TransDir::FWD;
@@ -273,7 +273,7 @@ class Transducer : public Device {
     void setup() {
         print_config(true, false);  // print header
         if (_pin < 255) Serial.printf(" on pin %d\n", _pin);
-    }  // printf("%s..\n", this->_long_name.c_str()); }
+    }  // printf("%s..\n", _long_name.c_str()); }
     // To set limits : call either one of set_abslim() or set_abslim_native(), whichever one you have
     // the values to define the range, and all si and native abs values will be set automatically.
     // op limits will also be reconstrained to the updated abs values, however if you have a specific op range then
@@ -353,15 +353,18 @@ class Transducer : public Device {
         }
         if (!std::isnan(arg_mfactor)) _boffset = arg_boffset;
     }
+    void tedit(float tdelta) {  // for touchscreen editing of the value
+        touch_val = constrain(_si.val() + tdelta, _opmin, _opmax);
+    }
     void print_config(bool header=false, bool ranges=true) {
         if (header) {
-            Serial.printf("%s %s%s", this->_long_name.c_str(), transtypecard[this->_transtype].c_str(), (_pin == 255) ? " ..\n" : "");
+            Serial.printf("%s %s%s", _long_name.c_str(), transtypecard[_transtype].c_str(), (_pin == 255) ? " ..\n" : "");
             if (_pin < 255) Serial.printf(" on pin %d ..\n", _pin);
         }
-        Serial.printf("  %s current value: %.2lf %s = %.2lf %s = %.2lf %%\n", this->_short_name.c_str(), this->_si.val(), this->_si_units.c_str(), this->_native.val(), this->_native_units.c_str(), pc()); 
+        Serial.printf("  %s current value: %.2lf %s = %.2lf %s = %.2lf %%\n", _short_name.c_str(), _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
         if (ranges) {
-            Serial.printf("  abs range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", this->_si.min(), this->_si.max(), this->_si_units.c_str(), this->_native.min(), this->_native.max(), this->_native_units.c_str());
-            Serial.printf("  op range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", this->_opmin, this->_opmax, this->_si_units.c_str(), this->_opmin_native, this->_opmax_native, this->_native_units.c_str());
+            Serial.printf("  abs range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
+            Serial.printf("  op range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
         }
 
     }
@@ -403,14 +406,14 @@ class Sensor : public Transducer {
     bool _first_filter_run = false;
 
     void calculate_ema() { // Exponential Moving Average
-        if (this->_first_filter_run) {
-            this->set_si(this->_si_raw);
-            this->_first_filter_run = false;  // soren: I commented this out, wouldn't this always turn on filtering?
+        if (_first_filter_run) {
+            set_si(_si_raw);
+            _first_filter_run = false;  // soren: I commented this out, wouldn't this always turn on filtering?
         }
-        else this->set_si(ema_filt(this->_si_raw, this->_si.val(), _ema_alpha));
+        else set_si(ema_filt(_si_raw, _si.val(), _ema_alpha));
     }
     virtual void set_val_from_touch() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
-        this->set_si(this->_si.val());                  // wtf is this supposed to do?
+        set_si(touch_val);                  // wtf is this supposed to do?
         // set_si(_si.val + touch.fdelta);  // i would think this should look something like this (needs some coding on the other side to support)
     }
     virtual float read_sensor() {
@@ -418,14 +421,14 @@ class Sensor : public Transducer {
         return NAN;
     }
     virtual void set_val_from_pin() {
-        this->set_native(read_sensor());
+        set_native(read_sensor());
         calculate_ema();  // Sensor EMA filter
     }
     virtual void set_val_from_pot() {
-        this->set_si(_pot->mapToRange(this->_opmin, this->_opmax));  // as currently written, the pot will spoof both si and native raw values in addition to the filtered si value.  do we want this?
+        set_si(_pot->mapToRange(_opmin, _opmax));  // as currently written, the pot will spoof both si and native raw values in addition to the filtered si value.  do we want this?
     }
-    // virtual void update_si_limits() { _val_filt.set_limits(this->_si.min_shptr(), this->_si.max_shptr()); } // make sure our filtered value has the same limits as our regular value
-    virtual void update_source() { if (this->_source == src::PIN) this->_first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
+    // virtual void update_si_limits() { _val_filt.set_limits(_si.min_shptr(), _si.max_shptr()); } // make sure our filtered value has the same limits as our regular value
+    virtual void update_source() { if (_source == src::PIN) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
   public:
     Sensor(uint8_t pin) : Transducer(pin) {
         _long_name = "Unknown";
@@ -435,8 +438,8 @@ class Sensor : public Transducer {
         _transtype = SensorType;
         Transducer::setup();
     }
-    void set_ema_alpha(float arg_alpha) { this->_ema_alpha = arg_alpha; }
-    float ema_alpha() { return this->_ema_alpha; }
+    void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
+    float ema_alpha() { return _ema_alpha; }
 };
 
 // Base class for sensors which communicate using i2c.
@@ -449,9 +452,9 @@ class I2CSensor : public Sensor {
     I2C* _i2c;
     // implement in child classes using the appropriate i2c sensor
     // virtual void set_val_from_pot() {
-    //     this->_si.set(this->_pot->mapToRange(this->_si.min(), this->_si.max()));
-    //     // this->_val_raw = this->_native.val();
-    //     this->set_si(this->_si.val()); // don't filter the value we get from the pot, the pot output is already filtered
+    //     _si.set(_pot->mapToRange(_si.min(), _si.max()));
+    //     // _val_raw = _native.val();
+    //     set_si(_si.val()); // don't filter the value we get from the pot, the pot output is already filtered
     // }
     // virtual void update_si_limits() {
     //     _native.set_limits(_si.min_shptr(), _si.max_shptr());  // Our two i2c sensors (airvelo & MAP) don't reveal low-level readings, so we only get si units
@@ -467,7 +470,7 @@ class I2CSensor : public Sensor {
     I2CSensor() = delete;
     virtual void setup() {
         Sensor::setup();
-        this->_detected = _i2c->detected_by_addr(this->addr);
+        _detected = _i2c->detected_by_addr(addr);
     }
 };
 // AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
@@ -498,7 +501,7 @@ class AirVeloSensor : public I2CSensor {
         if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
     }
     void setup() {
-        // Serial.printf("%s..", this->_long_name.c_str());
+        // Serial.printf("%s..", _long_name.c_str());
         I2CSensor::setup();
         set_si(0.0);  // initialize value
         set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
@@ -559,7 +562,7 @@ class MAPSensor : public I2CSensor {
         if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
     }
     void setup() {
-        // Serial.printf("%s..", this->_long_name.c_str());
+        // Serial.printf("%s..", _long_name.c_str());
         I2CSensor::setup();
         set_si(1.0);  // initialize value
         set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
@@ -590,8 +593,8 @@ class AnalogSensor : public Sensor {
     Timer read_timer{25000};  // adc cannot read too fast w/o errors, so give some time between readings
     virtual void set_val_from_pin() {
         if (read_timer.expireset()) {
-            this->set_native(static_cast<float>(analogRead(this->_pin)));  // Soren: can this be done without two casts?
-            this->calculate_ema(); // filtered values are kept in si format
+            set_native(static_cast<float>(analogRead(_pin)));  // Soren: can this be done without two casts?
+            calculate_ema(); // filtered values are kept in si format
         }
     }
   public:
@@ -602,9 +605,9 @@ class AnalogSensor : public Sensor {
     }
     void setup() {
         Sensor::setup();
-        set_pin(this->_pin, INPUT);
-        this->set_can_source(src::PIN, true);
-        this->set_source(src::PIN);
+        set_pin(_pin, INPUT);
+        set_can_source(src::PIN, true);
+        set_source(src::PIN);
         set_abslim_native(0.0, (float)adcrange_adc, false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
     }
 };
@@ -620,7 +623,7 @@ class CarBattery : public AnalogSensor {
         _si_units = "V";
     }
     CarBattery() = delete;
-    void setup() {  // printf("%s..\n", this->_long_name.c_str());
+    void setup() {  // printf("%s..\n", _long_name.c_str());
         AnalogSensor::setup();
         float max_volts = 16.0;  // temporarily hold this key value for use in m_factor calculation and abs limit setting below (which must happen in that order) 
         float m = max_volts / (float)adcrange_adc;  // replace with a calibrated value based on measurements, and/or adjust and optimize voltage divider
@@ -706,11 +709,12 @@ class BrakePositionSensor : public AnalogSensor {
     BrakePositionSensor() = delete;
     void setup() {
         AnalogSensor::setup();
-        // printf("%s..\n", this->_long_name.c_str());
+        // printf("%s..\n", _long_name.c_str());
         _dir = TransDir::REV;  // causes percent conversions to use inverted scale 
         conversion_method = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
         #if BrakeThomson
-            set_abslim(0.335, 8.3);  // TUNED 230602
+            set_abslim(0.335, 8.3, false);  // TUNED 230602
+            set_abslim_native(979, 3103, false);  // NOT TUNED - these values stolen from LAE actuator below. needs tuning!
             set_oplim(0.506, 4.234)  // 4.624  //TUNED 230602 - Best position to park the actuator out of the way so we can use the pedal (in)
             _zeropoint = 3.179;  // TUNED 230602 - Brake position value corresponding to the point where fluid PSI hits zero (in)
         #else  // if LAE motor
@@ -763,13 +767,13 @@ class PulseSensor : public Sensor {
     // to about 0.750 mph which is as fast as I can move the magnet with my hand, and it works.
     // Update: Janky bench test appeared to work up to 11000 rpm.
     void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
-        this->_isr_time_current_us = esp_timer_get_time();
-        int64_t time_us = this->_isr_time_current_us - this->_isr_time_last_us;
-        if (time_us > this->_absmin_us_64) {  // ignore spurious triggers or bounces
-            this->_isr_time_last_us = this->_isr_time_current_us;
-            this->_us = time_us;
-            // this->_pin_level = !this->_pin_level;
-            this->_pin_level = read_pin(_pin);
+        _isr_time_current_us = esp_timer_get_time();
+        int64_t time_us = _isr_time_current_us - _isr_time_last_us;
+        if (time_us > _absmin_us_64) {  // ignore spurious triggers or bounces
+            _isr_time_last_us = _isr_time_current_us;
+            _us = time_us;
+            // _pin_level = !_pin_level;
+            _pin_level = read_pin(_pin);
         }
     }
     void set_pin_inactive() {
@@ -782,10 +786,10 @@ class PulseSensor : public Sensor {
         pinlevel_last = _pin_level;
     }
     virtual float read_sensor() {
-        float _isr_buf_us = static_cast<float>(this->_us);  // Copy delta value (in case another interrupt happens during handling)
+        float _isr_buf_us = static_cast<float>(_us);  // Copy delta value (in case another interrupt happens during handling)
         float new_native = _native.val();  // initialize our return value to the current native value
-        if (_isr_buf_us >= this->_absmax_us) new_native = this->_native.min();  // if it's been too long since last pulse return zero
-        else if (_isr_buf_us > this->_absmin_us) new_native = 1000000.0 / _isr_buf_us;  // otherwise if the pulse isn't too soon after the last one (possible bounce) then convert as a valid reading
+        if (_isr_buf_us >= _absmax_us) new_native = _native.min();  // if it's been too long since last pulse return zero
+        else if (_isr_buf_us > _absmin_us) new_native = 1000000.0 / _isr_buf_us;  // otherwise if the pulse isn't too soon after the last one (possible bounce) then convert as a valid reading
         set_pin_inactive();
         return new_native;  // too-short pulse times are presumably bounces and are ignored, keeping the existing native value
     }
@@ -808,7 +812,7 @@ class PulseSensor : public Sensor {
     PulseSensor() = delete;
     void print_config(bool header=false, bool ranges=true) {
         Transducer::print_config(header, ranges);
-        if (ranges) Serial.printf("  pulsewidth now = %.0lf us, abs range: %.0lf-%.0lf us\n", this->_us, this->_absmin_us, this->_absmax_us);
+        if (ranges) Serial.printf("  pulsewidth now = %.0lf us, abs range: %.0lf-%.0lf us\n", _us, _absmin_us, _absmax_us);
     }
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // overload the normal function so we can also include us calculations 
@@ -818,9 +822,9 @@ class PulseSensor : public Sensor {
             return;  // we can't accept 0 Hz for opmin
         }
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
-        this->_absmax_us = 1000000.0 / this->_native.min();  // also set us limits from here, converting Hz to us. note min/max are swapped
-        this->_absmin_us = 1000000.0 / this->_native.max();  // also set us limits from here, converting Hz to us. note min/max are swapped
-        this->_absmin_us_64 = (int)this->_absmin_us;         // make an int copy for the isr to use conveniently
+        _absmax_us = 1000000.0 / _native.min();  // also set us limits from here, converting Hz to us. note min/max are swapped
+        _absmin_us = 1000000.0 / _native.max();  // also set us limits from here, converting Hz to us. note min/max are swapped
+        _absmin_us_64 = (int)_absmin_us;         // make an int copy for the isr to use conveniently
     }
     // void set_abslim(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
     //     Transducer::set_abslim_native(0.0, arg_max, calc_si);  // si abs minimum is unsettable, and always zero
@@ -835,11 +839,11 @@ class PulseSensor : public Sensor {
     // }
     void setup() {
         Sensor::setup();
-        set_pin(this->_pin, INPUT_PULLUP);
-        this->set_can_source(src::PIN, true);
-        this->set_source(src::PIN);
-        attachInterrupt(digitalPinToInterrupt(this->_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
-        this->set_can_source(src::POT, true);
+        set_pin(_pin, INPUT_PULLUP);
+        set_can_source(src::PIN, true);
+        set_source(src::PIN);
+        attachInterrupt(digitalPinToInterrupt(_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
+        set_can_source(src::POT, true);
     }
     // float last_read_time() { return _last_read_time_us; }
     // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
@@ -865,7 +869,7 @@ class Tachometer : public PulseSensor {
         _si_units = "rpm";
     }
     Tachometer() = delete;
-    void setup() {  // printf("%s..\n", this->_long_name.c_str());
+    void setup() {  // printf("%s..\n", _long_name.c_str());
         PulseSensor::setup();
         float m = 60.0 * _freqdiv;  // 1 Hz = 1 pulse/sec * 8 rot/pulse * 60 sec/min = 480 rot/min, (so 480 rpm/Hz)
         set_conversions(m, 0.0);
@@ -903,7 +907,7 @@ class Speedometer : public PulseSensor {
     Speedometer() = delete;
     void setup() {
         PulseSensor::setup();
-        // printf("%s..\n", this->_long_name.c_str());
+        // printf("%s..\n", _long_name.c_str());
         float m = 3600.0 * 20 * M_PI * _freqdiv / (2 * 12 * 5280);  // 1 Hz = 1 pulse/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.8 mph per Hz)
         set_conversions(m, 0.0);
         set_abslim(0.0, 25.0);  // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
@@ -929,19 +933,19 @@ class Speedometer : public PulseSensor {
 //     Servo _servo;
 //     // NOTE: should be marked 'override' but compiler says it doesn't override anything...?
 //     void set_native_limits(Param &minParam, Param &maxParam) {
-//         this->set_native_limits(minParam, maxParam);
-//         _servo.attach(this->_pin, this->min_native->val(), this->max_native->val());
+//         set_native_limits(minParam, maxParam);
+//         _servo.attach(_pin, min_native->val(), max_native->val());
 //     }
 //     void set_si_limits(Param &minParam, Param &maxParam) {
-//         this->set_si_limits(minParam, maxParam);
-//         _servo.attach(this->_pin, this->min_native->val(), this->max_native->val());
+//         set_si_limits(minParam, maxParam);
+//         _servo.attach(_pin, min_native->val(), max_native->val());
 //     }
 //   public:
 //     // ServoPWM(uint8_t pin, uint_t freq) : Transducer<float, float>(pin) {
 //     ServoPWM(uint8_t pin, uint8_t freq) : Transducer<float, float>(pin) {
 //         _servo.setPeriodHertz(freq);
-//         _servo.attach(this->_pin, this->_native.min(), this->_native.max());
-//         // _servo.attach(this->_pin, this->_native.absmin(), this->_native.absmax());
+//         _servo.attach(_pin, _native.min(), _native.max());
+//         // _servo.attach(_pin, _native.absmin(), _native.absmax());
 //     }
 //     ServoPWM() = delete;
 //     _long_name = "Unknown PWM motor output";
@@ -949,12 +953,12 @@ class Speedometer : public PulseSensor {
 //     _native_units = "us";
 //     _si_units = "";
 //     void setup() {
-//         set_pin(this->_pin, OUTPUT);
+//         set_pin(_pin, OUTPUT);
 //         _transtype = ActuatorType;
 //     }
 //     void write() {
-//         this->_val_raw = this->_native.val();
-//         _servo.writeMicroseconds((int32_t)this->_val_raw);  // Write result to servo interface
+//         _val_raw = _native.val();
+//         _servo.writeMicroseconds((int32_t)_val_raw);  // Write result to servo interface
 //     }
 // };
 // // Device::Toggle is a base class for system signals or devices having a boolean value

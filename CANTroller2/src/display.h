@@ -56,7 +56,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " Touch X", " Touch Y", "  Uptime", "Webservr", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "Draw Clk", "Push Clk", "Idle Clk", "BlnkDemo", neo_bright, "NeoDesat", "Animaton", },  // PG_UI
+    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "Draw Clk", "Push Clk", "Idle Clk", "BlnkDemo", neo_bright, "NeoDesat", "PanelApp", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "%",    "%",    },  // PG_RUN
