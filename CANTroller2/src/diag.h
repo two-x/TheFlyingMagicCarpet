@@ -33,7 +33,7 @@ class DiagRuntime {
     uint32_t err_margin_adc = 5;
     std::string err_type_card[NUM_ERR_TYPES] = { "Lost", "Rang", "Warn" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
     std::string err_sens_card[NumTelemetryFull+3] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA, None, and Hybrid tacked on the end.  access these names using ascii_name() function
-        "Throtl", "BkMotr", "Steer", "HotRC", "Speedo", "Tach", "BkPres", "BkPosn", "Temps", "Other", "GPIO", 
+        "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HotRC", "Temps", "Other", "GPIO", 
         "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4", "Batery", "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR",
         "TmpWRL", "TmpWRR", "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
         "NA", "None", "Hybrid",

@@ -88,8 +88,8 @@ enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum boolean_states { ON=1 };
 enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PWMS=3, PG_IDLE=4, PG_MOTR=5, PG_BPID=6, PG_GPID=7, PG_CPID=8, PG_TEMP=9, PG_SIM=10, PG_UI=11, NUM_DATAPAGES=12 };
 enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, BRAKE=3, NUM_TEMP_CATEGORIES=4 };  // 
-enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };   // possible sources of gas, brake, steering commands
-enum ui_modes { DatapagesUI=0, ScreensaverUI=1 };
+enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };      // possible sources of gas, brake, steering commands
+enum ui_modes { MuleChassisUI=0, DiagConsoleUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel
 enum codestatus { Confused=0, Booting=1, Parked=2, Stopped=3, Driving=4, NumCodeStatuses=5 };
 enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
 enum telemetry_idiots {                              // list of transducers which have onscreen idiotlights showing status
@@ -191,7 +191,8 @@ bool captouch = true;
 float loop_avg_us;
 bool sensidiots[11];
 bool web_disabled = false;
-int ui_context = DatapagesUI;
+int ui_context = DiagConsoleUI;
+int ui_default = DiagConsoleUI;
 bool panicstop = false;
 // bool sensor_present[telemetry_full];
 

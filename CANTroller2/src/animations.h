@@ -5,6 +5,8 @@
 #define disp_simbuttons_y 48
 #define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)  // 156
 #define disp_simbuttons_h (disp_height_pix - disp_simbuttons_y)  // 192
+#define disp_font_height 8
+#define disp_font_width 6
 const uint8_t BLK  = 0x00;  // greyscale: full black (RGB elements off)
 const uint8_t DGRY = 0x49;  // pseudo-greyscale: very dark grey (blueish)
 const uint8_t MGRY = 0x6d;  // pseudo-greyscale: medium grey (yellowish)
@@ -558,46 +560,60 @@ class DiagConsole {
   private:
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
-    static constexpr int num_lines = 16;
+    viewport* vp;
+    Timer messagetimer{1000000};  // messages delivered within this close of each other will get highlighted together
+    static constexpr int num_lines = 19;
     // std::string textlines[num_lines];
-    int usedlines = 0, last_drawn = -1, newest_content = -1;
-    std::vector<std::string> textlines; // Ring buffer array
-    size_t bufferSize; // Size of the ring buffer
-    size_t nextIndex = 0; // Index for the next insertion
+    int usedlines = 0, last_drawn = -1, newest_content = -1, next_index = 0, linelength, vert_spacing = 2, highlighted_lines = 0;
+    std::string textlines[num_lines], drawnow; // Ring buffer array
+    // uint8_t linecolors[num_lines]; // Ring buffer array
+    // std::vector<std::string> textlines; // Ring buffer array
+    int bufferSize = num_lines; // size_t bufferSize; // Size of the ring buffer
+    // size_t nextIndex = 0; // Index for the next insertion
     // Function to retrieve the stored strings
-    std::string getBufferElement(size_t index) {
+    std::string getBufferElement(int index) { // size_t 
         if (index < bufferSize) {
             return textlines[index];
         } else {
             return ""; // Return empty string if index is out of range
         }
     }
+    std::string remove_nonprintable(const std::string& victim) {
+        std::string result;
+        for (char ch : victim) {
+            if (isprint(static_cast<unsigned char>(ch))) result += ch;
+        }
+        return result;
+    }
   public:
     bool dirty = true;
     // Function similar to Serial.printf()
     void dprintf(const char* format, ...) {
+        if (messagetimer.expireset()) highlighted_lines = next_index;  // mark the target index as 1st to be highlighted
         va_list args;
         va_start(args, format);
         char temp[100]; // Assuming maximum length of output string
         vsnprintf(temp, sizeof(temp), format, args);
         va_end(args);
-        textlines[nextIndex] = temp; // Store formatted output into buffer
-        nextIndex = (nextIndex + 1) % bufferSize; // Update next insertion index
+        textlines[next_index] = remove_nonprintable(std::string(temp)); // Store formatted output into buffer
+        newest_content = next_index;
+        ++next_index %= bufferSize; // Update next insertion index
         dirty = true;
     }
-    void init() {
-        this->dprintf("Temperature: %d, Humidity: %.2f", 25, 50.67);
-        this->dprintf("Error Code: %d", 404);
-        for (size_t i = 0; i < 5; ++i) {
-            std::cout << "Element " << i << ": " << this->getBufferElement(i) << std::endl;
+    void setup(viewport* _vp) {
+        vp = _vp;
+        std::string blank = ">";
+        for (int i=0; i<num_lines; i++) {
+            // linecolors[i] = MGRY;
+            this->dprintf("%s", blank.c_str());
         }
+        linelength = (int)(vp->w / disp_font_width);
+        dirty = true;
     }
-    void setup() {
-        std::string blank = "";
-        for (int i=0; i<num_lines; i++) this->dprintf("%s", blank.c_str());
-
+    void update(LGFX_Sprite* spr, bool force=false) {
+        if (dirty || force) draw(spr);
+        dirty = false;
     }
-
     // void redraw() {
     //     panel->diffpush(&framebuf[flip], &framebuf[!flip]);
     // }
@@ -606,23 +622,21 @@ class DiagConsole {
     //     if (newerr.length() > 15) newerr = newerr.substr(0, 15);
     //     textlines[usedlines++] = newerr;
     // // }
-    void draw(LGFX_Sprite* buf, bool force=false) {
-         if (!dirty && !force) return;
-    //     int new_lines = newest_content - last_drawn;
-    //     int drawline = std::min
-        
-    //     // int flip = panel->setflip(false);
-    //     // nowspr_ptr = &(framebuf[flip]);
-    //     // panel->diffpush(&framebuf[flip], &framebuf[!flip]);
-    //     usedlines += num
-    //     dirty = false;
+    void draw(LGFX_Sprite* spr) {
+        spr->fillSprite(BLK);
+        spr->setFont(&fonts::Font0);
+        spr->setTextDatum(textdatum_t::top_left);
+        spr->setTextColor(MGRY);
+        for (int line=0; line<num_lines; line++) {
+            spr->setCursor(vp->x, vp->y + vert_spacing + line * (disp_font_height + vert_spacing));
+            int nowindex = (next_index + line) % bufferSize;
+            if (nowindex >= highlighted_lines) spr->setTextColor(LGRY);
+            int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
+            drawnow = textlines[nowindex].substr(0, strsize);
+            spr->print(drawnow.c_str());
+        }
     }
-    // DiagConsole(size_t size) : bufferSize(size), nextIndex(0) {
-    //     textlines.resize(size);
-    // }
-    DiagConsole() {
-        textlines.resize(bufferSize);
-    }
+    DiagConsole() {}
 };
 class AnimationManager {
   private:
@@ -635,15 +649,16 @@ class AnimationManager {
     CollisionsSaver cSaver;
     Simulator* sim;
     Touchscreen* touch;
-    DiagConsole diagconsole; // Initialize serial buffer with size 5
     int touchp[2], dispfps;
     int corner[2], sprsize[2];
     Timer fps_timer, fps_timer2{250000};
     float myfps = 0.0;
     int oldfps = 0;
     int64_t fps_mark;
-    bool screensaver_last = false, simulating_last = false, mule_drawn = false;
+    bool simulating_last = false, mule_drawn = false;
+    int ui_context_last = MuleChassisUI;
   public:
+    DiagConsole diagconsole; // Initialize serial buffer with size 5
     std::uint32_t sec, psec, _width, _height, _myfps = 0, frame_count = 0;
     bool anim_reset_request = false;
     AnimationManager() {}
@@ -662,6 +677,7 @@ class AnimationManager {
         Serial.printf(" screensavers .. ");
         eSaver.setup(&framebuf[flip], &vp);
         cSaver.setup(&framebuf[flip], &vp);
+        diagconsole.setup(&vp);
         // Serial.printf(" diag console .. ");
         // diagconsole.setup();
         Serial.printf("set up\n");
@@ -752,15 +768,16 @@ class AnimationManager {
         }
     }
     float update(LGFX_Sprite* spr, bool dirty=false) {
-        if (!screensaver_last && screensaver) change_saver();  // ptrsaver->reset();
-        screensaver_last = screensaver;
+        if ((ui_context_last != ScreensaverUI) && (ui_context == ScreensaverUI)) change_saver();  // ptrsaver->reset();
+        ui_context_last = ui_context;
         if (anim_reset_request) reset();
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
         if (dirty) {
             spr->fillSprite(BLK);
             mule_drawn = false;
+            diagconsole.dirty = true;
         }
-        if (screensaver) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
+        if (ui_context == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             // mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
             if (nowsaver == Eraser) {
                 still_running = eSaver.update(spr, &vp);
@@ -774,10 +791,15 @@ class AnimationManager {
             }
             if (!still_running) change_saver();
         }
-        else if (!mule_drawn) {
-            spr->fillSprite(BLK);
-            spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
-            mule_drawn = true;
+        else if (ui_context == DiagConsoleUI) {
+            diagconsole.update(spr);
+        }
+        else if (ui_context == MuleChassisUI) {
+            if (!mule_drawn) {
+                spr->fillSprite(BLK);
+                spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
+                mule_drawn = true;
+            }
         }
         spr->clearClipRect();
         if (sim->enabled()) {

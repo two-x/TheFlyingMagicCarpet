@@ -153,11 +153,11 @@ class Device {
     virtual void set_val_from_calc() {}
     virtual void set_val_common() {}  // Runs when setting val from any source, after one of the above
     virtual void update_source() {}
+  public:
     std::string _long_name = "Unknown device";
     std::string _short_name = "device";
     std::string _native_units = "";
     std::string _si_units = "";
-  public:
     Timer timer;  // Can be used for external purposes
     sens senstype = sens::none;
     Device() = delete; // should always be created with a pin
@@ -355,8 +355,8 @@ class Transducer : public Device {
     }
     void print_config(bool header=false, bool ranges=true) {
         if (header) {
-            Serial.printf("Initializing %s %s%s", this->_long_name.c_str(), this->_short_name.c_str(), transtypecard[this->_transtype].c_str(), (_pin == 255) ? "\n" : "");
-            if (_pin < 255) Serial.printf(" on pin %d\n", _pin);
+            Serial.printf("%s %s%s", this->_long_name.c_str(), transtypecard[this->_transtype].c_str(), (_pin == 255) ? " ..\n" : "");
+            if (_pin < 255) Serial.printf(" on pin %d ..\n", _pin);
         }
         Serial.printf("  %s current value: %.2lf %s = %.2lf %s = %.2lf %%\n", this->_short_name.c_str(), this->_si.val(), this->_si_units.c_str(), this->_native.val(), this->_native_units.c_str(), pc()); 
         if (ranges) {

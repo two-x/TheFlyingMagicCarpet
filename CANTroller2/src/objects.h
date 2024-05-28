@@ -403,6 +403,8 @@ void bootbutton_actions() {  // temporary (?) functionality added for developmen
             speedo.print_config(true);
             tach.print_config(true);
             mulebatt.print_config(true);
+            animations.diagconsole.dprintf("%s: %.2lf%s = %.2lf%s = %.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
+
         }
     }
 }

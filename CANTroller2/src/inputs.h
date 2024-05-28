@@ -271,7 +271,7 @@ class Touchscreen {
                         }
                     }
                 }
-                if (ui_context == DatapagesUI) {
+                if (ui_context != ScreensaverUI) {
                     if (touchHoldTimer.elapsed() > (tedit_exponent + 1) * touchAccelTimer.timeout()) {
                         tedit_exponent = constrain(tedit_exponent+1, 0, tedit_exponent_max);
                     }

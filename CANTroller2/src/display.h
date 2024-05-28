@@ -11,8 +11,6 @@ static MomentaryButton bootbutton(boot_sw_pin, false);
 #define disp_lines 20  // Max lines of text displayable at line height = disp_line_height_pix
 #define disp_fixed_lines 8  // Lines of static variables/values always displayed
 #define disp_line_height_pix 12  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
-#define disp_font_height 8
-#define disp_font_width 6
 #define disp_bargraph_width 40
 #define disp_bargraph_squeeze 1
 #define disp_maxlength 6  // How many characters fit between the ":" and the units string
@@ -27,7 +25,7 @@ std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Ho
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
-
+std::string uicontextcard[NumContextsUI] = { "chasis", "consol", "animat" };
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
 #define stEr "St\x88r"
 #define brAk "Br\x83k"
@@ -72,7 +70,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",     "%/s", ______, ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, "pix",  "pix",  "min",  b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us",   "us",   "Hz",   "fps",  "us",   "us",   "us",   b1nary, "%",    "of10", "eyes", },  // PG_UI
+    { "us",   "us",   "Hz",   "fps",  "us",   "us",   "us",   "eyes", "%",    "of10", scroll, },  // PG_UI
 };
 static std::string unitmapnames[11] = { "usps", "us", "rpms", scroll, b1nary, "%", "ohm", "eyes", "psin", degree, "of10" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for exceptions where some unit strings can't be well represented by any set of 3 font characters
@@ -241,7 +239,7 @@ class Display {
         }
         disp_bools_dirty = disp_selected_val_dirty = disp_datapage_dirty = disp_sidemenu_dirty = true;
         disp_runmode_dirty = disp_simbuttons_dirty = disp_values_dirty = true;
-        screensaver = false;
+        ui_context = ui_default;
     }
     void blackout(LGFX_Sprite* spr) {
         spr->fillSprite(BLK);
@@ -802,7 +800,8 @@ class Display {
             draw_truth(16, flashdemo, 0);
             draw_dynamic(17, neobright, 1.0, 100.0f, -1, 3);
             draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
-            draw_truth(19, screensaver, 0);
+            draw_asciiname(19, uicontextcard[ui_context]);
+            // draw_truth(19, (ui_context == ScreensaverUI), 0);
         }
         disp_values_dirty = false;
     }
@@ -887,6 +886,7 @@ class Display {
         lcd.endWrite();   // lcd->display();
     }
     void auto_saver() {
+        static int last_context;
         if (autosaver_request == REQ_NA) return;
         if (autosaver_request == REQ_TOG) autosaver_request = (int)(!auto_saver_enabled);
         if (autosaver_request == (int)(auto_saver_enabled)) {
@@ -898,16 +898,18 @@ class Display {
             was_simulating = sim->enabled();
             sim->disable();
             animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
-            screensaver = auto_saver_enabled = true;
-            animations.anim_reset_request = true;
+            auto_saver_enabled = true;
+            last_context = ui_context;
             ui_context = ScreensaverUI;
+            animations.anim_reset_request = true;
         }
         else if (autosaver_request == REQ_OFF) {
-            screensaver = auto_saver_enabled = false;
+            auto_saver_enabled = false;
+            ui_context = last_context;
             animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
             reset_request = true;
             if (was_simulating) sim->enable();
-            ui_context = DatapagesUI;
+            // ui_context = DatapagesUI;
         }
         autosaver_request = REQ_NA;
     }
@@ -1090,7 +1092,7 @@ class Tuner {
                 if (sel_val == 7) { adj_bool(&flashdemo, rdelta); neo->enable_flashdemo(flashdemo); }
                 else if (sel_val == 8) { adj_val(&neobright, rdelta, 1, 100); neo->setbright(neobright); }
                 else if (sel_val == 9) { adj_val(&neodesat, rdelta, 0, 10); neo->setdesaturation(neodesat); }
-                else if (sel_val == 10) adj_bool(&screensaver, rdelta);
+                else if (sel_val == 10) adj_val(&ui_context, rdelta, 0, NumContextsUI-1);
             }
             idelta = 0;
         }
