@@ -400,23 +400,33 @@ void stop_console() {
         delay(200);  // give time for serial to print everything in its buffer
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
-    diagconsole.dprintf(PNK, "magic carpet is booted");
+    diagconsole.dprintf(CYN, "magic carpet is booted");
     diagconsole.dprintf("welcome to diag console");
 }
 void dump_errorcode_update() {
     static uint16_t status_last[NUM_ERR_TYPES];
     bool do_print = false;
     uint8_t color = NON;
+    uint16_t now, was;
+    int diff = 0;
     for (int e=0; e<NUM_ERR_TYPES; e++) {
         if (diag.errstatus[e] != status_last[e]) {
             do_print = true;
-            if (diag.errstatus[e] > status_last[e]) {  // there's a new error
-                if (color == LGRN) color = diagconsole.defaultcolor;  // but also another error got cleared, so use default color
-                else if (color == NON) color = SALM;  // use the sad red color
-            }
-            else if (diag.errstatus[e] < status_last[e]) {  // one of the errors got cleared
-                if (color == SALM) color = diagconsole.defaultcolor;  // but there was also a new error, so use default color
-                else if (color == NON) color = LGRN;  // use the happy green color
+            now = diag.errstatus[e];
+            was = status_last[e];
+            while (now || was) {
+                if ((now & 1) > (was & 1)) {
+                    diff++;  // there's a new error
+                    if (color == LGRN) color = diagconsole.defaultcolor;  // but also another error got cleared, so use default color
+                    else if (color == NON) color = SALM;  // use the sad red bad-news color
+                }
+                else if ((now & 1) < (was & 1)) {
+                    diff--;  // an error got cleared
+                    if (color == SALM) color = diagconsole.defaultcolor;  // but there was also a new error, so use default color
+                    else if (color == NON) color = LGRN;  // use the happy green color            
+                }
+                now >>= 1;
+                was >>= 1;
             }
         }
         status_last[e] = diag.errstatus[e];
