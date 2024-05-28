@@ -317,6 +317,44 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
 };
 Timer user_inactivity_timer;  // how long of not touching it before it goes to low power mode
 
+const uint8_t BLK  = 0x00;  // greyscale: full black (RGB elements off)
+const uint8_t DGRY = 0x49;  // pseudo-greyscale: very dark grey (blueish)
+const uint8_t MGRY = 0x6d;  // pseudo-greyscale: medium grey (yellowish)
+const uint8_t LGRY = 0xb6;  // greyscale: very light grey
+const uint8_t WHT  = 0xff;  // greyscale: full white (RGB elements full on)
+const uint8_t RED  = 0xe0;  // red (R element full on)
+const uint8_t YEL  = 0xfc;  // yellow (RG elements full on)
+const uint8_t GRN  = 0x1c;  // green (G element full on)
+const uint8_t CYN  = 0x1f;  // cyan (GB elements full on)
+const uint8_t BLU  = 0x03;  // blue (B element full on)
+const uint8_t MGT  = 0xe2;  // magenta (RB elements full on)
+const uint8_t DRED = 0x80;  // dark red
+const uint8_t BORG = 0xe8;  // blood orange (very reddish orange)
+const uint8_t SALM = 0xc9;  // muted salmon
+const uint8_t BRN  = 0x88;  // dark orange aka brown
+const uint8_t DBRN = 0x44;  // dark brown
+const uint8_t ORG  = 0xf0;  // orange
+const uint8_t LYEL = 0xfe;  // lemon yellow
+const uint8_t GROD = 0xf9;  // goldenrod
+const uint8_t MYEL = 0xd5;  // mustard yellow
+const uint8_t GGRN = 0x9e;  // a low saturation greyish pastel green
+const uint8_t LGRN = 0x55;  // a muted lime green
+const uint8_t TEAL = 0x1e;  // this teal is barely distinguishable from cyan
+const uint8_t STBL = 0x9b;  // steel blue is desaturated light blue
+const uint8_t DCYN = 0x12;  // dark cyan
+const uint8_t RBLU = 0x0b;  // royal blue
+const uint8_t MBLU = 0x02;  // midnight blue
+const uint8_t INDG = 0x43;  // indigo (deep blue with a hint of purple)
+const uint8_t ORCD = 0x8f;  // orchid (lighter and less saturated purple)
+const uint8_t VIO  = 0x83;  // violet
+const uint8_t PUR  = 0x63;  // purple
+const uint8_t GPUR = 0x6a;  // a low saturation greyish pastel purple
+const uint8_t LPUR = 0xb3;  // a light pastel purple
+const uint8_t PNK  = 0xe3;  // pink is the best color
+const uint8_t MPNK = 0xeb;  // we need all shades of pink
+const uint8_t LPNK = 0xf3;  // especially light pink, the champagne of pinks
+const uint8_t NON  = 0x45;  // used as default value when color is unspecified
+
 // kick_inactivity_timer() function to call whenever human activity occurs, for accurate inactivity timeout feature
 //   integer argument encodes which source of human activity has kicked the timer. Here are the codes:
 //   0 = momentary button down (encoder sw or boot button)

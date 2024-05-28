@@ -87,7 +87,8 @@ static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for excepti
     { 0x30, 0x48, 0x48, 0x30, 0x00, 0x10, 0x7c, 0x12, 0x04, 0x00, 0x02, 0x7f, 0x00, 0x3e, 0x51, 0x49, 0x3e, },  // of 10
 };  // These bitmaps are in the same format as the idiot light bitmaps, described in neopixel.h
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
-AnimationManager animations;
+DiagConsole diagconsole;
+PanelAppManager panel(&diagconsole);
 volatile float fps = 0.0;
 volatile bool is_pushing = 0;
 volatile bool is_drawing = 0;
@@ -217,7 +218,7 @@ class Display {
         datapage = prefs.getUInt("dpage", PG_RUN);
         disp_datapage_last = prefs.getUInt("dpage", PG_TEMP);
         init_framebuffers(disp_width_pix, disp_height_pix);
-        animations.setup(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+        panel.setup(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         sprptr = &framebuf[flip];
         Serial.printf("  display initialized\n");
     }
@@ -828,7 +829,7 @@ class Display {
         }
         if (sim->enabled() != sim_last) disp_simbuttons_dirty = true;
         sim_last = sim->enabled();
-        fps = animations.update(spr, disp_simbuttons_dirty);
+        fps = panel.update(spr, disp_simbuttons_dirty);
         disp_simbuttons_dirty = false;
         return true;
     }
@@ -897,16 +898,16 @@ class Display {
         if (autosaver_request == REQ_ON) {
             was_simulating = sim->enabled();
             sim->disable();
-            animations.set_vp(0, 0, disp_width_pix, disp_height_pix);
+            panel.set_vp(0, 0, disp_width_pix, disp_height_pix);
             auto_saver_enabled = true;
             last_context = ui_context;
             ui_context = ScreensaverUI;
-            animations.anim_reset_request = true;
+            panel.anim_reset_request = true;
         }
         else if (autosaver_request == REQ_OFF) {
             auto_saver_enabled = false;
             ui_context = last_context;
-            animations.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
+            panel.set_vp(disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
             reset_request = true;
             if (was_simulating) sim->enable();
             // ui_context = DatapagesUI;

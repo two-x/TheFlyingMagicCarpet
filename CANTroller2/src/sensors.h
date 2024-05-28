@@ -120,6 +120,7 @@ class Param {
     }
     // return value indicates if the value actually changed or not
     bool set(float arg_val) {
+        if (std::abs(arg_val) < float_zero) arg_val = 0.0;  // avoid stupidly low near-zero values that happens sometimes
         if (std::abs(_val - arg_val) < float_zero) return false;
         _last = _val;
         _val = arg_val;
@@ -261,8 +262,8 @@ class Transducer : public Device {
     Param _si, _native;
     float _si_raw;  // si_raw is an output for display purposes, only meaningful for sensors, not actuators. managed here because that's easier 
     // override these in children that need to react to limits changing
-    virtual void update_native_limits() {}
-    virtual void update_si_limits() {}
+    // virtual void update_native_limits() {}
+    // virtual void update_si_limits() {}
   public:
     Transducer(uint8_t arg_pin) : Device(arg_pin) {
         _long_name = "Unknown transducer";
@@ -270,7 +271,7 @@ class Transducer : public Device {
     }
     Transducer() = delete;  // this ensures a pin is always provided
     int _transtype;
-    void setup() {
+    virtual void setup() {
         print_config(true, false);  // print header
         if (_pin < 255) Serial.printf(" on pin %d\n", _pin);
     }  // printf("%s..\n", _long_name.c_str()); }
@@ -278,7 +279,7 @@ class Transducer : public Device {
     // the values to define the range, and all si and native abs values will be set automatically.
     // op limits will also be reconstrained to the updated abs values, however if you have a specific op range then
     // call one of set_oplim() or set_oplim_native() separately as well (which works similarly).
-    void set_abslim(float argmin=NAN, float argmax=NAN, bool autocalc=true) {     // these are absmin and absmax limits. values where NAN is passed in won't be used
+    virtual void set_abslim(float argmin=NAN, float argmax=NAN, bool autocalc=true) {     // these are absmin and absmax limits. values where NAN is passed in won't be used
         if (std::isnan(argmin)) argmin = _si.min();                               // use incumbent min value if none was passed in
         if (std::isnan(argmax)) argmax = _si.max();                               // use incumbent max value if none was passed in
         _si.set_limits(argmin, argmax);                                           // commit to the Param accordingly
@@ -288,7 +289,7 @@ class Transducer : public Device {
         }
         set_oplim(NAN, NAN, false);                                               // just to enforce any re-constraints if needed to keep op limits inside abs limits
     }
-    void set_abslim_native(float argmin=NAN, float argmax=NAN, bool autocalc=true) { // these are absmin and absmax limits. values where NAN is passed in won't be used
+    virtual void set_abslim_native(float argmin=NAN, float argmax=NAN, bool autocalc=true) { // these are absmin and absmax limits. values where NAN is passed in won't be used
         if (std::isnan(argmin)) argmin = _native.min();                              // use incumbent min value if none was passed in
         if (std::isnan(argmax)) argmax = _native.max();                              // use incumbent max value if none was passed in
         _native.set_limits(argmin, argmax);                                          // commit to the Param accordingly
@@ -297,7 +298,7 @@ class Transducer : public Device {
         }
         set_oplim_native(NAN, NAN, false);                                           // just to enforce any re-constraints if needed to keep op limits inside abs limits
     }
-    void set_oplim(float argmin=NAN, float argmax=NAN, bool autocalc=true) {  // these are opmin and opmax limits. values where NAN is passed in won't be used
+    virtual void set_oplim(float argmin=NAN, float argmax=NAN, bool autocalc=true) {  // these are opmin and opmax limits. values where NAN is passed in won't be used
         if (!std::isnan(argmin)) _opmin = argmin;                             // if min value was passed in then set opmin to it
         else if (std::isnan(_opmin)) _opmin = _si.min();                      // otherwise if opmin has no value then set it to absmin
         if (!std::isnan(argmax)) _opmax = argmax;                             // if max value was passed in then set opmax to it
@@ -308,7 +309,7 @@ class Transducer : public Device {
             set_oplim_native(to_native(_opmin), to_native(_opmax), false);    // then convert the new values and ensure si and native stay equivalent
         }
     }
-    void set_oplim_native(float argmin=NAN, float argmax=NAN, bool autocalc=true) {    // these are opmin and opmax limits. values where NAN is passed in won't be used
+    virtual void set_oplim_native(float argmin=NAN, float argmax=NAN, bool autocalc=true) {    // these are opmin and opmax limits. values where NAN is passed in won't be used
         if (!std::isnan(argmin)) _opmin_native = argmin;                               // if min value was passed in then set opmin to it
         else if (std::isnan(_opmin_native)) _opmin_native = _native.min();             // otherwise if opmin has no value then set it to absmin
         if (!std::isnan(argmax)) _opmax_native = argmax;                               // if max value was passed in then set opmax to it
@@ -335,7 +336,9 @@ class Transducer : public Device {
         if (_dir == TransDir::FWD) return set_si(map(arg_val_pc, 0.0, 100.0, _opmin, _opmax));
         else return set_si(map(arg_val_pc, 100.0, 0.0, _opmin, _opmax));
     }
-    bool add_native(float arg_add_native) { return set_native(constrain(_native.val() + arg_add_native, _opmin_native, _opmax_native)); }
+    bool add_native(float arg_add_native) { 
+        return set_native(constrain(_native.val() + arg_add_native, _opmin_native, _opmax_native));
+    }
     bool add_pc(float arg_add_pc) {
         float delta_pc = arg_add_pc * tuning_rate_pcps * loop_avg_us / 1000000.0;  // this acceleration logic doesn't belong here
         return set_si(constrain(_si.val() + map(delta_pc, 0.0, 100.0, _opmin, _opmax), _opmin, _opmax));
@@ -353,10 +356,10 @@ class Transducer : public Device {
         }
         if (!std::isnan(arg_mfactor)) _boffset = arg_boffset;
     }
-    void tedit(float tdelta) {  // for touchscreen editing of the value
+    virtual void tedit(float tdelta) {  // for touchscreen editing of the value
         touch_val = constrain(_si.val() + tdelta, _opmin, _opmax);
     }
-    void print_config(bool header=false, bool ranges=true) {
+    virtual void print_config(bool header=false, bool ranges=true) {
         if (header) {
             Serial.printf("%s %s%s", _long_name.c_str(), transtypecard[_transtype].c_str(), (_pin == 255) ? " ..\n" : "");
             if (_pin < 255) Serial.printf(" on pin %d ..\n", _pin);
@@ -428,13 +431,13 @@ class Sensor : public Transducer {
         set_si(_pot->mapToRange(_opmin, _opmax));  // as currently written, the pot will spoof both si and native raw values in addition to the filtered si value.  do we want this?
     }
     // virtual void update_si_limits() { _val_filt.set_limits(_si.min_shptr(), _si.max_shptr()); } // make sure our filtered value has the same limits as our regular value
-    virtual void update_source() { if (_source == src::PIN) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
+    void update_source() { if (_source == src::PIN) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
   public:
     Sensor(uint8_t pin) : Transducer(pin) {
         _long_name = "Unknown";
         _short_name = "unksen";
     }  
-    void setup() {
+    virtual void setup() {
         _transtype = SensorType;
         Transducer::setup();
     }
@@ -480,7 +483,7 @@ class AirVeloSensor : public I2CSensor {
     float goodreading = NAN;
     int64_t airvelo_read_period_us = 35000;
     Timer airveloTimer;
-    virtual float read_sensor() {
+    float read_sensor() {
         if (!_i2c->detected(i2c_airvelo)) return NAN;
         else if (_i2c->not_my_turn(i2c_airvelo)) return goodreading;
         else if (airveloTimer.expireset()) goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
@@ -497,7 +500,7 @@ class AirVeloSensor : public I2CSensor {
     }
     AirVeloSensor() = delete;
 
-    virtual void set_val_common() {
+    void set_val_common() {
         if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
     }
     void setup() {
@@ -535,7 +538,7 @@ class MAPSensor : public I2CSensor {
     float goodreading = NAN;
     Timer mapreadTimer;
     uint32_t mapread_timeout = 100000, mapretry_timeout = 10000;
-    virtual float read_sensor() {
+    float read_sensor() {
         if (!_i2c->detected(i2c_map)) return NAN;
         else if (_i2c->not_my_turn(i2c_map)) return goodreading;
         else if (mapreadTimer.expired()) {
@@ -558,7 +561,7 @@ class MAPSensor : public I2CSensor {
         _si_units = "atm";
     }
     MAPSensor() = delete;
-    virtual void set_val_common() {
+    void set_val_common() {
         if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
     }
     void setup() {
@@ -591,7 +594,7 @@ class MAPSensor : public I2CSensor {
 class AnalogSensor : public Sensor {
   protected:
     Timer read_timer{25000};  // adc cannot read too fast w/o errors, so give some time between readings
-    virtual void set_val_from_pin() {
+    void set_val_from_pin() {
         if (read_timer.expireset()) {
             set_native(static_cast<float>(analogRead(_pin)));  // Soren: can this be done without two casts?
             calculate_ema(); // filtered values are kept in si format
@@ -603,7 +606,7 @@ class AnalogSensor : public Sensor {
         _short_name = "analog";
         _native_units = "adc";
     }
-    void setup() {
+    virtual void setup() {
         Sensor::setup();
         set_pin(_pin, INPUT);
         set_can_source(src::PIN, true);
@@ -695,8 +698,6 @@ class PressureSensor : public AnalogSensor {
 // for measuring brake position (TODO which position? pad? pedal?)
 // Extends AnalogSensor for handling analog pin reading and conversion.
 class BrakePositionSensor : public AnalogSensor {
-  protected:
-    
   public:
     sens senstype = sens::brkpos;
     float _zeropoint;  // in inches  // _parkpos
@@ -837,7 +838,7 @@ class PulseSensor : public Sensor {
     //     if (std::abs(arg_si) < float_zero) return _native.min();  // zero value is valid for si, but conversion will divide by zero, so return something realistic
     //     return Transducer::to_native(arg_si);  //
     // }
-    void setup() {
+    virtual void setup() {
         Sensor::setup();
         set_pin(_pin, INPUT_PULLUP);
         set_can_source(src::PIN, true);

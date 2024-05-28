@@ -3,6 +3,7 @@
 #include <esp_task_wdt.h>
 #include <iostream>
 #include <iomanip>  // For formatting console loop timing string output
+
 class DiagRuntime {
   private:
     bool report_error_changes = true;
@@ -31,6 +32,7 @@ class DiagRuntime {
   public:
     // diag tunable values
     uint32_t err_margin_adc = 5;
+    uint16_t errstatus[NUM_ERR_TYPES] = { 0x00, 0x00, 0x00 };  // keeps current error status in efficient hex words
     std::string err_type_card[NUM_ERR_TYPES] = { "Lost", "Rang", "Warn" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
     std::string err_sens_card[NumTelemetryFull+3] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA, None, and Hybrid tacked on the end.  access these names using ascii_name() function
         "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HotRC", "Temps", "Other", "GPIO", 
@@ -63,6 +65,11 @@ class DiagRuntime {
             for (int32_t j=0; j<NumTelemetryFull; j++)
                 err_sens[i][j] = err_last[i][j] = false; // Initialize sensor error flags to false
     }
+    void update_status_words() {}
+    void setflag(int device, int errtype, bool stat) {
+        err_sens[errtype][device] = stat;
+        errstatus[errtype] = (errstatus[errtype] & ~(1 << device)) | (stat << device);  // replaces the device's error bit in status word with updated value
+    }
     void update(int _runmode) {
         runmode = _runmode;
         if (errTimer.expireset()) {
@@ -76,24 +83,24 @@ class DiagRuntime {
                 if (!tempsens->detected(l)) not_detected = true;
                 else if (tempsens->val(l) >= temp_lims_f[tempsens->errclass(l)][WARNING]) temp_err[tempsens->errclass(l)] = true;
             }
-            err_sens[LOST][_TempEng] = not_detected;
+            setflag(_TempEng, LOST, not_detected);
 
             // Detect sensors disconnected or giving out-of-range readings.
             // TODO : The logic of this for each sensor should be moved to devices.h objects
-            err_sens[RANGE][_BrakeMotor] = (brake->pc[OUT] < brake->pc[OPMIN] || brake->pc[OUT] > brake->pc[OPMAX]);
-            err_sens[RANGE][_GasServo] = (gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
-            err_sens[RANGE][_BrakeMotor] = (steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
-            err_sens[RANGE][_BrakePosn] = (brkpos->val() < brkpos->opmin() || brkpos->val() > brkpos->opmax());
-            err_sens[LOST][_BrakePosn] = (brkpos->raw() < err_margin_adc);
-            err_sens[RANGE][_BrakePres] = (pressure->val() < pressure->opmin() || pressure->val() > pressure->opmax());
-            err_sens[LOST][_BrakePres] = (pressure->raw() < err_margin_adc);
-            err_sens[RANGE][_MuleBatt] = (mulebatt->val() < mulebatt->opmin() || mulebatt->val() > mulebatt->opmax());
+            setflag(_BrakeMotor, RANGE, brake->pc[OUT] < brake->pc[OPMIN] || brake->pc[OUT] > brake->pc[OPMAX]);
+            setflag(_GasServo, RANGE, gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
+            setflag(_BrakeMotor, RANGE, steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
+            setflag(_BrakePosn, RANGE, brkpos->val() < brkpos->opmin() || brkpos->val() > brkpos->opmax());
+            setflag(_BrakePosn, LOST, brkpos->raw() < err_margin_adc);
+            setflag(_BrakePres, RANGE, pressure->val() < pressure->opmin() || pressure->val() > pressure->opmax());
+            setflag(_BrakePres, LOST, pressure->raw() < err_margin_adc);
+            setflag(_MuleBatt, RANGE, mulebatt->val() < mulebatt->opmin() || mulebatt->val() > mulebatt->opmax());
             HotRCFailure();
-            err_sens[LOST][_Ignition] = (!ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
+            setflag(_Ignition, LOST, !ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
             SpeedoFailure();
             TachFailure();
-            err_sens[RANGE][_Speedo] = (speedo->val() < speedo->opmin() || speedo->val() > speedo->opmax());;
-            err_sens[RANGE][_Tach] = (tach->val() < tach->opmin() || tach->val() > tach->opmax());
+            setflag(_Speedo, RANGE, speedo->val() < speedo->opmin() || speedo->val() > speedo->opmax());
+            setflag(_Tach, RANGE, tach->val() < tach->opmin() || tach->val() > tach->opmax());
             BrakeMotorFailure();
 
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LOWPOWER));
@@ -111,11 +118,11 @@ class DiagRuntime {
   private:
     void set_sensorgroups() {
         for (int typ=0; typ<NUM_ERR_TYPES; typ++) {
-            err_sens[typ][_HotRC] = err_sens[typ][_HotRCHorz] || err_sens[typ][_HotRCVert] || err_sens[typ][_HotRCCh3] || err_sens[typ][_HotRCCh4];
-            err_sens[typ][_GPIO] = err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter] || err_sens[typ][_FuelPump];
-            err_sens[typ][_Other] = err_sens[typ][_MuleBatt] || err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot];
-            err_sens[typ][_Temps] = err_sens[typ][_TempEng] || err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL]
-                                 || err_sens[typ][_TempWhRR] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb];
+            setflag(_HotRC, typ, err_sens[typ][_HotRCHorz] || err_sens[typ][_HotRCVert] || err_sens[typ][_HotRCCh3] || err_sens[typ][_HotRCCh4]);
+            setflag(_GPIO, typ, err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter] || err_sens[typ][_FuelPump]);
+            setflag(_Other, typ, err_sens[typ][_MuleBatt] || err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot]);
+            setflag(_Temps, typ, err_sens[typ][_TempEng] || err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL]
+                                 || err_sens[typ][_TempWhRR] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb]);
         }
     }
     void set_sensidiots() {
@@ -141,10 +148,14 @@ class DiagRuntime {
         for (int32_t i=0; i<NUM_ERR_TYPES; i++) {
             for (int32_t j=0; j<NumTelemetryFull; j++) {
                 if (report_error_changes) {
-                    if (err_sens[i][j] && !err_last[i][j])
+                    if (err_sens[i][j] && !err_last[i][j]) {
                         Serial.printf("!diag: %s %s err\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
-                    else if (!err_sens[i][j] && err_last[i][j])
+                        // diagconsole.dprintf(SALM, "! %s %s err\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
+                    }
+                    else if (!err_sens[i][j] && err_last[i][j]) {
                         Serial.printf("!diag: %s %s ok\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
+                        // diagconsole.dprintf(LGRN, "- %s %s ok\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
+                    }
                 }
                 err_last[i][j] = err_sens[i][j];
             }
@@ -167,7 +178,7 @@ class DiagRuntime {
         bool found_err = false;
         if ((brake->feedback != _BrakePres) && (err_sens[LOST][_BrakePosn] || err_sens[RANGE][_BrakePosn])) found_err = true;
         if ((brake->feedback != _BrakePosn) && (err_sens[LOST][_BrakePres] || err_sens[RANGE][_BrakePres])) found_err = true;
-        err_sens[WARN][_BrakeMotor] = found_err;
+        setflag(_BrakeMotor, WARN, found_err);
     }
     void SpeedoFailure() {  // checks if speedo isn't zero when stopped, or doesn't increase when we drive
         static bool gunning_it, gunning_last = true;
@@ -186,7 +197,7 @@ class DiagRuntime {
             else if (speedoTimer.expired()) fail = (speedo->val() - baseline_speed < speedo->margin());  // the car should be moving by now
         }
         gunning_last = gunning_it;
-        err_sens[LOST][_Speedo] = fail;
+        setflag(_Speedo, LOST, fail);
     }
     void TachFailure() {  // checks if tach isn't low when throttle is released, or doesn't increase when we gun it
         static bool running_it, running_last = true;
@@ -205,7 +216,7 @@ class DiagRuntime {
             else if (tachTimer.expired()) fail = (tach->val() - baseline_rpm < tach->margin());  // the car should be moving by now
         }
         running_last = running_it;
-        err_sens[LOST][_Tach] =  fail;
+        setflag(_Tach, LOST, fail);
     }
     void HotRCFailure() {
         for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
@@ -214,10 +225,10 @@ class DiagRuntime {
             else if (ch == VERT) errindex = _HotRCVert;
             else if (ch == CH3) errindex = _HotRCCh3;
             else if (ch == CH4) errindex = _HotRCCh4;
-            err_sens[RANGE][errindex] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < hotrc->us[ch][OPMIN] - (hotrc->us[ch][MARGIN] >> 1)) 
-                                    || (hotrc->us[ch][RAW] > hotrc->us[ch][OPMAX] + (hotrc->us[ch][MARGIN] >> 1)));  // && ch != VERT
-            err_sens[LOST][errindex] = !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
-                                    || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN])));
+            setflag(errindex, RANGE, !hotrc->radiolost() && ((hotrc->us[ch][RAW] < hotrc->us[ch][OPMIN] - (hotrc->us[ch][MARGIN] >> 1)) 
+                                    || (hotrc->us[ch][RAW] > hotrc->us[ch][OPMAX] + (hotrc->us[ch][MARGIN] >> 1))));  // && ch != VERT
+            setflag(errindex, LOST, !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
+                                    || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN]))));
             // err_sens[RANGE][_HotRCVert] = (hotrc->us[VERT][RAW] < hotrc->failsafe_us - hotrc->us[ch][MARGIN])
             //     || ((hotrc->us[VERT][RAW] < hotrc->us[VERT][OPMIN] - halfMARGIN) && (hotrc->us[VERT][RAW] > hotrc->failsafe_us + hotrc->us[ch][MARGIN]));
         }

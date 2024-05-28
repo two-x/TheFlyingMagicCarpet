@@ -7,39 +7,6 @@
 #define disp_simbuttons_h (disp_height_pix - disp_simbuttons_y)  // 192
 #define disp_font_height 8
 #define disp_font_width 6
-const uint8_t BLK  = 0x00;  // greyscale: full black (RGB elements off)
-const uint8_t DGRY = 0x49;  // pseudo-greyscale: very dark grey (blueish)
-const uint8_t MGRY = 0x6d;  // pseudo-greyscale: medium grey (yellowish)
-const uint8_t LGRY = 0xb6;  // greyscale: very light grey
-const uint8_t WHT  = 0xff;  // greyscale: full white (RGB elements full on)
-const uint8_t RED  = 0xe0;  // red (R element full on)
-const uint8_t YEL  = 0xfc;  // yellow (RG elements full on)
-const uint8_t GRN  = 0x1c;  // green (G element full on)
-const uint8_t CYN  = 0x1f;  // cyan (GB elements full on)
-const uint8_t BLU  = 0x03;  // blue (B element full on)
-const uint8_t MGT  = 0xe2;  // magenta (RB elements full on)
-const uint8_t DRED = 0x80;  // dark red
-const uint8_t BORG = 0xe8;  // blood orange (very reddish orange)
-const uint8_t BRN  = 0x88;  // dark orange aka brown
-const uint8_t DBRN = 0x44;  // dark brown
-const uint8_t ORG  = 0xf0;  // orange
-const uint8_t LYEL = 0xfe;  // lemon yellow
-const uint8_t GGRN = 0x9e;  // a low saturation greyish pastel green
-const uint8_t TEAL = 0x1e;  // this teal is barely distinguishable from cyan
-const uint8_t STBL = 0x9b;  // steel blue is desaturated light blue
-const uint8_t DCYN = 0x12;  // dark cyan
-const uint8_t RBLU = 0x0b;  // royal blue
-const uint8_t MBLU = 0x02;  // midnight blue
-const uint8_t INDG = 0x43;  // indigo (deep blue with a hint of purple)
-const uint8_t ORCD = 0x8f;  // orchid (lighter and less saturated purple)
-const uint8_t VIO  = 0x83;  // violet
-const uint8_t PUR  = 0x63;  // purple
-const uint8_t GPUR = 0x6a;  // a low saturation greyish pastel purple
-const uint8_t LPUR = 0xb3;  // a light pastel purple
-const uint8_t PNK  = 0xe3;  // pink is the best color
-const uint8_t MPNK = 0xeb;  // we need all shades of pink
-const uint8_t LPNK = 0xf3;  // especially light pink, the champagne of pinks
-const uint8_t NON  = 0x45;  // used as default value when color is unspecified
 int simgriddir[4][3] = {
     { JOY_PLUS,  JOY_PLUS,  JOY_PLUS,  },
     { JOY_MINUS, JOY_MINUS, JOY_MINUS, },
@@ -553,22 +520,23 @@ class EraserSaver {  // draws colorful patterns to exercise
 };
 #include <iostream>
 #include <string>
-#include <vector>
 #include <sstream>
 #include <stdarg.h>
 class DiagConsole {
+  public:
+    bool dirty = true;
+    static constexpr int num_lines = 19;
+    // std::string textlines[num_lines];
+    int usedlines = 0, last_drawn = -1, newest_content = -1, next_index = 0, linelength, pix_margin = 2, highlighted_lines = 0;
+    std::string textlines[num_lines], drawnow; // Ring buffer array
+    uint8_t linecolors[num_lines], defaultcolor = MYEL, usecolor; // 
+    // std::vector<std::string> textlines; // Ring buffer array
+    int bufferSize = num_lines; // size_t bufferSize; // Size of the ring buffer
   private:
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
     viewport* vp;
     Timer messagetimer{1000000};  // messages delivered within this close of each other will get highlighted together
-    static constexpr int num_lines = 19;
-    // std::string textlines[num_lines];
-    int usedlines = 0, last_drawn = -1, newest_content = -1, next_index = 0, linelength, vert_spacing = 2, highlighted_lines = 0;
-    std::string textlines[num_lines], drawnow; // Ring buffer array
-    // uint8_t linecolors[num_lines]; // Ring buffer array
-    // std::vector<std::string> textlines; // Ring buffer array
-    int bufferSize = num_lines; // size_t bufferSize; // Size of the ring buffer
     // size_t nextIndex = 0; // Index for the next insertion
     // Function to retrieve the stored strings
     std::string getBufferElement(int index) { // size_t 
@@ -585,27 +553,70 @@ class DiagConsole {
         }
         return result;
     }
-  public:
-    bool dirty = true;
-    // Function similar to Serial.printf()
-    void dprintf(const char* format, ...) {
+    void dprintf_impl(uint8_t color, const char* format, va_list args) {  // this is not called directly but by one ots overloads below
         if (messagetimer.expireset()) highlighted_lines = next_index;  // mark the target index as 1st to be highlighted
-        va_list args;
-        va_start(args, format);
         char temp[100]; // Assuming maximum length of output string
         vsnprintf(temp, sizeof(temp), format, args);
-        va_end(args);
         textlines[next_index] = remove_nonprintable(std::string(temp)); // Store formatted output into buffer
+        linecolors[next_index] = color;
         newest_content = next_index;
         ++next_index %= bufferSize; // Update next insertion index
         dirty = true;
     }
+    void draw(LGFX_Sprite* spr) {
+        spr->fillSprite(BLK);
+        spr->setFont(&fonts::Font0);
+        spr->setTextDatum(textdatum_t::top_left);
+        for (int line=0; line<num_lines; line++) {
+            spr->setCursor(vp->x + pix_margin, vp->y + pix_margin + line * (disp_font_height + pix_margin));
+            int nowindex = (next_index + line) % bufferSize;
+            // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
+            int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
+            drawnow = textlines[nowindex].substr(0, strsize);
+            spr->setTextColor(linecolors[nowindex]);
+            spr->print(drawnow.c_str());
+        }
+        dirty = false;
+    }
+
+  public:
+    void dprintf(const char* format, ...) {  // for if we're called with same arguments as printf would take
+        va_list args;
+        va_start(args, format);
+        dprintf_impl(defaultcolor, format, args);  // Use default color
+        va_end(args);
+    }
+    void dprintf(uint8_t color, const char* format, ...) {  // otherwise you can insert a custom color as the first argument
+        va_list args;
+        va_start(args, format);
+        dprintf_impl(color, format, args);  // Use provided color
+        va_end(args);
+    }
+    // void dprintf(const char* format, ...) {
+    //     if (messagetimer.expireset()) highlighted_lines = next_index;  // mark the target index as 1st to be highlighted
+    //     va_list args;
+    //     va_start(args, format);
+    //     char temp[100]; // Assuming maximum length of output string
+    //     vsnprintf(temp, sizeof(temp), format, args);
+    //     va_end(args);
+    //     textlines[next_index] = remove_nonprintable(std::string(temp)); // Store formatted output into buffer
+    //     linecolors[next_index] = usecolor;
+    //     usecolor = default_color;
+    //     newest_content = next_index;
+    //     ++next_index %= bufferSize; // Update next insertion index
+    //     dirty = true;
+    // }
+    // void dprintf(uint8_t color, const char* format, ...) {  // in case you want a custom color for your message, put it as the first argument
+    //     usecolor = color;
+    //     dprintf(format, args); // this probably isn't right. intention is to pass all arguments except color in to dprintf
+    // }
     void setup(viewport* _vp) {
         vp = _vp;
         std::string blank = "";
         for (int i=0; i<num_lines; i++) {
             // linecolors[i] = MGRY;
             this->dprintf("%s", blank.c_str());
+            linecolors[i] = MYEL;
         }
         linelength = (int)(vp->w / disp_font_width);
         dirty = true;
@@ -614,31 +625,9 @@ class DiagConsole {
         if (dirty || force) draw(spr);
         dirty = false;
     }
-    // void redraw() {
-    //     panel->diffpush(&framebuf[flip], &framebuf[!flip]);
-    // }
-    // void add_errorline(std::string type, std::string item) {
-    //     std::string newerr = type + ": " + item;
-    //     if (newerr.length() > 15) newerr = newerr.substr(0, 15);
-    //     textlines[usedlines++] = newerr;
-    // // }
-    void draw(LGFX_Sprite* spr) {
-        spr->fillSprite(BLK);
-        spr->setFont(&fonts::Font0);
-        spr->setTextDatum(textdatum_t::top_left);
-        spr->setTextColor(MGRY);
-        for (int line=0; line<num_lines; line++) {
-            spr->setCursor(vp->x, vp->y + vert_spacing + line * (disp_font_height + vert_spacing));
-            int nowindex = (next_index + line) % bufferSize;
-            if (nowindex >= highlighted_lines) spr->setTextColor(LGRY);
-            int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
-            drawnow = textlines[nowindex].substr(0, strsize);
-            spr->print(drawnow.c_str());
-        }
-    }
     DiagConsole() {}
 };
-class AnimationManager {
+class PanelAppManager {
   private:
     enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
     int nowsaver = Eraser, still_running = 0;
@@ -658,28 +647,26 @@ class AnimationManager {
     bool simulating_last = false, mule_drawn = false;
     int ui_context_last = MuleChassisUI;
   public:
-    DiagConsole diagconsole; // Initialize serial buffer with size 5
+    DiagConsole* diagconsole; // Initialize serial buffer with size 5
     std::uint32_t sec, psec, _width, _height, _myfps = 0, frame_count = 0;
     bool anim_reset_request = false;
-    AnimationManager() {}
+    PanelAppManager(DiagConsole* _diag) : diagconsole(_diag) {}
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
     }
     void setup(LGFX* _lgfx, Simulator* _sim, Touchscreen* _touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
-        Serial.printf("  animations init ..");
+        Serial.printf("  panel app manager init ..");
         mylcd = _lgfx;
         sim = _sim;
         touch = _touch;
         set_vp(_cornerx, _cornery, _sprwidth, _sprheight);
         _width = vp.w << SHIFTSIZE;
         _height = vp.h << SHIFTSIZE;
-        Serial.printf(" screensavers .. ");
+        Serial.printf(" screensavers & diag console .. ");
         eSaver.setup(&framebuf[flip], &vp);
         cSaver.setup(&framebuf[flip], &vp);
-        diagconsole.setup(&vp);
-        // Serial.printf(" diag console .. ");
-        // diagconsole.setup();
+        diagconsole->setup(&vp);
         Serial.printf("set up\n");
     }
     void reset() {
@@ -737,7 +724,6 @@ class AnimationManager {
         // spr->setTextDatum(textdatum_t::top_left);
         // spr->setFont(&fonts::Font0);
         spr->setTextColor(BLK);
-
     }
     void calc_fps() {
         int64_t now = fps_timer.elapsed();
@@ -776,7 +762,7 @@ class AnimationManager {
         if (dirty) {
             spr->fillSprite(BLK);
             mule_drawn = false;
-            diagconsole.dirty = true;
+            diagconsole->dirty = true;
         }
         if (ui_context == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             // mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
@@ -793,7 +779,7 @@ class AnimationManager {
             if (!still_running) change_saver();
         }
         else if (ui_context == DiagConsoleUI) {
-            diagconsole.update(spr);
+            diagconsole->update(spr);
         }
         else if (ui_context == MuleChassisUI) {
             if (!mule_drawn) {

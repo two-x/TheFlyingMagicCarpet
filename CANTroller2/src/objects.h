@@ -240,7 +240,7 @@ class Starter {
     void request(int req) { now_req = req; }  // Serial.printf("r:%d n:%d\n", req, now_req);}
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         // if (now_req != NA) Serial.printf("m:%d r:%d\n", motor, now_req);
-        if (now_req == REQ_TOG) now_req = !motor;  // translate a toggle request to a drive request opposite to the current drive state
+        if (now_req == REQ_TOG) now_req = motor ? REQ_OFF : REQ_ON;  // translate a toggle request to a drive request opposite to the current drive state
         if ((brake.feedback == _None) && (now_req == REQ_ON)) now_req = REQ_NA;  // never run the starter if brake is in openloop mode
         req_active = (now_req != REQ_NA);                   // for display
         if (motor && ((now_req == REQ_OFF) || starterTimer.expired()))  {  // if we're driving the motor but need to stop or in the process of stopping
@@ -365,6 +365,16 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
 
 static FuelPump fuelpump(tp_cs_fuel_pin);
 
+// // this prototype is needed for diag to call console writes, which aren't defined yet
+// class DiagConsole;  // Forward declaration of DiagConsole
+// DiagConsole diagconsole;
+// void dprintf(DiagConsole& console, uint8_t color, const char* format, ...) {  // placeholder function 
+
+// }
+
+// void DiagConsole::dprintf(uint8_t color, const char* format, ...);
+// class DiagConsole { public: DiagConsole(); void dprintf(uint8_t color, const char* format, ...); };
+
 #include "diag.h"
 static LoopTimer looptimer;
 static BootMonitor watchdog(&prefs, &looptimer);
@@ -390,12 +400,13 @@ void stop_console() {
         delay(200);  // give time for serial to print everything in its buffer
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
-    animations.diagconsole.dprintf("Magic carpet is booted");
+    diagconsole.dprintf(PNK, "magic carpet is booted");
+    diagconsole.dprintf("welcome to diag console");
 }
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
     if (bootbutton.shortpress()) {
-        if (auto_saver_enabled) animations.change_saver();
+        if (auto_saver_enabled) panel.change_saver();
         // else sim.toggle();
         else {
             sim.toggle();
@@ -404,7 +415,7 @@ void bootbutton_actions() {  // temporary (?) functionality added for developmen
             speedo.print_config(true);
             tach.print_config(true);
             mulebatt.print_config(true);
-            animations.diagconsole.dprintf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
+            diagconsole.dprintf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
 
         }
     }
