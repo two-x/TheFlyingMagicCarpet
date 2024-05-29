@@ -193,7 +193,7 @@ class Encoder {
 #define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
 #define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 #define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
-#define disp_tuning_lines 11  // Lines of dynamic variables/values in dataset pages 
+#define disp_tuning_lines 15  // Lines of dynamic variables/values in dataset pages 
 class Touchscreen {
   private:
     LGFX* _tft;
