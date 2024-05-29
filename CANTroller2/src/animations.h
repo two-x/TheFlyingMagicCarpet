@@ -395,8 +395,9 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             else if (rotate == Dots) {
                 uint8_t sat = (30 * season) + rn(256 - 30 * season);
+                int bigger = 1 + rn(3);
                 for (int star = 0; star < 12; star++)
-                    sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (2 + rn(2)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
+                    sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (2 + rn(1 + bigger * season)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
             }
             else if (rotate == Boxes) {
                 boxrad = 2 + rn(2 + 4 * season);
