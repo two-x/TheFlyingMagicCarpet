@@ -365,16 +365,6 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
 
 static FuelPump fuelpump(tp_cs_fuel_pin);
 
-// // this prototype is needed for diag to call console writes, which aren't defined yet
-// class DiagConsole;  // Forward declaration of DiagConsole
-// DiagConsole diagconsole;
-// void dprintf(DiagConsole& console, uint8_t color, const char* format, ...) {  // placeholder function 
-
-// }
-
-// void DiagConsole::dprintf(uint8_t color, const char* format, ...);
-// class DiagConsole { public: DiagConsole(); void dprintf(uint8_t color, const char* format, ...); };
-
 #include "diag.h"
 static LoopTimer looptimer;
 static BootMonitor watchdog(&prefs, &looptimer);

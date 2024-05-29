@@ -236,22 +236,23 @@ class Transducer : public Device {
     //   _boffset : si value to add after native-to-si conversion, or subtract before si-to-native conversion
     // note, to avoid crashes, divide by zero attempts result in return of max value in lieu of infinity
     virtual float from_native(float arg_native) {
-        if (conversion_method == AbsLimMap) return map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
-        else if (conversion_method == OpLimMap) return map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
-        else if (conversion_method == LinearMath) return _boffset + _mfactor * arg_native; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
-        Serial.printf("Err: from_native unable to convert %lf (min %lf, max %lf)\n", arg_native, _native.min(), _native.max());
-        return NAN;
+        float ret = NAN;
+        if (conversion_method == AbsLimMap) ret = map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
+        else if (conversion_method == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
+        else if (conversion_method == LinearMath) ret = _boffset + _mfactor * arg_native; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
+        if (std::isnan(ret)) Serial.printf("Err: from_native unable to convert %lf (min %lf, max %lf)\n", arg_native, _native.min(), _native.max());
+        if (std::abs(ret) < float_zero) return 0.0;  // reject any stupidly small near-zero values
+        return ret;
     }
     virtual float to_native(float arg_si) {  // convert an absolute si value to native units
-        if (conversion_method == AbsLimMap) return map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
-        else if (conversion_method == OpLimMap) return map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
-        else if (conversion_method == LinearMath) return (arg_si - _boffset) / _mfactor;
-        Serial.printf("Err: to_native unable to convert %lf (min %lf, max %lf)\n", arg_si, _si.min(), _si.max());
-        return NAN;
+        float ret = NAN;
+        if (conversion_method == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
+        else if (conversion_method == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
+        else if (conversion_method == LinearMath) ret = (arg_si - _boffset) / _mfactor;
+        else if (std::isnan(ret)) Serial.printf("Err: to_native unable to convert %lf (min %lf, max %lf)\n", arg_si, _si.min(), _si.max());
+        if (std::abs(ret) < float_zero) return 0.0;  // reject any stupidly small near-zero values
+        return ret;
     }
-    // NOTE: do we really need two values? or should this just be a single value and get converted wherever needed?
-    // To hold val/min/max display values in display units (like V, mph, etc.)
-
     // notes 2405022 (soren)
     // here we maintain 3 separate versions of our primary value:
     //   _si (Param): a possibly-filtered value in human-readable units like feet or psi, auto constrained within specified absolute limits*.
@@ -770,7 +771,7 @@ class PulseSensor : public Sensor {
     void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
         _isr_time_current_us = esp_timer_get_time();
         int64_t time_us = _isr_time_current_us - _isr_time_last_us;
-        if (time_us > _absmin_us_64) {  // ignore spurious triggers or bounces
+        if (time_us >= _absmin_us_64) {  // ignore spurious triggers or bounces
             _isr_time_last_us = _isr_time_current_us;
             _us = time_us;
             // _pin_level = !_pin_level;
@@ -789,8 +790,8 @@ class PulseSensor : public Sensor {
     virtual float read_sensor() {
         float _isr_buf_us = static_cast<float>(_us);  // Copy delta value (in case another interrupt happens during handling)
         float new_native = _native.val();  // initialize our return value to the current native value
-        if (_isr_buf_us >= _absmax_us) new_native = _native.min();  // if it's been too long since last pulse return zero
-        else if (_isr_buf_us > _absmin_us) new_native = 1000000.0 / _isr_buf_us;  // otherwise if the pulse isn't too soon after the last one (possible bounce) then convert as a valid reading
+        if (_isr_buf_us > _absmax_us) new_native = _native.min();  // if it's been too long since last pulse return zero
+        else if (_isr_buf_us >= _absmin_us) new_native = us_to_hz(_isr_buf_us);  // otherwise if the pulse isn't too soon after the last one (possible bounce) then convert as a valid reading
         set_pin_inactive();
         return new_native;  // too-short pulse times are presumably bounces and are ignored, keeping the existing native value
     }
@@ -805,6 +806,8 @@ class PulseSensor : public Sensor {
         return _absmax_us;
     }
   public:
+    std::string _uber_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
+
     PulseSensor(uint8_t arg_pin, float arg_freqdiv=1.0) : Sensor(arg_pin), _freqdiv(arg_freqdiv) {
         _long_name = "Unknown Hall-Effect";
         _short_name = "pulsen";
@@ -813,7 +816,7 @@ class PulseSensor : public Sensor {
     PulseSensor() = delete;
     void print_config(bool header=false, bool ranges=true) {
         Transducer::print_config(header, ranges);
-        if (ranges) Serial.printf("  pulsewidth now = %.0lf us, abs range: %.0lf-%.0lf us\n", _us, _absmin_us, _absmax_us);
+        if (ranges) Serial.printf("  pulsewidth now = %.0lf %s, abs range: %.0lf-%.0lf %s\n", _us, _uber_native_units.c_str(), _absmin_us, _absmax_us, _uber_native_units.c_str());
     }
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // overload the normal function so we can also include us calculations 
@@ -850,6 +853,7 @@ class PulseSensor : public Sensor {
     // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     bool stopped() { return (std::abs(val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     bool* pin_inactive_ptr() { return &_pin_inactive; }
+    bool* pin_level_ptr() { return &_pin_level; }
     float absmin_us() { return _absmin_us; }
     float absmax_us() { return _absmax_us; }
     float idle() { return _idle; }
@@ -1103,16 +1107,19 @@ class Simulator {
                     if (can_sim) { // if we just enabled simulatability...
                         if (arg_sensor == _potmap) { // ...and the pot is supposed to map to this component...
                             d->set_source(src::POT); // ...then set the input source for the associated Device to read from the pot
-                        } else if (_enabled) { // ...and the pot isn't mapping to this component, but the simulator is running...
+                        }
+                        else if (_enabled) { // ...and the pot isn't mapping to this component, but the simulator is running...
                             d->set_source(src::TOUCH); // ...then set the input source for the associated Device to read from the touchscreen
                         }
-                    } else {
+                    }
+                    else {
                         d->set_source(default_mode); // we disabled simulation for this component, set it back to its default input source
                     }
                 }
                 kv->second = simulable_t(can_sim, d, default_mode); // update the entry with the new simulatability status
             }
-        } else {
+        }
+        else {
             _devices[arg_sensor] = simulable_t(can_sim, nullptr, src::UNDEF); // add a new entry with the simulatability status for this component
         }
     }

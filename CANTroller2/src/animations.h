@@ -247,7 +247,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     LGFX_Sprite* sprite;
     viewport* vp;
     int wormpos[2] = {0, 0}, wormvel[2] = {0, 0}, wormsign[2] = {1, 1}, wormd[2] = {20, 20};
-    int shifter = 2, wormdmin = 8, wormdmax = 50, wormvelmax = 1 << shifter, wormsat = 128;
+    int shifter = 2, wormdmin = 8, wormdmax = 50, wormvelmax = 512, wormsat = 128;
     uint32_t boxsize[2], huebase = 0;
     int sprsize[2], rotate = -1, scaler = 1, season = 0, numseasons = 4;
     int point[2], plast[2], er[2], erpos_max[2], wormstripe = 2;
@@ -380,7 +380,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 uint8_t sat, brt, c, c2;
                 uint16_t hue = spothue + 32768 * rn(2);
                 sat = 255 - ((uint8_t)(spothue >> (7+season)));  // + rn(63) 
-                brt = 200 + rn(56);
+                brt = 150 + rn(56);
                 if (season > 1) { sat = 180; brt -= 25; }
                 c = hsv_to_rgb<uint8_t>(hue, sat, brt);
                 c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
@@ -453,7 +453,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 int wormposmax[2] = {(vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2};
                 if (wormmovetimer.expireset()) {
                     for (int axis = HORZ; axis <= VERT; axis++) {
-                        wormpos[axis] += wormvel[axis] * wormsign[axis];
+                        wormpos[axis] += (wormvel[axis] >> 6) * wormsign[axis];
                         if ((wormpos[axis] * wormsign[axis]) >> shifter >= wormposmax[axis] + 2) {
                             wormpos[axis] = (wormsign[axis] * wormposmax[axis]) << shifter;
                             wormsign[axis] *= -1;
@@ -466,8 +466,8 @@ class EraserSaver {  // draws colorful patterns to exercise
                 }
                 if (wormtimer.expireset()) {
                     for (int axis = HORZ; axis <= VERT; axis++) {
-                        wormvel[axis] = constrain(wormvel[axis] + rn(2), 0, wormvelmax);
-                        if (wormvel[axis] == 0) wormsign[axis] = (rn(2) << 1) - 1;
+                        wormvel[axis] = constrain(wormvel[axis] + rn(255) - 127, 0, wormvelmax);
+                        // if (wormvel[axis] == 0) wormsign[axis] = (rn(2) << 1) - 1;
                     }
                 }
                 // sprite->fillEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, BLK);
@@ -644,7 +644,7 @@ class PanelAppManager {
     float myfps = 0.0;
     int oldfps = 0;
     int64_t fps_mark;
-    bool simulating_last = false, mule_drawn = false;
+    bool simulating_last = false, mule_drawn = false, dirty = true;
     int ui_context_last = MuleChassisUI;
   public:
     DiagConsole* diagconsole; // Initialize serial buffer with size 5
@@ -753,9 +753,10 @@ class PanelAppManager {
             oldfps = dispfps;
         }
     }
-    float update(LGFX_Sprite* spr, bool dirty=false) {
+    float update(LGFX_Sprite* spr, bool argdirty=false) {
         if ((ui_context_last != ScreensaverUI) && (ui_context == ScreensaverUI)) change_saver();  // ptrsaver->reset();
         if (ui_context_last != ui_context) dirty = true;
+        if (argdirty) dirty = true;
         ui_context_last = ui_context;
         if (anim_reset_request) reset();
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
@@ -794,9 +795,11 @@ class PanelAppManager {
         }
         else if (simulating_last) {
             spr->fillRect(vp.x, vp.y, vp.w, vp.h, BLK);
+            dirty = true;
             mule_drawn = false;
         }
         simulating_last = sim->enabled();
+        dirty = false;
         calc_fps();
         return myfps;
     }

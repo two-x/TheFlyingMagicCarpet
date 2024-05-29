@@ -131,7 +131,7 @@ bool looptime_print = false;         // makes code write out timestamps througho
 bool touch_reticles = true;          // draws tiny little plus reticles to aim at for doing touchscreen calibration
 bool button_test_heartbeat_color = false; // makes boot button short press change heartbeat color. useful for testing code on bare esp
 bool wifi_client_mode = false;       // should wifi be in client or access point mode?
-bool screensaver_enabled = true;          // does fullscreen screensaver start automatically when in powerdown, after a delay?
+bool screensaver_enabled = true;     // does fullscreen screensaver start automatically when in powerdown, after a delay?
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
 
 // global tunable variables
@@ -173,7 +173,7 @@ bool car_hasnt_moved = false;           // minor state variable for fly mode - W
 bool powering_up = false;               // minor state variable for lowpower mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
-bool screensaver = false;                // can enable experiment with animated screen draws
+// bool screensaver = false;                // can enable experiment with animated screen draws
 bool basicmode_request = false;
 int autosaver_request = REQ_NA;
 int tunctrl = OFF, tunctrl_last = OFF;
