@@ -21,7 +21,7 @@ int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
   protected:
-    float _ema_alpha = .95;
+    float _ema_alpha = 0.98;
     float _opmin = 0.0, _opmax = 100.0 ;  // in percent
     float _opmin_native = 380; // TUNED 230603 - Used only in determining theconversion factor
     float _opmax_native = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
@@ -195,47 +195,42 @@ class Device {
     bool enabled() { return _enabled; }
 };
 
-// Device::Transducer is a base class for any system devices that convert real-world values <--> signals in either direction. It has a "native"
-// value which represents the sensed or driven hardware input/output. It also has a "si" value which represents the logical or human-readable
-// equivalent value. Adjusting either value will automatically change the other one.
 
 enum class TransDir : uint8_t { REV, FWD }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
 enum TransType { ActuatorType, SensorType, NumTransType }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
 std::string transtypecard[NumTransType] = { "actuator", "sensor" };
 // std::string transdircard[NumTransDir] = { "reverse", "forward" };
 
-// Transducer class: (240522 soren)
-// This class holds key device values, converts between different units they might use, and manages their constraint within specified range limits
-// Some definitions:
-// Each xducer has a primary value associated with it, eg for the speedo this is our speed. That value takes multiple forms:
-//   UNITS:  units of measure appropriate to the device. these appear in variable and function names, or when absent the default "si" is assumed. Here are the possibilities:  
+// Transducer class
+// Device::Transducer is a base class for any system devices that convert real-world values <--> signals in either direction. it has a "native"
+// value which represents the sensed or driven hardware input/output. it also has a "si" value which represents the logical or human-readable
+// equivalent value. by default, adjusting either value will automatically change the other one. this class holds key device values, converts between different units they might use, and manages their constraint within specified range limits
+// Each xducer has a primary value associated with it, eg for the speedo this is our speed. Here we maintain 3 separate versions of our primary value:
+//   Variables: 
+//     _si (Param): a possibly-filtered value in human-readable units like feet or psi, auto constrained within specified absolute limits*.
+//     _native (Param) : a raw (unfiltered) value in machine-interface units, often adc counts or microseconds (us), auto constrained within specified absolute limits.
+//     _si_raw (float) : is a raw (unfiltered) si-unit conversion of the raw value, useful if scrutinizing the effects of filters, etc.
+//   Units:  units of measure appropriate to the device. these appear in variable and function names, or when absent the default "si" is assumed. Here are the possibilities:  
 //     "si": (default) values kept in standard units of measure which humans prefer, such as mph, feet-per-second, etc.
 //     "native": values kept in whatever units are native to the specific device/driver, usually adc counts (for analog sensors) or microseconds (for pwm)... depends on the sensor type
 //     "pc": values scaled to a percentage of the operational range, where opmin = 0% and opmax = 100%
-//   LIMITS:
+//   Conversions:  set conversion_method to best suit the most reliable data you have for your sensor. this decides what math to do when converting between native and si unit values. Here are the choices:
+//     AbsLimMap : runs map() function to scale value from one absolute range to the other. For this you must first have explicitly set abs ranges for both native and si
+//     OpLimMap : same as AbsLimMap but transpose across the operational ranges rather than the absolute ranges
+//     LinearMath : uses y = mx + b generic linear equation to convert. if using this then setting the abs or op range in one unit will auto calc the other. for this you need to set accurate values for the following:
+//       _mfactor : conversion rate for si-units/native-units.  (eg for feet (si) and yards (native) would be 3 ft/yd)
+//       _boffset : constant in si units to add after native-to-si conversion, or subtract before si-to-native conversion
+//   Limits:
 //     "absmin"/"absmax": defines the whole range the transducer is capable of. all values are auto-constrained to this range, also tunability of operational limits are confined to this range
 //     "opmin"/"opmax": defines the healthy operational range the transducer. Actuators should be constrained to this range, Sensors should be expected to read within this range or flag an error
 class Transducer : public Device {
   protected:
-    // Multiplier and adder values to plug in for unit conversion math
-    // float _raw_native;  // Keep track of the most recent unfiltered and unconstrained native value, for monitoring and diag purposes
     float _mfactor = 1.0, _boffset = 0.0, touch_val;
-    float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;  // float _opmin, _opmax, _absmin, _absmax, _margin, _raw, _filt;
-    // float _zerovalue = NAN;  // value to return from to_native conversion when val is zero (needed for speedometer)
+    float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;
     TransDir _dir = TransDir::FWD;
-    // Set conversion_method to best suit the most reliable data you have for your sensor.
-    // This decides what math to do when converting between native and si unit values. Here are the choices:
-    //   LinearMath : uses y = mx + b generic linear equation to convert. For this you need to set accurate values for _mfactor, _boffset, and _dir where defaults don't apply. If using this then setting the abs or op range in one unit will auto calc the other
-    //   AbsLimMap : runs map() function to scale value from one absolute range to the other. For this you must first have explicitly set abs ranges for both native and si
-    //   OpLimMap : same as AbsLimMap but transpose across the operational ranges rather than the absolute ranges
     int conversion_method = LinearMath;  // the default method
     
-    // these linear conversion functions change absolute native values to si and back - overwrite in child classes as needed
-    //   _mfactor : non-inverted: is conversion rate in si/native units  (eg for feet (si) and yards (native) would be 3)
-    //               inverted: is si-unit to inverted-native-unit ratio  (eg for Hz (si) and ms (native), would be 1000)
-    //   _boffset : si value to add after native-to-si conversion, or subtract before si-to-native conversion
-    // note, to avoid crashes, divide by zero attempts result in return of max value in lieu of infinity
-    virtual float from_native(float arg_native) {
+    virtual float from_native(float arg_native) {  // these linear conversion functions change absolute native values to si and back - overwrite in child classes as needed
         float ret = NAN;
         if (conversion_method == AbsLimMap) ret = map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
         else if (conversion_method == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
@@ -253,18 +248,8 @@ class Transducer : public Device {
         if (std::abs(ret) < float_zero) return 0.0;  // reject any stupidly small near-zero values
         return ret;
     }
-    // notes 2405022 (soren)
-    // here we maintain 3 separate versions of our primary value:
-    //   _si (Param): a possibly-filtered value in human-readable units like feet or psi, auto constrained within specified absolute limits*.
-    //   _native (Param) : a raw (unfiltered) value in machine-interface units, often adc counts or microseconds (us), auto constrained within specified absolute limits.
-    //   _si_raw (float) : is a raw (unfiltered) si-unit conversion of the raw value, useful if scrutinizing the effects of filters, etc.
-    //
-    //   * by default constraints on _si enforce the specified absolute range
     Param _si, _native;
-    float _si_raw;  // si_raw is an output for display purposes, only meaningful for sensors, not actuators. managed here because that's easier 
-    // override these in children that need to react to limits changing
-    // virtual void update_native_limits() {}
-    // virtual void update_si_limits() {}
+    float _si_raw;  // si_raw is an output for display purposes, only meaningful for sensors, not actuators. managed here because that's easier
   public:
     Transducer(uint8_t arg_pin) : Device(arg_pin) {
         _long_name = "Unknown transducer";
@@ -276,10 +261,11 @@ class Transducer : public Device {
         print_config(true, false);  // print header
         if (_pin < 255) Serial.printf(" on pin %d\n", _pin);
     }  // printf("%s..\n", _long_name.c_str()); }
-    // To set limits : call either one of set_abslim() or set_abslim_native(), whichever one you have
-    // the values to define the range, and all si and native abs values will be set automatically.
-    // op limits will also be reconstrained to the updated abs values, however if you have a specific op range then
-    // call one of set_oplim() or set_oplim_native() separately as well (which works similarly).
+    // To set limits, depends on your conversion method being used :
+    //   linear_math: call either one of set_abslim() or set_abslim_native(), whichever one you have the values to define the range and all si and native abs values will be set automatically.
+    //                op limits will also be reconstrained to the updated abs values, however if you have a specific op range then
+    //   abslimmap: call both of set_abslim() and set_abslim_native(), providing all 4 values which are later used to convert values. specify false for the autocalc argument
+    //   oplimmap:  call both of set_oplim() and set_oplim_native(), providing all 4 values which are later used to convert values. specify false for the autocalc argument
     virtual void set_abslim(float argmin=NAN, float argmax=NAN, bool autocalc=true) {     // these are absmin and absmax limits. values where NAN is passed in won't be used
         if (std::isnan(argmin)) argmin = _si.min();                               // use incumbent min value if none was passed in
         if (std::isnan(argmax)) argmax = _si.max();                               // use incumbent max value if none was passed in
@@ -349,8 +335,8 @@ class Transducer : public Device {
         return set_si(constrain(_si.val() + delta_si, _opmin, _opmax));
     }
     void set_margin(float arg_marg) { _margin = arg_marg; }
-    // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
-    void set_conversions(float arg_mfactor=NAN, float arg_boffset=NAN) {  // arguments passed in as NAN will not be used
+    
+    void set_conversions(float arg_mfactor=NAN, float arg_boffset=NAN) {  // arguments passed in as NAN will not be used.  // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
         if (!std::isnan(arg_mfactor)) {
             if (std::abs(arg_mfactor) < float_zero) Serial.printf("Err: can not support _mfactor of zero\n");
             else _mfactor = arg_mfactor;
@@ -370,9 +356,7 @@ class Transducer : public Device {
             Serial.printf("  abs range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
             Serial.printf("  op range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
         }
-
     }
-    // float si() { return _si.val(); }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)
     float* ptr() { return _si.ptr(); }
     float absmin() { return _si.min(); }
@@ -396,7 +380,7 @@ class Transducer : public Device {
 };
 
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
-
+// 
 // Sensor class notes:  Some definitions (240522 soren)
 // Sensors typically apply filtering to the incoming values read. Postprocessing is done to the _si Param value accessible externally by val()
 //   the values are described below. all this is inherited from Transducer, just with filtering applied:
@@ -477,8 +461,7 @@ class I2CSensor : public Sensor {
         _detected = _i2c->detected_by_addr(addr);
     }
 };
-// AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
-class AirVeloSensor : public I2CSensor {
+class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
   protected:
     FS3000 _sensor;
     float goodreading = NAN;
@@ -504,8 +487,7 @@ class AirVeloSensor : public I2CSensor {
     void set_val_common() {
         if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
     }
-    void setup() {
-        // Serial.printf("%s..", _long_name.c_str());
+    void setup() {  // Serial.printf("%s..", _long_name.c_str());
         I2CSensor::setup();
         set_si(0.0);  // initialize value
         set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
@@ -531,9 +513,7 @@ class AirVeloSensor : public I2CSensor {
         print_config();
     }
 };
-
-// MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
-class MAPSensor : public I2CSensor {
+class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
   protected:
     SparkFun_MicroPressure _sensor;
     float goodreading = NAN;
@@ -574,7 +554,6 @@ class MAPSensor : public I2CSensor {
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         mapreadTimer.set(mapread_timeout);
-
         Serial.printf("  map sensor %sdetected", _detected ? "" : "not ");
         if (_detected) {
             if (!_sensor.begin()) {
@@ -590,9 +569,7 @@ class MAPSensor : public I2CSensor {
         print_config();
     }
 };
-
-// class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
-class AnalogSensor : public Sensor {
+class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
   protected:
     Timer read_timer{25000};  // adc cannot read too fast w/o errors, so give some time between readings
     void set_val_from_pin() {
@@ -615,9 +592,7 @@ class AnalogSensor : public Sensor {
         set_abslim_native(0.0, (float)adcrange_adc, false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
     }
 };
-
-// CarBattery reads the voltage level from the Mule battery
-class CarBattery : public AnalogSensor {
+class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level from the Mule battery
   public:
     sens senstype = sens::mulebatt;
     CarBattery(uint8_t arg_pin) : AnalogSensor(arg_pin) {
@@ -746,8 +721,7 @@ class BrakePositionSensor : public AnalogSensor {
     float zeropoint() { return _zeropoint; }
     float* zeropoint_ptr() { return &_zeropoint; }
 };
-
-// class PulseSensor are hall-monitor sensors where the value is based on magnetic pulse timing of a rotational Source (eg tachometer, speedometer)
+// class PulseSensor are hall-effect based magnetic field sensors where the value is based on magnetic pulse timing of a rotational Source (eg tachometer, speedometer)
 class PulseSensor : public Sensor {
   protected:
     // volatile int64_t timestamp_last_us;  // _stop_timeout_us = 1250000;  // Time after last magnet pulse when we can assume the engine is stopped (in us)
@@ -830,17 +804,6 @@ class PulseSensor : public Sensor {
         _absmin_us = 1000000.0 / _native.max();  // also set us limits from here, converting Hz to us. note min/max are swapped
         _absmin_us_64 = (int)_absmin_us;         // make an int copy for the isr to use conveniently
     }
-    // void set_abslim(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
-    //     Transducer::set_abslim_native(0.0, arg_max, calc_si);  // si abs minimum is unsettable, and always zero
-    // }
-    // float from_native(float arg_native) {
-    //     if (std::abs(arg_native) - _margin_native < _native.min()) return 0.0;  // values below the min native we jump to zero
-    //     return Transducer::from_native(arg_native);  // si abs minimum is unsettable, and always zero
-    // }
-    // float to_native(float arg_si) {
-    //     if (std::abs(arg_si) < float_zero) return _native.min();  // zero value is valid for si, but conversion will divide by zero, so return something realistic
-    //     return Transducer::to_native(arg_si);  //
-    // }
     virtual void setup() {
         Sensor::setup();
         set_pin(_pin, INPUT_PULLUP);
@@ -861,7 +824,6 @@ class PulseSensor : public Sensor {
     void set_idle(float newidle) { _idle = constrain(newidle, _opmin, _opmax); }
     float us() { return _us; }
 };
-
 // Tachometer represents a magnetic pulse measurement of the enginge rotation.
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
 class Tachometer : public PulseSensor {
@@ -879,7 +841,6 @@ class Tachometer : public PulseSensor {
         float m = 60.0 * _freqdiv;  // 1 Hz = 1 pulse/sec * 8 rot/pulse * 60 sec/min = 480 rot/min, (so 480 rpm/Hz)
         set_conversions(m, 0.0);
         set_abslim(0.0, 4500.0);  // the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
-        
         // do i need this line?
         // set_abslim_native(us_to_hz(6000), NAN, false);  // for pulse sensor, set absmin_native to define the stop timeout period. Less Hz means more us which slows our detection of being stopped
         

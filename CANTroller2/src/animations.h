@@ -379,9 +379,10 @@ class EraserSaver {  // draws colorful patterns to exercise
                 int d = 6 + rn(45);
                 uint8_t sat, brt, c, c2;
                 uint16_t hue = spothue + 32768 * rn(2);
-                sat = 255 - ((uint8_t)(spothue >> (7+season)));  // + rn(63) 
-                brt = 150 + rn(56);
-                if (season > 1) { sat = 180; brt -= 25; }
+                sat = 255 - ((uint8_t)(spothue >> (8+season)));  // + rn(63) 
+                brt = 175 + rn(56);
+                if (season == 0) { sat = 100; brt = 200; }
+                if (season == 3) { sat = 255; brt = 255; }
                 c = hsv_to_rgb<uint8_t>(hue, sat, brt);
                 c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
                 // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
@@ -526,9 +527,10 @@ class EraserSaver {  // draws colorful patterns to exercise
 class DiagConsole {
   public:
     bool dirty = true;
-    static constexpr int num_lines = 19;
+    static constexpr int num_lines = 24;
     // std::string textlines[num_lines];
-    int usedlines = 0, last_drawn = -1, newest_content = -1, next_index = 0, linelength, pix_margin = 2, highlighted_lines = 0;
+    int usedlines = 0, last_drawn = -1, newest_content = -1, next_index = 0, linelength = 50, pix_margin = 2;
+    int font_height = 6, highlighted_lines = 0;
     std::string textlines[num_lines], drawnow; // Ring buffer array
     uint8_t linecolors[num_lines], defaultcolor = MYEL, usecolor; // 
     // std::vector<std::string> textlines; // Ring buffer array
@@ -566,10 +568,10 @@ class DiagConsole {
     }
     void draw(LGFX_Sprite* spr) {
         spr->fillSprite(BLK);
-        spr->setFont(&fonts::Font0);
+        spr->setFont(&fonts::TomThumb);
         spr->setTextDatum(textdatum_t::top_left);
         for (int line=0; line<num_lines; line++) {
-            spr->setCursor(vp->x + pix_margin, vp->y + pix_margin + line * (disp_font_height + pix_margin));
+            spr->setCursor(vp->x + pix_margin, vp->y + pix_margin + line * (font_height + 2));
             int nowindex = (next_index + line) % bufferSize;
             // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
             int strsize = std::min((int)linelength, (int)textlines[nowindex].length());

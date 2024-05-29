@@ -42,8 +42,8 @@ std::string uicontextcard[NumContextsUI] = { "chasis", "consol", "animat" };
 #define horfailsaf "HFails\x83""f"
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%", "%", "%" };  // Fixed rows
-static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 6, 5, 8, 7, 7, 10, 0, 7 };  // first value in each dataset page that's editable. All values after this must also be editable
+static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  ", "Test" };
+static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 9, 9, 5, 7, 6, 5, 8, 7, 7, 10, 0, 7, 3 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
@@ -54,9 +54,10 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "MotrMode", "Feedback", brAk"Posn", "Pn|PrErr", "Pres Tgt", "Posn Tgt", "HybrdTgt", "OutRatio", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "MotrMode", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
-    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " Touch X", " Touch Y", "  Uptime", "Webservr", },  // PG_TEMP
+    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " Touch X", " Touch Y", "  Uptime", "No Temps", },  // PG_TEMP
     { "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
     { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "Draw Clk", "Push Clk", "Idle Clk", "BlnkDemo", neo_bright, "NeoDesat", "PanelApp", },  // PG_UI
+    { spEd" Raw", spEd"Puls", "PressRaw", "Pressure", "Pressure", "Pressure", spEd"Filt", spEd"Freq", spEd"OpMx", brAk"Posn", brAk"Posn", },  // PG_TEST  //  "Webservr", },  // PG_TEST
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "%",    "%",    },  // PG_RUN
@@ -71,6 +72,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, "pix",  "pix",  "min",  b1nary, },  // PG_TEMP
     { b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
     { "us",   "us",   "Hz",   "fps",  "us",   "us",   "us",   "eyes", "%",    "of10", scroll, },  // PG_UI
+    { "mph",  "us",   "psi",  "psi",  "%",    "adc",  "mph",  "Hz",   "mph",  "in",   "%",    },  // PG_TEST
 };
 static std::string unitmapnames[11] = { "usps", "us", "rpms", scroll, b1nary, "%", "ohm", "eyes", "psin", degree, "of10" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for exceptions where some unit strings can't be well represented by any set of 3 font characters
@@ -774,8 +776,7 @@ class Display {
             draw_dynamic(16, touch->touch_pt(0), 0, disp_width_pix);
             draw_dynamic(17, touch->touch_pt(1), 0, disp_height_pix);
             draw_dynamic(18, looptimer.uptime());
-            draw_truth(19, !web_disabled, 0);  // note this value is inverse to how it's displayed, same for the tuner entry
-            // draw_truth(19, dont_take_temperatures, 2);
+            draw_truth(19, dont_take_temperatures, 2);
         }
         else if (datapage == PG_SIM) {
             draw_truth(9, sim->can_sim(sens::joy), 0);
@@ -803,6 +804,21 @@ class Display {
             draw_dynamic(18, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
             draw_asciiname(19, uicontextcard[ui_context]);
             // draw_truth(19, (ui_context == ScreensaverUI), 0);
+        }
+        else if (datapage == PG_TEST) {
+            draw_dynamic(9, speedo.raw(), speedo.opmin(), speedo.opmax());
+            draw_dynamic(10, speedo.us(), speedo.absmin_us(), speedo.absmax_us());
+            draw_dynamic(11, pressure.raw(), pressure.opmin(), pressure.opmax());
+            draw_dynamic(12, pressure.val(), pressure.opmin(), pressure.opmax());
+            draw_dynamic(13, pressure.pc(), 0.0, 100.0);
+            draw_dynamic(14, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
+            draw_dynamic(15, speedo.val(), speedo.opmin(), speedo.opmax());
+            draw_dynamic(16, speedo.native(), speedo.opmin(), speedo.opmax());
+            draw_dynamic(17, speedo.opmax(), speedo.absmin(), speedo.absmax());
+            draw_dynamic(18, brkpos.val(), brkpos.opmin(), brkpos.opmax());
+            draw_dynamic(19, brkpos.pc(), 0.0, 100.0);
+            // for (int myline=9; myline<=18; myline++) draw_eraseval(myline);
+            // draw_truth(19, !web_disabled, 0);  // note this value is inverse to how it's displayed, same for the tuner entry
         }
         disp_values_dirty = false;
     }
@@ -1073,8 +1089,7 @@ class Tuner {
                 else if (sel_val == 10) gas.cruisepid.add_kd(0.001f * fdelta);
             }
             else if (datapage == PG_TEMP) {
-                if (sel_val == 10) adj_bool(&web_disabled, -1 * rdelta);  // note this value is inverse to how it's displayed, same for the value display entry
-                // else if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
+                if (sel_val == 10) adj_bool(&dont_take_temperatures, idelta);
             }
             else if (datapage == PG_SIM) {
                 if (sel_val == 0) { sim.set_can_sim(sens::joy, rdelta); screen->disp_simbuttons_dirty = true; }
@@ -1095,6 +1110,17 @@ class Tuner {
                 else if (sel_val == 9) { adj_val(&neodesat, rdelta, 0, 10); neo->setdesaturation(neodesat); }
                 else if (sel_val == 10) adj_val(&ui_context, rdelta, 0, NumContextsUI-1);
             }
+            else if (datapage == PG_TEST) {
+                if (sel_val == 3) pressure.add_si(fdelta);
+                else if (sel_val == 4) pressure.add_pc(fdelta);
+                else if (sel_val == 5) pressure.add_native(fdelta);
+                else if (sel_val == 6) speedo.add_si(fdelta);
+                else if (sel_val == 7) speedo.add_native(fdelta);
+                else if (sel_val == 8) speedo.set_oplim(NAN, speedo.opmax() + fdelta);
+                else if (sel_val == 9) brkpos.add_si(fdelta);
+                else if (sel_val == 10) brkpos.add_pc(fdelta);                
+                // if (sel_val == 10) adj_bool(&web_disabled, -1 * rdelta);  // note this value is inverse to how it's displayed, same for the value display entry
+            }                
             idelta = 0;
         }
     }
