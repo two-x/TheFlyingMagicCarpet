@@ -819,10 +819,13 @@ class PulseSensor : public Sensor {
     bool* pin_level_ptr() { return &_pin_level; }
     float absmin_us() { return _absmin_us; }
     float absmax_us() { return _absmax_us; }
+    float absmin_ms() { return _absmin_us / 1000.0; }
+    float absmax_ms() { return _absmax_us / 1000.0; }
     float idle() { return _idle; }
     float* idle_ptr() { return &_idle; }
     void set_idle(float newidle) { _idle = constrain(newidle, _opmin, _opmax); }
     float us() { return _us; }
+    float ms() { return _us / 1000.0; }
 };
 // Tachometer represents a magnetic pulse measurement of the enginge rotation.
 // It extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM

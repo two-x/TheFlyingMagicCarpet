@@ -42,13 +42,13 @@ std::string uicontextcard[NumContextsUI] = { "chasis", "consol", "animat" };
 #define horfailsaf "HFails\x83""f"
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%", "%", "%" };  // Fixed rows
-static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sns1", "Sns2", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 13, 9, 12, 11, 10, 9, 12, 11, 11, 14, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
+static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 13, 11, 10, 11, 11, 9, 12, 11, 11, 14, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", __________, __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, __________, __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
-    { "PressRaw", "BkPosRaw", "TachPuls", spEd"Puls", " Pot Raw", __________, __________, __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS1
-    { spEd" Raw", spEd"Puls", "PressRaw", "Pressure", "Pressure", "Pressure", spEd"Filt", spEd"Freq", __________, __________, __________, __________, spEd"OpMx", brAk"Posn", brAk"Posn", },  // PG_SENS2  //  "Webservr", },  // PG_TEST
+    { " Pot Raw", "BkPosRaw", "BkPosRaw", brAk"Posn", brAk"Posn", "PressRaw", "PressRaw", "Pressure", "Pressure", __________, __________, "AirV Max", " MAP Min", " MAP Max", "BkPos0Pt", },  // PG_SENS
+    { "TachPuls", "Tach Raw", "Tach Raw", spEd"Puls", spEd" Raw", spEd" Raw", "   Speed", "   Speed", spEd"AMin", spEd"AMax", "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", spEd"Idle", },  // PG_PULS  //  "Webservr", },  // PG_TEST
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", "StartGas", __________, __________, __________, __________, "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { "Brk Heat", "HybBrake", __________, __________, __________, __________, __________, __________, __________, "BkEnaPID", "BkFeedbk", "BkPosLim", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
@@ -62,8 +62,8 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, ______, "%",    "%",    },  // PG_RUN
     { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, ______, ______, ______, ______, "us",   "us",   },  // PG_JOY
-    { "adc",  "adc",  "Hz",   "Hz",   "adc",  ______, ______, ______, ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS1
-    { "mph",  "us",   "psi",  "psi",  "%",    "adc",  "mph",  "Hz",   ______, ______, ______, ______, "mph",  "in",   "%",    },  // PG_SENS2
+    { "adc",  "adc",  "in",   "in",   "pc",   "adc",  "psi",  "psi",  "pc",   ______, ______, "mph",  "atm",  "atm",  "in",   },  // PG_SENS
+    { "ms",   "Hz",   "psi",  "ms",   "Hz",   "mph",  "mph",  "%",    "ms",   "ms",   "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    "%",    ______, ______, ______, ______, degree, degree, degreF, degreF, },  // PG_IDLE
     { degreF, "%",    ______, ______, ______, ______, ______, ______, ______, b1nary, scroll, b1nary, b1nary, b1nary, scroll, },  // PG_MOTR
@@ -346,15 +346,15 @@ class Display {
         sprptr->setTextColor(LGRY);
         sprptr->setTextSize(1);
         int y_pos;
-        for (int lineno = 0; lineno < disp_lines; lineno++)  {  // Step thru lines of fixed telemetry data
+        for (int lineno = 0; lineno < disp_lines; lineno++) {  // Step thru lines of fixed telemetry data
             y_pos = (lineno + 1) * disp_line_height_pix;
-            if (lineno < disp_fixed_lines) {
+            if (lineno <= disp_fixed_lines) {
                 draw_string(disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
                 draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
             }
             else if (redraw_all) {
-                int index = lineno - disp_fixed_lines;
-                Serial.printf("drawing line:%d x:%d y:%d text:%s\n", index, disp_datapage_names_x, y_pos, datapage_names[page][index].c_str() );
+                int index = lineno - disp_fixed_lines - 1;
+                // Serial.printf("drawing line:%d x:%d y:%d text:%s\n", index, disp_datapage_names_x, y_pos, datapage_names[page][index].c_str() );
                 draw_string(disp_datapage_names_x, y_pos, datapage_names[page][index], datapage_names[page_last][index], LGRY, BLK, forced);
                 draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][index], tuneunits[page_last][index], LGRY, BLK);
                 
@@ -365,6 +365,8 @@ class Display {
             disp_bargraphs[lineno] = false;
         }
     }
+
+
     void draw_hyphen(int x_pos, int y_pos, uint8_t color) {  // Draw minus sign in front of negative numbers
         sprptr->drawFastHLine(x_pos+2, y_pos+3, 3, color);
     }
@@ -531,9 +533,13 @@ class Display {
         disp_datapage_dirty = false;
     }
     void draw_selected_name(int tun_ctrl, int selected_val, int selected_last, int selected_last_last) {
-        for (int i = 0; i < disp_tuning_lines; i++)
-            if (selected_val != i) draw_string(12, (i + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][i], nulstr, LGRY, BLK, true);
-        draw_string(12, (selected_val + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][selected_val], nulstr, (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : LGRY), BLK, true);
+        static int last_selected; 
+        uint8_t color = LGRY;
+        if (tun_ctrl == EDIT) color = GRN;
+        else if (tun_ctrl == SELECT) color = YEL;
+        draw_string(12, (last_selected + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][last_selected], nulstr, LGRY, BLK, true);
+        draw_string(12, (selected_val + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][selected_val], nulstr, color, BLK, true);
+        last_selected = selected_val;
         disp_selected_val_dirty = false;    
     }
     void draw_bool(bool value, int col, bool force=false) {  // Draws values of boolean data
@@ -667,33 +673,38 @@ class Display {
             draw_dynamic(22, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
             draw_dynamic(23, hotrc.deadband_us, 0, 100);
         }
-        else if (datapage == PG_SENS1) {
-            draw_dynamic(9, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
+        else if (datapage == PG_SENS) {
+            draw_dynamic(9, pot.native(), pot.opmin_native(), pot.opmax_native());
             draw_dynamic(10, brkpos.native(), brkpos.opmin_native(), brkpos.opmax_native());
-            draw_dynamic(11, tach.native(), tach.opmin_native(), tach.opmax_native());
-            draw_dynamic(12, speedo.native(), speedo.opmin_native(), speedo.opmax_native());
-            draw_dynamic(13, pot.native(), pot.opmin_native(), pot.opmax_native());
-            for (int line=14; line<=17; line++) draw_eraseval(line);
-            draw_dynamic(18, airvelo.opmax(), 0.0f, airvelo.absmax());
-            draw_dynamic(19, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
-            draw_dynamic(20, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
-            draw_dynamic(21, speedo.idle(), speedo.opmin(), speedo.opmax());
-            draw_dynamic(22, speedo.opmax(), speedo.absmin(), speedo.absmax());
+            draw_dynamic(11, brkpos.raw(), brkpos.opmin(), brkpos.opmax());
+            draw_dynamic(12, brkpos.val(), brkpos.opmin(), brkpos.opmax());
+            draw_dynamic(13, brkpos.pc(), 0.0, 100.0);
+            draw_dynamic(14, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
+            draw_dynamic(15, pressure.raw(), pressure.opmin(), pressure.opmax());
+            draw_dynamic(16, pressure.val(), pressure.opmin(), pressure.opmax());
+            draw_dynamic(17, pressure.pc(), 0.0, 100.0);
+            for (int line=18; line<=19; line++) draw_eraseval(line);
+            draw_dynamic(20, airvelo.opmax(), airvelo.absmin(), airvelo.absmax());
+            draw_dynamic(21, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
+            draw_dynamic(22, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
             draw_dynamic(23, brkpos.zeropoint(), brkpos.opmin(), brkpos.opmax());  // BrakePositionSensor::absmin_retract_in, BrakePositionSensor::absmax_extend_in);
         }
-        else if (datapage == PG_SENS2) {
-            draw_dynamic(9, speedo.raw(), speedo.opmin(), speedo.opmax());
-            draw_dynamic(10, speedo.us(), speedo.absmin_us(), speedo.absmax_us());
-            draw_dynamic(11, pressure.raw(), pressure.opmin(), pressure.opmax());
-            draw_dynamic(12, pressure.val(), pressure.opmin(), pressure.opmax());
-            draw_dynamic(13, pressure.pc(), 0.0, 100.0);
-            draw_dynamic(14, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
+        else if (datapage == PG_PULS) {
+            draw_dynamic(9, tach.ms(), tach.absmin_ms(), tach.absmax_ms());
+            draw_dynamic(10, tach.native(), tach.opmin_native(), tach.opmax_native());
+            draw_dynamic(11, tach.raw(), tach.opmin(), tach.opmax());
+            draw_dynamic(12, speedo.ms(), speedo.absmin_ms(), speedo.absmax_ms());
+            draw_dynamic(13, speedo.native(), speedo.opmin_native(), speedo.opmax_native());
+            draw_dynamic(14, speedo.raw(), speedo.opmin(), speedo.opmax());
             draw_dynamic(15, speedo.val(), speedo.opmin(), speedo.opmax());
-            draw_dynamic(16, speedo.native(), speedo.opmin(), speedo.opmax());
-            for (int line=17; line<=20; line++) draw_eraseval(line);
-            draw_dynamic(21, speedo.opmax(), speedo.absmin(), speedo.absmax());
-            draw_dynamic(22, brkpos.val(), brkpos.opmin(), brkpos.opmax());
-            draw_dynamic(23, brkpos.pc(), 0.0, 100.0);
+            draw_dynamic(16, speedo.pc(), 0.0, 100.0);
+            draw_dynamic(17, speedo.absmin_ms());
+            draw_dynamic(18, speedo.absmax_ms());
+            draw_dynamic(19, tach.opmin(), tach.absmin(), tach.absmax());
+            draw_dynamic(20, tach.opmax(), tach.absmin(), tach.absmax());
+            draw_dynamic(11, speedo.opmin(), speedo.absmin(), speedo.absmax());
+            draw_dynamic(22, speedo.opmax(), speedo.absmin(), speedo.absmax());
+            draw_dynamic(23, speedo.idle(), speedo.opmin(), speedo.opmax());
             // for (int myline=9; myline<=18; myline++) draw_eraseval(myline);
             // draw_truth(19, !web_disabled, 0);  // note this value is inverse to how it's displayed, same for the tuner entry
         }
@@ -984,9 +995,11 @@ class Tuner {
     void process_inputs() {
         if (!tuningEditTimer.expired()) return;
         tuningEditTimer.reset();
-        sel_val_last = sel_val;
-        datapage_last = datapage;
-        tunctrl_last = tunctrl;
+        if (!screen->disp_selected_val_dirty) {
+            sel_val_last = sel_val;
+            tunctrl_last = tunctrl;
+        }
+        if (!screen->disp_datapage_dirty) datapage_last = datapage;
         int encoder_sw_action = encoder.button.press_event();  // true = autoreset the event if there is one
         if (encoder_sw_action != swNONE) {  // First deal with any unhandled switch press events
             if (encoder_sw_action == swSHORT)  {  // if short press
@@ -1052,18 +1065,22 @@ class Tuner {
                 if (sel_val == 13) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
                 else if (sel_val == 14) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
             }
-            else if (datapage == PG_SENS1) {
-                if (sel_val == 9) adj_val(airvelo.opmax_ptr(), fdelta, airvelo.absmin(), airvelo.absmax());
-                else if (sel_val == 10) adj_val(mapsens.opmin_ptr(), fdelta, mapsens.absmin(), mapsens.absmax());
-                else if (sel_val == 11) adj_val(mapsens.opmax_ptr(), fdelta, mapsens.absmin(), mapsens.absmax());
-                else if (sel_val == 12) adj_val(speedo.idle_ptr(), fdelta, speedo.opmin(), speedo.opmax() - 1);
-                else if (sel_val == 13) adj_val(speedo.opmax_ptr(), fdelta, speedo.idle(), speedo.absmax());
+            else if (datapage == PG_SENS) {
+                if (sel_val == 11) airvelo.set_oplim(NAN, airvelo.opmax() + fdelta);
+                else if (sel_val == 12) mapsens.set_oplim(mapsens.opmin() + fdelta, NAN);
+                else if (sel_val == 13) mapsens.set_oplim(NAN, mapsens.opmax() + fdelta);
                 else if (sel_val == 14) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.opmin(), brkpos.opmax());
+                // if (sel_val == 11) adj_val(airvelo.opmax_ptr(), fdelta, airvelo.opmin(), airvelo.absmax());
+                // else if (sel_val == 12) adj_val(mapsens.opmin_ptr(), fdelta, mapsens.absmin(), mapsens.opmax());
+                // else if (sel_val == 13) adj_val(mapsens.opmax_ptr(), fdelta, mapsens.opmin(), mapsens.absmax());
+                // else if (sel_val == 14) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.opmin(), brkpos.opmax());
             }
-            else if (datapage == PG_SENS2) {
-                if (sel_val == 12) speedo.set_oplim(NAN, speedo.opmax() + fdelta);
-                else if (sel_val == 13) brkpos.add_si(fdelta);
-                else if (sel_val == 14) brkpos.add_pc(fdelta);                
+            else if (datapage == PG_PULS) {
+                if (sel_val == 10) tach.set_oplim(tach.opmin() + fdelta, NAN);
+                else if (sel_val == 11) tach.set_oplim(NAN, tach.opmax() + fdelta);
+                else if (sel_val == 12) speedo.set_oplim(speedo.opmin() + fdelta, NAN);
+                else if (sel_val == 13) speedo.set_oplim(NAN, speedo.opmax() + fdelta);
+                else if (sel_val == 14) adj_val(speedo.idle_ptr(), fdelta, speedo.opmin(), speedo.opmax());
                 // if (sel_val == 10) adj_bool(&web_disabled, -1 * rdelta);  // note this value is inverse to how it's displayed, same for the value display entry
             }                
             else if (datapage == PG_PWMS) {

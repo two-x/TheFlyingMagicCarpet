@@ -524,6 +524,7 @@ class EraserSaver {  // draws colorful patterns to exercise
 #include <string>
 #include <sstream>
 #include <stdarg.h>
+// #include "Org_01.h"
 class DiagConsole {
   public:
     bool dirty = true;
@@ -566,22 +567,47 @@ class DiagConsole {
         ++next_index %= bufferSize; // Update next insertion index
         dirty = true;
     }
+    int chars_to_fit_pix(LGFX_Sprite* spr, std::string& str, int pix) {
+        int totalwidth = 0, charcount = 0;
+        for (size_t i = 0; i < str.length(); ++i) {
+            std::string ch(1, str[i]); // Create a string with the single character
+            int charwidth = spr->textWidth(ch.c_str()); // Measure the width of the next character
+            if (totalwidth + charwidth > pix) break; // Stop if adding the next character exceeds the maximum width
+            totalwidth += charwidth;
+            charcount++;
+        }
+        return charcount;
+    }
     void draw(LGFX_Sprite* spr) {
         spr->fillSprite(BLK);
-        spr->setFont(&fonts::TomThumb);
+        // int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
+        spr->setFont(&fonts::Font0);  // spr->setFont(&fonts::Org_01);
         spr->setTextDatum(textdatum_t::top_left);
-        for (int line=0; line<num_lines; line++) {
-            spr->setCursor(vp->x + pix_margin, vp->y + pix_margin + line * (font_height + 2));
-            int nowindex = (next_index + line) % bufferSize;
+        std::string nowline = textlines[newest_content];
+        int chopit = chars_to_fit_pix(spr, nowline, vp->w);
+        bool toobig = (chopit < nowline.length());
+        if (toobig) {
+            spr->setCursor(vp->x + 2, vp->y + vp->h - 18);
+            nowline = textlines[newest_content].substr(0, chopit);
+            spr->print(nowline.c_str());
+            nowline = textlines[newest_content].substr(chopit);
+        }
+        spr->setCursor(vp->x + 2, vp->y + vp->h - 9);
+        spr->print(nowline.c_str());
+        int bottom_extent = vp->y + vp->h - 11 * (1 + (int)toobig);
+        spr->drawFastHLine(vp->x + 3, bottom_extent, vp->w - 6, LGRY);  // separator for the newest line at the bottom will be printed larger and span 2 lines
+        spr->setFont(&fonts::TomThumb);
+        for (int line=1; line<num_lines; line++) {
+            int backindex = (newest_content + bufferSize - line) % bufferSize;
+            spr->setCursor(vp->x + pix_margin, bottom_extent - 2 - line * (font_height + 2));
             // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
-            int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
-            drawnow = textlines[nowindex].substr(0, strsize);
-            spr->setTextColor(linecolors[nowindex]);
+            int strsize = std::min((int)linelength, (int)textlines[backindex].length());
+            drawnow = textlines[backindex].substr(0, strsize);
+            spr->setTextColor(linecolors[backindex]);
             spr->print(drawnow.c_str());
         }
         dirty = false;
     }
-
   public:
     void dprintf(const char* format, ...) {  // for if we're called with same arguments as printf would take
         va_list args;
