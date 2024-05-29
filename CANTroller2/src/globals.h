@@ -86,7 +86,7 @@ enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrake
 enum brakeextra { NumBrakeSens=2 };
 enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum boolean_states { ON=1 };
-enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PWMS=3, PG_IDLE=4, PG_MOTR=5, PG_BPID=6, PG_GPID=7, PG_CPID=8, PG_TEMP=9, PG_SIM=10, PG_UI=11, PG_TEST=12, NUM_DATAPAGES=13 };
+enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS1=2, PG_SENS2=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9, PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
 enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, BRAKE=3, NUM_TEMP_CATEGORIES=4 };  // 
 enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };      // possible sources of gas, brake, steering commands
 enum ui_modes { MuleChassisUI=0, DiagConsoleUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel
@@ -135,7 +135,7 @@ bool screensaver_enabled = true;     // does fullscreen screensaver start automa
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
 
 // global tunable variables
-float float_zero = 0.0000069;        // if two floats being compared are closer than this, we consider them equal
+float float_zero = 0.000069;         // if two floats being compared are closer than this, we consider them equal
 int sprite_color_depth = 8;
 uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode

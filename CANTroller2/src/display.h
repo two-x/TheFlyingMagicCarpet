@@ -42,12 +42,13 @@ std::string uicontextcard[NumContextsUI] = { "chasis", "consol", "animat" };
 #define horfailsaf "HFails\x83""f"
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%", "%", "%" };  // Fixed rows
-static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  ", "Test" };
-static constexpr int32_t tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 13, 9, 11, 10, 9, 12, 11, 11, 14, 4, 11, 12 };  // first value in each dataset page that's editable. All values after this must also be editable
+static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sns1", "Sns2", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 13, 9, 12, 11, 10, 9, 12, 11, 11, 14, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", "Air Velo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", __________, __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, __________, __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
-    { "PressRaw", "BkPosRaw", "TachPuls", spEd"Puls", " Pot Raw", __________, __________, __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS
+    { "PressRaw", "BkPosRaw", "TachPuls", spEd"Puls", " Pot Raw", __________, __________, __________, __________, "AirV Max", " MAP Min", " MAP Max", spEd"Idle", spEd"RedL", "BkPos0Pt", },  // PG_SENS1
+    { spEd" Raw", spEd"Puls", "PressRaw", "Pressure", "Pressure", "Pressure", spEd"Filt", spEd"Freq", __________, __________, __________, __________, spEd"OpMx", brAk"Posn", brAk"Posn", },  // PG_SENS2  //  "Webservr", },  // PG_TEST
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", "StartGas", __________, __________, __________, __________, "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { "Brk Heat", "HybBrake", __________, __________, __________, __________, __________, __________, __________, "BkEnaPID", "BkFeedbk", "BkPosLim", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
@@ -57,22 +58,21 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " Touch X", " Touch Y", "  Uptime", __________, __________, __________, __________, "No Temps", },  // PG_TEMP
     { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
     { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "Draw Clk", "Push Clk", "Idle Clk", __________, __________, __________, __________, "BlnkDemo", neo_bright, "NeoDesat", "PanelApp", },  // PG_UI
-    { spEd" Raw", spEd"Puls", "PressRaw", "Pressure", "Pressure", "Pressure", spEd"Filt", spEd"Freq", __________, __________, __________, __________, spEd"OpMx", brAk"Posn", brAk"Posn", },  // PG_TEST  //  "Webservr", },  // PG_TEST
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, ______, "%",    "%",    },  // PG_RUN
     { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, ______, ______, ______, ______, "us",   "us",   },  // PG_JOY
-    { "adc",  "adc",  "Hz",   "Hz",   "adc",  ______, ______, ______, ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS
+    { "adc",  "adc",  "Hz",   "Hz",   "adc",  ______, ______, ______, ______, "mph",  "atm",  "atm",  "mph",  "mph",  "in",   },  // PG_SENS1
+    { "mph",  "us",   "psi",  "psi",  "%",    "adc",  "mph",  "Hz",   ______, ______, ______, ______, "mph",  "in",   "%",    },  // PG_SENS2
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    "%",    ______, ______, ______, ______, degree, degree, degreF, degreF, },  // PG_IDLE
     { degreF, "%",    ______, ______, ______, ______, ______, ______, ______, b1nary, scroll, b1nary, b1nary, b1nary, scroll, },  // PG_MOTR
     { scroll, scroll, "in",   "psin", "psin", "%",    "%",    "%",    ______, ______, ______, ______, ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, ______, ______, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
-    { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    "%/s",  ______, ______, ______, ______, ______, ______, "Hz",   "s",    },  // PG_CPID
+    { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, "pix",  "pix",  "min",  ______, ______, ______, ______, b1nary, },  // PG_TEMP
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
     { "us",   "us",   "Hz",   "fps",  "us",   "us",   "us",   ______, ______, ______, ______, "eyes", "%",    "of10", scroll, },  // PG_UI
-    { "mph",  "us",   "psi",  "psi",  "%",    "adc",  "mph",  "Hz",   ______, ______, ______, ______, "mph",  "in",   "%",    },  // PG_TEST
 };
 static std::string unitmapnames[11] = { "usps", "us", "rpms", scroll, b1nary, "%", "ohm", "eyes", "psin", degree, "of10" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for exceptions where some unit strings can't be well represented by any set of 3 font characters
@@ -94,9 +94,9 @@ PanelAppManager panel(&diagconsole);
 volatile float fps = 0.0;
 volatile bool is_pushing = 0;
 volatile bool is_drawing = 0;
-volatile int32_t pushclock;
-volatile int32_t drawclock;
-volatile int32_t idleclock;
+volatile int pushclock;
+volatile int drawclock;
+volatile int idleclock;
 volatile bool reset_request = false;
 volatile bool pushtime = 0;
 volatile bool drawn = false;
@@ -131,7 +131,7 @@ class Display {
     uint8_t palettesize = 2;
     // uint16_t palette[256] = { BLK, WHT };
     static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
-    Timer dispAgeTimer[disp_lines];  // int32_t disp_age_timer_us[disp_lines];
+    Timer dispAgeTimer[disp_lines];  // int disp_age_timer_us[disp_lines];
     static constexpr int idiots_corner_x = 165;
     static constexpr int idiots_corner_y = 13;
     bool sim_last = false, fullscreen_last = false;
@@ -209,14 +209,14 @@ class Display {
         // lcd.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM - (this is only relevant for TFT_eSPI display library)
         #endif
         init();
-        for (int32_t lineno=0; lineno <= disp_fixed_lines; lineno++)  {
+        for (int lineno=0; lineno <= disp_fixed_lines; lineno++)  {
             disp_age_quanta[lineno] = -1;
             disp_values[lineno] = "";
             disp_polarities[lineno] = 1;
         }
-        for (int32_t row=0; row<arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
-        for (int32_t row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
-        for (int32_t row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+        for (int row=0; row<arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
+        for (int row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
+        for (int row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         datapage = prefs.getUInt("dpage", PG_RUN);
         disp_datapage_last = prefs.getUInt("dpage", PG_TEMP);
         init_framebuffers(disp_width_pix, disp_height_pix);
@@ -268,7 +268,7 @@ class Display {
     uint8_t darken_color(uint8_t color) {  // halves each of r, g, and b of a 5-6-5 formatted 16-bit color value either once or twice
         return ((color & 0xc0) | (color & 0x18) | (color & 0x2));
     }
-    uint16_t darken_color(uint16_t color, int32_t halvings = 1) {  // halves each of r, g, and b of a 5-6-5 formatted 16-bit color value either once or twice
+    uint16_t darken_color(uint16_t color, int halvings = 1) {  // halves each of r, g, and b of a 5-6-5 formatted 16-bit color value either once or twice
         if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
         else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
     }
@@ -296,42 +296,42 @@ class Display {
             }
         }
     }
-    void draw_bargraph_base(int32_t corner_x, int32_t corner_y, int32_t width) {  // draws a horizontal bargraph scale.  124, y, 40
+    void draw_bargraph_base(int corner_x, int corner_y, int width) {  // draws a horizontal bargraph scale.  124, y, 40
         sprptr->drawFastHLine(corner_x + disp_bargraph_squeeze, corner_y, width - disp_bargraph_squeeze*2, MGRY);  // base line
         sprptr->drawFastVLine(corner_x + width/2, corner_y-1, 2, WHT);  // centerpoint gradient line
-        for (int32_t offset=0; offset<=2; offset+=2) sprptr->drawFastVLine((corner_x + disp_bargraph_squeeze) + offset * (width/2 - disp_bargraph_squeeze), corner_y-2, 3, WHT);  // endpoint gradient lines
+        for (int offset=0; offset<=2; offset+=2) sprptr->drawFastVLine((corner_x + disp_bargraph_squeeze) + offset * (width/2 - disp_bargraph_squeeze), corner_y-2, 3, WHT);  // endpoint gradient lines
     }
-    void draw_needle_shape(int32_t pos_x, int32_t pos_y, uint8_t color) {  // draws a cute little pointy needle
+    void draw_needle_shape(int pos_x, int pos_y, uint8_t color) {  // draws a cute little pointy needle
         sprptr->drawFastVLine(pos_x-1, pos_y, 2, color);
         sprptr->drawFastVLine(pos_x, pos_y, 4, color);
         sprptr->drawFastVLine(pos_x+1, pos_y, 2, color);
     }
-    void draw_target_shape(int32_t pos_x, int32_t pos_y, uint8_t t_color, uint8_t r_color) {  // draws a cute little target symbol
+    void draw_target_shape(int pos_x, int pos_y, uint8_t t_color, uint8_t r_color) {  // draws a cute little target symbol
         sprptr->drawFastHLine(pos_x-1, pos_y, 3, t_color);
         sprptr->drawFastVLine(pos_x, pos_y, 4, t_color);
     }
-    void draw_bargraph_needle(int32_t n_pos_x, int32_t old_n_pos_x, int32_t pos_y, uint8_t n_color) {  // draws a cute little pointy needle
+    void draw_bargraph_needle(int n_pos_x, int old_n_pos_x, int pos_y, uint8_t n_color) {  // draws a cute little pointy needle
         draw_needle_shape(old_n_pos_x, pos_y, BLK);
         draw_needle_shape(n_pos_x, pos_y, n_color);
     }
-    void draw_string(int32_t x_new, int32_t x_old, int32_t y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
+    void draw_string(int x, int y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
         if ((text == oldtext) && !forced) return; 
         // sprptr->fillRect(x_old, y, oldtext.length() * disp_font_width, disp_font_height, bgcolor);
         sprptr->setTextColor(bgcolor);
-        sprptr->setCursor(x_old, y);
+        sprptr->setCursor(x, y);
         sprptr->print(oldtext.c_str());
         sprptr->setTextColor(color);
-        sprptr->setCursor(x_new, y);
+        sprptr->setCursor(x, y);
         sprptr->print(text.c_str());
     }
-    void draw_unitmap(int8_t index, int32_t x, int32_t y, uint8_t color) {
-        for (int32_t xo = 0; xo < disp_font_width * 3 - 1; xo++)
-            for (int32_t yo = 0; yo < disp_font_height - 1; yo++)
+    void draw_unitmap(int index, int x, int y, uint8_t color) {
+        for (int xo = 0; xo < disp_font_width * 3 - 1; xo++)
+            for (int yo = 0; yo < disp_font_height - 1; yo++)
                 if ((unitmaps[index][xo] >> yo) & 1) sprptr->drawPixel(x + xo, y + yo, color);
     }
-    void draw_string_units(int32_t x, int32_t y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
+    void draw_string_units(int x, int y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
         sprptr->fillRect(x, y, 3 * disp_font_width, disp_font_height, bgcolor);
-        for (int8_t i = 0; i<arraysize(unitmaps); i++) {
+        for (int i = 0; i<arraysize(unitmaps); i++) {
             if (unitmapnames[i] == text) {
                 draw_unitmap(i, x, y, color);
                 return;
@@ -342,39 +342,42 @@ class Display {
         sprptr->print(text.c_str());
     }
     // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
-    void draw_fixed(int32_t page, int32_t page_last, bool redraw_all, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
+    void draw_fixed(int page, int page_last, bool redraw_all, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
         sprptr->setTextColor(LGRY);
         sprptr->setTextSize(1);
-        int32_t y_pos;
-        for (int32_t lineno = 0; lineno < disp_fixed_lines; lineno++)  {  // Step thru lines of fixed telemetry data
+        int y_pos;
+        for (int lineno = 0; lineno < disp_lines; lineno++)  {  // Step thru lines of fixed telemetry data
             y_pos = (lineno + 1) * disp_line_height_pix;
-            draw_string(disp_datapage_names_x, disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
-            draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
+            if (lineno < disp_fixed_lines) {
+                draw_string(disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
+                draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
+            }
+            else if (redraw_all) {
+                int index = lineno - disp_fixed_lines;
+                Serial.printf("drawing line:%d x:%d y:%d text:%s\n", index, disp_datapage_names_x, y_pos, datapage_names[page][index].c_str() );
+                draw_string(disp_datapage_names_x, y_pos, datapage_names[page][index], datapage_names[page_last][index], LGRY, BLK, forced);
+                draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][index], tuneunits[page_last][index], LGRY, BLK);
+                
+                // commenting these two lines doesn't seem to mess up the rendering of the bargraphs when i flip thru the datapages ... so what are they for?!
+                // sprptr->fillRect(disp_bargraphs_x - 1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
+                // if (disp_needles[index] >= 0) draw_bargraph_needle(-1, disp_needles[index], y_pos + 1, BLK);  // Let's draw a needle
+            }
             disp_bargraphs[lineno] = false;
         }
-        if (redraw_all) {
-            for (int32_t lineno=0; lineno < disp_tuning_lines; lineno++)  {  // Step thru lines of dataset page data
-                draw_string(disp_datapage_names_x, disp_datapage_names_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[page][lineno], datapage_names[page_last][lineno], LGRY, BLK, forced);
-                draw_string_units(disp_datapage_units_x, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
-                int32_t corner_y = (lineno + disp_fixed_lines + 1) * disp_line_height_pix + 7;  // lineno*disp_line_height_pix+-1;
-                sprptr->fillRect(disp_bargraphs_x-1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
-                if (disp_needles[lineno] >= 0) draw_bargraph_needle(-1, disp_needles[lineno], corner_y - 6, BLK);  // Let's draw a needle
-            }
-        }
     }
-    void draw_hyphen(int32_t x_pos, int32_t y_pos, uint8_t color) {  // Draw minus sign in front of negative numbers
+    void draw_hyphen(int x_pos, int y_pos, uint8_t color) {  // Draw minus sign in front of negative numbers
         sprptr->drawFastHLine(x_pos+2, y_pos+3, 3, color);
     }
-    void draw_dynamic(int32_t lineno, std::string disp_string, int32_t value, int32_t lowlim, int32_t hilim, int32_t target=-1, uint8_t color=NON) {
-        int32_t age_us = (color != NON) ? 11 : (int32_t)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
-        int32_t x_base = disp_datapage_values_x;
+    void draw_dynamic(int lineno, std::string disp_string, int value, int lowlim, int hilim, int target=-1, uint8_t color=NON) {
+        int age_us = (color != NON) ? 11 : (int)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
+        int x_base = disp_datapage_values_x;
         bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
         bool force = (value == 1234567) || disp_data_dirty[lineno];
         if ((disp_values[lineno] != disp_string) || force) {  // If value differs, Erase old value and write new
             if (color == NON) color = GRN;
-            int32_t y_pos = lineno*disp_line_height_pix;
+            int y_pos = lineno*disp_line_height_pix;
             if (polarity != disp_polarities[lineno]) draw_hyphen(x_base, y_pos, (!polarity) ? color : BLK);
-            draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK, force || (color != disp_val_colors[lineno])); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
+            draw_string(x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK, force || (color != disp_val_colors[lineno])); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
             disp_values[lineno] = disp_string;
             disp_polarities[lineno] = polarity;
             disp_val_colors[lineno] = color;
@@ -384,18 +387,18 @@ class Display {
         else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color. This may fail and redraw when the timer overflows? 
             if (age_us < 8) color = 0x1c + (age_us << 5);  // Base of green with red added as you age, until yellow is achieved
             else color = 0xfc - ((age_us-8) << 2);  // Then lose green as you age further
-            int32_t y_pos = (lineno)*disp_line_height_pix;
+            int y_pos = (lineno)*disp_line_height_pix;
             if (!polarity) draw_hyphen(x_base, y_pos, color);
-            draw_string(x_base+disp_font_width, x_base+disp_font_width, y_pos, disp_values[lineno], "", color, BLK);
+            draw_string(x_base+disp_font_width, y_pos, disp_values[lineno], "", color, BLK);
             disp_age_quanta[lineno] = age_us;
             disp_val_colors[lineno] = color;
         }
         bool delete_bargraph = false;
-        int32_t corner_x = disp_bargraphs_x;
-        int32_t corner_y = lineno*disp_line_height_pix;
+        int corner_x = disp_bargraphs_x;
+        int corner_y = lineno*disp_line_height_pix;
         if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
-            int32_t n_pos = map(value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-            int32_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : GRN;
+            int n_pos = map(value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+            uint8_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : GRN;
             n_pos = corner_x + constrain(n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
             if (!disp_bargraphs[lineno]) draw_bargraph_base(corner_x, corner_y + 8, disp_bargraph_width);
             disp_bargraphs[lineno] = true;
@@ -403,8 +406,8 @@ class Display {
             draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
             disp_needles[lineno] = n_pos;  // Remember position of needle
             if (target != -1) {  // If target value is given, draw a target on the bargraph too
-                int32_t t_pos = map(target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-                int32_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
+                int t_pos = map(target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+                uint8_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
                 t_pos = corner_x + constrain(t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                 draw_target_shape(t_pos, corner_y, tcolor, NON);  // Draw the new target
                 disp_targets[lineno] = t_pos;  // Remember position of target
@@ -417,29 +420,29 @@ class Display {
         }
         disp_data_dirty[lineno] = false;
     }
-    void draw_dynamic(int32_t lineno, int32_t value, int32_t lowlim=-1, int32_t hilim=-1, int32_t target=-1) {
-        std::string val_string = num2string(value, (int32_t)disp_maxlength);
-        draw_dynamic(lineno, val_string.c_str(), value, lowlim, hilim, (int32_t)target);
+    void draw_dynamic(int lineno, int value, int lowlim=-1, int hilim=-1, int target=-1) {
+        std::string val_string = num2string(value, (int)disp_maxlength);
+        draw_dynamic(lineno, val_string.c_str(), value, lowlim, hilim, (int)target);
     }
-    void draw_dynamic(int32_t lineno, float value, float lowlim=-1, float hilim=-1, int32_t target=-1, int32_t precision = disp_default_float_precision) {
-        std::string val_string = num2string(value, (int32_t)disp_maxlength, precision);
-        draw_dynamic(lineno, val_string.c_str(), (int32_t)value, (int32_t)lowlim, (int32_t)hilim, target);
+    void draw_dynamic(int lineno, float value, float lowlim=-1, float hilim=-1, int target=-1, int precision = disp_default_float_precision) {
+        std::string val_string = num2string(value, (int)disp_maxlength, precision);
+        draw_dynamic(lineno, val_string.c_str(), (int)value, (int)lowlim, (int)hilim, target);
     }
-    void draw_dynamic(int32_t lineno, float value, float lowlim, float hilim, float target, int32_t precision = disp_default_float_precision) {
-        draw_dynamic(lineno, value, lowlim, hilim, (int32_t)target, precision);
+    void draw_dynamic(int lineno, float value, float lowlim, float hilim, float target, int precision = disp_default_float_precision) {
+        draw_dynamic(lineno, value, lowlim, hilim, (int)target, precision);
     }
-    void draw_eraseval(int32_t lineno) {
+    void draw_eraseval(int lineno) {
         draw_dynamic(lineno, "", 1234567, -1, -1, -1);
     }
-    void draw_asciiname(int32_t lineno, std::string name) {
+    void draw_asciiname(int lineno, std::string name) {
         draw_dynamic(lineno, name.c_str(), 1, -1, -1, -1, CYN);
     }
-    void draw_truth(int32_t lineno, bool truthy, int32_t styl=2) {  // 0:on/off, 1:yes/no, 2:true/false .
+    void draw_truth(int lineno, bool truthy, int styl=2) {  // 0:on/off, 1:yes/no, 2:true/false .
         draw_dynamic(lineno, (truthy) ? ((styl==0) ? "on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
     }
-    int32_t significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
-        int32_t place = 1;
-        if (value >= 1) { // int32_t vallog = std::log10(value);  // Can be sped up
+    int significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
+        int place = 1;
+        if (value >= 1) { // int vallog = std::log10(value);  // Can be sped up
             while (value >= 10) {
                 value /= 10;
                 place++;  // ex. 100.34 -> 3
@@ -454,32 +457,32 @@ class Display {
         }
         return place;
     }
-    int32_t significant_place(int32_t value) {  // Returns the length in digits of a positive integer value
-        int32_t place = 1;
+    int significant_place(int value) {  // Returns the length in digits of a positive integer value
+        int place = 1;
         while (value >= 10) {
             value /= 10;
             place++;
         }
         return place;
     }
-    std::string num2string(int32_t value, int32_t maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
+    std::string num2string(int value, int maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
         value = abs(value);  // This function disregards sign
-        int32_t place = significant_place(value);  // check how slow is log() function? Compare performance vs. multiple divides ( see num2string() )
+        int place = significant_place(value);  // check how slow is log() function? Compare performance vs. multiple divides ( see num2string() )
         if (place <= maxlength) return std::to_string(value);  // If value is short enough, return it
         char buffer[maxlength+1];  // Allocate buffer with the maximum required size
         std::snprintf(buffer, sizeof(buffer), "%.*e", maxlength - 4 - (int)(place >= 10), (float)value);
         std::string result(buffer);  // copy buffer to result
         return result.substr(0, result.find('e') + 1) + std::to_string(place);
     }
-    std::string num2string(float value, int32_t maxlength, int32_t sigdig, bool chop_zeroes = true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
+    std::string num2string(float value, int maxlength, int sigdig, bool chop_zeroes = true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
         value = abs(value);  // This function disregards sign
-        int32_t place = significant_place(value);  // Learn decimal place of the most significant digit in value
+        int place = significant_place(value);  // Learn decimal place of the most significant digit in value
         if (place >= sigdig && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
-            std::string result(std::to_string((int32_t)value));
+            std::string result(std::to_string((int)value));
             return result;
         }
         if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for given significant digits (eg 123.4, 12.34, 1.234, 0.000)
-            int32_t length = std::min(sigdig+1, maxlength);
+            int length = std::min(sigdig+1, maxlength);
             char buffer[length+1];
             std::snprintf(buffer, length + 1, (chop_zeroes) ? "%.*g" : "%.*f", length - 1, value);  // (buf, letters incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
             std::string result(buffer);  // copy buffer to result            
@@ -494,7 +497,7 @@ class Display {
             return result;
         }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
         char buffer[maxlength+1];  // Allocate buffer with the maximum required size
-        int32_t truncit = std::min(sigdig - 1, maxlength - 4 - (int)(place <= -10 || place >= 10));
+        int truncit = std::min(sigdig - 1, maxlength - 4 - (int)(place <= -10 || place >= 10));
         std::snprintf(buffer, sizeof(buffer), "%.*e", truncit, value);
         std::string result(buffer);  // copy buffer to result
         if (result.find("e+0") != std::string::npos) result.replace(result.find("e+0"), 3, "e");  // Remove useless "+0" from exponent
@@ -503,7 +506,7 @@ class Display {
         else if (result.find("e-") != std::string::npos) result.replace(result.find("e-"), 2, "\x88");  // For ridiculously small values
         return result;
     }
-    void draw_runmode(int32_t _nowmode, uint8_t color_override=NON) {  // color_override = -1 uses default color
+    void draw_runmode(int _nowmode, uint8_t color_override=NON) {  // color_override = -1 uses default color
         sprptr->setTextDatum(textdatum_t::top_left);
         sprptr->fillRect(disp_runmode_text_x, 0, (modecard[runmode_last].length() + 5) * disp_font_width, disp_font_height, BLK);
         sprptr->setTextColor((color_override == NON) ? colorcard[_nowmode] : color_override);  
@@ -513,7 +516,7 @@ class Display {
         disp_runmode_dirty = false;
         runmode_last = _nowmode;
     }
-    void draw_datapage(int32_t page, bool forced=false) {
+    void draw_datapage(int page, bool forced=false) {
         if (forced) {
             for (int i = disp_fixed_lines; i < disp_lines; i++) {
                 disp_age_quanta[i] = 0;
@@ -523,21 +526,19 @@ class Display {
             disp_values_dirty = true;
         }
         draw_fixed(page, disp_datapage_last, true, forced);  // Erase and redraw variable names and units for data on this page
-        draw_string(disp_datapage_title_x, disp_datapage_title_x, 0, pagecard[page], pagecard[disp_datapage_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
+        draw_string(disp_datapage_title_x, 0, pagecard[page], pagecard[disp_datapage_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
         disp_datapage_last = page;
         disp_datapage_dirty = false;
     }
-    void draw_selected_name(int32_t tun_ctrl, int32_t selected_val, int32_t selected_last, int32_t selected_last_last) {
+    void draw_selected_name(int tun_ctrl, int selected_val, int selected_last, int selected_last_last) {
         for (int i = 0; i < disp_tuning_lines; i++)
-            if (selected_val != i) draw_string(12, 12, 12+(i+disp_fixed_lines)*disp_line_height_pix, datapage_names[datapage][i], nulstr, LGRY, BLK, true);
-        // if (selected_val != selected_last) draw_string(12, 12, 12+(selected_last+disp_fixed_lines)*disp_line_height_pix, datapage_names[datapage][selected_last], nulstr, LGRY, BLK, true);
-        // if (selected_val != selected_last_last) draw_string(12, 12, 12+(selected_last_last+disp_fixed_lines)*disp_line_height_pix, datapage_names[datapage][selected_last_last], nulstr, LGRY, BLK, true);
-        draw_string(12, 12, 12+(selected_val+disp_fixed_lines)*disp_line_height_pix, datapage_names[datapage][selected_val], nulstr, (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : LGRY), BLK, true);
+            if (selected_val != i) draw_string(12, (i + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][i], nulstr, LGRY, BLK, true);
+        draw_string(12, (selected_val + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][selected_val], nulstr, (tun_ctrl == EDIT) ? GRN : ((tun_ctrl == SELECT) ? YEL : LGRY), BLK, true);
         disp_selected_val_dirty = false;    
     }
-    void draw_bool(bool value, int32_t col, bool force=false) {  // Draws values of boolean data
+    void draw_bool(bool value, int col, bool force=false) {  // Draws values of boolean data
         if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
-            int32_t x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - top_menu_buttons[col-2].length()*(disp_font_width>>1) + 1;
+            int x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - top_menu_buttons[col-2].length()*(disp_font_width>>1) + 1;
             sprptr->setTextDatum(textdatum_t::top_left);
             sprptr->setFont(&fonts::Font0);
             sprptr->setTextColor((value) ? GRN : LGRY);  
@@ -547,29 +548,29 @@ class Display {
     }
     void draw_touchgrid(bool side_only = false) {  // draws edge buttons with names in 'em. If replace_names, just updates names
         sprptr->setTextDatum(textdatum_t::top_left);
-        int32_t namelen = 0;
+        int namelen = 0;
         sprptr->setTextColor(LGRY);
-        for (int32_t row = 0; row < arraysize(side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
+        for (int row = 0; row < arraysize(side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
             sprptr->fillRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
             sprptr->drawRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LGRY);
             namelen = 0;
-            for (uint32_t x = 0 ; x < side_menu_buttons[row].length() ; x++ ) {
+            for (int x = 0 ; x < side_menu_buttons[row].length() ; x++ ) {
                 if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
             }
-            for (int32_t letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
+            for (int letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
                 sprptr->setCursor(1, (touch_cell_v_pix*row) + (touch_cell_v_pix/2) + (disp_font_height + 1) * (letter - (namelen >> 1)) - 3); // adjusts vertical offset depending how many letters in the button name and which letter we're on
                 sprptr->print(side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
             }
         }
         if (!side_only) {
-            for (int32_t col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
+            for (int col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
                 sprptr->fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
                 sprptr->drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LGRY);  // sprptr->width()-9, 3, 18, (sprptr->height()/5)-6, 8, LGRY);
             }
         }
         disp_sidemenu_dirty = false;
     }
-    void draw_reticle(LGFX_Sprite* spr, uint32_t x, uint32_t y) {
+    void draw_reticle(LGFX_Sprite* spr, int x, int y) {
         spr->drawFastHLine(x - 2, y, 5, DGRY);
         spr->drawFastVLine(x, y - 2, 5, DGRY);
     }
@@ -581,7 +582,7 @@ class Display {
             draw_reticle(spr, disp_width_pix-touch_reticle_offset, disp_height_pix-touch_reticle_offset);
         }
     }
-    void draw_idiotbitmap(int i, int32_t x, int32_t y) {
+    void draw_idiotbitmap(int i, int x, int y) {
         uint8_t bg = idiots->val(i) ? idiots->color[ON][i] : BLK;
         uint8_t color = idiots->val(i) ? BLK : idiots->color[OFF][i];
         sprptr->drawRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
@@ -593,7 +594,7 @@ class Display {
         if (!tempsens.detected(location)) draw_eraseval(draw_index);
         else draw_dynamic(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
     }
-    void draw_idiotlight(int32_t i, int32_t x, int32_t y) {
+    void draw_idiotlight(int i, int x, int y) {
         if (!idiots->val(i)) sprptr->fillRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, BLK);  // erase rectangle when turning off. need to test if this is necessary
         if (idiots->icon[i][0] == 0xff) {  // 0xff in the first byte will draw 2-letter string instead of bitmap
             sprptr->fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, (idiots->val(i)) ? idiots->color[ON][i] : BLK);
@@ -617,7 +618,7 @@ class Display {
                 diag.most_critical_last[i] = diag.most_critical_sensor[i];
             }
             if (force || (idiots->val(i) ^ idiots->last[i])) {
-                draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + 2) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int32_t)(i / idiots->row_count));
+                draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + 2) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int)(i / idiots->row_count));
             }
         }
         disp_idiots_dirty = false;
@@ -637,7 +638,7 @@ class Display {
         draw_dynamic(2, speedo.val(), 0.0f, speedo.opmax(), gas.cruisepid.target());
         draw_dynamic(3, tach.val(), 0.0f, tach.opmax(), gas.pid.target());
         draw_dynamic(4, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], gas.throttle_target_pc);
-        draw_dynamic(5, pressure.val(), pressure.opmin(), pressure.opmax(), brake.pids[PressureFB].target());  // (brake_active_pid == S_PID) ? (int32_t)brakeSPID.targ() : pressure_target_adc);
+        draw_dynamic(5, pressure.val(), pressure.opmin(), pressure.opmax(), brake.pids[PressureFB].target());  // (brake_active_pid == S_PID) ? (int)brakeSPID.targ() : pressure_target_adc);
         draw_dynamic(6, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
         draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
         draw_dynamic(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
@@ -666,7 +667,7 @@ class Display {
             draw_dynamic(22, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
             draw_dynamic(23, hotrc.deadband_us, 0, 100);
         }
-        else if (datapage == PG_SENS) {
+        else if (datapage == PG_SENS1) {
             draw_dynamic(9, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
             draw_dynamic(10, brkpos.native(), brkpos.opmin_native(), brkpos.opmax_native());
             draw_dynamic(11, tach.native(), tach.opmin_native(), tach.opmax_native());
@@ -679,6 +680,22 @@ class Display {
             draw_dynamic(21, speedo.idle(), speedo.opmin(), speedo.opmax());
             draw_dynamic(22, speedo.opmax(), speedo.absmin(), speedo.absmax());
             draw_dynamic(23, brkpos.zeropoint(), brkpos.opmin(), brkpos.opmax());  // BrakePositionSensor::absmin_retract_in, BrakePositionSensor::absmax_extend_in);
+        }
+        else if (datapage == PG_SENS2) {
+            draw_dynamic(9, speedo.raw(), speedo.opmin(), speedo.opmax());
+            draw_dynamic(10, speedo.us(), speedo.absmin_us(), speedo.absmax_us());
+            draw_dynamic(11, pressure.raw(), pressure.opmin(), pressure.opmax());
+            draw_dynamic(12, pressure.val(), pressure.opmin(), pressure.opmax());
+            draw_dynamic(13, pressure.pc(), 0.0, 100.0);
+            draw_dynamic(14, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
+            draw_dynamic(15, speedo.val(), speedo.opmin(), speedo.opmax());
+            draw_dynamic(16, speedo.native(), speedo.opmin(), speedo.opmax());
+            for (int line=17; line<=20; line++) draw_eraseval(line);
+            draw_dynamic(21, speedo.opmax(), speedo.absmin(), speedo.absmax());
+            draw_dynamic(22, brkpos.val(), brkpos.opmin(), brkpos.opmax());
+            draw_dynamic(23, brkpos.pc(), 0.0, 100.0);
+            // for (int myline=9; myline<=18; myline++) draw_eraseval(myline);
+            // draw_truth(19, !web_disabled, 0);  // note this value is inverse to how it's displayed, same for the tuner entry
         }
         else if (datapage == PG_PWMS) {
             draw_dynamic(9, gas.deg[OUT], gas.deg[OPMIN], gas.deg[OPMAX]);
@@ -799,9 +816,9 @@ class Display {
             draw_truth(23, cal_gasmode, 0);
         }
         else if (datapage == PG_UI) {
-            draw_dynamic(9, (int32_t)loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
+            draw_dynamic(9, (int)loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
             draw_dynamic(10, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
-            draw_dynamic(11, (int32_t)looptimer.loopfreq_hz, 0, 4000);
+            draw_dynamic(11, (int)looptimer.loopfreq_hz, 0, 4000);
             draw_dynamic(12, fps, 0.0f, 600.0f);
             draw_dynamic(13, drawclock, 0, refresh_limit);
             draw_dynamic(14, pushclock, 0, refresh_limit);
@@ -812,22 +829,6 @@ class Display {
             draw_dynamic(22, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
             draw_asciiname(23, uicontextcard[ui_context]);
             // draw_truth(19, (ui_context == ScreensaverUI), 0);
-        }
-        else if (datapage == PG_TEST) {
-            draw_dynamic(9, speedo.raw(), speedo.opmin(), speedo.opmax());
-            draw_dynamic(10, speedo.us(), speedo.absmin_us(), speedo.absmax_us());
-            draw_dynamic(11, pressure.raw(), pressure.opmin(), pressure.opmax());
-            draw_dynamic(12, pressure.val(), pressure.opmin(), pressure.opmax());
-            draw_dynamic(13, pressure.pc(), 0.0, 100.0);
-            draw_dynamic(14, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
-            draw_dynamic(15, speedo.val(), speedo.opmin(), speedo.opmax());
-            draw_dynamic(16, speedo.native(), speedo.opmin(), speedo.opmax());
-            for (int line=17; line<=20; line++) draw_eraseval(line);
-            draw_dynamic(21, speedo.opmax(), speedo.absmin(), speedo.absmax());
-            draw_dynamic(22, brkpos.val(), brkpos.opmin(), brkpos.opmax());
-            draw_dynamic(23, brkpos.pc(), 0.0, 100.0);
-            // for (int myline=9; myline<=18; myline++) draw_eraseval(myline);
-            // draw_truth(19, !web_disabled, 0);  // note this value is inverse to how it's displayed, same for the tuner entry
         }
         disp_values_dirty = false;
     }
@@ -867,13 +868,13 @@ class Display {
         diffpush(&framebuf[flip], &framebuf[!flip]);
         flip = !flip;
         sprptr = &framebuf[flip];
-        pushclock = (int32_t)(esp_timer_get_time() - screen_refresh_time);
+        pushclock = (int)(esp_timer_get_time() - screen_refresh_time);
     }
     void draw_task() {
-        int32_t mark = (int32_t)esp_timer_get_time();
+        int mark = (int)esp_timer_get_time();
         // Serial.printf("f%d draw@ 0x%08x\n", flip, &framebuf[flip]);
         draw_all(&framebuf[flip]);
-        drawclock = (int32_t)(esp_timer_get_time() - mark);
+        drawclock = (int)(esp_timer_get_time() - mark);
         idleclock = refresh_limit - pushclock - drawclock;
     }
     void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
@@ -973,7 +974,7 @@ class Tuner {
     int datapage_last;
   public:
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
-    int32_t rdelta = 0, rdelta_encoder = 0, idelta = 0, idelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
+    int rdelta = 0, rdelta_encoder = 0, idelta = 0, idelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
     float fdelta = 0.0;  // fdelta is float edit value accelerated
     void update(int rmode) {
         process_inputs();
@@ -986,7 +987,7 @@ class Tuner {
         sel_val_last = sel_val;
         datapage_last = datapage;
         tunctrl_last = tunctrl;
-        uint32_t encoder_sw_action = encoder.button.press_event();  // true = autoreset the event if there is one
+        int encoder_sw_action = encoder.button.press_event();  // true = autoreset the event if there is one
         if (encoder_sw_action != swNONE) {  // First deal with any unhandled switch press events
             if (encoder_sw_action == swSHORT)  {  // if short press
                 if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
@@ -1051,7 +1052,7 @@ class Tuner {
                 if (sel_val == 13) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
                 else if (sel_val == 14) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
             }
-            else if (datapage == PG_SENS) {
+            else if (datapage == PG_SENS1) {
                 if (sel_val == 9) adj_val(airvelo.opmax_ptr(), fdelta, airvelo.absmin(), airvelo.absmax());
                 else if (sel_val == 10) adj_val(mapsens.opmin_ptr(), fdelta, mapsens.absmin(), mapsens.absmax());
                 else if (sel_val == 11) adj_val(mapsens.opmax_ptr(), fdelta, mapsens.absmin(), mapsens.absmax());
@@ -1059,6 +1060,12 @@ class Tuner {
                 else if (sel_val == 13) adj_val(speedo.opmax_ptr(), fdelta, speedo.idle(), speedo.absmax());
                 else if (sel_val == 14) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.opmin(), brkpos.opmax());
             }
+            else if (datapage == PG_SENS2) {
+                if (sel_val == 12) speedo.set_oplim(NAN, speedo.opmax() + fdelta);
+                else if (sel_val == 13) brkpos.add_si(fdelta);
+                else if (sel_val == 14) brkpos.add_pc(fdelta);                
+                // if (sel_val == 10) adj_bool(&web_disabled, -1 * rdelta);  // note this value is inverse to how it's displayed, same for the value display entry
+            }                
             else if (datapage == PG_PWMS) {
                 if (sel_val == 11) { adj_val(&(gas.si[OPMIN]), fdelta, gas.si[PARKED] + 1, gas.si[OPMAX] - 1); gas.derive(); }
                 else if (sel_val == 12) { adj_val(&(gas.si[OPMAX]), fdelta, gas.si[OPMIN] + 1, 180.0f); gas.derive(); }
@@ -1119,12 +1126,6 @@ class Tuner {
                 else if (sel_val == 13) { adj_val(&neodesat, rdelta, 0, 10); neo->setdesaturation(neodesat); }
                 else if (sel_val == 14) adj_val(&ui_context, rdelta, 0, NumContextsUI-1);
             }
-            else if (datapage == PG_TEST) {
-                if (sel_val == 12) speedo.set_oplim(NAN, speedo.opmax() + fdelta);
-                else if (sel_val == 13) brkpos.add_si(fdelta);
-                else if (sel_val == 14) brkpos.add_pc(fdelta);                
-                // if (sel_val == 10) adj_bool(&web_disabled, -1 * rdelta);  // note this value is inverse to how it's displayed, same for the value display entry
-            }                
             idelta = 0;
         }
     }
