@@ -196,7 +196,7 @@ class Device {
 };
 
 
-enum class TransDir : uint8_t { REV, FWD }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
+enum class TransDir : uint8_t { REV=0, FWD=1 }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
 enum TransType { ActuatorType, SensorType, NumTransType }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
 std::string transtypecard[NumTransType] = { "actuator", "sensor" };
 // std::string transdircard[NumTransDir] = { "reverse", "forward" };
@@ -374,8 +374,8 @@ class Transducer : public Device {
     float opmin_native() { return _opmin_native; }
     float opmax_native() { return _opmax_native; }
     float margin_native() { return to_native(_margin); }
-    float pc() { return map(_si.val(), _opmin, _opmax, 0.0, 100.0); }  // get value as a percent of the operational range
-    float raw_pc() { return map(_si_raw, _opmin, _opmax, 0.0, 100.0); }  // get raw value in percent
+    float pc() { return map(_si.val(), _opmin, _opmax, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD)); }  // get value as a percent of the operational range
+    float raw_pc() { return map(_si_raw, _opmin, _opmax, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD)); }  // get raw value in percent
     float margin_pc() { return map(_margin, _opmin, _opmax, 0.0, 100.0); }
 };
 
