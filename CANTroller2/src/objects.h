@@ -391,29 +391,32 @@ void stop_console() {
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
     ezread.dprintf(DCYN, "magic carpet is booted");
-    ezread.dprintf("welcome to ez-read console");
+    // ezread.dprintf("welcome to EZ-Read Console");
 }
 void dump_errorcode_update() {
     static uint16_t status_last[NUM_ERR_TYPES];
     bool do_print = false;
     uint8_t color = NON;
     uint16_t now, was;
-    int errdiffs = 0;
+    int errdiffs = 0, errtotal = 0;
     for (int e=0; e<NUM_ERR_TYPES; e++) {
         if (diag.errstatus[e] != status_last[e]) {
             do_print = true;
             now = diag.errstatus[e];
             was = status_last[e];
             while (now || was) {
-                if ((now & 1) > (was & 1)) {
-                    errdiffs++;  // there's a new error
-                    if (color == LGRN) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
-                    else if (color == NON) color = SALM;  // use the sad red bad-news color
+                if (now & 1) {
+                    errtotal++;
+                    if (!(was & 1)) {
+                        errdiffs++;  // there's a new error
+                        if (color == LGRN) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
+                        else if (color == NON) color = SALM;  // use the sad red bad-news color
+                    }
                 }
                 else if ((now & 1) < (was & 1)) {
                     errdiffs--;  // an error got cleared
                     if (color == SALM) color = ezread.defaultcolor;  // but there was also a new error, so use default color
-                    else if (color == NON) color = LGRN;  // use the happy green color            
+                    else if (color == NON) color = LGRN;  // use the happy green color
                 }
                 now >>= 1;
                 was >>= 1;
@@ -422,7 +425,7 @@ void dump_errorcode_update() {
         status_last[e] = diag.errstatus[e];
     }
     if (color == NON) color = ezread.defaultcolor;
-    if (do_print) ezread.dprintf(color, "diag L:%04x R:%04x W:%04x (net %+d)", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], errdiffs);
+    if (do_print) ezread.dprintf(color, "codes L%04x R%04x W%04x  %d errs (%+d)", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], errtotal, errdiffs);
 }
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);

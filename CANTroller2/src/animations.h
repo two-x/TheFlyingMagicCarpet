@@ -1,5 +1,10 @@
 #pragma once
 #include <Arduino.h>
+#include "tftsetup.h"
+#include "inputs.h"
+static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
+static MomentaryButton bootbutton(boot_sw_pin, false);
+
 // #define touch_simbutton 38
 #define disp_simbuttons_x 164
 #define disp_simbuttons_y 48
@@ -48,6 +53,7 @@ class CollisionsSaver {
         uint8_t color;
     };
     bool touchnow = false, touchlast;
+    bool touchball_invisible = true;
     viewport* vp;
     uint8_t sqrme, slices = 8;
     ball_info_t* balls;
@@ -86,7 +92,7 @@ class CollisionsSaver {
             a = &balls[i];
             sprite->fillCircle((a->x >> SHIFTSIZE) + vp->x, (a->y >> SHIFTSIZE) + vp->y, a->r >> SHIFTSIZE, (uint8_t)(a->color));
         }
-        if (touchnow) sprite->fillCircle((touchball.x >> SHIFTSIZE) + vp->x, (touchball.y >> SHIFTSIZE) + vp->y, touchball.r >> SHIFTSIZE, touchball.color);
+        if (touchnow && !touchball_invisible) sprite->fillCircle((touchball.x >> SHIFTSIZE) + vp->x, (touchball.y >> SHIFTSIZE) + vp->y, touchball.r >> SHIFTSIZE, touchball.color);
         touchnow = false;
     }
     void new_ball(int ballno) {
@@ -576,30 +582,31 @@ class EZReadConsole {  // never has any terminal solution been easier on the eye
             totalwidth += charwidth;
             charcount++;
         }
-        return charcount;
+        return charcount - 1;
     }
     void draw(LGFX_Sprite* spr) {
         spr->fillSprite(BLK);
         // int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
         spr->setFont(&fonts::Font0);  // spr->setFont(&fonts::Org_01);
         spr->setTextDatum(textdatum_t::top_left);
+        spr->setTextColor(linecolors[newest_content]);
         std::string nowline = textlines[newest_content];
         int chopit = chars_to_fit_pix(spr, nowline, vp->w);
         bool toobig = (chopit < nowline.length());
         if (toobig) {
-            spr->setCursor(vp->x + 2, vp->y + vp->h - 18);
+            spr->setCursor(vp->x + pix_margin, vp->y + vp->h - 18);
             nowline = textlines[newest_content].substr(0, chopit);
             spr->print(nowline.c_str());
             nowline = textlines[newest_content].substr(chopit);
         }
-        spr->setCursor(vp->x + 2, vp->y + vp->h - 9);
+        spr->setCursor(vp->x + pix_margin, vp->y + vp->h - 9);
         spr->print(nowline.c_str());
-        int bottom_extent = vp->y + vp->h - 11 * (1 + (int)toobig);
+        int bottom_extent = vp->y + vp->h - 9 * (1 + (int)toobig);
         // spr->drawFastHLine(vp->x + 3, bottom_extent, vp->w - 6, LGRY);  // separator for the newest line at the bottom will be printed larger and span 2 lines
         spr->setFont(&fonts::TomThumb);
         for (int line=1; line<num_lines; line++) {
             int backindex = (newest_content + bufferSize - line) % bufferSize;
-            spr->setCursor(vp->x + pix_margin, bottom_extent - line * (font_height + 2));
+            spr->setCursor(vp->x + pix_margin, bottom_extent - line * (font_height + pix_margin));
             // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
             int strsize = std::min((int)linelength, (int)textlines[backindex].length());
             spr->setTextColor(linecolors[backindex]);
@@ -620,24 +627,6 @@ class EZReadConsole {  // never has any terminal solution been easier on the eye
         dprintf_impl(color, format, args);  // Use provided color
         va_end(args);
     }
-    // void dprintf(const char* format, ...) {
-    //     if (messagetimer.expireset()) highlighted_lines = next_index;  // mark the target index as 1st to be highlighted
-    //     va_list args;
-    //     va_start(args, format);
-    //     char temp[100]; // Assuming maximum length of output string
-    //     vsnprintf(temp, sizeof(temp), format, args);
-    //     va_end(args);
-    //     textlines[next_index] = remove_nonprintable(std::string(temp)); // Store formatted output into buffer
-    //     linecolors[next_index] = usecolor;
-    //     usecolor = default_color;
-    //     newest_content = next_index;
-    //     ++next_index %= bufferSize; // Update next insertion index
-    //     dirty = true;
-    // }
-    // void dprintf(uint8_t color, const char* format, ...) {  // in case you want a custom color for your message, put it as the first argument
-    //     usecolor = color;
-    //     dprintf(format, args); // this probably isn't right. intention is to pass all arguments except color in to dprintf
-    // }
     void setup(viewport* _vp) {
         vp = _vp;
         std::string blank = "";
@@ -647,6 +636,7 @@ class EZReadConsole {  // never has any terminal solution been easier on the eye
             linecolors[i] = MYEL;
         }
         linelength = (int)(vp->w / disp_font_width);
+        dprintf("welcome to EZ-Read console");
         dirty = true;
     }
     void update(LGFX_Sprite* spr, bool force=false) {

@@ -1,8 +1,4 @@
 #pragma once
-#include "tftsetup.h"
-#include "inputs.h"
-static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-static MomentaryButton bootbutton(boot_sw_pin, false);
 #include "animations.h"
 #include "neopixel.h"
 
@@ -25,7 +21,7 @@ std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Ho
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
-std::string uicontextcard[NumContextsUI] = { "chasis", "consol", "animat" };
+std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 // These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
 #define stEr "St\x88r"
 #define brAk "Br\x83k"
@@ -40,8 +36,8 @@ std::string uicontextcard[NumContextsUI] = { "chasis", "consol", "animat" };
 #define neo_bright "NeoBr\x8dgt"
 #define maxadjrate "MaxAjR\x83t"
 #define horfailsaf "HFails\x83""f"
-static std::string telemetry[disp_fixed_lines] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
-static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%", "%", "%" };  // Fixed rows
+static std::string telemetry[disp_fixed_lines] = { "TriggerV", "JoysticH", "   Speed", "    Tach", brAk"Pres", "Throttle", brAk"Motr", stEr"Motr", };  // Fixed rows
+static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "psi", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 9, 12, 11, 11, 13, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
@@ -365,27 +361,8 @@ class Display {
                 // if (disp_needles[index] >= 0) draw_bargraph_needle(-1, disp_needles[index], y_pos + 1, BLK);  // Let's draw a needle
                 disp_bargraphs[lineno] = false;
             }
-        // for (int lineno = 0; lineno < disp_lines; lineno++) {  // Step thru lines of fixed telemetry data
-        //     y_pos = (lineno + 1) * disp_line_height_pix;
-        //     if (lineno <= disp_fixed_lines) {
-        //         draw_string(disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
-        //         draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
-        //     }
-        //     else if (redraw_all) {
-        //         int index = lineno - disp_fixed_lines - 1;
-        //         // Serial.printf("drawing line:%d x:%d y:%d text:%s\n", index, disp_datapage_names_x, y_pos, datapage_names[page][index].c_str() );
-        //         draw_string(disp_datapage_names_x, y_pos, datapage_names[page][index], datapage_names[page_last][index], LGRY, BLK, forced);
-        //         draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][index], tuneunits[page_last][index], LGRY, BLK);
-                
-        //         // commenting these two lines doesn't seem to mess up the rendering of the bargraphs when i flip thru the datapages ... so what are they for?!
-        //         // sprptr->fillRect(disp_bargraphs_x - 1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
-        //         // if (disp_needles[index] >= 0) draw_bargraph_needle(-1, disp_needles[index], y_pos + 1, BLK);  // Let's draw a needle
-        //     }
-        //     disp_bargraphs[lineno] = false;
         }
     }
-
-
     void draw_hyphen(int x_pos, int y_pos, uint8_t color) {  // Draw minus sign in front of negative numbers
         sprptr->drawFastHLine(x_pos+2, y_pos+3, 3, color);
     }
@@ -566,7 +543,7 @@ class Display {
             int x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - top_menu_buttons[col-2].length()*(disp_font_width>>1) + 1;
             sprptr->setTextDatum(textdatum_t::top_left);
             sprptr->setFont(&fonts::Font0);
-            sprptr->setTextColor((value) ? GRN : LGRY);  
+            sprptr->setTextColor((value) ? YEL : LGRY);  
             sprptr->drawString(top_menu_buttons[col-2].c_str(), x_mod, 0);
             disp_bool_values[col-2] = value;
         }
@@ -660,12 +637,12 @@ class Display {
         // if (!disp_values_dirty) return;
         float drange;
         draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        draw_dynamic(2, speedo.val(), 0.0f, speedo.opmax(), gas.cruisepid.target());
-        draw_dynamic(3, tach.val(), 0.0f, tach.opmax(), gas.pid.target());
-        draw_dynamic(4, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], gas.throttle_target_pc);
+        draw_dynamic(2, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+        draw_dynamic(3, speedo.val(), 0.0f, speedo.opmax(), gas.cruisepid.target());
+        draw_dynamic(4, tach.val(), 0.0f, tach.opmax(), gas.pid.target());
         draw_dynamic(5, pressure.val(), pressure.opmin(), pressure.opmax(), brake.pids[PressureFB].target());  // (brake_active_pid == S_PID) ? (int)brakeSPID.targ() : pressure_target_adc);
-        draw_dynamic(6, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
-        draw_dynamic(7, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+        draw_dynamic(6, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], gas.throttle_target_pc);
+        draw_dynamic(7, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
         draw_dynamic(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
         if (datapage == PG_RUN) {
             draw_dynamic(9, brkpos.val(), brkpos.opmin(), brkpos.opmax());
