@@ -422,7 +422,7 @@ void dump_errorcode_update() {
         status_last[e] = diag.errstatus[e];
     }
     if (color == NON) color = diagconsole.defaultcolor;
-    if (do_print) diagconsole.dprintf(color, "flag L:%04x R:%04x W:%04x", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN]);
+    if (do_print) diagconsole.dprintf(color, "diag L:%04x R:%04x W:%04x (net %+d)", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], diff);
 }
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);

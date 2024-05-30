@@ -595,11 +595,11 @@ class DiagConsole {
         spr->setCursor(vp->x + 2, vp->y + vp->h - 9);
         spr->print(nowline.c_str());
         int bottom_extent = vp->y + vp->h - 11 * (1 + (int)toobig);
-        spr->drawFastHLine(vp->x + 3, bottom_extent, vp->w - 6, LGRY);  // separator for the newest line at the bottom will be printed larger and span 2 lines
+        // spr->drawFastHLine(vp->x + 3, bottom_extent, vp->w - 6, LGRY);  // separator for the newest line at the bottom will be printed larger and span 2 lines
         spr->setFont(&fonts::TomThumb);
         for (int line=1; line<num_lines; line++) {
             int backindex = (newest_content + bufferSize - line) % bufferSize;
-            spr->setCursor(vp->x + pix_margin, bottom_extent - 2 - line * (font_height + 2));
+            spr->setCursor(vp->x + pix_margin, bottom_extent - line * (font_height + 2));
             // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
             int strsize = std::min((int)linelength, (int)textlines[backindex].length());
             drawnow = textlines[backindex].substr(0, strsize);

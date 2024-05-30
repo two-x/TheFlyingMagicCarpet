@@ -4,13 +4,18 @@ TaskHandle_t temptask = nullptr, webtask = nullptr, pushTaskHandle = NULL, drawT
 
 void setup() {
     initialize_pins_and_console();
+    semaphore_setup();
+    i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);
+    touch.setup(&lcd, &i2c, disp_width_pix, disp_height_pix);
+    screen.setup();             // start up the screen asap so we can monitor the boot progress on the diag console
+    xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 2048, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);      // 2048 works, 1024 failed
+    xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // 4096 works, 2048 failed
     running_on_devboard = !tempsens.setup();  // onewire bus and temp sensors
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 4096 works, 3072 failed,  priority is from 0 to 24=highest    
     print_partition_table();
     set_board_defaults();       // set variables as appropriate if on a breadboard
     run_tests();
     psram_setup();
-    semaphore_setup();
     watchdog.setup(&temptask, &webtask, &drawTaskHandle, &pushTaskHandle);
     bootbutton.setup();
     hotrc.setup();
@@ -21,7 +26,6 @@ void setup() {
     mulebatt.setup();
     tach.setup();
     speedo.setup();
-    i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);
     airvelo.setup();           // must be done after i2c is started
     mapsens.setup();
     lightbox.setup();
@@ -32,10 +36,6 @@ void setup() {
     brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos, &gas, &tempsens);
     steer.setup(&hotrc, &speedo, &mulebatt);
     sim_setup();               // simulator initialize devices and pot map
-    touch.setup(&lcd, &i2c, disp_width_pix, disp_height_pix);
-    screen.setup();
-    xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 2048, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);      // 2048 works, 1024 failed
-    xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // 4096 works, 2048 failed
     neo.setup();               // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);        // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();              // initialize diagnostic engine

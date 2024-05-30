@@ -334,6 +334,7 @@ class GasServo : public ServoMotor {
   public:
     using ServoMotor::ServoMotor;
     QPID pid, cruisepid;
+    int throttle_ctrl_mode = OpenLoop;   // set default ctrl behavior. should gas servo use the rpm-sensing pid? values: ActivePID or OpenLoop
     bool pid_enabled = false, cruise_pid_enabled = false;
     int cruise_adjust_scheme = TriggerHold;  // edit these to be the defaults on boot
     int motormode = Idle;  // not tunable  // pid_status = OpenLoop, cruise_pid_status = OpenLoop,
