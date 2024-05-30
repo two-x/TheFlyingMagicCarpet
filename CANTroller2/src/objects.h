@@ -390,15 +390,15 @@ void stop_console() {
         delay(200);  // give time for serial to print everything in its buffer
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
-    diagconsole.dprintf(CYN, "magic carpet is booted");
-    diagconsole.dprintf("welcome to diag console");
+    ezread.dprintf(DCYN, "magic carpet is booted");
+    ezread.dprintf("welcome to ez-read console");
 }
 void dump_errorcode_update() {
     static uint16_t status_last[NUM_ERR_TYPES];
     bool do_print = false;
     uint8_t color = NON;
     uint16_t now, was;
-    int diff = 0;
+    int errdiffs = 0;
     for (int e=0; e<NUM_ERR_TYPES; e++) {
         if (diag.errstatus[e] != status_last[e]) {
             do_print = true;
@@ -406,13 +406,13 @@ void dump_errorcode_update() {
             was = status_last[e];
             while (now || was) {
                 if ((now & 1) > (was & 1)) {
-                    diff++;  // there's a new error
-                    if (color == LGRN) color = diagconsole.defaultcolor;  // but also another error got cleared, so use default color
+                    errdiffs++;  // there's a new error
+                    if (color == LGRN) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
                     else if (color == NON) color = SALM;  // use the sad red bad-news color
                 }
                 else if ((now & 1) < (was & 1)) {
-                    diff--;  // an error got cleared
-                    if (color == SALM) color = diagconsole.defaultcolor;  // but there was also a new error, so use default color
+                    errdiffs--;  // an error got cleared
+                    if (color == SALM) color = ezread.defaultcolor;  // but there was also a new error, so use default color
                     else if (color == NON) color = LGRN;  // use the happy green color            
                 }
                 now >>= 1;
@@ -421,8 +421,8 @@ void dump_errorcode_update() {
         }
         status_last[e] = diag.errstatus[e];
     }
-    if (color == NON) color = diagconsole.defaultcolor;
-    if (do_print) diagconsole.dprintf(color, "diag L:%04x R:%04x W:%04x (net %+d)", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], diff);
+    if (color == NON) color = ezread.defaultcolor;
+    if (do_print) ezread.dprintf(color, "diag L:%04x R:%04x W:%04x (net %+d)", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], errdiffs);
 }
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
@@ -436,7 +436,7 @@ void bootbutton_actions() {  // temporary (?) functionality added for developmen
             speedo.print_config(true);
             tach.print_config(true);
             mulebatt.print_config(true);
-            // diagconsole.dprintf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
+            // ezread.dprintf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
         }
     }
 }

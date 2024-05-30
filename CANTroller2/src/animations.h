@@ -525,7 +525,7 @@ class EraserSaver {  // draws colorful patterns to exercise
 #include <sstream>
 #include <stdarg.h>
 // #include "Org_01.h"
-class DiagConsole {
+class EZReadConsole {  // never has any terminal solution been easier on the eyes
   public:
     bool dirty = true;
     static constexpr int num_lines = 24;
@@ -602,9 +602,8 @@ class DiagConsole {
             spr->setCursor(vp->x + pix_margin, bottom_extent - line * (font_height + 2));
             // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
             int strsize = std::min((int)linelength, (int)textlines[backindex].length());
-            drawnow = textlines[backindex].substr(0, strsize);
             spr->setTextColor(linecolors[backindex]);
-            spr->print(drawnow.c_str());
+            spr->print(textlines[backindex].c_str());
         }
         dirty = false;
     }
@@ -654,7 +653,7 @@ class DiagConsole {
         if (dirty || force) draw(spr);
         dirty = false;
     }
-    DiagConsole() {}
+    EZReadConsole() {}
 };
 class PanelAppManager {
   private:
@@ -676,10 +675,10 @@ class PanelAppManager {
     bool simulating_last = false, mule_drawn = false, dirty = true;
     int ui_context_last = MuleChassisUI;
   public:
-    DiagConsole* diagconsole; // Initialize serial buffer with size 5
+    EZReadConsole* ezread; // Initialize serial buffer with size 5
     std::uint32_t sec, psec, _width, _height, _myfps = 0, frame_count = 0;
     bool anim_reset_request = false;
-    PanelAppManager(DiagConsole* _diag) : diagconsole(_diag) {}
+    PanelAppManager(EZReadConsole* _ez) : ezread(_ez) {}
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
@@ -695,7 +694,7 @@ class PanelAppManager {
         Serial.printf(" screensavers & diag console .. ");
         eSaver.setup(&framebuf[flip], &vp);
         cSaver.setup(&framebuf[flip], &vp);
-        diagconsole->setup(&vp);
+        ezread->setup(&vp);
         Serial.printf("set up\n");
     }
     void reset() {
@@ -792,7 +791,7 @@ class PanelAppManager {
         if (dirty) {
             spr->fillSprite(BLK);
             mule_drawn = false;
-            diagconsole->dirty = true;
+            ezread->dirty = true;
         }
         if (ui_context == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             // mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
@@ -808,8 +807,8 @@ class PanelAppManager {
             }
             if (!still_running) change_saver();
         }
-        else if (ui_context == DiagConsoleUI) {
-            diagconsole->update(spr);
+        else if (ui_context == EZReadUI) {
+            ezread->update(spr);
         }
         else if (ui_context == MuleChassisUI) {
             if (!mule_drawn) {

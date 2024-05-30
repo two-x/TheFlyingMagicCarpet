@@ -89,8 +89,8 @@ static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for excepti
     { 0x30, 0x48, 0x48, 0x30, 0x00, 0x10, 0x7c, 0x12, 0x04, 0x00, 0x02, 0x7f, 0x00, 0x3e, 0x51, 0x49, 0x3e, },  // of 10
 };  // These bitmaps are in the same format as the idiot light bitmaps, described in neopixel.h
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
-DiagConsole diagconsole;
-PanelAppManager panel(&diagconsole);
+EZReadConsole ezread;
+PanelAppManager panel(&ezread);
 volatile float fps = 0.0;
 volatile bool is_pushing = 0;
 volatile bool is_drawing = 0;
@@ -343,26 +343,45 @@ class Display {
     }
     // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
     void draw_fixed(int page, int page_last, bool redraw_all, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
+        static int fixed_page_last;
         sprptr->setTextColor(LGRY);
         sprptr->setTextSize(1);
         int y_pos;
-        for (int lineno = 0; lineno < disp_lines; lineno++) {  // Step thru lines of fixed telemetry data
+        for (int lineno = 0; lineno < disp_fixed_lines; lineno++) {  // Step thru lines of fixed telemetry data
             y_pos = (lineno + 1) * disp_line_height_pix;
-            if (lineno <= disp_fixed_lines) {
-                draw_string(disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
-                draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
-            }
-            else if (redraw_all) {
-                int index = lineno - disp_fixed_lines - 1;
+            draw_string(disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
+            draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
+        }
+        if (redraw_all) {
+            for (int lineno = 0; lineno < disp_tuning_lines; lineno++) {  // Step thru lines of fixed telemetry data
+                y_pos = (lineno + disp_fixed_lines + 1) * disp_line_height_pix;
+                // int index = lineno - disp_fixed_lines - 1;
                 // Serial.printf("drawing line:%d x:%d y:%d text:%s\n", index, disp_datapage_names_x, y_pos, datapage_names[page][index].c_str() );
-                draw_string(disp_datapage_names_x, y_pos, datapage_names[page][index], datapage_names[page_last][index], LGRY, BLK, forced);
-                draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][index], tuneunits[page_last][index], LGRY, BLK);
+                draw_string(disp_datapage_names_x, y_pos, datapage_names[page][lineno], datapage_names[page_last][lineno], LGRY, BLK, forced);
+                draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
                 
                 // commenting these two lines doesn't seem to mess up the rendering of the bargraphs when i flip thru the datapages ... so what are they for?!
                 // sprptr->fillRect(disp_bargraphs_x - 1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
                 // if (disp_needles[index] >= 0) draw_bargraph_needle(-1, disp_needles[index], y_pos + 1, BLK);  // Let's draw a needle
+                disp_bargraphs[lineno] = false;
             }
-            disp_bargraphs[lineno] = false;
+        // for (int lineno = 0; lineno < disp_lines; lineno++) {  // Step thru lines of fixed telemetry data
+        //     y_pos = (lineno + 1) * disp_line_height_pix;
+        //     if (lineno <= disp_fixed_lines) {
+        //         draw_string(disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
+        //         draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
+        //     }
+        //     else if (redraw_all) {
+        //         int index = lineno - disp_fixed_lines - 1;
+        //         // Serial.printf("drawing line:%d x:%d y:%d text:%s\n", index, disp_datapage_names_x, y_pos, datapage_names[page][index].c_str() );
+        //         draw_string(disp_datapage_names_x, y_pos, datapage_names[page][index], datapage_names[page_last][index], LGRY, BLK, forced);
+        //         draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][index], tuneunits[page_last][index], LGRY, BLK);
+                
+        //         // commenting these two lines doesn't seem to mess up the rendering of the bargraphs when i flip thru the datapages ... so what are they for?!
+        //         // sprptr->fillRect(disp_bargraphs_x - 1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
+        //         // if (disp_needles[index] >= 0) draw_bargraph_needle(-1, disp_needles[index], y_pos + 1, BLK);  // Let's draw a needle
+        //     }
+        //     disp_bargraphs[lineno] = false;
         }
     }
 
