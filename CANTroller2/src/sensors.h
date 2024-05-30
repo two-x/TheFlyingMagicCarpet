@@ -588,6 +588,7 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
         Sensor::setup();
         set_pin(_pin, INPUT);
         set_can_source(src::PIN, true);
+        set_can_source(src::POT, true);
         set_source(src::PIN);
         set_abslim_native(0.0, (float)adcrange_adc, false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
     }

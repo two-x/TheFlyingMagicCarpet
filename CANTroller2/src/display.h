@@ -43,14 +43,14 @@ std::string uicontextcard[NumContextsUI] = { "chasis", "consol", "animat" };
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "   Speed", "    Tach", "Throttle", brAk"Pres", brAk"Motr", "JoysticH", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "mph", "rpm", "%", "psi", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 13, 11, 10, 11, 11, 9, 12, 11, 11, 13, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 9, 12, 11, 11, 13, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", __________, __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
-    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, __________, __________, __________, __________, horfailsaf, "Deadband", },  // PG_JOY
-    { " Pot Raw", "BkPosRaw", "BkPosRaw", brAk"Posn", brAk"Posn", "PressRaw", "PressRaw", "Pressure", "Pressure", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", "BPosZero", },  // PG_SENS
+    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
+    { " Pot Raw", "BkPosRaw", "BkPosRaw", brAk"Posn", brAk"Posn", "PressRaw", "PressRaw", "Pressure", "Pressure", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PG_SENS
     { "TachPuls", "Tach Raw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpeedRaw", "   Speed", "   Speed", spEd"AMin", spEd"AMax", "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", spEd"Idle", },  // PG_PULS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
-    { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", "StartGas", __________, __________, __________, __________, "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
+    { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", __________, __________, __________, __________, "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { "Brk Heat", "HybBrake", __________, __________, __________, __________, __________, __________, __________, "BkEnaPID", "BkFeedbk", "BkPosLim", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
     { "MotrMode", "Feedback", brAk"Posn", "Pn|PrErr", "Pres Tgt", "Posn Tgt", "HybrdTgt", "OutRatio", "  P Term", "  I Term", "  D Term", __________, "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "MotrMode", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, __________, __________, __________, "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
@@ -61,11 +61,11 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, ______, "%",    "%",    },  // PG_RUN
-    { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, ______, ______, ______, ______, "us",   "us",   },  // PG_JOY
-    { "adc",  "adc",  "in",   "in",   "pc",   "adc",  "psi",  "psi",  "pc",   ______, ______, "mph",  "atm",  "atm",  "in",   },  // PG_SENS
+    { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, ______, "mph",  "atm",  "atm",  "us",   "us",   },  // PG_JOY
+    { "adc",  "adc",  "in",   "in",   "pc",   "adc",  "psi",  "psi",  "pc",   ______, "psi",  "psi",  "in",   "in",   "in",   },  // PG_SENS
     { "ms",   "Hz",   "psi",  "ms",   "Hz",   "mph",  "mph",  "%",    "ms",   "ms",   "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
-    { scroll, "rpm",  "%",    degree, "rpm",  "V",    "%",    ______, ______, ______, ______, degree, degree, degreF, degreF, },  // PG_IDLE
+    { scroll, "rpm",  "%",    degree, "rpm",  "V",    ______, ______, ______, ______, "%",    degree, degree, degreF, degreF, },  // PG_IDLE
     { degreF, "%",    ______, ______, ______, ______, ______, ______, ______, b1nary, scroll, b1nary, b1nary, b1nary, scroll, },  // PG_MOTR
     { scroll, scroll, "in",   "psin", "psin", "%",    "%",    "%",    "%",    "%",    "%",    ______, ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, ______, ______, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
@@ -688,7 +688,10 @@ class Display {
             draw_dynamic(12, hotrc.us[CH4][RAW], hotrc.us[CH4][OPMIN], hotrc.us[CH4][OPMAX]);
             draw_dynamic(13, hotrc.pc[HORZ][RAW], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
             draw_dynamic(14, hotrc.pc[VERT][RAW], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            for (int line=15; line<=21; line++) draw_eraseval(line);
+            for (int line=15; line<=18; line++) draw_eraseval(line);
+            draw_dynamic(19, airvelo.opmax(), airvelo.absmin(), airvelo.absmax());
+            draw_dynamic(20, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
+            draw_dynamic(21, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
             draw_dynamic(22, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
             draw_dynamic(23, hotrc.deadband_us, 0, 100);
         }
@@ -702,10 +705,11 @@ class Display {
             draw_dynamic(15, pressure.raw(), pressure.opmin(), pressure.opmax());
             draw_dynamic(16, pressure.val(), pressure.opmin(), pressure.opmax());
             draw_dynamic(17, pressure.pc(), 0.0, 100.0);
-            for (int line=18; line<=19; line++) draw_eraseval(line);
-            draw_dynamic(20, airvelo.opmax(), airvelo.absmin(), airvelo.absmax());
-            draw_dynamic(21, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
-            draw_dynamic(22, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
+            draw_eraseval(18);
+            draw_dynamic(19, pressure.opmin(), pressure.absmin(), pressure.absmax());
+            draw_dynamic(20, pressure.opmax(), pressure.absmin(), pressure.absmax());
+            draw_dynamic(21, brkpos.opmin(), brkpos.absmin(), brkpos.absmax());
+            draw_dynamic(22, brkpos.opmax(), brkpos.absmin(), brkpos.absmax());
             draw_dynamic(23, brkpos.zeropoint(), brkpos.opmin(), brkpos.opmax());  // BrakePositionSensor::absmin_retract_in, BrakePositionSensor::absmax_extend_in);
         }
         else if (datapage == PG_PULS) {
@@ -1081,13 +1085,17 @@ class Tuner {
                 else if (sel_val == 14) adj_val(&(steer.steer_safe_pc), idelta, 0, 100);
             }
             else if (datapage == PG_JOY) {
-                if (sel_val == 13) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
+                if (sel_val == 10) airvelo.set_oplim(NAN, airvelo.opmax() + fdelta);
+                else if (sel_val == 11) mapsens.set_oplim(mapsens.opmin() + fdelta, NAN);
+                else if (sel_val == 12) mapsens.set_oplim(NAN, mapsens.opmax() + fdelta);
+                else if (sel_val == 13) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
                 else if (sel_val == 14) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
             }
             else if (datapage == PG_SENS) {
-                if (sel_val == 11) airvelo.set_oplim(NAN, airvelo.opmax() + fdelta);
-                else if (sel_val == 12) mapsens.set_oplim(mapsens.opmin() + fdelta, NAN);
-                else if (sel_val == 13) mapsens.set_oplim(NAN, mapsens.opmax() + fdelta);
+                if (sel_val == 10) pressure.set_oplim(pressure.opmin() + fdelta, NAN);
+                else if (sel_val == 11) pressure.set_oplim(NAN, pressure.opmax() + fdelta);
+                else if (sel_val == 12) brkpos.set_oplim(brkpos.opmin() + fdelta, NAN);
+                else if (sel_val == 13) brkpos.set_oplim(NAN, brkpos.opmax() + fdelta);
                 else if (sel_val == 14) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.opmin(), brkpos.opmax());
                 // if (sel_val == 11) adj_val(airvelo.opmax_ptr(), fdelta, airvelo.opmin(), airvelo.absmax());
                 // else if (sel_val == 12) adj_val(mapsens.opmin_ptr(), fdelta, mapsens.absmin(), mapsens.opmax());
