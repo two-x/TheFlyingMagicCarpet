@@ -87,6 +87,7 @@ void sim_setup() {
     sim.register_device(sens::speedo, speedo, speedo.source());
     // sim.register_device(sens::engtemp, temp, temp.source());
     // sim.register_device(sens::starter, starter, starter.source());
+    sim.recall_cansim();
     sim.set_potmap();
 }
 // RTOS task that updates temp sensors in a separate task
@@ -409,14 +410,14 @@ void dump_errorcode_update() {
                     errtotal++;
                     if (!(was & 1)) {
                         errdiffs++;  // there's a new error
-                        if (color == LGRN) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
-                        else if (color == NON) color = SALM;  // use the sad red bad-news color
+                        if (color == ezread.happycolor) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
+                        else if (color == NON) color = ezread.sadcolor;  // use the bad news color
                     }
                 }
                 else if ((now & 1) < (was & 1)) {
                     errdiffs--;  // an error got cleared
-                    if (color == SALM) color = ezread.defaultcolor;  // but there was also a new error, so use default color
-                    else if (color == NON) color = LGRN;  // use the happy green color
+                    if (color == ezread.sadcolor) color = ezread.defaultcolor;  // but there was also a new error, so use default color
+                    else if (color == NON) color = ezread.happycolor;  // use the good news color
                 }
                 now >>= 1;
                 was >>= 1;

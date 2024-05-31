@@ -539,8 +539,7 @@ class EZReadConsole {  // never has any terminal solution been easier on the eye
     int usedlines = 0, last_drawn = -1, newest_content = -1, next_index = 0, linelength = 50, pix_margin = 2;
     int font_height = 6, highlighted_lines = 0;
     std::string textlines[num_lines], drawnow; // Ring buffer array
-    uint8_t linecolors[num_lines], defaultcolor = MYEL, usecolor; // 
-    // std::vector<std::string> textlines; // Ring buffer array
+    uint8_t linecolors[num_lines], defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
     int bufferSize = num_lines; // size_t bufferSize; // Size of the ring buffer
   private:
     LGFX* mylcd;
