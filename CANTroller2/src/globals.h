@@ -401,3 +401,60 @@ void kick_inactivity_timer(int source=0) {
 //     //     return true;
 //     // }
 // };
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <stdarg.h>
+// #include "Org_01.h"
+class EZReadConsole {
+  public:
+    bool dirty = true;
+    EZReadConsole() {}
+    static constexpr int num_lines = 24;
+    std::string textlines[num_lines];
+    int newest_content = -1, next_index = 0;
+    uint8_t linecolors[num_lines];
+    int bufferSize = num_lines; // size_t bufferSize; // Size of the ring buffer
+    uint8_t defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
+  private:
+    std::string remove_nonprintable(const std::string& victim) {
+        std::string result;
+        for (char ch : victim) {
+            if (isprint(static_cast<unsigned char>(ch))) result += ch;
+        }
+        return result;
+    }
+    void ezprintf_impl(uint8_t color, const char* format, va_list args) {  // this is not called directly but by one ots overloads below
+        char temp[100]; // Assuming maximum length of output string
+        vsnprintf(temp, sizeof(temp), format, args);
+        textlines[next_index] = remove_nonprintable(std::string(temp)); // Store formatted output into buffer
+        linecolors[next_index] = color;
+        newest_content = next_index;
+        ++next_index %= bufferSize; // Update next insertion index
+        dirty = true;
+    }
+  public:
+    void setup() {
+        std::string blank = "";
+        for (int i=0; i<num_lines; i++) {
+            // linecolors[i] = MGRY;
+            this->ezprintf("%s", blank.c_str());
+            linecolors[i] = MYEL;
+        }
+        ezprintf("welcome to EZ-Read console");
+        dirty = true;
+    }
+    void ezprintf(const char* format, ...) {  // for if we're called with same arguments as printf would take
+        va_list args;
+        va_start(args, format);
+        ezprintf_impl(defaultcolor, format, args);  // Use default color
+        va_end(args);
+    }
+    void ezprintf(uint8_t color, const char* format, ...) {  // otherwise you can insert a custom color as the first argument
+        va_list args;
+        va_start(args, format);
+        ezprintf_impl(color, format, args);  // Use provided color
+        va_end(args);
+    }
+};
+static EZReadConsole ezread;

@@ -917,6 +917,7 @@ class RCChannel : public Sensor {  // class for each channel of the hotrc
   protected:
     virtual float read_sensor() {
         // return new_native;  // too-short pulse times are presumably bounces and are ignored, keeping the existing native value
+        return NAN;
     }
   public:
     RCChannel(int arg_pin) : Sensor(arg_pin) {

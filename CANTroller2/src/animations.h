@@ -526,52 +526,17 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
     }
 };
-#include <iostream>
-#include <string>
-#include <sstream>
-#include <stdarg.h>
-// #include "Org_01.h"
-class EZReadConsole {  // never has any terminal solution been easier on the eyes
+class EZReadDrawer {  // never has any terminal solution been easier on the eyes
   public:
     bool dirty = true;
-    static constexpr int num_lines = 24;
-    // std::string textlines[num_lines];
-    int usedlines = 0, last_drawn = -1, newest_content = -1, next_index = 0, linelength = 50, pix_margin = 2;
-    int font_height = 6, highlighted_lines = 0;
-    std::string textlines[num_lines], drawnow; // Ring buffer array
-    uint8_t linecolors[num_lines], defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
-    int bufferSize = num_lines; // size_t bufferSize; // Size of the ring buffer
+    int pix_margin = 2;
+    int font_height = 6, linelength;
+    std::string drawnow; // Ring buffer array
   private:
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
     viewport* vp;
-    Timer messagetimer{1000000};  // messages delivered within this close of each other will get highlighted together
-    // size_t nextIndex = 0; // Index for the next insertion
-    // Function to retrieve the stored strings
-    std::string getBufferElement(int index) { // size_t 
-        if (index < bufferSize) {
-            return textlines[index];
-        } else {
-            return ""; // Return empty string if index is out of range
-        }
-    }
-    std::string remove_nonprintable(const std::string& victim) {
-        std::string result;
-        for (char ch : victim) {
-            if (isprint(static_cast<unsigned char>(ch))) result += ch;
-        }
-        return result;
-    }
-    void dprintf_impl(uint8_t color, const char* format, va_list args) {  // this is not called directly but by one ots overloads below
-        if (messagetimer.expireset()) highlighted_lines = next_index;  // mark the target index as 1st to be highlighted
-        char temp[100]; // Assuming maximum length of output string
-        vsnprintf(temp, sizeof(temp), format, args);
-        textlines[next_index] = remove_nonprintable(std::string(temp)); // Store formatted output into buffer
-        linecolors[next_index] = color;
-        newest_content = next_index;
-        ++next_index %= bufferSize; // Update next insertion index
-        dirty = true;
-    }
+    EZReadConsole* ez;
     int chars_to_fit_pix(LGFX_Sprite* spr, std::string& str, int pix) {
         int totalwidth = 0, charcount = 0;
         for (size_t i = 0; i < str.length(); ++i) {
@@ -588,61 +553,42 @@ class EZReadConsole {  // never has any terminal solution been easier on the eye
         // int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
         spr->setFont(&fonts::Font0);  // spr->setFont(&fonts::Org_01);
         spr->setTextDatum(textdatum_t::top_left);
-        spr->setTextColor(linecolors[newest_content]);
-        std::string nowline = textlines[newest_content];
+        spr->setTextColor(ez->linecolors[ez->newest_content]);
+        std::string nowline = ez->textlines[ez->newest_content];
         int chopit = chars_to_fit_pix(spr, nowline, vp->w);
         bool toobig = (chopit < nowline.length());
         if (toobig) {
             spr->setCursor(vp->x + pix_margin, vp->y + vp->h - 18);
-            nowline = textlines[newest_content].substr(0, chopit);
+            nowline = ez->textlines[ez->newest_content].substr(0, chopit);
             spr->print(nowline.c_str());
-            nowline = textlines[newest_content].substr(chopit);
+            nowline = ez->textlines[ez->newest_content].substr(chopit);
         }
         spr->setCursor(vp->x + pix_margin, vp->y + vp->h - 9);
         spr->print(nowline.c_str());
         int bottom_extent = vp->y + vp->h - 9 * (1 + (int)toobig);
         // spr->drawFastHLine(vp->x + 3, bottom_extent, vp->w - 6, LGRY);  // separator for the newest line at the bottom will be printed larger and span 2 lines
         spr->setFont(&fonts::TomThumb);
-        for (int line=1; line<num_lines; line++) {
-            int backindex = (newest_content + bufferSize - line) % bufferSize;
+        for (int line=1; line<ez->num_lines; line++) {
+            int backindex = (ez->newest_content + ez->bufferSize - line) % ez->bufferSize;
             spr->setCursor(vp->x + pix_margin, bottom_extent - line * (font_height + pix_margin));
             // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
-            int strsize = std::min((int)linelength, (int)textlines[backindex].length());
-            spr->setTextColor(linecolors[backindex]);
-            spr->print(textlines[backindex].c_str());
+            int strsize = std::min((int)linelength, (int)ez->textlines[backindex].length());
+            spr->setTextColor(ez->linecolors[backindex]);
+            spr->print(ez->textlines[backindex].c_str());
         }
         dirty = false;
     }
   public:
-    void dprintf(const char* format, ...) {  // for if we're called with same arguments as printf would take
-        va_list args;
-        va_start(args, format);
-        dprintf_impl(defaultcolor, format, args);  // Use default color
-        va_end(args);
-    }
-    void dprintf(uint8_t color, const char* format, ...) {  // otherwise you can insert a custom color as the first argument
-        va_list args;
-        va_start(args, format);
-        dprintf_impl(color, format, args);  // Use provided color
-        va_end(args);
-    }
     void setup(viewport* _vp) {
+        ez->setup();
         vp = _vp;
-        std::string blank = "";
-        for (int i=0; i<num_lines; i++) {
-            // linecolors[i] = MGRY;
-            this->dprintf("%s", blank.c_str());
-            linecolors[i] = MYEL;
-        }
         linelength = (int)(vp->w / disp_font_width);
-        dprintf("welcome to EZ-Read console");
-        dirty = true;
     }
     void update(LGFX_Sprite* spr, bool force=false) {
-        if (dirty || force) draw(spr);
-        dirty = false;
+        if (dirty || force || ez->dirty) draw(spr);
+        dirty = ez->dirty = false;
     }
-    EZReadConsole() {}
+    EZReadDrawer(EZReadConsole* _ez) : ez(_ez) {}
 };
 class PanelAppManager {
   private:
@@ -664,10 +610,10 @@ class PanelAppManager {
     bool simulating_last = false, mule_drawn = false, dirty = true;
     int ui_context_last = MuleChassisUI;
   public:
-    EZReadConsole* ezread; // Initialize serial buffer with size 5
+    EZReadDrawer* ezdraw; // Initialize serial buffer with size 5
     std::uint32_t sec, psec, _width, _height, _myfps = 0, frame_count = 0;
     bool anim_reset_request = false;
-    PanelAppManager(EZReadConsole* _ez) : ezread(_ez) {}
+    PanelAppManager(EZReadDrawer* _ez) : ezdraw(_ez) {}
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
@@ -683,7 +629,7 @@ class PanelAppManager {
         Serial.printf(" screensavers & diag console .. ");
         eSaver.setup(&framebuf[flip], &vp);
         cSaver.setup(&framebuf[flip], &vp);
-        ezread->setup(&vp);
+        ezdraw->setup(&vp);
         Serial.printf("set up\n");
     }
     void reset() {
@@ -780,7 +726,7 @@ class PanelAppManager {
         if (dirty) {
             spr->fillSprite(BLK);
             mule_drawn = false;
-            ezread->dirty = true;
+            ezdraw->dirty = true;
         }
         if (ui_context == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             // mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
@@ -797,7 +743,7 @@ class PanelAppManager {
             if (!still_running) change_saver();
         }
         else if (ui_context == EZReadUI) {
-            ezread->update(spr);
+            ezdraw->update(spr);
         }
         else if (ui_context == MuleChassisUI) {
             if (!mule_drawn) {

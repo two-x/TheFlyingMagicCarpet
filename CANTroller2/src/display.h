@@ -85,8 +85,8 @@ static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for excepti
     { 0x30, 0x48, 0x48, 0x30, 0x00, 0x10, 0x7c, 0x12, 0x04, 0x00, 0x02, 0x7f, 0x00, 0x3e, 0x51, 0x49, 0x3e, },  // of 10
 };  // These bitmaps are in the same format as the idiot light bitmaps, described in neopixel.h
 //  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
-EZReadConsole ezread;
-PanelAppManager panel(&ezread);
+static EZReadDrawer ezdraw(&ezread);
+static PanelAppManager panel(&ezdraw);
 volatile float fps = 0.0;
 volatile bool is_pushing = 0;
 volatile bool is_drawing = 0;

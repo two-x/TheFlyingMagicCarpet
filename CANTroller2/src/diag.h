@@ -150,11 +150,11 @@ class DiagRuntime {
                 if (report_error_changes) {
                     if (err_sens[i][j] && !err_last[i][j]) {
                         Serial.printf("!diag: %s %s err\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
-                        // diagconsole.dprintf(SALM, "! %s %s err\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
+                        // ezread.ezprintf(ezread.sadcolor, "! %s %s err\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
                     }
                     else if (!err_sens[i][j] && err_last[i][j]) {
                         Serial.printf("!diag: %s %s ok\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
-                        // diagconsole.dprintf(LGRN, "- %s %s ok\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
+                        // ezread.ezprintf(ezread.happycolor, "- %s %s ok\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
                     }
                 }
                 err_last[i][j] = err_sens[i][j];
