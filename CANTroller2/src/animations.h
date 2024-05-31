@@ -255,7 +255,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     int wormpos[2] = {0, 0}, wormvel[2] = {0, 0}, wormsign[2] = {1, 1}, wormd[2] = {20, 20};
     int shifter = 2, wormdmin = 8, wormdmax = 50, wormvelmax = 512, wormsat = 128;
     uint32_t boxsize[2], huebase = 0;
-    int sprsize[2], rotate = -1, scaler = 1, season = 0, numseasons = 4;
+    int sprsize[2], rotate = -1, scaler = 1, season = 0, last_season = 0, numseasons = 4;
     int point[2], plast[2], er[2], erpos_max[2], wormstripe = 2;
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, now = 0;
@@ -266,7 +266,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 200, shape = rn(Rotate), pensatdir = 1;
     static constexpr uint32_t saver_cycletime_us = 18000000;
     Timer saverCycleTimer, pentimer = Timer(70000), lucktimer, seasontimer;
-    Timer wormmovetimer = Timer(20000), wormtimer = Timer(1000000), wormstripetimer = Timer(2850000);
+    Timer wormmovetimer = Timer(20000), wormtimer = Timer(1000000), extraeffectstimer = Timer(2850000);
     bool saver_lotto = false, has_eraser = true;
  public:
     EraserSaver() {}
@@ -312,6 +312,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             if (cycle == 0) change_pattern(-1);
             saverCycleTimer.set((saver_cycletime_us / ((cycle == 2) ? 5 : 1)) << (shape == Worm));
         }
+        last_season = season;
         if (seasontimer.expireset()) {
             ++season %= numseasons;
             seasontimer.set(2000000 * (1 + rn(4)));
@@ -417,10 +418,31 @@ class EraserSaver {  // draws colorful patterns to exercise
                     sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler + edge, c2);
             }
             else if (rotate == Dots) {
+                static bool punchdelay;
+                static bool was_eraser;
                 uint8_t sat = (30 * season) + rn(256 - 30 * season);
-                int bigger = 1 + rn(3);
-                for (int star = 0; star < 12; star++)
-                    sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (2 + rn(1 + bigger * season)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
+                if (season == 3) {
+                    was_eraser = has_eraser;
+                    has_eraser = false;
+                }
+                if (season == 0 && last_season == 3) {  // on new years we slam them with a big punch
+                    extraeffectstimer.reset();
+                    punchdelay = true;
+                    sprite->fillCircle((vp->w >> 1) + vp->x, (vp->h >> 1) + vp->y, (int)((float)std::min(vp->h, vp->w) * 0.38), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
+                }
+                else if (punchdelay) {
+                    if (extraeffectstimer.expired()) {
+                        season = last_season = 0;
+                        punchdelay = false;
+                        has_eraser = was_eraser;
+                        seasontimer.reset();
+                    }
+                }
+                else {
+                    int bigger = 1 + rn(3);
+                    for (int star = 0; star < 12; star++)
+                        sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (2 + rn(1 + bigger * season)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
+                }
             }
             else if (rotate == Boxes) {
                 boxrad = 2 + rn(2 + 4 * season);
@@ -466,9 +488,9 @@ class EraserSaver {  // draws colorful patterns to exercise
                 // uint8_t sat = spothue >> 8;
                 // uint8_t brt = 129 + 42 * (1 + std::abs(season-1));
                 uint8_t c = (!wormstripe) ? BLK : pencolor;
-                if (wormstripetimer.expired()) {
+                if (extraeffectstimer.expired()) {
                     ++wormstripe %= 2;
-                    wormstripetimer.set(300000 * ((!wormstripe) ? 1 : 4));
+                    extraeffectstimer.set(300000 * ((!wormstripe) ? 1 : 4));
                 }
                 // if ((spothue >> 5) & 3 == 3) {
                 //     if (season == 3) c = BLK;
