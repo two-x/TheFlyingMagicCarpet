@@ -196,10 +196,10 @@ class Device {
 };
 
 
-enum class TransDir : uint8_t { REV=0, FWD=1 }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
-enum TransType { ActuatorType, SensorType, NumTransType }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
+enum class TransDir : int { REV=0, FWD=1, NumTransDir=2 }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
+enum TransType { ActuatorType=0, SensorType=1, NumTransType=2 }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
 std::string transtypecard[NumTransType] = { "actuator", "sensor" };
-// std::string transdircard[NumTransDir] = { "reverse", "forward" };
+std::string transdircard[(int)TransDir::NumTransDir] = { "rev", "fwd" };
 
 // Transducer class
 // Device::Transducer is a base class for any system devices that convert real-world values <--> signals in either direction. it has a "native"
@@ -369,6 +369,8 @@ class Transducer : public Device {
     float* ptr() { return _si.ptr(); }
     float absmin() { return _si.min(); }
     float absmax() { return _si.max(); }
+    float* absmin_ptr() { return _si.min_ptr(); }
+    float* absmax_ptr() { return _si.max_ptr(); }
     float opmin() { return _opmin; }
     float opmax() { return _opmax; }
     float* opmin_ptr() { return &_opmin; }
@@ -1008,7 +1010,6 @@ class Simulator {
         for (uint8_t sensor = (uint8_t)sens::none + 1; sensor < (uint8_t)sens::NUM_SENSORS; sensor++) set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
         set_potmap(); // set initial pot map
     }  // syspower, ignition removed, as they are not sensors or even inputs
-
     void updateSimulationStatus(bool enableSimulation) {
         // If the simulation status hasn't changed, there's nothing to do
         if (_enabled == enableSimulation) return;
@@ -1070,10 +1071,8 @@ class Simulator {
     bool touchable(sens arg_sensor) {
         return can_sim(arg_sensor) && (sources[static_cast<int>(arg_sensor)] == static_cast<int>(src::TOUCH));
     }
-    // set simulatability status for a component
-    void set_can_sim(sens arg_sensor, int32_t can_sim) { set_can_sim(arg_sensor, (can_sim > 0)); }  // allows interpreting -1 as 0, convenient for our tuner etc.
-    
-    void set_can_sim(sens arg_sensor, bool can_sim) {
+  private:
+    void set_can_sim_nosave(sens arg_sensor, bool can_sim) {  // set a device so simulator will include it when enabled. does not write to flash
         auto kv = _devices.find(arg_sensor); // look for component
         if (kv != _devices.end()) { // if an entry for this component already exists, check if the new simulatability status is different from the old
             bool old_can_sim = std::get<0>(kv->second);
@@ -1099,6 +1098,27 @@ class Simulator {
         }
         else {
             _devices[arg_sensor] = simulable_t(can_sim, nullptr, src::UNDEF); // add a new entry with the simulatability status for this component
+        }
+    }
+  public:
+    void set_can_sim(sens arg_sensor, bool can_sim) {  // this wrapper function sets a device as able to be simulated, then store to flash
+        set_can_sim_nosave(arg_sensor, can_sim);  // set the device simulatability status
+        save_cansim();  // re-save can-sim status word to flash (makes setting permanent across boots)
+    }
+    void set_can_sim(sens arg_sensor, int can_sim) { 
+        set_can_sim(arg_sensor, (can_sim > 0));  // allows interpreting -1 as 0, convenient for our tuner etc.
+    }
+    void save_cansim() {  // compress can_sim status of all devices into a 32 bit int, and save it to flash
+        uint32_t simword = 0;
+        for (int s=1; s<(int)sens::NUM_SENSORS; s++) {
+            simword = simword | ((uint32_t)can_sim((sens)s) << s);
+        }
+        _myprefs->putUInt("cansim", simword);
+    }
+    void recall_cansim() {  // pull 32 bit int containing can_sim status of all devices from previous flash save, and set all devices accordingly
+        uint32_t simword = _myprefs->getUInt("cansim", 0);
+        for (int s=1; s<(int)sens::NUM_SENSORS; s++) {
+            set_can_sim_nosave((sens)s, (bool)((simword >> s) & 1));
         }
     }
     // set the component to be overridden by the pot (the pot can only override one component at a time)

@@ -189,7 +189,7 @@ float maf_gps = 0;                      // manifold mass airflow in grams per se
 uint16_t heartbeat_override_color = 0x0000;
 bool nowtouch = false;
 bool captouch = true;
-float loop_avg_us;
+float loop_avg_us, loop_peak_us, loopfreq_hz, uptime_min;
 bool sensidiots[11];
 bool web_disabled = false;
 int ui_context = EZReadUI;
@@ -331,7 +331,7 @@ const uint8_t BLU  = 0x03;  // blue (B element full on)
 const uint8_t MGT  = 0xe2;  // magenta (RB elements full on)
 const uint8_t DRED = 0x80;  // dark red
 const uint8_t BORG = 0xe8;  // blood orange (very reddish orange)
-const uint8_t SALM = 0xc9;  // muted salmon
+const uint8_t SALM = 0xe9;  // salmon (0xc9 is more muted)
 const uint8_t BRN  = 0x88;  // dark orange aka brown
 const uint8_t DBRN = 0x44;  // dark brown
 const uint8_t ORG  = 0xf0;  // orange

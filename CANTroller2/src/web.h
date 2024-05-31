@@ -48,7 +48,7 @@ class WebManager {  // just a useless dummy version for code compatibility
   private:
     FileSystem fs;
   public:
-    WebManager(LoopTimer* unused) {}
+    WebManager() {}
     void setup() {
         fs.setup();
         printf("Wifi/Web features are disabled..\n");
@@ -159,11 +159,9 @@ class Web {
     WebSocketsServer socket;
     Timer socket_timer;
     uint32_t socket_refresh_us = 1000000, dumdum = 1;
-    LoopTimer* looptimer;
   public:
     Web() : webserver(80), socket(81) {}
-    void setup(LoopTimer* _lt) {
-        looptimer = _lt;
+    void setup() {
         printf("Web services..\n");
         webserver.on("/tester", HTTP_GET, [](AsyncWebServerRequest *request){
             request->send(200, "text/plain", "Hello, tester");
@@ -200,7 +198,7 @@ class Web {
             object["rand1"] = random(100);                    // write data into the JSON object -> I used "rand1" and "rand2" here, but you can use anything else
             object["rand2"] = random(100);
             object["loopavg"] = (int32_t)(loop_avg_us);                    // write data into the JSON object -> I used "rand1" and "rand2" here, but you can use anything else
-            object["looppeak"] = looptimer->loop_peak_us;
+            object["looppeak"] = (int32_t)loop_peak_us;
             serializeJson(doc, jsonString);                   // convert JSON object to string
             // Serial.println(jsonString);                       // print JSON string to console for debug purposes (you can comment this out)
             socket.broadcastTXT(jsonString);               // send JSON string to clients
@@ -210,17 +208,16 @@ class Web {
 class WebManager {
   private:
     bool web_started = false;
-    LoopTimer* looptimer;
   public:
     FileSystem fs;
     AccessPoint wifi;
     Web server;
-    WebManager(LoopTimer* _lt) : looptimer(_lt) {}
+    WebManager() {}
     void setup() {
         if (!wifi_web_supported) return;
         wifi.setup();
         fs.setup();
-        server.setup(looptimer);
+        server.setup();
         web_started = true;
     }
     String processor(const String &var) {

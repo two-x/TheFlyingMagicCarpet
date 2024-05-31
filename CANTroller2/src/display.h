@@ -16,7 +16,7 @@
 #define disp_datapage_units_x 103        
 #define disp_bargraphs_x 122
 #define disp_datapage_title_x 83
-uint8_t colorcard[NUM_RUNMODES] = { MGT, WHT, RED, ORG, YEL, GRN, TEAL, PUR };
+uint8_t colorcard[NUM_RUNMODES] = { MGT, PUR, RED, ORG, YEL, GRN, TEAL, WHT };
 std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
@@ -612,13 +612,13 @@ class Display {
             if (i <= neo->neopixelsAvailable()) {
                 if (idiots->val(i) != idiots->last[i]) neo->setBoolState(i, idiots->val(i));
             }
-            if (i == LOST || i == RANGE) {
-                if (diag.most_critical_last[i] != diag.most_critical_sensor[i]) {
-                    if (diag.most_critical_sensor[i] == _None) neo->setflash((int)i, 0);
-                    else neo->setflash((int)i, diag.most_critical_sensor[i] + 1, 2, 6, 1, 0);
-                }
-                diag.most_critical_last[i] = diag.most_critical_sensor[i];
-            }
+            // if (i == LOST || i == RANGE) {
+            //     if (diag.most_critical_last[i] != diag.most_critical_sensor[i]) {
+            //         if (diag.most_critical_sensor[i] == _None) neo->setflash((int)i, 0);
+            //         else neo->setflash((int)i, diag.most_critical_sensor[i] + 1, 2, 6, 1, 0);
+            //     }
+            //     diag.most_critical_last[i] = diag.most_critical_sensor[i];
+            // }
             if (force || (idiots->val(i) ^ idiots->last[i])) {
                 draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + 2) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int)(i / idiots->row_count));
             }
@@ -807,7 +807,7 @@ class Display {
             draw_temperature(loc::BRAKE, 15);
             draw_dynamic(16, touch->touch_pt(0), 0, disp_width_pix);
             draw_dynamic(17, touch->touch_pt(1), 0, disp_height_pix);
-            draw_dynamic(18, looptimer.uptime());
+            draw_dynamic(18, uptime_min);
             for (int line=19; line<=21; line++) draw_eraseval(line);
             draw_truth(22, dont_take_temperatures, 2);
             draw_truth(23, web_disabled, 2);
@@ -827,9 +827,9 @@ class Display {
             draw_truth(23, cal_gasmode, 0);
         }
         else if (datapage == PG_UI) {
-            draw_dynamic(9, (int)loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
-            draw_dynamic(10, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
-            draw_dynamic(11, (int)looptimer.loopfreq_hz, 0, 4000);
+            draw_dynamic(9, loop_avg_us);
+            draw_dynamic(10, loop_peak_us);
+            draw_dynamic(11, loopfreq_hz);
             draw_dynamic(12, fps, 0.0f, 600.0f);
             // draw_dynamic(13, drawclock, 0, refresh_limit);
             // draw_dynamic(14, pushclock, 0, refresh_limit);
