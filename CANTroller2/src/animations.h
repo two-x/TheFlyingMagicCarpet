@@ -401,11 +401,11 @@ class EraserSaver {  // draws colorful patterns to exercise
             else if (rotate == Rings) {
                 int d = 6 + rn(45);
                 uint8_t sat, brt, c, c2;
-                uint16_t hue = spothue + 32768 * rn(2);
+                uint16_t hue = spothue + 32768 * rn(2) + rn(1500);
                 sat = 255 - ((uint8_t)(spothue >> (8+season)));  // + rn(63) 
                 brt = 175 + rn(56);
-                if (season == 0) { sat = 100; brt = 200; }
-                if (season == 3) { sat = 255; brt = 255; }
+                if (season == 0) { sat = 100 + 50 * rn(2); brt = 200; }
+                if (season == 3) { sat = 175 + 75 * rn(2); brt = 255; }
                 c = hsv_to_rgb<uint8_t>(hue, sat, brt);
                 c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
                 // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
@@ -426,7 +426,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                     has_eraser = false;
                 }
                 if (season == 0 && last_season == 3) {  // on new years we slam them with a big punch
-                    extraeffectstimer.reset();
+                    extraeffectstimer.set(1750000);
                     punchdelay = true;
                     sprite->fillCircle((vp->w >> 1) + vp->x, (vp->h >> 1) + vp->y, (int)((float)std::min(vp->h, vp->w) * 0.38), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
                 }
@@ -464,19 +464,27 @@ class EraserSaver {  // draws colorful patterns to exercise
                 sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, rando_color());  // Change colors as needed
             }
             else if (rotate == Ascii) {
+                uint16_t hue;
+                uint8_t sat;
                 sprite->setTextSize(1);
                 sprite->setTextDatum(textdatum_t::middle_center);
                 sprite->setFont(&fonts::Font4);
                 for (int star = 0; star < 4; star++) {
                     point[HORZ] = rn(vp->w);
                     point[VERT] = rn(vp->h);
-                    uint16_t hue = point[VERT] * 65535 / vp->h;
-                    uint8_t sat = point[HORZ] * 255 / vp->w;
+                    if (season == 0 || season == 4) {
+                        hue = (vp->h * (int)(season > 1)) - point[VERT] * 65535 / vp->h;
+                        sat = (vp->w * (int)(season == 1 || season == 3)) - point[HORZ] * 255 / vp->w;
+                    }
+                    else {
+                        hue = (vp->w * (int)(season == 0 || season == 2)) - point[HORZ] * 65535 / vp->w;
+                        sat = (vp->h * (int)(season < 1)) - point[VERT] * 255 / vp->h;
+                    }
                     String letter = (String)((char)(0x21 + rn(0x5d)));
-                    uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, 100 + 100 * (spothue < (32767 / (season+1))) + rn(56));
+                    uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue < (32767 / (season+1))) + rn(56));
                     sprite->drawString(letter, point[HORZ]+1 + vp->x, point[VERT]+1 + vp->y);
                     sprite->drawString(letter, point[HORZ]-1 + vp->x, point[VERT]-1 + vp->y);
-                    sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 100 + 100 * (spothue > 32767) + rn(56)));
+                    sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue > 32767) + rn(56)));
                     sprite->drawString(letter, point[HORZ] + vp->x, point[VERT] + vp->y);
                     sprite->setTextColor(BLK);  // allows subliminal messaging
                 }
