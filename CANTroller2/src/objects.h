@@ -175,7 +175,7 @@ class ToggleSwitch {
     }
     void update() {
         if ((attached_sensor == sens::none) || !sim.simulating(attached_sensor)) readswpin();
-        if (last != val) kick_inactivity_timer(8);
+        if (last != val) kick_inactivity_timer(HUTogSw);
     }
 };
 class Ignition {

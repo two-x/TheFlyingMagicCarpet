@@ -358,17 +358,12 @@ const uint8_t NON  = 0x45;  // used as default value when color is unspecified
 
 // kick_inactivity_timer() function to call whenever human activity occurs, for accurate inactivity timeout feature
 //   integer argument encodes which source of human activity has kicked the timer. Here are the codes:
-//   0 = momentary button down (encoder sw or boot button)
-//   1 = momentary button up (encoder sw or boot button)
-//   2 = encoder turned
-//   3 = web interactivity
-//   4 = touchscreen touching
-//   5 = hotrc button presses
-//   6 = hotrc trigger or joystick off center
-//   7 = pot movement
-//   8 = toggle switch flipped (basic switch)
+enum human_activities { HUNone=-1, HUMomDown=0, HUMomUp=1, HUEncTurn=2, HUWeb=3, HUTouch=4, HURCTog=5, HURCTrig=6, HUPot=7, HUTogSw=8, HUNumActivities=9 };
+int last_activity = HUNone;
+std::string activitiescard[HUNumActivities] = { "msw_dn", "msw_up", "encodr", "web", "touch", "rc_btn", "rctrig", "pot", "tog_sw" };
 void kick_inactivity_timer(int source=0) {
     user_inactivity_timer.reset();  // evidence of user activity
+    last_activity = source;
     // Serial.printf("kick%d ", source);
 }
 

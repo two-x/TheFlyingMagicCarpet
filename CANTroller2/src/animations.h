@@ -248,7 +248,7 @@ class CollisionsSaver {
     void saver_touch(int, int) {};  // unused
 };
 class EraserSaver {  // draws colorful patterns to exercise
-    enum savershapes : int { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, Worm, Rotate, NumSaverShapes };
+    enum savershapes { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, Worm, Rotate, NumSaverShapes };
  private:
     LGFX_Sprite* sprite;
     viewport* vp;
@@ -318,6 +318,18 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         drawsprite();
         return shapes_done;
+    }
+    void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random, -3 for cycle backwards
+        ++shapes_done %= 5;
+        int last_pat = shape;
+        has_eraser = !rn(2);
+        if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
+        else {
+            if (newpat == -1) ++shape %= Worm;
+            if (newpat == -3) shape = (shape - 1 + NumSaverShapes) % Worm;
+            else if (newpat == -2) while (last_pat == shape) shape = rn(Rotate);
+            if (rn(25) == 13) shape = Rotate;
+        }
     }
   private:
     void drawsprite() {
@@ -513,17 +525,6 @@ class EraserSaver {  // draws colorful patterns to exercise
             sprite->setTextDatum(textdatum_t::top_left);
         }
         for (int axis = HORZ; axis <= VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
-    }
-    void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random
-        ++shapes_done %= 5;
-        int last_pat = shape;
-        has_eraser = !rn(2);
-        if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
-        else {
-            if (newpat == -1) ++shape %= Worm;
-            else if (newpat == -2) while (last_pat == shape) shape = rn(Rotate);
-            if (rn(25) == 13) shape = Rotate;
-        }
     }
 };
 class EZReadDrawer {  // never has any terminal solution been easier on the eyes
@@ -733,6 +734,10 @@ class PanelAppManager {
             if (nowsaver == Eraser) {
                 still_running = eSaver.update(spr, &vp);
                 if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
+                if (auto_saver_enabled) {
+                    int changeit = constrain(encoder.rotation(), -1, 1);
+                    if (changeit) eSaver.change_pattern(changeit - 2);
+                }
                 display_fps(spr);
             }
             else if (nowsaver == Collisions) {

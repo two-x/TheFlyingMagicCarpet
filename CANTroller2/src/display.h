@@ -53,12 +53,12 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, __________, __________, __________, __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " Touch X", " Touch Y", "  Uptime", __________, __________, __________, "No Temps", "StopWifi", },  // PG_TEMP
     { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", __________, __________, __________, __________, __________, __________, __________, "BlnkDemo", neo_bright, "NeoDesat", "PanelApp", },  // PG_UI
+    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", __________, __________, __________, __________, __________, __________, "BlnkDemo", neo_bright, "NeoDesat", "PanelApp", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, ______, "%",    "%",    },  // PG_RUN
     { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, ______, "mph",  "atm",  "atm",  "us",   "us",   },  // PG_JOY
-    { "adc",  "adc",  "in",   "in",   "pc",   "adc",  "psi",  "psi",  "pc",   ______, "psi",  "psi",  "in",   "in",   "in",   },  // PG_SENS
+    { "adc",  "adc",  "in",   "in",   "%",    "adc",  "psi",  "psi",  "%",    ______, "psi",  "psi",  "in",   "in",   "in",   },  // PG_SENS
     { "ms",   "Hz",   "psi",  "ms",   "Hz",   "mph",  "mph",  "%",    "ms",   "ms",   "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    ______, ______, ______, ______, "%",    degree, degree, degreF, degreF, },  // PG_IDLE
@@ -68,7 +68,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, "pix",  "pix",  "min",  ______, ______, ______, b1nary, b1nary, },  // PG_TEMP
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us",   "us",   "Hz",   "fps",  ______, ______, ______, ______, ______, ______, ______, "eyes", "%",    "of10", scroll, },  // PG_UI
+    { "us",   "us",   "Hz",   "fps",  scroll, ______, ______, ______, ______, ______, ______, "eyes", "%",    "of10", scroll, },  // PG_UI
 };
 static std::string unitmapnames[11] = { "usps", "us", "rpms", scroll, b1nary, "%", "ohm", "eyes", "psin", degree, "of10" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for exceptions where some unit strings can't be well represented by any set of 3 font characters
@@ -831,10 +831,11 @@ class Display {
             draw_dynamic(10, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
             draw_dynamic(11, (int)looptimer.loopfreq_hz, 0, 4000);
             draw_dynamic(12, fps, 0.0f, 600.0f);
+            draw_asciiname(13, activitiescard[last_activity]);
             // draw_dynamic(13, drawclock, 0, refresh_limit);
             // draw_dynamic(14, pushclock, 0, refresh_limit);
             // draw_dynamic(15, idleclock, 0, refresh_limit);
-            for (int line=13; line<=19; line++) draw_eraseval(line);
+            for (int line=14; line<=19; line++) draw_eraseval(line);
             draw_truth(20, flashdemo, 0);
             draw_dynamic(21, neobright, 1.0, 100.0f, -1, 3);
             draw_dynamic(22, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);

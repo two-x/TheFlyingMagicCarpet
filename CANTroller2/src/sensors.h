@@ -49,7 +49,7 @@ class Potentiometer {
             _pc = constrain(_pc, _absmin, _absmax); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
             if (std::abs(_pc - _activity_ref) > _activity_margin_pc) {
                 // Serial.printf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
-                kick_inactivity_timer(7);  // evidence of user activity
+                kick_inactivity_timer(HUPot);  // evidence of user activity
                 _activity_ref = _pc;
                 // Serial.printf("r2:%lf\n", _activity_ref);
             }
@@ -1343,7 +1343,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
             if ((sw[chan] != sw[chan-2]) && !_radiolost) {
                 _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
-                kick_inactivity_timer(5);  // evidence of user activity
+                kick_inactivity_timer(HURCTog);  // evidence of user activity
             }
             sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
         }
@@ -1369,7 +1369,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             pc[axis][RAW] = us_to_pc(axis, us[axis][RAW], false);
             pc[axis][FILT] = us_to_pc(axis, us[axis][FILT], true);
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
-            else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(6);  // indicate evidence of user activity
+            else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(HURCTrig);  // indicate evidence of user activity
         }
         for (int8_t axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
     }

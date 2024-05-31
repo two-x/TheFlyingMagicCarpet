@@ -28,7 +28,7 @@ class MomentaryButton {
 
         if (!myread) {  // if encoder sw is being pressed (switch is active low)
             if (!now) {  // if the press just occurred
-                if (activity_timer_keepalive) kick_inactivity_timer(0);  // evidence of user activity
+                if (activity_timer_keepalive) kick_inactivity_timer(HUMomDown);  // evidence of user activity
                 _longPressTimer.reset();  // start a press timer
                 _timer_active = true;  // flag to indicate timing for a possible long press
             }
@@ -41,7 +41,7 @@ class MomentaryButton {
         }
         else {  // if encoder sw is not being pressed
             if (now) {
-                if (activity_timer_keepalive) kick_inactivity_timer(1);  // evidence of user activity
+                if (activity_timer_keepalive) kick_inactivity_timer(HUMomUp);  // evidence of user activity
                 if(!_suppress_click) _sw_action = swSHORT;  // if the switch was just released, a short press occurred, which must be handled
             }
             _timer_active = false;  // Allows detection of next long press event
@@ -174,7 +174,7 @@ class Encoder {
     int32_t rotation() {  // Returns detents spun since last call, accelerated by spin rate or not
         int32_t d = 0;
         if (_delta) {  // Now handle any new rotations
-            kick_inactivity_timer(2);  // evidence of user activity
+            kick_inactivity_timer(HUEncTurn);  // evidence of user activity
             if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
                 // if (accel) {
                 _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
@@ -258,7 +258,7 @@ class Touchscreen {
             // Serial.printf("n%d rx:%d ry:%d ", nowtouch, touch_read[0], touch_read[1]);
             nowtouch = (count > 0);
             if (nowtouch) {
-                kick_inactivity_timer(4);  // evidence of user activity
+                kick_inactivity_timer(HUTouch);  // evidence of user activity
                 for (int axis=0; axis<=1; axis++) {
                     // if (captouch) tft_touch[axis] = touch_read[axis];  // disp_width - 1 - touch_read[xx];
                     tft_touch[axis] = map(touch_read[axis], corners[captouch][axis][tsmin], corners[captouch][axis][tsmax], 0, disp_size[axis]);
