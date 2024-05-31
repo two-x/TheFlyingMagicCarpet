@@ -51,9 +51,9 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "MotrMode", "Feedback", brAk"Posn", "Pn|PrErr", "Pres Tgt", "Posn Tgt", "HybrdTgt", "OutRatio", "  P Term", "  I Term", "  D Term", __________, "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "MotrMode", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, __________, __________, __________, "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, __________, __________, __________, __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
-    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " Touch X", " Touch Y", "  Uptime", __________, __________, __________, "No Temps", "StopWifi", },  // PG_TEMP
+    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, __________, "No Temps", "StopWifi", },  // PG_TEMP
     { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", __________, __________, __________, __________, __________, __________, "BlnkDemo", neo_bright, "NeoDesat", "PanelApp", },  // PG_UI
+    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", " Touch X", " Touch Y", "  Uptime", __________, __________, __________, "BlnkDemo", neo_bright, "NeoDesat", "PanelApp", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, ______, "%",    "%",    },  // PG_RUN
@@ -66,9 +66,9 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { scroll, scroll, "in",   "psin", "psin", "%",    "%",    "%",    "%",    "%",    "%",    ______, ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, ______, ______, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, degreF, "pix",  "pix",  "min",  ______, ______, ______, b1nary, b1nary, },  // PG_TEMP
+    { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, b1nary, b1nary, },  // PG_TEMP
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us",   "us",   "Hz",   "fps",  scroll, ______, ______, ______, ______, ______, ______, "eyes", "%",    "of10", scroll, },  // PG_UI
+    { "us",   "us",   "Hz",   "fps",  scroll, "pix",  "pix",  "min",  ______, ______, ______, "eyes", "%",    "of10", scroll, },  // PG_UI
 };
 static std::string unitmapnames[11] = { "usps", "us", "rpms", scroll, b1nary, "%", "ohm", "eyes", "psin", degree, "of10" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for exceptions where some unit strings can't be well represented by any set of 3 font characters
@@ -214,7 +214,6 @@ class Display {
         for (int row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
         for (int row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
         datapage = prefs.getUInt("dpage", PG_RUN);
-        disp_datapage_last = prefs.getUInt("dpage", PG_TEMP);
         init_framebuffers(disp_width_pix, disp_height_pix);
         panel.setup(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         sprptr = &framebuf[flip];
@@ -527,6 +526,7 @@ class Display {
         draw_string(disp_datapage_title_x, 0, pagecard[page], pagecard[disp_datapage_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
         disp_datapage_last = page;
         disp_datapage_dirty = false;
+        prefs.putUInt("dpage", (uint32_t)page);
     }
     void draw_selected_name(int tun_ctrl, int selected_val, int selected_last, int selected_last_last) {
         static int last_selected; 
@@ -805,10 +805,7 @@ class Display {
             draw_temperature(loc::WHEEL_RL, 13);
             draw_temperature(loc::WHEEL_RR, 14);
             draw_temperature(loc::BRAKE, 15);
-            draw_dynamic(16, touch->touch_pt(0), 0, disp_width_pix);
-            draw_dynamic(17, touch->touch_pt(1), 0, disp_height_pix);
-            draw_dynamic(18, looptimer.uptime());
-            for (int line=19; line<=21; line++) draw_eraseval(line);
+            for (int line=16; line<=21; line++) draw_eraseval(line);
             draw_truth(22, dont_take_temperatures, 2);
             draw_truth(23, web_disabled, 2);
         }
@@ -832,10 +829,13 @@ class Display {
             draw_dynamic(11, (int)looptimer.loopfreq_hz, 0, 4000);
             draw_dynamic(12, fps, 0.0f, 600.0f);
             draw_asciiname(13, activitiescard[last_activity]);
+            draw_dynamic(14, touch->touch_pt(0), 0, disp_width_pix);
+            draw_dynamic(15, touch->touch_pt(1), 0, disp_height_pix);
+            draw_dynamic(16, looptimer.uptime());
             // draw_dynamic(13, drawclock, 0, refresh_limit);
             // draw_dynamic(14, pushclock, 0, refresh_limit);
             // draw_dynamic(15, idleclock, 0, refresh_limit);
-            for (int line=14; line<=19; line++) draw_eraseval(line);
+            for (int line=17; line<=19; line++) draw_eraseval(line);
             draw_truth(20, flashdemo, 0);
             draw_dynamic(21, neobright, 1.0, 100.0f, -1, 3);
             draw_dynamic(22, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
@@ -1034,7 +1034,6 @@ class Tuner {
         if (datapage != datapage_last) {
             if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drßop back to select mode
             screen->disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
-            prefs.putUInt("dpage", datapage);
         }
         if (tunctrl == SELECT) {
             sel_val = constrain(sel_val, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes

@@ -210,9 +210,9 @@ class Touchscreen {
     int tlast_x, tlast_y;
     Timer touchHoldTimer{550000};  // Hold this long to count as a long press
     Timer touchAccelTimer{400000};
-    Timer touchDoublePressTimer{40000};  // Won't allow a new press within this long after an old press (prevent accidental double clicks)
+    Timer rejectiontimer{25000};  // Won't allow a new press within this long after an old press (prevent accidental double clicks)
     Timer touchSenseTimer{15000};  // touch chip can't respond faster than some time period
-    bool touchPrintEnabled = true;
+    bool touchPrintEnabled = true, rejectiontimer_active = false;
     unsigned long lastTouchPrintTime = 0;
     const unsigned long touchPrintInterval = 500; // Adjust this interval as needed (in milliseconds)
     enum touch_axis : int { xx, yy, zz };
@@ -256,7 +256,15 @@ class Touchscreen {
             uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
             // if (captouch) count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]), &(touch_read[zz]));
             // Serial.printf("n%d rx:%d ry:%d ", nowtouch, touch_read[0], touch_read[1]);
-            nowtouch = (count > 0);
+            bool touch_triggered = (count > 0);
+            if (touch_triggered) {  // this little bit of logic uses a timer to reject spurious short touches, which happen sometimes especially with the screen pressed against the box lid
+                if (!rejectiontimer_active) {
+                    rejectiontimer.reset();
+                    rejectiontimer_active = true;
+                }
+                else if (rejectiontimer.expired()) nowtouch = true;
+            }
+            else if (rejectiontimer_active) nowtouch = rejectiontimer_active = false;
             if (nowtouch) {
                 kick_inactivity_timer(HUTouch);  // evidence of user activity
                 for (int axis=0; axis<=1; axis++) {
@@ -283,7 +291,6 @@ class Touchscreen {
                 if (lasttouch) {
                     landed_coordinates_valid = false;
                     idelta = 0;  // Stop changing the value
-                    // touchDoublePressTimer.reset();  // Upon end of a touch, begin timer to reject any accidental double touches
                     tedit_exponent = 0;
                     tedit = (float)(1 << tedit_exponent); // Reset touch acceleration value to 1
                 }
