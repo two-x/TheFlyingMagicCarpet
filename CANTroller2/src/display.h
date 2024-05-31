@@ -824,10 +824,10 @@ class Display {
             draw_truth(23, cal_gasmode, 0);
         }
         else if (datapage == PG_UI) {
-            draw_dynamic(9, (int)loop_avg_us, looptimer.loop_scale_min_us, looptimer.loop_scale_avg_max_us);
-            draw_dynamic(10, looptimer.loop_peak_us, looptimer.loop_scale_min_us, looptimer.loop_scale_peak_max_us);
-            draw_dynamic(11, (int)looptimer.loopfreq_hz, 0, 4000);
-            draw_dynamic(12, fps, 0.0f, 600.0f);
+            draw_dynamic(9, (int)loop_avg_us, -1, -1, -1);
+            draw_dynamic(10, looptimer.loop_peak_us, -1, -1, -1);
+            draw_dynamic(11, (int)looptimer.loopfreq_hz, -1, -1, -1);
+            draw_dynamic(12, fps);
             draw_asciiname(13, activitiescard[last_activity]);
             draw_dynamic(14, touch->touch_pt(0), 0, disp_width_pix);
             draw_dynamic(15, touch->touch_pt(1), 0, disp_height_pix);

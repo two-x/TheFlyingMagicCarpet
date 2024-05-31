@@ -319,8 +319,12 @@ class EraserSaver {  // draws colorful patterns to exercise
         drawsprite();
         return shapes_done;
     }
-    void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random, -3 for cycle backwards
+    void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random, -3 for cycle backwards  // XX , -4 for autocycle (retains saver timeout)
+        // if (newpat == -4) {
         ++shapes_done %= 5;
+            // newpat = -1;
+        // }
+        // else shapes_done = 0;
         int last_pat = shape;
         has_eraser = !rn(2);
         if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
@@ -736,13 +740,18 @@ class PanelAppManager {
                 if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
                 if (auto_saver_enabled) {
                     int changeit = constrain(encoder.rotation(), -1, 1);
-                    if (changeit) eSaver.change_pattern(changeit - 2);
+                    if (changeit > 0) eSaver.change_pattern(-1);
+                    else if (changeit < 0) still_running = false;
                 }
                 display_fps(spr);
             }
             else if (nowsaver == Collisions) {
                 if (touched()) cSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
-                still_running = cSaver.update(spr, &vp);
+                if (auto_saver_enabled) {
+                    int changeit = constrain(encoder.rotation(), -1, 1);
+                    if (changeit < 0) still_running = false;
+                }
+                if (still_running) still_running = cSaver.update(spr, &vp);
                 display_fps(spr);
             }
             if (!still_running) change_saver();
