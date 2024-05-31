@@ -918,7 +918,9 @@ class RCChannel : public Sensor {  // class for each channel of the hotrc
     virtual float read_sensor() {
         // return new_native;  // too-short pulse times are presumably bounces and are ignored, keeping the existing native value
     }
+    float _dbsize_native;
   public:
+    float _cent_native, _dbbot, _dbtop, _dbbot_native, _dbtop_native;
     RCChannel(int arg_pin) : Sensor(arg_pin) {
         _long_name = "RC Channel";
         _short_name = "rcchan";
@@ -931,6 +933,88 @@ class RCChannel : public Sensor {  // class for each channel of the hotrc
         set_pin(_pin, INPUT);
         set_can_source(src::PIN, true);
         set_source(src::PIN);
+        conversion_method = OpLimMap;
+        _ema_alpha = 0.075;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+        set_abslims_native(880.0, 2080.0);
+        set_center_native(1500.0);
+        set_oplims(-100.0, 100.0);
+        set_dbsize_native(13.0);
+    }
+    void set_center_native(float argcent) {
+        _cent_native = argcent;
+        set_dbsize_native(_dbsize_native);  // recalc deadbands
+    }
+    void set_dbsize_native(float dbsize) {
+        _dbsize_native = dbsize;
+        _dbtop_native = _cent_native + _dbsize_native / 2.0;
+        _dbbot_native = _cent_native - _dbsize_native / 2.0;
+        _dbtop = from_native(_dbtop_native);
+        _dbbot = from_native(_dbbot_native);
+    }
+
+    float pc[NUM_AXES][NUM_VALUS];           // values range from -100% to 100% are all derived or auto-assigned
+    int32_t us[NUM_CHANS][NUM_VALUS] = {
+        {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+        { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+        { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+        { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+    float ema_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]
+    int32_t absmin_us = 880;
+    int32_t absmax_us = 2080;
+    int32_t deadband_us = 13;  // All [DBBOT] and [DBTOP] values above are derived from this by calling calc_params()
+    int32_t margin_us = 20;  // All [MARGIN] values above are derived from this by calling calc_params()
+    int32_t failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
+    int32_t failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
+    int32_t failsafe_pad_us = 10;
+  private:
+    Simulator* sim;
+    Potentiometer* pot;
+    static const uint32_t failsafe_timeout = 15000;
+
+
+
+  protected:
+    bool spike_signbit;
+    int32_t spike_length, this_delta, interpolated_slope, loopindex, previndex, spike_cliff[NUM_AXES];
+    int32_t spike_threshold = 6;
+    int32_t prespike_index = -1;
+    int32_t index[NUM_AXES] = { 1, 1 };  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
+    static const int32_t depth = 9;  // more depth will reject longer spikes at the expense of controller delay
+    int32_t raw_history[depth], filt_history[depth];  // Values before and after filtering.
+    int32_t spike_filter (uint8_t axis, int32_t new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
+        previndex = (depth + index - 1) % depth;  // previndex is where the incoming new value will be stored
+        this_delta = new_val - filt_history[previndex];  // Value change since last reading
+        if (std::abs(this_delta) > spike_cliff) {  // If new value is a cliff edge (start or end of a spike)
+            if (prespike_index == -1) {  // If this cliff edge is the start of a new spike
+                prespike_index = previndex;  // save index of last good value just before the cliff
+                spike_signbit = signbit(this_delta);  // Save the direction of the cliff
+            }
+            else if (spike_signbit == signbit(this_delta)) {  // If this cliff edge deepens an in-progress spike (or more likely the change is valid)
+                inject_interpolations(axis, previndex, filt_history[previndex]);  // Smoothly grade the values from before the last cliff to previous value
+                prespike_index = previndex;  // Consider this cliff edge the start of the spike instead
+            }
+            else {  // If this cliff edge is a recovery of an in-progress spike
+                inject_interpolations(axis, index, new_val);  // Fill in the spiked values with interpolated values
+                prespike_index = -1;  // Cancel the current spike
+            }
+        }
+        else if (prespike_index == index) {  // If a current spike lasted thru our whole buffer
+            inject_interpolations (axis, previndex, filt_history[previndex]);  // Smoothly grade the whole buffer
+            prespike_index = -1;  // Cancel the current spike
+        }
+        int32_t returnval = filt_history[index];  // Save the incumbent value at current index (oldest value) into buffer
+        filt_history[index] = new_val;
+        raw_history[index] = new_val;
+        ++(index) %= depth;  // Update index for next time
+        return returnval;  // Return the saved old value
+    }
+    void inject_interpolations(uint8_t axis, int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
+        spike_length = ((depth + endspike_index - prespike_index) % depth) - 1;  // Equal to the spiking values count plus one
+        if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
+        interpolated_slope = (endspike_val - filt_history[prespike_index]) / spike_length;
+        loopindex = 0;
+        while (++loopindex <= spike_length)
+            filt_history[(prespike_index + loopindex) % depth] = filt_history[prespike_index] + loopindex * interpolated_slope;
     }
 };
 class RCToggle : public RCChannel {};
