@@ -32,12 +32,13 @@ class DiagRuntime {
   public:
     // diag tunable values
     uint32_t err_margin_adc = 5;
-    uint16_t errstatus[NUM_ERR_TYPES] = { 0x00, 0x00, 0x00 };  // keeps current error status in efficient hex words
+    uint32_t errstatus[NUM_ERR_TYPES] = { 0x00, 0x00, 0x00 };  // keeps current error status in efficient hex words
     std::string err_type_card[NUM_ERR_TYPES] = { "Lost", "Rang", "Warn" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
     std::string err_sens_card[NumTelemetryFull+3] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA, None, and Hybrid tacked on the end.  access these names using ascii_name() function
-        "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HotRC", "Temps", "Other", "GPIO", 
-        "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4", "Batery", "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR",
-        "TmpWRL", "TmpWRR", "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
+        "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HotRC",
+        "Temps", "Other", "GPIO", "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4", "Batery",
+        "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR",
+        "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
         "NA", "None", "Hybrid",
     };
     std::string ascii_name(int sensor) {
@@ -62,8 +63,9 @@ class DiagRuntime {
 
     void setup() {
         for (int32_t i=0; i<NUM_ERR_TYPES; i++)
-            for (int32_t j=0; j<NumTelemetryFull; j++)
+            for (int32_t j=0; j<NumTelemetryFull; j++) {
                 err_sens[i][j] = err_last[i][j] = false; // Initialize sensor error flags to false
+            }
     }
     void update_status_words() {}
     void setflag(int device, int errtype, bool stat) {
@@ -87,13 +89,9 @@ class DiagRuntime {
 
             // Detect sensors disconnected or giving out-of-range readings.
             // TODO : The logic of this for each sensor should be moved to devices.h objects
-            setflag(_BrakeMotor, RANGE, brake->pc[OUT] < brake->pc[OPMIN] || brake->pc[OUT] > brake->pc[OPMAX]);
             setflag(_GasServo, RANGE, gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
-            setflag(_BrakeMotor, RANGE, steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
-            setflag(_BrakePosn, RANGE, brkpos->val() < brkpos->opmin() || brkpos->val() > brkpos->opmax());
-            setflag(_BrakePosn, LOST, brkpos->raw() < err_margin_adc);
-            setflag(_BrakePres, RANGE, pressure->val() < pressure->opmin() || pressure->val() > pressure->opmax());
-            setflag(_BrakePres, LOST, pressure->raw() < err_margin_adc);
+            setflag(_SteerMotor, RANGE, steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
+            BrakeFailure();
             setflag(_MuleBatt, RANGE, mulebatt->val() < mulebatt->opmin() || mulebatt->val() > mulebatt->opmax());
             HotRCFailure();
             setflag(_Ignition, LOST, !ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
@@ -101,8 +99,6 @@ class DiagRuntime {
             TachFailure();
             setflag(_Speedo, RANGE, speedo->val() < speedo->opmin() || speedo->val() > speedo->opmax());
             setflag(_Tach, RANGE, tach->val() < tach->opmin() || tach->val() > tach->opmax());
-            BrakeMotorFailure();
-
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LOWPOWER));
             set_sensorgroups();
             set_sensidiots();
@@ -174,11 +170,33 @@ class DiagRuntime {
             printf("\n");
         }
     }
-    void BrakeMotorFailure() {  // checks if any sensor the brake is expecting to use in its current mode are posting errors
+
+    // Brakes:   checks if any sensor the brake is expecting to use in its current mode are posting errors
+    void BrakeFailure() {  // checks if posn is not changing while pressure is changing and motor is moving (assuming not near max brake)
+        static float pressure_last_pc;
+        static float brkpos_last_pc;
+        static float motor_last_pc;
+        if ((std::abs(brake->pc[OUT]) > brake->pc[MARGIN]) && (std::abs(motor_last_pc) > brake->pc[MARGIN]) && (signbit(brake->pc[OUT]) == signbit(motor_last_pc))) {  // if brake motor is moving
+            if (pressure->pc() <= 80.0) {  // if not near the max pressure (where position changes very little)
+                setflag(_BrakePosn, LOST, ((std::abs(pressure->pc() - pressure_last_pc) > pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if pressure value is changing but position isn't, then set flag otherwise clear
+                setflag(_BrakePosn, WARN, (signbit(brkpos->pc()) != signbit(pressure->pc())) && (signbit(brkpos->pc()) != signbit(brake->pc[OUT])));  // if motor and pressure are consistent with moving one direction but position is changing the opposite way
+            }
+            if (brkpos->pc() >= 20.0) {  // if not near the min braking full extension (where pressure changes very little) 
+                setflag(_BrakePres, LOST, ((std::abs(brkpos->pc() - brkpos_last_pc) > brkpos->margin_pc()) && (std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc())));  // if position value is changing but pressure isn't, then set flag otherwise clear
+                setflag(_BrakePosn, WARN, (signbit(pressure->pc()) != signbit(brkpos->pc())) && (signbit(pressure->pc()) != signbit(brake->pc[OUT])));  // if motor and position are consistent with moving one direction but pressure is changing the opposite way
+            }
+            setflag(_BrakeMotor, LOST, ((std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if neither sensor is changing, set motor lost flag
+        }
+        setflag(_BrakeMotor, RANGE, brake->pc[OUT] < brake->pc[OPMIN] || brake->pc[OUT] > brake->pc[OPMAX]);
+        setflag(_BrakePosn, RANGE, (brkpos->pc() > 100.0) || (brkpos->pc() < 0.0));  // if position reading is outside oprange, set flag
+        setflag(_BrakePres, RANGE, (pressure->pc() > 100.0) || (pressure->pc() < 0.0));  // if pressure reading is outside oprange, set flag
         bool found_err = false;
         if ((brake->feedback != _BrakePres) && (err_sens[LOST][_BrakePosn] || err_sens[RANGE][_BrakePosn])) found_err = true;
         if ((brake->feedback != _BrakePosn) && (err_sens[LOST][_BrakePres] || err_sens[RANGE][_BrakePres])) found_err = true;
         setflag(_BrakeMotor, WARN, found_err);
+        pressure_last_pc = pressure->pc();
+        brkpos_last_pc = brkpos->pc();
+        motor_last_pc = brake->pc[OUT];
     }
     void SpeedoFailure() {  // checks if speedo isn't zero when stopped, or doesn't increase when we drive
         static bool gunning_it, gunning_last = true;

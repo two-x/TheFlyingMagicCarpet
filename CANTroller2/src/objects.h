@@ -397,10 +397,10 @@ void stop_console() {
     // ezread.ezprintf("welcome to EZ-Read Console");
 }
 void dump_errorcode_update() {
-    static uint16_t status_last[NUM_ERR_TYPES];
+    static uint32_t status_last[NUM_ERR_TYPES];
     bool do_print = false;
     uint8_t color = NON;
-    uint16_t now, was;
+    uint32_t now, was;
     int errdiffs = 0, errtotal = 0;
     for (int e=0; e<NUM_ERR_TYPES; e++) {
         if (diag.errstatus[e] != status_last[e]) {
@@ -427,8 +427,14 @@ void dump_errorcode_update() {
         }
         status_last[e] = diag.errstatus[e];
     }
-    if (color == NON) color = ezread.defaultcolor;
-    if (do_print) ezread.ezprintf(color, "codes L%04x R%04x W%04x  %d errs (%+d)", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], errtotal, errdiffs);
+    if (color == NON) {
+        color = ezread.defaultcolor;
+        if (!errdiffs) do_print = false;
+    }
+    if (do_print) {
+        ezread.ezprintf(color, "codes L%x R%x W%x  %d errs (%+d)", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], errtotal, errdiffs);
+        Serial.printf("codes L%x R%x W%x  %d errs (%+d)\n", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], errtotal, errdiffs);
+    }
 }
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);

@@ -98,7 +98,7 @@ enum telemetry_idiots {                              // list of transducers whic
     _Speedo=3, _Tach=4, _BrakePres=5, _BrakePosn=6,  // these transducers are sensors, we read from
     _HotRC=7, _Temps=8, _Other=9, _GPIO=10,          // these are actually groups of multiple sensors (see below)
     NumTelemetryIdiots=11,                           // size of the list of values with idiot lights
-};                        
+};
 enum telemetry_full {                                                                                 // complete list expanding sensor groups
     _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14,                                         // _HotRC sensor group
     _MuleBatt=15, _AirVelo=16, _MAP=17, _Pot=18,                                                      // _Other sensor group
