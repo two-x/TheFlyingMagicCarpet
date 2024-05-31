@@ -229,25 +229,6 @@ class Transducer : public Device {
     float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;
     TransDir _dir = TransDir::FWD;
     int conversion_method = LinearMath;  // the default method
-    
-    virtual float from_native(float arg_native) {  // these linear conversion functions change absolute native values to si and back - overwrite in child classes as needed
-        float ret = NAN;
-        if (conversion_method == AbsLimMap) ret = map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
-        else if (conversion_method == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
-        else if (conversion_method == LinearMath) ret = _boffset + _mfactor * arg_native; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
-        if (std::isnan(ret)) Serial.printf("Err: from_native unable to convert %lf (min %lf, max %lf)\n", arg_native, _native.min(), _native.max());
-        if (std::abs(ret) < float_zero) return 0.0;  // reject any stupidly small near-zero values
-        return ret;
-    }
-    virtual float to_native(float arg_si) {  // convert an absolute si value to native units
-        float ret = NAN;
-        if (conversion_method == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
-        else if (conversion_method == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
-        else if (conversion_method == LinearMath) ret = (arg_si - _boffset) / _mfactor;
-        else if (std::isnan(ret)) Serial.printf("Err: to_native unable to convert %lf (min %lf, max %lf)\n", arg_si, _si.min(), _si.max());
-        if (std::abs(ret) < float_zero) return 0.0;  // reject any stupidly small near-zero values
-        return ret;
-    }
     Param _si, _native;
     float _si_raw;  // si_raw is an output for display purposes, only meaningful for sensors, not actuators. managed here because that's easier
   public:
@@ -261,6 +242,34 @@ class Transducer : public Device {
         print_config(true, false);  // print header
         if (_pin < 255) Serial.printf(" on pin %d\n", _pin);
     }  // printf("%s..\n", _long_name.c_str()); }
+    virtual float from_native(float arg_native) {  // these linear conversion functions change absolute native values to si and back - overwrite in child classes as needed
+        float ret = NAN;
+        if (conversion_method == AbsLimMap) ret = map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
+        else if (conversion_method == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
+        else if (conversion_method == LinearMath) ret = _boffset + _mfactor * arg_native; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
+        if (std::isnan(ret)) Serial.printf("Err: from_native unable to convert %lf (min %lf, max %lf)\n", arg_native, _native.min(), _native.max());
+        if (std::abs(ret) < float_conversion_zero) return 0.0;  // reject any stupidly small near-zero values
+        return ret;
+    }
+    virtual float to_native(float arg_si) {  // convert an absolute si value to native units
+        float ret = NAN;
+        if (conversion_method == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
+        else if (conversion_method == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
+        else if (conversion_method == LinearMath) ret = (arg_si - _boffset) / _mfactor;
+        else if (std::isnan(ret)) Serial.printf("Err: to_native unable to convert %lf (min %lf, max %lf)\n", arg_si, _si.min(), _si.max());
+        if (std::abs(ret) < float_conversion_zero) return 0.0;  // reject any stupidly small near-zero values
+        return ret;
+    }
+    virtual float to_pc(float arg_si) {  // convert an absolute si value to percent form.  note this honors the _dir setting
+        float ret = map(arg_si, _opmin, _opmax, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD));
+        if (std::abs(ret) < float_conversion_zero) return 0.0;  // round off absurdly small values
+        return ret;
+    }
+    virtual float from_pc(float arg_pc) {  // convert an absolute percent value to si unit form.  note this honors the _dir setting
+        float ret = map(arg_pc, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD), _opmin, _opmax);
+        if (std::abs(ret) < float_conversion_zero) return 0.0;  // round off absurdly small values
+        return ret;
+    }
     // To set limits, depends on your conversion method being used :
     //   linear_math: call either one of set_abslim() or set_abslim_native(), whichever one you have the values to define the range and all si and native abs values will be set automatically.
     //                op limits will also be reconstrained to the updated abs values, however if you have a specific op range then
@@ -320,19 +329,18 @@ class Transducer : public Device {
         return true;
     }
     bool set_pc(float arg_val_pc) { 
-        if (_dir == TransDir::FWD) return set_si(map(arg_val_pc, 0.0, 100.0, _opmin, _opmax));
-        else return set_si(map(arg_val_pc, 100.0, 0.0, _opmin, _opmax));
+        return set_si(from_pc(arg_val_pc));
     }
-    bool add_native(float arg_add_native) { 
-        return set_native(constrain(_native.val() + arg_add_native, _opmin_native, _opmax_native));
+    bool add_native(float arg_add) {  // this scales the given add amount to a consistent rate of change 
+        float delta = arg_add * tuning_rate_pcps * loop_avg_us * (_opmax_native - _opmin_native) / (100.0 * 1000000.0);  // this acceleration logic doesn't belong here
+        return set_native(constrain(_native.val() + delta, _opmin_native, _opmax_native));
     }
-    bool add_pc(float arg_add_pc) {
-        float delta_pc = arg_add_pc * tuning_rate_pcps * loop_avg_us / 1000000.0;  // this acceleration logic doesn't belong here
-        return set_si(constrain(_si.val() + map(delta_pc, 0.0, 100.0, _opmin, _opmax), _opmin, _opmax));
+    bool add_pc(float arg_add) {  // this scales the given add amount to a consistent rate of change
+        return add_si(from_pc(arg_add));
     }
-    bool add_si(float arg_add_si) {
-        float delta_si = arg_add_si * tuning_rate_pcps * loop_avg_us * (_opmax - _opmin) / (100.0 * 1000000.0);  // this acceleration logic doesn't belong here
-        return set_si(constrain(_si.val() + delta_si, _opmin, _opmax));
+    bool add_si(float arg_add) {  // this scales the given add amount to a consistent rate of change
+        float delta = arg_add * tuning_rate_pcps * loop_avg_us * (_opmax - _opmin) / (100.0 * 1000000.0);  // this acceleration logic doesn't belong here
+        return set_si(constrain(_si.val() + delta, _opmin, _opmax));
     }
     void set_margin(float arg_marg) { _margin = arg_marg; }
     
@@ -374,9 +382,9 @@ class Transducer : public Device {
     float opmin_native() { return _opmin_native; }
     float opmax_native() { return _opmax_native; }
     float margin_native() { return to_native(_margin); }
-    float pc() { return map(_si.val(), _opmin, _opmax, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD)); }  // get value as a percent of the operational range
-    float raw_pc() { return map(_si_raw, _opmin, _opmax, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD)); }  // get raw value in percent
-    float margin_pc() { return map(_margin, _opmin, _opmax, 0.0, 100.0); }
+    float pc() { return to_pc(_si.val()); }  // get value as a percent of the operational range
+    float raw_pc() { return to_pc(_si_raw); }  // get raw value in percent
+    float margin_pc() { return std::abs(to_pc(_margin)); }
 };
 
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
@@ -670,6 +678,10 @@ class PressureSensor : public AnalogSensor {
     }
     bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
     float zeropoint() { return _zeropoint; }  // zeropoint is the pressure at which we can consider the brake is released (if position is unavailable)
+    float hold_initial_pc() { return to_pc(hold_initial); }  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
+    float hold_increment_pc() { return to_pc(hold_increment); }  // incremental pressure added periodically when auto stopping (adc count 0-4095)
+    float panic_initial_pc() { return to_pc(panic_initial); }  // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
+    float panic_increment_pc() { return to_pc(panic_increment); }  // incremental pressure added periodically when auto stopping (adc count 0-4095)
 };
 // BrakePositionSensor represents a linear position sensor
 // for measuring brake position (TODO which position? pad? pedal?)
@@ -720,6 +732,7 @@ class BrakePositionSensor : public AnalogSensor {
     bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
     float parkpos() { return _opmax; }
     float zeropoint() { return _zeropoint; }
+    float zeropoint_pc() { return to_pc(_zeropoint); }
     float* zeropoint_ptr() { return &_zeropoint; }
 };
 // class PulseSensor are hall-effect based magnetic field sensors where the value is based on magnetic pulse timing of a rotational Source (eg tachometer, speedometer)

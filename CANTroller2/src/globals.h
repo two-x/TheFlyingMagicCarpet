@@ -136,6 +136,7 @@ bool print_framebuffers = false;     // dumps out ascii representations of scree
 
 // global tunable variables
 float float_zero = 0.000069;         // if two floats being compared are closer than this, we consider them equal
+float float_conversion_zero = 0.001; // 
 int sprite_color_depth = 8;
 uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode

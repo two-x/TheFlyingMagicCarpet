@@ -602,44 +602,15 @@ class BrakeMotor : public JagMotor {
     float brake_pid_trans_threshold_hi = 0.50;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
     bool autostopping = false, autoholding = false, reverse = false;
     float target[NumBrakeSens];  // this value is the posn and pressure (and hybrid combined) target settings, or fed into pid to calculate setting if pid enabled
-    float panic_initial_pc, hold_initial_pc, panic_increment_pc, hold_increment_pc, parkpos_pc, zeropoint_pc;
     float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, target_pc, pid_err_pc;
     float combined_read_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
     float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
     float open_loop_attenuation_pc = 50.0, thresh_loop_attenuation_pc = 50.0, thresh_loop_hysteresis_pc = 1.0;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
     void derive() {  // to-do below: need stop/hold values for posn only operation!
         JagMotor::derive();
-        pc[MARGIN] = 100.0 * pressure->margin() / (pressure->opmax() - pressure->opmin());
-        hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_hi + brake_pid_trans_threshold_lo);
-        hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);
-
-        panic_initial_pc = map(pressure->panic_initial, pressure->opmin(), pressure->opmax(), 0.0, 100.0);
-        hold_initial_pc = map(pressure->hold_initial, pressure->opmin(), pressure->opmax(), 0.0, 100.0);
-        panic_increment_pc = 100.0 * pressure->panic_increment / (pressure->opmax() - pressure->opmin());
-        hold_increment_pc = 100.0 * pressure->hold_increment / (pressure->opmax() - pressure->opmin());
-        zeropoint_pc = map(brkpos->zeropoint(), brkpos->opmin(), brkpos->opmax(), 100.0, 0.0);
-        parkpos_pc = map(brkpos->parkpos(), brkpos->opmin(), brkpos->opmax(), 100.0, 0.0);
-        // do we want to have specific psi and inch values for these depending on present sensors?
-        // if (feedback == PressureFB) {  // use these if only pressure sensor available
-        //     zeropoint_pc = map(pressure->zeropoint(), pressure->opmin(), pressure->opmax(), 100.0, 0.0);
-        //     parkpos_pc = zeropoint_pc;            
-        // }
-        // else {  // use these by default
-        //     zeropoint_pc = map(brkpos->zeropoint(), brkpos->opmin(), brkpos->opmax(), 100.0, 0.0);
-        //     parkpos_pc = map(brkpos->parkpos(), brkpos->opmin(), brkpos->opmax(), 100.0, 0.0);
-        // }
-        // if (feedback == PositionFB) {  // use these if only position sensor available
-        //     panic_initial_pc = map(brkpos->panic_initial_psi, brkpos->opmax(), brkpos->opmin(), 0.0, 100.0);
-        //     hold_initial_pc = map(brkpos->hold_initial_psi, brkpos->opmax(), brkpos->opmin(), 0.0, 100.0);
-        //     panic_increment_pc = 100.0 * brkpos->panic_increment_psi / (brkpos->opmax() - brkpos->opmin());
-        //     hold_increment_pc = 100.0 * brkpos->hold_increment_psi / (brkpos->opmax() - brkpos->opmin());
-        // }
-        // else {  // use these by default
-        //     panic_initial_pc = map(pressure->panic_initial_psi, pressure->opmin(), pressure->opmax(), 0.0, 100.0);
-        //     hold_initial_pc = map(pressure->hold_initial_psi, pressure->opmin(), pressure->opmax(), 0.0, 100.0);
-        //     panic_increment_pc = 100.0 * pressure->panic_increment_psi / (pressure->opmax() - pressure->opmin());
-        //     hold_increment_pc = 100.0 * pressure->hold_increment_psi / (pressure->opmax() - pressure->opmin());
-        // }
+        // pc[MARGIN] = 100.0 * pressure->margin() / (pressure->opmax() - pressure->opmin());
+        hybrid_math_offset = 0.5 * (brake_pid_trans_threshold_hi + brake_pid_trans_threshold_lo);  // pre-do some of the math to speed up hybrid calculations
+        hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);  // pre-do some of the math to speed up hybrid calculations
     }
     bool detect_tempsens() {
         float trytemp = tempsens->val(loc::BRAKE);
@@ -696,7 +667,7 @@ class BrakeMotor : public JagMotor {
         if (feedback == NoneFB) return NAN;             // this should not happen, maybe print an error message
         if (feedback == PressureFB) return 1.0;
         if (feedback == PositionFB) return 0.0;
-        float pressure_ratio = (pressure_val - pressure->opmin()) / (pressure->opmax() - pressure->opmin());  // calculate ratio of output to range
+        float pressure_ratio = pressure->pc() / 100.0;  // (pressure_val - pressure->opmin()) / (pressure->opmax() - pressure->opmin());  // calculate ratio of output to range
         if (pressure_ratio >= brake_pid_trans_threshold_hi) return 1.0;  // at pressure above hi threshold, pressure has 100% influence
         if (pressure_ratio <= brake_pid_trans_threshold_lo) return 0.0;  // at pressure below lo threshold, position has 100% influence
         return 0.5 + 0.5 * sin(hybrid_math_coeff * (pressure_ratio - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
@@ -707,15 +678,12 @@ class BrakeMotor : public JagMotor {
     void set_target(float targ_pc) {  // sets brake target percent. if hybrid, will set pressue and posn targets per current hybrid ratio, and set both pid targets in case pids are used
         target_pc = targ_pc;
         if (feedback == NoneFB) return;  // target_pc is overall, (or desired or combined ?) value is used if running openloop
-        target[PressureFB] = pressure->opmin() + target_pc * (pressure->opmax() - pressure->opmin()) / 100.0;  // feed this into pid if enabled, (otherwise could use as a motor cutoff threshold? this mode not implemented)
-        target[PositionFB] = brkpos->opmin() + (100.0 - target_pc) * (brkpos->opmax() - brkpos->opmin()) / 100.0;  // (saved into variables for display)
+        target[PressureFB] = pressure->from_pc(target_pc);  // feed this into pid if enabled, (otherwise could use as a motor cutoff threshold? this mode not implemented)
+        target[PositionFB] = brkpos->from_pc(target_pc);  // (saved into variables for display)
         for (int mypid=PositionFB; mypid<=PressureFB; mypid++) pids[mypid].set_target(target[mypid]);  // feed target vals to pid loops. this is harmless if pids disabled, it will have no effect
     }
     void read_sensors() {  // calculates and saves combined brake value percent, based on readings of the feedback sensors. harmless to call even if running openloop
-        float pres = map(pressure->val(), pressure->opmin(), pressure->opmax(), 0.0, 100.0);
-        float posn = map(brkpos->val(), brkpos->opmax(), brkpos->opmin(), 0.0, 100.0);
-        // if (active_sensor == NoneFB) combined_read_pc = NAN;
-        combined_read_pc = get_hybrid_brake_pc(pres, posn);  // else
+        combined_read_pc = get_hybrid_brake_pc(pressure->pc(), brkpos->pc());
     }
     float calc_thresh_loop_out() {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
         float err = (combined_read_pc - target_pc);
@@ -742,8 +710,8 @@ class BrakeMotor : public JagMotor {
         }
         autostopping = !stopped_now && !stopcar_timer.expired();
         if (!autostopping) return;
-        else if (interval_timer.expireset()) set_target(std::min(100.0f, target_pc + panic ? panic_increment_pc : hold_increment_pc));
-        else set_target(std::max(target_pc, panic ? panic_initial_pc : hold_initial_pc));
+        else if (interval_timer.expireset()) set_target(std::min(100.0f, target_pc + panic ? pressure->panic_increment_pc() : pressure->hold_increment_pc()));
+        else set_target(std::max(target_pc, panic ? pressure->panic_initial_pc() : pressure->hold_initial_pc()));
         pc[OUT] = calc_loop_out();
     }
     bool goto_fixed_point(float tgt_point, bool at_position) {  // goes to a fixed position (hopefully) or pressure (if posn is unavailable) then stops.  useful for parking and releasing modes
@@ -778,7 +746,7 @@ class BrakeMotor : public JagMotor {
             // Serial.printf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->val(), pressure->hold_initial_psi, pressure->margin_psi);
             if (autoholding) pc[OUT] = pc[STOP];
             else if (!autostopping) {
-                set_target(std::max(target_pc, hold_initial_pc));
+                set_target(std::max(target_pc, pressure->hold_initial_pc()));
                 pc[OUT] = calc_loop_out();
             }
         }
@@ -798,10 +766,10 @@ class BrakeMotor : public JagMotor {
             else pc[OUT] = pc[STOP];
         }
         else if (motormode == Release) {
-            releasing = goto_fixed_point(zeropoint_pc, released());
+            releasing = goto_fixed_point(brkpos->zeropoint_pc(), released());
         }
         else if (motormode == ParkMotor) {
-            parking = goto_fixed_point(parkpos_pc, parked());
+            parking = goto_fixed_point(0.0, parked());
         }
         else if ((motormode == ThreshLoop) || (motormode == ActivePID)) {
             if (hotrc->joydir(VERT) != JOY_DN) set_target(pc[STOP]);  // let off the brake
@@ -811,13 +779,13 @@ class BrakeMotor : public JagMotor {
     }
     void constrain_output() {  // keep within the operational range, or to full absolute range if calibrating (caution don't break anything!)
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
-        else if (enforce_positional_limits
-          && ((pc[OUT] < pc[STOP] && brkpos->val() > brkpos->opmax() - brkpos->margin()) 
-          || (pc[OUT] > pc[STOP] && brkpos->val() < brkpos->opmin() + brkpos->margin())))  // if brake is at position limits and we're tring to go further, stop the motor
-            pc[OUT] = pc[STOP];
-        else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);  // send to the actuator. refuse to exceed range
-        if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;  // prevent stupidly small values which i was seeing
-        for (int p = PositionFB; p <= PressureFB; p++) pids[p].set_output(pc[OUT]);  // Feed the final value back into the pids
+        else if (enforce_positional_limits                                                 // if we're not exceed actuator position limits AND
+          && ((pc[OUT] < pc[STOP] && brkpos->val() > brkpos->opmax() - brkpos->margin())   //   we're trying to extend while already at the extension limit
+          || (pc[OUT] > pc[STOP] && brkpos->val() < brkpos->opmin() + brkpos->margin())))  //   or trying to retract while already at the retraction limit
+            pc[OUT] = pc[STOP];                                                            // then stop the motor
+        else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);                     // constrain motor value to operational range
+        if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;                                 // prevent stupidly small values which i was seeing
+        for (int p = PositionFB; p <= PressureFB; p++) pids[p].set_output(pc[OUT]);  // feed the final value back into the pids
     }
   public:
     void setmode(int _mode, bool force_init=false) {                         // motormode is beholden to the current config
