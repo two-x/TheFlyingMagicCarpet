@@ -45,6 +45,7 @@ void initialize_pins_and_console() {  // set up those straggler pins which aren'
     delay(1200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     Serial.printf("** Setup begin..\nSerial console started..\n");
     Serial.printf("Syspower turned %s. fun_flag is %s.\n", syspower ? "on" : "off", fun_flag ? "high" : "low");    
+    ezread.ezprintf("Syspower turned %s. fun_flag is %s.\n", syspower ? "on" : "off", fun_flag ? "high" : "low");    
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
     sim.set_can_sim(sens::joy, false);
@@ -65,14 +66,15 @@ void set_board_defaults() {          // true for dev boards, false for printed b
         print_framebuffers = false;
         print_task_stack_usage = false;
     }
-    printf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
+    Serial.printf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
+    ezread.ezprintf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
 }
 void print_partition_table() {
-    printf("\nPartition Typ SubT  Address SizeByte   kB\n");
+    Serial.printf("\nPartition Typ SubT  Address SizeByte   kB\n");
     esp_partition_iterator_t iterator = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
     const esp_partition_t *partition;
     while ((partition = esp_partition_get(iterator)) != NULL) {
-        printf(" %8s %3d 0x%02x 0x%06x 0x%06x %4d\n", partition->label, partition->type, partition->subtype, partition->address, partition->size, (partition->size)/1024);
+        Serial.printf(" %8s %3d 0x%02x 0x%06x 0x%06x %4d\n", partition->label, partition->type, partition->subtype, partition->address, partition->size, (partition->size)/1024);
         if (!strcmp(partition->label, "coredump")) break;
         iterator = esp_partition_next(iterator);
     }
@@ -386,13 +388,13 @@ void update_web(void *parameter) {
     }
 }
 void stop_console() {
-    printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
+    Serial.printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) {
         delay(200);  // give time for serial to print everything in its buffer
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
-    ezread.dprintf(DCYN, "magic carpet is booted");
-    // ezread.dprintf("welcome to EZ-Read Console");
+    ezread.ezprintf(DCYN, "magic carpet is booted");
+    // ezread.ezprintf("welcome to EZ-Read Console");
 }
 void dump_errorcode_update() {
     static uint16_t status_last[NUM_ERR_TYPES];
@@ -426,7 +428,7 @@ void dump_errorcode_update() {
         status_last[e] = diag.errstatus[e];
     }
     if (color == NON) color = ezread.defaultcolor;
-    if (do_print) ezread.dprintf(color, "codes L%04x R%04x W%04x  %d errs (%+d)", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], errtotal, errdiffs);
+    if (do_print) ezread.ezprintf(color, "codes L%04x R%04x W%04x  %d errs (%+d)", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], errtotal, errdiffs);
 }
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
@@ -440,7 +442,7 @@ void bootbutton_actions() {  // temporary (?) functionality added for developmen
             speedo.print_config(true);
             tach.print_config(true);
             mulebatt.print_config(true);
-            // ezread.dprintf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
+            // ezread.ezprintf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
         }
     }
 }

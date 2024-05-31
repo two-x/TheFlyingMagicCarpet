@@ -27,25 +27,25 @@ class I2C {
         _devaddrs[i2c_lightbox] = lightbox_addr;
         _devaddrs[i2c_airvelo] = airvelo_addr;
         _devaddrs[i2c_map] = map_addr;
-        printf("I2C bus"); delay(1);  // Attempt to force print to happen before init
+        Serial.printf("I2C bus"); delay(1);  // Attempt to force print to happen before init
         scanTimer.reset();
         if (disabled) return 0;
         Wire.begin(_sda_pin, _scl_pin);  // I2c bus needed for airflow sensor
         byte error, address;
-        printf(" scan..");
+        Serial.printf(" scan..");
         _devicecount = 0;
         for (address = 1; address < 127; address++ ) {
             Wire.beginTransmission(address);
             error = Wire.endTransmission();
             if (error == 0) {
-                printf (" found addr: 0x%s%x", (address < 16) ? "0" : "", address);
+                Serial.printf (" found addr: 0x%s%x", (address < 16) ? "0" : "", address);
                 _detaddrs[_devicecount++] = address;
             }
-            else if (error==4) printf (" error addr: 0x%s%x", (address < 16) ? "0" : "", address);
+            else if (error==4) Serial.printf (" error addr: 0x%s%x", (address < 16) ? "0" : "", address);
         }
-        if (scanTimer.elapsed() > 5000000) printf(" timeout & fail bus scan.");
-        if (_devicecount == 0) printf(" no devices found.");
-        printf(" ..done\n");
+        if (scanTimer.elapsed() > 5000000) Serial.printf(" timeout & fail bus scan.");
+        if (_devicecount == 0) Serial.printf(" no devices found.");
+        Serial.printf(" ..done\n");
         fill_det_array();
         return detected(i2c_touch);
     }
@@ -57,18 +57,18 @@ class I2C {
         return _detected[device];
     }
     void pass_i2c_baton() {
-        // printf("%d->", i2cbaton);
+        // Serial.printf("%d->", i2cbaton);
         if (i2cbaton == i2c_airvelo || i2cbaton == i2c_map) i2cbaton = (captouch) ? i2c_touch : i2c_lightbox; 
         else if (i2cbaton == i2c_touch) i2cbaton = i2c_lightbox;
         else if (i2cbaton == i2c_lightbox) {
             i2cbaton = (lastsens == i2c_airvelo) ? i2c_map : i2c_airvelo;
             lastsens = i2cbaton;
         }
-        // printf("\r-%d-", i2cbaton);
+        // Serial.printf("\r-%d-", i2cbaton);
     }
     bool not_my_turn(int checkdev) {
         bool retval = (use_i2c_baton && (checkdev != i2cbaton));
-        // printf("b:%d c:%d nmt:%d\n", i2cbaton, checkdev, retval);
+        // Serial.printf("b:%d c:%d nmt:%d\n", i2cbaton, checkdev, retval);
         return retval;       
     }
 };
@@ -197,7 +197,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     static constexpr uint8_t addr = 0x69;
     LightingBox(I2C* _i2c) : i2c{_i2c} {}  // LightingBox(DiagRuntime* _diag) : diag(_diag) {}
     void setup() {
-        printf("Lighting box serial comm..\n");
+        Serial.printf("Lighting box serial comm..\n");
     }
     bool sendstatus() {
         uint8_t byt = 0x00;  // command template for runmode update
