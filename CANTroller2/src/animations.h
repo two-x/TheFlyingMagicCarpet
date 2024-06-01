@@ -34,7 +34,8 @@ volatile bool auto_saver_enabled = false;
 volatile int32_t screen_refresh_time;
 // Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
 LGFX lcd;
-LGFX_Sprite framebuf[2];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
+static constexpr int num_bufs = 2;
+LGFX_Sprite framebuf[num_bufs];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
 struct viewport {
     int32_t x;
     int32_t y;
@@ -569,6 +570,7 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
     std::string drawnow; // Ring buffer array
   private:
     LGFX* mylcd;
+    // LGFX_Sprite* spr;
     LGFX_Sprite* nowspr_ptr;
     viewport* vp;
     EZReadConsole* ez;
@@ -585,6 +587,7 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
     }
     void draw(LGFX_Sprite* spr) {
         spr->fillSprite(BLK);
+        spr->setTextWrap(false);        // 右端到達時のカーソル折り返しを禁止
         // int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
         spr->setFont(&fonts::Font0);  // spr->setFont(&fonts::Org_01);
         spr->setTextDatum(textdatum_t::top_left);

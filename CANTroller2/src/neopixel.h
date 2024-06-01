@@ -325,7 +325,7 @@ class IdiotLights {
         &panicstop, &standby_incomplete, &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting, 
         &car_hasnt_moved, &starter.motor, &fuelpump.status_inverse, // &powering_up,
         &brake.posn_pid_active, &bootbutton.now, &nowtouch, tach.pin_inactive_ptr(), &encoder.enc_a, sim.enabled_ptr(), 
-        &brake.no_feedback, &running_on_devboard, &sensidiots[_GasServo], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor],
+        &brake.no_feedback, &running_on_devboard, &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor],
         &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach], &sensidiots[_BrakePres], 
         &sensidiots[_BrakePosn], &sensidiots[_Temps], &sensidiots[_Other], &sensidiots[_GPIO],
     };  // , &encoder.enc_b, &starter.req_active, &web_disabled, 

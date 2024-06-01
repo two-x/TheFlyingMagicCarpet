@@ -7,7 +7,7 @@ void setup() {
     semaphore_setup();
     i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);
     touch.setup(&lcd, &i2c, disp_width_pix, disp_height_pix);
-    screen.setup();             // start up the screen asap so we can monitor the boot progress on the diag console
+    screen.setup();             // start up the screen asap so we can monitor the boot progress on the ezread console
     xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 2048, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);      // 2048 works, 1024 failed
     xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // 4096 works, 2048 failed
     running_on_devboard = !tempsens.setup();  // onewire bus and temp sensors
@@ -72,9 +72,8 @@ void loop() {                  // arduino-style loop() is like main() but with a
     touch.update();            // read touchscreen input and do what it tells us to
     tuner.update(run.mode);    // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update(run.mode);     // notice any screwy conditions or suspicious shenanigans - consistent 200us
-    dump_errorcode_update();   // writes changes to error flags status to onscreen console
     neo.update(colorcard[run.mode]);          // update/send neopixel colors 
     lightbox.update(run.mode, speedo.val());  // communicate any relevant data to the lighting controller
     looptimer.update();                       // looptimer.mark("F");
-    vTaskDelay(pdMS_TO_TICKS(1));             // momentarily pause continuous execution for multitasking purposes
+    vTaskDelay(pdMS_TO_TICKS(1));             // momentarily pause continuous execution for multitasking purposes. delays the loop but in a good way
 }

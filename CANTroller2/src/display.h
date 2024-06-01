@@ -42,7 +42,7 @@ static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens"
 static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 9, 12, 11, 11, 13, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", __________, __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
-    { "HRc Horz", "HRc Vert", "HotRcCh3", "HotRcCh4", "TrigVRaw", "JoyH Raw", __________, __________, __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
+    { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
     { " Pot Raw", "BkPosRaw", "BkPosRaw", brAk"Posn", brAk"Posn", "PressRaw", "PressRaw", "Pressure", "Pressure", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PG_SENS
     { "TachPuls", "Tach Raw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpeedRaw", "   Speed", "   Speed", spEd"AMin", spEd"AMax", "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", spEd"Idle", },  // PG_PULS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
@@ -57,7 +57,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, ______, "%",    "%",    },  // PG_RUN
-    { "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, ______, ______, "mph",  "atm",  "atm",  "us",   "us",   },  // PG_JOY
+    { "us",   "us",   "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, "mph",  "atm",  "atm",  "us",   "us",   },  // PG_JOY
     { "adc",  "adc",  "in",   "in",   "%",    "adc",  "psi",  "psi",  "%",    ______, "psi",  "psi",  "in",   "in",   "in",   },  // PG_SENS
     { "ms",   "Hz",   "psi",  "ms",   "Hz",   "mph",  "mph",  "%",    "ms",   "ms",   "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
@@ -157,18 +157,18 @@ class Display {
         int sprsize[2] = { _sprwidth, _sprheight };
         Serial.printf("  create frame buffers.. ");
         lcd.setColorDepth(sprite_color_depth);
-        for (int i = 0; i <= 1; i++) framebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+        for (int i = 0; i < num_bufs; i++) framebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[HORZ];
         auto frameheight = sprsize[VERT];
         bool fail = false;
         bool using_psram = false;
-        for (std::uint32_t i = 0; !fail && i < 2; ++i) {
+        for (std::uint32_t i = 0; !fail && i < num_bufs; ++i) {
             framebuf[i].setPsram(false);
             fail = !framebuf[i].createSprite(framewidth, frameheight);
         }
         if (fail) {
             fail = false;
-            for (std::uint32_t i = 0; !fail && i < 2; ++i) {
+            for (std::uint32_t i = 0; !fail && i < num_bufs; ++i) {
                 framebuf[i].setPsram(true);
                 fail = !framebuf[i].createSprite(framewidth, frameheight);
             }
@@ -176,7 +176,7 @@ class Display {
                 fail = false;
                 if (framewidth >= 320) framewidth = 180;
                 if (frameheight >= 240) frameheight = 180;
-                for (std::uint32_t i = 0; !fail && i < 2; ++i) {
+                for (std::uint32_t i = 0; !fail && i < num_bufs; ++i) {
                     fail = !framebuf[i].createSprite(framewidth, frameheight);
                 }
                 if (fail) {
@@ -186,7 +186,7 @@ class Display {
             }
             else using_psram = true;
         }
-        Serial.printf(" made 2x %dx%d sprites in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
+        Serial.printf(" made %dx %dx%d sprites in %sram\n", num_bufs, framewidth, frameheight, using_psram ? "ps" : "native ");
     }
     void init() {  // init() is necessary after any power interruption
         lcd.setColorDepth(8);
@@ -659,13 +659,15 @@ class Display {
             draw_dynamic(23, steer.steer_safe_pc, 0.0f, 100.0f);
         }
         else if (datapage == PG_JOY) {
-            draw_dynamic(9, hotrc.us[HORZ][RAW], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
-            draw_dynamic(10, hotrc.us[VERT][RAW], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
-            draw_dynamic(11, hotrc.us[CH3][RAW], hotrc.us[CH3][OPMIN], hotrc.us[CH3][OPMAX]);
-            draw_dynamic(12, hotrc.us[CH4][RAW], hotrc.us[CH4][OPMIN], hotrc.us[CH4][OPMAX]);
-            draw_dynamic(13, hotrc.pc[HORZ][RAW], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-            draw_dynamic(14, hotrc.pc[VERT][RAW], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-            for (int line=15; line<=18; line++) draw_eraseval(line);
+            draw_dynamic(9, hotrc.us[HORZ][FILT], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
+            draw_dynamic(10, hotrc.us[VERT][FILT], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
+            draw_dynamic(11, hotrc.us[HORZ][RAW], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
+            draw_dynamic(12, hotrc.us[VERT][RAW], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
+            draw_dynamic(13, hotrc.us[CH3][RAW], hotrc.us[CH3][OPMIN], hotrc.us[CH3][OPMAX]);
+            draw_dynamic(14, hotrc.us[CH4][RAW], hotrc.us[CH4][OPMIN], hotrc.us[CH4][OPMAX]);
+            draw_dynamic(15, hotrc.pc[HORZ][RAW], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+            draw_dynamic(16, hotrc.pc[VERT][RAW], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+            for (int line=17; line<=18; line++) draw_eraseval(line);
             draw_dynamic(19, airvelo.opmax(), airvelo.absmin(), airvelo.absmax());
             draw_dynamic(20, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
             draw_dynamic(21, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());

@@ -221,20 +221,32 @@ class Touchscreen {
     uint16_t tquad;  // imagine screen divided into rows and columns as touch buttons. First byte encodes row, 2nd byte is column 
     // uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     // lcd.setTouch(touch_cal_data);
-    void get_touch_debounced() {  // this rejects short spurious touch or un-touch blips
+    int read_axis(int axis) {
+        int ret = map(touch_read[axis], corners[captouch][axis][tsmin], corners[captouch][axis][tsmax], 0, disp_size[axis]);
+        ret = constrain(tft_touch[axis], 0, disp_size[axis] - 1);
+        if (flip_the_screen) ret = disp_size[axis] - ret;
+        return ret;
+    }
+    void get_touch_debounced() {  // this sets or unsets nowtouch while rejecting random very-short spurious touch or un-touch blips
+        static bool triggered_last;
         uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
         bool touch_triggered = (count > 0);
         if (nowtouch != touch_triggered) {       // if the hardware returned opposite our current filtered state, get triggered
             if (!rejectiontimer_active) {        // if we're not already waiting for validity
-                rejectiontimer.reset();          // reset the timer. the touch must stay triggered through expiration for valid change in touch state
+                rejectiontimer.reset();          // reset the timer. the touch (or lack thereof) must stay triggered high (or low) through expiration for valid change in touch state
                 rejectiontimer_active = true;    // remember we are now triggered and waiting for validity
             }
             else if (rejectiontimer.expired()) { // levels have held through entire validity wait timeout
                 rejectiontimer_active = false;   // remember we're no longer triggered nor waiting for validity
                 nowtouch = touch_triggered;      // we can now consider the change in touch state valid
+                landed_coordinates_valid = nowtouch; // mark that the original touch coordinates are valid for the present swipe, or the swipe just ended
             }
         }
         else rejectiontimer_active = false;      // cancel our trigger, and be ready to retrigger
+        for (int axis=0; axis<=1; axis++) {
+            if (nowtouch) tft_touch[axis] = read_axis(axis);
+            else if (touch_triggered && !triggered_last) landed[axis] = read_axis(axis);
+        }
     }
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
@@ -253,6 +265,16 @@ class Touchscreen {
     bool touched() { return nowtouch; }
     int touch_x() { return tft_touch[xx]; }
     int touch_y() { return tft_touch[yy]; }
+    int landed_x() { return landed[xx]; }
+    int landed_y() { return landed[yy]; }
+    int swipe_x() {
+        if (!landed_coordinates_valid) return 0;
+        return tft_touch[xx] - landed[xx];
+    }
+    int swipe_y() {
+        if (!landed_coordinates_valid) return 0;
+        return tft_touch[yy] - landed[yy];
+    }   
     int16_t touch_pt(uint8_t axis) { return tft_touch[axis]; }
     bool ontouch() { return nowtouch && !lasttouch; }
     bool longpress() {
@@ -271,18 +293,6 @@ class Touchscreen {
             get_touch_debounced();
             if (nowtouch) {
                 kick_inactivity_timer(HUTouch);  // evidence of user activity
-                for (int axis=0; axis<=1; axis++) {
-                    // if (captouch) tft_touch[axis] = touch_read[axis];  // disp_width - 1 - touch_read[xx];
-                    tft_touch[axis] = map(touch_read[axis], corners[captouch][axis][tsmin], corners[captouch][axis][tsmax], 0, disp_size[axis]);
-                    tft_touch[axis] = constrain(tft_touch[axis], 0, disp_size[axis] - 1);
-                    if (flip_the_screen) tft_touch[axis] = disp_size[axis] - tft_touch[axis];
-                    if (!landed_coordinates_valid) {
-                        landed[axis] = tft_touch[axis];
-                        if (axis) {
-                            landed_coordinates_valid = true;  // on 2nd time thru set this true
-                        }
-                    }
-                }
                 if (ui_context != ScreensaverUI) {
                     if (touchHoldTimer.elapsed() > (tedit_exponent + 1) * touchAccelTimer.timeout()) {
                         tedit_exponent = constrain(tedit_exponent+1, 0, tedit_exponent_max);
@@ -293,7 +303,6 @@ class Touchscreen {
             }
             else {  // if not being touched
                 if (lasttouch) {
-                    landed_coordinates_valid = false;
                     idelta = 0;  // Stop changing the value
                     tedit_exponent = 0;
                     tedit = (float)(1 << tedit_exponent); // Reset touch acceleration value to 1

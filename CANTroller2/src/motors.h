@@ -314,7 +314,7 @@ class JagMotor : public ServoMotor {
 //    TriggerPull : Cruise locks servo angle (throttle_target_pc), instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
 //    TriggerHold : Cruise locks servo angle (throttle_target_pc), instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
 //    SuspendFly : Cruise uses its own pid targeting a speed value. The PID output is either a servo angle or an rpm target for the gas pid, depending on pid_config setting above. Whatever speed you're at when trigger releases is new cruise target  
-class GasServo : public ServoMotor {
+class Throttle : public ServoMotor {
   private:
     Tachometer* tach;
     Potentiometer* pot;
@@ -558,13 +558,16 @@ class GasServo : public ServoMotor {
     void add_temphot(float add) { set_temphot(idletemp_f[OPMAX] + add); }
     void add_tempcold(float add) { set_tempcold(idletemp_f[OPMIN] + add); }
 };
+class Choke : public ServoMotor {
+  private:
+};
 // Brake uses two PID loops: one based on pressure (accurate for high brake pressures), and one based on position (accurate when pedal is more released)
 // Note as pedal is pressed down, position decreases as pressure increases. PID output is percent motor power.
 class BrakeMotor : public JagMotor {
   private:
     BrakePositionSensor* brkpos;
     PressureSensor* pressure;
-    GasServo* throttle;
+    Throttle* throttle;
     TemperatureSensorManager* tempsens;
     float brakemotor_duty_spec_pc = 25.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
     float press_kp = 0.142;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
@@ -618,7 +621,7 @@ class BrakeMotor : public JagMotor {
         Serial.printf(" using heat %s sensor\n", brake_tempsens_exists ? "readings from detected" : "estimates in lieu of");
         return brake_tempsens_exists;
     }
-    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, GasServo* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, Throttle* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         Serial.printf("Brake motor.. pid is %s, feedback is %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
         JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
@@ -703,7 +706,7 @@ class BrakeMotor : public JagMotor {
         if (stopped_last && !stopped_now) stopcar_timer.reset();
         stopped_last = stopped_now;
         if (feedback == NoneFB) {  // to panic stop without any feedback, we just push as hard as we can for a couple seconds then stop
-            autostopping = !stopped_now && !blindaction_timer.expired();
+            autostopping = !stopped_now && panic && !blindaction_timer.expired();
             if (!autostopping) return;
             pc[OUT] = pc[OPMAX];  // note this is dangerous in that it could mechanically break stuff. if running open loop avoid panicstops
             return;
@@ -779,19 +782,19 @@ class BrakeMotor : public JagMotor {
     }
     void constrain_output() {  // keep within the operational range, or to full absolute range if calibrating (caution don't break anything!)
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
-        else if (enforce_positional_limits                                                 // if we're not exceed actuator position limits AND
-          && ((pc[OUT] < pc[STOP] && brkpos->val() > brkpos->opmax() - brkpos->margin())   //   we're trying to extend while already at the extension limit
-          || (pc[OUT] > pc[STOP] && brkpos->val() < brkpos->opmin() + brkpos->margin())))  //   or trying to retract while already at the retraction limit
-            pc[OUT] = pc[STOP];                                                            // then stop the motor
+        else if (enforce_positional_limits                                                 // IF we're not exceed actuator position limits
+          && ((pc[OUT] < pc[STOP] && brkpos->val() > brkpos->opmax() - brkpos->margin())   //   AND ( we're trying to extend while already at the extension limit
+          || (pc[OUT] > pc[STOP] && brkpos->val() < brkpos->opmin() + brkpos->margin())))  //     OR trying to retract while already at the retraction limit )
+            pc[OUT] = pc[STOP];                                                            // THEN stop the motor
         else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);                     // constrain motor value to operational range
         if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;                                 // prevent stupidly small values which i was seeing
         for (int p = PositionFB; p <= PressureFB; p++) pids[p].set_output(pc[OUT]);  // feed the final value back into the pids
     }
   public:
-    void setmode(int _mode, bool force_init=false) {                         // motormode is beholden to the current config
-        if (feedback == NoneFB) {                                            // if there is no feedback
-            if (_mode == ActivePID || _mode == ThreshLoop) _mode = OpenLoop; // can't use loops, drop to openloop instead
-            else if (_mode == AutoHold || (_mode == AutoStop && !panicstop)) {                  // todo: rethink these scenarios 
+    void setmode(int _mode, bool force_init=false) {                              // motormode is beholden to the current config
+        if (feedback == NoneFB) {                                                 // if there is no feedback
+            if (_mode == ActivePID || _mode == ThreshLoop) _mode = OpenLoop;      // can't use loops, drop to openloop instead
+            else if (_mode == AutoHold || (_mode == AutoStop && !panicstop)) {    // todo: rethink these scenarios 
                 Serial.print("Warn: non-emergency auto braking unavailable in openloop\n");
                 return;  // keep current mode
             }

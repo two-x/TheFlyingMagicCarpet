@@ -25,7 +25,7 @@ static Tachometer tach(tach_pin, 8.0);  // 8.0x frequency divider
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(&i2c);
 static MAPSensor mapsens(&i2c);
-static GasServo gas(gas_pwm_pin, 52);
+static Throttle gas(gas_pwm_pin, 52);
 static BrakeMotor brake(brake_pwm_pin, 50);
 static SteerMotor steer(steer_pwm_pin, 50);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
@@ -395,46 +395,6 @@ void stop_console() {
     }
     ezread.ezprintf(DCYN, "magic carpet is booted");
     // ezread.ezprintf("welcome to EZ-Read Console");
-}
-void dump_errorcode_update() {
-    static uint32_t status_last[NUM_ERR_TYPES];
-    bool do_print = false;
-    uint8_t color = NON;
-    uint32_t now, was;
-    int errdiffs = 0, errtotal = 0;
-    for (int e=0; e<NUM_ERR_TYPES; e++) {
-        if (diag.errstatus[e] != status_last[e]) {
-            do_print = true;
-            now = diag.errstatus[e];
-            was = status_last[e];
-            while (now || was) {
-                if (now & 1) {
-                    errtotal++;
-                    if (!(was & 1)) {
-                        errdiffs++;  // there's a new error
-                        if (color == ezread.happycolor) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
-                        else if (color == NON) color = ezread.sadcolor;  // use the bad news color
-                    }
-                }
-                else if ((now & 1) < (was & 1)) {
-                    errdiffs--;  // an error got cleared
-                    if (color == ezread.sadcolor) color = ezread.defaultcolor;  // but there was also a new error, so use default color
-                    else if (color == NON) color = ezread.happycolor;  // use the good news color
-                }
-                now >>= 1;
-                was >>= 1;
-            }
-        }
-        status_last[e] = diag.errstatus[e];
-    }
-    if (color == NON) {
-        color = ezread.defaultcolor;
-        if (!errdiffs) do_print = false;
-    }
-    if (do_print) {
-        ezread.ezprintf(color, "codes L%x R%x W%x  %d errs (%+d)", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], errtotal, errdiffs);
-        Serial.printf("codes L%x R%x W%x  %d errs (%+d)\n", diag.errstatus[LOST], diag.errstatus[RANGE], diag.errstatus[WARN], errtotal, errdiffs);
-    }
 }
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);

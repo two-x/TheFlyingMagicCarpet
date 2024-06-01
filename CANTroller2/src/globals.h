@@ -94,7 +94,7 @@ enum codestatus { Confused=0, Booting=1, Parked=2, Stopped=3, Driving=4, NumCode
 enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
 enum telemetry_idiots {                              // list of transducers which have onscreen idiotlights showing status
     _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
-    _GasServo=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are actuators, driven by us
+    _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are actuators, driven by us
     _Speedo=3, _Tach=4, _BrakePres=5, _BrakePosn=6,  // these transducers are sensors, we read from
     _HotRC=7, _Temps=8, _Other=9, _GPIO=10,          // these are actually groups of multiple sensors (see below)
     NumTelemetryIdiots=11,                           // size of the list of values with idiot lights
@@ -409,7 +409,7 @@ class EZReadConsole {
     std::string textlines[num_lines];
     int newest_content = -1, next_index = 0;
     uint8_t linecolors[num_lines];
-    int bufferSize = num_lines; // size_t bufferSize; // Size of the ring buffer
+    int bufferSize = 100, maxlength=40; // size_t bufferSize; // Size of the ring buffer
     uint8_t defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
   private:
     std::string remove_nonprintable(const std::string& victim) {
@@ -423,6 +423,7 @@ class EZReadConsole {
         char temp[100]; // Assuming maximum length of output string
         vsnprintf(temp, sizeof(temp), format, args);
         textlines[next_index] = remove_nonprintable(std::string(temp)); // Store formatted output into buffer
+        if (textlines[next_index].length() > maxlength) textlines[next_index] = textlines[next_index].substr(0, maxlength);
         linecolors[next_index] = color;
         newest_content = next_index;
         ++next_index %= bufferSize; // Update next insertion index

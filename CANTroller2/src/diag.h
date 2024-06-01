@@ -13,7 +13,7 @@ class DiagRuntime {
     BrakePositionSensor* brkpos;
     Tachometer* tach;
     Speedometer* speedo;
-    GasServo* gas;
+    Throttle* gas;
     BrakeMotor* brake;
     SteerMotor* steer;
     CarBattery* mulebatt;
@@ -56,7 +56,7 @@ class DiagRuntime {
     uint8_t most_critical_sensor[NUM_ERR_TYPES];
     uint8_t most_critical_last[NUM_ERR_TYPES];
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
-        Tachometer* a_tach, Speedometer* a_speedo, GasServo* a_gas, BrakeMotor* a_brake, SteerMotor* a_steer, 
+        Tachometer* a_tach, Speedometer* a_speedo, Throttle* a_gas, BrakeMotor* a_brake, SteerMotor* a_steer, 
         CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, Ignition* a_ignition)
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
           steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition) {}
@@ -89,7 +89,7 @@ class DiagRuntime {
 
             // Detect sensors disconnected or giving out-of-range readings.
             // TODO : The logic of this for each sensor should be moved to devices.h objects
-            setflag(_GasServo, RANGE, gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
+            setflag(_Throttle, RANGE, gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
             setflag(_SteerMotor, RANGE, steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
             BrakeFailure();
             setflag(_MuleBatt, RANGE, mulebatt->val() < mulebatt->opmin() || mulebatt->val() > mulebatt->opmax());
@@ -104,7 +104,7 @@ class DiagRuntime {
             set_sensidiots();
             set_idiot_blinks();
             report_changes();  // detect and report changes in any error values
-
+            dump_errorcode_update();
             // for (int32_t i=0; i<NUM_ERR_TYPES; i++)
             //     for (int32_t j=0; j<NumTelemetryFull; j++)
             // // printf ("\n");
@@ -251,10 +251,50 @@ class DiagRuntime {
             //     || ((hotrc->us[VERT][RAW] < hotrc->us[VERT][OPMIN] - halfMARGIN) && (hotrc->us[VERT][RAW] > hotrc->failsafe_us + hotrc->us[ch][MARGIN]));
         }
     }
+    void dump_errorcode_update() {
+        static uint32_t status_last[NUM_ERR_TYPES];
+        bool do_print = false;
+        uint8_t color = NON;
+        uint32_t now, was;
+        int errdiffs = 0, errtotal = 0;
+        for (int e=0; e<NUM_ERR_TYPES; e++) {
+            if (errstatus[e] != status_last[e]) {
+                do_print = true;
+                now = errstatus[e];
+                was = status_last[e];
+                while (now || was) {
+                    if (now & 1) {
+                        errtotal++;
+                        if (!(was & 1)) {
+                            errdiffs++;  // there's a new error
+                            if (color == ezread.happycolor) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
+                            else if (color == NON) color = ezread.sadcolor;  // use the bad news color
+                        }
+                    }
+                    else if ((now & 1) < (was & 1)) {
+                        errdiffs--;  // an error got cleared
+                        if (color == ezread.sadcolor) color = ezread.defaultcolor;  // but there was also a new error, so use default color
+                        else if (color == NON) color = ezread.happycolor;  // use the good news color
+                    }
+                    now >>= 1;
+                    was >>= 1;
+                }
+            }
+            status_last[e] = errstatus[e];
+        }
+        if (color == NON) {
+            color = ezread.defaultcolor;
+            if (!errdiffs) do_print = false;
+        }
+        if (do_print) {
+            ezread.ezprintf(color, "codes L%x R%x W%x  %d errs (%+d)", errstatus[LOST], errstatus[RANGE], errstatus[WARN], errtotal, errdiffs);
+            Serial.printf("codes L%x R%x W%x  %d errs (%+d)\n", errstatus[LOST], errstatus[RANGE], errstatus[WARN], errtotal, errdiffs);
+        }
+    }
     void make_log_entry() {
         if (logTimer.expireset()) {
             times[dic][index] = esp_timer_get_time();
-            tel[dic][_GasServo][index] = gas->pc[OUT];
+            tel[dic][_Throttle][index] = gas->pc[OUT];
             tel[dic][_BrakeMotor][index] = brake->pc[OUT];
             tel[dic][_SteerMotor][index] = steer->pc[OUT];
             tel[dic][_BrakePres][index] = pressure->val();
