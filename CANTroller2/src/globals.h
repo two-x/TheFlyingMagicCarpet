@@ -1,7 +1,7 @@
 // globals.h - not dependent on anything, so include this first
 #pragma once
 #include "Arduino.h"
-// pin assignments  ESP32-S3-DevkitC series   (note: "*" are pins we can reclaim if needed)
+// pin assignments  ESP32-S3-DevkitC series   (note: "!" are free pins, "*" are pins we can reclaim if needed)
 #define     boot_sw_pin  0 // button0/strap1   // input, the esp "boot" button. if more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
 #define      tft_dc_pin  1 // adc1.0           // output, assert when sending data to display chip to indicate commands vs. screen data
 #define  tp_cs_fuel_pin  2 // adc1.1           // output, this controls touch panel chip select for resistive touchscreen (dev board) OR drives the vehicle's fuel pump (on car)
@@ -21,18 +21,18 @@
 #define     gas_pwm_pin 16 // pwm1/adc2.5      // output, pwm signal duty cycle controls throttle target. on Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define   brake_pwm_pin 17 // pwm0/adc2.6/tx1  // output, pwm signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped)
 #define   steer_pwm_pin 18 // pwm0/adc2.7/rx1  // output, pwm signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). jaguar asks for an added 150ohm series R when high is 3.3V
-#define steer_enc_a_pin 19 // usb-d-/adc2.8  * // reserved for usb or a steering quadrature encoder.
-#define steer_enc_b_pin 20 // usb-d+/adc2.9  * // reserved for usb or a steering quadrature encoder.
+#define steer_enc_a_pin 19 // usb-d-/adc2.8  ! // reserved for usb or a steering quadrature encoder.
+#define steer_enc_b_pin 20 // usb-d+/adc2.9  ! // reserved for usb or a steering quadrature encoder.
 #define     onewire_pin 21 // pwm0             // onewire bus for temperature sensor data. note: tested this does not work on higher-numbered pins (~35+)
 #define      speedo_pin 35 // spiram/octspi    // int input, active high, asserted when magnet south is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define     starter_pin 36 // sram/ospi/glitch // input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
 #define        tach_pin 37 // spiram/octspi    // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
 #define  encoder_sw_pin 38 // spiram/octspi  * // input, Rotary encoder push switch, for the UI. active low (needs pullup). signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
-#define       extra_pin 39 // jtck/glitch    ! // input, asserted to tell us to run in basic mode, active low (has ext pullup) - note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define       extra_pin 39 // jtck/glitch    ! // input, unused.  note possible known glitch: 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define   hotrc_ch4_pin 40 // jtdo             // syspower, starter, and cruise mode toggle control. hotrc ch4 pwm toggle signal
 #define   hotrc_ch3_pin 41 // jtdi             // ignition control, hotrc Ch3 PWM toggle signal
 #define   encoder_a_pin 42 // jtms             // int input, the A (aka CLK) pin of the encoder. both A and B complete a negative pulse in between detents. if A pulse goes low first, turn is CCW. (needs pullup)
-#define    tx_basic_pin 43 // "TX"/tx0         // serial monitor data out. Also used to detect devboard vs. pcb at boot time (using pullup/pulldown, see below)
+#define    tx_basic_pin 43 // "TX"/tx0         // serial monitor data out. Also used to read basic mode switch using pullup/pulldown by temporarily interrupting the console to read
 #define          rx_pin 44 // "RX"/rx0         // serial monitor data in. maybe could repurpose during runtime since we only need outgoing console data?
 #define    ignition_pin 45 // strap0           // output to an nfet/pfet pair to control the car ignition
 #define    syspower_pin 46 // strap0           // output to an nfet/pfet pair to power all the tranducers.
