@@ -51,7 +51,7 @@ void loop() {                  // arduino-style loop() is like main() but with a
     ignition.update(run.mode); // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();       // read the builtin button
     bootbutton_actions();      // temporary (?) functionality added for development convenience
-    basicsw.update();          // see if basic mode switch got hit
+    basicsw.update(run.mode);          // see if basic mode switch got hit
     starter.update();          // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();          // read encoder input signals  // 20 us per loop
     pot.update();              // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 

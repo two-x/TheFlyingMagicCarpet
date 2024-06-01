@@ -227,22 +227,22 @@ class Touchscreen {
         if (flip_the_screen) ret = disp_size[axis] - ret;
         return ret;
     }
-    void get_touch_debounced() {  // this sets or unsets nowtouch while rejecting random very-short spurious touch or un-touch blips
+    void get_touch_debounced() {                     // this sets or unsets nowtouch while rejecting random very-short spurious touch or un-touch blips
         static bool triggered_last;
         uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
         bool touch_triggered = (count > 0);
-        if (nowtouch != touch_triggered) {       // if the hardware returned opposite our current filtered state, get triggered
-            if (!rejectiontimer_active) {        // if we're not already waiting for validity
-                rejectiontimer.reset();          // reset the timer. the touch (or lack thereof) must stay triggered high (or low) through expiration for valid change in touch state
-                rejectiontimer_active = true;    // remember we are now triggered and waiting for validity
+        if (nowtouch != touch_triggered) {           // if the hardware returned opposite our current filtered state, get triggered
+            if (!rejectiontimer_active) {            // if we're not already waiting for validity
+                rejectiontimer.reset();              // reset the timer. the touch (or lack thereof) must stay triggered high (or low) through expiration for valid change in touch state
+                rejectiontimer_active = true;        // remember we are now triggered and waiting for validity
             }
-            else if (rejectiontimer.expired()) { // levels have held through entire validity wait timeout
-                rejectiontimer_active = false;   // remember we're no longer triggered nor waiting for validity
-                nowtouch = touch_triggered;      // we can now consider the change in touch state valid
+            else if (rejectiontimer.expired()) {     // levels have held through entire validity wait timeout
+                rejectiontimer_active = false;       // remember we're no longer triggered nor waiting for validity
+                nowtouch = touch_triggered;          // we can now consider the change in touch state valid
                 landed_coordinates_valid = nowtouch; // mark that the original touch coordinates are valid for the present swipe, or the swipe just ended
             }
         }
-        else rejectiontimer_active = false;      // cancel our trigger, and be ready to retrigger
+        else rejectiontimer_active = false;          // cancel our trigger, and be ready to retrigger
         for (int axis=0; axis<=1; axis++) {
             if (nowtouch) tft_touch[axis] = read_axis(axis);
             else if (touch_triggered && !triggered_last) landed[axis] = read_axis(axis);

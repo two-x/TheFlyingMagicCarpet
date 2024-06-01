@@ -28,19 +28,19 @@
 #define     starter_pin 36 // sram/ospi/glitch // input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
 #define        tach_pin 37 // spiram/octspi    // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
 #define  encoder_sw_pin 38 // spiram/octspi  * // input, Rotary encoder push switch, for the UI. active low (needs pullup). signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
-#define     basicsw_pin 39 // jtck/glitch      // input, asserted to tell us to run in basic mode, active low (has ext pullup) - note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define       extra_pin 39 // jtck/glitch    ! // input, asserted to tell us to run in basic mode, active low (has ext pullup) - note: placed on p39 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define   hotrc_ch4_pin 40 // jtdo             // syspower, starter, and cruise mode toggle control. hotrc ch4 pwm toggle signal
 #define   hotrc_ch3_pin 41 // jtdi             // ignition control, hotrc Ch3 PWM toggle signal
 #define   encoder_a_pin 42 // jtms             // int input, the A (aka CLK) pin of the encoder. both A and B complete a negative pulse in between detents. if A pulse goes low first, turn is CCW. (needs pullup)
-#define     uart_tx_pin 43 // "TX"/tx0         // serial monitor data out. Also used to detect devboard vs. pcb at boot time (using pullup/pulldown, see below)
-#define     uart_rx_pin 44 // "RX"/rx0         // serial monitor data in. maybe could repurpose during runtime since we only need outgoing console data?
+#define    tx_basic_pin 43 // "TX"/tx0         // serial monitor data out. Also used to detect devboard vs. pcb at boot time (using pullup/pulldown, see below)
+#define          rx_pin 44 // "RX"/rx0         // serial monitor data in. maybe could repurpose during runtime since we only need outgoing console data?
 #define    ignition_pin 45 // strap0           // output to an nfet/pfet pair to control the car ignition
 #define    syspower_pin 46 // strap0           // output to an nfet/pfet pair to power all the tranducers.
 #define   encoder_b_pin 47 // NA               // int input, the B (aka DT) pin of the encoder. both A and B complete a negative pulse in between detents. if B pulse goes low first, turn is CW. (needs pullup)
 #define    neopixel_pin 48 // neopix           // data line to onboard neopixel WS281x (on all v1 devkit boards - pin 38 is used on v1.1 boards). Also used for onboard and external neopoxels - ! pin is also defined in neopixel.h
 // external components needed (pullup/pulldown resistors, capacitors, etc.): (note: "BB" = on dev breadboards only, "PCB" = on vehicle PCB only)
 // 1. onewire_pin, tach_pin, speedo_pin: Add 4.7k-ohm to 3.3V, needed for open collector sensor output to define logic-high voltage level.
-// 2. uart_tx_pin: (PCB) add 22k-ohm to GND. (BB) connect the 22k-ohm to 3.3V instead. for boot detection of vehicle PCB, so defaults are set appropriately.
+// 2. tx_basic_pin: (BB) connect the 22k-ohm to gnd to avoid always being in basic mode
 // 3. resistor dividers are needed for these inputs: starter_pin (16V->3.3V), mulebatt_pin (16V->3.3V), and pressure_pin (5V->3.3V).
 // 4. ignition_pin, syspower_pin, starter_pin: require pulldowns to gnd, this is provided by nfet gate pulldown.
 // 5. gas_pwm_pin: should have a series ~680-ohm R going to the servo.

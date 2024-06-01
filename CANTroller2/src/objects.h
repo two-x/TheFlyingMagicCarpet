@@ -35,17 +35,18 @@ int rn(int values=256) {  // Generate a random number between 0 and values-1
     return dis(gen);
 }
 void initialize_pins_and_console() {  // set up those straggler pins which aren't taken care of inside class objects
-    set_pin(sdcard_cs_pin, OUTPUT, HIGH);    // deasserting unused cs line ensures available spi bus
+    set_pin(sdcard_cs_pin, OUTPUT, HIGH);     // deasserting unused cs line ensures available spi bus
     set_pin(syspower_pin, OUTPUT, syspower);
+    set_pin(extra_pin, INPUT_PULLUP);         // avoid undefined inputs
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);         // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);         // avoid voltage level contention
-    set_pin(uart_tx_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
-    fun_flag = (read_pin(uart_tx_pin));       // detect bit at boot, can be used for any hardware devation we might need
+    // set_pin(tx_basic_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
+    // fun_flag = (read_pin(uart_tx_pin));       // detect bit at boot, can be used for any hardware devation we might need
     Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
     delay(1200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     Serial.printf("** Setup begin..\nSerial console started..\n");
-    Serial.printf("Syspower turned %s. fun_flag is %s.\n", syspower ? "on" : "off", fun_flag ? "high" : "low");    
-    ezread.ezprintf("Syspower turned %s. fun_flag is %s.\n", syspower ? "on" : "off", fun_flag ? "high" : "low");    
+    Serial.printf("Syspower turned %s\n", syspower ? "on" : "off");  // , fun_flag ? "high" : "low");    
+    ezread.ezprintf("Syspower turned %s\n", syspower ? "on" : "off");  // , fun_flag ? "high" : "low");    
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
     sim.set_can_sim(sens::joy, false);
@@ -156,17 +157,16 @@ void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-
 }
 class ToggleSwitch {
   public:
-    bool pin_val = HIGH, val = LOW;  // pin low means val high
-  private:
+    bool val = LOW;  // pin low means val high
+  protected:
     int pin;
     bool last = 0;
     sens attached_sensor = sens::none;
     void readswpin() {
         last = val;
         do {
-            pin_val = digitalRead(pin);   // !value because electrical signal is active low
-        } while (pin_val != digitalRead(pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
-        val = !pin_val;  // pin low means switch value is high
+            val = digitalRead(pin);   // !value because electrical signal is active low
+        } while (val == digitalRead(pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
   public:
     ToggleSwitch(int _pin, sens _sens=sens::none) : pin(_pin), attached_sensor(_sens) {
@@ -178,6 +178,33 @@ class ToggleSwitch {
         if (last != val) kick_inactivity_timer(HUTogSw);
     }
 };
+// the basic mode switch puts either a pullup or pulldown onto the serial tx pin. so to read it we must turn off the serial console, read the pin, then turn the console back on
+// to limit interruptions in the console, we only read every few seconds, and only when not in a driving mode
+class BasicModeSwitch : public ToggleSwitch {
+  private:
+    Timer basicswreadtimer{1500000};
+    void readswpin() {
+        if (console_enabled) {
+            // delay(200);  // give time for serial to print everything in its buffer
+            Serial.end();  // close serial console to prevent crashes due to error printing
+        }
+        set_pin(pin, INPUT);
+        ToggleSwitch::readswpin();
+        if (console_enabled) {
+            Serial.begin(115200);  // restart serial console to prevent crashes due to error printing
+            // delay(1500);  // note we will miss console messages for a bit surrounding a read, unless we add back these delays
+        }
+    }
+  public:
+    BasicModeSwitch(int _pin) : ToggleSwitch(_pin, sens::basicsw) {}
+    void update(int runmode) {
+        if (sim.simulating(attached_sensor)) return;
+        if (runmode == FLY || runmode == HOLD || runmode == CRUISE) return;
+        if (basicswreadtimer.expireset()) readswpin();
+        if (last != val) kick_inactivity_timer(HUTogSw);
+    }
+};
+
 class Ignition {
   private:
     int ign_req = REQ_NA, panic_req = REQ_NA, pin;
@@ -281,7 +308,7 @@ class Starter {
     // src source() { return pin_outputting ? src::CALC : src::PIN; }
 };
 
-static ToggleSwitch basicsw(basicsw_pin, sens::basicsw);
+static BasicModeSwitch basicsw(tx_basic_pin);
 static Ignition ignition(ignition_pin);
 static Starter starter(starter_pin);
 
