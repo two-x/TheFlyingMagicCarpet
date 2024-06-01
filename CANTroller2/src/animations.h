@@ -426,7 +426,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                     has_eraser = false;
                 }
                 if (season == 0 && last_season == 3) {  // on new years we slam them with a big punch
-                    extraeffectstimer.set(1750000);
+                    extraeffectstimer.set(800000);
                     punchdelay = true;
                     sprite->fillCircle((vp->w >> 1) + vp->x, (vp->h >> 1) + vp->y, (int)((float)std::min(vp->h, vp->w) * 0.38), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
                 }

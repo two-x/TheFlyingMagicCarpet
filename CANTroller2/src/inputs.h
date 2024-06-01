@@ -221,6 +221,21 @@ class Touchscreen {
     uint16_t tquad;  // imagine screen divided into rows and columns as touch buttons. First byte encodes row, 2nd byte is column 
     // uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     // lcd.setTouch(touch_cal_data);
+    void get_touch_debounced() {  // this rejects short spurious touch or un-touch blips
+        uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
+        bool touch_triggered = (count > 0);
+        if (nowtouch != touch_triggered) {       // if the hardware returned opposite our current filtered state, get triggered
+            if (!rejectiontimer_active) {        // if we're not already waiting for validity
+                rejectiontimer.reset();          // reset the timer. the touch must stay triggered through expiration for valid change in touch state
+                rejectiontimer_active = true;    // remember we are now triggered and waiting for validity
+            }
+            else if (rejectiontimer.expired()) { // levels have held through entire validity wait timeout
+                rejectiontimer_active = false;   // remember we're no longer triggered nor waiting for validity
+                nowtouch = touch_triggered;      // we can now consider the change in touch state valid
+            }
+        }
+        else rejectiontimer_active = false;      // cancel our trigger, and be ready to retrigger
+    }
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
     int idelta = 0;
@@ -253,18 +268,7 @@ class Touchscreen {
     void update() {
         if (captouch && _i2c->not_my_turn(i2c_touch)) return;
         if (touchSenseTimer.expireset()) {
-            uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
-            // if (captouch) count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]), &(touch_read[zz]));
-            // Serial.printf("n%d rx:%d ry:%d ", nowtouch, touch_read[0], touch_read[1]);
-            bool touch_triggered = (count > 0);
-            if (touch_triggered) {  // this little bit of logic uses a timer to reject spurious short touches, which happen sometimes especially with the screen pressed against the box lid
-                if (!rejectiontimer_active) {
-                    rejectiontimer.reset();
-                    rejectiontimer_active = true;
-                }
-                else if (rejectiontimer.expired()) nowtouch = true;
-            }
-            else if (rejectiontimer_active) nowtouch = rejectiontimer_active = false;
+            get_touch_debounced();
             if (nowtouch) {
                 kick_inactivity_timer(HUTouch);  // evidence of user activity
                 for (int axis=0; axis<=1; axis++) {
