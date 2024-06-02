@@ -8,7 +8,7 @@ class MomentaryButton {
     bool activity_timer_keepalive = true;  // will activity on this switch be considered that the user is active?
     Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
     //  ---- tunable ----
-    Timer _longPressTimer = Timer(375000);  // Used to time long button presses
+    Timer _longPressTimer = Timer(300000);  // Used to time long button presses
   public:
     int _sw_pin = -1;
     bool now = false;  // Remember whether switch is being pressed

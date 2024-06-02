@@ -983,7 +983,7 @@ class Tuner {
     Display* screen;
     NeopixelStrip* neo;
     Touchscreen* touch;
-    Timer tuningAbandonmentTimer{25000000};  // This times out edit mode after a a long period of inactivity
+    Timer tuningAbandonmentTimer{45000000};  // This times out edit mode after a a long period of inactivity
     Timer tuningEditTimer{50000};  // Control frequency of polling for new edits
     int datapage_last;
   public:
