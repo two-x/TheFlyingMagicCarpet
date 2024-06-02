@@ -169,9 +169,10 @@ class ToggleSwitch {
 class BasicModeSwitch : public ToggleSwitch {
   public:
     BasicModeSwitch(int _pin) : ToggleSwitch(_pin, sens::basicsw) {}
-    void read() {
+    void read() {  // ensure console is not active when calling this
         set_pin(pin, INPUT);
         readswpin();
+        if (last != val) kick_inactivity_timer(HUTogSw);
     }
     void reread(int runmode) {
         if (sim.simulating(attached_sensor)) return;
@@ -185,7 +186,6 @@ class BasicModeSwitch : public ToggleSwitch {
             Serial.begin(115200);  // restart serial console to prevent crashes due to error printing
             // delay(1500);  // note we will miss console messages for a bit surrounding a read, unless we add back these delays
         }
-        if (last != val) kick_inactivity_timer(HUTogSw);
     }
 };
 static BasicModeSwitch basicsw(tx_basic_pin);
@@ -202,8 +202,8 @@ void initialize_pins_and_console() {  // set up those straggler pins which aren'
     Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
     delay(1200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     Serial.printf("** Setup begin..\nSerial console started..\n");
-    Serial.printf("Syspower turned %s\n", syspower ? "on" : "off");  // , fun_flag ? "high" : "low");    
-    ezread.ezprintf("Syspower turned %s\n", syspower ? "on" : "off");  // , fun_flag ? "high" : "low");    
+    Serial.printf("Syspower is %s, basicsw read: \n", syspower ? "on" : "off", basicsw.val ? "high" : "low");    
+    ezread.ezprintf("Syspower is %s, basicsw read: \n", syspower ? "on" : "off", basicsw.val ? "high" : "low");
 }
 class Ignition {
   private:
