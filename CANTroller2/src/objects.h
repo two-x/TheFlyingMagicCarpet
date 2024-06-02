@@ -155,7 +155,8 @@ class ToggleSwitch {
         } while (val == digitalRead(pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
   public:
-    ToggleSwitch(int _pin, sens _sens=sens::none) : pin(_pin), attached_sensor(_sens) {
+    ToggleSwitch(int _pin, sens _sens=sens::none) : pin(_pin), attached_sensor(_sens) {}
+    void setup() {
         set_pin(pin, INPUT_PULLUP);
         readswpin();
     }
@@ -171,7 +172,8 @@ class BasicModeSwitch : public ToggleSwitch {
     BasicModeSwitch(int _pin) : ToggleSwitch(_pin, sens::basicsw) {}
     void read() {  // ensure console is not active when calling this
         set_pin(pin, INPUT);
-        readswpin();
+        val = digitalRead(pin);
+        // readswpin();
         if (last != val) kick_inactivity_timer(HUTogSw);
     }
     void reread(int runmode) {
@@ -198,6 +200,7 @@ void initialize_pins_and_console() {  // set up those straggler pins which aren'
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);         // avoid voltage level contention
     // set_pin(tx_basic_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
     // fun_flag = (read_pin(tx_basic_pin));       // detect bit at boot, can be used for any hardware devation we might need
+    // basicsw.val = fun_flag;
     basicsw.read();
     Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
     delay(1200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot

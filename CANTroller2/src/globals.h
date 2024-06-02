@@ -409,7 +409,7 @@ class EZReadConsole {
     std::string textlines[num_lines];
     int newest_content = -1, next_index = 0;
     uint8_t linecolors[num_lines];
-    int bufferSize = 100, maxlength=40; // size_t bufferSize; // Size of the ring buffer
+    int bufferSize = num_lines, maxlength=40; // size_t bufferSize; // Size of the ring buffer
     uint8_t defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
   private:
     std::string remove_nonprintable(const std::string& victim) {
