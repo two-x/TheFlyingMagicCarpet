@@ -6,7 +6,7 @@
 
 class DiagRuntime {
   private:
-    bool report_error_changes = true;
+    bool report_error_changes = true, first_boot = true;
     Hotrc* hotrc;
     TemperatureSensorManager* tempsens;
     PressureSensor* pressure;
@@ -73,6 +73,11 @@ class DiagRuntime {
         errstatus[errtype] = (errstatus[errtype] & ~(1 << device)) | (stat << device);  // replaces the device's error bit in status word with updated value
     }
     void update(int _runmode) {
+        if (first_boot) {  // don't run too soon before sensors get initialized etc.
+            first_boot = false;
+            errTimer.reset();
+            return;
+        }
         runmode = _runmode;
         if (errTimer.expireset()) {
             // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
