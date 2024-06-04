@@ -237,6 +237,7 @@ class QPID {
 static std::string motormodecard[NumMotorModes] = { "NA", "Halt", "Idle", "Releas", "OpLoop", "Thresh", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start" };
 static std::string cruiseschemecard[NumCruiseSchemes] = { "FlyPID", "TrPull", "TrHold" };
 static std::string brakefeedbackcard[NumBrakeFB] = { "BkPosn", "BkPres", "Hybrid", "None" };
+static std::string openloopmodecard[NumOpenLoopModes] = { "Median", "AutoRel", "AR+Hold" };
 
 // ServoMotor - a parent class providing common elements for motor manager child classes. These subclasses each
 // coordinate all aspects of one motor, including related sensors & pid, having a standard control interface
@@ -596,9 +597,9 @@ class BrakeMotor : public JagMotor {
     float press_ki = 0.04;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_kd = 0.000;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     float posn_kp = 42.0;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float posn_ki = 6.5;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float posn_kd = 0.000;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    static constexpr int pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+    float posn_ki = 5.5;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float posn_kd = 22.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    static constexpr int pid_timeout = 40000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     int dominantsens_last = PositionFB, preforce_drivemode;    // float posn_inflect, pres_inflect, pc_inflect;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
@@ -621,7 +622,7 @@ class BrakeMotor : public JagMotor {
     bool pid_enabled = true, pid_ena_last = true, enforce_positional_limits = true, no_feedback = false;    // default for use of pid allowed
     int feedback = PositionFB, feedback_last = PositionFB;  // this is the default for sensors to use as feedback
     int dominantsens, motormode = Halt, oldmode = Halt;  // not tunable
-    int openloop_autorelease = true;  // if true, when in openloop the brakes release when trigger released. otherwise, control with thrigger using halfway point scheme
+    int openloop_mode = AutoRelHoldable;  // if true, when in openloop the brakes release when trigger released. otherwise, control with thrigger using halfway point scheme
     bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == PositionFB);
     QPID pids[NumBrakeSens];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     QPID* pid_dom = &(pids[PositionFB]);  // AnalogSensor sensed[2];
@@ -661,9 +662,9 @@ class BrakeMotor : public JagMotor {
         pids[PressureFB].init(pressure->ptr(), &(pc[OPMIN]), &(pc[OPMAX]), press_kp, press_ki, press_kd, QPID::pmod::onerr,
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
         pids[PositionFB].init(brkpos->ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_kp, posn_ki, posn_kd, QPID::pmod::onerr, 
-            QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
-        pids[PressureFB].set_iaw_cond_thresh(0.25);  // set the fraction of the output range within which integration works at all
-        pids[PositionFB].set_iaw_cond_thresh(0.25);
+            QPID::dmod::onerr, QPID::awmod::off, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
+        // pids[PressureFB].set_iaw_cond_thresh(0.25);  // set the fraction of the output range within which integration works at all
+        // pids[PositionFB].set_iaw_cond_thresh(0.25);
         max_out_change_pcps = 200.0;  // LAE actuator stutters and stalls when changing direction suddenly
     }
   private:
@@ -730,11 +731,17 @@ class BrakeMotor : public JagMotor {
     }
     float calc_open_out() {
         // this line releases brake whenever trigger is released, and presses proportional to trigger push. must hold trigger steady to stop brakes where they are
-        if (openloop_autorelease) {
+        if (openloop_mode == AutoRelHoldable) {
+            if (hotrc->pc[VERT][FILT] <= hotrc->pc[VERT][OPMIN] + hotrc->pc[VERT][MARGIN])
+                set_target(open_loop_attenuation_pc * pc[OPMAX] / 100.0);
+            else if (hotrc->joydir() == JOY_DN) set_target(pc[STOP]);
+            else set_target(pc[OPMIN]);
+        }
+        else if (openloop_mode == AutoRelease) {
             if (hotrc->joydir() == JOY_DN) set_target(open_loop_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], pc[STOP], pc[OPMAX]) / 100.0);
             else set_target(pc[OPMIN]);
         }
-        else {
+        else {  // if openloopmode == Median
             if (hotrc->joydir() == JOY_DN) set_target(open_loop_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], pc[OPMIN], pc[OPMAX]) / 100.0);
             else set_target(pc[STOP]);
         }

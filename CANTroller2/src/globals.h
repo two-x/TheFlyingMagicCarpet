@@ -83,6 +83,7 @@ enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes
 enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
 enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, ThreshLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, NumMotorModes=13 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
+enum openloopmodes { MedianPoint, AutoRelease, AutoRelHoldable, NumOpenLoopModes };
 enum brakeextra { NumBrakeSens=2 };
 enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum boolean_states { ON=1 };
@@ -138,7 +139,7 @@ bool print_framebuffers = false;     // dumps out ascii representations of scree
 float float_zero = 0.000069;         // if two floats being compared are closer than this, we consider them equal
 float float_conversion_zero = 0.001; // 
 int sprite_color_depth = 8;
-uint32_t looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
+int looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode
 int32_t cruise_delta_max_pc_per_s = 16;  // (in TriggerHold mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.016;   // (in TriggerPull mode) Limits the change of each adjust trigger pull to this fraction of what's possible
@@ -154,8 +155,8 @@ float temp_sensor_max_f = 257.0; // maximum reading of sensor is 125 C = 257 F
 float maf_min_gps = 0.0;
 float maf_max_gps = 50.0; // i just made this number up as i have no idea what's normal for MAF
 bool flashdemo = false;
-int32_t neobright = 10;   // default for us dim/brighten the neopixels
-int32_t neodesat = 0;     // default for lets us de/saturate the neopixels
+int neobright = 10;   // default for us dim/brighten the neopixels
+int neodesat = 0;     // default for lets us de/saturate the neopixels
 float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change value at this percent of their overall range per second
 
 // non-tunable values. probably these belong with their related code
@@ -201,8 +202,8 @@ bool panicstop = false;
 #define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays
 #undef constrain
 inline float constrain(float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
-inline int32_t constrain(int32_t amt, int32_t low, int32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
-inline uint32_t constrain(uint32_t amt, uint32_t low, uint32_t high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
+inline int constrain(int amt, int low, int high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
+inline uint constrain(uint amt, uint low, uint high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline long constrain(long amt, long low, long high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {

@@ -39,7 +39,7 @@ std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "JoysticH", "   Speed", "    Tach", brAk"Pres", "Throttle", brAk"Motr", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "psi", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 8, 11, 11, 11, 13, 4, 10 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 8, 11, 11, 11, 13, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", __________, __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
@@ -47,13 +47,13 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "TachPuls", "Tach Raw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpeedRaw", "   Speed", "   Speed", spEd"AMin", spEd"AMax", "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", spEd"Idle", },  // PG_PULS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", __________, __________, __________, __________, "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
-    { "Brk Heat", "HybBrake", __________, __________, __________, __________, __________, __________, "BkEnaPID", "BkFeedbk", "BAutoRel", "BkPosLim", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
-    { "MotrMode", "Feedback", brAk"Posn", "Pn|PrErr", "Pres Tgt", "Posn Tgt", "HybrdTgt", "OutRatio", "  P Term", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
+    { "Brk Heat", "HybBrake", __________, __________, __________, __________, __________, __________, "BkEnaPID", "BkFeedbk", "BOpnMode", "BkPosLim", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
+    { "MotrMode", "Feedback", brAk"Posn", "Pn|PrErr", "Pres Tgt", "Posn Tgt", "HybrdTgt", "OutRatio", "  P Term", "Integral", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "MotrMode", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, __________, __________, __________, "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, __________, __________, __________, __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, __________, "No Temps", "StopWifi", },  // PG_TEMP
     { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", " Touch X", " Touch Y", "SpinRate", "  Uptime", __________, "EZScroll", "BlnkDemo", neo_bright, "NeoDesat", "PanelApp", },  // PG_UI
+    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", " Touch X", " Touch Y", "SpinRate", "  Uptime", __________, __________, "EZScroll", "BlnkDemo", neo_bright, "PanelApp", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, ______, "%",    "%",    },  // PG_RUN
@@ -62,13 +62,13 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "ms",   "Hz",   "psi",  "ms",   "Hz",   "mph",  "mph",  "%",    "ms",   "ms",   "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    ______, ______, ______, ______, "%",    degree, degree, degreF, degreF, },  // PG_IDLE
-    { degreF, "%",    ______, ______, ______, ______, ______, ______, b1nary, scroll, b1nary, b1nary, b1nary, b1nary, scroll, },  // PG_MOTR
+    { degreF, "%",    ______, ______, ______, ______, ______, ______, b1nary, scroll, scroll, b1nary, b1nary, b1nary, scroll, },  // PG_MOTR
     { scroll, scroll, "in",   "psin", "psin", "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, ______, ______, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, b1nary, b1nary, },  // PG_TEMP
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us",   "us",   "Hz",   "fps",  scroll, "pix",  "pix",  "%",    "min",  ______, "lin",  "eyes", "%",    "of10", scroll, },  // PG_UI
+    { "us",   "us",   "Hz",   "fps",  scroll, "pix",  "pix",  "%",    "min",  ______, ______, "lin",  "eyes", "%",    scroll, },  // PG_UI
 };
 static std::string unitmapnames[11] = { "usps", "us", "rpms", scroll, b1nary, "%", "ohm", "eyes", "psin", degree, "of10" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for exceptions where some unit strings can't be well represented by any set of 3 font characters
@@ -365,11 +365,11 @@ class Display {
     void draw_hyphen(int x_pos, int y_pos, uint8_t color) {  // Draw minus sign in front of negative numbers
         sprptr->drawFastHLine(x_pos+2, y_pos+3, 3, color);
     }
-    void draw_dynamic(int lineno, std::string disp_string, int value, int lowlim, int hilim, int target=-1, uint8_t color=NON) {
+    void drawval_core(int lineno, std::string disp_string, float value, float lowlim, float hilim, float target=NAN, uint8_t color=NON) {
         int age_us = (color != NON) ? 11 : (int)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
         int x_base = disp_datapage_values_x;
-        bool polarity = (value >= 0);  // polarity 0=negative, 1=positive
-        bool force = (value == 1234567) || disp_data_dirty[lineno];
+        bool polarity = (value >= 0.0);  // polarity 0=negative, 1=positive
+        bool force = std::isnan(value) || disp_data_dirty[lineno];
         if ((disp_values[lineno] != disp_string) || force) {  // If value differs, Erase old value and write new
             if (color == NON) color = GRN;
             int y_pos = lineno*disp_line_height_pix;
@@ -393,8 +393,8 @@ class Display {
         bool delete_bargraph = false;
         int corner_x = disp_bargraphs_x;
         int corner_y = lineno*disp_line_height_pix;
-        if (lowlim < hilim) {  // Any value having a given range deserves a bargraph gauge with a needle
-            int n_pos = map(value, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+        if (!std::isnan(lowlim) && !std::isnan(hilim)) {  // Any value having a given range deserves a bargraph gauge with a needle
+            int n_pos = (int)(map(value, lowlim, hilim, (float)disp_bargraph_squeeze, (float)(disp_bargraph_width-disp_bargraph_squeeze)));
             uint8_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : GRN;
             n_pos = corner_x + constrain(n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
             if (!disp_bargraphs[lineno]) draw_bargraph_base(corner_x, corner_y + 8, disp_bargraph_width);
@@ -402,8 +402,8 @@ class Display {
             draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // Erase old target
             draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
             disp_needles[lineno] = n_pos;  // Remember position of needle
-            if (target != -1) {  // If target value is given, draw a target on the bargraph too
-                int t_pos = map(target, lowlim, hilim, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+            if (!std::isnan(target)) {  // If target value is given, draw a target on the bargraph too
+                int t_pos = (int)(map(target, lowlim, hilim, (float)disp_bargraph_squeeze, (float)(disp_bargraph_width-disp_bargraph_squeeze)));
                 uint8_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
                 t_pos = corner_x + constrain(t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
                 draw_target_shape(t_pos, corner_y, tcolor, NON);  // Draw the new target
@@ -411,31 +411,42 @@ class Display {
             }
         }
         else delete_bargraph = true;
-        if (delete_bargraph || value == 1234567) {
+        if (delete_bargraph || value == NAN) {
             sprptr->fillRect(corner_x - 1, corner_y, disp_bargraph_width + 2, disp_line_height_pix, BLK);
             disp_bargraphs[lineno] = false;
         }
         disp_data_dirty[lineno] = false;
     }
-    void draw_dynamic(int lineno, int value, int lowlim=-1, int hilim=-1, int target=-1) {
+    void drawval_int(int lineno, int value, int lowlim=-1, int hilim=-1, int target=-1) {
         std::string val_string = num2string(value, (int)disp_maxlength);
-        draw_dynamic(lineno, val_string.c_str(), value, lowlim, hilim, (int)target);
+        float lo, hi, targ;
+        if (lowlim == -1) lo = NAN;
+        else lo = (float)lowlim;
+        if (hilim == -1) hi = NAN;
+        else hi = (float)hilim;
+        if (target == -1) targ = NAN;
+        else targ = (float)target;        
+        drawval_core(lineno, val_string, (float)value, lo, hi, targ);
     }
-    void draw_dynamic(int lineno, float value, float lowlim=-1, float hilim=-1, int target=-1, int precision = disp_default_float_precision) {
+    void drawval(int lineno, float value, float lowlim, float hilim, float target=NAN, int precision = disp_default_float_precision) {
         std::string val_string = num2string(value, (int)disp_maxlength, precision);
-        draw_dynamic(lineno, val_string.c_str(), (int)value, (int)lowlim, (int)hilim, target);
+        drawval_core(lineno, val_string, value, lowlim, hilim, target);
     }
-    void draw_dynamic(int lineno, float value, float lowlim, float hilim, float target, int precision = disp_default_float_precision) {
-        draw_dynamic(lineno, value, lowlim, hilim, (int)target, precision);
+    void drawval(int lineno, float value, int precision) {
+        std::string val_string = num2string(value, (int)disp_maxlength, precision);
+        drawval_core(lineno, val_string, value, NAN, NAN, NAN);
+    }
+    void drawval(int lineno, float value) {
+        drawval(lineno, value, NAN, NAN, NAN);
     }
     void draw_eraseval(int lineno) {
-        draw_dynamic(lineno, "", 1234567, -1, -1, -1);
+        drawval_core(lineno, "", NAN, NAN, NAN, NAN);
     }
     void draw_asciiname(int lineno, std::string name) {
-        draw_dynamic(lineno, name.c_str(), 1, -1, -1, -1, CYN);
+        drawval_core(lineno, name, 1, NAN, NAN, NAN, CYN);
     }
     void draw_truth(int lineno, bool truthy, int styl=2) {  // 0:on/off, 1:yes/no, 2:true/false .
-        draw_dynamic(lineno, (truthy) ? ((styl==0) ? "on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
+        drawval_core(lineno, (truthy) ? ((styl==0) ? "on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
     }
     int significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
         int place = 1;
@@ -595,7 +606,7 @@ class Display {
     }
     void draw_temperature(loc location, int draw_index) {
         if (!tempsens.detected(location)) draw_eraseval(draw_index);
-        else draw_dynamic(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
+        else drawval(draw_index, tempsens.val(location), temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
     }
     void draw_idiotlight(int i, int x, int y) {
         if (!idiots->val(i)) sprptr->fillRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, BLK);  // erase rectangle when turning off. need to test if this is necessary
@@ -637,113 +648,113 @@ class Display {
     void disp_datapage_values() {
         // if (!disp_values_dirty) return;
         float drange;
-        draw_dynamic(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        draw_dynamic(2, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-        draw_dynamic(3, speedo.val(), 0.0f, speedo.opmax(), gas.cruisepid.target());
-        draw_dynamic(4, tach.val(), 0.0f, tach.opmax(), gas.pid.target());
-        draw_dynamic(5, pressure.val(), pressure.opmin(), pressure.opmax(), brake.pids[PressureFB].target());  // (brake_active_pid == S_PID) ? (int)brakeSPID.targ() : pressure_target_adc);
-        draw_dynamic(6, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], gas.throttle_target_pc);
-        draw_dynamic(7, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
-        draw_dynamic(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
+        drawval_int(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+        drawval_int(2, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+        drawval(3, speedo.val(), 0.0f, speedo.opmax(), gas.cruisepid.target());
+        drawval(4, tach.val(), 0.0f, tach.opmax(), gas.pid.target());
+        drawval(5, pressure.val(), pressure.opmin(), pressure.opmax(), brake.pids[PressureFB].target());  // (brake_active_pid == S_PID) ? (int)brakeSPID.targ() : pressure_target_adc);
+        drawval(6, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], gas.throttle_target_pc);
+        drawval(7, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
+        drawval(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
         if (datapage == PG_RUN) {
-            draw_dynamic(9, brkpos.val(), brkpos.opmin(), brkpos.opmax());
-            draw_dynamic(10, mulebatt.val(), mulebatt.opmin(), mulebatt.opmax());
-            draw_dynamic(11, pot.val(), pot.opmin(), pot.opmax());
-            draw_dynamic(12, airvelo.val(), airvelo.opmin(), airvelo.opmax());
-            draw_dynamic(13, mapsens.val(), mapsens.opmin(), mapsens.opmax());
-            draw_dynamic(14, maf_gps, maf_min_gps, maf_max_gps);
+            drawval(9, brkpos.val(), brkpos.opmin(), brkpos.opmax());
+            drawval(10, mulebatt.val(), mulebatt.opmin(), mulebatt.opmax());
+            drawval(11, pot.val(), pot.opmin(), pot.opmax());
+            drawval(12, airvelo.val(), airvelo.opmin(), airvelo.opmax());
+            drawval(13, mapsens.val(), mapsens.opmin(), mapsens.opmax());
+            drawval(14, maf_gps, maf_min_gps, maf_max_gps);
             draw_asciiname(15, motormodecard[gas.motormode]);
             draw_asciiname(16, motormodecard[brake.motormode]);
             draw_asciiname(17, motormodecard[steer.motormode]);
             for (int line=18; line<=21; line++) draw_eraseval(line);
-            draw_dynamic(22, gas.governor, 0.0f, 100.0f);
-            draw_dynamic(23, steer.steer_safe_pc, 0.0f, 100.0f);
+            drawval(22, gas.governor, 0.0f, 100.0f);
+            drawval(23, steer.steer_safe_pc, 0.0f, 100.0f);
         }
         else if (datapage == PG_JOY) {
-            draw_dynamic(9, hotrc.us[HORZ][FILT], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
-            draw_dynamic(10, hotrc.us[VERT][FILT], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
-            draw_dynamic(11, hotrc.us[HORZ][RAW], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
-            draw_dynamic(12, hotrc.us[VERT][RAW], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
-            draw_dynamic(13, hotrc.us[CH3][RAW], hotrc.us[CH3][OPMIN], hotrc.us[CH3][OPMAX]);
-            draw_dynamic(14, hotrc.us[CH4][RAW], hotrc.us[CH4][OPMIN], hotrc.us[CH4][OPMAX]);
-            draw_dynamic(15, hotrc.pc[HORZ][RAW], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-            draw_dynamic(16, hotrc.pc[VERT][RAW], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+            drawval_int(9, hotrc.us[HORZ][FILT], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
+            drawval_int(10, hotrc.us[VERT][FILT], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
+            drawval_int(11, hotrc.us[HORZ][RAW], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
+            drawval_int(12, hotrc.us[VERT][RAW], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
+            drawval_int(13, hotrc.us[CH3][RAW], hotrc.us[CH3][OPMIN], hotrc.us[CH3][OPMAX]);
+            drawval_int(14, hotrc.us[CH4][RAW], hotrc.us[CH4][OPMIN], hotrc.us[CH4][OPMAX]);
+            drawval_int(15, hotrc.pc[HORZ][RAW], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+            drawval_int(16, hotrc.pc[VERT][RAW], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
             for (int line=17; line<=18; line++) draw_eraseval(line);
-            draw_dynamic(19, airvelo.opmax(), airvelo.absmin(), airvelo.absmax());
-            draw_dynamic(20, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
-            draw_dynamic(21, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
-            draw_dynamic(22, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
-            draw_dynamic(23, hotrc.deadband_us, 0, 100);
+            drawval(19, airvelo.opmax(), airvelo.absmin(), airvelo.absmax());
+            drawval(20, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
+            drawval(21, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
+            drawval_int(22, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
+            drawval_int(23, hotrc.deadband_us, 0, 100);
         }
         else if (datapage == PG_SENS) {
-            draw_dynamic(9, pot.native(), pot.opmin_native(), pot.opmax_native());
-            draw_dynamic(10, brkpos.native(), brkpos.opmin_native(), brkpos.opmax_native());
-            draw_dynamic(11, brkpos.raw(), brkpos.opmin(), brkpos.opmax());
-            draw_dynamic(12, brkpos.val(), brkpos.opmin(), brkpos.opmax());
-            draw_dynamic(13, brkpos.pc(), 0.0, 100.0);
-            draw_dynamic(14, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
-            draw_dynamic(15, pressure.raw(), pressure.opmin(), pressure.opmax());
-            draw_dynamic(16, pressure.val(), pressure.opmin(), pressure.opmax());
-            draw_dynamic(17, pressure.pc(), 0.0, 100.0);
+            drawval(9, pot.native(), pot.opmin_native(), pot.opmax_native());
+            drawval(10, brkpos.native(), brkpos.opmin_native(), brkpos.opmax_native());
+            drawval(11, brkpos.raw(), brkpos.opmin(), brkpos.opmax());
+            drawval(12, brkpos.val(), brkpos.opmin(), brkpos.opmax());
+            drawval(13, brkpos.pc(), 0.0, 100.0);
+            drawval(14, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
+            drawval(15, pressure.raw(), pressure.opmin(), pressure.opmax());
+            drawval(16, pressure.val(), pressure.opmin(), pressure.opmax());
+            drawval(17, pressure.pc(), 0.0, 100.0);
             draw_eraseval(18);
-            draw_dynamic(19, pressure.opmin(), pressure.absmin(), pressure.absmax());
-            draw_dynamic(20, pressure.opmax(), pressure.absmin(), pressure.absmax());
-            draw_dynamic(21, brkpos.opmin(), brkpos.absmin(), brkpos.absmax());
-            draw_dynamic(22, brkpos.opmax(), brkpos.absmin(), brkpos.absmax());
-            draw_dynamic(23, brkpos.zeropoint(), brkpos.opmin(), brkpos.opmax());  // BrakePositionSensor::absmin_retract_in, BrakePositionSensor::absmax_extend_in);
+            drawval(19, pressure.opmin(), pressure.absmin(), pressure.absmax());
+            drawval(20, pressure.opmax(), pressure.absmin(), pressure.absmax());
+            drawval(21, brkpos.opmin(), brkpos.absmin(), brkpos.absmax());
+            drawval(22, brkpos.opmax(), brkpos.absmin(), brkpos.absmax());
+            drawval(23, brkpos.zeropoint(), brkpos.opmin(), brkpos.opmax());  // BrakePositionSensor::absmin_retract_in, BrakePositionSensor::absmax_extend_in);
         }
         else if (datapage == PG_PULS) {
-            draw_dynamic(9, tach.ms(), tach.absmin_ms(), tach.absmax_ms());
-            draw_dynamic(10, tach.native(), tach.opmin_native(), tach.opmax_native());
-            draw_dynamic(11, tach.raw(), tach.opmin(), tach.opmax());
-            draw_dynamic(12, speedo.ms(), speedo.absmin_ms(), speedo.absmax_ms());
-            draw_dynamic(13, speedo.native(), speedo.opmin_native(), speedo.opmax_native());
-            draw_dynamic(14, speedo.raw(), speedo.opmin(), speedo.opmax());
-            draw_dynamic(15, speedo.val(), speedo.opmin(), speedo.opmax());
-            draw_dynamic(16, speedo.pc(), 0.0, 100.0);
-            draw_dynamic(17, speedo.absmin_ms());
-            draw_dynamic(18, speedo.absmax_ms());
-            draw_dynamic(19, tach.opmin(), tach.absmin(), tach.absmax());
-            draw_dynamic(20, tach.opmax(), tach.absmin(), tach.absmax());
-            draw_dynamic(11, speedo.opmin(), speedo.absmin(), speedo.absmax());
-            draw_dynamic(22, speedo.opmax(), speedo.absmin(), speedo.absmax());
-            draw_dynamic(23, speedo.idle(), speedo.opmin(), speedo.opmax());
+            drawval(9, tach.ms(), tach.absmin_ms(), tach.absmax_ms());
+            drawval(10, tach.native(), tach.opmin_native(), tach.opmax_native());
+            drawval(11, tach.raw(), tach.opmin(), tach.opmax());
+            drawval(12, speedo.ms(), speedo.absmin_ms(), speedo.absmax_ms());
+            drawval(13, speedo.native(), speedo.opmin_native(), speedo.opmax_native());
+            drawval(14, speedo.raw(), speedo.opmin(), speedo.opmax());
+            drawval(15, speedo.val(), speedo.opmin(), speedo.opmax());
+            drawval(16, speedo.pc(), 0.0, 100.0);
+            drawval(17, speedo.absmin_ms());
+            drawval(18, speedo.absmax_ms());
+            drawval(19, tach.opmin(), tach.absmin(), tach.absmax());
+            drawval(20, tach.opmax(), tach.absmin(), tach.absmax());
+            drawval(11, speedo.opmin(), speedo.absmin(), speedo.absmax());
+            drawval(22, speedo.opmax(), speedo.absmin(), speedo.absmax());
+            drawval(23, speedo.idle(), speedo.opmin(), speedo.opmax());
             // for (int myline=9; myline<=18; myline++) draw_eraseval(myline);
         }
         else if (datapage == PG_PWMS) {
-            draw_dynamic(9, gas.deg[OUT], gas.deg[OPMIN], gas.deg[OPMAX]);
-            draw_dynamic(10, gas.us[OUT], gas.us[ABSMIN], gas.us[ABSMAX]);
-            draw_dynamic(11, brake.volt[OUT], brake.volt[OPMIN], brake.volt[OPMAX]);
-            draw_dynamic(12, brake.us[OUT], brake.us[ABSMIN], brake.us[ABSMAX]);
-            draw_dynamic(13, steer.volt[OUT], steer.volt[OPMIN], steer.volt[OPMAX]);
-            draw_dynamic(14, steer.us[OUT], steer.us[ABSMIN], steer.us[ABSMAX]);
+            drawval(9, gas.deg[OUT], gas.deg[OPMIN], gas.deg[OPMAX]);
+            drawval(10, gas.us[OUT], gas.us[ABSMIN], gas.us[ABSMAX]);
+            drawval(11, brake.volt[OUT], brake.volt[OPMIN], brake.volt[OPMAX]);
+            drawval(12, brake.us[OUT], brake.us[ABSMIN], brake.us[ABSMAX]);
+            drawval(13, steer.volt[OUT], steer.volt[OPMIN], steer.volt[OPMAX]);
+            drawval(14, steer.us[OUT], steer.us[ABSMIN], steer.us[ABSMAX]);
             for (int line=15; line<=19; line++) draw_eraseval(line);
-            draw_dynamic(20, gas.deg[OPMIN], gas.deg[ABSMAX], gas.deg[ABSMAX]);
-            draw_dynamic(21, gas.deg[OPMAX], gas.deg[ABSMAX], gas.deg[ABSMAX]);
-            draw_dynamic(22, brake.us[STOP], brake.us[ABSMIN], brake.us[ABSMAX]);
-            draw_dynamic(23, brake.duty_fwd_pc, 0.0f, 100.0f);
+            drawval(20, gas.deg[OPMIN], gas.deg[ABSMAX], gas.deg[ABSMAX]);
+            drawval(21, gas.deg[OPMAX], gas.deg[ABSMAX], gas.deg[ABSMAX]);
+            drawval(22, brake.us[STOP], brake.us[ABSMIN], brake.us[ABSMAX]);
+            drawval(23, brake.duty_fwd_pc, 0.0f, 100.0f);
         }
         else if (datapage == PG_IDLE) {
             draw_asciiname(9, motormodecard[gas.motormode]);
-            draw_dynamic(10, gas.pid.target(), tach.opmin(), tach.opmax());
-            draw_dynamic(11, gas.idle_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
-            draw_dynamic(12, gas.idle_si[OUT], gas.si[OPMIN], gas.si[OPMAX]);
-            draw_dynamic(13, tach.idle(), tach.opmin(), tach.opmax());
-            draw_dynamic(14, fuelpump.volts, fuelpump.off_v, fuelpump.on_max_v);
+            drawval(10, gas.pid.target(), tach.opmin(), tach.opmax());
+            drawval(11, gas.idle_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
+            drawval(12, gas.idle_si[OUT], gas.si[OPMIN], gas.si[OPMAX]);
+            drawval(13, tach.idle(), tach.opmin(), tach.opmax());
+            drawval(14, fuelpump.volts, fuelpump.off_v, fuelpump.on_max_v);
             for (int line=15; line<=18; line++) draw_eraseval(line);
-            draw_dynamic(19, gas.starting_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
-            draw_dynamic(20, gas.idle_si[OPMAX], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
-            draw_dynamic(21, gas.idle_si[OPMIN], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
-            draw_dynamic(22, gas.idletemp_f[OPMIN], gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX]); //  gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4);
-            draw_dynamic(23, gas.idletemp_f[OPMAX], gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX]); // gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4); 
+            drawval(19, gas.starting_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
+            drawval(20, gas.idle_si[OPMAX], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
+            drawval(21, gas.idle_si[OPMIN], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
+            drawval(22, gas.idletemp_f[OPMIN], gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX]); //  gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4);
+            drawval(23, gas.idletemp_f[OPMAX], gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX]); // gas.idletemp_f[ABSMIN], gas.idletemp_f[ABSMAX], -1, 4); 
         }
         else if (datapage == PG_MOTR) {
-            draw_dynamic(9, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
-            draw_dynamic(10, brake.combined_read_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
+            drawval(9, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
+            drawval(10, brake.combined_read_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
             for (int myline=11; myline<=16; myline++) draw_eraseval(myline);
             draw_truth(17, brake.pid_enabled, 1);
             draw_asciiname(18, brakefeedbackcard[brake.feedback]);
-            draw_truth(19, brake.openloop_autorelease, 1);
+            draw_asciiname(19, openloopmodecard[brake.openloop_mode]);
             draw_truth(20, brake.enforce_positional_limits, 1);
             draw_truth(21, gas.pid_enabled, 1);
             draw_truth(22, gas.cruise_pid_enabled, 1);
@@ -753,53 +764,54 @@ class Display {
             drange = brake.us[ABSMIN]-brake.us[ABSMAX];
             draw_asciiname(9, motormodecard[brake.motormode]);
             draw_asciiname(10, brakefeedbackcard[brake.feedback]);
-            draw_dynamic(11, brkpos.val(), brkpos.opmin(), brkpos.opmax(), brake.pids[_BrakePosn].target());
-            draw_dynamic(12, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
-            draw_dynamic(13, brake.target[PressureFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-            draw_dynamic(14, brake.target[PositionFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-            draw_dynamic(15, brake.target_pc, 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-            draw_dynamic(16, brake.hybrid_out_ratio_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
-            draw_dynamic(17, brake.pid_dom->pterm(), -drange, drange);
-            draw_dynamic(18, brake.pid_dom->iterm(), -drange, drange);
-            draw_dynamic(19, brake.pid_dom->dterm(), -drange, drange);
-            draw_dynamic(20, brake.pid_dom->sampletime());
-            draw_dynamic(21, brake.pid_dom->kp());
-            draw_dynamic(22, brake.pid_dom->ki());
-            draw_dynamic(23, brake.pid_dom->kd());
+            drawval(11, brkpos.val(), brkpos.opmin(), brkpos.opmax(), brake.pids[_BrakePosn].target());
+            drawval(12, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
+            drawval(13, brake.target[PressureFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+            drawval(14, brake.target[PositionFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+            drawval(15, brake.target_pc, 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+            drawval(16, brake.hybrid_out_ratio_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
+            drawval(17, brake.pid_dom->pterm(), -drange, drange);
+            // drawval(18, brake.pid_dom->iterm(), -drange, drange);
+            drawval(18, brake.pid_dom->outsum(), -drange, drange);
+            drawval(19, brake.pid_dom->dterm(), -drange, drange);
+            drawval(20, brake.pid_dom->sampletime());
+            drawval(21, brake.pid_dom->kp());
+            drawval(22, brake.pid_dom->ki());
+            drawval(23, brake.pid_dom->kd());
         }
         else if (datapage == PG_GPID) {
             draw_asciiname(9, motormodecard[gas.motormode]);
-            draw_dynamic(10, gas.throttle_target_pc, tach.opmin(), tach.opmax());
-            draw_dynamic(11, gas.pid.target(), tach.opmin(), tach.opmax());
-            draw_dynamic(12, gas.pid.err(), tach.idle() - tach.opmax(), tach.opmax() - tach.idle());
-            draw_dynamic(13, gas.pid.pterm(), -100.0f, 100.0f);
-            draw_dynamic(14, gas.pid.iterm(), -100.0f, 100.0f);
-            draw_dynamic(15, gas.pid.dterm(), -100.0f, 100.0f);
-            // draw_dynamic(15, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
+            drawval(10, gas.throttle_target_pc, tach.opmin(), tach.opmax());
+            drawval(11, gas.pid.target(), tach.opmin(), tach.opmax());
+            drawval(12, gas.pid.err(), tach.idle() - tach.opmax(), tach.opmax() - tach.idle());
+            drawval(13, gas.pid.pterm(), -100.0f, 100.0f);
+            drawval(14, gas.pid.iterm(), -100.0f, 100.0f);
+            drawval(15, gas.pid.dterm(), -100.0f, 100.0f);
+            // drawval(15, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
             for (int line=16; line<=19; line++) draw_eraseval(line);
-            draw_dynamic(20, gas.max_throttle_angular_velocity_degps, 0.0f, 360.0f);
-            draw_dynamic(21, gas.pid.kp());
-            draw_dynamic(22, gas.pid.ki());
-            draw_dynamic(23, gas.pid.kd());
+            drawval(20, gas.max_throttle_angular_velocity_degps, 0.0f, 360.0f);
+            drawval(21, gas.pid.kp());
+            drawval(22, gas.pid.ki());
+            drawval(23, gas.pid.kd());
         }
         else if (datapage == PG_CPID) {
             drange = tach.opmax() - tach.idle();
             // draw_truth(9, gas.cruise_pid_enabled, 1);
-            draw_dynamic(9, gas.cruisepid.target(), speedo.idle(), speedo.opmax());
-            draw_dynamic(10, gas.cruisepid.err(), speedo.idle()-speedo.opmax(), speedo.opmax()-speedo.idle());
-            draw_dynamic(11, gas.cruisepid.pterm(), -drange, drange);
-            draw_dynamic(12, gas.cruisepid.iterm(), -drange, drange);
-            draw_dynamic(13, gas.cruisepid.dterm(), -drange, drange);
-            // draw_dynamic(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
+            drawval(9, gas.cruisepid.target(), speedo.idle(), speedo.opmax());
+            drawval(10, gas.cruisepid.err(), speedo.idle()-speedo.opmax(), speedo.opmax()-speedo.idle());
+            drawval(11, gas.cruisepid.pterm(), -drange, drange);
+            drawval(12, gas.cruisepid.iterm(), -drange, drange);
+            drawval(13, gas.cruisepid.dterm(), -drange, drange);
+            // drawval(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
             // Serial.printf("min:%lf max:%lf", gas.pc[OPMIN], gas.pc[OPMAX]);
             // Serial.printf(" gmin():%lf gmax():%lf", gas.pid.outmin(), gas.pid.outmax());
             // Serial.printf(" cmin():%lf cmax():%lf", gas.cruisepid.outmin(), gas.cruisepid.outmax());
-            draw_dynamic(14, gas.throttle_target_pc, 0.0f, 100.0f);
+            drawval(14, gas.throttle_target_pc, 0.0f, 100.0f);
             for (int line=15; line<=19; line++) draw_eraseval(line);
-            draw_dynamic(20, cruise_delta_max_pc_per_s, 1, 35);
-            draw_dynamic(21, gas.cruisepid.kp());
-            draw_dynamic(22, gas.cruisepid.ki());
-            draw_dynamic(23, gas.cruisepid.kd());
+            drawval(20, cruise_delta_max_pc_per_s, 1, 35);
+            drawval(21, gas.cruisepid.kp());
+            drawval(22, gas.cruisepid.ki());
+            drawval(23, gas.cruisepid.kd());
         }
         else if (datapage == PG_TEMP) {
             draw_temperature(loc::AMBIENT, 9);
@@ -828,23 +840,22 @@ class Display {
             draw_truth(23, cal_gasmode, 0);
         }
         else if (datapage == PG_UI) {
-            draw_dynamic(9, (int)loop_avg_us, -1, -1, -1);
-            draw_dynamic(10, looptimer.loop_peak_us, -1, -1, -1);
-            draw_dynamic(11, (int)looptimer.loopfreq_hz, -1, -1, -1);
-            draw_dynamic(12, fps);
+            drawval_int(9, (int)loop_avg_us);
+            drawval_int(10, looptimer.loop_peak_us);
+            drawval_int(11, (int)looptimer.loopfreq_hz);
+            drawval_int(12, fps);
             draw_asciiname(13, activitiescard[last_activity]);
-            draw_dynamic(14, touch->touch_pt(0), 0, disp_width_pix);
-            draw_dynamic(15, touch->touch_pt(1), 0, disp_height_pix);
-            draw_dynamic(16, encoder.spinrate_pc(), 0.0, 100.0);
-            draw_dynamic(17, looptimer.uptime());
-            // draw_dynamic(13, drawclock, 0, refresh_limit);
-            // draw_dynamic(14, pushclock, 0, refresh_limit);
-            // draw_dynamic(15, idleclock, 0, refresh_limit);
-            for (int line=18; line<=18; line++) draw_eraseval(line);
-            draw_dynamic(19, ezdraw.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
-            draw_truth(20, flashdemo, 0);
-            draw_dynamic(21, neobright, 1.0, 100.0f, -1, 3);
-            draw_dynamic(22, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
+            drawval_int(14, touch->touch_pt(0), 0, disp_width_pix);
+            drawval_int(15, touch->touch_pt(1), 0, disp_height_pix);
+            drawval_int(16, encoder.spinrate_pc(), 0.0, 100.0);
+            drawval_int(17, looptimer.uptime());
+            // drawval(13, drawclock, 0, refresh_limit);
+            // drawval(14, pushclock, 0, refresh_limit);
+            // drawval(15, idleclock, 0, refresh_limit);
+            for (int line=18; line<=19; line++) draw_eraseval(line);
+            drawval_int(20, ezdraw.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
+            draw_truth(21, flashdemo, 0);
+            drawval(22, neobright, 1.0, 100.0f, -1, 3);
             draw_asciiname(23, uicontextcard[ui_context]);
             // draw_truth(19, (ui_context == ScreensaverUI), 0);
         }
@@ -1056,6 +1067,11 @@ class Tuner {
         adj_val(&t, _rdelta, 0, NumBrakeFB-1);
         brake.update_ctrl_config(brake.pid_enabled, t);
     }
+    void adj_brake_openloop(int _rdelta) {  // active brake sensors scroll select custom adjust function. allows scroll select of valid values even tho they are not contiguous in the enum
+        int t = brake.openloop_mode;
+        adj_val(&t, _rdelta, 0, NumOpenLoopModes-1);
+        brake.openloop_mode = t;
+    }
     void adj_cruise_scheme() {
         int t = gas.cruise_adjust_scheme;
         adj_val(&t, rdelta, 0, NumCruiseSchemes-1);
@@ -1109,7 +1125,7 @@ class Tuner {
             else if (datapage == PG_MOTR) {
                 if (sel_val == 8) brake.update_ctrl_config((int)(rdelta>0));
                 else if (sel_val == 9) adj_brake_feedback(rdelta);
-                else if (sel_val == 10) adj_bool(&brake.openloop_autorelease, rdelta);
+                else if (sel_val == 10) adj_brake_openloop(rdelta);
                 else if (sel_val == 11) adj_bool(&brake.enforce_positional_limits, rdelta);
                 else if (sel_val == 12) gas.update_ctrl_config((int)(rdelta>0));
                 else if (sel_val == 13) gas.update_cruise_ctrl_config((int)(rdelta>0));
@@ -1117,9 +1133,9 @@ class Tuner {
             }
             else if (datapage == PG_BPID) {
                 if (sel_val == 11) brake.pid_dom->add_sampletime(idelta);
-                else if (sel_val == 12) brake.pid_dom->add_kp(0.001f * fdelta);
-                else if (sel_val == 13) brake.pid_dom->add_ki(0.001f * fdelta);
-                else if (sel_val == 14) brake.pid_dom->add_kd(0.001f * fdelta);
+                else if (sel_val == 12) brake.pid_dom->add_kp(0.01 * fdelta);
+                else if (sel_val == 13) brake.pid_dom->add_ki(0.01 * fdelta);
+                else if (sel_val == 14) brake.pid_dom->add_kd(0.01 * fdelta);
             }
             else if (datapage == PG_GPID) {
                 if (sel_val == 11) adj_val(&(gas.max_throttle_angular_velocity_degps), fdelta, 0.0f, 180.0f);
@@ -1151,10 +1167,9 @@ class Tuner {
                 else if (sel_val == 14) adj_bool(&cal_gasmode_request, rdelta);
             }
             else if (datapage == PG_UI) {
-                if (sel_val == 10) ezdraw.lookback(ezdraw.offset + rdelta); 
-                else if (sel_val == 11) { adj_bool(&flashdemo, rdelta); neo->enable_flashdemo(flashdemo); }
-                else if (sel_val == 12) { adj_val(&neobright, rdelta, 1, 100); neo->setbright(neobright); }
-                else if (sel_val == 13) { adj_val(&neodesat, rdelta, 0, 10); neo->setdesaturation(neodesat); }
+                if (sel_val == 11) ezdraw.lookback(ezdraw.offset + rdelta); 
+                else if (sel_val == 12) { adj_bool(&flashdemo, rdelta); neo->enable_flashdemo(flashdemo); }
+                else if (sel_val == 13) { adj_val(&neobright, rdelta, 1, 100); neo->setbright(neobright); }
                 else if (sel_val == 14) adj_val(&ui_context, rdelta, 0, NumContextsUI-1);
             }
             idelta = 0;

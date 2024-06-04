@@ -9,8 +9,8 @@
 #include <ESP32Servo.h>        // Makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <Preferences.h>  // Functions for writing values to nvs flash partition
 
-// This enum class represent the components which can be simulated (sensor). It's a uint8_t type under the covers, so it can be used as an index
-// typedef uint8_t opt_t;
+// This enum class represent the components which can be simulated (sensor). It's int type under the covers, so it can be used as an index
+// typedef int opt_t;
 enum si_native_conversion_methods { LinearMath=0, AbsLimMap=1, OpLimMap=2 };
 enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, airvelo=6, mapsens=7, engtemp=8, mulebatt=9, starter=10, basicsw=11, NUM_SENSORS=12 };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
 enum class src : int { UNDEF=0, FIXED=1, PIN=2, TOUCH=3, POT=4, CALC=5 };
@@ -28,12 +28,12 @@ class Potentiometer {
     float _absmin_native = 0.0, _absmax_native = static_cast<float>(adcrange_adc);
     float _absmin = 0.0, _absmax = 100.0;
     float _activity_margin_pc = 7.5;
-    uint8_t _pin;
+    int _pin;
     float _pc = 50.0, _raw, _native, _activity_ref;  // values in filtered percent, raw percent, raw adc
     Timer pot_timer{100000};  // adc cannot read too fast w/o errors, so give some time between readings
   public:
     // tune these by monitoring adc_raw and twist pot to each limit. set min at the highest value seen when turned full CCW, and vice versas for max, then trim each toward adc_midrange until you get full 0 to 100% range
-    Potentiometer(uint8_t arg_pin) : _pin(arg_pin) {}
+    Potentiometer(int arg_pin) : _pin(arg_pin) {}
     Potentiometer() = delete; // must have a pin defined
     sens senstype = sens::none;
     void setup() {
@@ -140,7 +140,7 @@ class Param {
 class Device {
   protected:
     // Which types of sources are possible for this device?
-    uint8_t _pin;
+    int _pin;
     bool _enabled = true;
     Potentiometer* _pot; // to pull input from the pot if we're in simulation mode
     src _source = src::UNDEF;
@@ -163,10 +163,10 @@ class Device {
     sens senstype = sens::none;
     Device() = delete; // should always be created with a pin
     // NOTE: should we start in PIN mode?
-    Device(uint8_t arg_pin) : _pin(arg_pin) {}
-    bool can_source(src arg_source) { return _can_source[static_cast<uint8_t>(arg_source)]; }
+    Device(int arg_pin) : _pin(arg_pin) {}
+    bool can_source(src arg_source) { return _can_source[static_cast<int>(arg_source)]; }
     bool set_source(src arg_source) {
-        if (_can_source[static_cast<uint8_t>(arg_source)]) {
+        if (_can_source[static_cast<int>(arg_source)]) {
             _source = arg_source;
             update_source();
             sources[static_cast<int>(senstype)] = static_cast<int>(arg_source);
@@ -189,9 +189,9 @@ class Device {
         _pot = &pot_arg;
     }
     void set_enabled(bool arg_enable) { _enabled = arg_enable; }
-    void set_can_source(src arg_source, bool is_possible) { _can_source[static_cast<uint8_t>(arg_source)] = is_possible; }
+    void set_can_source(src arg_source, bool is_possible) { _can_source[static_cast<int>(arg_source)] = is_possible; }
     src source() { return _source; }
-    uint8_t pin() { return _pin; }
+    int pin() { return _pin; }
     bool enabled() { return _enabled; }
 };
 
@@ -231,7 +231,7 @@ class Transducer : public Device {
     Param _si, _native;
     float _si_raw;  // si_raw is an output for display purposes, only meaningful for sensors, not actuators. managed here because that's easier
   public:
-    Transducer(uint8_t arg_pin) : Device(arg_pin) {
+    Transducer(int arg_pin) : Device(arg_pin) {
         _long_name = "Unknown transducer";
         _short_name = "xducer";
     }
@@ -427,7 +427,7 @@ class Sensor : public Transducer {
     // virtual void update_si_limits() { _val_filt.set_limits(_si.min_shptr(), _si.max_shptr()); } // make sure our filtered value has the same limits as our regular value
     void update_source() { if (_source == src::PIN) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
   public:
-    Sensor(uint8_t pin) : Transducer(pin) {
+    Sensor(int pin) : Transducer(pin) {
         _long_name = "Unknown";
         _short_name = "unksen";
     }  
@@ -527,7 +527,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     SparkFun_MicroPressure _sensor;
     float goodreading = NAN;
     Timer mapreadTimer;
-    uint32_t mapread_timeout = 100000, mapretry_timeout = 10000;
+    int mapread_timeout = 100000, mapretry_timeout = 10000;
     float read_sensor() {
         if (!_i2c->detected(i2c_map)) return NAN;
         else if (_i2c->not_my_turn(i2c_map)) return goodreading;
@@ -588,7 +588,7 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
         }
     }
   public:
-    AnalogSensor(uint8_t arg_pin) : Sensor(arg_pin) {
+    AnalogSensor(int arg_pin) : Sensor(arg_pin) {
         _long_name = "Unknown Analog";
         _short_name = "analog";
         _native_units = "adc";
@@ -605,7 +605,7 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
 class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level from the Mule battery
   public:
     sens senstype = sens::mulebatt;
-    CarBattery(uint8_t arg_pin) : AnalogSensor(arg_pin) {
+    CarBattery(int arg_pin) : AnalogSensor(arg_pin) {
         _long_name = "Vehicle Battery Voltage";
         _short_name = "mulbat";
         _native_units = "adc";
@@ -632,10 +632,10 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
 class PressureSensor : public AnalogSensor {
   public:
     sens senstype = sens::pressure;
-    // int32_t opmin_adc, opmax_adc, absmin_adc, absmax_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+    // int opmin_adc, opmax_adc, absmin_adc, absmax_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
     float hold_initial, hold_increment, panic_initial, panic_increment, _zeropoint;  // , _margin_psi, _zeropoint_psi;
-    PressureSensor(uint8_t arg_pin) : AnalogSensor(arg_pin) {
+    PressureSensor(int arg_pin) : AnalogSensor(arg_pin) {
         _long_name = "Brake Pressure";
         _short_name = "presur";
         _native_units = "adc";
@@ -653,9 +653,9 @@ class PressureSensor : public AnalogSensor {
     //   psi = 0.2 * (adc - 621)  ->  psi = 0.2 * adc - 124  ->  adc = 5 * psi + 621
 
     // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-    // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+    // ~208psi by this math - "Maximum" braking  // older?  int max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
     // _absmin_adc = 0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-    // _absmax_adc = adcrange_adc; // ~208psi by this math - "Maximum" braking  // older?  int32_t max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+    // _absmax_adc = adcrange_adc; // ~208psi by this math - "Maximum" braking  // older?  int max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
     PressureSensor() = delete;
     void setup() {
         AnalogSensor::setup();
@@ -691,7 +691,7 @@ class BrakePositionSensor : public AnalogSensor {
   public:
     sens senstype = sens::brkpos;
     float _zeropoint;  // in inches  // _parkpos
-    BrakePositionSensor(uint8_t arg_pin) : AnalogSensor(arg_pin) {
+    BrakePositionSensor(int arg_pin) : AnalogSensor(arg_pin) {
         _long_name = "Brake Position";
         _short_name = "brkpos";
         _native_units = "adc";
@@ -797,7 +797,7 @@ class PulseSensor : public Sensor {
   public:
     std::string _uber_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
 
-    PulseSensor(uint8_t arg_pin, float arg_freqdiv=1.0) : Sensor(arg_pin), _freqdiv(arg_freqdiv) {
+    PulseSensor(int arg_pin, float arg_freqdiv=1.0) : Sensor(arg_pin), _freqdiv(arg_freqdiv) {
         _long_name = "Unknown Hall-Effect";
         _short_name = "pulsen";
         _native_units = "Hz";
@@ -847,7 +847,7 @@ class PulseSensor : public Sensor {
 class Tachometer : public PulseSensor {
   public:
     sens senstype = sens::tach;
-    Tachometer(uint8_t arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {
+    Tachometer(int arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {
         _long_name = "Tachometer";
         _short_name = "tach";
         _native_units = "Hz";
@@ -882,7 +882,7 @@ class Tachometer : public PulseSensor {
 class Speedometer : public PulseSensor {
   public:
     sens senstype = sens::speedo;
-    Speedometer(uint8_t arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {
+    Speedometer(int arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {
         _long_name = "Speedometer";
         _short_name = "speedo";
         _native_units = "Hz";
@@ -954,8 +954,8 @@ class RCAnalog : public RCChannel {};
 //         _servo.attach(_pin, min_native->val(), max_native->val());
 //     }
 //   public:
-//     // ServoPWM(uint8_t pin, uint_t freq) : Transducer<float, float>(pin) {
-//     ServoPWM(uint8_t pin, uint8_t freq) : Transducer<float, float>(pin) {
+//     // ServoPWM(int pin, int freq) : Transducer<float, float>(pin) {
+//     ServoPWM(int pin, int freq) : Transducer<float, float>(pin) {
 //         _servo.setPeriodHertz(freq);
 //         _servo.attach(_pin, _native.min(), _native.max());
 //         // _servo.attach(_pin, _native.absmin(), _native.absmax());
@@ -971,7 +971,7 @@ class RCAnalog : public RCChannel {};
 //     }
 //     void write() {
 //         _val_raw = _native.val();
-//         _servo.writeMicroseconds((int32_t)_val_raw);  // Write result to servo interface
+//         _servo.writeMicroseconds((int)_val_raw);  // Write result to servo interface
 //     }
 // };
 // // Device::Toggle is a base class for system signals or devices having a boolean value
@@ -980,14 +980,14 @@ class RCAnalog : public RCChannel {};
 //     // NOTE: how should we handle simulatability? I almost think it should be done at a higher level than the device...
 //     // NOTE: should use Param here maybe?
 //     bool val, val_last, can_sim;
-//     Toggle(int32_t arg_pin) : Device(arg_pin){  // std::string& eng_name, 
+//     Toggle(int arg_pin) : Device(arg_pin){  // std::string& eng_name, 
 //         can_sim = true;
 //     }
 // };
 // // Device::Toggle::InToggle is system signals or devices having a boolean value that serve as inputs (eg basicsw, cruisesw)
 // class InToggle : public Toggle {
 //   public:
-//     InToggle(int32_t arg_pin) : Toggle(arg_pin) {
+//     InToggle(int arg_pin) : Toggle(arg_pin) {
 //         set_can_source(src::PIN, true);
 //         _source = src::PIN;
 //     }
@@ -1005,7 +1005,7 @@ class RCAnalog : public RCChannel {};
 // // Device::Toggle::OutToggle is system signals or devices having a boolean value that serve as outputs (eg ignition, leds, etc.)
 // class OutToggle : public Toggle {
 //   public:
-//     OutToggle(int32_t arg_pin) : Toggle(arg_pin) {
+//     OutToggle(int arg_pin) : Toggle(arg_pin) {
 //         // NOTE: LIVE is not a valid source, what should this be? Not PIN, we write to that. CALC maybe?
 //         // val_source = LIVE;
 //     }
@@ -1035,7 +1035,7 @@ class Simulator {
     Preferences* _myprefs;
   public:
     Simulator(Potentiometer& pot_arg, Preferences* myprefs) : _pot(pot_arg), _myprefs(myprefs) {
-        for (uint8_t sensor = (uint8_t)sens::none + 1; sensor < (uint8_t)sens::NUM_SENSORS; sensor++) set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
+        for (int sensor = (int)sens::none + 1; sensor < (int)sens::NUM_SENSORS; sensor++) set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
         set_potmap(); // set initial pot map
     }  // syspower, ignition removed, as they are not sensors or even inputs
 
@@ -1189,9 +1189,9 @@ class Simulator {
     }
     // Getter functions
     bool potmapping(sens s) { return can_sim(s) && _potmap == s; }  // query if a certain sensor is being potmapped
-    bool potmapping(int32_t s) { return can_sim(static_cast<sens>(s)) && (_potmap == static_cast<sens>(s)); }  // query if a certain sensor is being potmapped        
+    bool potmapping(int s) { return can_sim(static_cast<sens>(s)) && (_potmap == static_cast<sens>(s)); }  // query if a certain sensor is being potmapped        
     bool potmapping() { return can_sim(_potmap) && !(_potmap == sens::none); }  // query if any sensors are being potmapped
-    int32_t potmap() { return static_cast<int32_t>(_potmap); }  // query which sensor is being potmapped
+    int potmap() { return static_cast<int>(_potmap); }  // query which sensor is being potmapped
     bool enabled() { return _enabled; }
     bool* enabled_ptr() { return &_enabled; }
 };
@@ -1234,7 +1234,7 @@ class RMTInput {
             // while (1); // halt execution
         }
     }
-    int32_t readPulseWidth(bool persistence) { // persistence means the last reading will be returned until a newer one is gathered. Otherwise 0 if no reading
+    int readPulseWidth(bool persistence) { // persistence means the last reading will be returned until a newer one is gathered. Otherwise 0 if no reading
         size_t rx_size = 0;
         rmt_item32_t *item = (rmt_item32_t *)xRingbufferReceive(rb_, &rx_size, 0);
         if (item != NULL && rx_size == sizeof(rmt_item32_t)) {
@@ -1248,7 +1248,7 @@ class RMTInput {
   private:
     rmt_channel_t channel_;
     gpio_num_t gpio_;
-    int32_t pulse_width, pulse_width_last;
+    int pulse_width, pulse_width_last;
     float scale_factor = 0.625;
     RingbufHandle_t rb_;
 };
@@ -1256,7 +1256,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
   public:
     float ema_alpha = 0.075;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
     float pc[NUM_AXES][NUM_VALUS];           // values range from -100% to 100% are all derived or auto-assigned
-    int32_t us[NUM_CHANS][NUM_VALUS] = {
+    int us[NUM_CHANS][NUM_VALUS] = {
         // vals for hotrc v1 (with matte black "HotRC" sticker/receiver)
         // {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         // { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
@@ -1268,17 +1268,17 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         { 1202, 1606, 1806, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         { 1304, 1505, 1705, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
     float ema_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]
-    int32_t absmin_us = 880;
-    int32_t absmax_us = 2091;
-    int32_t deadband_us = 15;  // All [DBBOT] and [DBTOP] values above are derived from this by calling calc_params()
-    int32_t margin_us = 13;  // All [MARGIN] values above are derived from this by calling calc_params()
-    int32_t failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
-    int32_t failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
-    int32_t failsafe_pad_us = 10;
+    int absmin_us = 880;
+    int absmax_us = 2091;
+    int deadband_us = 15;  // All [DBBOT] and [DBTOP] values above are derived from this by calling calc_params()
+    int margin_us = 13;  // All [MARGIN] values above are derived from this by calling calc_params()
+    int failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
+    int failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
+    int failsafe_pad_us = 10;
   private:
     Simulator* sim;
     Potentiometer* pot;
-    static const uint32_t failsafe_timeout = 15000;
+    static const int failsafe_timeout = 15000;
     Timer failsafe_timer;  // How long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
     bool _radiolost = true;
     bool sw[NUM_CHANS] = { 1, 1, 0, 0 };  // index[2]=CH3, index[3]=CH4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
@@ -1290,12 +1290,12 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[CH4]
     };
     bool spike_signbit;
-    int32_t spike_length, this_delta, interpolated_slope, loopindex, previndex, spike_cliff[NUM_AXES];
-    int32_t spike_threshold[NUM_AXES] = { 6, 6 };
-    int32_t prespike_index[NUM_AXES] = { -1, -1 };
-    int32_t index[NUM_AXES] = { 1, 1 };  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
-    static const int32_t depth = 9;  // more depth will reject longer spikes at the expense of controller delay
-    int32_t raw_history[NUM_AXES][depth], filt_history[NUM_AXES][depth];  // Values before and after filtering.
+    int spike_length, this_delta, interpolated_slope, loopindex, previndex, spike_cliff[NUM_AXES];
+    int spike_threshold[NUM_AXES] = { 6, 6 };
+    int prespike_index[NUM_AXES] = { -1, -1 };
+    int index[NUM_AXES] = { 1, 1 };  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
+    static const int depth = 9;  // more depth will reject longer spikes at the expense of controller delay
+    int raw_history[NUM_AXES][depth], filt_history[NUM_AXES][depth];  // Values before and after filtering.
   public:
     Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) {
         calc_params();
@@ -1307,7 +1307,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     }
     void calc_params() {
         float m_factor;
-        for (int8_t axis=HORZ; axis<=VERT; axis++) {
+        for (int axis=HORZ; axis<=VERT; axis++) {
             us[axis][DBBOT] = us[axis][CENT] - deadband_us;
             us[axis][DBTOP] = us[axis][CENT] + deadband_us;
             us[axis][MARGIN] = margin_us;
@@ -1326,26 +1326,26 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         radiolost_update();
     }
     void toggles_reset() {  // Shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
-        for (int8_t ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
+        for (int ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
     }
     bool radiolost() { return _radiolost; }
     bool* radiolost_ptr() { return &_radiolost; }
-    bool sw_event(uint8_t ch) {  // returns if there's an event on the given channel then resets that channel
+    bool sw_event(int ch) {  // returns if there's an event on the given channel then resets that channel
         bool retval = _sw_event[ch];
         _sw_event[ch] = false;
         return retval;        
     }
-    void set_pc(int8_t axis, int8_t param, float val) { pc[axis][param] = val; }
-    void set_us(int8_t axis, int8_t param, int32_t val) { us[axis][param] = val; }
-    int32_t next_unfilt_rawval (uint8_t axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
-    int joydir(int8_t axis = VERT) {
+    void set_pc(int axis, int param, float val) { pc[axis][param] = val; }
+    void set_us(int axis, int param, int val) { us[axis][param] = val; }
+    int next_unfilt_rawval (int axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
+    int joydir(int axis = VERT) {
         if (axis == VERT) return ((pc[axis][FILT] > pc[axis][DBTOP]) ? JOY_UP : ((pc[axis][FILT] < pc[axis][DBBOT]) ? JOY_DN : JOY_CENT));
         return ((pc[axis][FILT] > pc[axis][DBTOP]) ? JOY_RT : ((pc[axis][FILT] < pc[axis][DBBOT]) ? JOY_LT : JOY_CENT));
     }  // return (pc[axis][FILT] > pc[axis][DBTOP]) ? ((axis == VERT) ? JOY_UP : JOY_RT) : (pc[axis][FILT] < pc[axis][DBBOT]) ? ((axis == VERT) ? JOY_DN : JOY_LT) : JOY_CENT;
   private:
     void toggles_update() {  //
-        for (int8_t chan = CH3; chan <= CH4; chan++) {
-            us[chan][RAW] = (int32_t)(rmt[chan].readPulseWidth(true));
+        for (int chan = CH3; chan <= CH4; chan++) {
+            us[chan][RAW] = (int)(rmt[chan].readPulseWidth(true));
             sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
             if ((sw[chan] != sw[chan-2]) && !_radiolost) {
                 _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
@@ -1354,7 +1354,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
         }
     }
-    float us_to_pc(int8_t axis, int32_t _us, bool deadbands=false) {
+    float us_to_pc(int axis, int _us, bool deadbands=false) {
         if (deadbands) {
             if (_us >= us[axis][DBTOP]) return map((float)_us, (float)us[axis][DBTOP], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
             if (_us <= us[axis][DBBOT]) return map((float)_us, (float)us[axis][DBBOT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
@@ -1368,16 +1368,16 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
             // Serial.printf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
         }
-        else for (int8_t axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
-            us[axis][RAW] = (int32_t)(rmt[axis].readPulseWidth(true));
-            int32_t us_spike = spike_filter(axis, us[axis][RAW]);
+        else for (int axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
+            us[axis][RAW] = (int)(rmt[axis].readPulseWidth(true));
+            int us_spike = spike_filter(axis, us[axis][RAW]);
             ema_filt(us_spike, &us[axis][FILT], ema_alpha);
             pc[axis][RAW] = us_to_pc(axis, us[axis][RAW], false);
             pc[axis][FILT] = us_to_pc(axis, us[axis][FILT], true);
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
             else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(HURCTrig);  // indicate evidence of user activity
         }
-        for (int8_t axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
+        for (int axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
     }
     bool radiolost_update() {
         if (us[VERT][FILT] > failsafe_us + failsafe_margin_us) {
@@ -1389,7 +1389,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     }
     // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
     // interpolated from before and after the spike. Also smoothes out abrupt value changes that don't recover later
-    int32_t spike_filter (uint8_t axis, int32_t new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
+    int spike_filter (int axis, int new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
         previndex = (depth + index[axis] - 1) % depth;  // previndex is where the incoming new value will be stored
         this_delta = new_val - filt_history[axis][previndex];  // Value change since last reading
         if (std::abs(this_delta) > spike_cliff[axis]) {  // If new value is a cliff edge (start or end of a spike)
@@ -1410,13 +1410,13 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             inject_interpolations (axis, previndex, filt_history[axis][previndex]);  // Smoothly grade the whole buffer
             prespike_index[axis] = -1;  // Cancel the current spike
         }
-        int32_t returnval = filt_history[axis][index[axis]];  // Save the incumbent value at current index (oldest value) into buffer
+        int returnval = filt_history[axis][index[axis]];  // Save the incumbent value at current index (oldest value) into buffer
         filt_history[axis][index[axis]] = new_val;
         raw_history[axis][index[axis]] = new_val;
         ++(index[axis]) %= depth;  // Update index for next time
         return returnval;  // Return the saved old value
     }
-    void inject_interpolations(uint8_t axis, int32_t endspike_index, int32_t endspike_val) {  // Replaces values between indexes with linear interpolated values
+    void inject_interpolations(int axis, int endspike_index, int endspike_val) {  // Replaces values between indexes with linear interpolated values
         spike_length = ((depth + endspike_index - prespike_index[axis]) % depth) - 1;  // Equal to the spiking values count plus one
         if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
         interpolated_slope = (endspike_val - filt_history[axis][prespike_index[axis]]) / spike_length;
