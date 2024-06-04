@@ -1,6 +1,6 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
-TaskHandle_t temptask = nullptr, webtask = nullptr, pushTaskHandle = NULL, drawTaskHandle = NULL;
+TaskHandle_t temptask = NULL, webtask = NULL, pushTaskHandle = NULL, drawTaskHandle = NULL;
 
 void setup() {
     initialize_pins_and_console();

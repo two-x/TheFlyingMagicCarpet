@@ -1263,15 +1263,15 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         // { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         // { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         // vals for hotrc v2 (with gloss black "HotRC" sticker/receiver)
-        {  974, 1476, 1981, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        { 1084, 1588, 2091, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        { 1204, 1606, 1809, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        { 1304, 1505, 1707, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+        {  973, 1477, 1960, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+        { 1081, 1577, 2072, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+        { 1202, 1606, 1806, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+        { 1304, 1505, 1705, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
     float ema_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]
     int32_t absmin_us = 880;
     int32_t absmax_us = 2091;
-    int32_t deadband_us = 10;  // All [DBBOT] and [DBTOP] values above are derived from this by calling calc_params()
-    int32_t margin_us = 3;  // All [MARGIN] values above are derived from this by calling calc_params()
+    int32_t deadband_us = 15;  // All [DBBOT] and [DBTOP] values above are derived from this by calling calc_params()
+    int32_t margin_us = 13;  // All [MARGIN] values above are derived from this by calling calc_params()
     int32_t failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     int32_t failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
     int32_t failsafe_pad_us = 10;

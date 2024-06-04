@@ -102,8 +102,6 @@ class DiagRuntime {
             setflag(_Ignition, LOST, !ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
             SpeedoFailure();
             TachFailure();
-            setflag(_Speedo, RANGE, speedo->val() < speedo->opmin() || speedo->val() > speedo->opmax());
-            setflag(_Tach, RANGE, tach->val() < tach->opmin() || tach->val() > tach->opmax());
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LOWPOWER));
             set_sensorgroups();
             set_sensidiots();
@@ -184,17 +182,17 @@ class DiagRuntime {
         if ((std::abs(brake->pc[OUT]) > brake->pc[MARGIN]) && (std::abs(motor_last_pc) > brake->pc[MARGIN]) && (signbit(brake->pc[OUT]) == signbit(motor_last_pc))) {  // if brake motor is moving
             if (pressure->pc() <= 80.0) {  // if not near the max pressure (where position changes very little)
                 setflag(_BrakePosn, LOST, ((std::abs(pressure->pc() - pressure_last_pc) > pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if pressure value is changing but position isn't, then set flag otherwise clear
-                setflag(_BrakePosn, WARN, (signbit(brkpos->pc()) != signbit(pressure->pc())) && (signbit(brkpos->pc()) != signbit(brake->pc[OUT])));  // if motor and pressure are consistent with moving one direction but position is changing the opposite way
+                setflag(_BrakePosn, WARN, (brake->feedback == HybridFB) && (signbit(brkpos->pc()) != signbit(pressure->pc())) && (signbit(brkpos->pc()) != signbit(brake->pc[OUT])));  // if motor and pressure are consistent with moving one direction but position is changing the opposite way  // rewmove the (brake->feedback == HybridFB) && term?
             }
             if (brkpos->pc() >= 20.0) {  // if not near the min braking full extension (where pressure changes very little) 
                 setflag(_BrakePres, LOST, ((std::abs(brkpos->pc() - brkpos_last_pc) > brkpos->margin_pc()) && (std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc())));  // if position value is changing but pressure isn't, then set flag otherwise clear
-                setflag(_BrakePosn, WARN, (signbit(pressure->pc()) != signbit(brkpos->pc())) && (signbit(pressure->pc()) != signbit(brake->pc[OUT])));  // if motor and position are consistent with moving one direction but pressure is changing the opposite way
+                setflag(_BrakePres, WARN, (brake->feedback == HybridFB) && (signbit(pressure->pc()) != signbit(brkpos->pc())) && (signbit(pressure->pc()) != signbit(brake->pc[OUT])));  // if motor and position are consistent with moving one direction but pressure is changing the opposite way
             }
             setflag(_BrakeMotor, LOST, ((std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if neither sensor is changing, set motor lost flag
         }
-        setflag(_BrakeMotor, RANGE, brake->pc[OUT] < brake->pc[OPMIN] || brake->pc[OUT] > brake->pc[OPMAX]);
-        setflag(_BrakePosn, RANGE, (brkpos->pc() > 100.0) || (brkpos->pc() < 0.0));  // if position reading is outside oprange, set flag
-        setflag(_BrakePres, RANGE, (pressure->pc() > 100.0) || (pressure->pc() < 0.0));  // if pressure reading is outside oprange, set flag
+        setflag(_BrakeMotor, RANGE, brake->pc[OUT] < brake->pc[OPMIN] - brake->pc[MARGIN] || brake->pc[OUT] > brake->pc[OPMAX] + brake->pc[MARGIN]);
+        setflag(_BrakePosn, RANGE, (brkpos->pc() > 100.0 + brkpos->margin_pc()) || (brkpos->pc() < 0.0 - brkpos->margin_pc()));  // if position reading is outside oprange, set flag
+        setflag(_BrakePres, RANGE, (pressure->pc() > 100.0 + pressure->margin_pc()) || (pressure->pc() < 0.0 - pressure->margin_pc()));  // if pressure reading is outside oprange, set flag
         bool found_err = false;
         if ((brake->feedback != _BrakePres) && (err_sens[LOST][_BrakePosn] || err_sens[RANGE][_BrakePosn])) found_err = true;
         if ((brake->feedback != _BrakePosn) && (err_sens[LOST][_BrakePres] || err_sens[RANGE][_BrakePres])) found_err = true;
@@ -221,6 +219,7 @@ class DiagRuntime {
         }
         gunning_last = gunning_it;
         setflag(_Speedo, LOST, fail);
+        setflag(_Speedo, RANGE, speedo->val() < speedo->opmin() || speedo->val() > speedo->opmax());
     }
     void TachFailure() {  // checks if tach isn't low when throttle is released, or doesn't increase when we gun it
         static bool running_it, running_last = true;
@@ -240,6 +239,7 @@ class DiagRuntime {
         }
         running_last = running_it;
         setflag(_Tach, LOST, fail);
+        setflag(_Tach, RANGE, tach->val() < tach->opmin() || tach->val() > tach->opmax());
     }
     void HotRCFailure() {
         for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
@@ -248,10 +248,10 @@ class DiagRuntime {
             else if (ch == VERT) errindex = _HotRCVert;
             else if (ch == CH3) errindex = _HotRCCh3;
             else if (ch == CH4) errindex = _HotRCCh4;
-            setflag(errindex, RANGE, !hotrc->radiolost() && ((hotrc->us[ch][RAW] < hotrc->us[ch][OPMIN] - (hotrc->us[ch][MARGIN] >> 1)) 
-                                    || (hotrc->us[ch][RAW] > hotrc->us[ch][OPMAX] + (hotrc->us[ch][MARGIN] >> 1))));  // && ch != VERT
-            setflag(errindex, LOST, !hotrc->radiolost() && ((hotrc->us[ch][RAW] < (hotrc->absmin_us - hotrc->us[ch][MARGIN]))
-                                    || (hotrc->us[ch][RAW] > (hotrc->absmax_us + hotrc->us[ch][MARGIN]))));
+            setflag(errindex, RANGE, !hotrc->radiolost() && ((hotrc->us[ch][FILT] < hotrc->us[ch][OPMIN] - hotrc->us[ch][MARGIN]) 
+                                    || (hotrc->us[ch][FILT] > hotrc->us[ch][OPMAX] + hotrc->us[ch][MARGIN])));  // && ch != VERT
+            setflag(errindex, LOST, !hotrc->radiolost() && ((hotrc->us[ch][FILT] < hotrc->absmin_us - hotrc->us[ch][MARGIN])
+                                    || (hotrc->us[ch][FILT] > hotrc->absmax_us + hotrc->us[ch][MARGIN])));
             // err_sens[RANGE][_HotRCVert] = (hotrc->us[VERT][RAW] < hotrc->failsafe_us - hotrc->us[ch][MARGIN])
             //     || ((hotrc->us[VERT][RAW] < hotrc->us[VERT][OPMIN] - halfMARGIN) && (hotrc->us[VERT][RAW] > hotrc->failsafe_us + hotrc->us[ch][MARGIN]));
         }
@@ -263,27 +263,25 @@ class DiagRuntime {
         uint32_t now, was;
         int errdiffs = 0, errtotal = 0;
         for (int e=0; e<NUM_ERR_TYPES; e++) {
-            if (errstatus[e] != status_last[e]) {
-                do_print = true;
-                now = errstatus[e];
-                was = status_last[e];
-                while (now || was) {
-                    if (now & 1) {
-                        errtotal++;
-                        if (!(was & 1)) {
-                            errdiffs++;  // there's a new error
-                            if (color == ezread.happycolor) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
-                            else if (color == NON) color = ezread.sadcolor;  // use the bad news color
-                        }
+            if (errstatus[e] != status_last[e]) do_print = true;
+            now = errstatus[e];
+            was = status_last[e];
+            while (now || was) {
+                if (now & 1) {
+                    errtotal++;
+                    if (!(was & 1)) {
+                        errdiffs++;  // there's a new error
+                        if (color == ezread.happycolor) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
+                        else if (color == NON) color = ezread.sadcolor;  // use the bad news color
                     }
-                    else if ((now & 1) < (was & 1)) {
-                        errdiffs--;  // an error got cleared
-                        if (color == ezread.sadcolor) color = ezread.defaultcolor;  // but there was also a new error, so use default color
-                        else if (color == NON) color = ezread.happycolor;  // use the good news color
-                    }
-                    now >>= 1;
-                    was >>= 1;
                 }
+                else if ((now & 1) < (was & 1)) {
+                    errdiffs--;  // an error got cleared
+                    if (color == ezread.sadcolor) color = ezread.defaultcolor;  // but there was also a new error, so use default color
+                    else if (color == NON) color = ezread.happycolor;  // use the good news color
+                }
+                now >>= 1;
+                was >>= 1;
             }
             status_last[e] = errstatus[e];
         }

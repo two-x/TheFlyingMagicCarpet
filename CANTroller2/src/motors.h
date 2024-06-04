@@ -19,28 +19,31 @@ class QPID {
     enum class awmod : int {cond, clamp, off, round, roundcond};  // integral anti-windup mode
     enum class centmod : int {off, on, strict};                   // Allows a defined output zero point
   private:
-    float dispkp = 0; float dispki = 0; float dispkd = 0;
-    float _pterm, _iterm, _dterm, _kp, _ki, _kd, _err, lasterr, lastin, _cent, _outsum, _target, _output;
+    float dispkp = 0, dispki = 0, dispkd = 0, _iaw_cond_thresh = 1.0;  // set what fraction of output range beyond which applies integral anti-windup in cond mode
+    float _pterm, _iterm, _dterm, _kp, _ki, _kd, _err, lasterr, lastin, _cent, _outsum, _target;
     float *myin;     // Pointers to the input, output, and target variables. This  creates a
     float *_outmin;
     float *_outmax;
+    float _output, lastout, _reverse_attenuation_pc = 0.0;
+    bool recent_reversal;
     ctrl _mode = ctrl::manual;
     cdir _dir = cdir::direct;
     pmod _pmode = pmod::onerr;
     dmod _dmode = dmod::onmeas;
     awmod _awmode = awmod::cond;
     centmod _centmode = centmod::off;
-    uint32_t sampletime, lasttime;
+    int _sampletime, lasttime, _reverse_delay = 0;
+    Timer reversetimer;
   public:
     QPID() {}  // Default constructor
     QPID(float* a_in, float* a_min, float* a_max, float a_kp = 0, float a_ki = 0, float a_kd = 0,
       pmod a_pmode = pmod::onerr, dmod a_dmode = dmod::onmeas, awmod a_awmode = awmod::cond, cdir a_dir = cdir::direct,
-      uint32_t a_sampletime = 100000, ctrl a_mode = ctrl::manual, centmod a_centmode = centmod::off, float a_cent = NAN) {
+      int a_sampletime = 100000, ctrl a_mode = ctrl::manual, centmod a_centmode = centmod::off, float a_cent = NAN) {
         init(a_in, a_min, a_max, a_kp, a_ki, a_kd, a_pmode, a_dmode, a_awmode, a_dir, a_sampletime, a_mode, a_centmode, a_cent);
     }
     void init(float* a_in, float* a_min, float* a_max, float a_kp = 0, float a_ki = 0, float a_kd = 0,
       pmod a_pmode = pmod::onerr, dmod a_dmode = dmod::onmeas, awmod a_awmode = awmod::cond, cdir a_dir = cdir::direct,
-      uint32_t a_sampletime = 100000, ctrl a_mode = ctrl::manual, centmod a_centmode = centmod::off, float a_cent = NAN) {
+      int a_sampletime = 100000, ctrl a_mode = ctrl::manual, centmod a_centmode = centmod::off, float a_cent = NAN) {
         myin = a_in;
         _mode = a_mode;
         _outmin = a_min;
@@ -53,10 +56,10 @@ class QPID {
             _outsum = _cent;
         }
         else set_cent(*_outmin);
-        sampletime = a_sampletime;
+        _sampletime = a_sampletime;
         set_dir(a_dir);
         set_tunings(a_kp, a_ki, a_kd, _pmode, _dmode, _awmode);
-        lasttime = micros() - sampletime;
+        lasttime = micros() - _sampletime;
     }
     void init(float preload_output = NAN) {  // Ensure a bumpless transfer from manual to automatic mode
         if (!std::isnan(preload_output)) _output = preload_output;
@@ -67,9 +70,9 @@ class QPID {
     // This function should be called every time "void loop()" executes. The function will decide whether a new 
     // PID output needs to be computed. Returns true when the output is computed, false when nothing has been done.
     float compute() {
-        uint32_t now = micros();
-        uint32_t timechange = (now - lasttime);
-        if (_mode == ctrl::automatic && timechange < sampletime) return _output;  // If class is handling the timing and this time was a nop
+        int now = micros();
+        int timechange = (now - lasttime);
+        if (_mode == ctrl::automatic && timechange < _sampletime) return _output;  // If class is handling the timing and this time was a nop
 
         float in = *myin;
         float din = in - lastin;
@@ -95,21 +98,33 @@ class QPID {
         if (_awmode == awmod::cond || _awmode == awmod::roundcond) {  // condition anti-windup (default)
             bool aw = false;
             float _itermout = (peterm - pmterm) + _ki * (_iterm + _err);
-            if (_itermout > *_outmax && derr > 0) aw = true;
-            else if (_itermout < *_outmin && derr < 0) aw = true;
-            if (aw && _ki) _iterm = constrain(_itermout, -(*_outmax), *_outmax);
+            if (_itermout > (*_outmax * _iaw_cond_thresh) && derr > 0) aw = true;
+            else if (_itermout < (*_outmin * _iaw_cond_thresh) && derr < 0) aw = true;
+            if (aw && _ki) _iterm = constrain(_itermout, -(*_outmax * _iaw_cond_thresh), *_outmax * _iaw_cond_thresh);
         }
-        else if ((_awmode == awmod::round || _awmode == awmod::roundcond) && _err < 0.001 && _err > -0.001) {
+        if ((_awmode == awmod::round || _awmode == awmod::roundcond) && _err < 0.001 && _err > -0.001) {
             _err = 0.0;
             if (_centmode == centmod::on || _centmode == centmod::strict) _outsum = _cent;     
         }
         if (_centmode == centmod::strict && _err * lasterr < 0) _outsum = _cent;  // Recenters any old integral when error crosses zero
 
-        _outsum += _iterm - pmterm;  // by default, compute output as per PID_v1    // include integral amount and pmterm
-        if (_awmode != awmod::off) _outsum = constrain(_outsum, *_outmin, *_outmax);  // Clamp
-
+        _outsum += _iterm;  // by default, compute output as per PID_v1    // include integral amount and pmterm
+        if (_awmode == awmod::off) _outsum -= pmterm;
+        else _outsum = constrain(_outsum - pmterm, *_outmin, *_outmax);  // Clamp
         _output = constrain(_outsum + peterm + _dterm, *_outmin, *_outmax);  // include _dterm, clamp and drive output
 
+        if ((_reverse_delay > 0) && (signbit(_output) != signbit(lastout))) {
+            if (!recent_reversal) {
+                reversetimer.set(_reverse_delay);
+            }
+            recent_reversal = true;
+            float atten = _reverse_attenuation_pc * (1.0 - ((float)reversetimer.elapsed() / (float)_reverse_delay)) / 100.0;
+            _output = constrain(_output, atten * (*_outmin), atten * (*_outmax));
+        }
+        if (reversetimer.expired()) {
+            recent_reversal = false;
+        }
+        lastout = _output;
         lasterr = _err;
         lastin = in;
         lasttime = now;
@@ -119,11 +134,14 @@ class QPID {
     // automatically from the constructor, but tunings can also be adjusted on the fly during normal operation.
     // void set_tunings(float a_kp, float a_ki, float a_kd, pmod a_pmode = pmod::onerr, dmod a_dmode = dmod::onmeas, awmod a_awmode = awmod::cond) {
     void set_tunings(float a_kp, float a_ki, float a_kd, pmod a_pmode, dmod a_dmode, awmod a_awmode) {
-        if (a_kp < 0 || a_ki < 0 || a_kd < 0 || !sampletime) return;  // added divide by zero protection
+        if (a_kp < 0 || a_ki < 0 || a_kd < 0 || !_sampletime) return;  // added divide by zero protection
         if (a_ki == 0) _outsum = 0;
         _pmode = a_pmode; _dmode = a_dmode; _awmode = a_awmode;
+        if (std::abs(a_kp) < float_conversion_zero) a_kp = 0.0;
+        if (std::abs(a_ki) < float_conversion_zero) a_ki = 0.0;
+        if (std::abs(a_kd) < float_conversion_zero) a_kd = 0.0;
         dispkp = a_kp; dispki = a_ki; dispkd = a_kd;
-        float sampletime_sec = (float)sampletime / 1000000;
+        float sampletime_sec = (float)_sampletime / 1000000;
         _kp = a_kp;
         _ki = a_ki * sampletime_sec;
         _kd = a_kd / sampletime_sec;
@@ -134,12 +152,12 @@ class QPID {
         set_tunings(a_kp, a_ki, a_kd, _pmode, _dmode, _awmode);
     }
     // set_sampletime  Sets the period, in microseconds, at which the calculation is performed.
-    void set_sampletime(uint32_t a_sampletime) {
-        if (a_sampletime > 0 && sampletime) {  // added more divide by zero protection
-            float ratio  = (float)a_sampletime / (float)sampletime;
+    void set_sampletime(int a_sampletime) {
+        if (a_sampletime > 0 && _sampletime) {  // added more divide by zero protection
+            float ratio  = (float)a_sampletime / (float)_sampletime;
             _ki *= ratio;
             _kd /= ratio;
-            sampletime = a_sampletime;
+            _sampletime = a_sampletime;
         }
     }
     // set_mode Sets the controller mode to manual (0), automatic (1) or timer (2) when the transition 
@@ -154,21 +172,27 @@ class QPID {
     void set_mode(int a_mode) { set_mode((ctrl)a_mode); }
     // Does all the things that need to happen to ensure a bumpless transfer from manual to automatic mode.
     void reset() {
-        lasttime = micros() - sampletime;
+        lasttime = micros() - _sampletime;
         lastin = 0; _outsum = 0;
         _pterm = 0; _iterm = 0; _dterm = 0;
     }
-    void set_kp(float a_kp) { set_tunings(a_kp, dispki, dispkd, _pmode, _dmode, _awmode); }
-    void set_ki(float a_ki) { set_tunings(dispkp, a_ki, dispkd, _pmode, _dmode, _awmode); }
-    void set_kd(float a_kd) { set_tunings(dispkp, dispki, a_kd, _pmode, _dmode, _awmode); }
-    void add_kp(float add) { set_kp(_kp + add); }
-    void add_ki(float add) { set_ki(_ki + add); }
-    void add_kd(float add) { set_kd(_kd + add); }
+    void set_kp(float a_kp) { set_tunings(std::max(0.0f, a_kp), dispki, dispkd, _pmode, _dmode, _awmode); }
+    void set_ki(float a_ki) { set_tunings(dispkp, std::max(0.0f, a_ki), dispkd, _pmode, _dmode, _awmode); }
+    void set_kd(float a_kd) { set_tunings(dispkp, dispki, std::max(0.0f, a_kd), _pmode, _dmode, _awmode); }
+    void add_kp(float add) { set_kp(dispkp + add); }
+    void add_ki(float add) { set_ki(dispki + add); }
+    void add_kd(float add) { set_kd(dispkd + add); }
+    void add_sampletime(int add) { set_sampletime(_sampletime + add);}
     void set_centmode(centmod a_centmode) { _centmode = a_centmode; }
     void set_centmode(int a_centmode) { _centmode = (centmod)a_centmode; }
     void set_cent(float a_cent) { if (*_outmin <= a_cent && *_outmax >= a_cent) _cent = a_cent; }
     void set_target(float a_target) { _target = a_target; }
     void set_output(float a_output) { _output = constrain(a_output, *_outmin, *_outmax); }
+    void set_iaw_cond_thresh(float thresh) { _iaw_cond_thresh = std::max(0.0f, thresh); }
+    void set_reverse_attenuation(int a_us, float a_atten) {
+        _reverse_delay = a_us;
+        _reverse_attenuation_pc = constrain(a_atten, 0.0, 100.0);
+    }
     // The PID will either be connected to a direct acting process (+output leads to +input) or a reverse acting process(+output leads to -input).
     void set_dir(cdir a_dir) { _dir = a_dir; }
     void set_dir(int a_dir) { _dir = (cdir)a_dir; }
@@ -195,6 +219,9 @@ class QPID {
     float kp() { return dispkp; }
     float ki() { return dispki; }
     float kd() { return dispkd; }
+    int sampletime() { return _sampletime; }  // provides sampletime in ms
+    int reversedelay() { return _reverse_delay; }
+    int reverseattenuator() { return _reverse_attenuation_pc; }
     float pterm() { return _pterm; }
     float iterm() { return _iterm; }
     float dterm() { return _dterm; }
@@ -225,7 +252,7 @@ class ServoMotor {
     Hotrc* hotrc;
     Speedometer* speedo;
     Servo motor;
-    static const uint32_t pid_timeout = 85000;
+    static const int pid_timeout = 85000;
     Timer pid_timer = Timer(pid_timeout);
     int pin, freq;
   public:
@@ -267,6 +294,9 @@ class JagMotor : public ServoMotor {
     float si[NUM_MOTORVALS] = { NAN, 0, NAN, 0, NAN, NAN, NAN, NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
     float (&volt)[arraysize(si)] = si;  // our standard si value is volts. Create reference so si and volt are interchangeable
+    #if !BrakeThomson
+    // set opmin to avoid driving motor with under 8%
+    #endif
     // JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {}
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
         si[ABSMAX] = running_on_devboard ? car_batt_fake_v : mulebatt->val();
@@ -390,7 +420,6 @@ class Throttle : public ServoMotor {
         derive();
         pid.init(tach->ptr(), &pc[OPMIN], &pc[OPMAX], gas_kp, gas_ki, gas_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::clamp, QPID::cdir::direct, pid_timeout);
-        
         if (pid_enabled) {  // to-do need to dynamically recreate pid if changed during runtime
             cruisepid.init(speedo->ptr(), tach->idle_ptr(), tach->opmax_ptr(), cruise_pidgas_kp, cruise_pidgas_ki,
               cruise_pidgas_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
@@ -573,10 +602,10 @@ class BrakeMotor : public JagMotor {
     float press_kp = 0.142;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float press_ki = 0.000;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_kd = 0.000;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    float posn_kp = 14.5;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float posn_kp = 42.0;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float posn_ki = 0.000;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_kd = 0.000;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    static constexpr uint32_t pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
+    static constexpr int pid_timeout = 85000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     int dominantsens_last = PositionFB;    // float posn_inflect, pres_inflect, pc_inflect;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
@@ -637,6 +666,10 @@ class BrakeMotor : public JagMotor {
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
         pids[PositionFB].init(brkpos->ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_kp, posn_ki, posn_kd, QPID::pmod::onerr, 
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
+        pids[PressureFB].set_iaw_cond_thresh(0.25);
+        pids[PositionFB].set_iaw_cond_thresh(0.25);
+        pids[PressureFB].set_reverse_attenuation(100000, 80.0);  // LAE actuator stutters and stalls when changing direction suddenly
+        pids[PositionFB].set_reverse_attenuation(100000, 80.0);  // LAE actuator stutters and stalls when changing direction suddenly
     }
   private:
     void update_motorheat() {  // i am probably going to scrap all this nonsense and just put another temp sensor on the motor

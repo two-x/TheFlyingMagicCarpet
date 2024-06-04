@@ -348,7 +348,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             // else ++huebase %= (1 << 21);
             // spothue = (uint16_t)(huebase >> 5);
             if (pentimer.expireset()) {
-                if (season <= 1) {
+                if (season == 1 && season == 3) {
                     pensat += (float)pensatdir * 1.5;
                     if (pensat > 255.0) {
                         pensat = 255;
@@ -359,7 +359,8 @@ class EraserSaver {  // draws colorful patterns to exercise
                         pensatdir = 1;
                     };
                 }
-                else penhue += 255;
+                else penhue += 500;
+                if (!rn(150)) penhue = rn(65536);
                 pencolor = hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
             }
             fspothue -= spotrate * 0.1;
@@ -375,7 +376,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                     wcball = hsv_to_rgb<uint8_t>(hue, 64, brt);
                 }
                 else if (season == 3) {
-                    wctip = hsv_to_rgb<uint8_t>(hue, 0, brt);
+                    wctip = hsv_to_rgb<uint8_t>(hue, rn(256), brt);
                     wcball = hsv_to_rgb<uint8_t>(hue, 64, rn(64));
                 }
                 else {
@@ -402,7 +403,10 @@ class EraserSaver {  // draws colorful patterns to exercise
                 }
             }
             else if (rotate == Rings) {
-                spotrate = (float)(5 + rn(2));
+                if (extraeffectstimer.expired()) {
+                    spotrate = (float)(2 + rn(8));
+                    extraeffectstimer.set(500000 * (1 + rn(4)));
+                }
                 int d = 6 + rn(45);
                 uint8_t sat, brt, c, c2;
                 uint16_t hue = spothue + 32768 * rn(2) + rn(1500);
@@ -431,7 +435,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                     has_eraser = false;
                 }
                 if (season == 0 && last_season == 3) {  // on new years we slam them with a big punch
-                    extraeffectstimer.set(550000);
+                    extraeffectstimer.set(300000);
                     punchdelay = true;
                     sprite->fillCircle((vp->w >> 1) + vp->x, (vp->h >> 1) + vp->y, (int)((float)std::min(vp->h, vp->w) * 0.38), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
                 }
@@ -450,6 +454,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 }
             }
             else if (rotate == Boxes) {
+                int boxcolor;
                 boxrad = 2 + rn(2 + 4 * season);
                 boxminsize = 2 * boxrad + 5;
                 int longer = rn(2);
@@ -465,8 +470,12 @@ class EraserSaver {  // draws colorful patterns to exercise
                 }
                 if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
                 if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
+                if (season++ == 0) spotrate = (float)(((int)spotrate + 4 + rn(3)) % 10);
+                else if (season == 1) boxcolor = rando_color();
+                else if (season == 2) boxcolor = hsv_to_rgb<uint8_t>(spothue + rn(1024), 150 + rn(56), 255);
+                else if (season == 3) boxcolor = hsv_to_rgb<uint8_t>(spothue + rn(2) * 32767 + rn(512), 150 + rn(56), 255);
                 // std::cout << "px" << point[HORZ] << " py" << point[VERT] << " bx" << boxsize[HORZ] << " by" << boxsize[VERT] << "\n";
-                sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, rando_color());  // Change colors as needed
+                sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, boxcolor);  // Change colors as needed
             }
             else if (rotate == Ascii) {
                 static float offset[2];
@@ -574,15 +583,22 @@ class EraserSaver {  // draws colorful patterns to exercise
 class EZReadDrawer {  // never has any terminal solution been easier on the eyes
   public:
     bool dirty = true;
-    int pix_margin = 2;
+    int pix_margin = 2, offset = 0;
     int font_height = 6, linelength;
     std::string drawnow; // Ring buffer array
+    void lookback(int off) {
+        int offset_old = offset;
+        offset = constrain(off, 0, ez->bufferSize);  //  - ez->num_lines);
+        if (offset) offsettimer.reset();
+        if (offset != offset_old) dirty = true;
+    }
   private:
     LGFX* mylcd;
     // LGFX_Sprite* spr;
     LGFX_Sprite* nowspr_ptr;
     viewport* vp;
     EZReadConsole* ez;
+    Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
     int chars_to_fit_pix(LGFX_Sprite* spr, std::string& str, int pix) {
         int totalwidth = 0, charcount = 0;
         for (size_t i = 0; i < str.length(); ++i) {
@@ -595,20 +611,21 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
         return charcount - 1;
     }
     void draw(LGFX_Sprite* spr) {
+        int botline = (ez->newest_content - offset + ez->bufferSize) % ez->bufferSize;
         spr->fillSprite(BLK);
         spr->setTextWrap(false);        // 右端到達時のカーソル折り返しを禁止
         // int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
         spr->setFont(&fonts::Font0);  // spr->setFont(&fonts::Org_01);
         spr->setTextDatum(textdatum_t::top_left);
-        spr->setTextColor(ez->linecolors[ez->newest_content]);
-        std::string nowline = ez->textlines[ez->newest_content];
+        spr->setTextColor(ez->linecolors[botline]);
+        std::string nowline = ez->textlines[botline];
         int chopit = chars_to_fit_pix(spr, nowline, vp->w);
         bool toobig = (chopit < nowline.length());
         if (toobig) {
             spr->setCursor(vp->x + pix_margin, vp->y + vp->h - 18);
-            nowline = ez->textlines[ez->newest_content].substr(0, chopit);
+            nowline = ez->textlines[botline].substr(0, chopit);
             spr->print(nowline.c_str());
-            nowline = ez->textlines[ez->newest_content].substr(chopit);
+            nowline = ez->textlines[botline].substr(chopit);
         }
         spr->setCursor(vp->x + pix_margin, vp->y + vp->h - 9);
         spr->print(nowline.c_str());
@@ -616,7 +633,7 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
         // spr->drawFastHLine(vp->x + 3, bottom_extent, vp->w - 6, LGRY);  // separator for the newest line at the bottom will be printed larger and span 2 lines
         spr->setFont(&fonts::TomThumb);
         for (int line=1; line<ez->num_lines; line++) {
-            int backindex = (ez->newest_content + ez->bufferSize - line) % ez->bufferSize;
+            int backindex = (botline + ez->bufferSize - line) % ez->bufferSize;
             spr->setCursor(vp->x + pix_margin, bottom_extent - line * (font_height + pix_margin));
             // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
             int strsize = std::min((int)linelength, (int)ez->textlines[backindex].length());
@@ -632,6 +649,7 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
         linelength = (int)(vp->w / disp_font_width);
     }
     void update(LGFX_Sprite* spr, bool force=false) {
+        if (offsettimer.expired()) offset = 0;
         if (dirty || force || ez->dirty) draw(spr);
         dirty = ez->dirty = false;
     }
@@ -657,7 +675,7 @@ class PanelAppManager {
     bool simulating_last = false, mule_drawn = false, dirty = true;
     int ui_context_last = MuleChassisUI;
   public:
-    EZReadDrawer* ezdraw; // Initialize serial buffer with size 5
+    EZReadDrawer* ezdraw;
     std::uint32_t sec, psec, _width, _height, _myfps = 0, frame_count = 0;
     bool anim_reset_request = false;
     PanelAppManager(EZReadDrawer* _ez) : ezdraw(_ez) {}
@@ -673,7 +691,7 @@ class PanelAppManager {
         set_vp(_cornerx, _cornery, _sprwidth, _sprheight);
         _width = vp.w << SHIFTSIZE;
         _height = vp.h << SHIFTSIZE;
-        Serial.printf(" screensavers & diag console .. ");
+        Serial.printf(" screensavers & ezread console .. ");
         eSaver.setup(&framebuf[flip], &vp);
         cSaver.setup(&framebuf[flip], &vp);
         ezdraw->setup(&vp);
@@ -753,10 +771,6 @@ class PanelAppManager {
             spr->print(std::to_string(oldfps).c_str());
             spr->setCursor(10, 10);
             spr->print(std::to_string(oldfps).c_str());
-            // for (int x=9; x<=11; x++) {
-            //     spr->setCursor(x, x);
-            //     spr->print(std::to_string(oldfps).c_str());
-            // }
             spr->setTextColor(LGRY);
             spr->setCursor(10, 10);
             spr->print(std::to_string(dispfps).c_str());

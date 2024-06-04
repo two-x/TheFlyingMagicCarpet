@@ -405,11 +405,12 @@ class EZReadConsole {
   public:
     bool dirty = true;
     EZReadConsole() {}
-    static constexpr int num_lines = 24;
-    std::string textlines[num_lines];
-    int newest_content = -1, next_index = 0;
+    static constexpr int num_lines = 50;
+    static constexpr int bufferSize = num_lines;
+    int maxlength=40; // size_t bufferSize; // Size of the ring buffer
+    std::string textlines[bufferSize];
+    int newest_content = bufferSize, next_index = 0;
     uint8_t linecolors[num_lines];
-    int bufferSize = num_lines, maxlength=40; // size_t bufferSize; // Size of the ring buffer
     uint8_t defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
   private:
     std::string remove_nonprintable(const std::string& victim) {
@@ -432,7 +433,7 @@ class EZReadConsole {
   public:
     void setup() {
         std::string blank = "";
-        for (int i=0; i<num_lines; i++) {
+        for (int i=0; i<bufferSize; i++) {
             // linecolors[i] = MGRY;
             this->ezprintf("%s", blank.c_str());
             linecolors[i] = MYEL;
@@ -450,6 +451,20 @@ class EZReadConsole {
         va_list args;
         va_start(args, format);
         ezprintf_impl(color, format, args);  // Use provided color
+        va_end(args);
+    }
+    void squintf(const char* format, ...) {  // prints string to both serial and ezread consoles
+        va_list args;
+        va_start(args, format);
+        ezprintf_impl(defaultcolor, format, args);
+        if (console_enabled) Serial.printf(format, args);
+        va_end(args);
+    }
+    void squintf(uint8_t color, const char* format, ...) {  // prints string to both serial and ezread consoles
+        va_list args;
+        va_start(args, format);
+        ezprintf_impl(color, format, args);  
+        if (console_enabled) Serial.printf(format, args);
         va_end(args);
     }
 };

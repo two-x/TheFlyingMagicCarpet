@@ -85,8 +85,8 @@ class Encoder {
     // class vars
     //  ---- tunable ----
     // TODO: these are all currently private const, if we ever actually want to tune them live we would need to change this
-    static const uint32_t _spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
-    static const uint32_t _accel_thresh_us = 60000;  // Spins faster than this will be accelerated
+    uint32_t _spinrate_min_us = 2500;  // Will reject spins faster than this as an attempt to debounce behavior
+    uint32_t _accel_thresh_us = 60000;  // Spins faster than this will be accelerated
     static const int _accel_max = 15;  // Maximum acceleration factor
 
     // instance vars
@@ -159,6 +159,13 @@ class Encoder {
         // set_pin(_sw_pin, INPUT_PULLUP);  // The esp32 pullup is too weak. Use resistor
         attachInterrupt(digitalPinToInterrupt(_a_pin), [this]{ _a_isr(); }, CHANGE); \
         attachInterrupt(digitalPinToInterrupt(_b_pin), [this]{ _b_isr(); }, CHANGE);
+        #if EncoderPanasonicType  // these encoders have half the transitions/interrupts for the same amount of turn 
+            _spinrate_min_us *= 2;  // so double the fastest spin threshold time
+            _accel_thresh_us *= 2;  // and double the acceleration threshold time
+        #endif
+    }
+    float spinrate_pc() {
+        return constrain(map((float)_spinrate_us, (float)_accel_thresh_us, (float)_spinrate_min_us, 0.0, 100.0), 0.0, 100.0);
     }
     void update() {
         button.update();
@@ -175,14 +182,11 @@ class Encoder {
         int32_t d = 0;
         if (_delta) {  // Now handle any new rotations
             kick_inactivity_timer(HUEncTurn);  // evidence of user activity
-            if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
-                // if (accel) {
-                _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
-                _spinrate_us = map (_spinrate_us, _spinrate_min_us, _accel_thresh_us, _accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
-                d = _delta * _spinrate_us;  // If a tunable value is being edited, turning the encoder changes the value
-                // }
-                // else d = constrain (_delta, -1, 1);  // Only change one at a time when selecting or turning pages
-            }
+            // if (_spinrate_isr_us >= _spinrate_min_us) {  // Reject clicks coming in too fast as bounces
+            _spinrate_us = constrain (_spinrate_isr_us, _spinrate_min_us, _accel_thresh_us);
+            _spinrate_us = map (_spinrate_us, _spinrate_min_us, _accel_thresh_us, _accel_max, 1);  // if turning faster than 100ms/det, proportionally accelerate the effect of each detent by up to 50x. encoder_temp variable repurposed here to hold # of edits per detent turned
+            d = _delta * _spinrate_us;  // If a tunable value is being edited, turning the encoder changes the value
+            // }
             _delta = 0;  // our responsibility to reset this flag after handling events
         }
         return d;

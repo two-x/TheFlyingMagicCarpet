@@ -39,7 +39,7 @@ std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "JoysticH", "   Speed", "    Tach", brAk"Pres", "Throttle", brAk"Motr", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "psi", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 9, 12, 11, 11, 13, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 9, 11, 11, 11, 13, 4, 10 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", __________, __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
@@ -48,12 +48,12 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", __________, __________, __________, __________, "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { "Brk Heat", "HybBrake", __________, __________, __________, __________, __________, __________, __________, "BkEnaPID", "BkFeedbk", "BkPosLim", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR
-    { "MotrMode", "Feedback", brAk"Posn", "Pn|PrErr", "Pres Tgt", "Posn Tgt", "HybrdTgt", "OutRatio", "  P Term", "  I Term", "  D Term", __________, "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
+    { "MotrMode", "Feedback", brAk"Posn", "Pn|PrErr", "Pres Tgt", "Posn Tgt", "HybrdTgt", "OutRatio", "  P Term", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "MotrMode", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, __________, __________, __________, "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, __________, __________, __________, __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, __________, "No Temps", "StopWifi", },  // PG_TEMP
     { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", " Touch X", " Touch Y", "  Uptime", __________, __________, __________, "BlnkDemo", neo_bright, "NeoDesat", "PanelApp", },  // PG_UI
+    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", " Touch X", " Touch Y", "SpinRate", "  Uptime", __________, "EZScroll", "BlnkDemo", neo_bright, "NeoDesat", "PanelApp", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, ______, "%",    "%",    },  // PG_RUN
@@ -63,12 +63,12 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    ______, ______, ______, ______, "%",    degree, degree, degreF, degreF, },  // PG_IDLE
     { degreF, "%",    ______, ______, ______, ______, ______, ______, ______, b1nary, scroll, b1nary, b1nary, b1nary, scroll, },  // PG_MOTR
-    { scroll, scroll, "in",   "psin", "psin", "%",    "%",    "%",    "%",    "%",    "%",    ______, ______, "Hz",   "s",    },  // PG_BPID
+    { scroll, scroll, "in",   "psin", "psin", "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, ______, ______, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, b1nary, b1nary, },  // PG_TEMP
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us",   "us",   "Hz",   "fps",  scroll, "pix",  "pix",  "min",  ______, ______, ______, "eyes", "%",    "of10", scroll, },  // PG_UI
+    { "us",   "us",   "Hz",   "fps",  scroll, "pix",  "pix",  "%",    "min",  ______, "lin",  "eyes", "%",    "of10", scroll, },  // PG_UI
 };
 static std::string unitmapnames[11] = { "usps", "us", "rpms", scroll, b1nary, "%", "ohm", "eyes", "psin", degree, "of10" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for exceptions where some unit strings can't be well represented by any set of 3 font characters
@@ -491,6 +491,7 @@ class Display {
             std::string result (std::to_string(value));  // sd=3,  0.1234  d=1 l=6    0.00123
             size_t decimalPos = result.find('.');  // decimalPos will always be 1 (?)
             if (decimalPos != std::string::npos) result = result.substr(decimalPos, std::min(sigdig-place, maxlength));  // Remove any digits to the left of the decimal point
+            if (value != 0.0 && chop_zeroes && result.find('.') != std::string::npos) result = result.substr(0, result.find_last_not_of('0') + 1);
             return result;
         }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
         char buffer[maxlength+1];  // Allocate buffer with the maximum required size
@@ -760,10 +761,10 @@ class Display {
             draw_dynamic(17, brake.pid_dom->pterm(), -drange, drange);
             draw_dynamic(18, brake.pid_dom->iterm(), -drange, drange);
             draw_dynamic(19, brake.pid_dom->dterm(), -drange, drange);
-            draw_eraseval(20);
-            draw_dynamic(21, brake.pid_dom->kp(), 0.0f, 8.0);
-            draw_dynamic(22, brake.pid_dom->ki(), 0.0f, 8.0);
-            draw_dynamic(23, brake.pid_dom->kd(), 0.0f, 8.0);
+            draw_dynamic(20, brake.pid_dom->sampletime());
+            draw_dynamic(21, brake.pid_dom->kp());
+            draw_dynamic(22, brake.pid_dom->ki());
+            draw_dynamic(23, brake.pid_dom->kd());
         }
         else if (datapage == PG_GPID) {
             draw_asciiname(9, motormodecard[gas.motormode]);
@@ -776,9 +777,9 @@ class Display {
             // draw_dynamic(15, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
             for (int line=16; line<=19; line++) draw_eraseval(line);
             draw_dynamic(20, gas.max_throttle_angular_velocity_degps, 0.0f, 360.0f);
-            draw_dynamic(21, gas.pid.kp(), 0.0f, 1.0);
-            draw_dynamic(22, gas.pid.ki(), 0.0f, 1.0);
-            draw_dynamic(23, gas.pid.kd(), 0.0f, 1.0);
+            draw_dynamic(21, gas.pid.kp());
+            draw_dynamic(22, gas.pid.ki());
+            draw_dynamic(23, gas.pid.kd());
         }
         else if (datapage == PG_CPID) {
             drange = tach.opmax() - tach.idle();
@@ -795,9 +796,9 @@ class Display {
             draw_dynamic(14, gas.throttle_target_pc, 0.0f, 100.0f);
             for (int line=15; line<=19; line++) draw_eraseval(line);
             draw_dynamic(20, cruise_delta_max_pc_per_s, 1, 35);
-            draw_dynamic(21, gas.cruisepid.kp(), 0.0f, 10.0f);
-            draw_dynamic(22, gas.cruisepid.ki(), 0.0f, 10.0f);
-            draw_dynamic(23, gas.cruisepid.kd(), 0.0f, 10.0f);
+            draw_dynamic(21, gas.cruisepid.kp());
+            draw_dynamic(22, gas.cruisepid.ki());
+            draw_dynamic(23, gas.cruisepid.kd());
         }
         else if (datapage == PG_TEMP) {
             draw_temperature(loc::AMBIENT, 9);
@@ -833,11 +834,13 @@ class Display {
             draw_asciiname(13, activitiescard[last_activity]);
             draw_dynamic(14, touch->touch_pt(0), 0, disp_width_pix);
             draw_dynamic(15, touch->touch_pt(1), 0, disp_height_pix);
-            draw_dynamic(16, looptimer.uptime());
+            draw_dynamic(16, encoder.spinrate_pc(), 0.0, 100.0);
+            draw_dynamic(17, looptimer.uptime());
             // draw_dynamic(13, drawclock, 0, refresh_limit);
             // draw_dynamic(14, pushclock, 0, refresh_limit);
             // draw_dynamic(15, idleclock, 0, refresh_limit);
-            for (int line=17; line<=19; line++) draw_eraseval(line);
+            for (int line=18; line<=18; line++) draw_eraseval(line);
+            draw_dynamic(19, ezdraw.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
             draw_truth(20, flashdemo, 0);
             draw_dynamic(21, neobright, 1.0, 100.0f, -1, 3);
             draw_dynamic(22, neodesat, 0, 10, -1, 2);  // -10, 10, -1, 2);
@@ -1111,7 +1114,8 @@ class Tuner {
                 else if (sel_val == 14) adj_cruise_scheme();
             }
             else if (datapage == PG_BPID) {
-                if (sel_val == 12) brake.pid_dom->add_kp(0.001f * fdelta);
+                if (sel_val == 11) brake.pid_dom->add_sampletime(idelta);
+                else if (sel_val == 12) brake.pid_dom->add_kp(0.001f * fdelta);
                 else if (sel_val == 13) brake.pid_dom->add_ki(0.001f * fdelta);
                 else if (sel_val == 14) brake.pid_dom->add_kd(0.001f * fdelta);
             }
@@ -1145,7 +1149,8 @@ class Tuner {
                 else if (sel_val == 14) adj_bool(&cal_gasmode_request, rdelta);
             }
             else if (datapage == PG_UI) {
-                if (sel_val == 11) { adj_bool(&flashdemo, rdelta); neo->enable_flashdemo(flashdemo); }
+                if (sel_val == 10) ezdraw.lookback(ezdraw.offset + rdelta); 
+                else if (sel_val == 11) { adj_bool(&flashdemo, rdelta); neo->enable_flashdemo(flashdemo); }
                 else if (sel_val == 12) { adj_val(&neobright, rdelta, 1, 100); neo->setbright(neobright); }
                 else if (sel_val == 13) { adj_val(&neodesat, rdelta, 0, 10); neo->setdesaturation(neodesat); }
                 else if (sel_val == 14) adj_val(&ui_context, rdelta, 0, NumContextsUI-1);
