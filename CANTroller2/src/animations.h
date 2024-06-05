@@ -255,15 +255,15 @@ class EraserSaver {  // draws colorful patterns to exercise
     viewport* vp;
     int wormpos[2] = {0, 0}, wormvel[2] = {0, 0}, wormsign[2] = {1, 1}, wormd[2] = {20, 20};
     int shifter = 2, wormdmin = 8, wormdmax = 50, wormvelmax = 512, wormsat = 128, boxsize[2];
-    uint32_t huebase = 0;
     int sprsize[2], rotate = -1, scaler = 1, season = 0, last_season = 0, numseasons = 4;
     int point[2], plast[2], er[2], erpos_max[2], wormstripe = 2;
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, now = 0;
     int eraser_velo[2] = {rn(eraser_velo_max), rn(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
     uint8_t wclast, pencolor = RED;
-    float pensat = 200.0, fspothue = 0.0, spotrate = 5;
-    uint16_t spothue = 65535, slowhue = 0, penhue = rn(65535);
+    float pensat = 200.0;
+    uint16_t spothue = 65535, penhue = rn(65535);
+    uint32_t spotrate = 300, huebase = 0;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 200, shape = rn(Rotate), pensatdir = 1;
     static constexpr uint32_t saver_cycletime_us = 18000000;
     Timer saverCycleTimer, pentimer{70000}, lucktimer, seasontimer, spottimer{2000000};
@@ -363,10 +363,9 @@ class EraserSaver {  // draws colorful patterns to exercise
                 if (!rn(150)) penhue = rn(65536);
                 pencolor = hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
             }
-            fspothue -= spotrate * 0.1;
-            spothue = (int)fspothue;
+            
+            spothue = (uint16_t)((uint32_t)spothue + (spotrate >> 2) % sizeof(spothue));
             if (!rn(20)) spothue = rn(65535);
-            if (spothue & 1) slowhue += 13;
             if (rotate == Wedges) {
                 uint8_t wcball, wctip;
                 uint16_t hue = rn(65536);
@@ -395,7 +394,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 int d[2] = {10 + rn(30), 10 + rn(30)};
                 uint8_t sat, brt;
                 uint16_t mult = rn(2000), hue = spothue + rn(3000);
-                spotrate = (float)((season * 2) + rn(2));
+                spotrate = (uint32_t)((season * 200) + rn(200));
                 sat = 100 + rn(156);
                 brt = 120 + rn(136);
                 for (int i = 0; i < 6 + rn(20); i++) { 
@@ -404,7 +403,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             else if (rotate == Rings) {
                 if (extraeffectstimer.expired()) {
-                    spotrate = (float)(2 + rn(8));
+                    spotrate = (uint32_t)(200 + rn(800));
                     extraeffectstimer.set(500000 * (1 + rn(4)));
                 }
                 int d = 6 + rn(45);
@@ -426,7 +425,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                     sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler + edge, c2);
             }
             else if (rotate == Dots) {
-                spotrate = (float)(rn(9));
+                spotrate = (uint32_t)(rn(900));
                 static bool punchdelay;
                 static bool was_eraser;
                 uint8_t sat = (30 * season) + rn(256 - 30 * season);
@@ -470,7 +469,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 }
                 if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
                 if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
-                if (season++ == 0) spotrate = (float)(((int)spotrate + 4 + rn(3)) % 10);
+                if (season++ == 0) spotrate = ((int)spotrate + 4 + rn(3)) % 10;
                 else {
                     int shells = 1;
                     if (!rn(5)) shells = rn(8);
