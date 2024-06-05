@@ -216,6 +216,7 @@ class Touchscreen {
     Timer touchAccelTimer{400000};
     Timer rejectiontimer{25000};  // Won't allow a new press within this long after an old press (prevent accidental double clicks)
     Timer touchSenseTimer{15000};  // touch chip can't respond faster than some time period
+    Timer keyRepeatTimer{250000};  // for editing parameters with only a few values, auto repeat is this slow
     bool touchPrintEnabled = true, rejectiontimer_active = false;
     unsigned long lastTouchPrintTime = 0;
     const unsigned long touchPrintInterval = 500; // Adjust this interval as needed (in milliseconds)
@@ -259,6 +260,24 @@ class Touchscreen {
     int touch_y() { return tft_touch[yy]; }
     int16_t touch_pt(uint8_t axis) { return tft_touch[axis]; }
     bool ontouch() { return nowtouch && !lasttouch; }
+    bool onrepeat() {
+        static bool press_in_effect = false;
+        bool ret = false;
+        if (!nowtouch) press_in_effect = false;
+        if (press_in_effect) {
+            if (keyRepeatTimer.expired()) {
+                keyRepeatTimer.reset();
+                ret = true;  // each time timer expires send true;
+            }
+        }
+        else if (nowtouch) {
+            keyRepeatTimer.reset();
+            press_in_effect = true;
+            ret = true;  // on first touch send true
+        }
+        else press_in_effect = ret = false;  // on loss of touch send false;
+        return ret;
+    }
     bool longpress() {
         bool retval = touch_longpress_valid && touchHoldTimer.expired();
         if (retval) touch_longpress_valid = false;
@@ -314,13 +333,13 @@ class Touchscreen {
         tquad = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5) << 4) | constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
         // ezread.squintf("n%dl%dv%d q%02x tx:%3d ty:%3d e%d x%d\r", nowtouch, lasttouch, landed_coordinates_valid, tquad, tft_touch[0], tft_touch[1], tedit, (int)tedit_exponent);
         // std::cout << "n" << nowtouch << " e" << tedit << " x" << tedit_exponent << "\r";
-        if (tquad == 0x00 && ontouch()) increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
+        if (tquad == 0x00 && onrepeat()) increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
         else if (tquad == 0x01) {  // Long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
             if (tunctrl == OFF) {
                 sel_val = 0;  // If entering select mode from off mode, select the first variable
                 if (longpress()) tunctrl = SELECT;
             }
-            else if (tunctrl == EDIT && ontouch()) {
+            else if (tunctrl == EDIT && onrepeat()) {
                 tunctrl = SELECT;  // Drop back to select mode
                 increment_sel_val = true;  // Move to the next selection
             }
@@ -338,8 +357,8 @@ class Touchscreen {
             else if (tunctrl == EDIT) idelta = (int)(-tedit);  // If in edit mode, decrease the value
         }
         else if (tquad == 0x21) ezread.lookback(ezread.offset + tedit);
-        else if (tquad == 0x22 && ontouch()) ezread.lookback(ezread.offset + 1);
-        else if (tquad == 0x23 && ontouch()) ezread.lookback(ezread.offset - 1);
+        else if (tquad == 0x22 && onrepeat()) ezread.lookback(ezread.offset + 1);
+        else if (tquad == 0x23 && onrepeat()) ezread.lookback(ezread.offset - 1);
         else if (tquad == 0x24) ezread.lookback(ezread.offset - tedit);
         else if (tquad == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
         else if (tquad == 0x20 && sim.enabled() && longpress()) calmode_request = true;
