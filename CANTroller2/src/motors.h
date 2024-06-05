@@ -247,13 +247,15 @@ class ServoMotor {
     Speedometer* speedo;
     Servo motor;
     static const int pid_timeout = 85000;
-    Timer pid_timer = Timer(pid_timeout);
+    float lastoutput;
+    Timer pid_timer{pid_timeout}, outchangetimer;
     int pin, freq;
   public:
     bool reverse = false;  // defaults. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { 0, NAN, 100, 0, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
     float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
+    float max_out_change_rate_pcps = 800.0;
     ServoMotor(int _pin, int _freq) { pin = _pin; freq = _freq; }
     void setup(Hotrc* _hotrc, Speedometer* _speedo) {
         hotrc = _hotrc;
@@ -273,7 +275,17 @@ class ServoMotor {
     float out_pc_to_us(float _pc) {  // works for motor with or without stop value
         return map(_pc, pc[ABSMIN], pc[ABSMAX], reverse ? us[ABSMAX] : us[ABSMIN], reverse ? us[ABSMIN] : us[ABSMAX]);
     }
-    void write_motor() { if (!std::isnan(us[OUT])) motor.writeMicroseconds((int32_t)(us[OUT])); }
+    void write_motor() {
+        if (!std::isnan(us[OUT])) motor.writeMicroseconds((int32_t)(us[OUT]));
+        lastoutput = pc[OUT];    
+    }
+  protected:
+    void changerate_limiter() {
+        float max_out_change_pc = max_out_change_rate_pcps * outchangetimer.elapsed() / 1000000.0;
+        outchangetimer.reset();
+        pc[OUT] = constrain(pc[OUT], lastoutput - max_out_change_pc, lastoutput + max_out_change_pc);
+        // lastoutput = pc[OUT];  // NOTE you must set lastoutput = pc[OUT]
+    }
 };
 class JagMotor : public ServoMotor {
   protected:
@@ -606,7 +618,6 @@ class BrakeMotor : public JagMotor {
     Timer stopcar_timer{10000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000}, blindaction_timer{3000000};
     bool stopped_last = false;
     bool feedback_enabled[NumBrakeSens];
-    Timer outchangetimer;
     void set_dominant_sensor(float _hybrid_ratio) {
         if (std::isnan(_hybrid_ratio)) return;
         dominantsens = (int)(_hybrid_ratio + 0.5) ? PressureFB : PositionFB;  // round to 0 or 1, the indices of posn and pres respectively
@@ -665,7 +676,7 @@ class BrakeMotor : public JagMotor {
             QPID::dmod::onerr, QPID::awmod::off, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::off);  // QPID::centmod::on, pc[STOP]);
         // pids[PressureFB].set_iaw_cond_thresh(0.25);  // set the fraction of the output range within which integration works at all
         // pids[PositionFB].set_iaw_cond_thresh(0.25);
-        max_out_change_pcps = 200.0;  // LAE actuator stutters and stalls when changing direction suddenly
+        max_out_change_rate_pcps = 200.0;  // LAE actuator stutters and stalls when changing direction suddenly
     }
   private:
     void update_motorheat() {  // i am probably going to scrap all this nonsense and just put another temp sensor on the motor
@@ -826,19 +837,15 @@ class BrakeMotor : public JagMotor {
         }
     }
     void postprocessing() {  // keep within the operational range, or to full absolute range if calibrating (caution don't break anything!)
-        static float lastout;
-        float max_out_change_pc = max_out_change_pcps * outchangetimer.elapsed() / 1000000.0;
-        outchangetimer.reset();
-        pc[OUT] = constrain(pc[OUT], lastout - max_out_change_pc, lastout + max_out_change_pc);
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
         else if (enforce_positional_limits                                                 // IF we're not exceed actuator position limits
           && ((pc[OUT] < pc[STOP] && brkpos->val() > brkpos->opmax() - brkpos->margin())   //   AND ( we're trying to extend while already at the extension limit
           || (pc[OUT] > pc[STOP] && brkpos->val() < brkpos->opmin() + brkpos->margin())))  //     OR trying to retract while already at the retraction limit )
             pc[OUT] = pc[STOP];                                                            // THEN stop the motor
         else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);                     // constrain motor value to operational range
+        changerate_limiter();
         if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;                                 // prevent stupidly small values which i was seeing
         for (int p = PositionFB; p <= PressureFB; p++) pids[p].set_output(pc[OUT]);  // feed the final value back into the pids
-        lastout = pc[OUT];
     }
   public:
     void setmode(int _mode, bool force_init=false) {    
@@ -920,6 +927,7 @@ class SteerMotor : public JagMotor {
     float steer_safe_pc = 72.0;  // this percent is taken off full steering power when driving full speed (linearly applied)
     bool reverse = false;
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+        max_out_change_rate_pcps = 350.0;
         printf("Steering motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
     }
@@ -948,6 +956,7 @@ class SteerMotor : public JagMotor {
         }
     }
     void postprocessing() {
+        changerate_limiter();
         pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);
         if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;
     }
