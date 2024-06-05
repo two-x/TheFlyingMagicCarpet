@@ -413,14 +413,14 @@ class Throttle : public ServoMotor {
         throttleRateTimer.reset();
         derive();
         pid.init(tach->ptr(), &pc[OPMIN], &pc[OPMAX], gas_kp, gas_ki, gas_kd, QPID::pmod::onerr, 
-            QPID::dmod::onerr, QPID::awmod::clamp, QPID::cdir::direct, pid_timeout);
+            QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
         if (pid_enabled) {  // to-do need to dynamically recreate pid if changed during runtime
             cruisepid.init(speedo->ptr(), tach->idle_ptr(), tach->opmax_ptr(), cruise_pidgas_kp, cruise_pidgas_ki,
-              cruise_pidgas_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
+              cruise_pidgas_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
         }
         else {  // if OpenLoop
             cruisepid.init(speedo->ptr(), &pc[OPMIN], &pc[OPMAX], cruise_opengas_kp, cruise_opengas_ki,
-              cruise_opengas_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::round, QPID::cdir::direct, pid_timeout);
+              cruise_opengas_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
         }
     }
     void update_idlespeed() {
@@ -633,7 +633,7 @@ class BrakeMotor : public JagMotor {
     float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, target_pc, pid_err_pc;
     float combined_read_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
     float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
-    float open_loop_attenuation_pc = 75.0, thresh_loop_attenuation_pc = 75.0, thresh_loop_hysteresis_pc = 2.0;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
+    float open_loop_attenuation_pc = 75.0, thresh_loop_attenuation_pc = 65.0, thresh_loop_hysteresis_pc = 2.0;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
     float max_out_change_pcps = 800.0;  // what percent of motor overall range should be the most its value can change within 1 second?
     void derive() {  // to-do below: need stop/hold values for posn only operation!
         JagMotor::derive();
@@ -660,9 +660,9 @@ class BrakeMotor : public JagMotor {
         derive();
         update_ctrl_config();
         pids[PressureFB].init(pressure->ptr(), &(pc[OPMIN]), &(pc[OPMAX]), press_kp, press_ki, press_kd, QPID::pmod::onerr,
-            QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
+            QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::off);  // QPID::centmod::on, pc[STOP]);
         pids[PositionFB].init(brkpos->ptr(), &(pc[OPMIN]), &(pc[OPMAX]), posn_kp, posn_ki, posn_kd, QPID::pmod::onerr, 
-            QPID::dmod::onerr, QPID::awmod::off, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::on, pc[STOP]);
+            QPID::dmod::onerr, QPID::awmod::off, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::off);  // QPID::centmod::on, pc[STOP]);
         // pids[PressureFB].set_iaw_cond_thresh(0.25);  // set the fraction of the output range within which integration works at all
         // pids[PositionFB].set_iaw_cond_thresh(0.25);
         max_out_change_pcps = 200.0;  // LAE actuator stutters and stalls when changing direction suddenly

@@ -420,8 +420,8 @@ void stop_console() {
         delay(200);  // give time for serial to print everything in its buffer
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
-    ezread.ezprintf(DCYN, "welcome to EZ-Read console");
-    ezread.ezprintf(DCYN, "magic carpet is booted");
+    // ezread.ezprintf(DCYN, "welcome to EZ-Read console\n");
+    ezread.ezprintf(DCYN, "magic carpet is booted\n");
     // ezread.ezprintf("welcome to EZ-Read Console");
 }
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience

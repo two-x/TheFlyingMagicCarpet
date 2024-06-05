@@ -239,7 +239,7 @@ class Transducer : public Device {
     int _transtype;
     virtual void setup() {
         print_config(true, false);  // print header
-        if (_pin < 255) ezread.squintf(" on pin %d\n", _pin);
+        // if (_pin < 255) ezread.squintf(" on pin %d\n", _pin);
     }  // printf("%s..\n", _long_name.c_str()); }
     virtual float from_native(float arg_native) {  // these linear conversion functions change absolute native values to si and back - overwrite in child classes as needed
         float ret = NAN;
@@ -355,13 +355,13 @@ class Transducer : public Device {
     }
     virtual void print_config(bool header=false, bool ranges=true) {
         if (header) {
-            ezread.squintf("%s %s%s", _long_name.c_str(), transtypecard[_transtype].c_str(), (_pin == 255) ? " ..\n" : "");
-            if (_pin < 255) ezread.squintf(" on pin %d ..\n", _pin);
+            Serial.printf("%s %s", _long_name.c_str(), transtypecard[_transtype].c_str());
+            if (_pin < 255) Serial.printf(", pin %d", _pin);
         }
-        ezread.squintf("  %s current value: %.2lf %s = %.2lf %s = %.2lf %%\n", _short_name.c_str(), _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
+        ezread.squintf("%s (p%d): %.2lf%s = %.2lf%s = %.2lf%%\n", _short_name.c_str(), _pin, _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
         if (ranges) {
-            ezread.squintf("  abs range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
-            ezread.squintf("  op range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
+            ezread.squintf("  op: %.2lf-%.2lf%s (%.0lf-%.0lf%s)", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
+            ezread.squintf("  abs: %.2lf-%.2lf%s (%.0lf-%.0lf%s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
         }
     }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)

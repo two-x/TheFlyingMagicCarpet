@@ -412,11 +412,11 @@ class EZReadConsole {
     std::string textlines[bufferSize];
     int newest_content = bufferSize, current_index = 0, offset = 0;
     uint8_t linecolors[num_lines], color;
-    uint8_t defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
+    uint8_t defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, highlightcolor = DCYN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
     void lookback(int off) {
         int offset_old = offset;
-        offset = constrain(off, 0, bufferSize - num_lines);  //  - ez->num_lines);
+        offset = constrain(off, 0, bufferSize);  //  - ez->num_lines);
         if (offset) offsettimer.reset();
         if (offset != offset_old) dirty = true;
     }
@@ -429,18 +429,26 @@ class EZReadConsole {
         }
         return result;
     }
-    void enqueue(std::string segment) {        
-        textlines[current_index] = remove_nonprintable(segment);
-        if (textlines[current_index].length() > maxlength) textlines[current_index] = textlines[current_index].substr(0, maxlength);
-        linecolors[current_index] = color;
-        // newest_content = current_index;
-        ++current_index %= bufferSize; // Update next insertion index
-    }
     void ezprintf_impl(uint8_t _color, const char* format, va_list args) {  // this is not called directly but by one ots overloads below
         char temp[100];
         color = _color;
         vsnprintf(temp, sizeof(temp), format, args);
-        enqueue(temp);  // Process each segment
+        std::string str = temp;
+        std::string::size_type start = 0;
+        std::string::size_type end = str.find_first_of("\r\n");
+        while (end != std::string::npos) {  // if string contains at least one newline, chop off up to the first one and tack onto current line, and enqueue
+            textlines[current_index] += str.substr(start, end - start);  // Append content up to the first newline
+            linecolors[current_index] = color;  // Set color for this line
+            start = end + 1;
+            end = str.find_first_of("\r\n", start);
+            textlines[current_index] = remove_nonprintable(textlines[current_index]);
+            ++current_index %= bufferSize; // Update next insertion index
+        }
+        if (start < str.size()) {
+            textlines[current_index] += str.substr(start);  // Append the remaining part of the string
+            textlines[current_index] = remove_nonprintable(textlines[current_index]);
+            linecolors[current_index] = color;
+        }
         dirty = true;
     }
   public:
@@ -451,7 +459,7 @@ class EZReadConsole {
             this->ezprintf("%s", blank.c_str());
             linecolors[i] = MYEL;
         }
-        ezprintf("welcome to EZ-Read console");
+        ezprintf(highlightcolor, "welcome to EZ-Read console\n");
         dirty = true;
     }
     void ezprintf(const char* format, ...) {  // for if we're called with same arguments as printf would take
@@ -466,7 +474,7 @@ class EZReadConsole {
         ezprintf_impl(color, format, args);  // Use provided color
         va_end(args);
     }
-    void squintf(const char* format, ...) {  // prints string to both serial and ezread consoles
+    void squintf(const char* format, ...) {  // prints string to both serial and ezread consoles, except you have to squint to see it
         va_list args;
         va_start(args, format);
         ezprintf_impl(defaultcolor, format, args);
@@ -477,7 +485,7 @@ class EZReadConsole {
             Serial.printf("%s", temp);
         }
     }
-    void squintf(uint8_t color, const char* format, ...) {  // prints string to both serial and ezread consoles
+    void squintf(uint8_t color, const char* format, ...) {  // prints string to both serial and ezread consoles, except you have to squint to see it
         va_list args;
         va_start(args, format);
         ezprintf_impl(color, format, args);  
