@@ -406,7 +406,7 @@ class EZReadConsole {
   public:
     bool dirty = true;
     EZReadConsole() {}
-    static constexpr int num_lines = 50;
+    static constexpr int num_lines = 300;
     static constexpr int bufferSize = num_lines;
     int maxlength=40, last_drawn = bufferSize; // size_t bufferSize; // Size of the ring buffer
     std::string textlines[bufferSize];
