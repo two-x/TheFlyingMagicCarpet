@@ -280,9 +280,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         vp = _vp;
         LGFX_Sprite* spp[2] = { sp0, sp1 };
         shapes_done = cycle = 0;
-        // spp[0]->fillSprite(BLK);
         for (int i = 0; i <= 1; i++) {
-            // spp[i]->setBaseColor(BLK);
             spp[i]->setTextSize(1);
             spp[i]->setTextDatum(textdatum_t::middle_center);
             spp[i]->setTextColor(BLK);
@@ -290,8 +288,6 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         change_pattern(-2);  // randomize new pattern whenever turned off and on
         saverCycleTimer.set(saver_cycletime_us);
-        // refresh_limit = 11111;  // 90 Hz limit
-        // screenRefreshTimer.set(refresh_limit);
         seasontimer.set(3000000);
         scaler = std::max(1, (vp->w + vp->h)/200);
         erpos_max[HORZ] = (int32_t)vp->w / 2 - eraser_rad;
@@ -322,11 +318,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         return shapes_done;
     }
     void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random, -3 for cycle backwards  // XX , -4 for autocycle (retains saver timeout)
-        // if (newpat == -4) {
         ++shapes_done %= 5;
-            // newpat = -1;
-        // }
-        // else shapes_done = 0;
         int last_pat = shape;
         has_eraser = !rn(2);
         if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
@@ -344,9 +336,6 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (shape == Rotate) ++rotate %= NumSaverShapes;
         else rotate = shape;
         if ((cycle != 2) || !has_eraser) {
-            // if (!rn(35)) huebase = rn(1 << 21);
-            // else ++huebase %= (1 << 21);
-            // spothue = (uint16_t)(huebase >> 5);
             if (pentimer.expireset()) {
                 if (season == 1 && season == 3) {
                     pensat += (float)pensatdir * 1.5;
@@ -364,7 +353,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 pencolor = hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
             }
             
-            spothue = (uint16_t)((uint32_t)spothue + (spotrate >> 2) % sizeof(spothue));
+            spothue = (uint16_t)(spothue + (spotrate >> 2) % sizeof(spothue));
             if (!rn(20)) spothue = rn(65535);
             if (rotate == Wedges) {
                 uint8_t wcball, wctip;
@@ -385,7 +374,6 @@ class EraserSaver {  // draws colorful patterns to exercise
                 float im = 0;
                 if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
                 sprite->fillCircle(plast[HORZ] + vp->x, plast[VERT] + vp->y, 3, wcball);
-                // sprite->drawCircle(point[HORZ], point[VERT], 3, BLK);
                 for (int h=-4; h<=4; h++)
                     sprite->drawGradientLine(point[HORZ] + vp->x, point[VERT] + vp->y, plast[HORZ]  + vp->x + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + vp->y + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wctip, wcball);
                 wclast = wcball;
@@ -453,8 +441,8 @@ class EraserSaver {  // draws colorful patterns to exercise
                 }
             }
             else if (rotate == Boxes) {
-                int boxcolor;
-                boxrad = rn(5 * season);
+                uint8_t boxcolor;
+                boxrad = rn(1 + rn(2) * season);  // note this will crash us!  ->  boxrad = rn(5 * season);
                 boxminsize = 2 * boxrad + 5;
                 int longer = rn(2);
                 boxsize[longer] = boxminsize + rn(vp->w - boxminsize);
@@ -469,22 +457,18 @@ class EraserSaver {  // draws colorful patterns to exercise
                 }
                 if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
                 if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
-                if (season++ == 0) spotrate = ((int)spotrate + 4 + rn(3)) % 10;
-                else {
-                    int shells = 1;
-                    if (!rn(5)) shells = rn(8);
-                    int steps[2] = { boxsize[HORZ] / (shells+1), boxsize[VERT] / (shells+1) };
-                    for (int mat=0; mat<shells; mat--) {
-                        if (season == 1) boxcolor = hsv_to_rgb<uint8_t>(rn(65535), rn(256), rn(256));
-                        if (season == 2) boxcolor = hsv_to_rgb<uint8_t>(spothue + rn(1024), 150 + rn(56), 255);
-                        if (season == 3) boxcolor = hsv_to_rgb<uint8_t>(spothue + rn(2) * 32767 + rn(512), 150 + rn(56), 255);
-                        for (int axis=0; axis<=1; axis++) {
-                            boxsize[axis] -= steps[axis];
-                            point[axis] += steps[axis] >> 1;
-                        }
-                        // std::cout << "px" << point[HORZ] << " py" << point[VERT] << " bx" << boxsize[HORZ] << " by" << boxsize[VERT] << "\n";
-                        sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, boxcolor);  // Change colors as needed
+                int shells = 1 + (!rn(5)) ? 1 + rn(4) : 0;
+                int steps[2] = { boxsize[HORZ] / (shells+1), boxsize[VERT] / (shells+1) };
+                for (int mat=0; mat<shells; mat++) {
+                    if (season == 0) boxcolor = rando_color();
+                    else if (season == 1) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)rn(65535), rn(256), rn(256));
+                    else if (season == 2) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(1024)) % 65535), 150 + rn(56), 255);
+                    else if (season == 3) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(2) * 32767 + rn(512)) % 65535), 150 + rn(56), 255);
+                    for (int axis=HORZ; axis<=VERT; axis++) {
+                        boxsize[axis] -= steps[axis];
+                        point[axis] += (steps[axis] >> 1);
                     }
+                    sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, boxcolor);  // Change colors as needed
                 }
             }
             else if (rotate == Ascii) {
