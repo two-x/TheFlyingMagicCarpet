@@ -337,8 +337,10 @@ class Touchscreen {
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
             else if (tunctrl == EDIT) idelta = (int)(-tedit);  // If in edit mode, decrease the value
         }
-        else if (tquad == 0x21 || tquad == 0x22) ezread.lookback(ezread.offset + tedit);
-        else if (tquad == 0x23 || tquad == 0x24) ezread.lookback(ezread.offset - tedit);
+        else if (tquad == 0x21) ezread.lookback(ezread.offset + tedit);
+        else if (tquad == 0x22 && ontouch()) ezread.lookback(ezread.offset + 1);
+        else if (tquad == 0x23 && ontouch()) ezread.lookback(ezread.offset - 1);
+        else if (tquad == 0x24) ezread.lookback(ezread.offset - tedit);
         else if (tquad == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
         else if (tquad == 0x20 && sim.enabled() && longpress()) calmode_request = true;
         else if (tquad == 0x40 && sim.enabled() && longpress()) ignition.request(REQ_TOG);
