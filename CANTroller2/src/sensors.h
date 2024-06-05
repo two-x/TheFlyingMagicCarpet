@@ -21,7 +21,7 @@ int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
   protected:
-    float _ema_alpha = 0.98;
+    float _ema_alpha = 0.99;
     float _opmin = 0.0, _opmax = 100.0 ;  // in percent
     float _opmin_native = 380; // TUNED 230603 - Used only in determining theconversion factor
     float _opmax_native = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
@@ -1254,7 +1254,7 @@ class RMTInput {
 };
 class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
-    float ema_alpha = 0.075;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+    float ema_alpha = 0.065;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
     float pc[NUM_AXES][NUM_VALUS];           // values range from -100% to 100% are all derived or auto-assigned
     int us[NUM_CHANS][NUM_VALUS] = {
         // vals for hotrc v1 (with matte black "HotRC" sticker/receiver)

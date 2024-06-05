@@ -627,7 +627,10 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
         linelength = (int)(vp->w / disp_font_width);
     }
     void update(LGFX_Sprite* spr, bool force=false) {
-        if (ez->offsettimer.expired()) ez->offset = 0;
+        if (ez->offsettimer.expired()) {
+            ez->offset = 0;
+            dirty = true;
+        }
         if (dirty || force || ez->dirty) draw(spr);
         dirty = ez->dirty = false;
     }
