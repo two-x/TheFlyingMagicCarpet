@@ -590,7 +590,8 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
     }
     void draw(LGFX_Sprite* spr) {
         int botline = (ez->current_index - ez->offset + ez->bufferSize) % ez->bufferSize;
-        spr->fillSprite(BLK);
+        int botrectheight = font_height, drawcursor;
+        // spr->fillSprite(BLK);
         spr->setTextWrap(false);        // 右端到達時のカーソル折り返しを禁止
         // int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
         spr->setFont(&fonts::Font0);  // spr->setFont(&fonts::Org_01);
@@ -599,20 +600,26 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
         std::string nowline = ez->textlines[botline];
         int chopit = chars_to_fit_pix(spr, nowline, vp->w);
         bool toobig = (chopit < nowline.length());
+        if (toobig) botrectheight *= 2;
+        spr->fillRect(vp->x, vp->y + vp->h - botrectheight, vp->w, botrectheight, ez->bottombg);
         if (toobig) {
-            spr->setCursor(vp->x + pix_margin, vp->y + vp->h - 18);
+            drawcursor = vp->y + vp->h - 3 * font_height;
+            spr->setCursor(vp->x + pix_margin, drawcursor);
             nowline = ez->textlines[botline].substr(0, chopit);
             spr->print(nowline.c_str());
             nowline = ez->textlines[botline].substr(chopit);
         }
-        spr->setCursor(vp->x + pix_margin, vp->y + vp->h - 9);
+        drawcursor = vp->y + vp->h - ((3 * font_height) >> 1);
+        spr->setCursor(vp->x + pix_margin, drawcursor);
         spr->print(nowline.c_str());
-        int bottom_extent = vp->y + vp->h - 9 * (1 + (int)toobig);
+        int bottom_extent = drawcursor * (1 + (int)toobig);
         // spr->drawFastHLine(vp->x + 3, bottom_extent, vp->w - 6, LGRY);  // separator for the newest line at the bottom will be printed larger and span 2 lines
         spr->setFont(&fonts::TomThumb);
         for (int line=1; line<ez->num_lines; line++) {
             int backindex = (botline + ez->bufferSize - line) % ez->bufferSize;
-            spr->setCursor(vp->x + pix_margin, bottom_extent - line * (font_height + pix_margin));
+            drawcursor = bottom_extent - line * (font_height + pix_margin);
+            spr->fillRect(vp->x, drawcursor, vp->w, font_height, ez->linebgs[backindex]);
+            spr->setCursor(vp->x + pix_margin, drawcursor);
             // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
             int strsize = std::min((int)linelength, (int)ez->textlines[backindex].length());
             spr->setTextColor(ez->linecolors[backindex]);

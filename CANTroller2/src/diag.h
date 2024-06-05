@@ -271,13 +271,13 @@ class DiagRuntime {
                     errtotal++;
                     if (!(was & 1)) {
                         errdiffs++;  // there's a new error
-                        if (color == ezread.happycolor) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
+                        if (color == ezread.happycolor) color = MYEL;  // but also another error got cleared, mark with MYEL
                         else if (color == NON) color = ezread.sadcolor;  // use the bad news color
                     }
                 }
                 else if ((now & 1) < (was & 1)) {
                     errdiffs--;  // an error got cleared
-                    if (color == ezread.sadcolor) color = ezread.defaultcolor;  // but there was also a new error, so use default color
+                    if (color == ezread.sadcolor) color = MYEL;  // but there was also a new error, mark with MYEL
                     else if (color == NON) color = ezread.happycolor;  // use the good news color
                 }
                 now >>= 1;
@@ -285,8 +285,8 @@ class DiagRuntime {
             }
             status_last[e] = errstatus[e];
         }
-        if (color == NON) {
-            color = ezread.defaultcolor;
+        if (color == MYEL || color == NON) {
+            color = ezread.flipdefcolor();
             if (!errdiffs) do_print = false;
         }
         if (do_print) {

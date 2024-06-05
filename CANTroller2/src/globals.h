@@ -331,6 +331,7 @@ const uint8_t CYN  = 0x1f;  // cyan (GB elements full on)
 const uint8_t BLU  = 0x03;  // blue (B element full on)
 const uint8_t MGT  = 0xe2;  // magenta (RB elements full on)
 const uint8_t DRED = 0x80;  // dark red
+const uint8_t ZRED = 0x20;  // the darkest red (very dark)
 const uint8_t BORG = 0xe8;  // blood orange (very reddish orange)
 const uint8_t SALM = 0xe9;  // salmon (0xc9 is more muted)
 const uint8_t BRN  = 0x88;  // dark orange aka brown
@@ -339,19 +340,25 @@ const uint8_t ORG  = 0xf0;  // orange
 const uint8_t LYEL = 0xfe;  // lemon yellow
 const uint8_t GROD = 0xf9;  // goldenrod
 const uint8_t MYEL = 0xd5;  // mustard yellow
+const uint8_t ZYEL = 0x24;  // the darkest yellow (very dark)
 const uint8_t GGRN = 0x9e;  // a low saturation greyish pastel green
+const uint8_t OLIV = 0xb5;  // olive, a bit on the yellow side
 const uint8_t LGRN = 0x55;  // a muted lime green
+const uint8_t ZGRN = 0x04;  // the darkest green (very dark)
 const uint8_t TEAL = 0x1e;  // this teal is barely distinguishable from cyan
 const uint8_t STBL = 0x9b;  // steel blue is desaturated light blue
 const uint8_t DCYN = 0x12;  // dark cyan
 const uint8_t RBLU = 0x0b;  // royal blue
 const uint8_t MBLU = 0x02;  // midnight blue
+const uint8_t YBLU = 0x05;  // a very dark teal (not as dark as other Z colors)
+const uint8_t ZBLU = 0x01;  // the darkest blue (not as dark as other Z colors)
 const uint8_t INDG = 0x43;  // indigo (deep blue with a hint of purple)
 const uint8_t ORCD = 0x8f;  // orchid (lighter and less saturated purple)
 const uint8_t VIO  = 0x83;  // violet
 const uint8_t PUR  = 0x63;  // purple
 const uint8_t GPUR = 0x6a;  // a low saturation greyish pastel purple
 const uint8_t LPUR = 0xb3;  // a light pastel purple
+const uint8_t ZPUR = 0x21;  // the darkest purple (not as dark as other Z colors)
 const uint8_t PNK  = 0xe3;  // pink is the best color
 const uint8_t MPNK = 0xeb;  // we need all shades of pink
 const uint8_t LPNK = 0xf3;  // especially light pink, the champagne of pinks
@@ -415,13 +422,14 @@ class EZReadConsole {
   public:
     bool dirty = true;
     EZReadConsole() {}
-    static constexpr int num_lines = 300;
+    static constexpr int num_lines = 30;
     static constexpr int bufferSize = num_lines;
     int maxlength=40, last_drawn = bufferSize; // size_t bufferSize; // Size of the ring buffer
     std::string textlines[bufferSize];
-    int newest_content = bufferSize, current_index = 0, offset = 0;
-    uint8_t linecolors[num_lines], color;
-    uint8_t defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, highlightcolor = DCYN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
+    int newest_content = bufferSize, current_index = 0, offset = 0, nowdef = 0, nowbg = 0;
+    uint8_t linecolors[bufferSize], linebgs[bufferSize], color;
+    uint8_t defcolor[2] = { MYEL, OLIV }, bgcolors[2] = { YBLU, ZYEL }, bottombg = ZGRN;
+    uint8_t sadcolor = SALM, happycolor = LGRN, highlightcolor = DCYN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
   private:
     std::string remove_nonprintable(const std::string& victim) {
@@ -436,9 +444,11 @@ class EZReadConsole {
         char temp[100];
         color = _color;
         vsnprintf(temp, sizeof(temp), format, args);
+        Serial.printf("6");
         std::string str = temp;
         std::string::size_type start = 0;
         std::string::size_type end = str.find_first_of("\r\n");
+        Serial.printf("7");
         while (end != std::string::npos) {  // if string contains at least one newline, chop off up to the first one and tack onto current line, and enqueue
             textlines[current_index] += str.substr(start, end - start);  // Append content up to the first newline
             linecolors[current_index] = color;  // Set color for this line
@@ -446,32 +456,50 @@ class EZReadConsole {
             end = str.find_first_of("\r\n", start);
             textlines[current_index] = remove_nonprintable(textlines[current_index]);
             ++current_index %= bufferSize; // Update next insertion index
+            Serial.printf("8");
         }
         if (start < str.size()) {
             textlines[current_index] += str.substr(start);  // Append the remaining part of the string
             textlines[current_index] = remove_nonprintable(textlines[current_index]);
             linecolors[current_index] = color;
+            Serial.printf("9");
         }
         dirty = true;
+        Serial.printf("a");
     }
   public:
+    int debugg = 0;
     void setup() {
         std::string blank = "";
+        Serial.printf("0");
         for (int i=0; i<bufferSize; i++) {
             // linecolors[i] = MGRY;
-            this->ezprintf("%s", blank.c_str());
-            linecolors[i] = MYEL;
+            linecolors[i] = flipdefcolor();
+            bgcolors[i] = flipbgcolor();
+            this->ezprintf(linecolors[i], "%s\n", blank.c_str());
         }
+        Serial.printf("1");
         ezprintf(highlightcolor, "welcome to EZ-Read console\n");
+        Serial.printf("2");
         dirty = true;
     }
+    uint8_t flipdefcolor() {
+        nowdef = 1 - nowdef;
+        return defcolor[nowdef];
+    }
+    uint8_t flipbgcolor() {
+        nowbg = 1 - nowbg;
+        return defcolor[nowbg];
+    }
     void ezprintf(const char* format, ...) {  // for if we're called with same arguments as printf would take
+        Serial.printf("4");
         va_list args;
         va_start(args, format);
-        ezprintf_impl(defaultcolor, format, args);  // Use default color
+        ezprintf_impl(flipdefcolor(), format, args);  // Use default color
         va_end(args);
     }
     void ezprintf(uint8_t color, const char* format, ...) {  // otherwise you can insert a custom color as the first argument
+        Serial.printf("5");
         va_list args;
         va_start(args, format);
         ezprintf_impl(color, format, args);  // Use provided color
@@ -480,7 +508,7 @@ class EZReadConsole {
     void squintf(const char* format, ...) {  // prints string to both serial and ezread consoles, except you have to squint to see it
         va_list args;
         va_start(args, format);
-        ezprintf_impl(defaultcolor, format, args);
+        ezprintf_impl(flipdefcolor(), format, args);
         va_end(args);
         if (console_enabled) {
             char temp[100];
