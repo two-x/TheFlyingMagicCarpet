@@ -120,7 +120,7 @@ bool brake_before_starting = true;   // if true, the starter motor pushes the br
 bool watchdog_enabled = false;       // enable the esp's built-in watchdog circuit, it will reset us if it doesn't get pet often enough (to prevent infinite hangs). disabled cuz it seems to mess with the hotrc (?)
 bool fuelpump_supported = true;      // do we drive power to vehicle fuel pump?  note if resistive touchscreen is present then fuelpump is automatically not supported regardless of this
 int throttle_ctrl_mode = OpenLoop;   // should gas servo use the rpm-sensing pid? values: ActivePID or OpenLoop
-bool print_task_stack_usage = true;  // enable to have remaining heap size and free task memory printed to console every so often. for tuning memory allocation
+bool print_task_stack_usage = false;  // enable to have remaining heap size and free task memory printed to console every so often. for tuning memory allocation
 bool autosaver_display_fps = true;   // do you want to see the fps performance of the fullscreen saver in the corner?
 bool crash_driving_recovery = true;  // if code crashes while driving, should it continue driving after reboot?
 bool pot_tuner_acceleration = true;  // when editing values, can we use the pot to control acceleration of value changes? (assuming we aren't pot mapping some sensor at the time)
@@ -365,7 +365,7 @@ std::string activitiescard[HUNumActivities] = { "msw_dn", "msw_up", "encodr", "w
 void kick_inactivity_timer(int source=0) {
     user_inactivity_timer.reset();  // evidence of user activity
     last_activity = source;
-    // Serial.printf("kick%d ", source);
+    // ezread.squintf("kick%d ", source);
 }
 
 // class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regular intervals
@@ -408,27 +408,39 @@ class EZReadConsole {
     EZReadConsole() {}
     static constexpr int num_lines = 50;
     static constexpr int bufferSize = num_lines;
-    int maxlength=40; // size_t bufferSize; // Size of the ring buffer
+    int maxlength=40, last_drawn = bufferSize; // size_t bufferSize; // Size of the ring buffer
     std::string textlines[bufferSize];
-    int newest_content = bufferSize, next_index = 0;
-    uint8_t linecolors[num_lines];
+    int newest_content = bufferSize, current_index = 0, offset = 0;
+    uint8_t linecolors[num_lines], color;
     uint8_t defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
+    Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
+    void lookback(int off) {
+        int offset_old = offset;
+        offset = constrain(off, 0, bufferSize - num_lines);  //  - ez->num_lines);
+        if (offset) offsettimer.reset();
+        if (offset != offset_old) dirty = true;
+    }
   private:
     std::string remove_nonprintable(const std::string& victim) {
         std::string result;
         for (char ch : victim) {
+            // if (ch == '\r' || ch == '\n') result += " | "; else
             if (isprint(static_cast<unsigned char>(ch))) result += ch;
         }
         return result;
     }
-    void ezprintf_impl(uint8_t color, const char* format, va_list args) {  // this is not called directly but by one ots overloads below
-        char temp[100]; // Assuming maximum length of output string
+    void enqueue(std::string segment) {        
+        textlines[current_index] = remove_nonprintable(segment);
+        if (textlines[current_index].length() > maxlength) textlines[current_index] = textlines[current_index].substr(0, maxlength);
+        linecolors[current_index] = color;
+        // newest_content = current_index;
+        ++current_index %= bufferSize; // Update next insertion index
+    }
+    void ezprintf_impl(uint8_t _color, const char* format, va_list args) {  // this is not called directly but by one ots overloads below
+        char temp[100];
+        color = _color;
         vsnprintf(temp, sizeof(temp), format, args);
-        textlines[next_index] = remove_nonprintable(std::string(temp)); // Store formatted output into buffer
-        if (textlines[next_index].length() > maxlength) textlines[next_index] = textlines[next_index].substr(0, maxlength);
-        linecolors[next_index] = color;
-        newest_content = next_index;
-        ++next_index %= bufferSize; // Update next insertion index
+        enqueue(temp);  // Process each segment
         dirty = true;
     }
   public:
@@ -458,15 +470,23 @@ class EZReadConsole {
         va_list args;
         va_start(args, format);
         ezprintf_impl(defaultcolor, format, args);
-        if (console_enabled) Serial.printf(format, args);
         va_end(args);
+        if (console_enabled) {
+            char temp[100];
+            vsnprintf(temp, sizeof(temp), format, args);
+            Serial.printf("%s", temp);
+        }
     }
     void squintf(uint8_t color, const char* format, ...) {  // prints string to both serial and ezread consoles
         va_list args;
         va_start(args, format);
         ezprintf_impl(color, format, args);  
-        if (console_enabled) Serial.printf(format, args);
         va_end(args);
+        if (console_enabled) {
+            char temp[100];
+            vsnprintf(temp, sizeof(temp), format, args);
+            Serial.printf("%s", temp);
+        }
     }
 };
 static EZReadConsole ezread;

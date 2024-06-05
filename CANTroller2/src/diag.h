@@ -148,11 +148,11 @@ class DiagRuntime {
             for (int32_t j=0; j<NumTelemetryFull; j++) {
                 if (report_error_changes) {
                     if (err_sens[i][j] && !err_last[i][j]) {
-                        Serial.printf("!diag: %s %s err\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
+                        ezread.squintf("!diag: %s %s err\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
                         // ezread.ezprintf(ezread.sadcolor, "! %s %s err\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
                     }
                     else if (!err_sens[i][j] && err_last[i][j]) {
-                        Serial.printf("!diag: %s %s ok\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
+                        ezread.squintf("!diag: %s %s ok\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
                         // ezread.ezprintf(ezread.happycolor, "- %s %s ok\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
                     }
                 }
@@ -290,8 +290,7 @@ class DiagRuntime {
             if (!errdiffs) do_print = false;
         }
         if (do_print) {
-            ezread.ezprintf(color, "codes L%x R%x W%x  %d errs (%+d)", errstatus[LOST], errstatus[RANGE], errstatus[WARN], errtotal, errdiffs);
-            Serial.printf("codes L%x R%x W%x  %d errs (%+d)\n", errstatus[LOST], errstatus[RANGE], errstatus[WARN], errtotal, errdiffs);
+            ezread.squintf("codes L%x R%x W%x  %d errs (%+d)\n", errstatus[LOST], errstatus[RANGE], errstatus[WARN], errtotal, errdiffs);
         }
     }
     void make_log_entry() {
@@ -484,7 +483,7 @@ class BootMonitor {
         print_postmortem();
         recover_status();
         if (!watchdog_enabled) return;
-        Serial.printf("Boot manager.. \n");
+        ezread.squintf("Boot manager.. \n");
         esp_task_wdt_init(timeout_sec, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
         esp_task_wdt_add(NULL);
     }
@@ -521,37 +520,37 @@ class BootMonitor {
         uptime_recorded = uptime_new;
     }
     void print_postmortem() {
-        Serial.printf("Boot count: %d (%d/%d). Last lost power while %s", bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str());
-        if (was_panicked) Serial.printf(" and panicking,");
-        Serial.printf(" after ");
+        ezread.squintf("Boot count: %d (%d/%d). Last lost power while %s", bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str());
+        if (was_panicked) ezread.squintf(" and panicking,");
+        ezread.squintf(" after ");
         uint32_t last_uptime = myprefs->getUInt("uptime", 0);
         if (last_uptime > 0) {
-            Serial.printf("just over %d min uptime\n", last_uptime);
+            ezread.squintf("just over %d min uptime\n", last_uptime);
             write_uptime();
         }
-        else Serial.printf("under 1 min uptime\n");
+        else ezread.squintf("under 1 min uptime\n");
     }
     void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
         if (print_task_stack_usage && highWaterTimer.expireset()) {
-            Serial.printf("mem minfree(B): heap:%d", xPortGetMinimumEverFreeHeapSize());            
+            ezread.squintf("mem minfree(B): heap:%d", xPortGetMinimumEverFreeHeapSize());            
             highWaterBytes = uxTaskGetStackHighWaterMark(*t1) * sizeof(StackType_t);
-            Serial.printf(" temptask:%d", highWaterBytes);
+            ezread.squintf(" temptask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t2) * sizeof(StackType_t);
-            Serial.printf(", webtask:%d", highWaterBytes);
+            ezread.squintf(", webtask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t3) * sizeof(StackType_t);
-            Serial.printf(", drawtask:%d", highWaterBytes);
+            ezread.squintf(", drawtask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t4) * sizeof(StackType_t);
-            Serial.printf(", pushtask:%d\n", highWaterBytes);
+            ezread.squintf(", pushtask:%d\n", highWaterBytes);
         }
     }
     void recover_status() {
         if ((codestatus_postmortem != Driving && codestatus_postmortem != Stopped) || !crash_driving_recovery) return;
         if (was_panicked) {
-            Serial.printf("  Continuing to panic..\n");
+            ezread.squintf("  Continuing to panic..\n");
             ignition.panic_request(REQ_ON);
             return;
         }
-        Serial.printf("  Resuming %s status..\n", codestatuscard[codestatus_postmortem]);
+        ezread.squintf("  Resuming %s status..\n", codestatuscard[codestatus_postmortem]);
         boot_to_runmode = (codestatus_postmortem == Driving) ? FLY : HOLD;
         ignition.request(REQ_ON);
         // gas.(brake.pc[STOP]);  // brake.pid_targ_pc(brake.pc[STOP]);
@@ -632,7 +631,7 @@ class BootMonitor {
 
 //         // lcd->drawBmpFile(SD, wfile.c_str(), random(-20,20), random(-20, 20));  // drawBmpFile(fs, path, x, y, maxWidth, maxHeight, offX, offY, scale_x, scale_y, datum);
 
-//         Serial.printf("wrote: %s\n", wfile.c_str());
+//         ezread.squintf("wrote: %s\n", wfile.c_str());
 //     }
 //   public:
 //     // SdCard(LGFX* _lcd\\) : lcd(_lcd) {}
@@ -649,7 +648,7 @@ class BootMonitor {
 //         // for (int y = 0; y < lcd->height(); ++y) 
 //         //     for (int x = 0; x < lcd->width(); ++x) 
 //         //         lcd->writeColor( lcd->color888(x << 1, x + y, y << 1), 1);
-//         // Serial.printf("BMP save test\n");
+//         // ezread.squintf("BMP save test\n");
 //         // lcd->endWrite();
         
 //         // for (int i=0; i<capmax; i++) {
@@ -660,7 +659,7 @@ class BootMonitor {
 //         //     delay(1000);
 //         //     SD.begin(sdcard_cs_pin, SDCARD_SPI, 25000000);
 //         // } while (!saveToSD(filename));
-//         // Serial.printf("BMP save %s success\n", filename.c_str());
+//         // ezread.squintf("BMP save %s success\n", filename.c_str());
         
 //         // lcd->setAddrWindow(0, 0, 320, 240);
 
@@ -670,7 +669,7 @@ class BootMonitor {
 //         if (capture_timer.expireset()) {
 //             ++capcount %= capmax;
 //             std::string wfile = saveToSD(capcount);
-//             Serial.printf("wrote: %s\n", wfile.c_str());
+//             ezread.squintf("wrote: %s\n", wfile.c_str());
 //         }
 //     }
 // };
@@ -692,8 +691,8 @@ class BootMonitor {
 //         Serial.println("fatfs mounted on /sd\n");
 //     }
 //     void fattest() {
-//         Serial.printf("Total space: %10u\n", FFat.totalBytes());
-//         Serial.printf("Free space: %10u\n", FFat.freeBytes());
+//         ezread.squintf("Total space: %10u\n", FFat.totalBytes());
+//         ezread.squintf("Free space: %10u\n", FFat.freeBytes());
 //         listDir(FFat, "/", 0);
 //         writeFile(FFat, "/hello.txt", "Hello ");
 //         appendFile(FFat, "/hello.txt", "World!\r\n");
@@ -702,12 +701,12 @@ class BootMonitor {
 //         readFile(FFat, "/foo.txt");
 //         deleteFile(FFat, "/foo.txt");
 //         testFileIO(FFat, "/test.txt");
-//         Serial.printf("Free space: %10u\n", FFat.freeBytes());
+//         ezread.squintf("Free space: %10u\n", FFat.freeBytes());
 //         deleteFile(FFat, "/test.txt");
 //         Serial.println( "Test complete" );
 //     }
 //     void listDir(fs::FS &fs, const char * dirname, uint8_t levels) {
-//         Serial.printf("Listing directory: %s\r\n", dirname);
+//         ezread.squintf("Listing directory: %s\r\n", dirname);
 
 //         File root = fs.open(dirname);
 //         if (!root){
@@ -737,7 +736,7 @@ class BootMonitor {
 //     }
 
 //     void readFile(fs::FS &fs, const char * path) {
-//         Serial.printf("Reading file: %s\r\n", path);
+//         ezread.squintf("Reading file: %s\r\n", path);
 
 //         File file = fs.open(path);
 //         if (!file || file.isDirectory()){
@@ -751,7 +750,7 @@ class BootMonitor {
 //     }
 
 //     void writeFile(fs::FS &fs, const char * path, const char * message) {
-//         Serial.printf("Writing file: %s\r\n", path);
+//         ezread.squintf("Writing file: %s\r\n", path);
 
 //         File file = fs.open(path, FILE_WRITE);
 //         if (!file){
@@ -764,7 +763,7 @@ class BootMonitor {
 //     }
 
 //     void appendFile(fs::FS &fs, const char * path, const char * message) {
-//         Serial.printf("Appending to file: %s\r\n", path);
+//         ezread.squintf("Appending to file: %s\r\n", path);
 
 //         File file = fs.open(path, FILE_APPEND);
 //         if (!file){
@@ -776,17 +775,17 @@ class BootMonitor {
 //         file.close();
 //     }
 //     void renameFile(fs::FS &fs, const char * path1, const char * path2) {
-//         Serial.printf("Renaming file %s to %s\r\n", path1, path2);
+//         ezread.squintf("Renaming file %s to %s\r\n", path1, path2);
 //         if (fs.rename(path1, path2)) Serial.println("- file renamed");
 //         else Serial.println("- rename failed");
 //     }
 //     void deleteFile(fs::FS &fs, const char * path) {
-//         Serial.printf("Deleting file: %s\r\n", path);
+//         ezread.squintf("Deleting file: %s\r\n", path);
 //         if (fs.remove(path)) Serial.println("- file deleted");
 //         else Serial.println("- delete failed");
 //     }
 //     void testFileIO(fs::FS &fs, const char * path) {
-//         Serial.printf("Testing file I/O with %s\r\n", path);
+//         ezread.squintf("Testing file I/O with %s\r\n", path);
 
 //         static uint8_t buf[512];
 //         size_t len = 0;
@@ -804,7 +803,7 @@ class BootMonitor {
 //         }
 //         Serial.println("");
 //         uint32_t end = millis() - start;
-//         Serial.printf(" - %u bytes written in %u ms\r\n", 2048 * 512, end);
+//         ezread.squintf(" - %u bytes written in %u ms\r\n", 2048 * 512, end);
 //         file.close();
 
 //         file = fs.open(path);
@@ -825,7 +824,7 @@ class BootMonitor {
 //             }
 //             Serial.println("");
 //             end = millis() - start;
-//             Serial.printf("- %u bytes read in %u ms\r\n", flen, end);
+//             ezread.squintf("- %u bytes read in %u ms\r\n", flen, end);
 //             file.close();
 //         }
 //         else Serial.println("- failed to open file for reading");

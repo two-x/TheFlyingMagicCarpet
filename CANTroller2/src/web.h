@@ -139,14 +139,14 @@ class AccessPoint {
   public:
     AccessPoint() : localip(192,168,1,69), gateway(192,168,1,5), subnet(255,255,255,0) {}
     void setup() {
-        Serial.printf("Wifi access point.. ");
+        ezread.squintf("Wifi access point.. ");
         WiFi.disconnect();  // in case already connected to another wifi as client or something
         WiFi.mode(WIFI_STA);
         WiFi.persistent(false);  // Don't store wifi config in eeprom, b/c it can get stuck there
         WiFi.setSleep(false);  // ensure server is awake for accessibility
         WiFi.softAPConfig(localip, gateway, subnet);
         WiFi.softAP(apssid, appassword);
-        Serial.printf("active. ssid:%s, pwd:%s, ip:", apssid, appassword);
+        ezread.squintf("active. ssid:%s, pwd:%s, ip:", apssid, appassword);
         Serial.println(WiFi.softAPIP());
         // std::cout << "ip = " << WiFi.softAPIP() << std::endl;
         // printf(" ip = %s\n", my_ip.c_str());

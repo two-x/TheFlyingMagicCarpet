@@ -103,15 +103,15 @@ SemaphoreHandle_t drawbuf_sem;  // StaticSemaphore_t draw_semaphorebuf_sem;
 static void push_task_wrapper(void *parameter);
 static void draw_task_wrapper(void *parameter);
 void semaphore_setup() {
-    Serial.printf("Semaphores..");
+    ezread.squintf("Semaphores..");
     pushbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
     drawbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t draw_semaphorebuf_sem;
-    if (pushbuf_sem == NULL || drawbuf_sem == NULL) Serial.printf(" creation failed");
+    if (pushbuf_sem == NULL || drawbuf_sem == NULL) ezread.squintf(" creation failed");
     else {
         xSemaphoreGive(pushbuf_sem);
         xSemaphoreGive(drawbuf_sem);
     }
-    Serial.printf("\n");
+    ezread.squintf("\n");
 }
 LGFX_Sprite* sprptr;
 std::string nulstr = "";
@@ -155,7 +155,7 @@ class Display {
       : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
     void init_framebuffers(int _sprwidth, int _sprheight) {
         int sprsize[2] = { _sprwidth, _sprheight };
-        Serial.printf("  create frame buffers.. ");
+        ezread.squintf("  create frame buffers.. ");
         lcd.setColorDepth(sprite_color_depth);
         for (int i = 0; i < num_bufs; i++) framebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[HORZ];
@@ -186,7 +186,7 @@ class Display {
             }
             else using_psram = true;
         }
-        Serial.printf(" made %dx %dx%d sprites in %sram\n", num_bufs, framewidth, frameheight, using_psram ? "ps" : "native ");
+        ezread.squintf(" made %dx %dx%d sprites in %sram\n", num_bufs, framewidth, frameheight, using_psram ? "ps" : "native ");
     }
     void init() {  // init() is necessary after any power interruption
         lcd.setColorDepth(8);
@@ -199,7 +199,7 @@ class Display {
     }    
     void setup() {  // setup() only happens once at system boot
         if (!display_enabled) return;
-        Serial.printf("Display..");  //
+        ezread.squintf("Display..");  //
         lcd.init();
         #ifdef BOARD_HAS_PSRAM
         // lcd.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM - (this is only relevant for TFT_eSPI display library)
@@ -217,7 +217,7 @@ class Display {
         init_framebuffers(disp_width_pix, disp_height_pix);
         panel.setup(&lcd, sim, touch, disp_simbuttons_x, disp_simbuttons_y, disp_simbuttons_w, disp_simbuttons_h);
         sprptr = &framebuf[flip];
-        Serial.printf("  display initialized\n");
+        ezread.squintf("  display initialized\n");
     }
     void reset(LGFX_Sprite* spr) {
         blackout(spr);
@@ -351,7 +351,7 @@ class Display {
             for (int lineno = 0; lineno < disp_tuning_lines; lineno++) {  // Step thru lines of fixed telemetry data
                 y_pos = (lineno + disp_fixed_lines + 1) * disp_line_height_pix;
                 // int index = lineno - disp_fixed_lines - 1;
-                // Serial.printf("drawing line:%d x:%d y:%d text:%s\n", index, disp_datapage_names_x, y_pos, datapage_names[page][index].c_str() );
+                // ezread.squintf("drawing line:%d x:%d y:%d text:%s\n", index, disp_datapage_names_x, y_pos, datapage_names[page][index].c_str() );
                 draw_string(disp_datapage_names_x, y_pos, datapage_names[page][lineno], datapage_names[page_last][lineno], LGRY, BLK, forced);
                 draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
                 
@@ -809,9 +809,9 @@ class Display {
             drawval(12, gas.cruisepid.iterm(), -drange, drange);
             drawval(13, gas.cruisepid.dterm(), -drange, drange);
             // drawval(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
-            // Serial.printf("min:%lf max:%lf", gas.pc[OPMIN], gas.pc[OPMAX]);
-            // Serial.printf(" gmin():%lf gmax():%lf", gas.pid.outmin(), gas.pid.outmax());
-            // Serial.printf(" cmin():%lf cmax():%lf", gas.cruisepid.outmin(), gas.cruisepid.outmax());
+            // ezread.squintf("min:%lf max:%lf", gas.pc[OPMIN], gas.pc[OPMAX]);
+            // ezread.squintf(" gmin():%lf gmax():%lf", gas.pid.outmin(), gas.pid.outmax());
+            // ezread.squintf(" cmin():%lf cmax():%lf", gas.cruisepid.outmin(), gas.cruisepid.outmax());
             drawval(14, gas.throttle_target_pc, 0.0f, 100.0f);
             for (int line=15; line<=19; line++) draw_eraseval(line);
             drawval(20, cruise_delta_max_pc_per_s, 1, 35);
@@ -859,7 +859,7 @@ class Display {
             // drawval(14, pushclock, 0, refresh_limit);
             // drawval(15, idleclock, 0, refresh_limit);
             for (int line=18; line<=19; line++) draw_eraseval(line);
-            drawval_int(20, ezdraw.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
+            drawval_int(20, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
             draw_truth(21, flashdemo, 0);
             drawval(22, neobright, 1.0, 100.0f, -1, 3);
             draw_asciiname(23, uicontextcard[ui_context]);
@@ -895,9 +895,9 @@ class Display {
         return true;
     }
     void push_task() {
-        // Serial.printf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
+        // ezread.squintf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
         if (print_framebuffers) {  // warning this *severely* slows everything down, ~.25 sec/loop. consider disabling word wrap in terminal output
-            Serial.printf("flip=%d\n", flip);
+            ezread.squintf("flip=%d\n", flip);
             printframebufs(2);
         }
         diffpush(&framebuf[flip], &framebuf[!flip]);
@@ -907,7 +907,7 @@ class Display {
     }
     void draw_task() {
         int mark = (int)esp_timer_get_time();
-        // Serial.printf("f%d draw@ 0x%08x\n", flip, &framebuf[flip]);
+        // ezread.squintf("f%d draw@ 0x%08x\n", flip, &framebuf[flip]);
         draw_all(&framebuf[flip]);
         drawclock = (int)(esp_timer_get_time() - mark);
         idleclock = refresh_limit - pushclock - drawclock;
@@ -1174,7 +1174,7 @@ class Tuner {
                 else if (sel_val == 14) adj_bool(&cal_gasmode_request, rdelta);
             }
             else if (datapage == PG_UI) {
-                if (sel_val == 11) ezdraw.lookback(ezdraw.offset + rdelta); 
+                if (sel_val == 11) ezread.lookback(ezread.offset + rdelta); 
                 else if (sel_val == 12) { adj_bool(&flashdemo, rdelta); neo->enable_flashdemo(flashdemo); }
                 else if (sel_val == 13) { adj_val(&neobright, rdelta, 1, 100); neo->setbright(neobright); }
                 else if (sel_val == 14) adj_val(&ui_context, rdelta, 0, NumContextsUI-1);

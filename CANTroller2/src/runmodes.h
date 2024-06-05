@@ -119,9 +119,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(ActivePID);
             steer.setmode(OpenLoop);
         }
-        if (hotrc.sw_event(CH4)) starter.request(REQ_TOG);  // Serial.printf("stall: req=%d\n", REQ_TOG);
+        if (hotrc.sw_event(CH4)) starter.request(REQ_TOG);  // ezread.squintf("stall: req=%d\n", REQ_TOG);
         if (starter.motor || !tach.stopped()) mode = HOLD;  // If we started the car, enter hold mode once starter is released
-        // Serial.printf("%d/%d ", starter_request, starter);
+        // ezread.squintf("%d/%d ", starter_request, starter);
     }
     void run_holdMode(bool recovering=false) {
         if (we_just_switched_modes) {
@@ -174,9 +174,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(Halt);
         }
         else if (calmode_request) mode = STANDBY;
-        if (cal_gasmode_request && gas.motormode != Calibrate) gas.setmode(Calibrate);  // Serial.printf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode);
+        if (cal_gasmode_request && gas.motormode != Calibrate) gas.setmode(Calibrate);  // ezread.squintf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode);
         else if (!cal_gasmode_request && gas.motormode == Calibrate) gas.setmode(Idle);
-        if (cal_brakemode_request && brake.motormode != Calibrate) brake.setmode(Calibrate);  // Serial.printf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode);
+        if (cal_brakemode_request && brake.motormode != Calibrate) brake.setmode(Calibrate);  // ezread.squintf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode);
         else if (!cal_brakemode_request && brake.motormode == Calibrate) brake.setmode(Halt);
     }
 };

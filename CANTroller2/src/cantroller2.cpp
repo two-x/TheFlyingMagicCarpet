@@ -42,7 +42,7 @@ void setup() {
     ignition.setup();          // must be after diag setup
     run.setup();               // initialize runmode state machine. must be after diag setup
     web.setup();               // start up access point, web server, and json-enabled web socket for diagnostic phone interface
-    xTaskCreatePinnedToCore(update_web, "Update Web Services", 4096, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. with 4096 wifi runs but fails to connect (maybe unrelated?).  2048 is too low, it crashes when client connects  16384
+    xTaskCreatePinnedToCore(update_web, "Update Web Services", 3166, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. with 4096 wifi runs but fails to connect (maybe unrelated?).  2048 is too low, it crashes when client connects  16384
     stop_console();
     looptimer.setup();
 }

@@ -312,7 +312,7 @@ class Touchscreen {
     void process_ui() {
         if (!nowtouch) return;
         tquad = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5) << 4) | constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
-        // Serial.printf("n%dl%dv%d q%02x tx:%3d ty:%3d e%d x%d\r", nowtouch, lasttouch, landed_coordinates_valid, tquad, tft_touch[0], tft_touch[1], tedit, (int)tedit_exponent);
+        // ezread.squintf("n%dl%dv%d q%02x tx:%3d ty:%3d e%d x%d\r", nowtouch, lasttouch, landed_coordinates_valid, tquad, tft_touch[0], tft_touch[1], tedit, (int)tedit_exponent);
         // std::cout << "n" << nowtouch << " e" << tedit << " x" << tedit_exponent << "\r";
         if (tquad == 0x00 && ontouch()) increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
         else if (tquad == 0x01) {  // Long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
@@ -337,6 +337,8 @@ class Touchscreen {
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
             else if (tunctrl == EDIT) idelta = (int)(-tedit);  // If in edit mode, decrease the value
         }
+        else if (tquad == 0x21 || tquad == 0x22) ezread.lookback(ezread.offset + tedit);
+        else if (tquad == 0x23 || tquad == 0x24) ezread.lookback(ezread.offset - tedit);
         else if (tquad == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
         else if (tquad == 0x20 && sim.enabled() && longpress()) calmode_request = true;
         else if (tquad == 0x40 && sim.enabled() && longpress()) ignition.request(REQ_TOG);
@@ -361,9 +363,9 @@ class Touchscreen {
     void printTouchInfo() {
         if (touchPrintEnabled && touched()) {
             unsigned long currentTime = millis();
-            if (currentTime - lastTouchPrintTime >= touchPrintInterval) {}  // Serial.printf("Touch %sdetected", (read_touch()) ? "" : "not ");
-            if (nowtouch) Serial.printf(" x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
-            else Serial.printf("\n");                // If available, you can print touch pressure as well (for capacitive touch)
+            if (currentTime - lastTouchPrintTime >= touchPrintInterval) {}  // ezread.squintf("Touch %sdetected", (read_touch()) ? "" : "not ");
+            if (nowtouch) ezread.squintf(" x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
+            else ezread.squintf("\n");                // If available, you can print touch pressure as well (for capacitive touch)
             lastTouchPrintTime = currentTime;
         }
     }

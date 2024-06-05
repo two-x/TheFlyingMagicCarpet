@@ -53,8 +53,7 @@ void set_board_defaults() {          // true for dev boards, false for printed b
         print_framebuffers = false;
         print_task_stack_usage = false;
     }
-    Serial.printf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
-    ezread.ezprintf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
+    ezread.squintf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
 }
 void print_partition_table() {
     Serial.printf("\nPartition Typ SubT  Address SizeByte   kB\n");
@@ -205,8 +204,7 @@ void initialize_pins_and_console() {  // set up those straggler pins which aren'
     Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
     delay(1200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     Serial.printf("** Setup begin..\nSerial console started..\n");
-    Serial.printf("Syspower is %s, basicsw read: \n", syspower ? "on" : "off", basicsw.val ? "high" : "low");    
-    ezread.ezprintf("Syspower is %s, basicsw read: \n", syspower ? "on" : "off", basicsw.val ? "high" : "low");
+    ezread.squintf("Syspower is %s, basicsw read: \n", syspower ? "on" : "off", basicsw.val ? "high" : "low");    
 }
 class Ignition {
   private:
@@ -270,9 +268,9 @@ class Starter {
         Serial.printf("Starter.. output-only supported\n");
         set_pin(pin, OUTPUT);  // set pin as output
     }
-    void request(int req) { now_req = req; }  // Serial.printf("r:%d n:%d\n", req, now_req);}
+    void request(int req) { now_req = req; }  // squintf("r:%d n:%d\n", req, now_req);}
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
-        // if (now_req != NA) Serial.printf("m:%d r:%d\n", motor, now_req);
+        // if (now_req != NA) squintf("m:%d r:%d\n", motor, now_req);
         if (now_req == REQ_TOG) now_req = motor ? REQ_OFF : REQ_ON;  // translate a toggle request to a drive request opposite to the current drive state
         if ((brake.feedback == _None) && (now_req == REQ_ON)) now_req = REQ_NA;  // never run the starter if brake is in openloop mode
         req_active = (now_req != REQ_NA);                   // for display
@@ -422,6 +420,7 @@ void stop_console() {
         delay(200);  // give time for serial to print everything in its buffer
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
+    ezread.ezprintf(DCYN, "welcome to EZ-Read console");
     ezread.ezprintf(DCYN, "magic carpet is booted");
     // ezread.ezprintf("welcome to EZ-Read Console");
 }

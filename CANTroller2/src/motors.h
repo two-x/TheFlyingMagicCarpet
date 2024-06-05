@@ -407,8 +407,8 @@ class Throttle : public ServoMotor {
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
-        Serial.printf("Throttle servo.. pid is %s\n", pid_enabled ? "enabled" : "disabled");
-        Serial.printf("  Cruise control pid is %s, using %s adjustment scheme\n", cruise_pid_enabled ? "enabled" : "disabled", cruiseschemecard[cruise_adjust_scheme].c_str());
+        ezread.squintf("Throttle servo.. pid is %s\n", pid_enabled ? "enabled" : "disabled");
+        ezread.squintf("  Cruise control pid is %s, using %s adjustment scheme\n", cruise_pid_enabled ? "enabled" : "disabled", cruiseschemecard[cruise_adjust_scheme].c_str());
         ServoMotor::setup(_hotrc, _speedo);
         throttleRateTimer.reset();
         derive();
@@ -424,14 +424,14 @@ class Throttle : public ServoMotor {
         }
     }
     void update_idlespeed() {
-        // Serial.printf("idle");
+        // ezread.squintf("idle");
         if (!std::isnan(tempsens->val(loc::ENGINE))) idletemp_f[OUT] = tempsens->val(loc::ENGINE);
         if (std::isnan(idletemp_f[OUT])) return;
         idle_si[OUT] = map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], idle_si[OPMAX], idle_si[OPMIN]);
         idle_si[OUT] = constrain(idle_si[OUT], idle_si[OPMIN], idle_si[OPMAX]);
         idle_pc = out_si_to_pc(idle_si[OUT]);
         tach->set_idle(map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], tach->idle_cold(), tach->idle_hot()));
-        // Serial.printf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);
+        // ezread.squintf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);
     }
   private:
     void cruise_adjust(int joydir) {
@@ -467,11 +467,11 @@ class Throttle : public ServoMotor {
     }
     float rate_limiter(float val) {  // give it where you would want the throttle (%), it gives you back where you're allowed to put it, respecting max angular velocity
         float max_change = (float)throttleRateTimer.elapsed() * max_throttle_angular_velocity_pcps / 1000000.0;
-        throttleRateTimer.reset();  // Serial.printf(" new:%lf pc0:%lf mx:%lf", throttle_target_pc, pc[OUT], max_change);
-        return constrain(val, pc[OUT] - max_change, pc[OUT] + max_change);  // Serial.printf(" tgt:%lf pc1:%lf\n", throttle_target_pc, pc[OUT]);
+        throttleRateTimer.reset();  // ezread.squintf(" new:%lf pc0:%lf mx:%lf", throttle_target_pc, pc[OUT], max_change);
+        return constrain(val, pc[OUT] - max_change, pc[OUT] + max_change);  // ezread.squintf(" tgt:%lf pc1:%lf\n", throttle_target_pc, pc[OUT]);
     }
     void set_output() {
-        // Serial.printf("mode");
+        // ezread.squintf("mode");
         if (motormode == Idle) throttle_target_pc = idle_pc;
         else if (motormode == Starting) throttle_target_pc = starting_pc;
         else if (motormode == Cruise) cruise_logic();  // cruise mode just got too big to be nested in this if-else clause
@@ -484,14 +484,14 @@ class Throttle : public ServoMotor {
             cal_gasmode = true;
             pc[OUT] = out_si_to_pc(map(pot->val(), pot->opmin(), pot->opmax(), si[ABSMIN], si[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
             return;  // cal mode sets the output directly, skipping the post processing below
-        }  // Serial.printf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], idle_pc);
+        }  // ezread.squintf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], idle_pc);
         float new_out;
         throttle_target_pc = constrain(throttle_target_pc, pc[PARKED], pc[OPMAX]);
         if (motormode == ActivePID) {
             pid.set_target(pc_to_rpm(throttle_target_pc));
             new_out = pid.compute();
         }
-        else new_out = throttle_target_pc;  // Serial.printf(" ela:%ld pcps:%lf", throttleRateTimer.elapsed(), max_throttle_angular_velocity_pcps);
+        else new_out = throttle_target_pc;  // ezread.squintf(" ela:%ld pcps:%lf", throttleRateTimer.elapsed(), max_throttle_angular_velocity_pcps);
         pc[OUT] = rate_limiter(new_out);
     }
     void postprocessing() {
@@ -531,19 +531,19 @@ class Throttle : public ServoMotor {
                 cruisepid.set_tunings(cruise_opengas_kp, cruise_opengas_ki, cruise_opengas_kd);
                 setmode(motormode);  // ensure current motor mode is consistent with configs set here
             }
-            Serial.printf("throttle config: pid %s\n", pid_enabled ? "enabled" : "disabled");
+            ezread.squintf("throttle config: pid %s\n", pid_enabled ? "enabled" : "disabled");
         }
         pid_ena_last = pid_enabled;
     }
     void update_cruise_ctrl_config(int new_pid_ena=-5) {  // pass in OFF or ON (for compatibility with brake function)
         if (new_pid_ena != -5) cruise_pid_enabled = (bool)new_pid_ena;     // otherwise receive new pid enable setting (ON/OFF) if given
-        if (cruise_pid_enabled != cruise_pid_ena_last) Serial.printf("cruise config: pid %s\n", cruise_pid_enabled ? "enabled" : "disabled");
+        if (cruise_pid_enabled != cruise_pid_ena_last) ezread.squintf("cruise config: pid %s\n", cruise_pid_enabled ? "enabled" : "disabled");
         cruise_pid_ena_last = cruise_pid_enabled;
     }
     void set_cruise_scheme(int newscheme) {
         // if (cruise_pid_enabled) cruise_adjust_scheme = SuspendFly;  else // in pid mode cruise must use SuspendFly adjustment scheme (not sure if this restriction is necessary?)
         cruise_adjust_scheme = newscheme;  // otherwise anything goes
-        Serial.printf("cruise config: using %s adjustment scheme\n", cruiseschemecard[cruise_adjust_scheme].c_str());
+        ezread.squintf("cruise config: using %s adjustment scheme\n", cruiseschemecard[cruise_adjust_scheme].c_str());
     }
     int parked() {
         return (std::abs(out_pc_to_si(pc[OUT]) - si[PARKED]) < 1);
@@ -556,7 +556,7 @@ class Throttle : public ServoMotor {
             postprocessing();                // Step 3 : fix output to ensure it's in range
             us[OUT] = out_pc_to_us(pc[OUT]);   // Step 4 : convert motor value to pulsewidth time
             deg[OUT] = out_pc_to_si(pc[OUT]);
-            // Serial.printf("out pc:%lf us:%lf\n", pc[OUT], us[OUT]);
+            // ezread.squintf("out pc:%lf us:%lf\n", pc[OUT], us[OUT]);
             write_motor();                     // Step 5 : write to servo
         }
     }
@@ -644,11 +644,11 @@ class BrakeMotor : public JagMotor {
     bool detect_tempsens() {
         float trytemp = tempsens->val(loc::BRAKE);
         brake_tempsens_exists = !std::isnan(trytemp);
-        Serial.printf(" using heat %s sensor\n", brake_tempsens_exists ? "readings from detected" : "estimates in lieu of");
+        ezread.squintf(" using heat %s sensor\n", brake_tempsens_exists ? "readings from detected" : "estimates in lieu of");
         return brake_tempsens_exists;
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, Throttle* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-        Serial.printf("Brake motor.. pid is %s, feedback is %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
+        ezread.squintf("Brake motor.. pid is %s, feedback is %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
         JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         // duty_fwd_pc = brakemotor_duty_spec_pc;
@@ -675,7 +675,7 @@ class BrakeMotor : public JagMotor {
             if (brake_tempsens_exists) motor_heat = tempsens->val(loc::BRAKE);
             else {
                 nowtemp = tempsens->val(loc::AMBIENT);
-                if (std::isnan(motor_heat) && !std::isnan(nowtemp)) motor_heat = nowtemp;  // Serial.printf("Actively forecasting brake motor heat generation\n");
+                if (std::isnan(motor_heat) && !std::isnan(nowtemp)) motor_heat = nowtemp;  // ezread.squintf("Actively forecasting brake motor heat generation\n");
                 else {
                     if (std::isnan(nowtemp)) added_heat = motor_heatloss_rate / -4.0;
                     else {
@@ -791,7 +791,7 @@ class BrakeMotor : public JagMotor {
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             carstop(false);
             autoholding = !autostopping && (pressure->val() >= pressure->hold_initial - pressure->margin());  // this needs to be tested  // if (!speedo->stopped()) {            
-            // Serial.printf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->val(), pressure->hold_initial_psi, pressure->margin_psi);
+            // ezread.squintf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->val(), pressure->hold_initial_psi, pressure->margin_psi);
             if (autoholding) pc[OUT] = pc[STOP];
             else if (!autostopping) {
                 set_target(std::max(target_pc, pressure->hold_initial_pc()));
@@ -868,7 +868,7 @@ class BrakeMotor : public JagMotor {
         motor_park_timer.reset();
         motormode = _mode;
         if (!mode_forced) preforce_drivemode = motormode;  // preforce_drivemode should equal motormode unless other modes were demoted to openloop
-        // Serial.printf("brakemode: %d\n",motormode);
+        // ezread.squintf("brakemode: %d\n",motormode);
     }
     void update_ctrl_config(int new_pid_ena=-5, int new_feedback=-5) {   // run w/o arguments each loop to enforce configuration limitations, or call with argument(s) to change config and update. do not change feedback or pid_enabled anywhere else!
         if (new_feedback != -5) feedback = new_feedback;                 // receive new feedback sensors setting (NoneFB/PressureFB/PositionFB/_Hybrid) if given
@@ -880,7 +880,7 @@ class BrakeMotor : public JagMotor {
         if (!pid_enabled) setmode(preforce_drivemode);                            // ensure current motor mode is consistent with configs set here
         if ((feedback != feedback_last) || (pid_enabled != pid_ena_last)) {
             derive();  // on change need to recalculate some values
-            Serial.printf("brake motor config: pid %s w/ feedback = %d\n", pid_enabled ? "enabled" : "disabled", feedback);        
+            ezread.squintf("brake motor config: pid %s w/ feedback = %d\n", pid_enabled ? "enabled" : "disabled", feedback);        
         }
         feedback_last = feedback;
         pid_ena_last = pid_enabled;

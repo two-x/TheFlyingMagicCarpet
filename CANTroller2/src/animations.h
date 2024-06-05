@@ -583,22 +583,15 @@ class EraserSaver {  // draws colorful patterns to exercise
 class EZReadDrawer {  // never has any terminal solution been easier on the eyes
   public:
     bool dirty = true;
-    int pix_margin = 2, offset = 0;
+    int pix_margin = 2;
     int font_height = 6, linelength;
     std::string drawnow; // Ring buffer array
-    void lookback(int off) {
-        int offset_old = offset;
-        offset = constrain(off, 0, ez->bufferSize);  //  - ez->num_lines);
-        if (offset) offsettimer.reset();
-        if (offset != offset_old) dirty = true;
-    }
   private:
     LGFX* mylcd;
     // LGFX_Sprite* spr;
     LGFX_Sprite* nowspr_ptr;
     viewport* vp;
     EZReadConsole* ez;
-    Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
     int chars_to_fit_pix(LGFX_Sprite* spr, std::string& str, int pix) {
         int totalwidth = 0, charcount = 0;
         for (size_t i = 0; i < str.length(); ++i) {
@@ -611,7 +604,7 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
         return charcount - 1;
     }
     void draw(LGFX_Sprite* spr) {
-        int botline = (ez->newest_content - offset + ez->bufferSize) % ez->bufferSize;
+        int botline = (ez->current_index - ez->offset + ez->bufferSize) % ez->bufferSize;
         spr->fillSprite(BLK);
         spr->setTextWrap(false);        // 右端到達時のカーソル折り返しを禁止
         // int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
@@ -649,7 +642,7 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
         linelength = (int)(vp->w / disp_font_width);
     }
     void update(LGFX_Sprite* spr, bool force=false) {
-        if (offsettimer.expired()) offset = 0;
+        if (ez->offsettimer.expired()) ez->offset = 0;
         if (dirty || force || ez->dirty) draw(spr);
         dirty = ez->dirty = false;
     }

@@ -37,7 +37,7 @@ class Potentiometer {
     Potentiometer() = delete; // must have a pin defined
     sens senstype = sens::none;
     void setup() {
-        Serial.printf("Pot setup..\n");
+        ezread.squintf("Pot setup..\n");
         set_pin(_pin, INPUT);
         _activity_ref = _pc;
     }
@@ -48,10 +48,10 @@ class Potentiometer {
             ema_filt(_raw, &_pc, _ema_alpha);
             _pc = constrain(_pc, _absmin, _absmax); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
             if (std::abs(_pc - _activity_ref) > _activity_margin_pc) {
-                // Serial.printf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
+                // ezread.squintf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
                 kick_inactivity_timer(HUPot);  // evidence of user activity
                 _activity_ref = _pc;
-                // Serial.printf("r2:%lf\n", _activity_ref);
+                // ezread.squintf("r2:%lf\n", _activity_ref);
             }
         }
     }
@@ -102,7 +102,7 @@ class Param {
     //       get() call, but that seems like overkill...
     void set_limits(float arg_min, float arg_max) {  // Use if min/max are kept in-class
         if (arg_min > arg_max) {
-            Serial.printf("Err: Param set_limits(): %lf (min) is >= %lf (max)\n", arg_min, arg_max);
+            ezread.squintf("Err: Param set_limits(): %lf (min) is >= %lf (max)\n", arg_min, arg_max);
             return;
         }
         *_min_ptr = arg_min;
@@ -111,7 +111,7 @@ class Param {
     }
     void set_limits(float* arg_min_ptr, float* arg_max_ptr) { // Use if min/max are external
         if (*arg_min_ptr > *arg_max_ptr) {
-            Serial.printf("Err: Param set_limits(): %lf (*min) is >= %lf (*max)\n", *arg_min_ptr, *arg_max_ptr);
+            ezread.squintf("Err: Param set_limits(): %lf (*min) is >= %lf (*max)\n", *arg_min_ptr, *arg_max_ptr);
             return;
         }
         _min_ptr = arg_min_ptr;
@@ -182,7 +182,7 @@ class Device {
         else if (_source == src::TOUCH) set_val_from_touch();
         else if (_source == src::POT) set_val_from_pot();
         else if (_source == src::CALC) set_val_from_calc();
-        else Serial.printf("invalid Device source: %d\n", _source);
+        else ezread.squintf("invalid Device source: %d\n", _source);
         set_val_common();
     }
     void attach_pot(Potentiometer &pot_arg) {
@@ -239,14 +239,14 @@ class Transducer : public Device {
     int _transtype;
     virtual void setup() {
         print_config(true, false);  // print header
-        if (_pin < 255) Serial.printf(" on pin %d\n", _pin);
+        if (_pin < 255) ezread.squintf(" on pin %d\n", _pin);
     }  // printf("%s..\n", _long_name.c_str()); }
     virtual float from_native(float arg_native) {  // these linear conversion functions change absolute native values to si and back - overwrite in child classes as needed
         float ret = NAN;
         if (conversion_method == AbsLimMap) ret = map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
         else if (conversion_method == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
-        else if (conversion_method == LinearMath) ret = _boffset + _mfactor * arg_native; // Serial.printf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
-        if (std::isnan(ret)) Serial.printf("Err: from_native unable to convert %lf (min %lf, max %lf)\n", arg_native, _native.min(), _native.max());
+        else if (conversion_method == LinearMath) ret = _boffset + _mfactor * arg_native; // ezread.squintf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
+        if (std::isnan(ret)) ezread.squintf("Err: from_native unable to convert %lf (min %lf, max %lf)\n", arg_native, _native.min(), _native.max());
         if (std::abs(ret) < float_conversion_zero) return 0.0;  // reject any stupidly small near-zero values
         return ret;
     }
@@ -255,7 +255,7 @@ class Transducer : public Device {
         if (conversion_method == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
         else if (conversion_method == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
         else if (conversion_method == LinearMath) ret = (arg_si - _boffset) / _mfactor;
-        else if (std::isnan(ret)) Serial.printf("Err: to_native unable to convert %lf (min %lf, max %lf)\n", arg_si, _si.min(), _si.max());
+        else if (std::isnan(ret)) ezread.squintf("Err: to_native unable to convert %lf (min %lf, max %lf)\n", arg_si, _si.min(), _si.max());
         if (std::abs(ret) < float_conversion_zero) return 0.0;  // reject any stupidly small near-zero values
         return ret;
     }
@@ -345,7 +345,7 @@ class Transducer : public Device {
     
     void set_conversions(float arg_mfactor=NAN, float arg_boffset=NAN) {  // arguments passed in as NAN will not be used.  // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
         if (!std::isnan(arg_mfactor)) {
-            if (std::abs(arg_mfactor) < float_zero) Serial.printf("Err: can not support _mfactor of zero\n");
+            if (std::abs(arg_mfactor) < float_zero) ezread.squintf("Err: can not support _mfactor of zero\n");
             else _mfactor = arg_mfactor;
         }
         if (!std::isnan(arg_mfactor)) _boffset = arg_boffset;
@@ -355,13 +355,13 @@ class Transducer : public Device {
     }
     virtual void print_config(bool header=false, bool ranges=true) {
         if (header) {
-            Serial.printf("%s %s%s", _long_name.c_str(), transtypecard[_transtype].c_str(), (_pin == 255) ? " ..\n" : "");
-            if (_pin < 255) Serial.printf(" on pin %d ..\n", _pin);
+            ezread.squintf("%s %s%s", _long_name.c_str(), transtypecard[_transtype].c_str(), (_pin == 255) ? " ..\n" : "");
+            if (_pin < 255) ezread.squintf(" on pin %d ..\n", _pin);
         }
-        Serial.printf("  %s current value: %.2lf %s = %.2lf %s = %.2lf %%\n", _short_name.c_str(), _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
+        ezread.squintf("  %s current value: %.2lf %s = %.2lf %s = %.2lf %%\n", _short_name.c_str(), _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
         if (ranges) {
-            Serial.printf("  abs range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
-            Serial.printf("  op range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
+            ezread.squintf("  abs range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
+            ezread.squintf("  op range: %.2lf-%.2lf %s (%.0lf-%.0lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
         }
     }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)
@@ -414,7 +414,7 @@ class Sensor : public Transducer {
         // set_si(_si.val + touch.fdelta);  // i would think this should look something like this (needs some coding on the other side to support)
     }
     virtual float read_sensor() {
-        Serial.printf("Err: sensor does not have an overridden read_sensor() function\n");
+        ezread.squintf("Err: sensor does not have an overridden read_sensor() function\n");
         return NAN;
     }
     virtual void set_val_from_pin() {
@@ -496,7 +496,7 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     void set_val_common() {
         if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
     }
-    void setup() {  // Serial.printf("%s..", _long_name.c_str());
+    void setup() {  // ezread.squintf("%s..", _long_name.c_str());
         I2CSensor::setup();
         set_si(0.0);  // initialize value
         set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
@@ -504,7 +504,7 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         airveloTimer.set(airvelo_read_period_us);
-        Serial.printf("  airvelo sensor %sdetected", _detected ? "" : "not ");
+        ezread.squintf("  airvelo sensor %sdetected", _detected ? "" : "not ");
         if (_detected) {
             if (!_sensor.begin()) {
                 printf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
@@ -537,7 +537,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
                 goodreading = temp;
                 mapreadTimer.set(mapread_timeout);
             }
-            else mapreadTimer.set(mapretry_timeout);  // Serial.printf("av:%f\n", goodreading);
+            else mapreadTimer.set(mapretry_timeout);  // ezread.squintf("av:%f\n", goodreading);
         }
         return goodreading;
     }
@@ -555,7 +555,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
         if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
     }
     void setup() {
-        // Serial.printf("%s..", _long_name.c_str());
+        // ezread.squintf("%s..", _long_name.c_str());
         I2CSensor::setup();
         set_si(1.0);  // initialize value
         set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
@@ -563,16 +563,16 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         mapreadTimer.set(mapread_timeout);
-        Serial.printf("  map sensor %sdetected", _detected ? "" : "not ");
+        ezread.squintf("  map sensor %sdetected", _detected ? "" : "not ");
         if (_detected) {
             if (!_sensor.begin()) {
-                Serial.printf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
+                ezread.squintf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
                 set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
             }
-            else Serial.printf(" and reading %f atm\n", _sensor.readPressure(ATM));
+            else ezread.squintf(" and reading %f atm\n", _sensor.readPressure(ATM));
         }
         else {
-            Serial.printf("\n");
+            ezread.squintf("\n");
             set_source(src::UNDEF); // don't even have a device at all...
         }
         print_config();
@@ -665,7 +665,7 @@ class PressureSensor : public AnalogSensor {
         set_conversions(m, b);
         set_abslim_native(0.0, (float)adcrange_adc);  // set abslims after m and b are set
         set_oplim_native(min_adc, 2080.0);            // set oplims after abslims are set
-        // Serial.printf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
+        // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
         set_ema_alpha(0.15);
         set_margin(1.0);       // max acceptible error when checking psi levels
         hold_initial = 120.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
@@ -786,12 +786,12 @@ class PulseSensor : public Sensor {
     }
     float us_to_hz(float arg_us) {
         if (std::abs(arg_us) > float_zero) return 1000000.0 / arg_us;
-        Serial.printf("Err: us_to_hz() refusing to take reciprocal of zero\n");
+        ezread.squintf("Err: us_to_hz() refusing to take reciprocal of zero\n");
         return absmax();
     }
     float hz_to_us(float arg_hz) {
         if (std::abs(arg_hz) > float_zero) return 1000000.0 / arg_hz;  // math is actually the same in both directions us -> hz or hz -> us
-        Serial.printf("Err: hz_to_us() refusing to take reciprocal of zero\n");
+        ezread.squintf("Err: hz_to_us() refusing to take reciprocal of zero\n");
         return _absmax_us;
     }
   public:
@@ -805,13 +805,13 @@ class PulseSensor : public Sensor {
     PulseSensor() = delete;
     void print_config(bool header=false, bool ranges=true) {
         Transducer::print_config(header, ranges);
-        if (ranges) Serial.printf("  pulsewidth now = %.0lf %s, abs range: %.0lf-%.0lf %s\n", _us, _uber_native_units.c_str(), _absmin_us, _absmax_us, _uber_native_units.c_str());
+        if (ranges) ezread.squintf("  pulsewidth now = %.0lf %s, abs range: %.0lf-%.0lf %s\n", _us, _uber_native_units.c_str(), _absmin_us, _absmax_us, _uber_native_units.c_str());
     }
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // overload the normal function so we can also include us calculations 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
         if ((!isnan(arg_min) && (std::abs(arg_min) <= float_zero)) || (!isnan(arg_max) && (std::abs(arg_max) <= float_zero))) {
-            Serial.printf("Err: pulse sensor can not have limit of 0\n");
+            ezread.squintf("Err: pulse sensor can not have limit of 0\n");
             return;  // we can't accept 0 Hz for opmin
         }
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
@@ -1215,12 +1215,12 @@ class RMTInput {
 
         esp_err_t config_result = rmt_config(&_config);
         if (config_result != ESP_OK) {
-            Serial.printf("Failed to configure RMT: %d\n", config_result);
+            ezread.squintf("Failed to configure RMT: %d\n", config_result);
             // while (1); // halt execution
         }
         esp_err_t install_result = rmt_driver_install(channel_, 2000, 0);
         if (install_result != ESP_OK) {
-            Serial.printf("Failed to install RMT driver: %d\n", install_result);
+            ezread.squintf("Failed to install RMT driver: %d\n", install_result);
             // while (1); // halt execution
         }
         rmt_get_ringbuf_handle(channel_, &rb_);
@@ -1230,7 +1230,7 @@ class RMTInput {
         }
         esp_err_t start_result = rmt_rx_start(channel_, 1);
         if (start_result != ESP_OK) {
-            Serial.printf("Failed to start RMT receiver: %d\n", start_result);
+            ezread.squintf("Failed to start RMT receiver: %d\n", start_result);
             // while (1); // halt execution
         }
     }
@@ -1366,7 +1366,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     void direction_update() {
         if (sim->simulating(sens::joy)) {
             if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
-            // Serial.printf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
+            // ezread.squintf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
         }
         else for (int axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
             us[axis][RAW] = (int)(rmt[axis].readPulseWidth(true));
