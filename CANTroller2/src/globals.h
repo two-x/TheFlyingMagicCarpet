@@ -397,11 +397,20 @@ void kick_inactivity_timer(int source=0) {
 //     //     return true;
 //     // }
 // };
+
+// EZRead is a text-logging console for display on a small low-res LCD in a window (or fullscreen if you feel like coding it).
+//   the output text is very efficient with use of space, except the most recent message at bottom, which is zoomed in enormously
+//   the user-obsessed legibility of EZRead is something you'll definitely want to write home to your parents about after every use
+//   ezprintf();   writes formatted text to ezread. use the same arguments as printf, except add a uint8_t rgb332-format color as the 1st arg if you like that
+//   squintf();   like running ezprint() followed by Serial.printf() on the same arguments. will write to both.
+//                somewhere is documentation on why this is called squintf, but I wasn't able to read it with my glasses
+//   arguments for the above: ([optional color], "printf-compatible format string", <other_printf_like_args>);
+//   lookback(int);   scrolls the given number of lines back in time to look at the past
+//
 #include <iostream>
 #include <string>
 #include <sstream>
 #include <stdarg.h>
-// #include "Org_01.h"
 class EZReadConsole {
   public:
     bool dirty = true;
@@ -414,12 +423,6 @@ class EZReadConsole {
     uint8_t linecolors[num_lines], color;
     uint8_t defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, highlightcolor = DCYN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
-    void lookback(int off) {
-        int offset_old = offset;
-        offset = constrain(off, 0, bufferSize);  //  - ez->num_lines);
-        if (offset) offsettimer.reset();
-        if (offset != offset_old) dirty = true;
-    }
   private:
     std::string remove_nonprintable(const std::string& victim) {
         std::string result;
@@ -495,6 +498,12 @@ class EZReadConsole {
             vsnprintf(temp, sizeof(temp), format, args);
             Serial.printf("%s", temp);
         }
+    }
+    void lookback(int off) {
+        int offset_old = offset;
+        offset = constrain(off, 0, bufferSize);  //  - ez->num_lines);
+        if (offset) offsettimer.reset();
+        if (offset != offset_old) dirty = true;
     }
 };
 static EZReadConsole ezread;
