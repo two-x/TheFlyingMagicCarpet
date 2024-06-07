@@ -589,7 +589,7 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
         return charcount - 1;
     }
     void draw(LGFX_Sprite* spr) {
-        int botline = (ez->current_index - ez->offset + ez->bufferSize) % ez->bufferSize;
+        int botline = (ez->current_index - ez->offset - (int)ez->textlines[ez->current_index].empty() + ez->bufferSize) % ez->bufferSize;
         spr->fillSprite(BLK);
         spr->setTextWrap(false);        // 右端到達時のカーソル折り返しを禁止
         // int strsize = std::min((int)linelength, (int)textlines[nowindex].length());

@@ -403,7 +403,7 @@ void kick_inactivity_timer(int source=0) {
 //   the user-obsessed legibility of EZRead is something you'll definitely want to write home to your parents about after every use
 //   ezprintf();   writes formatted text to ezread. use the same arguments as printf, except add a uint8_t rgb332-format color as the 1st arg if you like that
 //   squintf();   like running ezprint() followed by Serial.printf() on the same arguments. will write to both.
-//                somewhere is documentation on why this is called squintf, but I wasn't able to read it with my glasses
+//                somewhere is documentation on why this is called squintf, but I wasn't able to read it
 //   arguments for the above: ([optional color], "printf-compatible format string", <other_printf_like_args>);
 //   lookback(int);   scrolls the given number of lines back in time to look at the past
 //

@@ -229,7 +229,7 @@ class Transducer : public Device {
     TransDir _dir = TransDir::FWD;
     int conversion_method = LinearMath;  // the default method
     Param _si, _native;
-    float _si_raw;  // si_raw is an output for display purposes, only meaningful for sensors, not actuators. managed here because that's easier
+    float _zeropoint, _si_raw;  // si_raw is an output for display purposes, only meaningful for sensors, not actuators. managed here because that's easier
   public:
     Transducer(int arg_pin) : Device(arg_pin) {
         _long_name = "Unknown transducer";
@@ -386,6 +386,9 @@ class Transducer : public Device {
     float pc() { return to_pc(_si.val()); }  // get value as a percent of the operational range
     float raw_pc() { return to_pc(_si_raw); }  // get raw value in percent
     float margin_pc() { return std::abs(to_pc(_margin)); }
+    float zeropoint() { return _zeropoint; }  // zeropoint is the pressure at which we can consider the brake is released (if position is unavailable)
+    float zeropoint_pc() { return to_pc(_zeropoint); }
+    float* zeropoint_ptr() { return &_zeropoint; }
 };
 
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
@@ -414,7 +417,7 @@ class Sensor : public Transducer {
         // set_si(_si.val + touch.fdelta);  // i would think this should look something like this (needs some coding on the other side to support)
     }
     virtual float read_sensor() {
-        ezread.squintf("Err: sensor does not have an overridden read_sensor() function\n");
+        ezread.squintf("Err: %s does not have an overridden read_sensor() function\n", _short_name.c_str());
         return NAN;
     }
     virtual void set_val_from_pin() {
@@ -437,6 +440,7 @@ class Sensor : public Transducer {
     }
     void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
     float ema_alpha() { return _ema_alpha; }
+    bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
 };
 
 // Base class for sensors which communicate using i2c.
@@ -611,15 +615,13 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
         _native_units = "adc";
         _si_units = "V";
     }
-    CarBattery() = delete;
+    CarBattery() = delete;    
     void setup() {  // printf("%s..\n", _long_name.c_str());
         AnalogSensor::setup();
-        float max_volts = 16.0;  // temporarily hold this key value for use in m_factor calculation and abs limit setting below (which must happen in that order) 
-        float m = max_volts / (float)adcrange_adc;  // replace with a calibrated value based on measurements, and/or adjust and optimize voltage divider
-        set_conversions(m, 0.0);
-        set_abslim(0.0, max_volts);  // set abs range. dictated in this case by the max voltage a battery charger might output
-        set_oplim(10.8, 13.8);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
-        set_si(12.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
+        set_conversions(0.00404, 0.0);  // 240605 m calculated from multimeter readings vs adc counts taken across a few samples
+        set_abslim(0.0, 15.1);  // set abs range. dictated in this case by the max voltage a battery charger might output
+        set_oplim(10.7, 13.9);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
+        set_si(11.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         print_config();
@@ -634,7 +636,7 @@ class PressureSensor : public AnalogSensor {
     sens senstype = sens::pressure;
     // int opmin_adc, opmax_adc, absmin_adc, absmax_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: Reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-    float hold_initial, hold_increment, panic_initial, panic_increment, _zeropoint;  // , _margin_psi, _zeropoint_psi;
+    float hold_initial, hold_increment, panic_initial, panic_increment;  // , _margin_psi, _zeropoint_psi;
     PressureSensor(int arg_pin) : AnalogSensor(arg_pin) {
         _long_name = "Brake Pressure";
         _short_name = "presur";
@@ -665,6 +667,7 @@ class PressureSensor : public AnalogSensor {
         set_conversions(m, b);
         set_abslim_native(0.0, (float)adcrange_adc);  // set abslims after m and b are set
         set_oplim_native(min_adc, 2080.0);            // set oplims after abslims are set
+        set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
         // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
         set_ema_alpha(0.15);
         set_margin(1.0);       // max acceptible error when checking psi levels
@@ -674,15 +677,14 @@ class PressureSensor : public AnalogSensor {
         panic_increment = 5.0; // incremental pressure added periodically when auto stopping (adc count 0-4095)
         _zeropoint = _opmin;   // used when releasing the brake in case position is not available
         set_native(_opmin_native);
-        set_can_source(src::POT, true);
         print_config();
     }
-    bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
-    float zeropoint() { return _zeropoint; }  // zeropoint is the pressure at which we can consider the brake is released (if position is unavailable)
     float hold_initial_pc() { return to_pc(hold_initial); }  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
     float hold_increment_pc() { return to_pc(hold_increment); }  // incremental pressure added periodically when auto stopping (adc count 0-4095)
     float panic_initial_pc() { return to_pc(panic_initial); }  // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
     float panic_increment_pc() { return to_pc(panic_increment); }  // incremental pressure added periodically when auto stopping (adc count 0-4095)
+    bool parked() { return (std::abs(val() - _opmin) <= _margin); }  // is tha brake motor parked?
+    float parkpos() { return _opmin; }
 };
 // BrakePositionSensor represents a linear position sensor
 // for measuring brake position (TODO which position? pad? pedal?)
@@ -690,7 +692,6 @@ class PressureSensor : public AnalogSensor {
 class BrakePositionSensor : public AnalogSensor {
   public:
     sens senstype = sens::brkpos;
-    float _zeropoint;  // in inches  // _parkpos
     BrakePositionSensor(int arg_pin) : AnalogSensor(arg_pin) {
         _long_name = "Brake Position";
         _short_name = "brkpos";
@@ -720,7 +721,7 @@ class BrakePositionSensor : public AnalogSensor {
             set_abslim(0.95, 8.85, false);  // TUNED 240513 - actuator inches measured
             // TUNE. - opmin. Retract limit during nominal operation. Brake motor is prevented from pushing past this (in)
             // TUNE. - opmax. Best position to park the actuator out of the way so we can use the pedal (in)  
-            set_oplim(2.0, 5.7);
+            set_oplim(2.703, 5.7);  // 240605 determined opmin on vehicle, with LAE motor connected w/ quicklink + carabeener
             _zeropoint = 5.5;  // TUNE. - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
         #endif
         set_ema_alpha(0.35);
@@ -730,11 +731,7 @@ class BrakePositionSensor : public AnalogSensor {
         print_config();
     }
     bool parked() { return (std::abs(val() - _opmax) <= _margin); }  // is tha brake motor parked?
-    bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
     float parkpos() { return _opmax; }
-    float zeropoint() { return _zeropoint; }
-    float zeropoint_pc() { return to_pc(_zeropoint); }
-    float* zeropoint_ptr() { return &_zeropoint; }
 };
 // class PulseSensor are hall-effect based magnetic field sensors where the value is based on magnetic pulse timing of a rotational Source (eg tachometer, speedometer)
 class PulseSensor : public Sensor {
@@ -938,86 +935,96 @@ class RCToggle : public RCChannel {};
 class RCAnalog : public RCChannel {};
 
 // NOTE: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
-// ServoPWM is a base class for our type of actuators, where by varying a pulse width (in us), motors move.
+// ServoMotor is a base class for our type of actuators, where by varying a pulse width (in us), motors move.
 //    e.g. the gas, brake and steering motors. The gas motor is an actual servo, the others are controlled with servo signaling via jaguars.
 // template<typename float, typename float>
-// class ServoPWM : public Transducer<float, float> {
-//   protected:
-//     Servo _servo;
-//     // NOTE: should be marked 'override' but compiler says it doesn't override anything...?
-//     void set_native_limits(Param &minParam, Param &maxParam) {
-//         set_native_limits(minParam, maxParam);
-//         _servo.attach(_pin, min_native->val(), max_native->val());
-//     }
-//     void set_si_limits(Param &minParam, Param &maxParam) {
-//         set_si_limits(minParam, maxParam);
-//         _servo.attach(_pin, min_native->val(), max_native->val());
-//     }
-//   public:
-//     // ServoPWM(int pin, int freq) : Transducer<float, float>(pin) {
-//     ServoPWM(int pin, int freq) : Transducer<float, float>(pin) {
-//         _servo.setPeriodHertz(freq);
-//         _servo.attach(_pin, _native.min(), _native.max());
-//         // _servo.attach(_pin, _native.absmin(), _native.absmax());
-//     }
-//     ServoPWM() = delete;
-//     _long_name = "Unknown PWM motor output";
-//     _short_name = "pwmout";
-//     _native_units = "us";
-//     _si_units = "";
-//     void setup() {
-//         set_pin(_pin, OUTPUT);
-//         _transtype = ActuatorType;
-//     }
-//     void write() {
-//         _val_raw = _native.val();
-//         _servo.writeMicroseconds((int)_val_raw);  // Write result to servo interface
-//     }
-// };
-// // Device::Toggle is a base class for system signals or devices having a boolean value
-// class Toggle : public Device {
-//   public:
-//     // NOTE: how should we handle simulatability? I almost think it should be done at a higher level than the device...
-//     // NOTE: should use Param here maybe?
-//     bool val, val_last, can_sim;
-//     Toggle(int arg_pin) : Device(arg_pin){  // std::string& eng_name, 
-//         can_sim = true;
-//     }
-// };
-// // Device::Toggle::InToggle is system signals or devices having a boolean value that serve as inputs (eg basicsw, cruisesw)
-// class InToggle : public Toggle {
-//   public:
-//     InToggle(int arg_pin) : Toggle(arg_pin) {
-//         set_can_source(src::PIN, true);
-//         _source = src::PIN;
-//     }
-//     void set_val(bool arg_val) {
-//         if (_source != src::PIN) {
-//             val_last = val;
-//             val = arg_val;
-//         }
-//     }
-//     void read() {
-//         val_last = val;
-//         val = digitalRead(_pin);
-//     }
-// };
-// // Device::Toggle::OutToggle is system signals or devices having a boolean value that serve as outputs (eg ignition, leds, etc.)
-// class OutToggle : public Toggle {
-//   public:
-//     OutToggle(int arg_pin) : Toggle(arg_pin) {
-//         // NOTE: LIVE is not a valid source, what should this be? Not PIN, we write to that. CALC maybe?
-//         // val_source = LIVE;
-//     }
-//     void set_val(bool arg_val) {
-//         val_last = val;
-//         val = arg_val;
-//         // if (val_source == LIVE) write();
-//     }
-//     void write() {
-//         digitalWrite(_pin, val);
-//     }
-// };
+class ServoMotor2 : public Transducer {
+  protected:
+    Servo motor;
+    Timer updatetimer{85000}, outchangetimer;
+    float lastoutput, max_out_change_rate_pcps = 800.0;
+    int _pin, _freq;
+    virtual float write_sensor() {  // NOTE: should be marked 'override' but compiler says it doesn't override anything...?
+        ezread.squintf("Err: %s does not have an overridden write_sensor() function\n", _short_name.c_str());
+        return NAN;
+    }
+    void changerate_limiter() {
+        float max_out_change_pc = max_out_change_rate_pcps * outchangetimer.elapsed() / 1000000.0;
+        outchangetimer.reset();
+        set_si(constrain(_si.val(), lastoutput - max_out_change_pc, lastoutput + max_out_change_pc));
+        // lastoutput = pc[OUT];  // NOTE you must set lastoutput = pc[OUT]
+    }
+  public:
+    // ServoMotor(int pin, int freq) : Transducer<float, float>(pin) {
+    ServoMotor2(int pin, int freq) : Transducer(pin), _freq(freq) {
+        set_pin(_pin, OUTPUT);   // needed?
+        _transtype = ActuatorType;
+        motor.setPeriodHertz(_freq);
+        motor.attach(_pin, _native.min(), _native.max());  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
+        _long_name = "Unknown PWM motor";
+        _short_name = "pwmout";
+        _native_units = "us";
+    }
+    ServoMotor2() = delete;
+    void setup() {}
+    void write() {
+        if (!std::isnan(_native.val())) motor.writeMicroseconds((int)(_native.val()));
+        lastoutput = _native.val();    
+        // _val_raw = _native.val();
+        // _servo.writeMicroseconds((int)_val_raw);  // Write result to servo interface
+    }
+    float max_changerate() { return max_out_change_rate_pcps; };
+    void set_max_changerate(float a_newrate) { max_out_change_rate_pcps = a_newrate; };
+};
+class Jaguar : public ServoMotor2 {
+  public:
+    Jaguar(int pin, int freq) : ServoMotor2(pin, freq) {
+        conversion_method = OpLimMap;
+        _long_name = "Unknown Jaguar controller";
+        _short_name = "unkjag";
+        _si_units = "V";
+    }
+    Jaguar() = delete;
+    void setup() {
+        set_abslim(45.0, 168.2);  //this should also set oplim to the same
+        float m = (_si.max() - _si.min()) / (_native.max() / _native.min());  // (180 - 0) / (2500 - 500) = 0.09 deg/us
+        set_abslim(0.0, 180.0, false);
+    }
+};
+class GasServo : public ServoMotor2 {
+  public:
+    GasServo(int pin, int freq) : ServoMotor2(pin, freq) {
+        _dir = TransDir::FWD;  // if your servo goes CCW with increasing pulsewidths, change to REV
+        _long_name = "Throttle servo";
+        _short_name = "throtl";
+        _si_units = "deg";
+    }
+    GasServo() = delete;
+    void setup() {
+        set_abslim(0.0, 180.0, false);
+        set_abslim_native(500.0, 2500.0, false);
+        float m = (_si.max() - _si.min()) / (_native.max() / _native.min());  // (180 - 0) / (2500 - 500) = 0.09 deg/us
+        set_conversions(m, 0.0);
+    }
+        // set_oplim_native(1000.0, 2000.0, false);       
+        // jaguar range in degrees: (45.0, 168.2);
+};
+class BrakeMotor2 : public Jaguar {
+  public:
+    BrakeMotor2(int pin, int freq) : Jaguar(pin, freq) {
+        _long_name = "Brake motor";
+        _short_name = "brake";
+    }
+    BrakeMotor2() = delete;
+};
+class SteerMotor2 : public Jaguar {
+  public:
+    SteerMotor2(int pin, int freq) : Jaguar(pin, freq) {
+        _long_name = "Steering motor";
+        _short_name = "steer";
+    }
+    SteerMotor2() = delete;
+};
 // NOTE: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
 // Simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // NOTE: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,

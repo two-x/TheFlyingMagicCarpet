@@ -145,19 +145,30 @@ class DiagRuntime {
     }
     void report_changes() {
         for (int32_t i=0; i<NUM_ERR_TYPES; i++) {
+            bool printheader1 = false, printheader2 = false, printed = false;
             for (int32_t j=0; j<NumTelemetryFull; j++) {
-                if (report_error_changes) {
-                    if (err_sens[i][j] && !err_last[i][j]) {
-                        ezread.squintf("!diag: %s %s err\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
-                        // ezread.ezprintf(ezread.sadcolor, "! %s %s err\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
+                if (report_error_changes && (err_sens[i][j] && !err_last[i][j])) {
+                    if (!printheader1) {
+                        ezread.squintf("!%s:", err_type_card[i].c_str());
+                        printheader1 = true;
                     }
-                    else if (!err_sens[i][j] && err_last[i][j]) {
-                        ezread.squintf("!diag: %s %s ok\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
-                        // ezread.ezprintf(ezread.happycolor, "- %s %s ok\n", err_sens_card[j].c_str(), err_type_card[i].c_str());
-                    }
+                    ezread.ezprintf(" %s", err_sens_card[j].c_str());
+                    printed = true;
                 }
-                err_last[i][j] = err_sens[i][j];
             }
+            for (int32_t j=0; j<NumTelemetryFull; j++) {
+                if (report_error_changes && (!err_sens[i][j] && err_last[i][j])) {
+                    if (!printheader2) {
+                        if (!printheader1) ezread.squintf("!%s:", err_type_card[i].c_str());
+                        ezread.squintf(" ok:");
+                        printheader2 = true;
+                    }
+                    ezread.ezprintf(" %s", err_sens_card[j].c_str());
+                    printed = true;
+                }
+            }
+            for (int32_t j=0; j<NumTelemetryFull; j++) err_last[i][j] = err_sens[i][j];
+            if (printed) ezread.squintf("\n");
         }    
     }
     int worst_sensor(int type) {
