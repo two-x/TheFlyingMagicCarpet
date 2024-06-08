@@ -628,8 +628,9 @@ class BrakeControl : public JagMotor {
     bool stopped_last = false;
     bool feedback_enabled[NumBrakeSens];
     void set_dominant_sensor(float _hybrid_ratio) {
-        if (std::isnan(_hybrid_ratio)) return;
-        dominantsens = (int)(_hybrid_ratio + 0.5) ? PressureFB : PositionFB;  // round to 0 or 1, the indices of posn and pres respectively
+        if (feedback == PressureFB || feedback == PositionFB) dominantsens = feedback;
+        else if (std::isnan(_hybrid_ratio)) return;
+        else dominantsens = (int)(_hybrid_ratio + 0.5) ? PressureFB : PositionFB;  // round to 0 or 1, the indices of posn and pres respectively
         if (dominantsens == PositionFB) pid_dom = &(pids[PositionFB]);
         else pid_dom = &(pids[PressureFB]);
         posn_pid_active = (dominantsens == PositionFB);  // for display
@@ -724,6 +725,15 @@ class BrakeControl : public JagMotor {
         if (pressure_ratio <= brake_pid_trans_threshold_lo) return 0.0;  // at pressure below lo threshold, position has 100% influence
         return 0.5 + 0.5 * sin(hybrid_math_coeff * (pressure_ratio - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
     }
+    void set_hybrid_ratio() {
+        float temp = calc_hybrid_ratio(pressure->val());
+        if (!isnan(temp)) {
+            hybrid_out_ratio = temp;  // calculate pressure vs. position multiplier based on the sensed values
+            hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
+        }
+        else hybrid_out_ratio = hybrid_out_ratio_pc = NAN;
+        set_dominant_sensor(hybrid_out_ratio);  // round to 0 (posn pid) or 1 (pressure pid). this is for idiot light display
+    }
     float get_hybrid_brake_pc(float _given_pres, float _given_posn) {  // uses current hybrid_ratio to calculate a combined brake percentage value from given pres and posn values
         return hybrid_out_ratio * _given_pres + (1.0 - hybrid_out_ratio) * _given_posn;  // combine pid outputs weighted by the multiplier
     }
@@ -735,7 +745,10 @@ class BrakeControl : public JagMotor {
         for (int mypid=PositionFB; mypid<=PressureFB; mypid++) pids[mypid].set_target(target[mypid]);  // feed target vals to pid loops. this is harmless if pids disabled, it will have no effect
     }
     void read_sensors() {  // calculates and saves combined brake value percent, based on readings of the feedback sensors. harmless to call even if running openloop
-        combined_read_pc = get_hybrid_brake_pc(pressure->pc(), brkpos->pc());
+        if (feedback == PositionFB) combined_read_pc = brkpos->pc();
+        else if (feedback == PressureFB) combined_read_pc = pressure->pc();
+        else if (feedback == HybridFB) combined_read_pc = get_hybrid_brake_pc(pressure->pc(), brkpos->pc());
+        else combined_read_pc = NAN;
     }
     float calc_thresh_loop_out() {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
         float err = (combined_read_pc - target_pc);
@@ -744,7 +757,6 @@ class BrakeControl : public JagMotor {
         return thresh_loop_attenuation_pc * pc[OPMAX];
     }
     float calc_loop_out() {  // returns motor output percent calculated based on current target_pc or target[] values, in a way consistent w/ current config
-        read_sensors();
         if (motormode == ThreshLoop) return calc_thresh_loop_out();
         else if (motormode == ActivePID) return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // combine pid outputs weighted by the multiplier
         else return pc[STOP];  // this should not happen, maybe print an error message
@@ -804,10 +816,9 @@ class BrakeControl : public JagMotor {
             pc[OUT] = calc_open_out();
             return;  // open loop should skip calculating hybrid ratio, so just return
         }
-        hybrid_out_ratio = calc_hybrid_ratio(pressure->val());  // calculate pressure vs. position multiplier based on the sensed values
-        hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
-        set_dominant_sensor(hybrid_out_ratio);  // round to 0 (posn pid) or 1 (pressure pid). this is for idiot light display
-        
+        set_hybrid_ratio();
+        read_sensors();
+
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             carstop(false);
             autoholding = !autostopping && (pressure->val() >= pressure->hold_initial - pressure->margin());  // this needs to be tested  // if (!speedo->stopped()) {            

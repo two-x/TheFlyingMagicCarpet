@@ -367,8 +367,8 @@ class Touchscreen {
         else if (tquad == 0x30 && sim.simulating(sens::basicsw) && longpress()) basicmode_request = true;
         else if (tquad == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(tedit); // (+= 25) Pressed the increase brake pressure button
         else if (tquad == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(-tedit); // (-= 25) Pressed the decrease brake pressure button
-        else if (tquad == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(tedit); // (-= 25) Pressed the decrease brake pressure button
-        else if (tquad == 0x34 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(-tedit); // (-= 25) Pressed the decrease brake pressure button
+        else if (tquad == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(0.01 * tedit); // (-= 25) Pressed the decrease brake pressure button
+        else if (tquad == 0x34 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(-0.01 * tedit); // (-= 25) Pressed the decrease brake pressure button
         else if (tquad == 0x41 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.tedit(tedit);
         else if (tquad == 0x42 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.tedit(-tedit);
         else if (tquad == 0x43 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
