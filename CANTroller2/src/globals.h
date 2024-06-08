@@ -401,7 +401,7 @@ void kick_inactivity_timer(int source=0) {
 // EZRead is a text-logging console for display on a small low-res LCD in a window (or fullscreen if you feel like coding it).
 //   the output text is very efficient with use of space, except the most recent message at bottom, which is zoomed in enormously
 //   the user-obsessed legibility of EZRead is something you'll definitely want to write home to your parents about after every use
-//   ezprintf();   writes formatted text to ezread. use the same arguments as printf, except add a uint8_t rgb332-format color as the 1st arg if you like that
+//   printf();   writes formatted text to ezread. use the same arguments as printf, except add a uint8_t rgb332-format color as the 1st arg if you like that
 //   squintf();   like running ezprint() followed by Serial.printf() on the same arguments. will write to both.
 //                somewhere is documentation on why this is called squintf, but I wasn't able to read it
 //   arguments for the above: ([optional color], "printf-compatible format string", <other_printf_like_args>);
@@ -432,7 +432,7 @@ class EZReadConsole {
         }
         return result;
     }
-    void ezprintf_impl(uint8_t _color, const char* format, va_list args) {  // this is not called directly but by one ots overloads below
+    void printf_impl(uint8_t _color, const char* format, va_list args) {  // this is not called directly but by one ots overloads below
         char temp[100];
         color = _color;
         vsnprintf(temp, sizeof(temp), format, args);
@@ -459,28 +459,28 @@ class EZReadConsole {
         std::string blank = "";
         for (int i=0; i<bufferSize; i++) {
             // linecolors[i] = MGRY;
-            this->ezprintf("%s", blank.c_str());
+            this->printf("%s", blank.c_str());
             linecolors[i] = MYEL;
         }
-        ezprintf(highlightcolor, "welcome to EZ-Read console\n");
+        printf(highlightcolor, "welcome to EZ-Read console\n");
         dirty = true;
     }
-    void ezprintf(const char* format, ...) {  // for if we're called with same arguments as printf would take
+    void printf(const char* format, ...) {  // for if we're called with same arguments as printf would take
         va_list args;
         va_start(args, format);
-        ezprintf_impl(defaultcolor, format, args);  // Use default color
+        printf_impl(defaultcolor, format, args);  // Use default color
         va_end(args);
     }
-    void ezprintf(uint8_t color, const char* format, ...) {  // otherwise you can insert a custom color as the first argument
+    void printf(uint8_t color, const char* format, ...) {  // otherwise you can insert a custom color as the first argument
         va_list args;
         va_start(args, format);
-        ezprintf_impl(color, format, args);  // Use provided color
+        printf_impl(color, format, args);  // Use provided color
         va_end(args);
     }
     void squintf(const char* format, ...) {  // prints string to both serial and ezread consoles, except you have to squint to see it
         va_list args;
         va_start(args, format);
-        ezprintf_impl(defaultcolor, format, args);
+        printf_impl(defaultcolor, format, args);
         va_end(args);
         if (console_enabled) {
             char temp[100];
@@ -491,7 +491,7 @@ class EZReadConsole {
     void squintf(uint8_t color, const char* format, ...) {  // prints string to both serial and ezread consoles, except you have to squint to see it
         va_list args;
         va_start(args, format);
-        ezprintf_impl(color, format, args);  
+        printf_impl(color, format, args);  
         va_end(args);
         if (console_enabled) {
             char temp[100];

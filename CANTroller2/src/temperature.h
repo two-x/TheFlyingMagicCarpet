@@ -165,7 +165,7 @@ private:
             if (!brake_assigned && (brakemotor_type_detected != NIL)) {
                 sensors.emplace(loc::BRAKE, TemperatureSensor(loc::BRAKE, detected_address, &tempsensebus));
                 Serial.printf("  detected %s brake sensor at addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
-                ezread.ezprintf("temp: %s brake @ addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
+                ezread.printf("temp: %s brake @ addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
                 sensors.at(loc::BRAKE).print_address();
                 brake_assigned = true;
             }
@@ -191,7 +191,7 @@ private:
                     sensors.emplace(location, TemperatureSensor(location, *detected_address_it, &tempsensebus));
                     // Print the sensor address for debugging purposes
                     Serial.printf("  assigned known sensor %s at addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
-                    ezread.ezprintf("temp: known %s @ addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
+                    ezread.printf("temp: known %s @ addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
                     sensors.at(known_address.first).print_address();
                 } else {
                     // The sensor already exists, so just update its address
@@ -223,7 +223,7 @@ private:
                 if (it != all_locations.end()) {
                     // The sensor doesn't exist yet, so create it and add it to the map and print the sensor address
                     ezread.squintf("  detected unknown sensor addr: ");
-                    ezread.ezprintf("temp: unknown @ addr: ");
+                    ezread.squintf("temp: unknown @ addr: ");
                     sensors.emplace(*it, TemperatureSensor(*it, detected_address, &tempsensebus));
                     sensors.at(*it).print_address();
                     ezread.squintf("\n");

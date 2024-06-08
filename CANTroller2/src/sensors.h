@@ -356,19 +356,19 @@ class Transducer : public Device {
     virtual void print_config(bool header=true, bool ranges=true) {
         if (header) {
             Serial.printf("%s %s", _long_name.c_str(), transtypecard[_transtype].c_str());
-            ezread.ezprintf("%s", _short_name.c_str()); 
+            ezread.printf("%s", _short_name.c_str()); 
             if (_pin < 255 && _pin <= 0) {
                 Serial.printf(", pin %d", _pin);
-                ezread.ezprintf(" p%d", _pin);
+                ezread.printf(" p%d", _pin);
             }
             Serial.printf(": %.2lf %s = %.2lf %s = %.2lf %%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
-            ezread.ezprintf(": %.2lf%s = %.2lf%s = %.2lf%%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
+            ezread.printf(": %.2lf%s = %.2lf%s = %.2lf%%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
         }
         if (ranges) {
             Serial.printf("  op: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
             Serial.printf("  abs: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
-            ezread.ezprintf("  op: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
-            ezread.ezprintf("  abs: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
+            ezread.printf("  op: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
+            ezread.printf("  abs: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
         }
     }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)

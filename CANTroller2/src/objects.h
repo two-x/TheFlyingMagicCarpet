@@ -420,9 +420,9 @@ void stop_console() {
         delay(200);  // give time for serial to print everything in its buffer
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
-    // ezread.ezprintf(DCYN, "welcome to EZ-Read console\n");
-    ezread.ezprintf(DCYN, "magic carpet is booted\n");
-    // ezread.ezprintf("welcome to EZ-Read Console");
+    // ezread.printf(DCYN, "welcome to EZ-Read console\n");
+    ezread.printf(DCYN, "magic carpet is booted\n");
+    // ezread.printf("welcome to EZ-Read Console");
 }
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
@@ -436,7 +436,7 @@ void bootbutton_actions() {  // temporary (?) functionality added for developmen
             speedo.print_config(true);
             tach.print_config(true);
             mulebatt.print_config(true);
-            // ezread.ezprintf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
+            // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
         }
     }
 }
