@@ -220,13 +220,14 @@ class DiagRuntime {
         static bool gunning_it, gunning_last = true;
         static float baseline_speed;
         bool fail = false;
-        if (runmode == STANDBY) {  // || runmode == HOLD  // check that the speed is zero when stopped
-            // if (gunning_last) speedoTimer.reset();       // if we just stopped driving, allow time for car to stop
-            // else if (speedoTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
-            fail = (baseline_speed > speedo->margin());  // when stopped the speedo reading should be zero, otherwise fail
-            baseline_speed = speedo->val();         // store the speed value when we are stopped
-            // }
-        }
+        // commented this b/c 
+        // if (runmode == STANDBY) {  // || runmode == HOLD  // check that the speed is zero when stopped
+        //     // if (gunning_last) speedoTimer.reset();       // if we just stopped driving, allow time for car to stop
+        //     // else if (speedoTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
+        //     fail = (baseline_speed > speedo->margin());  // when stopped the speedo reading should be zero, otherwise fail
+        //     baseline_speed = speedo->val();         // store the speed value when we are stopped
+        //     // }
+        // }
         gunning_it = (gas->pc[OUT] > 20.0 && (runmode == FLY || runmode == CRUISE));
         if (gunning_it) {                                                             // if we're attempting to drive
             if (!gunning_last) speedoTimer.reset();                     // delay our speed comparison so car can accelerate

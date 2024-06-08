@@ -6,6 +6,10 @@ static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 static MomentaryButton bootbutton(boot_sw_pin, false);
 
 // #define touch_simbutton 38
+#define disp_apppanel_x 158
+#define disp_apppanel_y 48
+#define disp_apppanel_w (disp_width_pix - disp_apppanel_x)  // 156
+#define disp_apppanel_h (disp_height_pix - disp_apppanel_y)  // 192
 #define disp_simbuttons_x 164
 #define disp_simbuttons_y 48
 #define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)  // 156
@@ -589,7 +593,7 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
             totalwidth += charwidth;
             charcount++;
         }
-        return charcount - 1;
+        return charcount;
     }
     void draw(LGFX_Sprite* spr) {
         int botline = (ez->current_index - ez->offset - (int)ez->textlines[ez->current_index].empty() + ez->bufferSize) % ez->bufferSize;
