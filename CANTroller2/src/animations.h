@@ -399,11 +399,15 @@ class EraserSaver {  // draws colorful patterns to exercise
                 }
                 int d = 6 + rn(45);
                 uint8_t sat, brt, c, c2;
-                uint16_t hue = spothue + 32768 * rn(2) + rn(1500);
-                sat = 255 - ((uint8_t)(spothue >> ((6 + rn(3)) + season)));  // + rn(63) 
-                brt = 150 + rn(80);
+                uint16_t hue;
+                hue = spothue + 32768 * rn(2) + rn(1500);
                 if (season == 0) { sat = 75 + 100 * rn(2); brt = 150 + rn(56); }
-                if (season == 3) { sat = 175 + 75 * rn(2); brt = 200 + rn(56); }
+                else if (season == 1) { hue = penhue; sat = pensat; brt = 200 + rn(56); }
+                else if (season == 3) { sat = 175 + 75 * rn(2); brt = 200 + rn(56); }
+                else { 
+                    sat = 255 - ((uint8_t)(spothue >> ((6 + rn(3)) + season)));  // + rn(63) 
+                    brt = 150 + rn(80);
+                }
                 c = hsv_to_rgb<uint8_t>(hue, sat, brt);
                 c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
                 // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
@@ -604,7 +608,11 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
         }
         return charcount;
     }
+    void draw_scrollbar(LGFX_Sprite* spr) {
+    
+    }
     void draw(LGFX_Sprite* spr) {
+        draw_scrollbar(spr);
         int botline = (ez->current_index - ez->offset - (int)ez->textlines[ez->current_index].empty() + ez->bufferSize) % ez->bufferSize;
         spr->fillSprite(BLK);
         spr->setTextWrap(false);        // 右端到達時のカーソル折り返しを禁止
@@ -679,6 +687,7 @@ class PanelAppManager {
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
+        still_running = 1;
     }
     void setup(LGFX* _lgfx, Simulator* _sim, Touchscreen* _touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
         Serial.printf("  panel app manager init ..");

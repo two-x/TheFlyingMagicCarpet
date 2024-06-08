@@ -16,6 +16,7 @@
 #define disp_datapage_units_x 98  // 103        
 #define disp_bargraphs_x 117  // 122
 #define disp_datapage_title_x 83
+#define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
 uint8_t colorcard[NUM_RUNMODES] = { MGT, PUR, RED, ORG, YEL, GRN, TEAL, WHT };
 std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
@@ -130,7 +131,7 @@ class Display {
     // uint16_t palette[256] = { BLK, WHT };
     static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
     Timer dispAgeTimer[disp_lines];  // int disp_age_timer_us[disp_lines];
-    static constexpr int idiots_corner_x = disp_apppanel_x;
+    static constexpr int idiots_corner_x = disp_apppanel_x + 1;
     static constexpr int idiots_corner_y = 13;
     bool sim_last = false, fullscreen_last = false;
     int runmode_last = -1;
@@ -369,7 +370,7 @@ class Display {
         sprptr->drawFastHLine(x_pos+2, y_pos+3, 3, color);
     }
     void drawval_core(int lineno, std::string disp_string, float value, float lowlim, float hilim, float target=NAN, uint8_t color=NON) {
-        int age_us = (color != NON) ? 3 : (int)((float)(dispAgeTimer[lineno].elapsed()) / 15000000); // Divide by us per color gradient quantum
+        int age_us = (color != NON) ? disp_value_dimsteps : (int)((float)(dispAgeTimer[lineno].elapsed()) / 25000000); // Divide by us per color gradient quantum
         bool outofrange = (value > hilim || value < lowlim);
         int x_base = disp_datapage_values_x;
         bool polarity = (value > -float_zero) || (std::isnan(value));  // polarity 0=negative, 1=positive
@@ -385,7 +386,7 @@ class Display {
             dispAgeTimer[lineno].reset();
             disp_age_quanta[lineno] = 0;
         }
-        else if (age_us > disp_age_quanta[lineno] && age_us < 3)  {  // as readings age, redraw in new color. This may fail and redraw when the timer overflows? 
+        else if (age_us > disp_age_quanta[lineno] && age_us < disp_value_dimsteps)  {  // as readings age, redraw in new color. This may fail and redraw when the timer overflows? 
             if (outofrange) color = 0xf8 - (age_us * 0x24);  // if out of range, yellow color loses brightness with age
             else color = 0x3c - (age_us << 2);  // in range green color loses brightness with age
             // if (age_us < 8) color = 0x1c + (age_us << 5);  // base of green with red added as you age, until yellow is achieved
@@ -435,11 +436,15 @@ class Display {
         drawval_core(lineno, val_string, (float)value, lo, hi, targ);
     }
     void drawval(int lineno, float value, float lowlim, float hilim, float target=NAN, int precision = disp_default_float_precision) {
-        std::string val_string = num2string(value, (int)disp_maxlength, precision);
+        std::string val_string;
+        if (std::isnan(value)) val_string = "nan";
+        else val_string = num2string(value, (int)disp_maxlength, precision);
         drawval_core(lineno, val_string, value, lowlim, hilim, target);
     }
     void drawval(int lineno, float value, int precision) {
-        std::string val_string = num2string(value, (int)disp_maxlength, precision);
+        std::string val_string;
+        if (std::isnan(value)) val_string = "nan";
+        else val_string = num2string(value, (int)disp_maxlength, precision);
         drawval_core(lineno, val_string, value, NAN, NAN, NAN);
     }
     void drawval(int lineno, float value) {
