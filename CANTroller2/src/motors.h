@@ -428,8 +428,8 @@ class ThrottleControl : public ServoMotor {
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
-        ezread.squintf("Throttle servo.. pid is %s\n", pid_enabled ? "enabled" : "disabled");
-        ezread.squintf("  Cruise control pid is %s, using %s adjustment scheme\n", cruise_pid_enabled ? "enabled" : "disabled", cruiseschemecard[cruise_adjust_scheme].c_str());
+        ezread.squintf("Throttle servo.. pid %s\n", pid_enabled ? "enabled" : "disabled");
+        ezread.squintf("  Cruise pid %s, using %s adj scheme\n", cruise_pid_enabled ? "enabled" : "disabled", cruiseschemecard[cruise_adjust_scheme].c_str());
         ServoMotor::setup(_hotrc, _speedo);
         throttleRateTimer.reset();
         derive();

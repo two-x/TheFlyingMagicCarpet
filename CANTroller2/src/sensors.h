@@ -811,7 +811,7 @@ class PulseSensor : public Sensor {
     PulseSensor() = delete;
     void print_config(bool header=true, bool ranges=true) {
         Transducer::print_config(header, ranges);
-        if (ranges) ezread.squintf("  pulsewidth now = %.0lf %s, abs range: %.0lf-%.0lf %s\n", _us, _uber_native_units.c_str(), _absmin_us, _absmax_us, _uber_native_units.c_str());
+        if (ranges) ezread.squintf("  pulse = %.0lf %s, abs: %.0lf-%.0lf %s\n", _us, _uber_native_units.c_str(), _absmin_us, _absmax_us, _uber_native_units.c_str());
     }
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // overload the normal function so we can also include us calculations 

@@ -41,6 +41,10 @@ class DiagRuntime {
         "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
         "NA", "None", "Hybrid",
     };
+    // "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HrcHrz", "HrcVrt", "HrcCh3",
+    // "HrcCh4", "Batery", "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR",
+    // "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
+    // "NA", "None", "Hybrid",
     std::string ascii_name(int sensor) {
         if (sensor == _NA) return err_sens_card[NumTelemetryFull];
         if (sensor == _None) return err_sens_card[NumTelemetryFull + 1];
@@ -301,7 +305,7 @@ class DiagRuntime {
             if (!errdiffs) do_print = false;
         }
         if (do_print) {
-            ezread.squintf("codes L%x R%x W%x  %d errs (%+d)\n", errstatus[LOST], errstatus[RANGE], errstatus[WARN], errtotal, errdiffs);
+            ezread.squintf(color, "errs %d(%+d) L%x R%x W%x\n", errtotal, errdiffs, errstatus[LOST], errstatus[RANGE], errstatus[WARN]);
         }
     }
     void make_log_entry() {

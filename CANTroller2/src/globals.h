@@ -107,6 +107,19 @@ enum telemetry_full {                                                           
     _Ignition=26, _Starter=27, _BasicSw=28, _FuelPump=29,                                             // _GPIO signal group (with simple boolean values)
     NumTelemetryFull=30,                                                                              // size of both telemetry lists combined
 };
+// enum telemetry_groups { _HotRC=0, _Temps=1, _Other=2, _GPIO=3, _NumTelemetryGroups=4 }; // sensor groups (that share one idiot light
+// enum telemetry_full {                                                                                 // complete list expanding sensor groups
+//     _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
+//     _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are actuators, driven by us
+//     _Speedo=3, _Tach=4, _BrakePres=5, _BrakePosn=6,  // these transducers are sensors, we read from
+//     _HotRCHorz=7, _HotRCVert=8, _HotRCCh3=9, _HotRCCh4=10,                                         // _HotRC sensor group
+//     _MuleBatt=11, _AirVelo=12, _MAP=13, _Pot=14,                                                      // _Other sensor group
+//     _TempEng=15, _TempWhFL=16, _TempWhFR=17, _TempWhRL=18, _TempWhRR=19, _TempBrake=20, _TempAmb=21,  // _Temps sensor group
+//     _Ignition=22, _Starter=23, _BasicSw=24, _FuelPump=25,                                             // _GPIO signal group (with simple boolean values)
+//     NumTelemetryFull=26,                                                                              // size of both telemetry lists combined
+// };
+// enum telemetry_idiots { _HotRC_Grp=7, _Temps_Grp=8, _Other_Grp=9, _GPIO_Grp=10, NumTelemetryIdiots=11, }; // list of transducers which have onscreen idiotlights showing status
+
 
 // global configuration settings
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
@@ -330,6 +343,12 @@ const uint8_t GRN  = 0x1c;  // green (G element full on)
 const uint8_t CYN  = 0x1f;  // cyan (GB elements full on)
 const uint8_t BLU  = 0x03;  // blue (B element full on)
 const uint8_t MGT  = 0xe2;  // magenta (RB elements full on)
+const uint8_t ZRED = 0x20;  // the darkest red
+const uint8_t ZYEL = 0x24;  // the darkest yellow
+const uint8_t ZGRN = 0x04;  // the darkest green
+const uint8_t ZCYN = 0x05;  // the darkest cyan
+const uint8_t ZBLU = 0x01;  // the darkest blue
+const uint8_t ZMGT = 0x21;  // the darkest magenta
 const uint8_t DRED = 0x80;  // dark red
 const uint8_t BORG = 0xe8;  // blood orange (very reddish orange)
 const uint8_t SALM = 0xe9;  // salmon (0xc9 is more muted)
