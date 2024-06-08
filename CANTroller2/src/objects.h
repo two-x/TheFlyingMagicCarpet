@@ -25,9 +25,9 @@ static Tachometer tach(tach_pin, 8.0);  // 8.0x frequency divider
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(&i2c);
 static MAPSensor mapsens(&i2c);
-static Throttle gas(gas_pwm_pin, 52);
-static BrakeMotor brake(brake_pwm_pin, 50);
-static SteerMotor steer(steer_pwm_pin, 50);
+static ThrottleControl gas(gas_pwm_pin, 52);
+static BrakeControl brake(brake_pwm_pin, 50);
+static SteeringControl steer(steer_pwm_pin, 50);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
 
 int rn(int values=256) {  // Generate a random number between 0 and values-1

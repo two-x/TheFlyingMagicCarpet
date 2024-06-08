@@ -350,7 +350,8 @@ class JagMotor : public ServoMotor {
 //    TriggerPull : Cruise locks servo angle (throttle_target_pc), instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
 //    TriggerHold : Cruise locks servo angle (throttle_target_pc), instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
 //    SuspendFly : Cruise uses its own pid targeting a speed value. The PID output is either a servo angle or an rpm target for the gas pid, depending on pid_config setting above. Whatever speed you're at when trigger releases is new cruise target  
-class Throttle : public ServoMotor {
+class ThrottleControl : public ServoMotor {
+// replace with class ThrottleControl {
   private:
     Tachometer* tach;
     Potentiometer* pot;
@@ -368,7 +369,20 @@ class Throttle : public ServoMotor {
     Timer cruiseDeltaTimer, throttleRateTimer;
     bool pid_ena_last = false, cruise_pid_ena_last = false;
   public:
+    // replace
     using ServoMotor::ServoMotor;
+    float tach_last, throttle_target_pc, governor = 95, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
+    float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
+    float starting_pc = 25.0;                          // percent throttle to open to while starting the car
+    // with:
+    // ThrottleServo servo;
+    // ThrottleControl(int pin, int freq) {
+    //     servo = ThrottleServo(pin, freq);
+    // }
+    // float throttle_target_pc, tach_last;
+
     QPID pid, cruisepid;
     int throttle_ctrl_mode = OpenLoop;   // set default ctrl behavior. should gas servo use the rpm-sensing pid? values: ActivePID or OpenLoop
     bool pid_enabled = false, cruise_pid_enabled = false;
@@ -377,11 +391,6 @@ class Throttle : public ServoMotor {
     bool cruise_trigger_released = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;                  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float max_throttle_angular_velocity_degps = 65.0;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
-    float tach_last, throttle_target_pc, governor = 95, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-    float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
-    float starting_pc = 25.0;                          // percent throttle to open to while starting the car
     float pc_to_rpm(float _pc) {
         return map(_pc, 0.0, 100.0, tach->idle(), tach->opmax());
     }
@@ -593,16 +602,16 @@ class Throttle : public ServoMotor {
     void add_temphot(float add) { set_temphot(idletemp_f[OPMAX] + add); }
     void add_tempcold(float add) { set_tempcold(idletemp_f[OPMIN] + add); }
 };
-class Choke : public ServoMotor {
+class ChokeControl : public ServoMotor {
   private:
 };
 // Brake uses two PID loops: one based on pressure (accurate for high brake pressures), and one based on position (accurate when pedal is more released)
 // Note as pedal is pressed down, position decreases as pressure increases. PID output is percent motor power.
-class BrakeMotor : public JagMotor {
+class BrakeControl : public JagMotor {
   private:
     BrakePositionSensor* brkpos;
     PressureSensor* pressure;
-    Throttle* throttle;
+    ThrottleControl* throttle;
     TemperatureSensorManager* tempsens;
     float brakemotor_duty_spec_pc = 25.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
     float press_kp = 0.142;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
@@ -658,7 +667,7 @@ class BrakeMotor : public JagMotor {
         ezread.squintf(" using heat %s sensor\n", brake_tempsens_exists ? "readings from detected" : "estimates in lieu of");
         return brake_tempsens_exists;
     }
-    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, Throttle* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
+    void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, ThrottleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         ezread.squintf("Brake motor.. pid is %s, feedback is %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
         JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
@@ -920,7 +929,7 @@ class BrakeMotor : public JagMotor {
     float motorheatmin() { return motor_heat_min; }
     float motorheatmax() { return motor_heat_max; }
 };
-class SteerMotor : public JagMotor {
+class SteeringControl : public JagMotor {
   public:
     using JagMotor::JagMotor;
     int motormode = Halt, oldmode = Halt;

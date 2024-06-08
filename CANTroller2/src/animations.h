@@ -104,7 +104,7 @@ class CollisionsSaver {
         a->dy = (rand() & (5 << SHIFTSIZE)) + 1;
         sqrme = (uint8_t)(ball_radius_base * (float)(vp->w + vp->h));
         sqrme += rn((int)(ball_radius_modifier * (float)(vp->w + vp->h)));
-        for (int i=0; i<2; i++) if (!rn(ball_redoubler_rate)) sqrme *=2;
+        for (int i=0; i<2; i++) if (!(bool)rn(ball_redoubler_rate)) sqrme *=2;
         a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
         a->m = 4 + (ball_count & 0x07);
     }
@@ -318,13 +318,13 @@ class EraserSaver {  // draws colorful patterns to exercise
         return shapes_done;
     }
     void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random, -3 for cycle backwards  // XX , -4 for autocycle (retains saver timeout)
-        ++shapes_done %= 5;
+        ++shapes_done %= 7;
         int last_pat = shape;
-        has_eraser = !rn(2);
+        has_eraser = !rn(3);
         if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
         else {
-            if (newpat == -1) ++shape %= Worm;
-            if (newpat == -3) shape = (shape - 1 + NumSaverShapes) % Worm;
+            if (newpat == -1) ++shape %= Rotate;
+            if (newpat == -3) shape = (shape - 1 + NumSaverShapes) % Rotate;
             else if (newpat == -2) while (last_pat == shape) shape = rn(Rotate);
             if (rn(25) == 13) shape = Rotate;
         }
@@ -349,12 +349,12 @@ class EraserSaver {  // draws colorful patterns to exercise
                     };
                 }
                 else penhue += 500;
-                if (!rn(150)) penhue = rn(65536);
+                if (!(bool)rn(150)) penhue = rn(65536);
                 pencolor = hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
             }
             
             spothue = (uint16_t)(spothue + (spotrate >> 2) % sizeof(spothue));
-            if (!rn(20)) spothue = rn(65535);
+            if (!(bool)rn(20)) spothue = rn(65535);
             if (rotate == Wedges) {
                 uint8_t wcball, wctip;
                 uint16_t hue = rn(65536);
@@ -504,6 +504,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 sprite->setFont(&fonts::Font0);
             }
             else if (rotate == Worm) {
+                int point[2];
                 has_eraser = saver_lotto = false;
                 lucktimer.reset();
                 uint8_t c = (!wormstripe) ? BLK : pencolor;
@@ -522,18 +523,20 @@ class EraserSaver {  // draws colorful patterns to exercise
                     }
                 }
                 for (int axis = HORZ; axis <= VERT; axis++) {
-                    if (!rn(3)) wormd[axis] = constrain(wormd[axis] + rn(3) - 1, wormdmin, wormdmax);
+                    if (!(bool)rn(3)) wormd[axis] = constrain(wormd[axis] + rn(3) - 1, wormdmin, wormdmax);
                 }
                 if (wormtimer.expireset()) {
                     for (int axis = HORZ; axis <= VERT; axis++) {
                         wormvel[axis] = constrain(wormvel[axis] + rn(255) - 127, 0, wormvelmax);
                     }
                 }
-                sprite->drawEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
-                sprite->drawEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x + 1, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
-                sprite->drawEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x - 1, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
-                sprite->drawEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y + 1, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
-                sprite->drawEllipse((vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x, (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y - 1, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
+                point[HORZ] = (vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x;
+                point[VERT] = (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y;
+                for (int xo = -1; xo <= 1; xo += 2) {
+                    sprite->drawEllipse(point[HORZ], point[VERT], wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
+                    sprite->drawEllipse(point[HORZ], point[VERT] + xo, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
+                    sprite->drawEllipse(point[HORZ] + xo, point[VERT], wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
+                }
             }
         }
         if ((cycle != 0) && has_eraser) {
@@ -778,7 +781,7 @@ class PanelAppManager {
                 if (auto_saver_enabled) {
                     int changeit = constrain(encoder.rotation(), -1, 1);
                     if (changeit > 0) eSaver.change_pattern(-1);
-                    else if (changeit < 0) still_running = false;
+                    else if (changeit < 0) still_running = 0;
                 }
                 display_fps(spr);
             }
@@ -786,12 +789,12 @@ class PanelAppManager {
                 if (touched()) cSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
                 if (auto_saver_enabled) {
                     int changeit = constrain(encoder.rotation(), -1, 1);
-                    if (changeit < 0) still_running = false;
+                    if (changeit < 0) still_running = 0;
                 }
                 if (still_running) still_running = cSaver.update(spr, &vp);
                 display_fps(spr);
             }
-            if (!still_running) change_saver();
+            if (!(bool)still_running) change_saver();
         }
         else if (ui_context == EZReadUI) {
             ezdraw->update(spr);
@@ -842,7 +845,7 @@ void convert_565_to_332_image() {
     Serial.printf("const uint8_t %sx8[%ld] PROGMEM = {\n\t", String(IMAGE_ARRAY).c_str(), arraysize(IMAGE_ARRAY));
     for (int i=0; i<arraysize(IMAGE_ARRAY); i++) {
         Serial.printf("0x%02x, ", color_16b_to_8b(IMAGE_ARRAY[i]));
-        if (!(i % IMAGE_WIDTH)) Serial.printf("  // pixel# %ld\n%s", pixcount, (i < arraysize(IMAGE_ARRAY) - 1) ? "\t" : "");
+        if (!(bool)(i % IMAGE_WIDTH)) Serial.printf("  // pixel# %ld\n%s", pixcount, (i < arraysize(IMAGE_ARRAY) - 1) ? "\t" : "");
     }
     Serial.printf("};\n");
 }

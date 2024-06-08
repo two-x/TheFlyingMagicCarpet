@@ -13,9 +13,9 @@ class DiagRuntime {
     BrakePositionSensor* brkpos;
     Tachometer* tach;
     Speedometer* speedo;
-    Throttle* gas;
-    BrakeMotor* brake;
-    SteerMotor* steer;
+    ThrottleControl* gas;
+    BrakeControl* brake;
+    SteeringControl* steer;
     CarBattery* mulebatt;
     AirVeloSensor* airvelo;
     MAPSensor* mapsens;
@@ -56,7 +56,7 @@ class DiagRuntime {
     uint8_t most_critical_sensor[NUM_ERR_TYPES];
     uint8_t most_critical_last[NUM_ERR_TYPES];
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
-        Tachometer* a_tach, Speedometer* a_speedo, Throttle* a_gas, BrakeMotor* a_brake, SteerMotor* a_steer, 
+        Tachometer* a_tach, Speedometer* a_speedo, ThrottleControl* a_gas, BrakeControl* a_brake, SteeringControl* a_steer, 
         CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, Ignition* a_ignition)
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
           steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition) {}
@@ -152,7 +152,7 @@ class DiagRuntime {
                         ezread.squintf("!%s:", err_type_card[i].c_str());
                         printheader1 = true;
                     }
-                    ezread.ezprintf(" %s", err_sens_card[j].c_str());
+                    ezread.squintf(" %s", err_sens_card[j].c_str());
                     printed = true;
                 }
             }
@@ -163,7 +163,7 @@ class DiagRuntime {
                         ezread.squintf(" ok:");
                         printheader2 = true;
                     }
-                    ezread.ezprintf(" %s", err_sens_card[j].c_str());
+                    ezread.squintf(" %s", err_sens_card[j].c_str());
                     printed = true;
                 }
             }

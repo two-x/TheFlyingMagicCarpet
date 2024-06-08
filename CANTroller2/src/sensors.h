@@ -238,7 +238,7 @@ class Transducer : public Device {
     Transducer() = delete;  // this ensures a pin is always provided
     int _transtype;
     virtual void setup() {
-        print_config(true, false);  // print header
+        // print_config(true, false);  // print header
         // if (_pin < 255) ezread.squintf(" on pin %d\n", _pin);
     }  // printf("%s..\n", _long_name.c_str()); }
     virtual float from_native(float arg_native) {  // these linear conversion functions change absolute native values to si and back - overwrite in child classes as needed
@@ -353,15 +353,22 @@ class Transducer : public Device {
     virtual void tedit(float tdelta) {  // for touchscreen editing of the value
         touch_val = constrain(_si.val() + tdelta, _opmin, _opmax);
     }
-    virtual void print_config(bool header=false, bool ranges=true) {
+    virtual void print_config(bool header=true, bool ranges=true) {
         if (header) {
             Serial.printf("%s %s", _long_name.c_str(), transtypecard[_transtype].c_str());
-            if (_pin < 255) Serial.printf(", pin %d", _pin);
+            ezread.ezprintf("%s", _short_name.c_str()); 
+            if (_pin < 255 && _pin <= 0) {
+                Serial.printf(", pin %d", _pin);
+                ezread.ezprintf(" p%d", _pin);
+            }
+            Serial.printf(": %.2lf %s = %.2lf %s = %.2lf %%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
+            ezread.ezprintf(": %.2lf%s = %.2lf%s = %.2lf%%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
         }
-        ezread.squintf("%s (p%d): %.2lf%s = %.2lf%s = %.2lf%%\n", _short_name.c_str(), _pin, _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
         if (ranges) {
-            ezread.squintf("  op: %.2lf-%.2lf%s (%.0lf-%.0lf%s)", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
-            ezread.squintf("  abs: %.2lf-%.2lf%s (%.0lf-%.0lf%s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
+            Serial.printf("  op: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
+            Serial.printf("  abs: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
+            ezread.ezprintf("  op: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
+            ezread.ezprintf("  abs: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
         }
     }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)
@@ -508,22 +515,23 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         airveloTimer.set(airvelo_read_period_us);
+        print_config(true, false);
         ezread.squintf("  airvelo sensor %sdetected", _detected ? "" : "not ");
         if (_detected) {
             if (!_sensor.begin()) {
-                printf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
+                ezread.squintf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
                 set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
             }
             else {
                 _sensor.setRange(AIRFLOW_RANGE_15_MPS);
-                printf (" and responding properly\n");
+                ezread.squintf(" and responding properly\n");
             }
         }
         else {
-            printf("\n");
+            ezread.squintf("\n");
             set_source(src::UNDEF); // don't even have a device at all...
         }
-        print_config();
+        if (_detected) print_config(false, true);
     }
 };
 class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
@@ -567,6 +575,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         mapreadTimer.set(mapread_timeout);
+        print_config(true, false);
         ezread.squintf("  map sensor %sdetected", _detected ? "" : "not ");
         if (_detected) {
             if (!_sensor.begin()) {
@@ -579,7 +588,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
             ezread.squintf("\n");
             set_source(src::UNDEF); // don't even have a device at all...
         }
-        print_config();
+        if (_detected) print_config(false, true);
     }
 };
 class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
@@ -800,7 +809,7 @@ class PulseSensor : public Sensor {
         _native_units = "Hz";
     }
     PulseSensor() = delete;
-    void print_config(bool header=false, bool ranges=true) {
+    void print_config(bool header=true, bool ranges=true) {
         Transducer::print_config(header, ranges);
         if (ranges) ezread.squintf("  pulsewidth now = %.0lf %s, abs range: %.0lf-%.0lf %s\n", _us, _uber_native_units.c_str(), _absmin_us, _absmax_us, _uber_native_units.c_str());
     }
@@ -991,20 +1000,32 @@ class Jaguar : public ServoMotor2 {
         set_abslim(0.0, 180.0, false);
     }
 };
-class GasServo : public ServoMotor2 {
+class ThrottleServo2 : public ServoMotor2 {
+  protected:
+    Param governor_pc, idle_si, idletemp_f;
+    float max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
+    
+    // float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    // float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
+    float starting_pc = 25.0;                          // percent throttle to open to while starting the car
   public:
-    GasServo(int pin, int freq) : ServoMotor2(pin, freq) {
+    ThrottleServo2(int pin, int freq) : ServoMotor2(pin, freq) {
         _dir = TransDir::FWD;  // if your servo goes CCW with increasing pulsewidths, change to REV
         _long_name = "Throttle servo";
         _short_name = "throtl";
         _si_units = "deg";
     }
-    GasServo() = delete;
+    ThrottleServo2() = delete;
     void setup() {
         set_abslim(0.0, 180.0, false);
         set_abslim_native(500.0, 2500.0, false);
         float m = (_si.max() - _si.min()) / (_native.max() / _native.min());  // (180 - 0) / (2500 - 500) = 0.09 deg/us
         set_conversions(m, 0.0);
+        governor_pc.set(95);
+        idle_si.set_limits(43.0, 75.0);
+        idle_si.set(58.0);
+
     }
         // set_oplim_native(1000.0, 2000.0, false);       
         // jaguar range in degrees: (45.0, 168.2);
