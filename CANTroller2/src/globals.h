@@ -75,6 +75,8 @@ enum hotrc_val { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
 enum motor_val { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, NUM_MOTORVALS=8 }; // IDLE=8, NUM_MOTORVALS=9 };
 enum stop_val { STOP=1 };
 enum steer_val { SAFE=1 };
+enum diag_val { DiagVal=0, DiagMin=1, DiagMax=2, DiagMargin=3, NumDiagVals=4 };
+enum temp_val { ALARM=3 };
 enum size_enums { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
 enum joydirs { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
 enum runmode { BASIC=0, LOWPOWER=1, STANDBY=2, STALL=3, HOLD=4, FLY=5, CRUISE=6, CAL=7, NUM_RUNMODES=8 };
@@ -88,8 +90,8 @@ enum brakeextra { NumBrakeSens=2 };
 enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
 enum boolean_states { ON=1 };
 enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9, PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
-enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, BRAKE=3, NUM_TEMP_CATEGORIES=4 };  // 
-enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };      // possible sources of gas, brake, steering commands
+// enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, BRAKE=3, NUM_TEMP_CATEGORIES=4 };  // 
+// enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };      // possible sources of gas, brake, steering commands
 enum panel_apps { EZReadUI=0, MuleChassisUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel
 enum codestatus { Confused=0, Booting=1, Parked=2, Stopped=3, Driving=4, NumCodeStatuses=5 };
 enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
@@ -105,8 +107,10 @@ enum telemetry_full {                                                           
     _MuleBatt=15, _AirVelo=16, _MAP=17, _Pot=18,                                                      // _Other sensor group
     _TempEng=19, _TempWhFL=20, _TempWhFR=21, _TempWhRL=22, _TempWhRR=23, _TempBrake=24, _TempAmb=25,  // _Temps sensor group
     _Ignition=26, _Starter=27, _BasicSw=28, _FuelPump=29,                                             // _GPIO signal group (with simple boolean values)
-    NumTelemetryFull=30,                                                                              // size of both telemetry lists combined
+    _TempWheel=30,                                                                                    // flag for any wheel temp out of range
+    NumTelemetryFull=31,                                                                              // size of both telemetry lists combined
 };
+enum telemetry_bonus {  };  // flag for any wheel out of range
 // enum telemetry_groups { _HotRC=0, _Temps=1, _Other=2, _GPIO=3, _NumTelemetryGroups=4 }; // sensor groups (that share one idiot light
 // enum telemetry_full {                                                                                 // complete list expanding sensor groups
 //     _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
@@ -156,15 +160,6 @@ int looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefee
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode
 int32_t cruise_delta_max_pc_per_s = 16;  // (in TriggerHold mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.016;   // (in TriggerPull mode) Limits the change of each adjust trigger pull to this fraction of what's possible
-float temp_lims_f[NUM_TEMP_CATEGORIES][6]{
-    {45.0, 0.0, 115.0, 120.0, 130.0, 220.0},  // [AMBIENT] [OPMIN/DISP_MIN/OPMAX/WARNING/ALARM]
-    {178.0, 0.0, 198.0, 202.0, 205.0, 220.0}, // [ENGINE] [OPMIN/DISP_MIN/OPMAX/WARNING/ALARM]
-    {50.0, 0.0, 120.0, 130.0, 140.0, 220.0},  // [WHEEL] [OPMIN/DISP_MIN/OPMAX/WARNING/ALARM] (applies to all wheels)
-    {45.0, 0.0, 120.0, 130.0, 140.0, 220.0},  // [BRAKE] [OPMIN/DISP_MIN/OPMAX/WARNING/ALARM]
-};
-float temp_room = 77.0;          // "room" temperature is 25 C = 77 F  Who cares?
-float temp_sensor_min_f = -67.0; // minimum reading of sensor is -25 C = -67 F
-float temp_sensor_max_f = 257.0; // maximum reading of sensor is 125 C = 257 F
 float maf_min_gps = 0.0;
 float maf_max_gps = 50.0; // i just made this number up as i have no idea what's normal for MAF
 bool flashdemo = false;
@@ -173,6 +168,8 @@ int neodesat = 0;     // default for lets us de/saturate the neopixels
 float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change value at this percent of their overall range per second
 
 // non-tunable values. probably these belong with their related code
+float permanan = NAN;
+float* nanptr = &permanan;
 uint32_t codestatus = Booting;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool fun_flag = false;                  // since now using temp sensor address to detect vehicle, our tx resistor can be used for who knows what else!

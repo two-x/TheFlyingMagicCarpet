@@ -38,7 +38,7 @@ class DiagRuntime {
         "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HotRC",
         "Temps", "Other", "GPIO", "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4", "Batery",
         "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR",
-        "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
+        "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP", "TmpWhl",
         "NA", "None", "Hybrid",
     };
     // "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HrcHrz", "HrcVrt", "HrcCh3",
@@ -52,11 +52,15 @@ class DiagRuntime {
         return err_sens_card[NumTelemetryFull];        
     }
     // diag non-tunable values
-    bool temp_err[NUM_TEMP_CATEGORIES];  // [AMBIENT/ENGINE/WHEEL/BRAKE]
+    // bool temp_err[NumTempCategories];  // [AMBIENT/ENGINE/WHEEL/BRAKE]
     bool err_sens_alarm[NUM_ERR_TYPES] = { false, false, false, };  //  [LOST/RANGE/WARN]
     int8_t err_sens_fails[NUM_ERR_TYPES] = { 0, 0, 0, };
     bool err_sens[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE/WARN] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
     bool err_last[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE/WARN] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
+    // Device* devices[NumTelemetryFull];
+    float* devices[NumTelemetryFull][NumDiagVals];  //
+    bool registered[NumTelemetryFull];
+    float violating_value[NumTelemetryFull];
     uint8_t most_critical_sensor[NUM_ERR_TYPES];
     uint8_t most_critical_last[NUM_ERR_TYPES];
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
@@ -65,16 +69,62 @@ class DiagRuntime {
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
           steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition) {}
 
+    // void register_device(int _enumname, Device* _device) {  // registers devices that are children of Device class
+    // }
+    // void register_device(int _enumname, ServoMotor* _device) {  // registers devices that are children of ServoMotor class
+    // }
+    void register_device(int _enumname, float* _value, float* _min, float* _max, float* _margin) {  // registers devices that are children of ServoMotor class
+        devices[_enumname][DiagVal] = _value;
+        devices[_enumname][DiagMin] = _min;
+        devices[_enumname][DiagMax] = _max;
+        devices[_enumname][DiagMargin] = _margin;
+        registered[_enumname] = true;
+    }
+
     void setup() {
-        for (int32_t i=0; i<NUM_ERR_TYPES; i++)
-            for (int32_t j=0; j<NumTelemetryFull; j++) {
+        for (int i=0; i<NUM_ERR_TYPES; i++)
+            for (int j=0; j<NumTelemetryFull; j++) {
                 err_sens[i][j] = err_last[i][j] = false; // Initialize sensor error flags to false
             }
+        for (int j=0; j<NumTelemetryFull; j++) registered[j] = false;
+        register_device(_Throttle, &gas->pc[OUT], &gas->pc[OPMIN], &gas->pc[OPMAX], &gas->pc[MARGIN]);
+        register_device(_BrakeMotor, &brake->pc[OUT], &brake->pc[OPMIN], &brake->pc[OPMAX], &brake->pc[MARGIN]);
+        register_device(_SteerMotor, &steer->pc[OUT], &steer->pc[OPMIN], &steer->pc[OPMAX], &steer->pc[MARGIN]);
+        register_device(_Speedo, speedo->ptr(), speedo->opmin_ptr(), speedo->opmax_ptr(), speedo->margin_ptr());
+        register_device(_Tach, tach->ptr(), tach->opmin_ptr(), tach->opmax_ptr(), tach->margin_ptr());
+        register_device(_BrakePres, pressure->ptr(), pressure->opmin_ptr(), pressure->opmax_ptr(), pressure->margin_ptr());
+        register_device(_BrakePosn, brkpos->ptr(), brkpos->opmin_ptr(), brkpos->opmax_ptr(), brkpos->margin_ptr());
+        register_device(_HotRCHorz, &hotrc->pc[HORZ][FILT], &hotrc->pc[HORZ][OPMIN], &hotrc->pc[HORZ][OPMAX], &hotrc->pc[HORZ][MARGIN]);
+        register_device(_HotRCVert, &hotrc->pc[VERT][FILT], &hotrc->pc[VERT][OPMIN], &hotrc->pc[VERT][OPMAX], &hotrc->pc[VERT][MARGIN]);
+        register_device(_HotRCCh3, &hotrc->pc[CH3][FILT], &hotrc->pc[CH3][OPMIN], &hotrc->pc[CH3][OPMAX], &hotrc->pc[CH3][MARGIN]);
+        register_device(_HotRCCh4, &hotrc->pc[CH4][FILT], &hotrc->pc[CH4][OPMIN], &hotrc->pc[CH4][OPMAX], &hotrc->pc[CH4][MARGIN]);
+        register_device(_MuleBatt, mulebatt->ptr(), mulebatt->opmin_ptr(), mulebatt->opmax_ptr(), mulebatt->margin_ptr());
+        register_device(_AirVelo, airvelo->ptr(), airvelo->opmin_ptr(), airvelo->opmax_ptr(), airvelo->margin_ptr());
+        register_device(_MAP, mapsens->ptr(), mapsens->opmin_ptr(), mapsens->opmax_ptr(), mapsens->margin_ptr());
+        register_device(_Pot, pot->ptr(), pot->opmin_ptr(), pot->opmax_ptr(), pot->margin_ptr());
+        register_device(_TempEng, tempsens->ptr(loc::ENGINE), tempsens->opmin_ptr(loc::ENGINE), tempsens->opmax_ptr(loc::ENGINE), tempsens->margin_ptr(loc::ENGINE));
+        register_device(_TempAmb, tempsens->ptr(loc::AMBIENT), tempsens->opmin_ptr(loc::AMBIENT), tempsens->opmax_ptr(loc::AMBIENT), tempsens->margin_ptr(loc::AMBIENT));
+        register_device(_TempBrake, tempsens->ptr(loc::BRAKE), tempsens->opmin_ptr(loc::BRAKE), tempsens->opmax_ptr(loc::BRAKE), tempsens->margin_ptr(loc::BRAKE));
+        register_device(_TempWhFL, tempsens->ptr(loc::WHEEL_FL), tempsens->opmin_ptr(loc::WHEEL_FL), tempsens->opmax_ptr(loc::WHEEL_FL), tempsens->margin_ptr(loc::WHEEL_FL));
+        register_device(_TempWhFR, tempsens->ptr(loc::WHEEL_FR), tempsens->opmin_ptr(loc::WHEEL_FR), tempsens->opmax_ptr(loc::WHEEL_FR), tempsens->margin_ptr(loc::WHEEL_FR));
+        register_device(_TempWhRL, tempsens->ptr(loc::WHEEL_RL), tempsens->opmin_ptr(loc::WHEEL_RL), tempsens->opmax_ptr(loc::WHEEL_RL), tempsens->margin_ptr(loc::WHEEL_RL));
+        register_device(_TempWhRR, tempsens->ptr(loc::WHEEL_RR), tempsens->opmin_ptr(loc::WHEEL_RR), tempsens->opmax_ptr(loc::WHEEL_RR), tempsens->margin_ptr(loc::WHEEL_RR));
+        // register_bool_device(_Ignition, ignition->signal_ptr());
+        // register_bool_device(_Starter, starter->signal_ptr());
+        // register_bool_device(_FuelPump, fuelpump->signal_ptr());
     }
     void update_status_words() {}
     void setflag(int device, int errtype, bool stat) {
         err_sens[errtype][device] = stat;
         errstatus[errtype] = (errstatus[errtype] & ~(1 << device)) | (stat << device);  // replaces the device's error bit in status word with updated value
+    }
+    void checkrange(int _sens, bool extra_condition = true) {
+        bool last_rangerr = err_sens[RANGE][_sens];
+        bool rangerr = extra_condition && ((*devices[_sens][DiagVal] < *devices[_sens][DiagMin] - *devices[_sens][DiagMargin]) || (*devices[_sens][DiagVal] > *devices[_sens][DiagMax] + *devices[_sens][DiagMargin]));
+        if (rangerr != last_rangerr) {
+            setflag(_sens, RANGE, rangerr);
+            violating_value[_sens] = *devices[_sens][DiagVal];  
+        }
     }
     void update(int _runmode) {
         if (first_boot) {  // don't run too soon before sensors get initialized etc.
@@ -89,21 +139,36 @@ class DiagRuntime {
             // informed trouble code. Much like the engine computer in cars nowadays, which keep track of any detectable failures for you to
             // retreive with an OBD tool. Some checks are below, along with other possible things to check for:
             bool not_detected = false;  // first reset
-            for (int cat = 0; cat < NUM_TEMP_CATEGORIES; cat++) temp_err[cat] = false;  // first reset
-            for (int l = 0; l < tempsens->locint(); l++) {
-                if (!tempsens->detected(l)) not_detected = true;
-                else if (tempsens->val(l) >= temp_lims_f[tempsens->errclass(l)][WARNING]) temp_err[tempsens->errclass(l)] = true;
-            }
-            setflag(_TempEng, LOST, not_detected);
+            // for (int cat = 0; cat < NUM_TEMP_CATEGORIES; cat++) temp_err[cat] = false;  // first reset
+            // for (int l = 0; l < tempsens->locint(); l++) {
+            //     if (!tempsens->detected(l)) not_detected = true;
+            //     else if (tempsens->val(l) >= temp_lims_f[tempsens->errclass(l)][WARNING]) temp_err[tempsens->errclass(l)] = true;
+            // }
+            // setflag(_TempEng, LOST, not_detected);
 
             // Detect sensors disconnected or giving out-of-range readings.
             // TODO : The logic of this for each sensor should be moved to devices.h objects
-            setflag(_Throttle, RANGE, gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
-            setflag(_SteerMotor, RANGE, steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
-            BrakeFailure();
-            setflag(_MuleBatt, RANGE, mulebatt->val() < mulebatt->opmin() || mulebatt->val() > mulebatt->opmax());
-            HotRCFailure();
+            checkrange(_TempAmb);
+            checkrange(_TempEng);
+            checkrange(_TempWhFL);
+            checkrange(_TempWhFR);
+            checkrange(_TempWhRL);
+            checkrange(_TempWhRR);
+            checkrange(_TempBrake);
+            setflag(_TempWheel, RANGE, err_sens[RANGE][_TempWhFL] || err_sens[RANGE][_TempWhFR] || err_sens[RANGE][_TempWhRL] || err_sens[RANGE][_TempWhRR]);
+
+            checkrange(_Pot);
+            checkrange(_Throttle);
+            checkrange(_SteerMotor);
+            checkrange(_MuleBatt);
+            // setflag(_Throttle, RANGE, gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
+            // setflag(_SteerMotor, RANGE, steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
+            // setflag(_MuleBatt, RANGE, mulebatt->val() < mulebatt->opmin() || mulebatt->val() > mulebatt->opmax());
+            
             setflag(_Ignition, LOST, !ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
+
+            BrakeFailure();            
+            HotRCFailure();
             SpeedoFailure();
             TachFailure();
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LOWPOWER));
@@ -156,7 +221,7 @@ class DiagRuntime {
                         ezread.squintf("!%s:", err_type_card[i].c_str());
                         printheader1 = true;
                     }
-                    ezread.squintf(" %s", err_sens_card[j].c_str());
+                    ezread.squintf(" %s (%.2lf)", err_sens_card[j].c_str(), violating_value[j]);
                     printed = true;
                 }
             }
@@ -164,10 +229,10 @@ class DiagRuntime {
                 if (report_error_changes && (!err_sens[i][j] && err_last[i][j])) {
                     if (!printheader2) {
                         if (!printheader1) ezread.squintf("!%s:", err_type_card[i].c_str());
-                        ezread.squintf(" ok:");
+                        ezread.squintf(" OK:");
                         printheader2 = true;
                     }
-                    ezread.squintf(" %s", err_sens_card[j].c_str());
+                    ezread.squintf(" %s (%.2lf)", err_sens_card[j].c_str(), violating_value[j]);
                     printed = true;
                 }
             }
@@ -205,9 +270,12 @@ class DiagRuntime {
             }
             setflag(_BrakeMotor, LOST, ((std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if neither sensor is changing, set motor lost flag
         }
-        setflag(_BrakeMotor, RANGE, brake->pc[OUT] < brake->pc[OPMIN] - brake->pc[MARGIN] || brake->pc[OUT] > brake->pc[OPMAX] + brake->pc[MARGIN]);
-        setflag(_BrakePosn, RANGE, (brkpos->pc() > 100.0 + brkpos->margin_pc()) || (brkpos->pc() < 0.0 - brkpos->margin_pc()));  // if position reading is outside oprange, set flag
-        setflag(_BrakePres, RANGE, (pressure->pc() > 100.0 + pressure->margin_pc()) || (pressure->pc() < 0.0 - pressure->margin_pc()));  // if pressure reading is outside oprange, set flag
+        checkrange(_BrakeMotor);
+        checkrange(_BrakePosn);
+        checkrange(_BrakePres);
+        // setflag(_BrakeMotor, RANGE, brake->pc[OUT] < brake->pc[OPMIN] - brake->pc[MARGIN] || brake->pc[OUT] > brake->pc[OPMAX] + brake->pc[MARGIN]);
+        // setflag(_BrakePosn, RANGE, (brkpos->pc() > 100.0 + brkpos->margin_pc()) || (brkpos->pc() < 0.0 - brkpos->margin_pc()));  // if position reading is outside oprange, set flag
+        // setflag(_BrakePres, RANGE, (pressure->pc() > 100.0 + pressure->margin_pc()) || (pressure->pc() < 0.0 - pressure->margin_pc()));  // if pressure reading is outside oprange, set flag
         bool found_err = false;
         if ((brake->feedback != _BrakePres) && (err_sens[LOST][_BrakePosn] || err_sens[RANGE][_BrakePosn])) found_err = true;
         if ((brake->feedback != _BrakePosn) && (err_sens[LOST][_BrakePres] || err_sens[RANGE][_BrakePres])) found_err = true;
@@ -235,7 +303,8 @@ class DiagRuntime {
         }
         gunning_last = gunning_it;
         setflag(_Speedo, LOST, fail);
-        setflag(_Speedo, RANGE, speedo->val() < speedo->opmin() || speedo->val() > speedo->opmax());
+        checkrange(_Speedo);
+        // setflag(_Speedo, RANGE, speedo->val() < speedo->opmin() || speedo->val() > speedo->opmax());
     }
     void TachFailure() {  // checks if tach isn't low when throttle is released, or doesn't increase when we gun it
         static bool running_it, running_last = true;
@@ -255,7 +324,8 @@ class DiagRuntime {
         }
         running_last = running_it;
         setflag(_Tach, LOST, fail);
-        setflag(_Tach, RANGE, tach->val() < tach->opmin() || tach->val() > tach->opmax());
+        checkrange(_Tach);
+        // setflag(_Tach, RANGE, tach->val() < tach->opmin() || tach->val() > tach->opmax());
     }
     void HotRCFailure() {
         for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
@@ -264,8 +334,12 @@ class DiagRuntime {
             else if (ch == VERT) errindex = _HotRCVert;
             else if (ch == CH3) errindex = _HotRCCh3;
             else if (ch == CH4) errindex = _HotRCCh4;
-            setflag(errindex, RANGE, !hotrc->radiolost() && ((hotrc->us[ch][FILT] < hotrc->us[ch][OPMIN] - hotrc->us[ch][MARGIN]) 
-                                    || (hotrc->us[ch][FILT] > hotrc->us[ch][OPMAX] + hotrc->us[ch][MARGIN])));  // && ch != VERT
+            checkrange(_HotRCHorz, !hotrc->radiolost());
+            checkrange(_HotRCVert, !hotrc->radiolost());
+            checkrange(_HotRCCh3, !hotrc->radiolost());
+            checkrange(_HotRCCh4, !hotrc->radiolost());
+            // setflag(errindex, RANGE, !hotrc->radiolost() && ((hotrc->us[ch][FILT] < hotrc->us[ch][OPMIN] - hotrc->us[ch][MARGIN]) 
+            //                         || (hotrc->us[ch][FILT] > hotrc->us[ch][OPMAX] + hotrc->us[ch][MARGIN])));  // && ch != VERT
             setflag(errindex, LOST, !hotrc->radiolost() && ((hotrc->us[ch][FILT] < hotrc->absmin_us - hotrc->us[ch][MARGIN])
                                     || (hotrc->us[ch][FILT] > hotrc->absmax_us + hotrc->us[ch][MARGIN])));
             // err_sens[RANGE][_HotRCVert] = (hotrc->us[VERT][RAW] < hotrc->failsafe_us - hotrc->us[ch][MARGIN])

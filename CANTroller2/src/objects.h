@@ -81,7 +81,7 @@ void update_temperature_sensors(void *parameter) {
         if (sim.potmapping(sens::engtemp)) {
             TemperatureSensor *engine_sensor = tempsens.get_sensor(loc::ENGINE);
             if (engine_sensor != nullptr) {
-                engine_sensor->set_temperature(pot.mapToRange(temp_sensor_min_f, temp_sensor_max_f));
+                engine_sensor->set_temperature(pot.mapToRange(tempsens.opmin(loc::ENGINE), tempsens.opmax(loc::ENGINE)));  // temp_sensor_min_f, temp_sensor_max_f));
             }
         }
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently

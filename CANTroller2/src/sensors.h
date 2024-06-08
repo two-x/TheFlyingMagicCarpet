@@ -27,7 +27,7 @@ class Potentiometer {
     float _opmax_native = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
     float _absmin_native = 0.0, _absmax_native = static_cast<float>(adcrange_adc);
     float _absmin = 0.0, _absmax = 100.0;
-    float _activity_margin_pc = 10.0;
+    float _margin_pc = 10.0;
     int _pin;
     float _pc = 50.0, _raw, _native, _activity_ref;  // values in filtered percent, raw percent, raw adc
     Timer pot_timer{100000};  // adc cannot read too fast w/o errors, so give some time between readings
@@ -47,7 +47,7 @@ class Potentiometer {
             _raw = map(_native, _opmin_native, _opmax_native, _opmin, _opmax);
             ema_filt(_raw, &_pc, _ema_alpha);
             _pc = constrain(_pc, _absmin, _absmax); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
-            if (std::abs(_pc - _activity_ref) > _activity_margin_pc) {
+            if (std::abs(_pc - _activity_ref) > _margin_pc) {
                 // ezread.squintf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
                 kick_inactivity_timer(HUPot);  // evidence of user activity
                 _activity_ref = _pc;
@@ -65,6 +65,16 @@ class Potentiometer {
     float opmax() { return _opmax; }
     float opmin_native() { return _opmin_native; }
     float opmax_native() { return _opmax_native; }
+    float margin() { return _margin_pc; }
+    float* ptr() { return &_pc; }
+    float* raw_ptr() { return &_raw; }
+    float* native_ptr() { return &_native; }
+    float* opmin_ptr() { return &_opmin; }
+    float* opmax_ptr() { return &_opmax; }
+    float* opmin_native_ptr() { return &_opmin_native; }
+    float* opmax_native_ptr() { return &_opmax_native; }    
+    float* margin_ptr() { return &_margin_pc; }
+
 };
 // NOTE: the following classes all contain their own initial config values (for simplicity). We could instead use Config objects and pass them in at construction time, which might be
 //       a little cleaner organization-wise, since all the configs would be consolidated. It would also allow us to read Configs from storage somewhere, so we could have persistent
@@ -382,6 +392,7 @@ class Transducer : public Device {
     float* opmin_ptr() { return &_opmin; }
     float* opmax_ptr() { return &_opmax; }
     float margin() { return _margin; }
+    float* margin_ptr() { return &_margin; }
     float raw() { return _si_raw; }  // this is the si-unit raw value, constrained to abs range but otherwise unfiltered
     float native() { return _native.val(); }  // This is a native unit value, constrained to abs range but otherwise unfiltered
     float* native_ptr() { return _native.ptr(); }

@@ -2,8 +2,17 @@
 #include <vector>
 #include <DallasTemperature.h>
 
-enum class loc { AMBIENT, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR, BRAKE, NUM_LOCATIONS };  // , SOREN_DEV0, SOREN_DEV1, };
+enum class loc { AMBIENT=0, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR, BRAKE, NUM_LOCATIONS };  // , SOREN_DEV0, SOREN_DEV1, };
+enum temp_categories { CatUnknown=0, CatAmbient=1, CatEngine=2, CatWheel=3, CatBrake=4, NumTempCategories=5 };  // 
 enum brakemotor_types { NIL=-1, Thomson=0, LAE=1 };
+    
+float temp_lims_f[NumTempCategories][NUM_MOTORVALS] {
+    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatUnknown] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
+    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatAmbient] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
+    { 125.0, 178.0, 205.0, 218.0, NAN, -67.0, 257.0, 2.0 },  //  [CatEngine] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
+    {  50.0,  77.0, 135.0, 145.0, NAN, -67.0, 257.0, 2.0 },  //   [CatWheel] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN] (applies to all wheels)
+    {  45.0,  77.0, 125.0, 135.0, NAN, -67.0, 257.0, 2.0 },  //   [CatBrake] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
+};  // float* degf[(int)loc::NUM_LOCATIONS][NUM_MOTORVALS];
 
 class TemperatureSensor {
 public:
@@ -15,14 +24,17 @@ private:
     DeviceAddress _address;
     float _temperature;
     DallasTemperature* _tempsensebus;
+    int category = CatUnknown;
 
+    
 public:
     TemperatureSensor(loc location, const DeviceAddress& address, DallasTemperature* tempsensebus)
    : _location(location), _address(address), _tempsensebus(tempsensebus), _temperature(-999) {}
 
     TemperatureSensor() = delete; // always create with a pointer to the tempsensorbus
+    float* degf[NUM_MOTORVALS] = { nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr };
 
-     void request_temperature() {
+    void request_temperature() {
         // Request temperature from sensor
         if (!_tempsensebus->requestTemperaturesByAddress(_address.data())) {
             ezread.squintf("  failed temp request from sensor addr ");
@@ -46,6 +58,7 @@ public:
             return DEVICE_DISCONNECTED_F;
         } 
         _temperature = temp;
+        // *degf[FILT] = _temperature;
         return _temperature;
     }
 
@@ -60,6 +73,15 @@ public:
     void set_address(DeviceAddress address) {
         _address = address;
     }
+    void set_lims() {
+        if (_location == loc::AMBIENT) category = CatAmbient;
+        else if (_location == loc::ENGINE) category = CatEngine;
+        else if (_location == loc::BRAKE) category = CatBrake;
+        else if (_location == loc::WHEEL_FL || _location == loc::WHEEL_FR || _location == loc::WHEEL_RL || _location == loc::WHEEL_RR ) category = CatWheel;
+        else category = CatUnknown;
+        for (int i=0; i<NUM_MOTORVALS; i++) if (i != FILT) degf[i] = &temp_lims_f[category][i];  // degf[(int)sens][FILT] = &_temperature;
+        degf[FILT] = &_temperature;
+    }
     
     void print_address() const {
         ezread.squintf("0x");
@@ -68,7 +90,7 @@ public:
     }
 
     void print_sensor_info() const {
-        ezread.squintf("  location: %s, assigned addr: ", location_to_string(_location).c_str());
+        ezread.squintf("  loc: %s, assigned addr ", location_to_string(_location).c_str());
         print_address();
         ezread.squintf("\n");
     }
@@ -85,15 +107,24 @@ public:
             default: return "unknown";
         }
     }
+    float val() { return _temperature; }
+    float opmin() { return *degf[OPMIN]; }
+    float opmax() { return *degf[OPMAX]; }
+    float absmin() { return *degf[ABSMIN]; }
+    float absmax() { return *degf[ABSMAX]; }
+    float alarm() { return *degf[ALARM]; }
+    float margin() { return *degf[MARGIN]; }
+    float cent() { return *degf[CENT]; }
+    float* ptr() { return &_temperature; }
+    float* opmin_ptr() { return degf[OPMIN]; }
+    float* opmax_ptr() { return degf[OPMAX]; }
+    float* absmin_ptr() { return degf[ABSMIN]; }
+    float* absmax_ptr() { return degf[ABSMAX]; }
+    float* alarm_ptr() { return degf[ALARM]; }
+    float* margin_ptr() { return degf[MARGIN]; }
+    float* cent_ptr() { return degf[CENT]; }
 };
-static std::string brakemotor_type_to_string(int motortype) {
-    switch(motortype) {
-            case NIL: return "undetected";
-            case Thomson: return "Thomson";
-            case LAE: return "LAE";
-            default: return "undetected";
-    }
-}
+
 
 // Class to manage OneWire temperature sensors
 class TemperatureSensorManager {
@@ -199,6 +230,9 @@ private:
                     // Print the updated sensor address for debugging purposes
                     ezread.squintf("  updated sensor addr: ");
                     sensor_it->second.print_address();
+
+                    sensor_it->second.set_lims();
+
                 }
             } else {
                 lost_sensors++;
@@ -231,6 +265,39 @@ private:
             }
         }
     }
+    // void assign_category(*TemperatureSensor sens, int temp_category) {
+    //     auto sensor_it = sensors.find(sens);
+    //     if (sensor_it == sensors.end()) {
+    //             for (int i=0; i<NUM_MOTORVALS; i++) {  // if (i != FILT) degf[(int)sens][i] = &temp_lims_f[temp_category][i];
+    //         if (i != FILT) degf[i] = &temp_lims_f[temp_category][i];  // degf[(int)sens][FILT] = &_temperature;
+    //     }
+    //     degf[FILT] = &_temperature;
+    //     }
+    // }
+    // void assign_categories() {
+    //     for (loc i=AMBIENT; i<NUM_LOCATIONS; i = (loc)((int)i + 1)) {
+    //         auto it = sensors.find(i);
+    //         if (it != sensors.end()) {
+    //             if (i == AMBIENT) assign_category(&it->second, CatAmbient);
+    //             else if (i == ENGINE) assign_category(&it->second, CatEngine);
+    //             else if (i == BRAKE) assign_category(&it->second, CatBrake);
+    //             else if (i == WHEEL_FL || i == WHEEL_FR || i == WHEEL_RL || i == WHEEL_RR ) assign_category(&it->second, CatWheel);
+    //             else assign_category(&it->second, CatUnknown);
+    //         }                
+    //         else {
+    //             // The sensor doesn't exist in the map
+    //             return nullptr;
+    //         }            
+    //     }
+    // }
+    static std::string brakemotor_type_to_string(int motortype) {
+        switch(motortype) {
+            case NIL: return "undetected";
+            case Thomson: return "Thomson";
+            case LAE: return "LAE";
+            default: return "undetected";
+        }
+    }
 
 public:
     TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus),  last_read_request_time(0), sensor_index(0), _state(State::CONVERTING) {}
@@ -260,6 +327,8 @@ public:
 
             // Assign remaining addresses to the sensors in order using all_locations
             assign_remaining_addresses();
+
+            // assign_categories();
 
             // Request temperature for each sensor, this will make the is_ready() method work
             request_temperatures();
@@ -365,4 +434,21 @@ public:
     bool detected(int locat) { return detected(static_cast<loc>(locat)); }
     src source() { return src::PIN; }
     int brake_type() { return brakemotor_type_detected; }
+
+    float opmin(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->opmin(); }
+    float opmax(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->opmax(); }
+    float absmin(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->absmin(); }
+    float absmax(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->absmax(); }
+    float alarm(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->alarm(); }
+    float cent(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->cent(); }
+    float margin(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->margin(); }
+
+    float* ptr(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return nanptr; return sens->ptr(); }
+    float* opmin_ptr(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return nanptr; return sens->opmin_ptr(); }
+    float* opmax_ptr(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return nanptr; return sens->opmax_ptr(); }
+    float* absmin_ptr(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return nanptr; return sens->absmin_ptr(); }
+    float* absmax_ptr(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return nanptr; return sens->absmax_ptr(); }
+    float* alarm_ptr(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return nanptr; return sens->alarm_ptr(); }
+    float* cent_ptr(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return nanptr; return sens->cent_ptr(); }
+    float* margin_ptr(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return nanptr; return sens->margin_ptr(); }
 };

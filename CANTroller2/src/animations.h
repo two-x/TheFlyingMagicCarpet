@@ -400,13 +400,26 @@ class EraserSaver {  // draws colorful patterns to exercise
                 int d = 6 + rn(45);
                 uint8_t sat, brt, c, c2;
                 uint16_t hue;
-                hue = spothue + 32768 * rn(2) + rn(1500);
-                if (season == 0) { sat = 75 + 100 * rn(2); brt = 150 + rn(56); }
-                else if (season == 1) { hue = penhue; sat = pensat; brt = 200 + rn(56); }
-                else if (season == 3) { sat = 175 + 75 * rn(2); brt = 200 + rn(56); }
-                else { 
-                    sat = 255 - ((uint8_t)(spothue >> ((6 + rn(3)) + season)));  // + rn(63) 
-                    brt = 150 + rn(80);
+                uint16_t hue_common = hue = spothue + 32768 * rn(2) + rn(1500);
+                if (season == 0) {
+                    hue = hue_common;
+                    sat = 75 + 100 * rn(2);
+                    brt = 150 + rn(56);
+                }
+                else if (season == 1) {
+                    hue = (penhue + rn(2) * 32781) % 65563;
+                    sat = pensat + rn(100) - 100;
+                    brt = 150 + rn(106);
+                }
+                else if (season == 2) {
+                    hue = hue_common;
+                    sat = 255 - (uint8_t)(spothue >> (6 + rn(3) + season));
+                    brt = 175 + rn(80);
+                }
+                else if (season == 3) {
+                    hue = hue_common;
+                    sat = 175 + 75 * rn(2);
+                    brt = 200 + rn(56);
                 }
                 c = hsv_to_rgb<uint8_t>(hue, sat, brt);
                 c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
