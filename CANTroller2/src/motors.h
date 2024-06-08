@@ -237,7 +237,7 @@ class QPID {
 static std::string motormodecard[NumMotorModes] = { "NA", "Halt", "Idle", "Releas", "OpLoop", "Thresh", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start" };
 static std::string cruiseschemecard[NumCruiseSchemes] = { "FlyPID", "TrPull", "TrHold" };
 static std::string brakefeedbackcard[NumBrakeFB] = { "BkPosn", "BkPres", "Hybrid", "None" };
-static std::string openloopmodecard[NumOpenLoopModes] = { "Median", "AutoRel", "AR+Hold" };
+static std::string openloopmodecard[NumOpenLoopModes] = { "Median", "AutRel", "ARHold" };
 
 // ServoMotor - a parent class providing common elements for motor manager child classes. These subclasses each
 // coordinate all aspects of one motor, including related sensors & pid, having a standard control interface

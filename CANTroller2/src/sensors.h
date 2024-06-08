@@ -361,14 +361,14 @@ class Transducer : public Device {
                 Serial.printf(", pin %d", _pin);
                 ezread.printf(" p%d", _pin);
             }
-            Serial.printf(": %.2lf %s = %.2lf %s = %.2lf %%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
-            ezread.printf(": %.2lf%s = %.2lf%s = %.2lf%%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
+            ezread.squintf(": %.2lf %s = %.2lf %s = %.2lf %%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
+            // ezread.printf(": %.2lf%s = %.2lf%s = %.2lf%%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
         }
         if (ranges) {
-            Serial.printf("  op: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
-            Serial.printf("  abs: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
-            ezread.printf("  op: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
-            ezread.printf("  abs: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
+            ezread.squintf("  op: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
+            ezread.squintf("  abs: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
+            // ezread.printf("  op: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
+            // ezread.printf("  abs: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
         }
     }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)
@@ -1298,8 +1298,8 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     float ema_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]
     int absmin_us = 880;
     int absmax_us = 2091;
-    int deadband_us = 15;  // All [DBBOT] and [DBTOP] values above are derived from this by calling calc_params()
-    int margin_us = 13;  // All [MARGIN] values above are derived from this by calling calc_params()
+    int deadband_us = 15;  // All [DBBOT] and [DBTOP] values above are derived from this by calling derive()
+    int margin_us = 13;  // All [MARGIN] values above are derived from this by calling derive()
     int failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     int failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
     int failsafe_pad_us = 10;
@@ -1325,15 +1325,13 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     static const int depth = 9;  // more depth will reject longer spikes at the expense of controller delay
     int raw_history[NUM_AXES][depth], filt_history[NUM_AXES][depth];  // Values before and after filtering.
   public:
-    Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) {
-        calc_params();
-    }
+    Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) { derive(); }
     void setup() {
         ezread.squintf("Hotrc init.. Starting rmt..\n");
         for (int axis=HORZ; axis<=CH4; axis++) rmt[axis].init();  // Set up 4 RMT receivers, one per channel
         failsafe_timer.set(failsafe_timeout); 
     }
-    void calc_params() {
+    void derive() {
         float m_factor;
         for (int axis=HORZ; axis<=VERT; axis++) {
             us[axis][DBBOT] = us[axis][CENT] - deadband_us;

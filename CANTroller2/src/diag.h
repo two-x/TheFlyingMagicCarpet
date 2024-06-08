@@ -494,6 +494,7 @@ class BootMonitor {
         task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;
         if (sec >= 0) timeout_sec = sec;
         myprefs->begin("FlyByWire", false);
+        print_partition_table();
         bootcounter();
         set_codestatus(Booting);
         print_postmortem();
@@ -570,6 +571,18 @@ class BootMonitor {
         boot_to_runmode = (codestatus_postmortem == Driving) ? FLY : HOLD;
         ignition.request(REQ_ON);
         // gas.(brake.pc[STOP]);  // brake.pid_targ_pc(brake.pc[STOP]);
+    }
+    void print_partition_table() {
+        if (!running_on_devboard) return;
+        Serial.printf("\nPartition Typ SubT  Address SizeByte   kB\n");
+        esp_partition_iterator_t iterator = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
+        const esp_partition_t *partition;
+        while ((partition = esp_partition_get(iterator)) != NULL) {
+            Serial.printf(" %8s %3d 0x%02x 0x%06x 0x%06x %4d\n", partition->label, partition->type, partition->subtype, partition->address, partition->size, (partition->size)/1024);
+            if (!strcmp(partition->label, "coredump")) break;
+            iterator = esp_partition_next(iterator);
+        }
+        esp_partition_iterator_release(iterator);
     }
 };
 #if RUN_TESTS

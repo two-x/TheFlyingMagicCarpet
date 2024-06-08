@@ -7,7 +7,7 @@
 #define disp_lines 24  // Max lines of text displayable at line height = disp_line_height_pix
 #define disp_fixed_lines 8  // Lines of static variables/values always displayed
 #define disp_line_height_pix 10  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
-#define disp_bargraph_width 39
+#define disp_bargraph_width 35
 #define disp_bargraph_squeeze 1
 #define disp_maxlength 5  // How many characters is max data value
 #define disp_default_float_precision 3  // Significant digits displayed for float values. Higher causes more screen draws
@@ -130,7 +130,7 @@ class Display {
     // uint16_t palette[256] = { BLK, WHT };
     static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
     Timer dispAgeTimer[disp_lines];  // int disp_age_timer_us[disp_lines];
-    static constexpr int idiots_corner_x = disp_apppanel_x + disp_font_width / 2;
+    static constexpr int idiots_corner_x = disp_apppanel_x;
     static constexpr int idiots_corner_y = 13;
     bool sim_last = false, fullscreen_last = false;
     int runmode_last = -1;
@@ -144,12 +144,12 @@ class Display {
     volatile int disp_targets[disp_lines];
     volatile int disp_age_quanta[disp_lines];
     volatile uint8_t disp_val_colors[disp_lines];
-    volatile bool disp_selected_val_dirty;
+    volatile bool disp_selection_dirty;
     volatile bool disp_datapage_dirty;
     volatile bool disp_values_dirty;
     volatile bool disp_data_dirty[disp_lines];
     volatile bool disp_bools_dirty;
-    volatile bool disp_sidemenu_dirty;
+    volatile bool disp_menus_dirty;
     volatile bool disp_runmode_dirty;
     volatile bool disp_simbuttons_dirty;
     volatile bool disp_idiots_dirty;
@@ -237,7 +237,7 @@ class Display {
             disp_data_dirty[i] = true;
             disp_bargraphs[i] = false;
         }
-        disp_bools_dirty = disp_selected_val_dirty = disp_datapage_dirty = disp_sidemenu_dirty = true;
+        disp_bools_dirty = disp_selection_dirty = disp_datapage_dirty = disp_menus_dirty = true;
         disp_runmode_dirty = disp_simbuttons_dirty = disp_values_dirty = true;
         ui_context = ui_default;
     }
@@ -345,13 +345,13 @@ class Display {
         sprptr->setTextColor(LGRY);
         sprptr->setTextSize(1);
         int y_pos;
-        for (int lineno = 0; lineno < disp_fixed_lines; lineno++) {  // Step thru lines of fixed telemetry data
+        for (int lineno = 0; lineno < disp_fixed_lines; lineno++) {  // step thru lines of fixed telemetry data
             y_pos = (lineno + 1) * disp_line_height_pix;
             draw_string(disp_datapage_names_x, y_pos, telemetry[lineno], nulstr, LGRY, BLK, forced);
             draw_string_units(disp_datapage_units_x, y_pos, units[lineno], nulstr, LGRY, BLK);
         }
         if (redraw_all) {
-            for (int lineno = 0; lineno < disp_tuning_lines; lineno++) {  // Step thru lines of fixed telemetry data
+            for (int lineno = 0; lineno < disp_tuning_lines; lineno++) {  // step thru lines of fixed telemetry data
                 y_pos = (lineno + disp_fixed_lines + 1) * disp_line_height_pix;
                 // int index = lineno - disp_fixed_lines - 1;
                 // ezread.squintf("drawing line:%d x:%d y:%d text:%s\n", index, disp_datapage_names_x, y_pos, datapage_names[page][index].c_str() );
@@ -365,16 +365,17 @@ class Display {
             }
         }
     }
-    void draw_hyphen(int x_pos, int y_pos, uint8_t color) {  // Draw minus sign in front of negative numbers
+    void draw_hyphen(int x_pos, int y_pos, uint8_t color) {  // draw minus sign in front of negative numbers
         sprptr->drawFastHLine(x_pos+2, y_pos+3, 3, color);
     }
     void drawval_core(int lineno, std::string disp_string, float value, float lowlim, float hilim, float target=NAN, uint8_t color=NON) {
-        int age_us = (color != NON) ? 11 : (int)((float)(dispAgeTimer[lineno].elapsed()) / 2500000); // Divide by us per color gradient quantum
+        int age_us = (color != NON) ? 3 : (int)((float)(dispAgeTimer[lineno].elapsed()) / 6000000); // Divide by us per color gradient quantum
+        bool outofrange = (value > hilim || value < lowlim);
         int x_base = disp_datapage_values_x;
         bool polarity = (value >= 0.0);  // polarity 0=negative, 1=positive
         bool force = std::isnan(value) || disp_data_dirty[lineno];
-        if ((disp_values[lineno] != disp_string) || force) {  // If value differs, Erase old value and write new
-            if (color == NON) color = GRN;
+        if ((disp_values[lineno] != disp_string) || force) {  // if value differs, Erase old value and write new
+            if (color == NON) color = (outofrange) ? 0xf8 : 0x3c;
             int y_pos = lineno*disp_line_height_pix;
             if (polarity != disp_polarities[lineno]) draw_hyphen(x_base, y_pos, (!polarity) ? color : BLK);
             draw_string(x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK, force || (color != disp_val_colors[lineno])); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
@@ -384,9 +385,11 @@ class Display {
             dispAgeTimer[lineno].reset();
             disp_age_quanta[lineno] = 0;
         }
-        else if (age_us > disp_age_quanta[lineno] && age_us < 11)  {  // As readings age, redraw in new color. This may fail and redraw when the timer overflows? 
-            if (age_us < 8) color = 0x1c + (age_us << 5);  // Base of green with red added as you age, until yellow is achieved
-            else color = 0xfc - ((age_us-8) << 2);  // Then lose green as you age further
+        else if (age_us > disp_age_quanta[lineno] && age_us < 3)  {  // as readings age, redraw in new color. This may fail and redraw when the timer overflows? 
+            if (outofrange) color = 0xf8 - (age_us * 0x24);  // if out of range, yellow color loses brightness with age
+            else color = 0x3c - (age_us << 2);  // in range green color loses brightness with age
+            // if (age_us < 8) color = 0x1c + (age_us << 5);  // base of green with red added as you age, until yellow is achieved
+            // else color = 0xfc - ((age_us-8) << 2);  // then lose green as you age further
             int y_pos = (lineno)*disp_line_height_pix;
             if (!polarity) draw_hyphen(x_base, y_pos, color);
             draw_string(x_base+disp_font_width, y_pos, disp_values[lineno], "", color, BLK);
@@ -396,21 +399,21 @@ class Display {
         bool delete_bargraph = false;
         int corner_x = disp_bargraphs_x;
         int corner_y = lineno*disp_line_height_pix;
-        if (!std::isnan(lowlim) && !std::isnan(hilim)) {  // Any value having a given range deserves a bargraph gauge with a needle
+        if (!std::isnan(lowlim) && !std::isnan(hilim)) {  // any value having a given range deserves a bargraph gauge with a needle
             int n_pos = (int)(map(value, lowlim, hilim, (float)disp_bargraph_squeeze, (float)(disp_bargraph_width-disp_bargraph_squeeze)));
             uint8_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : GRN;
             n_pos = corner_x + constrain(n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
             if (!disp_bargraphs[lineno]) draw_bargraph_base(corner_x, corner_y + 8, disp_bargraph_width);
             disp_bargraphs[lineno] = true;
-            draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // Erase old target
-            draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // Let's draw a needle
-            disp_needles[lineno] = n_pos;  // Remember position of needle
-            if (!std::isnan(target)) {  // If target value is given, draw a target on the bargraph too
+            draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // erase old target
+            draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // let's draw a needle
+            disp_needles[lineno] = n_pos;  // remember position of needle
+            if (!std::isnan(target)) {  // if target value is given, draw a target on the bargraph too
                 int t_pos = (int)(map(target, lowlim, hilim, (float)disp_bargraph_squeeze, (float)(disp_bargraph_width-disp_bargraph_squeeze)));
                 uint8_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
                 t_pos = corner_x + constrain(t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
-                draw_target_shape(t_pos, corner_y, tcolor, NON);  // Draw the new target
-                disp_targets[lineno] = t_pos;  // Remember position of target
+                draw_target_shape(t_pos, corner_y, tcolor, NON);  // draw the new target
+                disp_targets[lineno] = t_pos;  // remember position of target
             }
         }
         else delete_bargraph = true;
@@ -543,15 +546,15 @@ class Display {
         disp_datapage_dirty = false;
         prefs.putUInt("dpage", (uint32_t)page);
     }
-    void draw_selected_name(int tun_ctrl, int selected_val, int selected_last, int selected_last_last) {
+    void draw_selected_name(int tun_ctrl, int selection, int selected_last, int selected_last_last) {
         static int last_selected; 
         uint8_t color = LGRY;
         if (tun_ctrl == EDIT) color = GRN;
         else if (tun_ctrl == SELECT) color = YEL;
         draw_string(12, (last_selected + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][last_selected], nulstr, LGRY, BLK, true);
-        draw_string(12, (selected_val + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][selected_val], nulstr, color, BLK, true);
-        last_selected = selected_val;
-        disp_selected_val_dirty = false;    
+        draw_string(12, (selection + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][selection], nulstr, color, BLK, true);
+        last_selected = selection;
+        disp_selection_dirty = false;    
     }
     void draw_bool(bool value, int col, bool force=false) {  // Draws values of boolean data
         if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
@@ -563,7 +566,7 @@ class Display {
             disp_bool_values[col-2] = value;
         }
     }
-    void draw_touchgrid(bool side_only = false) {  // draws edge buttons with names in 'em. If replace_names, just updates names
+    void draw_menus(bool side_only = false) {  // draws edge buttons with names in 'em. If replace_names, just updates names
         sprptr->setTextDatum(textdatum_t::top_left);
         int namelen = 0;
         sprptr->setTextColor(LGRY);
@@ -585,7 +588,7 @@ class Display {
                 sprptr->drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LGRY);  // sprptr->width()-9, 3, 18, (sprptr->height()/5)-6, 8, LGRY);
             }
         }
-        disp_sidemenu_dirty = false;
+        disp_menus_dirty = false;
     }
     void draw_reticle(LGFX_Sprite* spr, int x, int y) {
         spr->drawFastHLine(x - 2, y, 5, DGRY);
@@ -635,7 +638,7 @@ class Display {
                 diag.most_critical_last[i] = diag.most_critical_sensor[i];
             }
             if (force || (idiots->val(i) ^ idiots->last[i])) {
-                draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + 2) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int)(i / idiots->row_count));
+                draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + 3) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int)(i / idiots->row_count));
             }
         }
         disp_idiots_dirty = false;
@@ -881,8 +884,8 @@ class Display {
             tiny_text();
             update_idiots(disp_idiots_dirty);
             if (disp_datapage_dirty) draw_datapage(datapage, true);
-            if (disp_sidemenu_dirty) draw_touchgrid(false);
-            if (disp_selected_val_dirty) draw_selected_name(tunctrl, sel_val, sel_val_last, sel_val_last_last);
+            if (disp_menus_dirty) draw_menus(false);
+            if (disp_selection_dirty) draw_selected_name(tunctrl, sel, sel_last, sel_last_last);
             
             if (run.mode != runmode_last) disp_runmode_dirty = true;
             if (disp_values_dirty || disp_runmode_dirty || valuesRefreshTimer.expireset()) {
@@ -1022,8 +1025,8 @@ class Tuner {
     void process_inputs() {
         if (!tuningEditTimer.expired()) return;
         tuningEditTimer.reset();
-        if (!screen->disp_selected_val_dirty) {
-            sel_val_last = sel_val;
+        if (!screen->disp_selection_dirty) {
+            sel_last = sel;
             tunctrl_last = tunctrl;
         }
         if (!screen->disp_datapage_dirty) datapage_last = datapage;
@@ -1041,11 +1044,11 @@ class Tuner {
         rdelta_encoder = constrain(idelta_encoder, -1, 1);
         // encoder.rezero();
         // if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
-        if (tunctrl == SELECT) sel_val += rdelta_encoder;  // If overflow constrain will fix in general handler below
+        if (tunctrl == SELECT) sel += rdelta_encoder;  // If overflow constrain will fix in general handler below
         else if (tunctrl == OFF) datapage += rdelta_encoder;  // If overflow tconstrain will fix in general below
-        if (touch->increment_sel_val) ++sel_val %= disp_tuning_lines;
+        if (touch->increment_sel) ++sel %= disp_tuning_lines;
         if (touch->increment_datapage) ++datapage %= NUM_DATAPAGES;
-        touch->increment_sel_val = touch->increment_datapage = false;
+        touch->increment_sel = touch->increment_datapage = false;
         idelta = idelta_encoder + touch->get_delta();  // Allow edits using the encoder or touchscreen
         fdelta = float(idelta);
         rdelta = constrain(idelta, -1, 1);  // combine unaccelerated values
@@ -1054,7 +1057,7 @@ class Tuner {
             else fdelta *= map(pot.val(), 50.0, 100.0, 1.0, 25.0);
         }
         idelta = (int)fdelta;
-        if (tunctrl != tunctrl_last || datapage != datapage_last || sel_val != sel_val_last || idelta) tuningAbandonmentTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
+        if (tunctrl != tunctrl_last || datapage != datapage_last || sel != sel_last || idelta) tuningAbandonmentTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
         else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
         datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (datapage != datapage_last) {
@@ -1062,10 +1065,10 @@ class Tuner {
             screen->disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
         }
         if (tunctrl == SELECT) {
-            sel_val = constrain(sel_val, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
-            if (sel_val != sel_val_last) screen->disp_selected_val_dirty = true;
+            sel = constrain(sel, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
+            if (sel != sel_last) screen->disp_selection_dirty = true;
         }
-        if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selected_val_dirty = true;
+        if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selection_dirty = true;
     }
     void adj_potmap() {  // potmap scroll select custom adjust function. includes potentially needed refresh of sim buttons content
         sim.set_potmap((sens)(adj_val(sim.potmap(), rdelta, 0, (int)(sens::starter) - 1)));
@@ -1089,98 +1092,98 @@ class Tuner {
     void edit_values(int rmode) {
         if (tunctrl == EDIT && idelta) {  // Change tunable values when editing
             if (datapage == PG_RUN) {
-                if (sel_val == 13) { adj_val(&(gas.governor), idelta, 0, 100); gas.derive(); }
-                else if (sel_val == 14) adj_val(&(steer.steer_safe_pc), idelta, 0, 100);
+                if (sel == 13) { adj_val(&(gas.governor), idelta, 0, 100); gas.derive(); }
+                else if (sel == 14) adj_val(&(steer.steer_safe_pc), idelta, 0, 100);
             }
             else if (datapage == PG_JOY) {
-                if (sel_val == 10) airvelo.set_oplim(NAN, airvelo.opmax() + fdelta);
-                else if (sel_val == 11) mapsens.set_oplim(mapsens.opmin() + fdelta, NAN);
-                else if (sel_val == 12) mapsens.set_oplim(NAN, mapsens.opmax() + fdelta);
-                else if (sel_val == 13) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
-                else if (sel_val == 14) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.calc_params(); }
+                if (sel == 10) airvelo.set_oplim(NAN, airvelo.opmax() + fdelta);
+                else if (sel == 11) mapsens.set_oplim(mapsens.opmin() + fdelta, NAN);
+                else if (sel == 12) mapsens.set_oplim(NAN, mapsens.opmax() + fdelta);
+                else if (sel == 13) adj_val(&hotrc.failsafe_us, idelta, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
+                else if (sel == 14) { adj_val(&hotrc.deadband_us, idelta, 0, 50); hotrc.derive(); }
             }
             else if (datapage == PG_SENS) {
-                if (sel_val == 10) pressure.set_oplim(pressure.opmin() + fdelta, NAN);
-                else if (sel_val == 11) pressure.set_oplim(NAN, pressure.opmax() + fdelta);
-                else if (sel_val == 12) brkpos.set_oplim(brkpos.opmin() + fdelta, NAN);
-                else if (sel_val == 13) brkpos.set_oplim(NAN, brkpos.opmax() + fdelta);
-                else if (sel_val == 14) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.opmin(), brkpos.opmax());
-                // if (sel_val == 11) adj_val(airvelo.opmax_ptr(), fdelta, airvelo.opmin(), airvelo.absmax());
-                // else if (sel_val == 12) adj_val(mapsens.opmin_ptr(), fdelta, mapsens.absmin(), mapsens.opmax());
-                // else if (sel_val == 13) adj_val(mapsens.opmax_ptr(), fdelta, mapsens.opmin(), mapsens.absmax());
-                // else if (sel_val == 14) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.opmin(), brkpos.opmax());
+                if (sel == 10) pressure.set_oplim(pressure.opmin() + fdelta, NAN);
+                else if (sel == 11) pressure.set_oplim(NAN, pressure.opmax() + fdelta);
+                else if (sel == 12) brkpos.set_oplim(brkpos.opmin() + fdelta, NAN);
+                else if (sel == 13) brkpos.set_oplim(NAN, brkpos.opmax() + fdelta);
+                else if (sel == 14) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.opmin(), brkpos.opmax());
+                // if (sel == 11) adj_val(airvelo.opmax_ptr(), fdelta, airvelo.opmin(), airvelo.absmax());
+                // else if (sel == 12) adj_val(mapsens.opmin_ptr(), fdelta, mapsens.absmin(), mapsens.opmax());
+                // else if (sel == 13) adj_val(mapsens.opmax_ptr(), fdelta, mapsens.opmin(), mapsens.absmax());
+                // else if (sel == 14) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.opmin(), brkpos.opmax());
             }
             else if (datapage == PG_PULS) {
-                if (sel_val == 10) tach.set_oplim(tach.opmin() + fdelta, NAN);
-                else if (sel_val == 11) tach.set_oplim(NAN, tach.opmax() + fdelta);
-                else if (sel_val == 12) speedo.set_oplim(speedo.opmin() + fdelta, NAN);
-                else if (sel_val == 13) speedo.set_oplim(NAN, speedo.opmax() + fdelta);
-                else if (sel_val == 14) adj_val(speedo.idle_ptr(), fdelta, speedo.opmin(), speedo.opmax());
-                // if (sel_val == 10) adj_bool(&web_disabled, -1 * rdelta);  // note this value is inverse to how it's displayed, same for the value display entry
+                if (sel == 10) tach.set_oplim(tach.opmin() + fdelta, NAN);
+                else if (sel == 11) tach.set_oplim(NAN, tach.opmax() + fdelta);
+                else if (sel == 12) speedo.set_oplim(speedo.opmin() + fdelta, NAN);
+                else if (sel == 13) speedo.set_oplim(NAN, speedo.opmax() + fdelta);
+                else if (sel == 14) adj_val(speedo.idle_ptr(), fdelta, speedo.opmin(), speedo.opmax());
+                // if (sel == 10) adj_bool(&web_disabled, -1 * rdelta);  // note this value is inverse to how it's displayed, same for the value display entry
             }                
             else if (datapage == PG_PWMS) {
-                if (sel_val == 11) { adj_val(&(gas.si[OPMIN]), fdelta, gas.si[PARKED] + 1, gas.si[OPMAX] - 1); gas.derive(); }
-                else if (sel_val == 12) { adj_val(&(gas.si[OPMAX]), fdelta, gas.si[OPMIN] + 1, 180.0f); gas.derive(); }
-                else if (sel_val == 13) { adj_val(&(brake.us[STOP]), fdelta, brake.us[OPMIN] + 1, brake.us[OPMAX] - 1); brake.derive(); }
-                else if (sel_val == 14) { adj_val(&(brake.duty_fwd_pc), fdelta, 0.0f, 100.0f); brake.derive(); }
+                if (sel == 11) { adj_val(&(gas.si[OPMIN]), fdelta, gas.si[PARKED] + 1, gas.si[OPMAX] - 1); gas.derive(); }
+                else if (sel == 12) { adj_val(&(gas.si[OPMAX]), fdelta, gas.si[OPMIN] + 1, 180.0f); gas.derive(); }
+                else if (sel == 13) { adj_val(&(brake.us[STOP]), fdelta, brake.us[OPMIN] + 1, brake.us[OPMAX] - 1); brake.derive(); }
+                else if (sel == 14) { adj_val(&(brake.duty_fwd_pc), fdelta, 0.0f, 100.0f); brake.derive(); }
             }
             else if (datapage == PG_IDLE) {
-                if (sel_val == 10) adj_val(&gas.starting_pc, fdelta, gas.pc[OPMIN], gas.pc[OPMAX]);
-                else if (sel_val == 11) gas.add_idlecold(fdelta);
-                else if (sel_val == 12) gas.add_idlehot(fdelta);
-                else if (sel_val == 13) gas.add_tempcold(fdelta);
-                else if (sel_val == 14) gas.add_temphot(fdelta);
+                if (sel == 10) adj_val(&gas.starting_pc, fdelta, gas.pc[OPMIN], gas.pc[OPMAX]);
+                else if (sel == 11) gas.add_idlecold(fdelta);
+                else if (sel == 12) gas.add_idlehot(fdelta);
+                else if (sel == 13) gas.add_tempcold(fdelta);
+                else if (sel == 14) gas.add_temphot(fdelta);
             }
             else if (datapage == PG_MOTR) {
-                if (sel_val == 7) brake.update_ctrl_config((int)(rdelta>0));
-                else if (sel_val == 8) adj_brake_feedback(rdelta);
-                else if (sel_val == 9) adj_brake_openloop(rdelta);
-                else if (sel_val == 10) adj_bool(&brake.enforce_positional_limits, rdelta);
-                else if (sel_val == 11) adj_val(&brake.max_out_change_pcps, fdelta, 0.0, 1000.0);
-                else if (sel_val == 12) gas.update_ctrl_config((int)(rdelta>0));
-                else if (sel_val == 13) gas.update_cruise_ctrl_config((int)(rdelta>0));
-                else if (sel_val == 14) adj_cruise_scheme();
+                if (sel == 7) brake.update_ctrl_config((int)(rdelta>0));
+                else if (sel == 8) adj_brake_feedback(rdelta);
+                else if (sel == 9) adj_brake_openloop(rdelta);
+                else if (sel == 10) adj_bool(&brake.enforce_positional_limits, rdelta);
+                else if (sel == 11) adj_val(&brake.max_out_change_pcps, fdelta, 0.0, 1000.0);
+                else if (sel == 12) gas.update_ctrl_config((int)(rdelta>0));
+                else if (sel == 13) gas.update_cruise_ctrl_config((int)(rdelta>0));
+                else if (sel == 14) adj_cruise_scheme();
             }
             else if (datapage == PG_BPID) {
-                if (sel_val == 11) brake.pid_dom->add_sampletime(idelta);
-                else if (sel_val == 12) brake.pid_dom->add_kp(0.01 * fdelta);
-                else if (sel_val == 13) brake.pid_dom->add_ki(0.01 * fdelta);
-                else if (sel_val == 14) brake.pid_dom->add_kd(0.01 * fdelta);
+                if (sel == 11) brake.pid_dom->add_sampletime(idelta);
+                else if (sel == 12) brake.pid_dom->add_kp(0.01 * fdelta);
+                else if (sel == 13) brake.pid_dom->add_ki(0.01 * fdelta);
+                else if (sel == 14) brake.pid_dom->add_kd(0.01 * fdelta);
             }
             else if (datapage == PG_GPID) {
-                if (sel_val == 11) adj_val(&(gas.max_throttle_angular_velocity_degps), fdelta, 0.0f, 180.0f);
-                else if (sel_val == 12) gas.pid.add_kp(0.001f * fdelta);
-                else if (sel_val == 13) gas.pid.add_ki(0.001f * fdelta);
-                else if (sel_val == 14) gas.pid.add_kd(0.001f * fdelta);
+                if (sel == 11) adj_val(&(gas.max_throttle_angular_velocity_degps), fdelta, 0.0f, 180.0f);
+                else if (sel == 12) gas.pid.add_kp(0.001f * fdelta);
+                else if (sel == 13) gas.pid.add_ki(0.001f * fdelta);
+                else if (sel == 14) gas.pid.add_kd(0.001f * fdelta);
             }
             else if (datapage == PG_CPID) {
-                if (sel_val == 11) adj_val(&cruise_delta_max_pc_per_s, idelta, 1, 35);
-                else if (sel_val == 12) gas.cruisepid.add_kp(0.001f * fdelta);
-                else if (sel_val == 13) gas.cruisepid.add_ki(0.001f * fdelta);
-                else if (sel_val == 14) gas.cruisepid.add_kd(0.001f * fdelta);
+                if (sel == 11) adj_val(&cruise_delta_max_pc_per_s, idelta, 1, 35);
+                else if (sel == 12) gas.cruisepid.add_kp(0.001f * fdelta);
+                else if (sel == 13) gas.cruisepid.add_ki(0.001f * fdelta);
+                else if (sel == 14) gas.cruisepid.add_kd(0.001f * fdelta);
             }
             else if (datapage == PG_TEMP) {
-                if (sel_val == 13) adj_bool(&dont_take_temperatures, rdelta);
-                else if (sel_val == 14) adj_bool(&web_disabled, rdelta);
+                if (sel == 13) adj_bool(&dont_take_temperatures, rdelta);
+                else if (sel == 14) adj_bool(&web_disabled, rdelta);
             }
             else if (datapage == PG_SIM) {
-                if (sel_val == 4) { sim.set_can_sim(sens::joy, rdelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 5) { sim.set_can_sim(sens::pressure, rdelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 6) { sim.set_can_sim(sens::brkpos, rdelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 7) { sim.set_can_sim(sens::speedo, rdelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 8) { sim.set_can_sim(sens::tach, rdelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 9) { sim.set_can_sim(sens::airvelo, rdelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 10) { sim.set_can_sim(sens::mapsens, rdelta); screen->disp_simbuttons_dirty = true; } // else if (sel_val == 7) sim.set_can_sim(sens::starter, idelta);
-                else if (sel_val == 11) { sim.set_can_sim(sens::basicsw, rdelta); screen->disp_simbuttons_dirty = true; }
-                else if (sel_val == 12) adj_potmap();
-                else if (sel_val == 13) adj_bool(&cal_brakemode_request, rdelta);
-                else if (sel_val == 14) adj_bool(&cal_gasmode_request, rdelta);
+                if (sel == 4) { sim.set_can_sim(sens::joy, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel == 5) { sim.set_can_sim(sens::pressure, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel == 6) { sim.set_can_sim(sens::brkpos, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel == 7) { sim.set_can_sim(sens::speedo, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel == 8) { sim.set_can_sim(sens::tach, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel == 9) { sim.set_can_sim(sens::airvelo, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel == 10) { sim.set_can_sim(sens::mapsens, rdelta); screen->disp_simbuttons_dirty = true; } // else if (sel == 7) sim.set_can_sim(sens::starter, idelta);
+                else if (sel == 11) { sim.set_can_sim(sens::basicsw, rdelta); screen->disp_simbuttons_dirty = true; }
+                else if (sel == 12) adj_potmap();
+                else if (sel == 13) adj_bool(&cal_brakemode_request, rdelta);
+                else if (sel == 14) adj_bool(&cal_gasmode_request, rdelta);
             }
             else if (datapage == PG_UI) {
-                if (sel_val == 11) ezread.lookback(ezread.offset + rdelta); 
-                else if (sel_val == 12) { adj_bool(&flashdemo, rdelta); neo->enable_flashdemo(flashdemo); }
-                else if (sel_val == 13) { adj_val(&neobright, rdelta, 1, 100); neo->setbright(neobright); }
-                else if (sel_val == 14) adj_val(&ui_context, rdelta, 0, NumContextsUI-1);
+                if (sel == 11) ezread.lookback(ezread.offset + rdelta); 
+                else if (sel == 12) { adj_bool(&flashdemo, rdelta); neo->enable_flashdemo(flashdemo); }
+                else if (sel == 13) { adj_val(&neobright, rdelta, 1, 100); neo->setbright(neobright); }
+                else if (sel == 14) adj_val(&ui_context, rdelta, 0, NumContextsUI-1);
             }
             idelta = 0;
         }

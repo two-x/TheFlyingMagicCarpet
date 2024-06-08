@@ -244,7 +244,7 @@ class Touchscreen {
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
     int idelta = 0;
-    bool increment_datapage = false, increment_sel_val = false;
+    bool increment_datapage = false, increment_sel = false;
     Touchscreen() {}
     void setup(LGFX* tft, I2C* i2c, int width, int height) {
         if (!display_enabled) return;
@@ -336,15 +336,15 @@ class Touchscreen {
         if (tquad == 0x00 && onrepeat()) increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
         else if (tquad == 0x01) {  // Long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
             if (tunctrl == OFF) {
-                sel_val = 0;  // If entering select mode from off mode, select the first variable
+                sel = 0;  // If entering select mode from off mode, select the first variable
                 if (longpress()) tunctrl = SELECT;
             }
             else if (tunctrl == EDIT && onrepeat()) {
                 tunctrl = SELECT;  // Drop back to select mode
-                increment_sel_val = true;  // Move to the next selection
+                increment_sel = true;  // Move to the next selection
             }
             else if (tunctrl == SELECT) {
-                if (ontouch()) increment_sel_val = true;
+                if (ontouch()) increment_sel = true;
                 else if (longpress()) tunctrl = OFF;
             }
         }

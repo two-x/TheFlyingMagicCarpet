@@ -193,9 +193,9 @@ bool basicmode_request = false;
 int autosaver_request = REQ_NA;
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN;                  // which of the dataset pages is currently displayed and available to edit?
-volatile int sel_val = 0;               // in the real time tuning UI, which of the editable values is selected. -1 for none 
-volatile int sel_val_last = 0;          
-volatile int sel_val_last_last = 0;          
+volatile int sel = 0;               // in the real time tuning UI, which of the editable values is selected. -1 for none 
+volatile int sel_last = 0;          
+volatile int sel_last_last = 0;          
 bool syspower = HIGH;                   // set by handler only. Reflects current state of the signal
 // bool basicmodesw = LOW;
 int sleep_request = REQ_NA;
@@ -381,7 +381,8 @@ const uint8_t NON  = 0x45;  // used as default value when color is unspecified
 enum human_activities { HUNone=-1, HUMomDown=0, HUMomUp=1, HUEncTurn=2, HUWeb=3, HUTouch=4, HURCTog=5, HURCTrig=6, HUPot=7, HUTogSw=8, HUNumActivities=9 };
 int last_activity = HUNone;
 std::string activitiescard[HUNumActivities] = { "msw_dn", "msw_up", "encodr", "web", "touch", "rc_btn", "rctrig", "pot", "tog_sw" };
-void kick_inactivity_timer(int source=0) {
+void kick_inactivity_timer(int source=-1) {
+    if (source < 0) return;
     user_inactivity_timer.reset();  // evidence of user activity
     last_activity = source;
     // ezread.squintf("kick%d ", source);

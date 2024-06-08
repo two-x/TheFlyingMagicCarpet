@@ -35,36 +35,17 @@ int rn(int values=256) {  // Generate a random number between 0 and values-1
     return dis(gen);
 }
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
-    sim.set_can_sim(sens::joy, false);
-    for (sens sen=sens::pressure; sen<=sens::mulebatt; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, running_on_devboard);
-    // for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
-    // sim.set_can_sim(sens::basicsw, running_on_devboard);
-    // sim.set_can_sim(sens::starter, running_on_devboard);
-    // sim.set_can_sim(sens::mulebatt, running_on_devboard);
-    if (!running_on_devboard) {      // override settings if running on the real car
-        sim.set_potmap(sens::none);        
-        looptime_print = false;      // Makes code write out timestamps throughout loop to serial port
-        touch_reticles = false;
-        // console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
-        wifi_client_mode = false;       // Should wifi be in client or access point mode?
-        keep_system_powered = false; // Use true during development
-        dont_take_temperatures = false;
-        button_test_heartbeat_color = false;
-        print_framebuffers = false;
-        print_task_stack_usage = false;
-    }
     ezread.squintf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
-}
-void print_partition_table() {
-    Serial.printf("\nPartition Typ SubT  Address SizeByte   kB\n");
-    esp_partition_iterator_t iterator = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
-    const esp_partition_t *partition;
-    while ((partition = esp_partition_get(iterator)) != NULL) {
-        Serial.printf(" %8s %3d 0x%02x 0x%06x 0x%06x %4d\n", partition->label, partition->type, partition->subtype, partition->address, partition->size, (partition->size)/1024);
-        if (!strcmp(partition->label, "coredump")) break;
-        iterator = esp_partition_next(iterator);
-    }
-    esp_partition_iterator_release(iterator);
+    if (running_on_devboard) return;      // override settings if running on the real car
+    looptime_print = false;      // Makes code write out timestamps throughout loop to serial port
+    touch_reticles = false;
+    // console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
+    wifi_client_mode = false;       // Should wifi be in client or access point mode?
+    keep_system_powered = false; // Use true during development
+    dont_take_temperatures = false;
+    button_test_heartbeat_color = false;
+    print_framebuffers = false;
+    print_task_stack_usage = false;
 }
 void sim_setup() {
     sim.register_device(sens::pressure, pressure, pressure.source());
@@ -73,10 +54,24 @@ void sim_setup() {
     sim.register_device(sens::mapsens, mapsens, mapsens.source());
     sim.register_device(sens::tach, tach, tach.source());
     sim.register_device(sens::speedo, speedo, speedo.source());
-    // sim.register_device(sens::engtemp, temp, temp.source());
-    // sim.register_device(sens::starter, starter, starter.source());
     sim.recall_cansim();
     sim.set_potmap();
+    // sim.register_device(sens::engtemp, temp, temp.source());
+    // sim.register_device(sens::starter, starter, starter.source());
+    // for (sens sen=sens::pressure; sen<=sens::mulebatt; sen=(sens)((int)sen+1))
+    // sim.set_can_sim(sens::joy, running_on_devboard);    
+    // sim.set_can_sim(sens::pressure, running_on_devboard);
+    // sim.set_can_sim(sens::brkpos, running_on_devboard);
+    // sim.set_can_sim(sens::speedo, running_on_devboard);
+    // sim.set_can_sim(sens::tach, running_on_devboard);
+    // sim.set_can_sim(sens::airvelo, running_on_devboard);
+    // sim.set_can_sim(sens::mapsens, running_on_devboard);
+    // sim.set_can_sim(sens::engtemp, running_on_devboard);
+    // sim.set_can_sim(sens::mulebatt, running_on_devboard);
+    // // sim.set_can_sim(sens::starter, running_on_devboard);
+    // sim.set_can_sim(sens::basicsw, running_on_devboard);
+    // for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
+    // sim.set_potmap(sens::none);        
 }
 // RTOS task that updates temp sensors in a separate task
 void update_temperature_sensors(void *parameter) {

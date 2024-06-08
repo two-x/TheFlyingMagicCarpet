@@ -6,7 +6,7 @@ static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 static MomentaryButton bootbutton(boot_sw_pin, false);
 
 // #define touch_simbutton 38
-#define disp_apppanel_x 158
+#define disp_apppanel_x 154
 #define disp_apppanel_y 48
 #define disp_apppanel_w (disp_width_pix - disp_apppanel_x)  // 156
 #define disp_apppanel_h (disp_height_pix - disp_apppanel_y)  // 192
@@ -258,7 +258,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     LGFX_Sprite* sprite;
     viewport* vp;
     int wormpos[2] = {0, 0}, wormvel[2] = {0, 0}, wormsign[2] = {1, 1}, wormd[2] = {20, 20};
-    int shifter = 2, wormdmin = 8, wormdmax = 50, wormvelmax = 400, wormsat = 128, boxsize[2];
+    int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128, boxsize[2];
     int sprsize[2], rotate = -1, scaler = 1, season = 0, last_season = 0, numseasons = 4;
     int point[2], plast[2], er[2], erpos_max[2], wormstripe = 2;
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
