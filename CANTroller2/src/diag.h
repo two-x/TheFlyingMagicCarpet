@@ -87,9 +87,9 @@ class DiagRuntime {
                 err_sens[i][j] = err_last[i][j] = false; // Initialize sensor error flags to false
             }
         for (int j=0; j<NumTelemetryFull; j++) registered[j] = false;
-        register_device(_Throttle, &gas->pc[OUT], &gas->pc[OPMIN], &gas->pc[OPMAX], &gas->pc[MARGIN]);
-        register_device(_BrakeMotor, &brake->pc[OUT], &brake->pc[OPMIN], &brake->pc[OPMAX], &brake->pc[MARGIN]);
-        register_device(_SteerMotor, &steer->pc[OUT], &steer->pc[OPMIN], &steer->pc[OPMAX], &steer->pc[MARGIN]);
+        register_device(_Throttle, &gas->si[OUT], &gas->si[OPMIN], &gas->si[OPMAX], &gas->si[MARGIN]);
+        register_device(_BrakeMotor, &brake->si[OUT], &brake->si[OPMIN], &brake->si[OPMAX], &brake->si[MARGIN]);
+        register_device(_SteerMotor, &steer->si[OUT], &steer->si[OPMIN], &steer->si[OPMAX], &steer->si[MARGIN]);
         register_device(_Speedo, speedo->ptr(), speedo->opmin_ptr(), speedo->opmax_ptr(), speedo->margin_ptr());
         register_device(_Tach, tach->ptr(), tach->opmin_ptr(), tach->opmax_ptr(), tach->margin_ptr());
         register_device(_BrakePres, pressure->ptr(), pressure->opmin_ptr(), pressure->opmax_ptr(), pressure->margin_ptr());
@@ -114,9 +114,9 @@ class DiagRuntime {
         // register_bool_device(_FuelPump, fuelpump->signal_ptr());
     }
     void update_status_words() {}
-    void setflag(int device, int errtype, bool stat) {
+    void setflag(int device, int errtype, bool stat) {  // this sets the error flag in err_sens[type] array, and if device is registered, also in the status words
         err_sens[errtype][device] = stat;
-        errstatus[errtype] = (errstatus[errtype] & ~(1 << device)) | (stat << device);  // replaces the device's error bit in status word with updated value
+        errstatus[errtype] = (errstatus[errtype] & ~(1 << device)) | ((stat && registered[device]) << device);  // replaces the device's error bit in status word with updated value
     }
     void checkrange(int _sens, bool extra_condition = true) {
         bool last_rangerr = err_sens[RANGE][_sens];
@@ -165,7 +165,7 @@ class DiagRuntime {
             // setflag(_SteerMotor, RANGE, steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
             // setflag(_MuleBatt, RANGE, mulebatt->val() < mulebatt->opmin() || mulebatt->val() > mulebatt->opmax());
             
-            setflag(_Ignition, LOST, !ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
+            // setflag(_Ignition, LOST, !ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
 
             BrakeFailure();            
             HotRCFailure();
@@ -216,23 +216,25 @@ class DiagRuntime {
         for (int32_t i=0; i<NUM_ERR_TYPES; i++) {
             bool printheader1 = false, printheader2 = false, printed = false;
             for (int32_t j=0; j<NumTelemetryFull; j++) {
-                if (report_error_changes && (err_sens[i][j] && !err_last[i][j])) {
+                if (report_error_changes && (err_sens[i][j] && !err_last[i][j]) && registered[j]) {
                     if (!printheader1) {
                         ezread.squintf("!%s:", err_type_card[i].c_str());
                         printheader1 = true;
                     }
-                    ezread.squintf(" %s (%.2lf)", err_sens_card[j].c_str(), violating_value[j]);
+                    Serial.printf(" %s (%.2lf)", err_sens_card[j].c_str(), violating_value[j]);
+                    ezread.printf(" %s (%.0lf)", err_sens_card[j].c_str(), violating_value[j]);
                     printed = true;
                 }
             }
             for (int32_t j=0; j<NumTelemetryFull; j++) {
-                if (report_error_changes && (!err_sens[i][j] && err_last[i][j])) {
+                if (report_error_changes && (!err_sens[i][j] && err_last[i][j]) && registered[j]) {
                     if (!printheader2) {
                         if (!printheader1) ezread.squintf("!%s:", err_type_card[i].c_str());
                         ezread.squintf(" OK:");
                         printheader2 = true;
                     }
-                    ezread.squintf(" %s (%.2lf)", err_sens_card[j].c_str(), violating_value[j]);
+                    Serial.printf(" %s (%.2lf)", err_sens_card[j].c_str(), violating_value[j]);
+                    ezread.printf(" %s (%.0lf)", err_sens_card[j].c_str(), violating_value[j]);
                     printed = true;
                 }
             }
