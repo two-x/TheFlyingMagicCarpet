@@ -681,13 +681,16 @@ class PressureSensor : public AnalogSensor {
     PressureSensor() = delete;
     void setup() {
         AnalogSensor::setup();
+        // calibration procedure: (still working on this) hook to sensor and release brake, then pump and press as hard as you can. Get adc vals and set here as oplims_native. 
+        
         float min_adc = 658.0;  // temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 658 adc) * (v-max v - v-min v)) = 0.2 psi/adc
         float b = -1.0 * min_adc * m;  // -658 adc * 0.2 psi/adc = -131.6 psi
         set_conversions(m, b);
         set_abslim_native(0.0, (float)adcrange_adc);  // set abslims after m and b are set
         set_oplim_native(min_adc, 2080.0);            // set oplims after abslims are set
-        set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
+        set_oplim(0.0, 350.0);  // changed min to 0 (soren). Is this line necessary though? (soren)
+        // set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
         // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
         set_ema_alpha(0.15);
         set_margin(1.0);       // max acceptible error when checking psi levels

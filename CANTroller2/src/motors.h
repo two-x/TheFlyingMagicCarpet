@@ -650,7 +650,7 @@ class BrakeControl : public JagMotor {
     float brake_pid_trans_threshold_lo = 0.25;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
     float brake_pid_trans_threshold_hi = 0.50;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
     bool autostopping = false, autoholding = false, reverse = false;
-    float target[NumBrakeSens];  // this value is the posn and pressure (and hybrid combined) target settings, or fed into pid to calculate setting if pid enabled
+    float target_si[NumBrakeSens];  // this value is the posn and pressure (and hybrid combined) target settings, or fed into pid to calculate setting if pid enabled, in si units appropriate to each sensor
     float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, target_pc, pid_err_pc;
     float combined_read_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
     float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
@@ -740,9 +740,9 @@ class BrakeControl : public JagMotor {
     void set_target(float targ_pc) {  // sets brake target percent. if hybrid, will set pressue and posn targets per current hybrid ratio, and set both pid targets in case pids are used
         target_pc = targ_pc;
         if (feedback == NoneFB) return;  // target_pc is overall, (or desired or combined ?) value is used if running openloop
-        target[PressureFB] = pressure->from_pc(target_pc);  // feed this into pid if enabled, (otherwise could use as a motor cutoff threshold? this mode not implemented)
-        target[PositionFB] = brkpos->from_pc(target_pc);  // (saved into variables for display)
-        for (int mypid=PositionFB; mypid<=PressureFB; mypid++) pids[mypid].set_target(target[mypid]);  // feed target vals to pid loops. this is harmless if pids disabled, it will have no effect
+        target_si[PressureFB] = pressure->from_pc(target_pc);  // feed this into pid if enabled, (otherwise could use as a motor cutoff threshold? this mode not implemented)
+        target_si[PositionFB] = brkpos->from_pc(target_pc);  // (saved into variables for display)
+        for (int mypid=PositionFB; mypid<=PressureFB; mypid++) pids[mypid].set_target(target_si[mypid]);  // feed target vals to pid loops. this is harmless if pids disabled, it will have no effect
     }
     void read_sensors() {  // calculates and saves combined brake value percent, based on readings of the feedback sensors. harmless to call even if running openloop
         if (feedback == PositionFB) combined_read_pc = brkpos->pc();
@@ -907,7 +907,7 @@ class BrakeControl : public JagMotor {
         if (!pid_enabled) setmode(preforce_drivemode);                            // ensure current motor mode is consistent with configs set here
         if ((feedback != feedback_last) || (pid_enabled != pid_ena_last)) {
             derive();  // on change need to recalculate some values
-            ezread.squintf("brake pid %s feedback: %d\n", pid_enabled ? "enabled" : "disabled", feedback);        
+            ezread.squintf("brake pid %s feedback: %s\n", pid_enabled ? "enabled" : "disabled", brakefeedbackcard[feedback]);        
         }
         feedback_last = feedback;
         pid_ena_last = pid_enabled;

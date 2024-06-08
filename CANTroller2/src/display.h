@@ -40,7 +40,7 @@ std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "JoysticH", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 8, 10, 11, 11, 13, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 7, 11, 11, 11, 13, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
@@ -64,7 +64,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    ______, ______, ______, ______, "%",    degree, degree, degreF, degreF, },  // PG_IDLE
     { degreF, "%",    ______, ______, ______, ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, },  // PG_MOTR
-    { scroll, "%",    "%",    "%",    "%",    "%",    "%",    "%",    "%",    "%",    ______, "us",   ______, "Hz",   "s",    },  // PG_BPID
+    { scroll, "%",    "psi",  "%",    "in",   "%",    "%",    "%",    "%",    "%",    ______, "us",   ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, ______, ______, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, b1nary, b1nary, },  // PG_TEMP
@@ -777,9 +777,9 @@ class Display {
             drange = brake.us[ABSMIN]-brake.us[ABSMAX];
             draw_asciiname(9, motormodecard[brake.motormode]);
             drawval(10, pressure.pc(), 0.0, 100.0, brake.pids[PressureFB].target());
-            drawval(11, brake.pids[PressureFB].target(), 0.0, 100.0);
+            drawval(11, brake.pids[PressureFB].target(), pressure.opmin(), pressure.opmax());
             drawval(12, brkpos.pc(), 0.0, 100.0, brake.pids[PositionFB].target());
-            drawval(13, brake.pids[PositionFB].target(), 0.0, 100.0);
+            drawval(13, brake.pids[PositionFB].target(), brkpos.opmin(), brkpos.opmax());
             drawval(14, brake.target_pc, 0.0, 100.0);
             // draw_asciiname(9, motormodecard[brake.motormode]);
             // draw_asciiname(10, brakefeedbackcard[brake.feedback]);
