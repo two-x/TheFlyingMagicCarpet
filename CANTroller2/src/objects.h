@@ -204,7 +204,7 @@ void initialize_pins_and_console() {  // set up those straggler pins which aren'
     Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
     delay(1200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     Serial.printf("** Setup begin..\nSerial console started..\n");
-    ezread.squintf("Syspower is %s, basicsw read: \n", syspower ? "on" : "off", basicsw.val ? "high" : "low");    
+    ezread.squintf("Syspower is %s, basicsw read: %s\n", syspower ? "on" : "off", basicsw.val ? "high" : "low");    
 }
 class Ignition {
   private:
@@ -237,7 +237,7 @@ class Ignition {
             if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_req = REQ_ON;
         }
         if (panic_req != REQ_NA) {
-            panicstop = (panic_req == REQ_ON) ? true : false;    // printf("panic=%d\n", panicstop);
+            panicstop = (panic_req == REQ_ON) ? true : false;    // ezread.squintf("panic=%d\n", panicstop);
             if (panicstop != paniclast) {
                 prefs.putUInt("panicstop", (uint32_t)panicstop);  // this is read at boot, see diag.h
                 if (panicstop) panicTimer.reset();

@@ -240,7 +240,7 @@ class Transducer : public Device {
     virtual void setup() {
         // print_config(true, false);  // print header
         // if (_pin < 255) ezread.squintf(" on pin %d\n", _pin);
-    }  // printf("%s..\n", _long_name.c_str()); }
+    }  // ezread.squintf("%s..\n", _long_name.c_str()); }
     virtual float from_native(float arg_native) {  // these linear conversion functions change absolute native values to si and back - overwrite in child classes as needed
         float ret = NAN;
         if (conversion_method == AbsLimMap) ret = map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
@@ -625,7 +625,7 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
         _si_units = "V";
     }
     CarBattery() = delete;    
-    void setup() {  // printf("%s..\n", _long_name.c_str());
+    void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
         AnalogSensor::setup();
         set_conversions(0.00404, 0.0);  // 240605 m calculated from multimeter readings vs adc counts taken across a few samples
         set_abslim(0.0, 15.1);  // set abs range. dictated in this case by the max voltage a battery charger might output
@@ -710,7 +710,7 @@ class BrakePositionSensor : public AnalogSensor {
     BrakePositionSensor() = delete;
     void setup() {
         AnalogSensor::setup();
-        // printf("%s..\n", _long_name.c_str());
+        // ezread.squintf("%s..\n", _long_name.c_str());
         _dir = TransDir::REV;  // causes percent conversions to use inverted scale 
         conversion_method = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
         #if BrakeThomson
@@ -860,7 +860,7 @@ class Tachometer : public PulseSensor {
         _si_units = "rpm";
     }
     Tachometer() = delete;
-    void setup() {  // printf("%s..\n", _long_name.c_str());
+    void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
         PulseSensor::setup();
         float m = 60.0 * _freqdiv;  // 1 Hz = 1 pulse/sec * 8 rot/pulse * 60 sec/min = 480 rot/min, (so 480 rpm/Hz)
         set_conversions(m, 0.0);
@@ -897,7 +897,7 @@ class Speedometer : public PulseSensor {
     Speedometer() = delete;
     void setup() {
         PulseSensor::setup();
-        // printf("%s..\n", _long_name.c_str());
+        // ezread.squintf("%s..\n", _long_name.c_str());
         float m = 3600.0 * 20 * M_PI * _freqdiv / (2 * 12 * 5280);  // 1 Hz = 1 pulse/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.8 mph per Hz)
         set_conversions(m, 0.0);
         set_abslim(0.0, 25.0);  // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
@@ -1204,7 +1204,7 @@ class Simulator {
                             d->set_source(src::POT); // ...then set its input source to the pot
                         }
                     } else {
-                        printf("invalid pot map selected: %d/n", arg_sensor);
+                        ezread.squintf("invalid pot map selected: %d/n", arg_sensor);
                     }
                 }
             }
@@ -1329,7 +1329,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         calc_params();
     }
     void setup() {
-        printf("Hotrc init.. Starting rmt..\n");
+        ezread.squintf("Hotrc init.. Starting rmt..\n");
         for (int axis=HORZ; axis<=CH4; axis++) rmt[axis].init();  // Set up 4 RMT receivers, one per channel
         failsafe_timer.set(failsafe_timeout); 
     }

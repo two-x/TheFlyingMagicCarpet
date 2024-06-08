@@ -320,7 +320,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random, -3 for cycle backwards  // XX , -4 for autocycle (retains saver timeout)
         ++shapes_done %= 7;
         int last_pat = shape;
-        has_eraser = !rn(3);
+        has_eraser = !(bool)rn(4);
         if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
         else {
             if (newpat == -1) ++shape %= Rotate;
@@ -457,7 +457,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 }
                 if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
                 if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
-                int shells = 1 + (!rn(5)) ? 1 + rn(4) : 0;
+                int shells = 1 + (!(bool)rn(5)) ? 1 + rn(4) : 0;
                 int steps[2] = { boxsize[HORZ] / (shells+1), boxsize[VERT] / (shells+1) };
                 for (int mat=0; mat<shells; mat++) {
                     if (season == 0) boxcolor = rando_color();

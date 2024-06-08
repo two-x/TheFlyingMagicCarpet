@@ -552,19 +552,19 @@ class ThrottleControl : public ServoMotor {
                 cruisepid.set_tunings(cruise_opengas_kp, cruise_opengas_ki, cruise_opengas_kd);
                 setmode(motormode);  // ensure current motor mode is consistent with configs set here
             }
-            ezread.squintf("throttle config: pid %s\n", pid_enabled ? "enabled" : "disabled");
+            ezread.squintf("throttle pid %s\n", pid_enabled ? "enabled" : "disabled");
         }
         pid_ena_last = pid_enabled;
     }
     void update_cruise_ctrl_config(int new_pid_ena=-5) {  // pass in OFF or ON (for compatibility with brake function)
         if (new_pid_ena != -5) cruise_pid_enabled = (bool)new_pid_ena;     // otherwise receive new pid enable setting (ON/OFF) if given
-        if (cruise_pid_enabled != cruise_pid_ena_last) ezread.squintf("cruise config: pid %s\n", cruise_pid_enabled ? "enabled" : "disabled");
+        if (cruise_pid_enabled != cruise_pid_ena_last) ezread.squintf("cruise pid %s\n", cruise_pid_enabled ? "enabled" : "disabled");
         cruise_pid_ena_last = cruise_pid_enabled;
     }
     void set_cruise_scheme(int newscheme) {
         // if (cruise_pid_enabled) cruise_adjust_scheme = SuspendFly;  else // in pid mode cruise must use SuspendFly adjustment scheme (not sure if this restriction is necessary?)
         cruise_adjust_scheme = newscheme;  // otherwise anything goes
-        ezread.squintf("cruise config: using %s adjustment scheme\n", cruiseschemecard[cruise_adjust_scheme].c_str());
+        ezread.squintf("cruise using %s adj scheme\n", cruiseschemecard[cruise_adjust_scheme].c_str());
     }
     int parked() {
         return (std::abs(out_pc_to_si(pc[OUT]) - si[PARKED]) < 1);
@@ -668,7 +668,7 @@ class BrakeControl : public JagMotor {
         return brake_tempsens_exists;
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, ThrottleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-        ezread.squintf("Brake motor.. pid is %s, feedback is %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
+        ezread.squintf("Brake pid %s, feedback: %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
         JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         // duty_fwd_pc = brakemotor_duty_spec_pc;
@@ -866,7 +866,7 @@ class BrakeControl : public JagMotor {
                 _mode = OpenLoop;      // can't use loops, drop to openloop instead
             }
             else if (_mode == AutoHold || (_mode == AutoStop && !panicstop)) {    // todo: rethink these scenarios 
-                Serial.print("Warn: non-emergency auto braking unavailable in openloop\n");
+                Serial.print("Warn: autobrake unavailable in openloop\n");
                 return;  // keep current mode
             }
             else if (_mode == AutoStop) Serial.print("Warn: performing blind panic stop maneuver\n");
@@ -896,7 +896,7 @@ class BrakeControl : public JagMotor {
         if (!pid_enabled) setmode(preforce_drivemode);                            // ensure current motor mode is consistent with configs set here
         if ((feedback != feedback_last) || (pid_enabled != pid_ena_last)) {
             derive();  // on change need to recalculate some values
-            ezread.squintf("brake motor config: pid %s w/ feedback = %d\n", pid_enabled ? "enabled" : "disabled", feedback);        
+            ezread.squintf("brake pid %s feedback: %d\n", pid_enabled ? "enabled" : "disabled", feedback);        
         }
         feedback_last = feedback;
         pid_ena_last = pid_enabled;
@@ -937,7 +937,7 @@ class SteeringControl : public JagMotor {
     bool reverse = false;
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         max_out_change_rate_pcps = 350.0;
-        printf("Steering motor..\n");
+        ezread.squintf("Steering motor..\n");
         JagMotor::setup(_hotrc, _speedo, _batt);
     }
     void update() {

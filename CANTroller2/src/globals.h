@@ -237,7 +237,7 @@ int32_t read_pin(int32_t pin) { return (pin >= 0 && pin != 255) ? digitalRead (p
 float convert_units(float from_units, float convert_factor, bool invert, float in_offset = 0.0, float out_offset = 0.0) {
     if (!invert) return out_offset + convert_factor * (from_units - in_offset);
     if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
-    printf ("convert_units refused to divide by zero: %lf, %lf, %d, %lf, %lf", from_units, convert_factor, invert, in_offset, out_offset);
+    Serial.printf("convert_units refused to divide by zero: %lf, %lf, %d, %lf, %lf", from_units, convert_factor, invert, in_offset, out_offset);
     return -1;
 }
 // Exponential Moving Average filter : smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
@@ -481,7 +481,7 @@ class EZReadConsole {
             this->printf("%s", blank.c_str());
             linecolors[i] = MYEL;
         }
-        printf(highlightcolor, "welcome to EZ-Read console\n");
+        this->printf(highlightcolor, "welcome to EZ-Read console\n");
         dirty = true;
     }
     void printf(const char* format, ...) {  // for if we're called with same arguments as printf would take

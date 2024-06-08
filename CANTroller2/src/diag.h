@@ -114,7 +114,7 @@ class DiagRuntime {
             dump_errorcode_update();
             // for (int32_t i=0; i<NUM_ERR_TYPES; i++)
             //     for (int32_t j=0; j<NumTelemetryFull; j++)
-            // // printf ("\n");
+            // // ezread.squintf ("\n");
             // make_log_entry();
         }
     }
@@ -180,12 +180,12 @@ class DiagRuntime {
     }
     void print() {
         for (int32_t t=0; t<=NUM_ERR_TYPES; t++) {
-            printf ("diag err: %s (%d): ", err_type_card[t], err_sens_fails[t]);
+            ezread.squintf ("diag err: %s (%d): ", err_type_card[t], err_sens_fails[t]);
             for (int32_t s=0; s<=NumTelemetryFull; s++) {
                 if (s == NumTelemetryFull) s++;
-                if (err_sens[t][s]) printf ("%s, ", err_sens_card[s]);
+                if (err_sens[t][s]) ezread.squintf ("%s, ", err_sens_card[s]);
             }
-            printf("\n");
+            ezread.squintf("\n");
         }
     }
 
@@ -333,10 +333,10 @@ class DiagRuntime {
             // tel[dic][_TempWhRR][index] = 
             // tel[dic][_TempAmb][index] = 
             ++index %= entries;
-            // printf(".");
+            // ezread.squintf(".");
             if (!index) {
                 dic = !dic;
-                // printf("Filled dic %d\n", dic);
+                // ezread.squintf("Filled dic %d\n", dic);
             }
         }
     }
@@ -535,7 +535,7 @@ class BootMonitor {
         uptime_recorded = uptime_new;
     }
     void print_postmortem() {
-        ezread.squintf("Boot count: %d (%d/%d). Last lost power while %s", bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str());
+        ezread.squintf("Boot count: %d (%d/%d). Last lost power:\n  while %s", bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str());
         if (was_panicked) ezread.squintf(" and panicking,");
         ezread.squintf(" after ");
         uint32_t last_uptime = myprefs->getUInt("uptime", 0);
@@ -574,10 +574,10 @@ class BootMonitor {
 #if RUN_TESTS
     #include "unittests.h"
     void run_tests() {
-        printf("Running tests...\n");
+        Serial.printf("Running tests...\n");
         delay(5000);
         test_Param();
-        printf("Tests complete.\n");
+        Serial.printf("Tests complete.\n");
         for(;;); // loop forever
     }
 #else

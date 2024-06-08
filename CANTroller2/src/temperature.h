@@ -25,9 +25,9 @@ public:
      void request_temperature() {
         // Request temperature from sensor
         if (!_tempsensebus->requestTemperaturesByAddress(_address.data())) {
-            ezread.squintf("  failed temperature request from sensor addr: ");
+            ezread.squintf("  failed temp request from sensor addr ");
             print_address();
-            Serial.printf("\n");
+            ezread.squintf("\n");
         }
     }
 
@@ -42,7 +42,7 @@ public:
         if (temp == DEVICE_DISCONNECTED_F) {
             ezread.squintf("  disconnected device %s w/ addr: ", location_to_string(_location));
             print_address();
-            Serial.printf("\n");
+            ezread.squintf("\n");
             return DEVICE_DISCONNECTED_F;
         } 
         _temperature = temp;
@@ -64,13 +64,13 @@ public:
     void print_address() const {
         ezread.squintf("0x");
         for(uint8_t i = 0; i < _address.size(); i++) ezread.squintf("%02x", _address[i]);
-        Serial.printf("\n");
+        ezread.squintf("\n");
     }
 
     void print_sensor_info() const {
         ezread.squintf("  location: %s, assigned addr: ", location_to_string(_location).c_str());
         print_address();
-        Serial.printf("\n");
+        ezread.squintf("\n");
     }
 
     static std::string location_to_string(loc location) {
@@ -164,8 +164,8 @@ private:
             }
             if (!brake_assigned && (brakemotor_type_detected != NIL)) {
                 sensors.emplace(loc::BRAKE, TemperatureSensor(loc::BRAKE, detected_address, &tempsensebus));
-                Serial.printf("  detected %s brake sensor at addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
-                ezread.printf("temp: %s brake @ addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
+                Serial.printf("  detected %s brake sensor addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
+                ezread.printf("  %s brake addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
                 sensors.at(loc::BRAKE).print_address();
                 brake_assigned = true;
             }
@@ -190,8 +190,8 @@ private:
                     // The sensor doesn't exist yet, so create it and add it to the map
                     sensors.emplace(location, TemperatureSensor(location, *detected_address_it, &tempsensebus));
                     // Print the sensor address for debugging purposes
-                    Serial.printf("  assigned known sensor %s at addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
-                    ezread.printf("temp: known %s @ addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
+                    Serial.printf("  known sensor %s addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
+                    ezread.printf("  known %s @ addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
                     sensors.at(known_address.first).print_address();
                 } else {
                     // The sensor already exists, so just update its address
@@ -222,8 +222,8 @@ private:
                 }
                 if (it != all_locations.end()) {
                     // The sensor doesn't exist yet, so create it and add it to the map and print the sensor address
-                    ezread.squintf("  detected unknown sensor addr: ");
-                    ezread.squintf("temp: unknown @ addr: ");
+                    Serial.printf("  detected unknown sensor addr: ");
+                    ezread.printf("  unknown addr: ");
                     sensors.emplace(*it, TemperatureSensor(*it, detected_address, &tempsensebus));
                     sensors.at(*it).print_address();
                     ezread.squintf("\n");
@@ -235,14 +235,14 @@ private:
 public:
     TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus),  last_read_request_time(0), sensor_index(0), _state(State::CONVERTING) {}
     bool setup() {
-        ezread.squintf("Temperature sensors..");
+        ezread.squintf("Temp sensors..");
         
         tempsensebus.setWaitForConversion(false);
         tempsensebus.setCheckForConversion(true);
         tempsensebus.begin();
         detected_devices_ct = tempsensebus.getDeviceCount();
         detected_addresses.resize(detected_devices_ct);
-        ezread.squintf(" parasitic power %s. found %d device(s):\n", (tempsensebus.isParasitePowerMode()) ? "on" : "off", detected_devices_ct);  // , DEC);
+        ezread.squintf(" parasitic pwr %s. found %d device(s):\n", (tempsensebus.isParasitePowerMode()) ? "on" : "off", detected_devices_ct);  // , DEC);
         if (detected_devices_ct == 0) {
             // ezread.squintf("  no devices detected\n");
             vehicle_detected = false;
@@ -264,7 +264,7 @@ public:
             // Request temperature for each sensor, this will make the is_ready() method work
             request_temperatures();
         }
-        ezread.squintf("  detected sensor addresses consistent with %s context", vehicle_detected ? "on-vehicle" : "dev-board");
+        ezread.squintf("  detected %s context\n", vehicle_detected ? "on-vehicle" : "dev-board");
         return vehicle_detected;
     }
 

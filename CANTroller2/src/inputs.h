@@ -152,7 +152,7 @@ class Encoder {
     Encoder() = delete; // must be instantiated with pins
     
     void setup() {
-        printf("Encoder setup..\n");
+        ezread.squintf("Encoder setup..\n");
         set_pin(_a_pin, INPUT_PULLUP);
         set_pin(_b_pin, INPUT_PULLUP);
         button.setup();
