@@ -357,9 +357,9 @@ class Transducer : public Device {
         if (header) {
             Serial.printf("%s %s", _long_name.c_str(), transtypecard[_transtype].c_str());
             ezread.printf("%s", _short_name.c_str()); 
-            if (_pin < 255 && _pin <= 0) {
+            if (_pin < 255 && _pin >= 0) {
                 Serial.printf(", pin %d", _pin);
-                ezread.printf(" p%d", _pin);
+                ezread.printf(" (p%d)", _pin);
             }
             ezread.squintf(": %.2lf %s = %.2lf %s = %.2lf %%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
             // ezread.printf(": %.2lf%s = %.2lf%s = %.2lf%%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
