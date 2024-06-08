@@ -27,7 +27,7 @@ class Potentiometer {
     float _opmax_native = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
     float _absmin_native = 0.0, _absmax_native = static_cast<float>(adcrange_adc);
     float _absmin = 0.0, _absmax = 100.0;
-    float _activity_margin_pc = 7.5;
+    float _activity_margin_pc = 10.0;
     int _pin;
     float _pc = 50.0, _raw, _native, _activity_ref;  // values in filtered percent, raw percent, raw adc
     Timer pot_timer{100000};  // adc cannot read too fast w/o errors, so give some time between readings

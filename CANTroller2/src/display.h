@@ -311,15 +311,16 @@ class Display {
         draw_needle_shape(old_n_pos_x, pos_y, BLK);
         draw_needle_shape(n_pos_x, pos_y, n_color);
     }
-    void draw_string(int x, int y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
-        if ((text == oldtext) && !forced) return; 
-        // sprptr->fillRect(x_old, y, oldtext.length() * disp_font_width, disp_font_height, bgcolor);
-        sprptr->setTextColor(bgcolor);
-        sprptr->setCursor(x, y);
-        sprptr->print(oldtext.c_str());
+    void draw_string_core(int x, int y, std::string text, uint8_t color) {  // Send in "" for oldtext if erase isn't needed
         sprptr->setTextColor(color);
         sprptr->setCursor(x, y);
-        sprptr->print(text.c_str());
+        sprptr->print(text.c_str());    
+    }
+    void draw_string(int x, int y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
+        if ((text == oldtext) && !forced) return;
+        // sprptr->fillRect(x_old, y, oldtext.length() * disp_font_width, disp_font_height, bgcolor);
+        draw_string_core(x, y, oldtext, bgcolor);
+        draw_string_core(x, y, text, color);
     }
     void draw_unitmap(int index, int x, int y, uint8_t color) {
         for (int xo = 0; xo < disp_font_width * 3 - 1; xo++)
@@ -855,8 +856,8 @@ class Display {
             draw_asciiname(13, activitiescard[last_activity]);
             drawval_int(14, touch->touch_pt(0), 0, disp_width_pix);
             drawval_int(15, touch->touch_pt(1), 0, disp_height_pix);
-            drawval_int(16, encoder.spinrate_pc(), 0.0, 100.0);
-            drawval_int(17, looptimer.uptime());
+            drawval(16, encoder.spinrate_pc(), 0.0, 100.0);
+            drawval(17, looptimer.uptime());
             // drawval(13, drawclock, 0, refresh_limit);
             // drawval(14, pushclock, 0, refresh_limit);
             // drawval(15, idleclock, 0, refresh_limit);
