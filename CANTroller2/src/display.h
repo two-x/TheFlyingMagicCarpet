@@ -54,7 +54,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, __________, __________, __________, __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, __________, "No Temps", "StopWifi", },  // PG_TEMP
     { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", " Touch X", " Touch Y", "SpinRate", "  Uptime", __________, __________, "EZScroll", "BlnkDemo", neo_bright, "PanelApp", },  // PG_UI
+    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", " Touch X", " Touch Y", "SpinRate", "   Accel", "  Uptime", __________, "EZScroll", "BlnkDemo", neo_bright, "PanelApp", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "psi",  "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, "%",    "%",    },  // PG_RUN
@@ -69,7 +69,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, b1nary, b1nary, },  // PG_TEMP
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us",   "us",   "Hz",   "fps",  scroll, "pix",  "pix",  "%",    "min",  ______, ______, "lin",  "eyes", "%",    scroll, },  // PG_UI
+    { "us",   "us",   "Hz",   "fps",  scroll, "pix",  "pix",  "Hz",   ______, "min",  ______, "lin",  "eyes", "%",    scroll, },  // PG_UI
 };
 static std::string unitmapnames[11] = { "usps", "us", "rpms", scroll, b1nary, "%", "ohm", "eyes", "psin", degree, "of10" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[11][17] = {  // 17x7-pixel bitmaps for exceptions where some unit strings can't be well represented by any set of 3 font characters
@@ -270,6 +270,31 @@ class Display {
         if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
         else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
     }
+    int significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
+        int place = 1;
+        if (value >= 1) { // int vallog = std::log10(value);  // Can be sped up
+            while (value >= 10) {
+                value /= 10.0;
+                place++;  // ex. 100.34 -> 3
+            }
+        }
+        else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
+            place = 0;
+            while (value < 1) {
+                value *= 10.0;
+                place--;  // ex. 0.00334 -> -3
+            }
+        }
+        return place;
+    }
+    int significant_place(int value) {  // Returns the length in digits of a positive integer value
+        int place = 1;
+        while (value >= 10) {
+            value /= 10;
+            place++;
+        }
+        return place;
+    }
   private:
     void drawWideLine(int x0, int y0, int x1, int y1, float wd) {  // took from http://members.chello.at/~easyfilter/bresenham.html
         int dx = std::abs(x1-x0), sx = x0 < x1 ? 1 : -1; 
@@ -458,31 +483,6 @@ class Display {
     }
     void draw_truth(int lineno, bool truthy, int styl=2) {  // 0:on/off, 1:yes/no, 2:true/false .
         drawval_core(lineno, (truthy) ? ((styl==0) ? "on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, -1, -1, -1, (truthy) ? LPUR : GPUR);
-    }
-    int significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
-        int place = 1;
-        if (value >= 1) { // int vallog = std::log10(value);  // Can be sped up
-            while (value >= 10) {
-                value /= 10;
-                place++;  // ex. 100.34 -> 3
-            }
-        }
-        else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
-            place = 0;
-            while (value < 1) {
-                value *= 10;
-                place--;  // ex. 0.00334 -> -3
-            }
-        }
-        return place;
-    }
-    int significant_place(int value) {  // Returns the length in digits of a positive integer value
-        int place = 1;
-        while (value >= 10) {
-            value /= 10;
-            place++;
-        }
-        return place;
     }
     std::string num2string(int value, int maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
         value = abs(value);  // This function disregards sign
@@ -865,12 +865,13 @@ class Display {
             draw_asciiname(13, activitiescard[last_activity]);
             drawval_int(14, touch->touch_pt(0), 0, disp_width_pix);
             drawval_int(15, touch->touch_pt(1), 0, disp_height_pix);
-            drawval(16, encoder.spinrate_pc(), 0.0, 100.0);
-            drawval(17, looptimer.uptime());
+            drawval(16, encoder.spinrate(), 0.0, encoder.spinrate_max());
+            drawval_int(17, encoder.accel_factor(), 1, encoder._accel_max);
+            drawval(18, looptimer.uptime());
             // drawval(13, drawclock, 0, refresh_limit);
             // drawval(14, pushclock, 0, refresh_limit);
             // drawval(15, idleclock, 0, refresh_limit);
-            for (int line=18; line<=19; line++) draw_eraseval(line);
+            draw_eraseval(19);
             drawval_int(20, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
             draw_truth(21, flashdemo, 0);
             drawval(22, neobright, 1.0, 100.0f, -1, 3);
@@ -1027,6 +1028,30 @@ class Tuner {
         process_inputs();
         edit_values(rmode);
     }
+    float fedit(float orig_val, int idelta, float min_val, float max_val) {  // feed in float value and edit amount, get new edited accelerated and constrianed float val
+        int sig_place = screen->significant_place(orig_val);
+        float scale = 1.0;  // needs to change if disp_default_float_precision is modified !!
+        while (sig_place > disp_default_float_precision) {  
+            scale *= 10.0;
+            sig_place--;
+        }
+        while (sig_place < disp_default_float_precision) {
+            scale /= 10.0;
+            sig_place++;
+        }
+        float ret = constrain(orig_val + (float)(idelta) * scale, min_val, max_val); 
+        Serial.printf("o:%lf id:%d sc:%lf, min:%lf, max:%lf ret:%lf\n", orig_val, idelta, scale, min_val, max_val, ret);
+        return ret;
+    }
+    int iedit(int orig_val, int idelta, int min_val, int max_val) {  // feed in int value and edit amount, get new edited accelerated and constrianed int val
+        int sig_place = screen->significant_place(orig_val);
+        int scale = 1;
+        while (sig_place > 4) {
+            scale *= 10;
+            sig_place--;
+        }
+        return constrain(orig_val + idelta * scale, min_val, max_val); 
+    }
   private:
     void process_inputs() {
         if (!tuningEditTimer.expired()) return;
@@ -1046,7 +1071,7 @@ class Tuner {
             else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
         }
         // rdelta_encoder = encoder.rotation(false);  // unaccelerated encoder turn
-        idelta_encoder = encoder.rotation();   // accelerated
+        idelta_encoder = encoder.rotation(true);   // accelerated
         rdelta_encoder = constrain(idelta_encoder, -1, 1);
         // encoder.rezero();
         // if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
@@ -1058,10 +1083,10 @@ class Tuner {
         idelta = idelta_encoder + touch->get_delta();  // Allow edits using the encoder or touchscreen
         fdelta = float(idelta);
         rdelta = constrain(idelta, -1, 1);  // combine unaccelerated values
-        if (pot_tuner_acceleration && !sim.potmapping()) {  // use pot to control level of acceleration
-            if (pot.val() < 50.0) fdelta /= map(pot.val(), 50.0, 0.0, 1.0, 5.0);
-            else fdelta *= map(pot.val(), 50.0, 100.0, 1.0, 25.0);
-        }
+        if (pot_tuner_acceleration && !sim.potmapping()) fdelta *= map(pot.val(), 0.0, 100.0, 1.0, 25.0); // {  // use pot to control level of acceleration
+        //     if (pot.val() < 50.0) fdelta /= map(pot.val(), 50.0, 0.0, 1.0, 5.0);
+        //     else fdelta *= map(pot.val(), 50.0, 100.0, 1.0, 25.0);
+        // }
         idelta = (int)fdelta;
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel != sel_last || idelta) tuningAbandonmentTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
         else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
@@ -1110,7 +1135,7 @@ class Tuner {
             }
             else if (datapage == PG_SENS) {
                 if (sel == 10) pressure.set_oplim(pressure.opmin() + fdelta, NAN);
-                else if (sel == 11) pressure.set_oplim(NAN, pressure.opmax() + fdelta);
+                else if (sel == 11) pressure.set_oplim(NAN, fedit(pressure.opmax(), idelta, pressure.opmin(), pressure.absmax()));
                 else if (sel == 12) brkpos.set_oplim(brkpos.opmin() + 0.01 * fdelta, NAN);
                 else if (sel == 13) brkpos.set_oplim(NAN, brkpos.opmax() + 0.01 * fdelta);
                 else if (sel == 14) adj_val(brkpos.zeropoint_ptr(), 0.01 * fdelta, brkpos.opmin(), brkpos.opmax());
@@ -1186,7 +1211,7 @@ class Tuner {
                 else if (sel == 14) adj_bool(&cal_gasmode_request, rdelta);
             }
             else if (datapage == PG_UI) {
-                if (sel == 11) ezread.lookback(ezread.offset + rdelta); 
+                if (sel == 11) ezread.lookback(ezread.offset + idelta); 
                 else if (sel == 12) { adj_bool(&flashdemo, rdelta); neo->enable_flashdemo(flashdemo); }
                 else if (sel == 13) { adj_val(&neobright, rdelta, 1, 100); neo->setbright(neobright); }
                 else if (sel == 14) adj_val(&ui_context, rdelta, 0, NumContextsUI-1);

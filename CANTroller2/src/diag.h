@@ -148,14 +148,7 @@ class DiagRuntime {
 
             // Detect sensors disconnected or giving out-of-range readings.
             // TODO : The logic of this for each sensor should be moved to devices.h objects
-            checkrange(_TempAmb);
-            checkrange(_TempEng);
-            checkrange(_TempWhFL);
-            checkrange(_TempWhFR);
-            checkrange(_TempWhRL);
-            checkrange(_TempWhRR);
-            checkrange(_TempBrake);
-            setflag(_TempWheel, RANGE, err_sens[RANGE][_TempWhFL] || err_sens[RANGE][_TempWhFR] || err_sens[RANGE][_TempWhRL] || err_sens[RANGE][_TempWhRR]);
+            TempFailure();
 
             checkrange(_Pot);
             checkrange(_Throttle);
@@ -189,8 +182,8 @@ class DiagRuntime {
             setflag(_HotRC, typ, err_sens[typ][_HotRCHorz] || err_sens[typ][_HotRCVert] || err_sens[typ][_HotRCCh3] || err_sens[typ][_HotRCCh4]);
             setflag(_GPIO, typ, err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter] || err_sens[typ][_FuelPump]);
             setflag(_Other, typ, err_sens[typ][_MuleBatt] || err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot]);
-            setflag(_Temps, typ, err_sens[typ][_TempEng] || err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL]
-                                 || err_sens[typ][_TempWhRR] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb]);
+            setflag(_TempWheel, typ, err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL] || err_sens[typ][_TempWhRR]);
+            setflag(_Temps, typ, err_sens[typ][_TempEng] || err_sens[typ][_TempWheel] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb]);
         }
     }
     void set_sensidiots() {
@@ -255,7 +248,12 @@ class DiagRuntime {
             ezread.squintf("\n");
         }
     }
-
+    void TempFailure() {
+        for (int i=_TempEng; i<=_TempAmb; i++) {
+            checkrange(i);
+            setflag(i, LOST, !tempsens->detected(i));
+        }
+    }
     // Brakes:   checks if any sensor the brake is expecting to use in its current mode are posting errors
     void BrakeFailure() {  // checks if posn is not changing while pressure is changing and motor is moving (assuming not near max brake)
         static float pressure_last_pc;
@@ -330,7 +328,7 @@ class DiagRuntime {
         // setflag(_Tach, RANGE, tach->val() < tach->opmin() || tach->val() > tach->opmax());
     }
     void HotRCFailure() {
-        for (int32_t ch = HORZ; ch <= CH4; ch++) {  // Hack: This loop depends on the indices for hotrc channel enums matching indices of hotrc sensor errors
+        for (int32_t ch = HORZ; ch <= CH4; ch++) {
             int errindex;
             if (ch == HORZ) errindex = _HotRCHorz;
             else if (ch == VERT) errindex = _HotRCVert;
@@ -570,11 +568,11 @@ class BootMonitor {
         task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;
         if (sec >= 0) timeout_sec = sec;
         myprefs->begin("FlyByWire", false);
-        print_partition_table();
         bootcounter();
         set_codestatus(Booting);
         print_postmortem();
         recover_status();
+        print_partition_table();
         if (!watchdog_enabled) return;
         ezread.squintf("Boot manager.. \n");
         esp_task_wdt_init(timeout_sec, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c

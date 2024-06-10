@@ -622,7 +622,7 @@ class BrakeControl : public JagMotor {
     float posn_kd = 22.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr int pid_timeout = 40000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
-    int dominantsens_last = PositionFB, preforce_drivemode;    // float posn_inflect, pres_inflect, pc_inflect;
+    int dominantsens_last = PositionFB, preforce_request;    // float posn_inflect, pres_inflect, pc_inflect;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
     Timer stopcar_timer{10000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000}, blindaction_timer{3000000};
     bool stopped_last = false;
@@ -641,7 +641,7 @@ class BrakeControl : public JagMotor {
   public:
     using JagMotor::JagMotor;
     bool pid_enabled = true, pid_ena_last = true, enforce_positional_limits = true, no_feedback = false;    // default for use of pid allowed
-    int feedback = PositionFB, feedback_last = PositionFB;  // this is the default for sensors to use as feedback
+    int feedback = HybridFB, feedback_last = HybridFB;  // this is the default for sensors to use as feedback
     int dominantsens, motormode = Halt, oldmode = Halt;  // not tunable
     int openloop_mode = AutoRelHoldable;  // if true, when in openloop the brakes release when trigger released. otherwise, control with thrigger using halfway point scheme
     bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == PositionFB);
@@ -802,12 +802,12 @@ class BrakeControl : public JagMotor {
         if (feedback == NoneFB) {  // if running w/o feedback, let's blindly release the brake for a few seconds then halt it
             in_progress = (!blindaction_timer.expired());
             if (in_progress) pc[OUT] = pc[OPMIN];
-            else setmode(Halt); 
+            else setmode(Halt, false); 
             return in_progress;
         }
         in_progress = (!at_position && !motor_park_timer.expired());
         if (in_progress) set_target(tgt_point);
-        else setmode(Halt);
+        else setmode(Halt, false);
         pc[OUT] = calc_loop_out();
         return in_progress;
     }
@@ -832,7 +832,7 @@ class BrakeControl : public JagMotor {
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
             throttle->setmode(Idle);  // Stop pushing the gas, will help us stop the car better
             carstop(true);
-            if (!autostopping) setmode(Halt);  // After AutoStop mode stops the car or times out, then stop driving the motor
+            if (!autostopping) setmode(Halt, false);  // After AutoStop mode stops the car or times out, then stop driving the motor
         }
         else if (motormode == Halt) {
             pc[OUT] = pc[STOP];
@@ -868,11 +868,12 @@ class BrakeControl : public JagMotor {
         for (int p = PositionFB; p <= PressureFB; p++) pids[p].set_output(pc[OUT]);  // feed the final value back into the pids
     }
   public:
-    void setmode(int _mode, bool force_init=false) {    
+    void setmode(int _mode, bool external_request=true) {  // external_request set to false when calling from inside the class (to remember what the outside world wants the mode to be)   
         bool mode_forced = false;                                                 // note whether requested mode was overriden
+        int save_mode_request = _mode;
         if (feedback == NoneFB) {                                                 // if there is no feedback
             if (_mode == ActivePID || _mode == ThreshLoop) { 
-                preforce_drivemode = _mode;                                       // remember our requested drive mode before demoting to openloop mode, so we can restore it if settings changed
+                // preforce_drivemode = _mode;                                       // remember our requested drive mode before demoting to openloop mode, so we can restore it if settings changed
                 mode_forced = true;
                 _mode = OpenLoop;      // can't use loops, drop to openloop instead
             }
@@ -881,20 +882,23 @@ class BrakeControl : public JagMotor {
                 return;  // keep current mode
             }
             else if (_mode == AutoStop) Serial.print("Warn: performing blind panic stop maneuver\n");
-            else if (_mode == Release) _mode = Halt;
+            else if (_mode == Release) {
+                _mode = Halt;
+                mode_forced = true;
+            }
             // else if (_mode == Release || _mode == ParkMotor) _mode = Halt;   // in openloop we lose some safeties, only use if necessary 
         }
         else if (!pid_enabled) {                         // if we have feedback but pid is disabled in config
             if (_mode == ActivePID) _mode = ThreshLoop;  // drop to simple threshold-based loop scheme
         }
         if (_mode == motormode) return;
+        if (external_request) preforce_request = save_mode_request;  // remember what the outside world actually asked for, in case we override it but later wish to go back
         autostopping = autoholding = cal_brakemode = parking = releasing = false;        
         interval_timer.reset();
         stopcar_timer.reset();
         blindaction_timer.reset();
         motor_park_timer.reset();
         motormode = _mode;
-        if (!mode_forced) preforce_drivemode = motormode;  // preforce_drivemode should equal motormode unless other modes were demoted to openloop
         // ezread.squintf("brakemode: %d\n",motormode);
     }
     void update_ctrl_config(int new_pid_ena=-5, int new_feedback=-5) {   // run w/o arguments each loop to enforce configuration limitations, or call with argument(s) to change config and update. do not change feedback or pid_enabled anywhere else!
@@ -904,8 +908,8 @@ class BrakeControl : public JagMotor {
         feedback_enabled[PositionFB] = ((feedback == PositionFB) || (feedback == HybridFB));  // set sensor enable consistent with feedback config
         feedback_enabled[PressureFB] = ((feedback == PressureFB) || (feedback == HybridFB));  // set sensor enable consistent with feedback config
         no_feedback = (feedback == NoneFB);                              // for idiot light display
-        if (!pid_enabled) setmode(preforce_drivemode);                            // ensure current motor mode is consistent with configs set here
         if ((feedback != feedback_last) || (pid_enabled != pid_ena_last)) {
+            setmode(preforce_request, false);                            // ensure current motor mode is consistent with configs set here
             derive();  // on change need to recalculate some values
             ezread.squintf("brake pid %s feedback: %s\n", pid_enabled ? "enabled" : "disabled", brakefeedbackcard[feedback]);        
         }

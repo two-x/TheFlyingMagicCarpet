@@ -140,7 +140,7 @@ int throttle_ctrl_mode = OpenLoop;   // should gas servo use the rpm-sensing pid
 bool print_task_stack_usage = false;  // enable to have remaining heap size and free task memory printed to console every so often. for tuning memory allocation
 bool autosaver_display_fps = true;   // do you want to see the fps performance of the fullscreen saver in the corner?
 bool crash_driving_recovery = true;  // if code crashes while driving, should it continue driving after reboot?
-bool pot_tuner_acceleration = true;  // when editing values, can we use the pot to control acceleration of value changes? (assuming we aren't pot mapping some sensor at the time)
+bool pot_tuner_acceleration = false;  // when editing values, can we use the pot to control acceleration of value changes? (assuming we aren't pot mapping some sensor at the time)
 // dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool dont_take_temperatures = false; // disables temp sensors. in case debugging dallas sensors or causing problems
 bool console_enabled = true;         // completely disables the console serial output. idea being, it may be safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
