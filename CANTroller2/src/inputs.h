@@ -176,6 +176,7 @@ class Encoder {
     float spinrate() { return _spinrate; }  // in Hz for display
     float spinrate_max() { return _spinrate_max; }  // in Hz for display
     int accel_factor() { return _accel_factor; }  // for display
+    int accel_max() { return (int)_accel_max; }
     void update_spinrate() {
         static int best_time_this_twist;
         static int time_last;

@@ -193,11 +193,11 @@ class DiagRuntime {
         }
     }
     void set_idiot_blinks() {  // adds blink code to lost and range err neopixels corresponing to the lowest numbered failing sensor
-        for (int32_t t=LOST; t<=RANGE; t++) {
+        for (int t=LOST; t<=RANGE; t++) {
             most_critical_sensor[t] = _None;
             err_sens_alarm[t] = false;
             err_sens_fails[t] = 0;
-            for (int32_t s=0; s<NumTelemetryIdiots; s++)
+            for (int s=0; s<NumTelemetryIdiots; s++)
                 if (err_sens[t][s]) {
                     if (most_critical_sensor[t] = _None) most_critical_sensor[t] = s;
                     err_sens_alarm[t] = true;
@@ -206,9 +206,9 @@ class DiagRuntime {
         }
     }
     void report_changes() {
-        for (int32_t i=0; i<NUM_ERR_TYPES; i++) {
+        for (int i=0; i<NUM_ERR_TYPES; i++) {
             bool printheader1 = false, printheader2 = false, printed = false;
-            for (int32_t j=0; j<NumTelemetryFull; j++) {
+            for (int j=0; j<NumTelemetryFull; j++) {
                 if (report_error_changes && (err_sens[i][j] && !err_last[i][j]) && registered[j]) {
                     if (!printheader1) {
                         ezread.squintf("!%s:", err_type_card[i].c_str());
@@ -219,7 +219,7 @@ class DiagRuntime {
                     printed = true;
                 }
             }
-            for (int32_t j=0; j<NumTelemetryFull; j++) {
+            for (int j=0; j<NumTelemetryFull; j++) {
                 if (report_error_changes && (!err_sens[i][j] && err_last[i][j]) && registered[j]) {
                     if (!printheader2) {
                         if (!printheader1) ezread.squintf("!%s:", err_type_card[i].c_str());
@@ -231,7 +231,7 @@ class DiagRuntime {
                     printed = true;
                 }
             }
-            for (int32_t j=0; j<NumTelemetryFull; j++) err_last[i][j] = err_sens[i][j];
+            for (int j=0; j<NumTelemetryFull; j++) err_last[i][j] = err_sens[i][j];
             if (printed) ezread.squintf("\n");
         }    
     }
@@ -239,9 +239,9 @@ class DiagRuntime {
         return most_critical_sensor[type];  // for global awareness
     }
     void print() {
-        for (int32_t t=0; t<=NUM_ERR_TYPES; t++) {
+        for (int t=0; t<=NUM_ERR_TYPES; t++) {
             ezread.squintf ("diag err: %s (%d): ", err_type_card[t], err_sens_fails[t]);
-            for (int32_t s=0; s<=NumTelemetryFull; s++) {
+            for (int s=0; s<=NumTelemetryFull; s++) {
                 if (s == NumTelemetryFull) s++;
                 if (err_sens[t][s]) ezread.squintf ("%s, ", err_sens_card[s]);
             }
@@ -472,20 +472,20 @@ class LoopTimer {
     LoopTimer() {}
     // Loop timing related
     Timer loop_timer = Timer(1000000);  // how long the previous main loop took to run (in us)
-    int32_t loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
+    int loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
     float loop_sum_s, loopfreq_hz;
-    uint32_t looptimes_us[20];
+    int looptimes_us[20];
     bool loop_dirty[20];
     int64_t loop_cout_mark_us, boot_mark;
-    uint32_t loop_cout_us = 0, loop_peak_us = 0, loop_now = 0;;
-    static constexpr uint32_t loop_history = 100;
-    uint32_t loop_periods_us[loop_history];
+    int loop_cout_us = 0, loop_peak_us = 0, loop_now = 0;;
+    static constexpr int loop_history = 100;
+    int loop_periods_us[loop_history];
     // std::vector<std::string> loop_names(20);
     std::string loop_names[20];
     void setup() {  // Run once at end of setup()
         boot_mark = esp_timer_get_time();
         if (looptime_print) {
-            for (int32_t x=1; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
+            for (int x=1; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
             loop_names[0] = std::string("top");
             loop_dirty[0] = false;
             loopindex = 1;
@@ -503,7 +503,7 @@ class LoopTimer {
             loopindex++;
         }
     }
-    float calc_avg(uint32_t _loop_now, uint32_t _thisloop) {
+    float calc_avg(int _loop_now, int _thisloop) {
         if (_loop_now == loop_history + 2) {
             loop_recentsum = _thisloop;
             for (int l = 0; l <= loop_history; l++)
@@ -513,7 +513,7 @@ class LoopTimer {
         return (float)loop_recentsum/(float)loop_history;
     }
     void update() {  // Call once each loop at the very end
-        uint32_t thisloop = (uint32_t)loop_timer.elapsed();
+        int thisloop = (int)loop_timer.elapsed();
         loop_avg_us = calc_avg(loop_now, thisloop);
         loop_periods_us[loop_now] = thisloop;  // us since beginning of this loop
         loop_timer.reset();
@@ -521,17 +521,17 @@ class LoopTimer {
         // ema_filt(loop_periods_us[loop_now], &loop_avg_us, 0.01);
         if (loop_avg_us > 1) loopfreq_hz = 1000000/loop_avg_us;
         loop_peak_us = 0;
-        for (int8_t i=0; i<loop_history; i++) if (loop_peak_us < loop_periods_us[i]) loop_peak_us = loop_periods_us[i]; 
+        for (int i=0; i<loop_history; i++) if (loop_peak_us < loop_periods_us[i]) loop_peak_us = loop_periods_us[i]; 
         if (looptime_print) {
             loop_cout_mark_us = esp_timer_get_time();
             std::cout << std::fixed << std::setprecision(0);
-            std::cout << "\r" << (uint32_t)loop_sum_s << "s #" << loopno;  //  << " av:" << std::setw(5) << (int32_t)(loop_avg_us);  //  << " av:" << std::setw(3) << loop_avg_ms 
+            std::cout << "\r" << (int)loop_sum_s << "s #" << loopno;  //  << " av:" << std::setw(5) << (int32_t)(loop_avg_us);  //  << " av:" << std::setw(3) << loop_avg_ms 
             std::cout << " : " << std::setw(5) << loop_periods_us[loop_now] << " (" << std::setw(5) << loop_periods_us[loop_now]-loop_cout_us << ")us ";  // << " avg:" << loop_avg_us;  //  " us:" << esp_timer_get_time() << 
-            for (int32_t x=1; x<loopindex; x++)
+            for (int x=1; x<loopindex; x++)
                 std::cout << std::setw(3) << loop_names[x] << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
             std::cout << " cout:" << std::setw(5) << loop_cout_us;
             if (loop_periods_us[loop_now]-loop_cout_us > looptime_linefeed_threshold || !looptime_linefeed_threshold) std::cout << std::endl;
-            loop_cout_us = (uint32_t)(esp_timer_get_time() - loop_cout_mark_us);
+            loop_cout_us = (int)(esp_timer_get_time() - loop_cout_mark_us);
             loopindex = 0;
             mark ("top");
         }

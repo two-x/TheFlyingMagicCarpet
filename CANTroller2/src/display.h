@@ -449,7 +449,7 @@ class Display {
         }
         disp_data_dirty[lineno] = false;
     }
-    void drawval_int(int lineno, int value, int lowlim=-1, int hilim=-1, int target=-1) {
+    void drawval(int lineno, int value, int lowlim=-1, int hilim=-1, int target=-1) {
         std::string val_string = num2string(value, (int)disp_maxlength);
         float lo, hi, targ;
         if (lowlim == -1) lo = NAN;
@@ -521,6 +521,7 @@ class Display {
         int truncit = std::min(sig_places - 1, maxlength - 4 - (int)(place <= -10 || place >= 10));
         std::snprintf(buffer, sizeof(buffer), "%.*e", truncit, value);
         std::string result(buffer);  // copy buffer to result
+        result += std::to_string(std::abs(place));  // put exponent on
         if (result.find("e+0") != std::string::npos) result.replace(result.find("e+0"), 3, "e");  // Remove useless "+0" from exponent
         else if (result.find("e-0") != std::string::npos) result.replace(result.find("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find("e-0") != std::string::npos) 
         else if (result.find("e+") != std::string::npos) result.replace(result.find("e+"), 2, "e");  // For ridiculously large values
@@ -661,7 +662,7 @@ class Display {
     // * drawval (int_line, float_value)  // for floats
     // * drawval (int_line, float_value, [int_sig_places])  // for floats. sig_places is how many digits after decimal (if they fit) 
     // * drawval (int_line, float_value, [float_min], [float_max], [float_targ], [int_sig_places])  // for floats. if min & max are given it draws a bargraph of that range is drawn. If targ value is given then bargraph will include a target pointer. sig_places is how many digits after decimal (if they fit) 
-    // * drawval_int (int_line, int_value, [int_min], [int_max], [int_targ])  // for ints. if min & max are given it draws a bargraph of that range. If targ value is given then bargraph will include a target pointer. 
+    // * drawval (int_line, int_value, [int_min], [int_max], [int_targ])  // for ints. if min & max are given it draws a bargraph of that range. If targ value is given then bargraph will include a target pointer. 
     // * draw_truth (int_line, bool_value, [int_style])  // for bools. styles: 0 (on/off), 1 (yes/no), 2 (true/false) (default)
     // * draw_temp (int_line, sensor_location)  // for drawing temperatures
     // * draw_ascii (int_line, string)  // string must be length 6 max
@@ -669,8 +670,8 @@ class Display {
     void disp_datapage_values() {
         // if (!disp_values_dirty) return;
         float drange;
-        drawval_int(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        drawval_int(2, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+        drawval(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+        drawval(2, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
         drawval(3, speedo.val(), 0.0f, speedo.opmax(), gas.cruisepid.target());
         drawval(4, tach.val(), 0.0f, tach.opmax(), gas.pid.target());
         drawval(5, brake.combined_read_pc, 0.0, 100.0, brake.target_pc);  // (brake_active_pid == S_PID) ? (int)brakeSPID.targ() : pressure_target_adc);
@@ -693,20 +694,20 @@ class Display {
             drawval(23, steer.steer_safe_pc, 0.0f, 100.0f, NAN, 1);
         }
         else if (datapage == PG_JOY) {
-            drawval_int(9, hotrc.us[HORZ][FILT], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
-            drawval_int(10, hotrc.us[VERT][FILT], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
-            drawval_int(11, hotrc.us[HORZ][RAW], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
-            drawval_int(12, hotrc.us[VERT][RAW], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
-            drawval_int(13, hotrc.us[CH3][RAW], hotrc.us[CH3][OPMIN], hotrc.us[CH3][OPMAX]);
-            drawval_int(14, hotrc.us[CH4][RAW], hotrc.us[CH4][OPMIN], hotrc.us[CH4][OPMAX]);
-            drawval_int(15, hotrc.pc[HORZ][RAW], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-            drawval_int(16, hotrc.pc[VERT][RAW], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+            drawval(9, hotrc.us[HORZ][FILT], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
+            drawval(10, hotrc.us[VERT][FILT], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
+            drawval(11, hotrc.us[HORZ][RAW], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
+            drawval(12, hotrc.us[VERT][RAW], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
+            drawval(13, hotrc.us[CH3][RAW], hotrc.us[CH3][OPMIN], hotrc.us[CH3][OPMAX]);
+            drawval(14, hotrc.us[CH4][RAW], hotrc.us[CH4][OPMIN], hotrc.us[CH4][OPMAX]);
+            drawval(15, hotrc.pc[HORZ][RAW], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+            drawval(16, hotrc.pc[VERT][RAW], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
             for (int line=17; line<=18; line++) draw_eraseval(line);
             drawval(19, airvelo.opmax(), airvelo.absmin(), airvelo.absmax());
             drawval(20, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
             drawval(21, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
-            drawval_int(22, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
-            drawval_int(23, hotrc.deadband_us, 0, 100);
+            drawval(22, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
+            drawval(23, hotrc.deadband_us, 0, 100);
         }
         else if (datapage == PG_SENS) {
             drawval(9, pot.native(), pot.opmin_native(), pot.opmax_native());
@@ -868,23 +869,24 @@ class Display {
             draw_truth(23, cal_gasmode, 0);
         }
         else if (datapage == PG_UI) {
-            drawval_int(9, (int)loop_avg_us);
-            drawval_int(10, looptimer.loop_peak_us);
-            drawval_int(11, (int)looptimer.loopfreq_hz);
-            drawval_int(12, fps);
+            drawval(9, loop_avg_us);
+            drawval(10, looptimer.loop_peak_us);
+            drawval(11, (int)looptimer.loopfreq_hz);
+            drawval(12, fps);
             draw_ascii(13, activitiescard[last_activity]);
-            drawval_int(14, touch->touch_pt(0), 0, disp_width_pix);
-            drawval_int(15, touch->touch_pt(1), 0, disp_height_pix);
+            drawval(14, touch->touch_pt(0), 0, disp_width_pix);
+            drawval(15, touch->touch_pt(1), 0, disp_height_pix);
             drawval(16, encoder.spinrate(), 0.0, encoder.spinrate_max());
-            drawval_int(17, encoder.accel_factor(), 1, encoder._accel_max);
-            drawval(18, looptimer.uptime(), 3);
+            drawval(17, encoder.accel_factor(), 1, encoder.accel_max());
+            drawval(18, looptimer.uptime());
             // drawval(13, drawclock, 0, refresh_limit);
             // drawval(14, pushclock, 0, refresh_limit);
             // drawval(15, idleclock, 0, refresh_limit);
             draw_eraseval(19);
-            drawval_int(20, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
+            drawval(20, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
             draw_truth(21, flashdemo, 0);
-            drawval(22, neobright, 1.0, 100.0f, -1, 3);
+            drawval(22, neobright, 1, 100);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
+
             draw_ascii(23, uicontextcard[ui_context]);
             // draw_truth(19, (ui_context == ScreensaverUI), 0);
         }
@@ -1042,12 +1044,14 @@ class Tuner {
     // call w/o arguments to get a bool value determined by idelta.
     // alternately, give a pointer instead of a number to change the value directly instead of returning it (works w/ bools too)
     // note idelta must be already set to the desired integer edit value
-    // numeric edits are scaled proportional to the magnitude of the current value, unless a different magnitude is given
+    // numeric edits are scaled proportional to the magnitude of the current value. you can specify a minimum decimal place to scale to (keeps from being impossible to cross zero)
     // edit acceleration can be removed for ints if dropdown is set to true (for selection lists, etc.)
-    float tune(float orig_val, float min_val=NAN, float max_val=NAN, int sig_digits=-1) {
-        if (sig_digits < 0) sig_digits = disp_default_float_sig_dig;
-        int sig_place = screen->significant_place(orig_val);
+    float tune(float orig_val, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-3) {
+        // if (sig_digits < 0) sig_digits = disp_default_float_sig_dig;
+        int sig_digits = disp_default_float_sig_dig;
+        int sig_place = std::max(screen->significant_place(orig_val), min_sig_edit_place + sig_digits);
         float scale = 1.0;  // needs to change if disp_default_float_sig_dig is modified !!
+        // if (sig_place < 0) sig_place++;  // because place skips 0
         while (sig_place > sig_digits) {  
             scale *= 10.0;
             sig_place--;
@@ -1060,7 +1064,7 @@ class Tuner {
         if (std::isnan(min_val)) min_val = ret;
         if (std::isnan(max_val)) max_val = ret;
         return constrain(ret, min_val, max_val);
-        Serial.printf("o:%lf id:%d sc:%lf, min:%lf, max:%lf ret:%lf\n", orig_val, idelta, scale, min_val, max_val, ret);
+        // Serial.printf("o:%lf id:%d sc:%lf, min:%lf, max:%lf ret:%lf\n", orig_val, idelta, scale, min_val, max_val, ret);
         return ret;
     }
     void tune(float* orig_ptr, float min_val=NAN, float max_val=NAN, int sig_digits=-1) {
@@ -1225,7 +1229,7 @@ class Tuner {
                 else if (sel == 7) sim.set_can_sim(sens::speedo, tune());
                 else if (sel == 8) sim.set_can_sim(sens::tach, tune());
                 else if (sel == 9) sim.set_can_sim(sens::airvelo, tune());
-                else if (sel == 10) sim.set_can_sim(sens::mapsens, tune()); // else if (sel == 7) sim.set_can_sim(sens::starter, idelta);
+                else if (sel == 10) sim.set_can_sim(sens::mapsens, tune());
                 else if (sel == 11) sim.set_can_sim(sens::basicsw, tune());
                 else if (sel == 12) sim.set_potmap((sens)(tune(sim.potmap(), 0, (int)(sens::starter) - 1, true)));
                 else if (sel == 13) cal_brakemode_request = tune();
