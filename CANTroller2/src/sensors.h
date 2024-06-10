@@ -137,7 +137,7 @@ class Param {
         constrain_value();
         return true;
     }
-    bool add(float arg_add) { return set(_val + arg_add); }
+    // bool add(float arg_add) { return set(_val + arg_add); }
     float val() { return _val; }
     float min() { return *_min_ptr; }
     float max() { return *_max_ptr; }
@@ -340,17 +340,17 @@ class Transducer : public Device {
     bool set_pc(float arg_val_pc) { 
         return set_si(from_pc(arg_val_pc));
     }
-    bool add_native(float arg_add) {  // this scales the given add amount to a consistent rate of change 
-        float delta = arg_add * tuning_rate_pcps * loop_avg_us * (_opmax_native - _opmin_native) / (100.0 * 1000000.0);  // this acceleration logic doesn't belong here
-        return set_native(constrain(_native.val() + delta, _opmin_native, _opmax_native));
-    }
-    bool add_pc(float arg_add) {  // this scales the given add amount to a consistent rate of change
-        return add_si(from_pc(arg_add));
-    }
-    bool add_si(float arg_add) {  // this scales the given add amount to a consistent rate of change
-        float delta = arg_add * tuning_rate_pcps * loop_avg_us * (_opmax - _opmin) / (100.0 * 1000000.0);  // this acceleration logic doesn't belong here
-        return set_si(constrain(_si.val() + delta, _opmin, _opmax));
-    }
+    // bool add_native(float arg_add) {  // this scales the given add amount to a consistent rate of change 
+    //     float delta = arg_add * tuning_rate_pcps * loop_avg_us * (_opmax_native - _opmin_native) / (100.0 * 1000000.0);  // this acceleration logic doesn't belong here
+    //     return set_native(constrain(_native.val() + delta, _opmin_native, _opmax_native));
+    // }
+    // bool add_pc(float arg_add) {  // this scales the given add amount to a consistent rate of change
+    //     return add_si(from_pc(arg_add));
+    // }
+    // bool add_si(float arg_add) {  // this scales the given add amount to a consistent rate of change
+    //     float delta = arg_add * tuning_rate_pcps * loop_avg_us * (_opmax - _opmin) / (100.0 * 1000000.0);  // this acceleration logic doesn't belong here
+    //     return set_si(constrain(_si.val() + delta, _opmin, _opmax));
+    // }
     void set_margin(float arg_marg) { _margin = arg_marg; }
     
     void set_conversions(float arg_mfactor=NAN, float arg_boffset=NAN) {  // arguments passed in as NAN will not be used.  // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
@@ -748,7 +748,7 @@ class BrakePositionSensor : public AnalogSensor {
             // set_oplim_native(1445, 1923);  // 240609 1445 (2.68in) is full push, and 1923 (4.5in) is park position (with simple quicklink +carabeener linkage)
         #endif
         set_ema_alpha(0.35);
-        set_margin(0.01);  // TODO: add description
+        set_margin(0.2);  // TODO: add description
         // _mfactor = (_absmax - _absmin) / (float)(_absmax_adc - _absmin_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
         // _boffset = -2.69;  //  979 adc * 0.00372 in/adc - 0.95 in = -2.69 in
         print_config();

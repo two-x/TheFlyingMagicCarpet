@@ -169,10 +169,10 @@ class QPID {
     void set_kp(float a_kp) { set_tunings(std::max(0.0f, a_kp), dispki, dispkd, _pmode, _dmode, _awmode); }
     void set_ki(float a_ki) { set_tunings(dispkp, std::max(0.0f, a_ki), dispkd, _pmode, _dmode, _awmode); }
     void set_kd(float a_kd) { set_tunings(dispkp, dispki, std::max(0.0f, a_kd), _pmode, _dmode, _awmode); }
-    void add_kp(float add) { set_kp(dispkp + add); }
-    void add_ki(float add) { set_ki(dispki + add); }
-    void add_kd(float add) { set_kd(dispkd + add); }
-    void add_sampletime(int add) { set_sampletime(_sampletime + add);}
+    // void add_kp(float add) { set_kp(dispkp + add); }
+    // void add_ki(float add) { set_ki(dispki + add); }
+    // void add_kd(float add) { set_kd(dispkd + add); }
+    // void add_sampletime(int add) { set_sampletime(_sampletime + add);}
     void set_centmode(centmod a_centmode) { _centmode = a_centmode; }
     void set_centmode(int a_centmode) { _centmode = (centmod)a_centmode; }
     void set_cent(float a_cent) { if (*_outmin <= a_cent && *_outmax >= a_cent) _cent = a_cent; }
@@ -581,6 +581,14 @@ class ThrottleControl : public ServoMotor {
             write_motor();                     // Step 5 : write to servo
         }
     }
+    float idlehot() {
+        if (pid_enabled) return tach->idle_hot();
+        else return idle_si[OPMIN];
+    }
+    float idlecold() {
+        if (pid_enabled) return tach->idle_cold();
+        else return idle_si[OPMAX];
+    }
     void set_idlehot(float newidlehot) {
         if (pid_enabled) tach->set_idlehot(constrain(newidlehot, tach->opmin(), tach->idle_cold() - 1.0));
         else idle_si[OPMIN] = constrain(newidlehot, idle_si[ABSMIN], idle_si[OPMAX] - 1.0);
@@ -589,18 +597,8 @@ class ThrottleControl : public ServoMotor {
         if (pid_enabled) tach->set_idlecold(constrain(newidlecold, tach->idle_hot() + 1.0, tach->opmax()));
         else idle_si[OPMAX] = constrain(newidlecold, idle_si[OPMIN] + 1.0, idle_si[ABSMAX]);
     }
-    void add_idlehot(float add) { 
-        if (pid_enabled) tach->set_idlehot(tach->idle_hot() + add);
-        else set_idlehot(idle_si[OPMIN] + add);
-    }
-    void add_idlecold(float add) {
-        if (pid_enabled) tach->set_idlecold(tach->idle_cold() + add);
-        else set_idlecold(idle_si[OPMAX] + add);
-    }
     void set_temphot(float newtemphot) { idletemp_f[OPMAX] = constrain(newtemphot, idletemp_f[OPMIN] + 1.0, idletemp_f[ABSMAX]); }
     void set_tempcold(float newtempcold) { idletemp_f[OPMIN] = constrain(newtempcold, idletemp_f[ABSMIN], idletemp_f[OPMAX] - 1.0); }
-    void add_temphot(float add) { set_temphot(idletemp_f[OPMAX] + add); }
-    void add_tempcold(float add) { set_tempcold(idletemp_f[OPMIN] + add); }
 };
 class ChokeControl : public ServoMotor {
   private:
@@ -901,10 +899,10 @@ class BrakeControl : public JagMotor {
         motormode = _mode;
         // ezread.squintf("brakemode: %d\n",motormode);
     }
-    void update_ctrl_config(int new_pid_ena=-5, int new_feedback=-5) {   // run w/o arguments each loop to enforce configuration limitations, or call with argument(s) to change config and update. do not change feedback or pid_enabled anywhere else!
-        if (new_feedback != -5) feedback = new_feedback;                 // receive new feedback sensors setting (NoneFB/PressureFB/PositionFB/_Hybrid) if given
+    void update_ctrl_config(int new_pid_ena=-1, int new_feedback=-1, int new_openloop_mode=-1) {   // run w/o arguments each loop to enforce configuration limitations, or call with argument(s) to change config and update. do not change feedback or pid_enabled anywhere else!
+        if (new_feedback >= 0 && new_feedback <= NumBrakeFB) feedback = new_feedback;                 // receive new feedback sensors setting (NoneFB/PressureFB/PositionFB/_Hybrid) if given
         if (feedback == NoneFB) pid_enabled = false;                      // if there are no feedback sensors then we must force disable pid
-        else if (new_pid_ena != -5) pid_enabled = (bool)new_pid_ena;     // otherwise receive new pid enable setting (ON/OFF) if given
+        else if (new_pid_ena == 0 || new_pid_ena == 1) pid_enabled = (bool)new_pid_ena;     // otherwise receive new pid enable setting (ON/OFF) if given
         feedback_enabled[PositionFB] = ((feedback == PositionFB) || (feedback == HybridFB));  // set sensor enable consistent with feedback config
         feedback_enabled[PressureFB] = ((feedback == PressureFB) || (feedback == HybridFB));  // set sensor enable consistent with feedback config
         no_feedback = (feedback == NoneFB);                              // for idiot light display
@@ -913,6 +911,7 @@ class BrakeControl : public JagMotor {
             derive();  // on change need to recalculate some values
             ezread.squintf("brake pid %s feedback: %s\n", pid_enabled ? "enabled" : "disabled", brakefeedbackcard[feedback]);        
         }
+        if (new_openloop_mode >= 0 && new_openloop_mode <= NumOpenLoopModes) openloop_mode = new_openloop_mode;
         feedback_last = feedback;
         pid_ena_last = pid_enabled;
     }
