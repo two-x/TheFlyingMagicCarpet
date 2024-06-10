@@ -21,12 +21,11 @@ neorgb_t color_to_neo(uint16_t color565) { return neorgb_t((color565 & 0xf800) >
 neorgb_t color_to_neo(uint8_t color332) { return neorgb_t(color332 & 0xe0, (color332 & 0x1c) << 3, (color332 & 0x3) << 6); }  // , 0);
 class NeopixelStrip {
   public:
-    static const uint idiotcount = 7;
+    static const int idiotcount = 7;
   private:
     enum brightness_presets : int { B_OFF, B_MIN, B_LO, B_MED, B_HI, B_EXT, B_MAX };
     enum ledset : int { onoff, fcount, fpulseh, fpulsel, fonbrit, fnumset };  // just a bunch of int variables needed for each of the neo idiot lights
     enum ledcolor : int { cnow, clast, cnormal, coff, con, cflash, cnumcolors };
-    uint8_t neo_wheelcounter = 0;
     enum brightness_contexts { NITE, DAY };  // Indoors = NITE
     uint8_t brightlev[2][7] = { { 0, 2,  6, 10, 17, 30,  50 },     // [NITE] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
                                 { 0, 3, 16, 30, 45, 65, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
@@ -36,62 +35,61 @@ class NeopixelStrip {
     uint8_t heartbright = 22;
     uint8_t hibright = 35;
     uint8_t heartlobright = 2;
-    int8_t lomultiplier = 3;  // lobright is hibright divided by this twice
-    float desat_of_ten = 0.0;  // out of 10.0
+    int lomultiplier = 3;  // lobright is hibright divided by this twice
     uint8_t neo_master_brightness = 0xff;
     float correction[3] = { 1.0, 0.9, 1.0 };  // Applied to brightness of rgb elements
-    static constexpr uint32_t neo_fade_timeout_us = 380000;
+    static constexpr int neo_fade_timeout_us = 380000;
     Timer neoFadeTimer = Timer(neo_fade_timeout_us), neoHeartbeatTimer;
     bool neo_heartbeat = false;
     bool heartcolor_change = true;  // , heartcolor_overridden = false;
     int pin = -1;
     uint8_t heartbeat_brightness, heartbeat_brightness_last; // brightness during fadeouts
-    uint32_t neobright_last;
-    int32_t heartbeat_state = 0;
-    int32_t heartbeat_level = 0;
+    int neobright_last;
+    int heartbeat_state = 0;
+    int heartbeat_level = 0;
     int64_t heartbeat_ekg_us[4] = {250000, 240000, 620000, 2000000};  // {187500, 125000, 562500, 1250000};
-    int32_t heartbeat_pulse = 255;
-    static const uint8_t numpixels = 1 + idiotcount;  //  + extIdiotCount;  // 15 pixels = heartbeat RGB + 7 onboard RGB + 7 external RGBW
+    int heartbeat_pulse = 255;
+    static const int numpixels = 1 + idiotcount;  //  + extIdiotCount;  // 15 pixels = heartbeat RGB + 7 onboard RGB + 7 external RGBW
     neorgb_t neostrip[numpixels];
     neorgb_t heartbeatColor, heartbeatNow;
     uint8_t heartcolor16 = 0x00;  // blackened heart
     bool breadboard = false;
-    uint8_t fset[idiotcount][fnumset];
+    int fset[idiotcount][fnumset];
     neorgb_t cidiot[idiotcount][cnumcolors];
-    uint32_t fquantum_us = 50000;  // time resolution of flashes
-    static const uint8_t fevresolution = 128;
-    static const uint8_t fevpages = 4;  // fevresolution / 32;  <- but if I use that math instead, seg fault
-    uint32_t fevents[idiotcount][fevpages];
-    uint8_t fevcurrpage = 0; uint8_t fevfilled = 0; uint32_t nowtime_us, nowepoch;  // , fevmask_master;
+    int fquantum_us = 50000;  // time resolution of flashes
+    static const int fevresolution = 128;
+    static const int fevpages = 4;  // fevresolution / 32;  <- but if I use that math instead, seg fault
+    int fevents[idiotcount][fevpages];
+    int fevcurrpage = 0; int fevfilled = 0; int nowtime_us, nowepoch;  // , fevmask_master;
     Timer flashtimer;
     float maxelement(float r, float g, float b);
     float midelement(float r, float g, float b);
     float minelement(float r, float g, float b);
     neorgb_t dimmer(neorgb_t color, uint8_t bright);  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
-    neorgb_t desaturate(neorgb_t color, int32_t _desat_of_ten);  // desat_pc=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
-    void recolor_idiots(int8_t argidiot = -1);
-    bool fevpop(uint _idiot, int8_t pop_off);
-    void fevpush(uint _idiot, int8_t push_off, bool push_val);
-    void update_idiot(uint _idiot);
+    neorgb_t desaturate(neorgb_t color, int _desat_of_ten);  // desat_pc=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
+    void recolor_idiots(int argidiot = -1);
+    bool fevpop(int _idiot, int pop_off);
+    void fevpush(int _idiot, int push_off, bool push_val);
+    void update_idiot(int _idiot);
     void calc_lobright();
   public:
     NeopixelStrip(int argpin) { pin = argpin; }
     void refresh();
     void setup(bool viewcontext=NITE);
-    void setbright(uint8_t bright_pc);
+    void setbright(int bright_pc);
     void setdesaturation(float _desat_of_ten);  // a way to specify nite or daytime brightness levels
     void heartbeat_ena(bool onoroff);
     void set_heartcolor(uint8_t newcolor);
     void heartcolor_override(uint8_t color);
     void heartbeat_update();
     void colorfade_update();
-    uint32_t neopixelsAvailable();
-    bool newIdiotLight(uint _idiot, uint8_t color332, bool startboolstate = 0);
-    void setBoolState(uint _idiot, bool state);
-    void setflash(uint _idiot, uint8_t count, uint8_t pulseh=1, uint8_t pulsel=1, int32_t onbrit=-1, int32_t color=0xffffff);
-    void update(int16_t heart_color);
+    int neopixelsAvailable();
+    bool newIdiotLight(int _idiot, uint8_t color332, bool startboolstate = 0);
+    void setBoolState(int _idiot, bool state);
+    void setflash(int _idiot, int count, int pulseh=1, int pulsel=1, int onbrit=-1, uint32_t color=0xffffff);
+    void update(uint16_t heart_color);
     void enable_flashdemo(bool ena);
-    uint32_t idiot_neo_color(uint _idiot);
+    uint32_t idiot_neo_color(int _idiot);
 };
 
 float NeopixelStrip::maxelement(float r, float g, float b) {
@@ -104,14 +102,14 @@ float NeopixelStrip::minelement(float r, float g, float b) {
     return (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b);  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
 }
 neorgb_t NeopixelStrip::dimmer(neorgb_t color, uint8_t bright) {  // brightness 0 is off, 255 is max brightness while retaining same hue and saturation
-    int32_t ret[3];
+    int ret[3];
     float rgb[3] = { static_cast<float>(color.R), static_cast<float>(color.G), static_cast<float>(color.B) };
     float fbright = (float)bright / maxelement(rgb[0], rgb[1], rgb[2]);  // std::max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
-    for (int32_t element=0; element<3; element++) ret[element] = constrain((int32_t)(rgb[element] * fbright), 0, 255);
+    for (int element=0; element<3; element++) ret[element] = constrain((int)(rgb[element] * fbright), 0, 255);
     // printf("D br:%d  inc:%06x  outc:%02x%02x%02x\n", bright, color_to_888(color), (uint8_t)ret[0], (uint8_t)ret[1], (uint8_t)ret[2]);
     return neorgb_t(ret[0], ret[1], ret[2]);  // return CRGB((float)(color.r * fbright), (float)(color.g * fbright), (float)(color.b * fbright));
 }
-neorgb_t NeopixelStrip::desaturate(neorgb_t color, int32_t _desat_of_ten) {  // desat_pc=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
+neorgb_t NeopixelStrip::desaturate(neorgb_t color, int _desat_of_ten) {  // desat_pc=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
     uint8_t rgb[3] = { static_cast<uint8_t>(color.R), static_cast<uint8_t>(color.G), static_cast<uint8_t>(color.B) };
     float dominant = maxelement(rgb[0], rgb[1], rgb[2]);
     if (_desat_of_ten > 0)
@@ -125,9 +123,9 @@ neorgb_t NeopixelStrip::desaturate(neorgb_t color, int32_t _desat_of_ten) {  // 
     // }
     return neorgb_t(rgb[0], rgb[1], rgb[2]);
 }
-void NeopixelStrip::recolor_idiots(int8_t _idiot) {  // pass in -1 to recolor all idiots
-    int8_t start = (_idiot >= 0) ? _idiot : 0;
-    int8_t end = (_idiot >= 0) ? _idiot + 1 : idiotcount;
+void NeopixelStrip::recolor_idiots(int _idiot) {  // pass in -1 to recolor all idiots
+    int start = (_idiot >= 0) ? _idiot : 0;
+    int end = (_idiot >= 0) ? _idiot + 1 : idiotcount;
     for (int i = start; i < end; i++) {
         cidiot[i][con] = dimmer(cidiot[i][cnormal], hibright);
         cidiot[i][con] = desaturate(cidiot[i][con], desat_of_ten);
@@ -136,10 +134,10 @@ void NeopixelStrip::recolor_idiots(int8_t _idiot) {  // pass in -1 to recolor al
     }
 }
 void NeopixelStrip::refresh() {
-    int32_t numledstowrite = (heartbeatNow != neostrip[0]);
+    int numledstowrite = (heartbeatNow != neostrip[0]);
     neostrip[0] = heartbeatNow;
     neoobj.SetPixelColor(0, heartbeatNow);
-    for (int32_t i=0; i<idiotcount; i++) {
+    for (int i=0; i<idiotcount; i++) {
         if (cidiot[i][cnow] != neostrip[i+1]) {
             neoobj.SetPixelColor (1+i, cidiot[i][cnow]);
             neostrip[i + 1] = cidiot[i][cnow];  // color_to_neo(cidiot[i][cnow]);
@@ -158,7 +156,7 @@ void NeopixelStrip::setup(bool viewcontext) {
     neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
     neoFadeTimer.reset();
     setbright(neobright);
-    setdesaturation(neodesat);
+    setdesaturation(desat_of_ten);
     heartbeat_ena(true);
     std::cout << "refresh.. ";
     flashtimer.set(fquantum_us * fevresolution);
@@ -168,8 +166,9 @@ void NeopixelStrip::setup(bool viewcontext) {
 void NeopixelStrip::calc_lobright() {
     lobright = std::max(3, (hibright / lomultiplier) / lomultiplier);
 }
-void NeopixelStrip::setbright(uint8_t bright_pc) {  // a way to specify brightness level as a percent
-    hibright = (uint8_t)((255.0 * (float)bright_pc) / 100.0);
+void NeopixelStrip::setbright(int bright_pc) {  // a way to specify brightness level as a percent
+    neobright = bright_pc;
+    hibright = (uint8_t)((255.0 * (float)neobright) / 100.0);
     calc_lobright();
     if (neo_heartbeat_variable_brightness) {
         heartbright = hibright;  // (uint8_t)((float)hibright * 0.75);
@@ -205,7 +204,7 @@ void NeopixelStrip::heartbeat_update() {
     else if (!heartbeat_pulse) {
         heartbeat_brightness_last = heartbeat_brightness;
         if (neoFadeTimer.expired()) heartbeat_brightness = brightlev[context][B_MIN];
-        else heartbeat_brightness = (int8_t)(heartlobright + std::max((double)0, (float)(heartbright - heartlobright) * (1.0 - ((heartbeat_state == 1) ? 1.5 : 1.0) * (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us)));
+        else heartbeat_brightness = (uint8_t)(heartlobright + std::max((double)0, (float)(heartbright - heartlobright) * (1.0 - ((heartbeat_state == 1) ? 1.5 : 1.0) * (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us)));
         if (heartbeat_brightness > heartbeat_brightness_last) heartbeat_brightness = heartbeat_brightness_last;
     }
     if (heartcolor_change || heartbeat_brightness != neobright_last) {
@@ -214,29 +213,29 @@ void NeopixelStrip::heartbeat_update() {
         neobright_last = heartbeat_brightness;
     }
 }
-uint32_t NeopixelStrip::neopixelsAvailable() {
+int NeopixelStrip::neopixelsAvailable() {
     return idiotcount;
 }
-bool NeopixelStrip::newIdiotLight(uint _idiot, uint8_t color332, bool startboolstate) {
+bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolstate) {
     if (_idiot > idiotcount-1) return false;
     fset[_idiot][onoff] = startboolstate;
     cidiot[_idiot][cnormal] = color_to_neo(color332);
     cidiot[_idiot][clast] = color_to_neo((uint32_t)0);
     fset[_idiot][fcount] = 0;
     setBoolState(_idiot, startboolstate);
-    for (uint8_t pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
+    for (int pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
     recolor_idiots(_idiot);
     return true;
 }
-void NeopixelStrip::setBoolState(uint _idiot, bool state) {
+void NeopixelStrip::setBoolState(int _idiot, bool state) {
     fset[_idiot][onoff] = state;
 }
-bool NeopixelStrip::fevpop(uint _idiot, int8_t pop_off) {
-    int8_t page = pop_off / 32;
+bool NeopixelStrip::fevpop(int _idiot, int pop_off) {
+    int page = pop_off / 32;
     return (fevents[_idiot][page] >> (pop_off - 32 * page)) & 1;  // pop a bit off the stack and return it
 }
-void NeopixelStrip::fevpush(uint _idiot, int8_t push_off, bool push_val) {
-    int8_t page = push_off / 32;
+void NeopixelStrip::fevpush(int _idiot, int push_off, bool push_val) {
+    int page = push_off / 32;
     fevents[_idiot][page] |= (push_val << (push_off - 32 * page));
 }
 // setflash() : Call this to add a blink sequence to one of the idiot lights which will repeat indefinitely in [up to 6.4 sec] cycles
@@ -246,34 +245,35 @@ void NeopixelStrip::fevpush(uint _idiot, int8_t push_off, bool push_val) {
 //   pulsel = low pulse width of each blink, in increments of 50 ms (of which there are max 128 per cycle)
 //   onbrit = percent brightness to apply during high pulses (use -1 to avoid)
 //   color  = alternate color to apply during high pulses (use -1 to avoid)
-void NeopixelStrip::setflash(uint _idiot, uint8_t count, uint8_t pulseh, uint8_t pulsel, int32_t onbrit, int32_t color) {
+void NeopixelStrip::setflash(int _idiot, int count, int pulseh, int pulsel, int onbrit, uint32_t color) {
     fset[_idiot][fcount] = count;
     fset[_idiot][fpulseh] = std::max((int)pulseh, 1);
     fset[_idiot][fpulsel] = std::max((int)pulsel, 1);
-    fset[_idiot][fonbrit] = (onbrit == -1) ? hibright : (uint8_t)onbrit;
+    fset[_idiot][fonbrit] = (onbrit == -1) ? hibright : (int)onbrit;
     cidiot[_idiot][cflash] = dimmer((color == -1) ? cidiot[_idiot][cnormal] : color_to_neo((uint32_t)color), hibright);
     cidiot[_idiot][cflash] = desaturate(dimmer(cidiot[_idiot][cflash], fset[_idiot][fonbrit]), desat_of_ten);
-    for (uint8_t pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
-    uint8_t filled = 0;
-    uint8_t lstop;
-    uint8_t patternlen = fset[_idiot][fcount] * (fset[_idiot][fpulseh] + fset[_idiot][fpulsel]);
-    uint8_t reps = 1 + (patternlen < fevresolution / 3);  // For shorter flash patterns repeat them multiple times in each cycle
-    for (uint8_t rep = 1; rep <= reps; rep++) {        
+    for (int pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
+    int filled = 0;
+    int lstop;
+    int patternlen = fset[_idiot][fcount] * (fset[_idiot][fpulseh] + fset[_idiot][fpulsel]);
+    int reps = 1 + (patternlen < fevresolution / 3);  // For shorter flash patterns repeat them multiple times in each cycle
+    for (int rep = 1; rep <= reps; rep++) {        
         lstop = std::min((int)fevresolution, filled + patternlen);
         while (filled < lstop) {
-            for (uint8_t hbit = 0; hbit < fset[_idiot][fpulseh]; hbit++)
+            for (int hbit = 0; hbit < fset[_idiot][fpulseh]; hbit++)
                 if (filled < lstop) fevpush(_idiot, filled++, 1);
-            for (uint8_t lbit = 0; lbit < fset[_idiot][fpulsel]; lbit++)
+            for (int lbit = 0; lbit < fset[_idiot][fpulsel]; lbit++)
                 if (filled < lstop) fevpush(_idiot, filled++, 0); 
         }
         filled = fevresolution / reps;
     }
 }
-uint32_t NeopixelStrip::idiot_neo_color(uint _idiot) { 
+uint32_t NeopixelStrip::idiot_neo_color(int _idiot) { 
     return color_to_888(cidiot[_idiot][cnow]);
 }
 void NeopixelStrip::enable_flashdemo(bool ena) {
-    if (ena) {
+    flashdemo = ena;
+    if (flashdemo) {
         setflash(4, 8, 8, 8, 20, -1);  // brightness toggle in a continuous squarewave
         setflash(5, 3, 1, 2, 85);      // three super-quick bright white flashes
         setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
@@ -284,18 +284,18 @@ void NeopixelStrip::enable_flashdemo(bool ena) {
         setflash(6, 0);
     }
 }
-void NeopixelStrip::update_idiot(uint32_t _idiot) {
+void NeopixelStrip::update_idiot(int _idiot) {
     cidiot[_idiot][clast] = cidiot[_idiot][cnow];
     neorgb_t newnow = (fset[_idiot][onoff]) ? cidiot[_idiot][con] : cidiot[_idiot][coff];
     if (!fset[_idiot][fcount]) cidiot[_idiot][cnow] = newnow;
     else cidiot[_idiot][cnow] = fevpop(_idiot, nowepoch) ? cidiot[_idiot][cflash] : newnow;
 }
-void NeopixelStrip::update(int16_t heart_color) {
+void NeopixelStrip::update(uint16_t heart_color) {
     set_heartcolor(heart_color);
     heartbeat_update();  // Update our beating heart
-    nowtime_us = (uint32_t)flashtimer.elapsed();
+    nowtime_us = (int)flashtimer.elapsed();
     nowepoch = nowtime_us / fquantum_us;
-    for (int32_t i=0; i<idiotcount; i++) {
+    for (int i=0; i<idiotcount; i++) {
         if (!syspower) cidiot[i][cnow] = neorgb_t(0);
         else update_idiot(i);
     }
@@ -403,7 +403,7 @@ class IdiotLights {
     void setup(NeopixelStrip* _neo) {
         myneo = _neo;
         // int n = new_idiot(&(err_sens_alarm[LOST]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
-        for (int32_t i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[ON][i], val(i));
+        for (int i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[ON][i], val(i));
         std::cout << "Idiot lights.. set up " << iconcount << " toggle icons & " << myneo->idiotcount << " neopixel hazard lights" << std::endl;
     }
     bool val(int index) { return *(vals[index]); }
@@ -411,7 +411,7 @@ class IdiotLights {
   private:
     NeopixelStrip* myneo;
     void set_colors() {
-        for (int32_t i=0; i<iconcount; i++) {
+        for (int i=0; i<iconcount; i++) {
             int division = row_count;
             uint32_t color32 = hsv_to_rgb<uint32_t>((65535 * (uint16_t)(i % division) / division + idiot_hue_offset), idiot_saturation, 255);  // , 0, 220);
             color[ON][i] = color_to_332(color32);  // 5957 = 2^16/11

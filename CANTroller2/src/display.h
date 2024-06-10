@@ -1149,14 +1149,14 @@ class Tuner {
                 else if (sel == 14) tune(&steer.steer_safe_pc, idelta, 0, 100);
             }
             else if (datapage == PG_JOY) {
-                if (sel == 10) airvelo.set_oplim(NAN, tune(airvelo.opmax()));
-                else if (sel == 11) mapsens.set_oplim(tune(mapsens.opmin()), NAN);
-                else if (sel == 12) mapsens.set_oplim(NAN, tune(mapsens.opmax()));
+                if (sel == 10) airvelo.set_oplim(NAN, tune(airvelo.opmax(), airvelo.opmin(), airvelo.absmax()));
+                else if (sel == 11) mapsens.set_oplim(tune(mapsens.opmin(), mapsens.absmin(), mapsens.opmax()), NAN);
+                else if (sel == 12) mapsens.set_oplim(NAN, tune(mapsens.opmax(), mapsens.opmin(), mapsens.absmax()));
                 else if (sel == 13) tune(&hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
-                else if (sel == 14) { tune(&hotrc.deadband_us, 0, 50); hotrc.derive(); }
+                else if (sel == 14) { tune(&hotrc.deadband_us, 0, 100); hotrc.derive(); }
             }
             else if (datapage == PG_SENS) {
-                if (sel == 10) pressure.set_oplim(pressure.opmin() + fdelta, NAN);
+                if (sel == 10) pressure.set_oplim(tune(pressure.opmin(), pressure.absmin(), pressure.opmax()), NAN);
                 else if (sel == 11) pressure.set_oplim(NAN, tune(pressure.opmax(), pressure.opmin(), pressure.absmax()));
                 else if (sel == 12) brkpos.set_oplim(tune(brkpos.opmin(), brkpos.absmin(), brkpos.opmax()), NAN);
                 else if (sel == 13) brkpos.set_oplim(NAN, tune(brkpos.opmax(), brkpos.opmin(), brkpos.absmax()));
@@ -1175,17 +1175,17 @@ class Tuner {
                 // if (sel == 10) adj_bool(&web_disabled, -1 * rdelta);  // note this value is inverse to how it's displayed, same for the value display entry
             }                
             else if (datapage == PG_PWMS) {
-                if (sel == 11) { tune(&gas.si[OPMIN], gas.si[PARKED] + 1, gas.si[OPMAX] - 1); gas.derive(); }
-                else if (sel == 12) { tune(&gas.si[OPMAX], gas.si[OPMIN] + 1, 180.0f); gas.derive(); }
-                else if (sel == 13) { tune(&brake.us[STOP], brake.us[OPMIN] + 1, brake.us[OPMAX] - 1); brake.derive(); }
+                if (sel == 11) { tune(&gas.si[OPMIN], gas.si[ABSMIN], gas.si[OPMAX]); gas.derive(); }
+                else if (sel == 12) { tune(&gas.si[OPMAX], gas.si[OPMIN], gas.si[ABSMAX]); gas.derive(); }
+                else if (sel == 13) { tune(&brake.us[STOP], brake.us[OPMIN], brake.us[OPMAX]); brake.derive(); }
                 else if (sel == 14) { tune(&brake.duty_fwd_pc, 0.0f, 100.0f); brake.derive(); }
             }
             else if (datapage == PG_IDLE) {
                 if (sel == 10) tune(&gas.starting_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
-                else if (sel == 11) gas.set_idlecold(tune(gas.idlecold()));
-                else if (sel == 12) gas.set_idlehot(tune(gas.idlehot()));
-                else if (sel == 13) gas.set_tempcold(tune(gas.idletemp_f[OPMIN]));
-                else if (sel == 14) gas.set_temphot(tune(gas.idletemp_f[OPMAX]));
+                else if (sel == 11) gas.set_idlecold(tune(gas.idlecold(), gas.idle_si[OPMIN], gas.idle_si[OPMAX]));
+                else if (sel == 12) gas.set_idlehot(tune(gas.idlehot(), gas.idle_si[OPMIN], gas.idle_si[OPMAX]));
+                else if (sel == 13) gas.set_tempcold(tune(gas.idletemp_f[OPMIN], gas.idletemp_f[ABSMIN], gas.idletemp_f[OPMAX]));
+                else if (sel == 14) gas.set_temphot(tune(gas.idletemp_f[OPMAX], gas.idletemp_f[OPMIN], gas.idletemp_f[ABSMAX]));
             }
             else if (datapage == PG_MOTR) {
                 if (sel == 7) brake.update_ctrl_config((int)tune());
@@ -1231,14 +1231,14 @@ class Tuner {
                 else if (sel == 9) sim.set_can_sim(sens::airvelo, tune());
                 else if (sel == 10) sim.set_can_sim(sens::mapsens, tune());
                 else if (sel == 11) sim.set_can_sim(sens::basicsw, tune());
-                else if (sel == 12) sim.set_potmap((sens)(tune(sim.potmap(), 0, (int)(sens::starter) - 1, true)));
+                else if (sel == 12) sim.set_potmap((sens)(tune((int)sim.potmap(), 0, (int)(sens::starter) - 1, true)));
                 else if (sel == 13) cal_brakemode_request = tune();
                 else if (sel == 14) cal_gasmode_request = tune();
             }
             else if (datapage == PG_UI) {
                 if (sel == 11) ezread.lookback(tune(ezread.offset)); 
-                else if (sel == 12) { flashdemo = tune(); neo->enable_flashdemo(flashdemo); }
-                else if (sel == 13) { tune(&neobright, 1, 100); neo->setbright(neobright); }
+                else if (sel == 12) tune(&flashdemo);  //  neo->enable_flashdemo(flashdemo); }
+                else if (sel == 13) neo->setbright(tune(neobright, 1, 100));  //  neo->setbright(neobright); }
                 else if (sel == 14) tune(&ui_context, 0, NumContextsUI-1, true);
             }
             idelta = 0;
