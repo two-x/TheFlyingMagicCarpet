@@ -158,7 +158,7 @@ float float_conversion_zero = 0.001; //
 int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 0.3;       // Margin of error for determining hard brake value for dropping out of cruise mode
-int32_t cruise_delta_max_pc_per_s = 16;  // (in TriggerHold mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
+int cruise_delta_max_pc_per_s = 16;  // (in TriggerHold mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.016;   // (in TriggerPull mode) Limits the change of each adjust trigger pull to this fraction of what's possible
 float maf_min_gps = 0.0;
 float maf_max_gps = 50.0; // i just made this number up as i have no idea what's normal for MAF
