@@ -8,40 +8,40 @@
 class FileSystem {
   private:
     void cleanLittleFS() {
-        Serial.println("Cleaning LittleFS...");
+        ezread.squintf("Cleaning LittleFS... \n");
         LittleFS.format();
-        Serial.println("LittleFS cleaned.");
+        ezread.squintf("LittleFS cleaned\n");
     }
   public:
     FileSystem() {}
     void setup() {
-        printf("Littlefs mount %s", LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED) ? "point " : "failed ");
+        ezread.squintf("Littlefs mount %s", LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED) ? "point " : "failed ");
         
         // esp_vfs_fat_sdmmc_mount("/", );  // esp_vfs_fat_sdmmc_mount(const char *base_path, const sdmmc_host_t *host_config, const void *slot_config, const esp_vfs_fat_mount_config_t *mount_config, sdmmc_card_t **out_card)
 
         listDir(LittleFS, "/", 3);
     }
     void listDir(fs::FS &fs, const char * dirname, uint8_t levels) {
-        printf("%s", dirname);
+        ezread.squintf("%s", dirname);
         File root = fs.open(dirname);
-        if(!root) {
-            printf("\n  failed to open directory");
+        if (!root) {
+            ezread.squintf("\n  failed to open directory");
             return;
         }
         if (!root.isDirectory()) {
-            printf("\n  not a directory");
+            ezread.squintf("\n  not a directory");
             return;
         }
         File file = root.openNextFile();
         while(file) {
-            if(file.isDirectory()) {
-                printf("\n  dir: %s", file.name());
-                if(levels) listDir(fs, file.path(), levels -1);
+            if (file.isDirectory()) {
+                ezread.squintf("\n  dir: %s", file.name());
+                if (levels) listDir(fs, file.path(), levels -1);
             }
-            else printf("\n  file: %s  size: %d", file.name(), file.size());
+            else ezread.squintf("\n  file: %s  size: %d", file.name(), file.size());
             file = root.openNextFile();
         }
-        printf("\n");
+        ezread.squintf("\n");
     }
 };
 class WebManager {  // just a useless dummy version for code compatibility 
@@ -51,7 +51,7 @@ class WebManager {  // just a useless dummy version for code compatibility
     WebManager(LoopTimer* unused) {}
     void setup() {
         fs.setup();
-        printf("Wifi/Web features are disabled..\n");
+        ezread.squintf("Wifi/Web features are disabled..\n");
     }
     void update() { web_disabled = true; }
 };
@@ -123,7 +123,7 @@ class AccessPoint {
     const char* ssid = "";  // non-ap mode need real credentials here, but we don't want this in github
     const char* password = "";  // non-ap mode need real credentials here, but we don't want this in github
     void connect_existing_wifi() {
-        printf("connecting to %s", ssid);
+        ezread.squintf("connecting to %s", ssid);
         primarydns = IPAddress(8, 8, 8, 8);
         secondarydns = IPAddress(8, 8, 4, 4);
         WiFi.setAutoReconnect(true);
@@ -133,8 +133,8 @@ class AccessPoint {
             delay(500);
             Serial.print(".");
         }
-        printf("wifi connected. ip addr: ");
-        Serial.println(WiFi.localIP());
+        ezread.squintf("wifi connected. ip addr: ");
+        ezread.squintf(WiFi.localIP());
     }
   public:
     AccessPoint() : localip(192,168,1,69), gateway(192,168,1,5), subnet(255,255,255,0) {}
@@ -147,7 +147,7 @@ class AccessPoint {
         WiFi.softAPConfig(localip, gateway, subnet);
         WiFi.softAP(apssid, appassword);
         ezread.squintf("active. ssid:%s, pwd:%s, ip:", apssid, appassword);
-        Serial.println(WiFi.softAPIP());
+        ezread.squintf(WiFi.softAPIP());
         // std::cout << "ip = " << WiFi.softAPIP() << std::endl;
         // printf(" ip = %s\n", my_ip.c_str());
     }
@@ -158,13 +158,13 @@ class Web {
     AsyncWebServer webserver;
     WebSocketsServer socket;
     Timer socket_timer;
-    uint32_t socket_refresh_us = 1000000, dumdum = 1;
+    int socket_refresh_us = 1000000, dumdum = 1;
     LoopTimer* looptimer;
   public:
     Web() : webserver(80), socket(81) {}
     void setup(LoopTimer* _lt) {
         looptimer = _lt;
-        printf("Web services..\n");
+        ezread.squintf("Web services..\n");
         webserver.on("/tester", HTTP_GET, [](AsyncWebServerRequest *request){
             request->send(200, "text/plain", "Hello, tester");
         });
@@ -179,11 +179,11 @@ class Web {
         webserver.onNotFound([](AsyncWebServerRequest *request) {  // Send back a plain text message (can be made html if required)
             request->send(404, "text/plain", "404 - Page Not Found.  Try '/' or '/update'");
         });
-        printf("  Over-The-Air update support..\n");
+        ezread.squintf("  Over-The-Air update support..\n");
         ElegantOTA.begin(&webserver);  // start OTA after all server.on requests, before starting web server
-        printf("  Webserver..\n");
+        ezread.squintf("  Webserver..\n");
         webserver.begin();
-        printf("  Websockets..\n");
+        ezread.squintf("  Websockets..\n");
         socket.begin();
         socket.onEvent(webSocketEvent);
         socket_timer.set(socket_refresh_us);
