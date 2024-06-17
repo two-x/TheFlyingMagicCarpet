@@ -342,10 +342,9 @@ class Display {
         sprptr->setCursor(x, y);
         sprptr->print(text.c_str());    
     }
-    void draw_string(int x, int y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in "" for oldtext if erase isn't needed
+    void draw_string(int x, int y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor, bool forced=false) {  // Send in bgcolor=NON if erase isn't needed
         if ((text == oldtext) && !forced) return;
-        // sprptr->fillRect(x_old, y, oldtext.length() * disp_font_width, disp_font_height, bgcolor);
-        draw_string_core(x, y, oldtext, bgcolor);
+        if (bgcolor != NON) draw_string_core(x, y, oldtext, bgcolor);  // sprptr->fillRect(x_old, y, oldtext.length() * disp_font_width, disp_font_height, bgcolor);
         draw_string_core(x, y, text, color);
     }
     void draw_unitmap(int index, int x, int y, uint8_t color) {
@@ -353,8 +352,11 @@ class Display {
             for (int yo = 0; yo < disp_font_height - 1; yo++)
                 if ((unitmaps[index][xo] >> yo) & 1) sprptr->drawPixel(x + xo, y + yo, color);
     }
-    void draw_string_units(int x, int y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor) {  // Send in "" for oldtext if erase isn't needed
+    void draw_erase_units(int x, int y, uint8_t bgcolor) {
         sprptr->fillRect(x, y, 3 * disp_font_width, disp_font_height, bgcolor);
+    }
+    void draw_string_units(int x, int y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor) {  // Send in bgcolor=NON if erase isn't needed
+        if (bgcolor != NON) draw_erase_units(x, y, bgcolor);
         for (int i = 0; i<arraysize(unitmaps); i++) {
             if (unitmapnames[i] == text) {
                 draw_unitmap(i, x, y, color);
@@ -381,9 +383,9 @@ class Display {
                 y_pos = (lineno + disp_fixed_lines + 1) * disp_line_height_pix;
                 // int index = lineno - disp_fixed_lines - 1;
                 // ezread.squintf("drawing line:%d x:%d y:%d text:%s\n", index, disp_datapage_names_x, y_pos, datapage_names[page][index].c_str() );
-                draw_string(disp_datapage_names_x, y_pos, datapage_names[page][lineno], datapage_names[page_last][lineno], LGRY, BLK, forced);
-                draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);
-                
+                draw_string(disp_datapage_names_x, y_pos, datapage_names[page_last][lineno], datapage_names[page_last][lineno], BLK, NON, forced);  // erase old value
+                draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);  // erase value first (above) in case new long value string overlaps old units string
+                draw_string(disp_datapage_names_x, y_pos, datapage_names[page][lineno], datapage_names[page][lineno], LGRY, NON, forced);  //draw new value
                 // commenting these two lines doesn't seem to mess up the rendering of the bargraphs when i flip thru the datapages ... so what are they for?!
                 // sprptr->fillRect(disp_bargraphs_x - 1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
                 // if (disp_needles[index] >= 0) draw_bargraph_needle(-1, disp_needles[index], y_pos + 1, BLK);  // Let's draw a needle
