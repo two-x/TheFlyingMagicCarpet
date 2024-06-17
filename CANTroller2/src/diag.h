@@ -31,7 +31,7 @@ class DiagRuntime {
     Timer speedoTimer{2500000}, tachTimer{2500000};  // how much time within which we expect the car will move after hitting the gas
   public:
     // diag tunable values
-    uint32_t err_margin_adc = 5;
+    int err_margin_adc = 5;
     uint32_t errstatus[NUM_ERR_TYPES] = { 0x00, 0x00, 0x00 };  // keeps current error status in efficient hex words
     std::string err_type_card[NUM_ERR_TYPES] = { "Lost", "Rang", "Warn" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
     std::string err_sens_card[NumTelemetryFull+3] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA, None, and Hybrid tacked on the end.  access these names using ascii_name() function
@@ -54,7 +54,7 @@ class DiagRuntime {
     // diag non-tunable values
     // bool temp_err[NumTempCategories];  // [AMBIENT/ENGINE/WHEEL/BRAKE]
     bool err_sens_alarm[NUM_ERR_TYPES] = { false, false, false, };  //  [LOST/RANGE/WARN]
-    int8_t err_sens_fails[NUM_ERR_TYPES] = { 0, 0, 0, };
+    int err_sens_fails[NUM_ERR_TYPES] = { 0, 0, 0, };
     bool err_sens[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE/WARN] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
     bool err_last[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE/WARN] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
     // Device* devices[NumTelemetryFull];
@@ -170,8 +170,8 @@ class DiagRuntime {
             set_idiot_blinks();
             report_changes();  // detect and report changes in any error values
             dump_errorcode_update();
-            // for (int32_t i=0; i<NUM_ERR_TYPES; i++)
-            //     for (int32_t j=0; j<NumTelemetryFull; j++)
+            // for (int i=0; i<NUM_ERR_TYPES; i++)
+            //     for (int j=0; j<NumTelemetryFull; j++)
             // // ezread.squintf ("\n");
             // make_log_entry();
         }
@@ -328,7 +328,7 @@ class DiagRuntime {
         // setflag(_Tach, RANGE, tach->val() < tach->opmin() || tach->val() > tach->opmax());
     }
     void HotRCFailure() {
-        for (int32_t ch = HORZ; ch <= CH4; ch++) {
+        for (int ch = HORZ; ch <= CH4; ch++) {
             int errindex;
             if (ch == HORZ) errindex = _HotRCHorz;
             else if (ch == VERT) errindex = _HotRCVert;
@@ -525,7 +525,7 @@ class LoopTimer {
         if (looptime_print) {
             loop_cout_mark_us = esp_timer_get_time();
             std::cout << std::fixed << std::setprecision(0);
-            std::cout << "\r" << (int)loop_sum_s << "s #" << loopno;  //  << " av:" << std::setw(5) << (int32_t)(loop_avg_us);  //  << " av:" << std::setw(3) << loop_avg_ms 
+            std::cout << "\r" << (int)loop_sum_s << "s #" << loopno;  //  << " av:" << std::setw(5) << (int)(loop_avg_us);  //  << " av:" << std::setw(3) << loop_avg_ms 
             std::cout << " : " << std::setw(5) << loop_periods_us[loop_now] << " (" << std::setw(5) << loop_periods_us[loop_now]-loop_cout_us << ")us ";  // << " avg:" << loop_avg_us;  //  " us:" << esp_timer_get_time() << 
             for (int x=1; x<loopindex; x++)
                 std::cout << std::setw(3) << loop_names[x] << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
@@ -549,7 +549,7 @@ class BootMonitor {
     Preferences* myprefs;
     LoopTimer* myloop;
     int codestatus_last = 50000, crashcount = 0;
-    uint32_t bootcount;                         // variable to track total number of boots of this code build
+    uint32_t bootcount;     // variable to track total number of boots of this code build
     uint32_t codestatus_postmortem;
     std::string codestatuscard[NumCodeStatuses] = { "confused", "booting", "parked", "stopped", "driving" };
     Timer highWaterTimer{30000000};

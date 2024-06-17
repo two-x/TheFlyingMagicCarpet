@@ -5,11 +5,11 @@ enum i2c_nodes : int { i2c_touch, i2c_lightbox, i2c_airvelo, i2c_map, num_i2c_sl
 class I2C {
   private:
     bool disabled = false;
-    int32_t _devicecount = 0;
+    int _devicecount = 0;
     uint8_t _detaddrs[10];  // addresses detected, unordered
     uint8_t _devaddrs[num_i2c_slaves];  // addresses of known devices, ordered per enum
     bool _detected[num_i2c_slaves];  // detection status of known devices, ordered per enum
-    uint8_t _sda_pin, _scl_pin;
+    int _sda_pin, _scl_pin;
     Timer scanTimer;
     int lastsens = i2c_map;
     void fill_det_array() {
@@ -21,7 +21,7 @@ class I2C {
     }
   public:
     int i2cbaton = i2c_lightbox;             // A semaphore mechanism to prevent bus conflict on i2c bus
-    I2C(uint8_t sda_pin_arg, uint8_t scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
+    I2C(int sda_pin_arg, int scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
     int setup(uint8_t touch_addr, uint8_t lightbox_addr, uint8_t airvelo_addr, uint8_t map_addr) {
         _devaddrs[i2c_touch] = touch_addr;
         _devaddrs[i2c_lightbox] = lightbox_addr;
@@ -163,20 +163,20 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
     run_preamble = true;
     _i2cPort->requestFrom(_address,4);
     _status = _i2cPort->read();
-    if((_status & INTEGRITY_FLAG) || (_status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
-    uint32_t reading = 0;
-    for(uint8_t i=0;i<3;i++) {  //  read 24-bit pressure
+    if ((_status & INTEGRITY_FLAG) || (_status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
+    int reading = 0;
+    for (int i=0; i<3; i++) {  //  read 24-bit pressure
         reading |= _i2cPort->read();
-        if(i != 2) reading = reading<<8;
+        if (i != 2) reading = reading<<8;
     }
     pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
     pressure = (pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
-    if(units == PA)        pressure *= 6894.7573; //Pa (Pascal)
-    else if(units == KPA)  pressure *= 6.89476;   //kPa (kilopascal)
-    else if(units == TORR) pressure *= 51.7149;   //torr (mmHg)
-    else if(units == INHG) pressure *= 2.03602;   //inHg (inch of mercury)
-    else if(units == ATM)  pressure *= 0.06805;   //atm (atmosphere)
-    else if(units == BAR)  pressure *= 0.06895;   //bar
+    if (units == PA)        pressure *= 6894.7573; //Pa (Pascal)
+    else if (units == KPA)  pressure *= 6.89476;   //kPa (kilopascal)
+    else if (units == TORR) pressure *= 51.7149;   //torr (mmHg)
+    else if (units == INHG) pressure *= 2.03602;   //inHg (inch of mercury)
+    else if (units == ATM)  pressure *= 0.06805;   //atm (atmosphere)
+    else if (units == BAR)  pressure *= 0.06895;   //bar
     return pressure;
 }
 
@@ -200,7 +200,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         Serial.printf("Lighting box serial comm..\n");
     }
     bool sendstatus() {
-        uint8_t byt = 0x00;  // command template for runmode update
+        uint8_t byt = 0x00;  // command template for status update
         uint8_t warning = 0;  // (diag->worst_sensor(3) != _None);
         uint8_t alarm = 0;  // (diag->worst_sensor(4) != _None);
         byt |= (uint8_t)syspower | (uint8_t)(panicstop << 1) | (uint8_t)(warning << 2) | (alarm << 3);  // insert status bits nibble

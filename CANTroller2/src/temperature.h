@@ -135,7 +135,7 @@ public:
     };
     bool vehicle_detected = true;
     int brakemotor_type_detected = NIL;  // default value
-    int32_t temperature_precision = 11;  // 9-12 bit resolution
+    int temperature_precision = 11;  // 9-12 bit resolution
     int detected_devices_ct = 0;
 private:
     // Replace DeviceAddress with std::array<uint8_t, 8>
