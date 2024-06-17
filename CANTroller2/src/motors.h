@@ -909,7 +909,7 @@ class BrakeControl : public JagMotor {
         if ((feedback != feedback_last) || (pid_enabled != pid_ena_last)) {
             setmode(preforce_request, false);                            // ensure current motor mode is consistent with configs set here
             derive();  // on change need to recalculate some values
-            ezread.squintf("brake pid %s feedback: %s\n", pid_enabled ? "enabled" : "disabled", brakefeedbackcard[feedback]);        
+            ezread.squintf("brake pid %s feedback: %s\n", pid_enabled ? "enabled" : "disabled", brakefeedbackcard[feedback].c_str());        
         }
         if (new_openloop_mode >= 0 && new_openloop_mode <= NumOpenLoopModes) openloop_mode = new_openloop_mode;
         feedback_last = feedback;
