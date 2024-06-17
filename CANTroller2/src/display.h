@@ -165,13 +165,13 @@ class Display {
         auto frameheight = sprsize[VERT];
         bool fail = false;
         bool using_psram = false;
-        for (std::uint32_t i = 0; !fail && i < num_bufs; ++i) {
+        for (int i = 0; !fail && i < num_bufs; ++i) {
             framebuf[i].setPsram(false);
             fail = !framebuf[i].createSprite(framewidth, frameheight);
         }
         if (fail) {
             fail = false;
-            for (std::uint32_t i = 0; !fail && i < num_bufs; ++i) {
+            for (int i = 0; !fail && i < num_bufs; ++i) {
                 framebuf[i].setPsram(true);
                 fail = !framebuf[i].createSprite(framewidth, frameheight);
             }
@@ -179,7 +179,7 @@ class Display {
                 fail = false;
                 if (framewidth >= 320) framewidth = 180;
                 if (frameheight >= 240) frameheight = 180;
-                for (std::uint32_t i = 0; !fail && i < num_bufs; ++i) {
+                for (int i = 0; !fail && i < num_bufs; ++i) {
                     fail = !framebuf[i].createSprite(framewidth, frameheight);
                 }
                 if (fail) {
@@ -252,7 +252,7 @@ class Display {
     }
     void set_runmodecolors() {
         uint8_t saturat = 255;  uint8_t hue_offset = 0;
-        for (int32_t rm=0; rm<NUM_RUNMODES; rm++) {
+        for (int rm=0; rm<NUM_RUNMODES; rm++) {
             int division = NUM_RUNMODES;
             uint32_t color32 = hsv_to_rgb<uint32_t>((65536 * (uint16_t)(rm % division) / division + hue_offset), saturat, 255);  // , 0, 220);
             colorcard[rm] = color_to_332(color32);  // 5957 = 2^16/11

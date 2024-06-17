@@ -209,7 +209,7 @@ bool panicstop = false;
 // bool sensor_present[telemetry_full];
 
 // fast macros
-#define arraysize(x) ((int32_t)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays
+#define arraysize(x) ((int)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays
 #undef constrain
 inline float constrain(float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline int constrain(int amt, int low, int high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
@@ -220,7 +220,7 @@ inline float map(float x, float in_min, float in_max, float out_min, float out_m
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
-inline int32_t map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, int32_t out_max) {
+inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
@@ -229,7 +229,7 @@ inline int32_t map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, i
 void set_pin(int pin, int mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
 void write_pin(int pin, int val) {  if (pin >= 0 && pin != 255) digitalWrite (pin, val); }
 void set_pin(int pin, int mode, int val) { set_pin(pin, mode); write_pin(pin, val); }
-int32_t read_pin(int32_t pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
+int read_pin(int pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
 
 float convert_units(float from_units, float convert_factor, bool invert, float in_offset = 0.0, float out_offset = 0.0) {
     if (!invert) return out_offset + convert_factor * (from_units - in_offset);
@@ -252,12 +252,12 @@ void ema_filt(RAW_T _raw, FILT_T* _filt, float _alpha) {
 template <typename T>
 T adj_val(T variable, T modify, T low_limit, T high_limit) {
     T oldval = variable;
-    if (std::is_same<T, int32_t>::value) variable += (T)modify;
+    if (std::is_same<T, int>::value) variable += (T)modify;
     else if (std::is_same<T, float>::value) variable += (T)(modify * tuning_rate_pcps * (high_limit-low_limit) * loop_avg_us / (1000000 * 100.0));
     return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
 }
-bool adj_val(int32_t *variable, int32_t modify, int32_t low_limit, int32_t high_limit) { // sets an int reference to new val constrained to given range
-    int32_t oldval = *variable;
+bool adj_val(int *variable, int modify, int low_limit, int high_limit) { // sets an int reference to new val constrained to given range
+    int oldval = *variable;
     *variable = adj_val(*variable, modify, low_limit, high_limit);
     return (*variable != oldval);
 }
@@ -266,8 +266,8 @@ bool adj_val(float *variable, float modify, float low_limit, float high_limit) {
     *variable = adj_val(*variable, modify, low_limit, high_limit);
     return (*variable != oldval);
 }
-bool adj_bool(bool val, int32_t delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0
-void adj_bool(bool *val, int32_t delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
+bool adj_bool(bool val, int delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0
+void adj_bool(bool *val, int delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
 
 template <typename T>
 T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
@@ -311,7 +311,7 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
     volatile int64_t start_us, timeout_us;
   public:
     Timer() { reset(); }
-    Timer(uint32_t arg_timeout_us) { set ((int64_t)arg_timeout_us); }
+    Timer(int arg_timeout_us) { set ((int64_t)arg_timeout_us); }
     void set (int64_t arg_timeout_us) {
         timeout_us = arg_timeout_us;
         start_us = esp_timer_get_time();
@@ -390,7 +390,7 @@ void kick_inactivity_timer(int source=-1) {
 //     volatile int64_t end, timeout_us;
 //   public:
 //     AbsTimer() { reset(); }
-//     AbsTimer(uint32_t arg_timeout) { set ((int64_t)arg_timeout); }
+//     AbsTimer(int arg_timeout) { set ((int64_t)arg_timeout); }
 //     void IRAM_ATTR set (int64_t arg_timeout) {
 //         timeout_us = arg_timeout;
 //         end = esp_timer_get_time() + timeout_us;
@@ -405,7 +405,7 @@ void kick_inactivity_timer(int source=-1) {
 //     int64_t timeout() { return timeout_us; }    
 //     // never finished writing this ...
 //     //
-//     // uint32_t IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
+//     // bool IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
 //     //     int64_t now_us = esp_timer_get_time();
 //     //     if (now >= end) 
 //     //     end += timeout_us * (1 + (now - end) / timeout_us);

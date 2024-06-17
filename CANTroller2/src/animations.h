@@ -30,31 +30,31 @@ std::string simgrid[4][3] = {
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
 volatile bool _is_running;
-volatile std::uint32_t _loop_count;
-static constexpr std::uint32_t SHIFTSIZE = 8;
+volatile int _loop_count;
+static constexpr int SHIFTSIZE = 8;
 volatile bool flip = 0;
-volatile int32_t refresh_limit = 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
+volatile int refresh_limit = 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
 volatile bool auto_saver_enabled = false;
-volatile int32_t screen_refresh_time;
+volatile int screen_refresh_time;
 // Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
 LGFX lcd;
 static constexpr int num_bufs = 2;
 LGFX_Sprite framebuf[num_bufs];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
 struct viewport {
-    int32_t x;
-    int32_t y;
-    int32_t w;
-    int32_t h;
+    int x;
+    int y;
+    int w;
+    int h;
 };
 class CollisionsSaver {
   public:
     struct ball_info_t {
-        int32_t x;
-        int32_t y;
-        int32_t dx;
-        int32_t dy;
-        int32_t r;
-        int32_t m;
+        int x;
+        int y;
+        int dx;
+        int dy;
+        int r;
+        int m;
         uint8_t color;
     };
     bool touchnow = false, touchlast;
@@ -66,19 +66,19 @@ class CollisionsSaver {
     static constexpr int touchball_r = 15;
     ball_info_t touchball = { 100, 100, 0, 0, touchball_r << SHIFTSIZE, 10, GRN };
     LGFX_Sprite* sprite;
-    static constexpr std::uint32_t BALL_MAX = 35;  // 256
+    static constexpr int BALL_MAX = 35;  // 256
     ball_info_t _balls[2][BALL_MAX];
-    std::uint32_t _ball_count = 0, _myfps = 0;
-    std::uint32_t ball_thismax, ball_count = 0;
+    int _ball_count = 0, _myfps = 0;
+    int ball_thismax, ball_count = 0;
     int _width, _height, touchx, touchy, lastx, lasty;
-    std::uint32_t sec, psec, ball_create_rate = 3200;
-    std::uint32_t myfps = 0, frame_count = 0;
+    int sec, psec, ball_create_rate = 3200;
+    int myfps = 0, frame_count = 0;
     float ball_radius_base = 4.5 / 235.0;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
     float ball_radius_modifier = 2.6 / 235.0;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
     uint8_t ball_redoubler_rate = 0x18;  // originally 0x07
     uint8_t ball_gravity = 16;  // originally 0 with suggestion of 4
     volatile bool _is_running;
-    volatile std::uint32_t _loop_count = 0;
+    volatile int _loop_count = 0;
     CollisionsSaver() {}
     void drawfunc() {
         auto sprwidth = vp->w;
@@ -93,7 +93,7 @@ class CollisionsSaver {
             sprite->drawGradientVLine((int)(i * (vp->w - 1)) + vp->x, vp->y, vp->h, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
             sprite->drawGradientHLine(vp->x, (int)(i * (vp->h - 1)) + vp->y, vp->w, (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)(i * 65535)+25*_loop_count, 255, 200) >> 8), (uint8_t)(hsv_to_rgb<uint16_t>((uint16_t)((1.0-i) * 65535)+25*_loop_count, 255, 200) >> 8));
         }
-        for (std::uint32_t i = 0; i < _ball_count; i++) {
+        for (int i = 0; i < _ball_count; i++) {
             a = &balls[i];
             sprite->fillCircle((a->x >> SHIFTSIZE) + vp->x, (a->y >> SHIFTSIZE) + vp->y, a->r >> SHIFTSIZE, (uint8_t)(a->color));
         }
@@ -124,7 +124,7 @@ class CollisionsSaver {
         touchball.dx = (touchball.x - lastx) / 2;
         touchball.dy = (touchball.y - lasty) / 2;
     }
-    // ball_info_t temp_ball(int32_t x, int32_t y, int32_t dx, int32_t dy, int32_t r, int32_t m, uint8_t color) {
+    // ball_info_t temp_ball(int x, int y, int dx, int dy, int r, int m, uint8_t color) {
     //     return { x, y, dx, dy, r, m, color }; // Uniform initialization
     // }
     bool mainfunc(void) {
@@ -144,7 +144,7 @@ class CollisionsSaver {
         frame_count++;
         _loop_count++;
         ball_info_t *a, *b, *balls;
-        int32_t rr, len, vx2vy2;
+        int rr, len, vx2vy2;
         float vx, vy, distance, t;
         size_t f = _loop_count & 1;
         balls = a = &_balls[f][0];
@@ -239,7 +239,7 @@ class CollisionsSaver {
             spp[i]->setTextDatum(textdatum_t::top_left);
         }
         ball_thismax = BALL_MAX - rn(25);
-        for (std::uint32_t i = 0; i < ball_count; ++i) new_ball(i);
+        for (int i = 0; i < ball_count; ++i) new_ball(i);
         // screenRefreshTimer.set(refresh_limit);
         _is_running = true;
     }
@@ -267,9 +267,9 @@ class EraserSaver {  // draws colorful patterns to exercise
     uint8_t wclast, pencolor = RED;
     float pensat = 200.0;
     uint16_t spothue = 65535, penhue = rn(65535);
-    uint32_t spotrate = 300, huebase = 0;
+    int spotrate = 300, huebase = 0;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 200, shape = rn(Rotate), pensatdir = 1;
-    static constexpr uint32_t saver_cycletime_us = 18000000;
+    static constexpr int saver_cycletime_us = 18000000;
     Timer saverCycleTimer, pentimer{70000}, lucktimer, seasontimer, spottimer{2000000};
     Timer wormmovetimer{20000}, wormtimer{1000000}, extraeffectstimer{2850000};
     bool saver_lotto = false, has_eraser = true;
@@ -294,8 +294,8 @@ class EraserSaver {  // draws colorful patterns to exercise
         saverCycleTimer.set(saver_cycletime_us);
         seasontimer.set(3000000);
         scaler = std::max(1, (vp->w + vp->h)/200);
-        erpos_max[HORZ] = (int32_t)vp->w / 2 - eraser_rad;
-        erpos_max[VERT] = (int32_t)vp->h / 2 - eraser_rad;
+        erpos_max[HORZ] = (int)vp->w / 2 - eraser_rad;
+        erpos_max[VERT] = (int)vp->h / 2 - eraser_rad;
         point[HORZ] = rn(vp->w);
         point[VERT] = rn(vp->h);
         for (int axis = 0; axis <= 1; axis++) eraser_velo_sign[axis] = (rn(1)) ? 1 : -1;
@@ -385,7 +385,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 int d[2] = {10 + rn(30), 10 + rn(30)};
                 uint8_t sat, brt;
                 uint16_t mult = rn(2000), hue = spothue + rn(3000);
-                spotrate = (uint32_t)((season * 200) + rn(200));
+                spotrate = (int)((season * 200) + rn(200));
                 sat = 100 + rn(156);
                 brt = 120 + rn(136);
                 for (int i = 0; i < 6 + rn(20); i++) { 
@@ -394,7 +394,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             else if (rotate == Rings) {
                 if (extraeffectstimer.expired()) {
-                    spotrate = (uint32_t)(200 + rn(800));
+                    spotrate = (int)(200 + rn(800));
                     extraeffectstimer.set(500000 * (1 + rn(4)));
                 }
                 int d = 6 + rn(45);
@@ -434,7 +434,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             }
             else if (rotate == Dots) {
                 int punches_left;
-                spotrate = (uint32_t)(rn(900));
+                spotrate = (int)(rn(900));
                 static bool punchdelay;
                 static bool was_eraser;
                 uint8_t sat = (30 * season) + rn(256 - 30 * season);
@@ -694,7 +694,7 @@ class PanelAppManager {
     int ui_context_last = MuleChassisUI;
   public:
     EZReadDrawer* ezdraw;
-    std::uint32_t sec, psec, _width, _height, _myfps = 0, frame_count = 0;
+    int sec, psec, _width, _height, _myfps = 0, frame_count = 0;
     bool anim_reset_request = false;
     PanelAppManager(EZReadDrawer* _ez) : ezdraw(_ez) {}
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
@@ -736,8 +736,8 @@ class PanelAppManager {
         }
         spr->setTextDatum(textdatum_t::middle_center);
         bool do_draw;
-        for (int32_t row = 0; row < arraysize(simgrid); row++) {
-            for (int32_t col = 0; col < arraysize(simgrid[row]); col++) {
+        for (int row = 0; row < arraysize(simgrid); row++) {
+            for (int col = 0; col < arraysize(simgrid[row]); col++) {
                 do_draw = true;
                 if ((simgrid[row][col].find("pos") != std::string::npos) && (!sim->can_sim(sens::brkpos) || sim->potmapping(sens::brkpos))) do_draw = false;
                 if ((simgrid[row][col].find("psi") != std::string::npos) && (!sim->can_sim(sens::pressure) || sim->potmapping(sens::pressure))) do_draw = false;
@@ -748,8 +748,8 @@ class PanelAppManager {
                     if (!sim->can_sim(sens::joy)) do_draw = false;
                 }
                 if (do_draw) {
-                    int32_t cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + vp.x - 5 + 2;
-                    int32_t cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + vp.y - 1;
+                    int cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + vp.x - 5 + 2;
+                    int cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + vp.y - 1;
                     if (simgrid[row][col] != "    ") {
                         draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], YEL);  // for 3d look
                         draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);

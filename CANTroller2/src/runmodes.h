@@ -9,7 +9,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     Timer standby_timer{5000000};
     int oldmode = LOWPOWER;
     bool still_interactive = true;
-    uint32_t initial_inactivity;
   public:
     int mode = STANDBY;
     bool we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
