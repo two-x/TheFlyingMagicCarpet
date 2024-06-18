@@ -7,7 +7,7 @@
 #define disp_lines 24  // Max lines of text displayable at line height = disp_line_height_pix
 #define disp_fixed_lines 8  // Lines of static variables/values always displayed
 #define disp_line_height_pix 10  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
-#define disp_bargraph_width 35
+#define disp_bargraph_width 36
 #define disp_bargraph_squeeze 1
 #define disp_maxlength 5  // How many characters is max data value
 #define disp_default_float_sig_dig 3  // Significant digits displayed for float values. Higher causes more screen draws
@@ -85,11 +85,11 @@ static constexpr uint8_t unitmaps[19][13] = {  // now 13x7-pixel bitmaps for uni
     { 0x7e, 0x12, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x2a, 0x12, 0x00, 0x24, 0x3d, 0x20, },  // psi
     { 0x10, 0x2a, 0x2a, 0x3c, 0x20, 0x1f, 0x22, 0x00, 0x3e, 0x02, 0x3c, 0x02, 0x3c, },  // atm
     { 0x4c, 0x52, 0x52, 0x3e, 0x00, 0x30, 0x0c, 0x03, 0x00, 0x2c, 0x2a, 0x2a, 0x1a, },  // g/s
-    { 0x10, 0x2a, 0x2a, 0x3c, 0x20, 0x00, 0x1c, 0x24, 0x3f, 0x00, 0x1c, 0x22, 0x22, },  // adc
+    { 0x10, 0x2a, 0x2a, 0x3c, 0x20, 0x1c, 0x24, 0x24, 0x3f, 0x00, 0x1c, 0x22, 0x22, },  // adc
     { 0x7e, 0x12, 0x0c, 0x00, 0x24, 0x3d, 0x20, 0x00, 0x22, 0x14, 0x08, 0x14, 0x22, },  // pix
     { 0x3e, 0x02, 0x3c, 0x02, 0x3c, 0x00, 0x24, 0x3d, 0x20, 0x00, 0x3e, 0x02, 0x3c, },  // min
-    { 0x23, 0x13, 0x08, 0x64, 0x62, 0x00, 0x30, 0x0c, 0x03, 0x00, 0x2c, 0x2a, 0x1a, },  // %/s
-    { 0x06, 0x0f, 0x09, 0x0f, 0x06, 0x30, 0x0c, 0x03, 0x00, 0x2c, 0x2a, 0x1a, 0x00, },  // deg/s
+    { 0x23, 0x13, 0x08, 0x64, 0x62, 0x00, 0x30, 0x0c, 0x03, 0x58, 0x54, 0x54, 0x34, },  // %/s
+    { 0x06, 0x0f, 0x09, 0x0f, 0x06, 0x30, 0x0c, 0x03, 0x00, 0x2c, 0x2a, 0x2a, 0x1a, },  // deg/s
     { 0x08, 0x7e, 0x09, 0x02, 0x00, 0x7e, 0x12, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x12, },  // fps
     { 0x21, 0x3f, 0x20, 0x00, 0x24, 0x3d, 0x20, 0x00, 0x3e, 0x04, 0x02, 0x3c, 0x00, },  // lin
 };  // These bitmaps are in the same format as the idiot light bitmaps, described in neopixel.h
@@ -174,6 +174,7 @@ class Display {
     volatile bool disp_runmode_dirty;
     volatile bool disp_simbuttons_dirty;
     volatile bool disp_idiots_dirty;
+    volatile bool disp_units_dirty;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
       : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
     void init_framebuffers(int _sprwidth, int _sprheight) {
@@ -572,6 +573,9 @@ class Display {
         draw_fixed(page, disp_datapage_last, true, forced);  // Erase and redraw variable names and units for data on this page
         draw_string(disp_datapage_title_x, 0, pagecard[page], pagecard[disp_datapage_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
         // disp_datapage_dirty = false;
+        disp_datapage_last = page;
+        disp_units_dirty = true;
+        disp_datapage_dirty = false;
         prefs.putUInt("dpage", (uint32_t)page);
     }
     void draw_unitvals(int page) {
@@ -579,8 +583,7 @@ class Display {
             int y_pos = (lineno + disp_fixed_lines + 1) * disp_line_height_pix;
             draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][lineno], tuneunits[page][lineno], LGRY, NON);  // erase value first (above) in case new long value string overlaps old units string
         }
-        disp_datapage_last = page;
-        disp_datapage_dirty = false;
+        disp_units_dirty = false;
     }
     void draw_selected_name(int tun_ctrl, int selection, int selected_last, int selected_last_last) {
         static int last_selected; 
@@ -940,7 +943,8 @@ class Display {
                 disp_menu_bools();
                 disp_datapage_values();
             }
-            if (disp_datapage_dirty) draw_unitvals(datapage);  // draw unit strings after values in case long old value erasure might chop off the unit strings
+            if (disp_units_dirty) draw_unitvals(datapage);
+            // if (disp_datapage_dirty) draw_unitvals(datapage);  // draw unit strings after values in case long old value erasure might chop off the unit strings
             if (disp_runmode_dirty) draw_runmode(run.mode, NON);
         }
         if (sim->enabled() != sim_last) disp_simbuttons_dirty = true;
