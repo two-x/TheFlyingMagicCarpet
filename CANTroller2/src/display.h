@@ -178,7 +178,7 @@ class Display {
       : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
     void init_framebuffers(int _sprwidth, int _sprheight) {
         int sprsize[2] = { _sprwidth, _sprheight };
-        ezread.squintf("  create frame buffers.. ");
+        ezread.squintf(" %dx buffers ", num_bufs);
         lcd.setColorDepth(sprite_color_depth);
         for (int i = 0; i < num_bufs; i++) framebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[HORZ];
@@ -203,13 +203,13 @@ class Display {
                     fail = !framebuf[i].createSprite(framewidth, frameheight);
                 }
                 if (fail) {
-                    lcd.print("createSprite fail\n");
+                    lcd.print("failed\n");
                 }
                 else using_psram = true;
             }
             else using_psram = true;
         }
-        ezread.squintf(" made %dx %dx%d sprites in %sram\n", num_bufs, framewidth, frameheight, using_psram ? "ps" : "native ");
+        ezread.squintf("(%dx%d) in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
     }
     void init() {  // init() is necessary after any power interruption
         lcd.setColorDepth(8);
@@ -240,7 +240,7 @@ class Display {
         init_framebuffers(disp_width_pix, disp_height_pix);
         panel.setup(&lcd, sim, touch, disp_apppanel_x, disp_apppanel_y, disp_apppanel_w, disp_apppanel_h);
         sprptr = &framebuf[flip];
-        ezread.squintf("  display initialized\n");
+        // ezread.squintf("  display initialized\n");
     }
     void reset(LGFX_Sprite* spr) {
         blackout(spr);
