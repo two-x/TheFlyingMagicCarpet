@@ -6,7 +6,7 @@ static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 static MomentaryButton bootbutton(boot_sw_pin, false);
 
 // #define touch_simbutton 38
-#define disp_apppanel_x 154
+#define disp_apppanel_x 150
 #define disp_apppanel_y 48
 #define disp_apppanel_w (disp_width_pix - disp_apppanel_x)  // 156
 #define disp_apppanel_h (disp_height_pix - disp_apppanel_y)  // 192
