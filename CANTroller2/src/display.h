@@ -570,7 +570,6 @@ class Display {
         }
         draw_fixed(page, disp_datapage_last, true, forced);  // Erase and redraw variable names and units for data on this page
         draw_string(disp_datapage_title_x, 0, pagecard[page], pagecard[disp_datapage_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
-        disp_datapage_last = page;
         // disp_datapage_dirty = false;
         prefs.putUInt("dpage", (uint32_t)page);
     }
@@ -579,6 +578,7 @@ class Display {
             int y_pos = (lineno + disp_fixed_lines + 1) * disp_line_height_pix;
             draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][lineno], tuneunits[page][lineno], LGRY, NON);  // erase value first (above) in case new long value string overlaps old units string
         }
+        disp_datapage_last = page;
         disp_datapage_dirty = false;
     }
     void draw_selected_name(int tun_ctrl, int selection, int selected_last, int selected_last_last) {
