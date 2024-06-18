@@ -328,7 +328,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
         else {
             if (newpat == -1) ++shape %= Rotate;
-            if (newpat == -3) shape = (shape - 1 + NumSaverShapes) % Rotate;
+            if (newpat == -3) shape = (shape - 1 + Rotate) % Rotate;
             else if (newpat == -2) while (last_pat == shape) shape = rn(Rotate);
             if (rn(25) == 13) shape = Rotate;
         }
@@ -585,7 +585,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (lucktimer.expired())  {
             saver_lotto = !saver_lotto;
-            lucktimer.set(3200000 + !saver_lotto * (5 + rn(350)) * 4000000);
+            lucktimer.set(2900000 + !saver_lotto * (5 + rn(800)) * 4000000);
         } 
         if (saver_lotto) {
             sprite->setTextDatum(textdatum_t::middle_center);
@@ -814,17 +814,17 @@ class PanelAppManager {
                 still_running = eSaver.update(spr, &vp);
                 if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
                 if (auto_saver_enabled) {
-                    int changeit = constrain(encoder.rotation(), -1, 1);
+                    int changeit = encoder.rotdirection();
                     if (changeit > 0) eSaver.change_pattern(-1);
-                    else if (changeit < 0) still_running = 0;
+                    else if (changeit < 0) eSaver.change_pattern(-3);  // still_running = 0;
                 }
                 display_fps(spr);
             }
             else if (nowsaver == Collisions) {
                 if (touched()) cSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
                 if (auto_saver_enabled) {
-                    int changeit = constrain(encoder.rotation(), -1, 1);
-                    if (changeit < 0) still_running = 0;
+                    int changeit = encoder.rotdirection();
+                    if (changeit != 0) still_running = 0;
                 }
                 if ((bool)still_running) still_running = cSaver.update(spr, &vp);
                 display_fps(spr);

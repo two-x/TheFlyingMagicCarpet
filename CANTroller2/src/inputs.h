@@ -223,6 +223,12 @@ class Encoder {
         if (accel) d *= _accel_factor;
         return d;
     }
+    int rotdirection() {  // Returns 0 if unspun, or -1 or 1 if spun, depending on which direction
+        int d = _delta;
+        _delta = 0;  // our responsibility to reset this flag after handling events
+        if (d) kick_inactivity_timer(HUEncTurn);  // evidence of user activity            
+        return constrain(d, -1, 1);
+    }
     // void rezero() { _delta = 0; }  // Handling code needs to call to rezero after reading rotations
 };
 #define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
