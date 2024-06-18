@@ -150,8 +150,9 @@ class Display {
     // uint16_t palette[256] = { BLK, WHT };
     static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
     Timer dispAgeTimer[disp_lines];  // int disp_age_timer_us[disp_lines];
-    static constexpr int idiots_corner_x = disp_apppanel_x + 3;
+    static constexpr int idiots_corner_x = disp_apppanel_x + 2;
     static constexpr int idiots_corner_y = 13;
+    static constexpr int idiots_spacing_x = 1;
     bool sim_last = false, fullscreen_last = false;
     int runmode_last = -1;
   public:
@@ -673,7 +674,7 @@ class Display {
                 diag.most_critical_last[i] = diag.most_critical_sensor[i];
             }
             if (force || (idiots->val(i) ^ idiots->last[i])) {
-                draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + 3) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int)(i / idiots->row_count));
+                draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + idiots_spacing_x + 1) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int)(i / idiots->row_count));
             }
         }
         disp_idiots_dirty = false;

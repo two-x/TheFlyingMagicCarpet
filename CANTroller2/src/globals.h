@@ -193,7 +193,7 @@ int datapage = PG_RUN;                  // which of the dataset pages is current
 volatile int sel = 0;               // in the real time tuning UI, which of the editable values is selected. -1 for none 
 volatile int sel_last = 0;          
 volatile int sel_last_last = 0;          
-bool syspower = HIGH;                   // set by handler only. Reflects current state of the signal
+bool syspower = HIGH, not_syspower = !syspower;                   // set by handler only. Reflects current state of the signal
 // bool basicmodesw = LOW;
 int sleep_request = REQ_NA;
 float maf_gps = 0;                      // manifold mass airflow in grams per second
