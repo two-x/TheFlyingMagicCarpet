@@ -89,6 +89,7 @@ void update_temperature_sensors(void *parameter) {
 }
 void set_syspower(bool setting) {
     syspower = setting | keep_system_powered;
+    not_syspower = !syspower;
     write_pin(syspower_pin, syspower);
 }
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
