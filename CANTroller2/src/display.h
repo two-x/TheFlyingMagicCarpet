@@ -13,7 +13,7 @@
 #define disp_default_float_sig_dig 3  // Significant digits displayed for float values. Higher causes more screen draws
 #define disp_datapage_names_x 12
 #define disp_datapage_values_x 59
-#define disp_datapage_units_x 94  // 103        
+#define disp_datapage_units_x 98  // 103        
 #define disp_bargraphs_x 113  // 122
 #define disp_datapage_title_x 83
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
@@ -72,27 +72,26 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "us",   "us",   "Hz",   "fps",  scroll, "pix",  "pix",  "Hz",   ______, "min",  ______, "lin",  "eyes", "%",    scroll, },  // PG_UI
 };
 static std::string unitmapnames[19] = { "us", scroll, b1nary, "%", "ohm", "eyes", degree, "mph", "rpm", "psi", "atm", "g/s", "adc", "pix", "min", "%/s", degsec, "fps", "lin" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
-static constexpr uint8_t unitmaps[19][13] = {  // now 13x7-pixel (not 17x7) bitmaps for exceptions where some unit strings can't be well represented by any set of 3 font characters
+static constexpr uint8_t unitmaps[19][13] = {  // now 13x7-pixel bitmaps for unit strings. required when string is over 2 characters
     { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, },  // us - b/c the font's lowercase mu character doesn't work
-    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x02, 0x7f, 0x00, 0x7f, 0x20, 0x10, },  // scroll arrows - to indicate multiple choices. this one is right-aligned one char over to allow longer names
-    { 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value. right-aligned to distinguish it from actual units
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x02, 0x7f, 0x00, 0x00, 0x7f, 0x20, 0x10, },  // scroll arrows - to indicate multiple choices. this one is right-aligned one char over to allow longer names
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, },  // 0/1 - to indicate binary value. right-aligned to maybe distinguish it from actual units
     { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, },  // % - we use this a lot and the font % looks feeble
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
     { 0x00, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x41, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
     { 0x06, 0x0f, 0x09, 0x4f, 0x66, 0x50, 0x48, 0x4c, 0x72, 0x41, 0x40, 0x40, 0x00, },  // angular degrees
     { 0x3e, 0x02, 0x3c, 0x02, 0x3c, 0x00, 0x7e, 0x12, 0x0c, 0x00, 0x3f, 0x04, 0x38, },  // mph
     { 0x3e, 0x02, 0x04, 0x00, 0x7e, 0x12, 0x0c, 0x00, 0x3e, 0x02, 0x3c, 0x02, 0x3c, },  // rpm
-    { 0x7e, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x32, 0x00, 0x24, 0x3d, 0x20, 0x00, 0x00, },  // psi
-    { 0x10, 0x2a, 0x3c, 0x20, 0x02, 0x1f, 0x22, 0x00, 0x3e, 0x02, 0x3c, 0x02, 0x3c, },  // atm
-    { 0x4c, 0x52, 0x3e, 0x00, 0x30, 0x0c, 0x03, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x00, },  // g/s
-    { 0x10, 0x2a, 0x3c, 0x20, 0x00, 0x1b, 0x24, 0x3f, 0x00, 0x1c, 0x22, 0x22, 0x00, },  // adc
+    { 0x7e, 0x12, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x2a, 0x12, 0x00, 0x24, 0x3d, 0x20, },  // psi
+    { 0x10, 0x2a, 0x2a, 0x3c, 0x20, 0x1f, 0x22, 0x00, 0x3e, 0x02, 0x3c, 0x02, 0x3c, },  // atm
+    { 0x4c, 0x52, 0x52, 0x3e, 0x00, 0x30, 0x0c, 0x03, 0x00, 0x2c, 0x2a, 0x2a, 0x1a, },  // g/s
+    { 0x10, 0x2a, 0x2a, 0x3c, 0x20, 0x00, 0x1c, 0x24, 0x3f, 0x00, 0x1c, 0x22, 0x22, },  // adc
     { 0x7e, 0x12, 0x0c, 0x00, 0x24, 0x3d, 0x20, 0x00, 0x22, 0x14, 0x08, 0x14, 0x22, },  // pix
     { 0x3e, 0x02, 0x3c, 0x02, 0x3c, 0x00, 0x24, 0x3d, 0x20, 0x00, 0x3e, 0x02, 0x3c, },  // min
-    { 0x43, 0x13, 0x08, 0x64, 0x62, 0x00, 0x30, 0x0c, 0x03, 0x00, 0x2c, 0x2a, 0x1a, },  // %/s
+    { 0x23, 0x13, 0x08, 0x64, 0x62, 0x00, 0x30, 0x0c, 0x03, 0x00, 0x2c, 0x2a, 0x1a, },  // %/s
     { 0x06, 0x0f, 0x09, 0x0f, 0x06, 0x30, 0x0c, 0x03, 0x00, 0x2c, 0x2a, 0x1a, 0x00, },  // deg/s
-    { 0x08, 0x3e, 0x09, 0x02, 0x00, 0x7e, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x32, 0x00, },  // fps
-    { 0x21, 0x3f, 0x20, 0x00, 0x24, 0x3d, 0x20, 0x00, 0x3e, 0x02, 0x3c, 0x00, 0x00, },  // lin
-
+    { 0x08, 0x7e, 0x09, 0x02, 0x00, 0x7e, 0x12, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x12, },  // fps
+    { 0x21, 0x3f, 0x20, 0x00, 0x24, 0x3d, 0x20, 0x00, 0x3e, 0x04, 0x02, 0x3c, 0x00, },  // lin
 };  // These bitmaps are in the same format as the idiot light bitmaps, described in neopixel.h
     // { 0x7e, 0x20, 0x20, 0x3c, 0x00, 0x24, 0x2a, 0x2a, 0x12, 0x00, 0x70, 0x0e, 0x00, 0x24, 0x2a, 0x2a, 0x12, },  // usps - microseconds per second
     // { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, },  // us - b/c the font's lowercase mu character doesn't work
@@ -368,12 +367,12 @@ class Display {
         draw_string_core(x, y, text, color);
     }
     void draw_unitmap(int index, int x, int y, uint8_t color) {
-        for (int xo = 0; xo < disp_font_width * 3 - 1; xo++)
+        for (int xo = 0; xo < arraysize(unitmaps[0]); xo++)
             for (int yo = 0; yo < disp_font_height - 1; yo++)
                 if ((unitmaps[index][xo] >> yo) & 1) sprptr->drawPixel(x + xo, y + yo, color);
     }
     void draw_erase_units(int x, int y, uint8_t bgcolor) {
-        sprptr->fillRect(x, y, 3 * disp_font_width, disp_font_height, bgcolor);
+        sprptr->fillRect(x, y, arraysize(unitmaps[0]), disp_font_height, bgcolor);
     }
     void draw_string_units(int x, int y, std::string text, std::string oldtext, uint8_t color, uint8_t bgcolor) {  // Send in bgcolor=NON if erase isn't needed
         if (bgcolor != NON) draw_erase_units(x, y, bgcolor);
@@ -388,7 +387,7 @@ class Display {
         sprptr->print(text.c_str());
     }
     // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
-    void draw_fixed(int page, int page_last, bool redraw_all, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
+    void draw_fixed(int page, int page_last, bool redraw_all=true, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
         static int fixed_page_last;
         sprptr->setTextColor(LGRY);
         sprptr->setTextSize(1);
@@ -404,7 +403,7 @@ class Display {
                 // int index = lineno - disp_fixed_lines - 1;
                 // ezread.squintf("drawing line:%d x:%d y:%d text:%s\n", index, disp_datapage_names_x, y_pos, datapage_names[page][index].c_str() );
                 draw_string(disp_datapage_names_x, y_pos, datapage_names[page_last][lineno], datapage_names[page_last][lineno], BLK, NON, forced);  // erase old value
-                draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][lineno], tuneunits[page_last][lineno], LGRY, BLK);  // erase value first (above) in case new long value string overlaps old units string
+                draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page_last][lineno], tuneunits[page_last][lineno], BLK, NON);  // erase unit string here in case new long value string overlaps old units string. draw new unit string after values are drawn
                 draw_string(disp_datapage_names_x, y_pos, datapage_names[page][lineno], datapage_names[page][lineno], LGRY, NON, forced);  //draw new value
                 // commenting these two lines doesn't seem to mess up the rendering of the bargraphs when i flip thru the datapages ... so what are they for?!
                 // sprptr->fillRect(disp_bargraphs_x - 1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
@@ -572,8 +571,15 @@ class Display {
         draw_fixed(page, disp_datapage_last, true, forced);  // Erase and redraw variable names and units for data on this page
         draw_string(disp_datapage_title_x, 0, pagecard[page], pagecard[disp_datapage_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
         disp_datapage_last = page;
-        disp_datapage_dirty = false;
+        // disp_datapage_dirty = false;
         prefs.putUInt("dpage", (uint32_t)page);
+    }
+    void draw_unitvals(int page) {
+        for (int lineno = 0; lineno < disp_tuning_lines; lineno++) {  // step thru lines of fixed telemetry data
+            int y_pos = (lineno + disp_fixed_lines + 1) * disp_line_height_pix;
+            draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page][lineno], tuneunits[page][lineno], LGRY, NON);  // erase value first (above) in case new long value string overlaps old units string
+        }
+        disp_datapage_dirty = false;
     }
     void draw_selected_name(int tun_ctrl, int selection, int selected_last, int selected_last_last) {
         static int last_selected; 
@@ -933,6 +939,7 @@ class Display {
                 disp_menu_bools();
                 disp_datapage_values();
             }
+            if (disp_datapage_dirty) draw_unitvals(datapage);  // draw unit strings after values in case long old value erasure might chop off the unit strings
             if (disp_runmode_dirty) draw_runmode(run.mode, NON);
         }
         if (sim->enabled() != sim_last) disp_simbuttons_dirty = true;
