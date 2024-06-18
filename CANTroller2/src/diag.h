@@ -181,7 +181,7 @@ class DiagRuntime {
         for (int typ=0; typ<NUM_ERR_TYPES; typ++) {
             setflag(_HotRC, typ, err_sens[typ][_HotRCHorz] || err_sens[typ][_HotRCVert] || err_sens[typ][_HotRCCh3] || err_sens[typ][_HotRCCh4]);
             setflag(_GPIO, typ, err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter] || err_sens[typ][_FuelPump]);
-            setflag(_Other, typ, err_sens[typ][_MuleBatt] || err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot]);
+            setflag(_Other, typ, err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot]);  // || err_sens[typ][_MuleBatt]
             setflag(_TempWheel, typ, err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL] || err_sens[typ][_TempWhRR]);
             setflag(_Temps, typ, err_sens[typ][_TempEng] || err_sens[typ][_TempWheel] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb]);
         }

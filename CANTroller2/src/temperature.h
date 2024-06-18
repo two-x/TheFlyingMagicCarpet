@@ -302,14 +302,14 @@ private:
 public:
     TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus),  last_read_request_time(0), sensor_index(0), _state(State::CONVERTING) {}
     bool setup() {
-        ezread.squintf("Temp sensors..");
+        ezread.squintf("Temp sensors:");
         
         tempsensebus.setWaitForConversion(false);
         tempsensebus.setCheckForConversion(true);
         tempsensebus.begin();
         detected_devices_ct = tempsensebus.getDeviceCount();
         detected_addresses.resize(detected_devices_ct);
-        ezread.squintf(" parasitic pwr %s. found %d device(s):\n", (tempsensebus.isParasitePowerMode()) ? "on" : "off", detected_devices_ct);  // , DEC);
+        ezread.squintf(" parasitic %s. found %d device(s):\n", (tempsensebus.isParasitePowerMode()) ? "on" : "off", detected_devices_ct);  // , DEC);
         if (detected_devices_ct == 0) {
             // ezread.squintf("  no devices detected\n");
             vehicle_detected = false;
