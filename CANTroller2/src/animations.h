@@ -601,10 +601,10 @@ class EraserSaver {  // draws colorful patterns to exercise
 class EZReadDrawer {  // never has any terminal solution been easier on the eyes
   public:
     bool dirty = true;
-    int pix_margin = 2;
-    int font_height = 6, linelength;
     std::string drawnow; // Ring buffer array
   private:
+    int _main_x, scrollbar_width = 3, pix_margin = 2;
+    int font_height = 6, linelength;
     LGFX* mylcd;
     // LGFX_Sprite* spr;
     LGFX_Sprite* nowspr_ptr;
@@ -621,11 +621,24 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
         }
         return charcount;
     }
-    void draw_scrollbar(LGFX_Sprite* spr) {
-    
+    void draw_scrollbar(LGFX_Sprite* spr, uint8_t color) {
+        int cent = (int)((float)vp->h * 0.125) - 6;
+        for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
+        cent = (int)((float)vp->h * 0.375) - 6;
+        for (int arrow=0; arrow<3; arrow++) {
+            int my_y = cent + arrow * 5 - 4;    
+            for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, my_y + i, i + 1, color);
+        }
+        cent = (int)((float)vp->h * 0.625) - 6;
+        for (int arrow=0; arrow<3; arrow++) {
+            int my_y = cent + arrow * 5 - 4;    
+            for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, my_y, i + 1, color);
+        }
+        // int cent = vp->h / 8 - 6;
+        // for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
     }
     void draw(LGFX_Sprite* spr) {
-        draw_scrollbar(spr);
+        draw_scrollbar(spr, LGRY);
         int botline = (ez->current_index - ez->offset - (int)ez->textlines[ez->current_index].empty() + ez->bufferSize) % ez->bufferSize;
         spr->fillSprite(BLK);
         spr->setTextWrap(false);        // 右端到達時のカーソル折り返しを禁止
@@ -637,19 +650,19 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
         int chopit = chars_to_fit_pix(spr, nowline, vp->w);
         bool toobig = (chopit < nowline.length());
         if (toobig) {
-            spr->setCursor(vp->x + pix_margin, vp->y + vp->h - 18);
+            spr->setCursor(_main_x, vp->y + vp->h - 18);
             nowline = ez->textlines[botline].substr(0, chopit);
             spr->print(nowline.c_str());
             nowline = ez->textlines[botline].substr(chopit);
         }
-        spr->setCursor(vp->x + pix_margin, vp->y + vp->h - 9);
+        spr->setCursor(_main_x, vp->y + vp->h - 9);
         spr->print(nowline.c_str());
         int bottom_extent = vp->y + vp->h - 9 * (1 + (int)toobig);
         // spr->drawFastHLine(vp->x + 3, bottom_extent, vp->w - 6, LGRY);  // separator for the newest line at the bottom will be printed larger and span 2 lines
         spr->setFont(&fonts::TomThumb);
         for (int line=1; line<ez->num_lines; line++) {
             int backindex = (botline + ez->bufferSize - line) % ez->bufferSize;
-            spr->setCursor(vp->x + pix_margin, bottom_extent - line * (font_height + pix_margin));
+            spr->setCursor(_main_x, bottom_extent - line * (font_height + pix_margin));
             // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
             int strsize = std::min((int)linelength, (int)ez->textlines[backindex].length());
             spr->setTextColor(ez->linecolors[backindex]);
@@ -661,6 +674,7 @@ class EZReadDrawer {  // never has any terminal solution been easier on the eyes
     void setup(viewport* _vp) {
         ez->setup();
         vp = _vp;
+        _main_x = _vp->x + scrollbar_width + pix_margin;
         linelength = (int)(vp->w / disp_font_width);
     }
     void update(LGFX_Sprite* spr, bool force=false) {

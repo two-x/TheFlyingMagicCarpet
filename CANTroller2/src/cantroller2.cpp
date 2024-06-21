@@ -45,7 +45,7 @@ void setup() {
     stop_console();
     looptimer.setup();
 }
-void loop() {                  // arduino-style loop() is like main() but with a builtin infinite while(1) loop.
+void loop() {                  // arduino-style loop() is like main() but with a builtin infinite while(1) loop
     watchdog.update();         // pet the watchdog regularly to prevent reset
     ignition.update(run.mode); // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();       // read the builtin button
