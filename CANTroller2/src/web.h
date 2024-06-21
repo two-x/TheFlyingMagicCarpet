@@ -1,7 +1,6 @@
 #pragma once
 
-#if !WIFI_SUPPORTED  // if wifi/web disabled, only set up the filesystem and nonfunctional dummy web manager
-
+// set up our flash filesystem
 #define FORMAT_LITTLEFS_IF_FAILED true
 #include <FS.h>
 #include <LittleFS.h>
@@ -44,6 +43,10 @@ class FileSystem {
         ezread.squintf("\n");
     }
 };
+
+#if !WifiSupported  
+// if wifi/web disabled (WifiSupported == false), set up just a dummy web manager
+
 class WebManager {  // just a useless dummy version for code compatibility 
   private:
     FileSystem fs;
@@ -56,7 +59,7 @@ class WebManager {  // just a useless dummy version for code compatibility
     void update() { web_disabled = true; }
 };
 
-#else  // if WIFI_SUPPORTED == true  // (from here to the end of the file)
+#else  // if WifiSupported == true  // (from here to the end of the file)
 
 #include <Arduino.h>
 // #include <FFat.h>

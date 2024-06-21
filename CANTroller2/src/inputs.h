@@ -114,19 +114,19 @@ class Encoder {
     //   * the A signal starts low at each detent, and goes high then back low before the next detent 
     //   * the value of the B signal on the falling edge of the A signal is high if going CW, otherwise low
     //   * if your encoder is the wrong kind for this algorithm, it'll behave all sluggish, like usually ignoring every other detent, switch to the other algorithm
-    #if EncoderPanasonicType                              // eg the vehicle control box encoder
-    void IRAM_ATTR _a_isr() {                             // A isr has been triggered by A signal rise or fall transition. A will now bounce for a while and can't be trusted
-        isr_time_now = esp_timer_get_time();              // put some flavor in your flav
-        int elapsed = isr_time_now - isr_time_last;  // note time elapsed since last valid event on A isr. might be invalid for use by outside code if this is a bounce   
-        if (_bounce_lock == Encoder::ENC_A) {             // if A isr is bounce locked, B isr hasn't yet triggered since our last trigger
-            if (elapsed <= _bounce_expire_us) return;     // if bouncing is still a thing then bail
-            val_a_isr = digitalRead(_a_pin);              // otherwise since B isr hasn't triggered, we are reversing direction and must update our own value
+    #if EncoderPanasonicType                          // eg the vehicle control box encoder
+    void IRAM_ATTR _a_isr() {                         // A isr has been triggered by A signal rise or fall transition. A will now bounce for a while and can't be trusted
+        isr_time_now = esp_timer_get_time();          // put some flavor in your flav
+        int elapsed = isr_time_now - isr_time_last;   // note time elapsed since last valid event on A isr. might be invalid for use by outside code if this is a bounce   
+        if (_bounce_lock == Encoder::ENC_A) {         // if A isr is bounce locked, B isr hasn't yet triggered since our last trigger
+            if (elapsed <= _bounce_expire_us) return; // if bouncing is still a thing then bail
+            val_a_isr = digitalRead(_a_pin);          // otherwise since B isr hasn't triggered, we are reversing direction and must update our own value
         }
-        else val_b_isr = digitalRead(_b_pin);             // get a stable reading of B signal, unless we know B hasn't changed then skip for speed
-        _spintime_isr_us = elapsed;                       // save elapsed time since last trigger, to calculate spin rate
-        isr_time_last = isr_time_now;                     // reset spin rate timer for next time
-        _delta += (val_a_isr == val_b_isr) ? -1 : 1;      // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
-        _bounce_lock = Encoder::ENC_A;                    // bounce lock this isr to avoid retriggering, and unlock the B isr
+        else val_b_isr = digitalRead(_b_pin);         // get a stable reading of B signal, unless we know B hasn't changed then skip for speed
+        _spintime_isr_us = elapsed;                   // save elapsed time since last trigger, to calculate spin rate
+        isr_time_last = isr_time_now;                 // reset spin rate timer for next time
+        _delta += (val_a_isr == val_b_isr) ? -1 : 1;  // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
+        _bounce_lock = Encoder::ENC_A;                // bounce lock this isr to avoid retriggering, and unlock the B isr
     }
     #else                                                    // eg soren's dev board encoder
     void IRAM_ATTR _a_isr() {                                // A isr has been triggered by A signal rise or fall transition. A will now bounce for a while and can't be trusted
