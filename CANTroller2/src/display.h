@@ -1071,8 +1071,9 @@ class Tuner {
     int datapage_last;
   public:
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
-    int rdelta = 0, rdelta_encoder = 0, idelta = 0, idelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
-    float fdelta = 0.0;  // fdelta is float edit value accelerated
+    int idelta = 0, idelta_encoder = 0;  // idelta is integer edit value accelerated, and is used for all tuning edits regardless if int float or bool
+    int rdelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
+    // float fdelta = 0.0;  // fdelta is float edit value accelerated
     void update(int rmode) {
         process_inputs();
         edit_values(rmode);
@@ -1183,7 +1184,7 @@ class Tuner {
         if (tunctrl == EDIT && idelta) {  // Change tunable values when editing
             if (datapage == PG_RUN) {
                 if (sel == 13) { tune(&gas.governor, 0, 100); gas.derive(); }
-                else if (sel == 14) tune(&steer.steer_safe_pc, idelta, 0, 100);
+                else if (sel == 14) tune(&steer.steer_safe_pc, 0, 100);
             }
             else if (datapage == PG_JOY) {
                 if (sel == 10) airvelo.set_oplim(NAN, tune(airvelo.opmax(), airvelo.opmin(), airvelo.absmax()));
@@ -1249,7 +1250,7 @@ class Tuner {
 
             }
             else if (datapage == PG_CPID) {
-                if (sel == 11) adj_val(&cruise_delta_max_pc_per_s, idelta, 1, 35);
+                if (sel == 11) tune(&cruise_delta_max_pc_per_s, 1.0, 35.0);
                 else if (sel == 12) gas.cruisepid.set_kp(tune(gas.cruisepid.kp(), 0.0, NAN));
                 else if (sel == 13) gas.cruisepid.set_ki(tune(gas.cruisepid.ki(), 0.0, NAN));
                 else if (sel == 14) gas.cruisepid.set_kd(tune(gas.cruisepid.kd(), 0.0, NAN));
