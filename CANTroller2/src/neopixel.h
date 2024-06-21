@@ -214,7 +214,7 @@ void NeopixelStrip::heartbeat_update() {
         else heartbeat_brightness = (uint8_t)(heartlobright + std::max((double)0, (float)(heartbright - heartlobright) * (1.0 - ((heartbeat_state == 1) ? 1.5 : 1.0) * (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us)));
         if (heartbeat_brightness > heartbeat_brightness_last) heartbeat_brightness = heartbeat_brightness_last;
     }
-    if (heartcolor_change || std::abs(heartbeat_brightness - (int)neobright_last > 1)) {
+    if (heartcolor_change || (std::abs(heartbeat_brightness - (int)neobright_last) > 1)) {
         heartbeatNow = dimmer(heartbeatColor, heartbeat_brightness);  // heartbeatNow = dimmer(desaturate(heartbeatColor, desat_of_ten), heartbeat_brightness);
         heartcolor_change = false;
         neobright_last = (float)heartbeat_brightness;
