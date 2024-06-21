@@ -45,7 +45,7 @@ class NeopixelStrip {
     bool heartcolor_change = true;  // , heartcolor_overridden = false;
     int pin = -1;
     uint8_t heartbeat_brightness, heartbeat_brightness_last; // brightness during fadeouts
-    int neobright_last;
+    float neobright_last;
     int heartbeat_state = 0;
     int heartbeat_level = 0;
     int64_t heartbeat_ekg_us[4] = {250000, 240000, 620000, 2000000};  // {187500, 125000, 562500, 1250000};
@@ -80,7 +80,8 @@ class NeopixelStrip {
     NeopixelStrip(int argpin) { pin = argpin; }
     void refresh();
     void setup(bool viewcontext=NITE);
-    void setbright(int bright_pc);
+    void setbright(float bright_pc);
+    void setsat(float sat_pc);
     void setdesaturation(float _desat_of_ten);  // a way to specify nite or daytime brightness levels
     void heartbeat_ena(bool onoroff);
     void set_heartcolor(uint8_t newcolor);
@@ -99,15 +100,10 @@ class NeopixelStrip {
     uint8_t get_sat(RgbColor rgb);
 };
 
-float NeopixelStrip::maxelement(float r, float g, float b) {
-    return (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b);  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
-}
-float NeopixelStrip::midelement(float r, float g, float b) {
-    return (r >= g) ? ((g >= b) ? g : ((r >= b) ? b : r)) : ((r >= b) ? r : ((b >= g) ? g : b));  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
-}
-float NeopixelStrip::minelement(float r, float g, float b) {
-    return (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b);  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
-}
+float NeopixelStrip::maxelement(float r, float g, float b) { return (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b); }  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
+float NeopixelStrip::midelement(float r, float g, float b) { return (r >= g) ? ((g >= b) ? g : ((r >= b) ? b : r)) : ((r >= b) ? r : ((b >= g) ? g : b)); } // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
+float NeopixelStrip::minelement(float r, float g, float b) { return (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b); } // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
+
 neorgb_t NeopixelStrip::dimmer(neorgb_t color, uint8_t bright) {  // brightness 0 is off, 255 is max brightness while retaining same hue and saturation
     int ret[3];
     float rgb[3] = { static_cast<float>(color.R), static_cast<float>(color.G), static_cast<float>(color.B) };
@@ -122,12 +118,6 @@ neorgb_t NeopixelStrip::desaturate(neorgb_t color, int _desat_of_ten) {  // desa
     if (_desat_of_ten > 0)
         for (int element=0; element<3; element++)
             rgb[element] = (uint8_t)(rgb[element] + ((float)_desat_of_ten * (dominant - (float)(rgb[element])) / 20.0));
-    // else {
-    //     // float mide = midelement(rgb[0], rgb[1], rgb[2]);
-    //     dominant = minelement(rgb[0], rgb[1], rgb[2]);
-    //     for (int element=0; element<3; element++)
-    //         rgb[element] = (uint8_t)(rgb[element] - ((float)desat_of_ten * dominant / 10.0));
-    // }
     return neorgb_t(rgb[0], rgb[1], rgb[2]);
 }
 void NeopixelStrip::recolor_idiot(int _index) {
@@ -159,18 +149,6 @@ void NeopixelStrip::refresh() {
     }
     if (numledstowrite) neoobj.Show(numledstowrite);  // This ability to exclude pixels at the end of the strip that haven't changed from the data write is an advantage of neopixelbus over adafruit
 }
-// void NeopixelStrip::autocolor_leds() {
-//     for (int i=0; i<idiotcount; i++) {
-//         uint32_t color = hsv_to_rgb<uint32_t>((uint16_t)(i * 65535 / idiotcount), 256, 256);
-//         cidiot[i][cnormal] = color_to_neo(color);
-//         cidiot[i][clast] = color_to_neo(color);
-//         cidiot[i][con] = color_to_neo(color);
-//         cidiot[i][con] = desaturate(cidiot[i][con], desat_of_ten);
-//         cidiot[i][coff] = dimmer(cidiot[i][cnormal], lobright);
-//         cidiot[i][coff] = desaturate(cidiot[i][coff], desat_of_ten);
-
-//     }
-// }
 void NeopixelStrip::setup(bool viewcontext) {
     ezread.squintf("Neopixels.. ");
     breadboard = running_on_devboard;
@@ -191,14 +169,18 @@ void NeopixelStrip::setup(bool viewcontext) {
 void NeopixelStrip::calc_lobright() {
     lobright = std::max(3, (hibright / lomultiplier) / lomultiplier);
 }
-void NeopixelStrip::setbright(int bright_pc) {  // a way to specify brightness level as a percent
+void NeopixelStrip::setbright(float bright_pc) {  // a way to specify brightness level as a percent
     neobright = bright_pc;
-    hibright = (uint8_t)((255.0 * (float)neobright) / 100.0);
+    hibright = (uint8_t)((255.0 * neobright) / 100.0);
     calc_lobright();
     if (neo_heartbeat_variable_brightness) {
         heartbright = hibright;  // (uint8_t)((float)hibright * 0.75);
         heartlobright = lobright;
     }
+    recolor_idiots();
+}
+void NeopixelStrip::setsat(float sat_pc) {  // a way to specify brightness level as a percent
+    neosat = sat_pc;
     recolor_idiots();
 }
 void NeopixelStrip::setdesaturation(float _desat_of_ten) {  // a way to specify nite or daytime brightness levels
@@ -232,10 +214,10 @@ void NeopixelStrip::heartbeat_update() {
         else heartbeat_brightness = (uint8_t)(heartlobright + std::max((double)0, (float)(heartbright - heartlobright) * (1.0 - ((heartbeat_state == 1) ? 1.5 : 1.0) * (float)neoFadeTimer.elapsed() / (float)neo_fade_timeout_us)));
         if (heartbeat_brightness > heartbeat_brightness_last) heartbeat_brightness = heartbeat_brightness_last;
     }
-    if (heartcolor_change || heartbeat_brightness != neobright_last) {
+    if (heartcolor_change || std::abs(heartbeat_brightness - (int)neobright_last > 1)) {
         heartbeatNow = dimmer(heartbeatColor, heartbeat_brightness);  // heartbeatNow = dimmer(desaturate(heartbeatColor, desat_of_ten), heartbeat_brightness);
         heartcolor_change = false;
-        neobright_last = heartbeat_brightness;
+        neobright_last = (float)heartbeat_brightness;
     }
 }
 int NeopixelStrip::neopixelsAvailable() {
