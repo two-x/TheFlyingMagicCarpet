@@ -40,7 +40,7 @@ std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 static std::string telemetry[disp_fixed_lines] = { "TriggerV", "JoysticH", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 7, 11, 11, 11, 13, 4, 11 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 7, 11, 11, 11, 13, 4, 10 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
@@ -54,7 +54,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, __________, __________, __________, __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, __________, "No Temps", "StopWifi", },  // PG_TEMP
     { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", " Touch X", " Touch Y", "SpinRate", "   Accel", "  Uptime", __________, "EZScroll", "BlnkDemo", neo_bright, "PanelApp", },  // PG_UI
+    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", " Touch X", " Touch Y", "SpinRate", "   Accel", "  Uptime", "EZScroll", "BlnkDemo", neo_bright, "NeoSatur", "PanelApp", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "psi",  "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, "%",    "%",    },  // PG_RUN
@@ -69,7 +69,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, b1nary, b1nary, },  // PG_TEMP
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us",   "us",   "Hz",   "fps",  scroll, "pix",  "pix",  "Hz",   ______, "min",  ______, "lin",  "eyes", "%",    scroll, },  // PG_UI
+    { "us",   "us",   "Hz",   "fps",  scroll, "pix",  "pix",  "Hz",   ______, "min",  "lin",  "eyes", "%",    "%",    scroll, },  // PG_UI
 };
 static std::string unitmapnames[20] = { "us", scroll, b1nary, "%", "ohm", "eyes", degree, degreF, "mph", "rpm", "psi", "atm", "g/s", "adc", "pix", "min", "%/s", degsec, "fps", "lin" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[20][13] = {  // now 13x7-pixel bitmaps for unit strings. required when string is over 2 characters
@@ -918,11 +918,10 @@ class Display {
             // drawval(13, drawclock, 0, refresh_limit);
             // drawval(14, pushclock, 0, refresh_limit);
             // drawval(15, idleclock, 0, refresh_limit);
-            draw_eraseval(19);
-            drawval(20, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
-            draw_truth(21, flashdemo, 0);
-            drawval(22, neobright, 1, 100);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
-
+            drawval(19, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
+            draw_truth(20, flashdemo, 0);
+            drawval(21, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
+            drawval(22, neosat, 1.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
             draw_ascii(23, uicontextcard[ui_context]);
             // draw_truth(19, (ui_context == ScreensaverUI), 0);
         }
@@ -1171,7 +1170,7 @@ class Tuner {
         else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
         datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (datapage != datapage_last) {
-            if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drßop back to select mode
+            if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
             screen->disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
         }
         if (tunctrl == SELECT) {
@@ -1274,9 +1273,10 @@ class Tuner {
                 else if (sel == 14) cal_gasmode_request = tune();
             }
             else if (datapage == PG_UI) {
-                if (sel == 11) ezread.lookback(tune(ezread.offset)); 
-                else if (sel == 12) tune(&flashdemo);  //  neo->enable_flashdemo(flashdemo); }
-                else if (sel == 13) neo->setbright(tune(neobright, 1, 100));  //  neo->setbright(neobright); }
+                if (sel == 10) ezread.lookback(tune(ezread.offset)); 
+                else if (sel == 11) tune(&flashdemo);  //  neo->enable_flashdemo(flashdemo); }
+                else if (sel == 12) neo->setbright(tune(neobright, 0.0, 100.0));  //  neo->setbright(neobright); }
+                else if (sel == 13) neo->setsat(tune(neosat, 0.0, 100.0));  //  neo->setbright(neobright); }
                 else if (sel == 14) tune(&ui_context, 0, NumContextsUI-1, true);
             }
             idelta = 0;
