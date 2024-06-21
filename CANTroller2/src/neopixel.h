@@ -122,7 +122,7 @@ neorgb_t NeopixelStrip::desaturate(neorgb_t color, int _desat_of_ten) {  // desa
 }
 void NeopixelStrip::recolor_idiot(int _index) {
     uint8_t brite = (uint8_t)((float)hibright * 256.0 / 100.0);
-    uint8_t sat = (uint8_t)((float)csat[_index] * 256.0 / 10.0);
+    uint8_t sat = std::min((uint8_t)((float)csat[_index] * 256.0 / 10.0), (uint8_t)(neosat * 256.0 / 100.0));
     cidiot[_index][con] = color_to_neo(hsv_to_rgb<uint32_t>(chue[_index], sat, brite));
     brite = (uint8_t)((float)lobright * 256.0 / 100.0);
     cidiot[_index][coff] = color_to_neo(hsv_to_rgb<uint32_t>(chue[_index], sat, brite));
