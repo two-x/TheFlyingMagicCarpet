@@ -164,8 +164,8 @@ float maf_min_gps = 0.0;
 float maf_max_gps = 50.0; // i just made this number up as i have no idea what's normal for MAF
 float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change value at this percent of their overall range per second
 bool flashdemo = false;
-float neobright = 10;   // default for us dim/brighten the neopixels in percent
-float neosat = 80;  // default saturation of neopixels in percent
+float neobright = 10.0;   // default for us dim/brighten the neopixels in percent
+float neosat = 100.0;  // default saturation of neopixels in percent
 float desat_of_ten = 0.0;  // out of 10.0
 
 // non-tunable values. probably these belong with their related code
