@@ -22,7 +22,6 @@ neorgb_t color_to_neo(uint8_t color332) { return neorgb_t(color332 & 0xe0, (colo
 class NeopixelStrip {
   public:
     static const int idiotcount = 7;
-    bool use_tft_colors_for_neo = false;
   private:
     enum brightness_presets : int { B_OFF, B_MIN, B_LO, B_MED, B_HI, B_EXT, B_MAX };
     enum ledset : int { onoff, fcount, fpulseh, fpulsel, fonbrit, fnumset };  // just a bunch of int variables needed for each of the neo idiot lights
@@ -68,10 +67,9 @@ class NeopixelStrip {
     float maxelement(float r, float g, float b);
     float midelement(float r, float g, float b);
     float minelement(float r, float g, float b);
-    neorgb_t dimmer(neorgb_t color, uint8_t bright);  // brightness 0 is off, 100 is max brightness while retaining same hue and saturation
-    neorgb_t desaturate(neorgb_t color, int _desat_of_ten);  // desat_pc=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
     void recolor_idiots(int argidiot = -1);
-    void recolor_idiot(int index);
+    uint32_t recolor(uint32_t index, float bright_pc, float sat_pc);
+    neorgb_t recolor(neorgb_t index, float bright_pc, float sat_pc);
     bool fevpop(int _idiot, int pop_off);
     void fevpush(int _idiot, int push_off, bool push_val);
     void update_idiot(int _idiot);
@@ -98,43 +96,77 @@ class NeopixelStrip {
     void autocolor_leds();
     uint16_t get_hue(RgbColor rgb); // Function to convert RGB888 to 16-bit hue value
     uint8_t get_sat(RgbColor rgb);
+    uint8_t get_brite(RgbColor rgb);
 };
 
 float NeopixelStrip::maxelement(float r, float g, float b) { return (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b); }  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
 float NeopixelStrip::midelement(float r, float g, float b) { return (r >= g) ? ((g >= b) ? g : ((r >= b) ? b : r)) : ((r >= b) ? r : ((b >= g) ? g : b)); } // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
 float NeopixelStrip::minelement(float r, float g, float b) { return (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b); } // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
 
-neorgb_t NeopixelStrip::dimmer(neorgb_t color, uint8_t bright) {  // brightness 0 is off, 255 is max brightness while retaining same hue and saturation
-    int ret[3];
-    float rgb[3] = { static_cast<float>(color.R), static_cast<float>(color.G), static_cast<float>(color.B) };
-    float fbright = (float)bright / maxelement(rgb[0], rgb[1], rgb[2]);  // std::max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
-    for (int element=0; element<3; element++) ret[element] = constrain((int)(rgb[element] * fbright), 0, 255);
-    // printf("D br:%d  inc:%06x  outc:%02x%02x%02x\n", bright, color_to_888(color), (uint8_t)ret[0], (uint8_t)ret[1], (uint8_t)ret[2]);
-    return neorgb_t(ret[0], ret[1], ret[2]);  // return CRGB((float)(color.r * fbright), (float)(color.g * fbright), (float)(color.b * fbright));
+// neorgb_t NeopixelStrip::dimmer(neorgb_t color, uint8_t bright) {  // brightness 0 is off, 255 is max brightness while retaining same hue and saturation
+//     int ret[3];
+//     float rgb[3] = { static_cast<float>(color.R), static_cast<float>(color.G), static_cast<float>(color.B) };
+//     float fbright = (float)bright / maxelement(rgb[0], rgb[1], rgb[2]);  // std::max(color.r, color.g, color.b);  // 2.55 = 0xff / 100
+//     for (int element=0; element<3; element++) ret[element] = constrain((int)(rgb[element] * fbright), 0, 255);
+//     // printf("D br:%d  inc:%06x  outc:%02x%02x%02x\n", bright, color_to_888(color), (uint8_t)ret[0], (uint8_t)ret[1], (uint8_t)ret[2]);
+//     return neorgb_t(ret[0], ret[1], ret[2]);  // return CRGB((float)(color.r * fbright), (float)(color.g * fbright), (float)(color.b * fbright));
+// }
+// neorgb_t NeopixelStrip::desaturate(neorgb_t color, int _desat_of_ten) {  // desat_pc=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
+//     uint8_t rgb[3] = { static_cast<uint8_t>(color.R), static_cast<uint8_t>(color.G), static_cast<uint8_t>(color.B) };
+//     float dominant = maxelement(rgb[0], rgb[1], rgb[2]);
+//     if (_desat_of_ten > 0)
+//         for (int element=0; element<3; element++)
+//             rgb[element] = (uint8_t)(rgb[element] + ((float)_desat_of_ten * (dominant - (float)(rgb[element])) / 20.0));
+//     return neorgb_t(rgb[0], rgb[1], rgb[2]);
+// }
+// void NeopixelStrip::recolor_idiot(int _index) {
+//     uint8_t brite = (uint8_t)((float)hibright * 256.0 / 100.0);
+//     uint8_t sat = std::min((uint8_t)((float)csat[_index] * 256.0 / 10.0), (uint8_t)(neosat * 256.0 / 100.0));
+//     cidiot[_index][con] = color_to_neo(hsv_to_rgb<uint32_t>(chue[_index], sat, brite));
+//     brite = (uint8_t)((float)lobright * 256.0 / 100.0);
+//     cidiot[_index][coff] = color_to_neo(hsv_to_rgb<uint32_t>(chue[_index], sat, brite));
+//     // cidiot[i][con] = dimmer(cidiot[i][cnormal], hibright);
+//     // cidiot[i][con] = desaturate(cidiot[i][con], desat_of_ten);
+//     // cidiot[i][coff] = dimmer(cidiot[i][cnormal], lobright);
+//     // cidiot[i][coff] = desaturate(cidiot[i][coff], desat_of_ten);
+// }
+uint16_t NeopixelStrip::get_hue(RgbColor rgb) {  // Function to convert RGB888 to 16-bit hue value
+    HslColor hsl(rgb);  // Convert RGB to HSL
+    uint16_t hue16 = static_cast<uint16_t>(hsl.H * 65535);  // Convert hue from float [0.0, 1.0] to 16-bit integer [0, 65535]
+    return hue16;
 }
-neorgb_t NeopixelStrip::desaturate(neorgb_t color, int _desat_of_ten) {  // desat_pc=0 has no effect, =10 desaturates all the way to greyscale, =-99 saturates to max. without change in brightness
-    uint8_t rgb[3] = { static_cast<uint8_t>(color.R), static_cast<uint8_t>(color.G), static_cast<uint8_t>(color.B) };
-    float dominant = maxelement(rgb[0], rgb[1], rgb[2]);
-    if (_desat_of_ten > 0)
-        for (int element=0; element<3; element++)
-            rgb[element] = (uint8_t)(rgb[element] + ((float)_desat_of_ten * (dominant - (float)(rgb[element])) / 20.0));
-    return neorgb_t(rgb[0], rgb[1], rgb[2]);
+uint8_t NeopixelStrip::get_sat(RgbColor rgb) {
+    HslColor hsl(rgb);  // Convert RGB to HSL
+    uint8_t sat = static_cast<uint8_t>(hsl.S * 255);  // Convert saturation from float [0.0, 1.0] to 16-bit integer [0, 65535]
+    return sat;
 }
-void NeopixelStrip::recolor_idiot(int _index) {
-    uint8_t brite = (uint8_t)((float)hibright * 256.0 / 100.0);
-    uint8_t sat = std::min((uint8_t)((float)csat[_index] * 256.0 / 10.0), (uint8_t)(neosat * 256.0 / 100.0));
-    cidiot[_index][con] = color_to_neo(hsv_to_rgb<uint32_t>(chue[_index], sat, brite));
-    brite = (uint8_t)((float)lobright * 256.0 / 100.0);
-    cidiot[_index][coff] = color_to_neo(hsv_to_rgb<uint32_t>(chue[_index], sat, brite));
-    // cidiot[i][con] = dimmer(cidiot[i][cnormal], hibright);
-    // cidiot[i][con] = desaturate(cidiot[i][con], desat_of_ten);
-    // cidiot[i][coff] = dimmer(cidiot[i][cnormal], lobright);
-    // cidiot[i][coff] = desaturate(cidiot[i][coff], desat_of_ten);
+uint8_t NeopixelStrip::get_brite(RgbColor rgb) {
+    HslColor hsl(rgb);  // Convert RGB to HSL
+    uint8_t brite = static_cast<uint8_t>(hsl.L * 255);  // Convert saturation from float [0.0, 1.0] to 16-bit integer [0, 65535]
+    return brite;
+}
+// recolor reduces the given color in brightness and saturation to match the percents given, and returns the modified color. pass in 100.0 to leave either brightness or sat unchanged
+neorgb_t NeopixelStrip::recolor(neorgb_t orig, float bright_pc=100.0, float sat_pc=100.0) {
+    uint8_t newbrite = (uint8_t)((float)(get_brite(orig)) * bright_pc / 100.0);
+    // uint8_t newbrite = (uint8_t)(bright_pc / 100.0);
+    uint8_t newsat = (uint8_t)((float)(get_sat(orig)) * sat_pc / 100.0);
+    return color_to_neo(hsv_to_rgb<uint32_t>(get_hue(orig), newsat, newbrite));
+}
+uint32_t NeopixelStrip::recolor(uint32_t orig_color, float bright_pc=100.0, float sat_pc=100.0) {
+    neorgb_t orig = color_to_neo(orig_color);
+    // uint8_t newbrite = (uint8_t)(bright_pc / 100.0);
+    uint8_t newbrite = (uint8_t)((float)(get_brite(orig)) * bright_pc / 100.0);
+    uint8_t newsat = (uint8_t)((float)(get_sat(orig)) * sat_pc / 100.0);
+    return hsv_to_rgb<uint32_t>(get_hue(orig), newsat, newbrite);
 }
 void NeopixelStrip::recolor_idiots(int _idiot) {  // pass in -1 to recolor all idiots
     int start = (_idiot >= 0) ? _idiot : 0;
     int end = (_idiot >= 0) ? _idiot + 1 : idiotcount;
-    for (int i = start; i < end; i++) recolor_idiot(i);
+    for (int i = start; i < end; i++) {
+        // uint8_t sat = std::min((uint8_t)(csat[_idiot] * 256.0 / 100.0), (uint8_t)(neosat * 256.0 / 100.0));
+        cidiot[_idiot][con] = recolor(cidiot[_idiot][cnormal], (float)hibright, neosat);
+        cidiot[_idiot][coff] = recolor(cidiot[_idiot][cnormal], (float)lobright, neosat);
+    }
 }
 void NeopixelStrip::refresh() {
     int numledstowrite = (heartbeatNow != neostrip[0]);
@@ -171,7 +203,8 @@ void NeopixelStrip::calc_lobright() {
 }
 void NeopixelStrip::setbright(float bright_pc) {  // a way to specify brightness level as a percent
     neobright = bright_pc;
-    hibright = (uint8_t)((255.0 * neobright) / 100.0);
+    hibright = neobright;
+    // hibright = (uint8_t)((255.0 * neobright) / 100.0);
     calc_lobright();
     if (neo_heartbeat_variable_brightness) {
         heartbright = hibright;  // (uint8_t)((float)hibright * 0.75);
@@ -215,23 +248,13 @@ void NeopixelStrip::heartbeat_update() {
         if (heartbeat_brightness > heartbeat_brightness_last) heartbeat_brightness = heartbeat_brightness_last;
     }
     if (heartcolor_change || (std::abs(heartbeat_brightness - (int)neobright_last) > 1)) {
-        heartbeatNow = dimmer(heartbeatColor, heartbeat_brightness);  // heartbeatNow = dimmer(desaturate(heartbeatColor, desat_of_ten), heartbeat_brightness);
+        heartbeatNow = recolor(heartbeatColor, (float)heartbeat_brightness);  // heartbeatNow = dimmer(desaturate(heartbeatColor, desat_of_ten), heartbeat_brightness);
         heartcolor_change = false;
         neobright_last = (float)heartbeat_brightness;
     }
 }
 int NeopixelStrip::neopixelsAvailable() {
     return idiotcount;
-}
-uint16_t NeopixelStrip::get_hue(RgbColor rgb) {  // Function to convert RGB888 to 16-bit hue value
-    HslColor hsl(rgb);  // Convert RGB to HSL
-    uint16_t hue16 = static_cast<uint16_t>(hsl.H * 65535);  // Convert hue from float [0.0, 1.0] to 16-bit integer [0, 65535]
-    return hue16;
-}
-uint8_t NeopixelStrip::get_sat(RgbColor rgb) {
-    HslColor hsl(rgb);  // Convert RGB to HSL
-    uint8_t sat = static_cast<uint8_t>(hsl.H * 255);  // Convert saturation from float [0.0, 1.0] to 16-bit integer [0, 65535]
-    return sat;
 }
 bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolstate) {
     if (_idiot > idiotcount-1) return false;
@@ -255,7 +278,7 @@ bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolst
 void NeopixelStrip::setBoolState(int _idiot, bool state) {
     fset[_idiot][onoff] = state;
 }
-bool NeopixelStrip::fevpop(int _idiot, int pop_off) {
+bool NeopixelStrip::fevpop(int _idiot, int pop_off) {  // flash event : pop flash sequence data from the data page
     int page = pop_off / 32;
     return (fevents[_idiot][page] >> (pop_off - 32 * page)) & 1;  // pop a bit off the stack and return it
 }
@@ -275,8 +298,8 @@ void NeopixelStrip::setflash(int _idiot, int count, int pulseh, int pulsel, int 
     fset[_idiot][fpulseh] = std::max((int)pulseh, 1);
     fset[_idiot][fpulsel] = std::max((int)pulsel, 1);
     fset[_idiot][fonbrit] = (onbrit == -1) ? hibright : (int)onbrit;
-    cidiot[_idiot][cflash] = dimmer((color == -1) ? cidiot[_idiot][cnormal] : color_to_neo((uint32_t)color), hibright);
-    cidiot[_idiot][cflash] = desaturate(dimmer(cidiot[_idiot][cflash], fset[_idiot][fonbrit]), desat_of_ten);
+    if (color == -1) cidiot[_idiot][cnormal];
+    else cidiot[_idiot][cflash] = recolor(color, (float)hibright, neosat);
     for (int pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
     int filled = 0;
     int lstop;
@@ -445,7 +468,7 @@ class IdiotLights {
         myneo = _neo;
         // int n = new_idiot(&(err_sens_alarm[LOST]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
         for (int i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[ON][i], val(i));
-        ezread.squintf("Idiot lights set up %d toggle icons & %d neopixel hazard leds\n", iconcount, myneo->idiotcount);
+        ezread.squintf("Idiot lights set up %d icons & %d neopixel hazard leds\n", iconcount, myneo->idiotcount);
     }
     bool val(int index) { return *(vals[index]); }
     bool* ptr(int index) { return vals[index]; }
