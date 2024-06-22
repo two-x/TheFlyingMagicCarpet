@@ -1101,9 +1101,7 @@ class Tuner {
         float ret = orig_val + (float)(idelta) * scale;
         if (std::isnan(min_val)) min_val = ret;
         if (std::isnan(max_val)) max_val = ret;
-        return constrain(ret, min_val, max_val);
-        // Serial.printf("o:%lf id:%d sc:%lf, min:%lf, max:%lf ret:%lf\n", orig_val, idelta, scale, min_val, max_val, ret);
-        return ret;
+        return constrain(ret, min_val, max_val);  // Serial.printf("o:%lf id:%d sc:%lf, min:%lf, max:%lf ret:%lf\n", orig_val, idelta, scale, min_val, max_val, ret);
     }
     void tune(float* orig_ptr, float min_val=NAN, float max_val=NAN, int sig_digits=-1) {
         *orig_ptr = tune(*orig_ptr, min_val, max_val, sig_digits);
@@ -1148,25 +1146,15 @@ class Tuner {
             }
             else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
         }
-        // rdelta_encoder = encoder.rotation(false);  // unaccelerated encoder turn
         idelta_encoder = encoder.rotation(true);   // accelerated
         rdelta_encoder = constrain(idelta_encoder, -1, 1);
-        // encoder.rezero();
-        // if (tunctrl == EDIT) idelta_encoder = encoder.rotation(true);  // true = include acceleration
         if (tunctrl == SELECT) sel += rdelta_encoder;  // If overflow constrain will fix in general handler below
         else if (tunctrl == OFF) datapage += rdelta_encoder;  // If overflow tconstrain will fix in general below
         if (touch->increment_sel) ++sel %= disp_tuning_lines;
         if (touch->increment_datapage) ++datapage %= NUM_DATAPAGES;
         touch->increment_sel = touch->increment_datapage = false;
         idelta = idelta_encoder + touch->get_delta();  // Allow edits using the encoder or touchscreen
-        // fdelta = float(idelta);
-        // rdelta = constrain(idelta, -1, 1);  // combine unaccelerated values
         if (pot_tuner_acceleration && !sim.potmapping()) idelta = constrain(idelta * (int)(map(pot.val(), 0.0, 100.0, 1.0, 10.0)), 1, (int)encoder._accel_max); // {  // use pot to control level of acceleration
-        // if (pot_tuner_acceleration && !sim.potmapping()) fdelta *= map(pot.val(), 0.0, 100.0, 1.0, 25.0); // {  // use pot to control level of acceleration
-        //     if (pot.val() < 50.0) fdelta /= map(pot.val(), 50.0, 0.0, 1.0, 5.0);
-        //     else fdelta *= map(pot.val(), 50.0, 100.0, 1.0, 25.0);
-        // }
-        // idelta = (int)fdelta;
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel != sel_last || idelta) tuningAbandonmentTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
         else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
         datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value

@@ -151,6 +151,8 @@ bool button_test_heartbeat_color = false; // makes boot button short press chang
 bool wifi_client_mode = false;       // should wifi be in client or access point mode?
 bool screensaver_enabled = true;     // does fullscreen screensaver start automatically when in powerdown, after a delay?
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
+bool use_tft_colors_for_neo = true;
+
 
 // global tunable variables
 float float_zero = 0.000069;         // if two floats being compared are closer than this, we consider them equal
@@ -164,7 +166,7 @@ float maf_min_gps = 0.0;
 float maf_max_gps = 50.0; // i just made this number up as i have no idea what's normal for MAF
 float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change value at this percent of their overall range per second
 bool flashdemo = false;
-float neobright = 10.0;   // default for us dim/brighten the neopixels in percent
+float neobright = 20.0;   // default for us dim/brighten the neopixels in percent
 float neosat = 100.0;  // default saturation of neopixels in percent
 float desat_of_ten = 0.0;  // out of 10.0
 
