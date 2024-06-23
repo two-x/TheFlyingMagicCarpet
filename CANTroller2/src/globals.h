@@ -110,20 +110,6 @@ enum telemetry_full {                                                           
     _TempWheel=30,                                                                                    // flag for any wheel temp out of range
     NumTelemetryFull=31,                                                                              // size of both telemetry lists combined
 };
-enum telemetry_bonus {  };  // flag for any wheel out of range
-// enum telemetry_groups { _HotRC=0, _Temps=1, _Other=2, _GPIO=3, _NumTelemetryGroups=4 }; // sensor groups (that share one idiot light
-// enum telemetry_full {                                                                                 // complete list expanding sensor groups
-//     _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
-//     _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are actuators, driven by us
-//     _Speedo=3, _Tach=4, _BrakePres=5, _BrakePosn=6,  // these transducers are sensors, we read from
-//     _HotRCHorz=7, _HotRCVert=8, _HotRCCh3=9, _HotRCCh4=10,                                         // _HotRC sensor group
-//     _MuleBatt=11, _AirVelo=12, _MAP=13, _Pot=14,                                                      // _Other sensor group
-//     _TempEng=15, _TempWhFL=16, _TempWhFR=17, _TempWhRL=18, _TempWhRR=19, _TempBrake=20, _TempAmb=21,  // _Temps sensor group
-//     _Ignition=22, _Starter=23, _BasicSw=24, _FuelPump=25,                                             // _GPIO signal group (with simple boolean values)
-//     NumTelemetryFull=26,                                                                              // size of both telemetry lists combined
-// };
-// enum telemetry_idiots { _HotRC_Grp=7, _Temps_Grp=8, _Other_Grp=9, _GPIO_Grp=10, NumTelemetryIdiots=11, }; // list of transducers which have onscreen idiotlights showing status
-
 
 // global configuration settings
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
@@ -151,8 +137,7 @@ bool button_test_heartbeat_color = false; // makes boot button short press chang
 bool wifi_client_mode = false;       // should wifi be in client or access point mode?
 bool screensaver_enabled = true;     // does fullscreen screensaver start automatically when in powerdown, after a delay?
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
-bool use_tft_colors_for_neo = true;
-
+bool use_tft_colors_for_neo = false;
 
 // global tunable variables
 float float_zero = 0.000069;         // if two floats being compared are closer than this, we consider them equal
@@ -188,18 +173,16 @@ bool car_hasnt_moved = false;           // minor state variable for fly mode - W
 bool powering_up = false;               // minor state variable for lowpower mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
-// bool screensaver = false;                // can enable experiment with animated screen draws
 bool basicmode_request = false;
 int autosaver_request = REQ_NA;
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN;                  // which of the dataset pages is currently displayed and available to edit?
-volatile int sel = 0;               // in the real time tuning UI, which of the editable values is selected. -1 for none 
+volatile int sel = 0;                   // in the real time tuning UI, which of the editable values is selected. -1 for none 
 volatile int sel_last = 0;          
 volatile int sel_last_last = 0;          
-bool syspower = HIGH, not_syspower = !syspower;                   // set by handler only. Reflects current state of the signal
-// bool basicmodesw = LOW;
+bool syspower = HIGH, not_syspower = !syspower; // set by handler only. Reflects current state of the signal
 int sleep_request = REQ_NA;
-float maf_gps = 0;                      // manifold mass airflow in grams per second
+float maf_gps = 0;                              // manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
 bool nowtouch = false;
 bool captouch = true;
@@ -209,7 +192,6 @@ bool web_disabled = false;
 int ui_context = EZReadUI;
 int ui_default = EZReadUI;
 bool panicstop = false;
-// bool sensor_present[telemetry_full];
 
 // fast macros
 #define arraysize(x) ((int)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays
