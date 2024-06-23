@@ -206,6 +206,7 @@ class DiagRuntime {
         }
     }
     void report_changes() {
+        if (!print_error_changes) return;
         for (int i=0; i<NUM_ERR_TYPES; i++) {
             bool printheader1 = false, printheader2 = false, printed = false;
             for (int j=0; j<NumTelemetryFull; j++) {
@@ -237,16 +238,6 @@ class DiagRuntime {
     }
     int worst_sensor(int type) {
         return most_critical_sensor[type];  // for global awareness
-    }
-    void print() {
-        for (int t=0; t<=NUM_ERR_TYPES; t++) {
-            ezread.squintf ("diag err: %s (%d): ", err_type_card[t], err_sens_fails[t]);
-            for (int s=0; s<=NumTelemetryFull; s++) {
-                if (s == NumTelemetryFull) s++;
-                if (err_sens[t][s]) ezread.squintf ("%s, ", err_sens_card[s]);
-            }
-            ezread.squintf("\n");
-        }
     }
     void TempFailure() {
         for (int i=_TempEng; i<=_TempAmb; i++) {
@@ -347,6 +338,7 @@ class DiagRuntime {
         }
     }
     void dump_errorcode_update() {
+        if (!print_error_changes) return;
         static uint32_t status_last[NUM_ERR_TYPES];
         bool do_print = false;
         uint8_t color = NON;
@@ -471,7 +463,7 @@ class LoopTimer {
   public:
     LoopTimer() {}
     // Loop timing related
-    Timer loop_timer = Timer(1000000);  // how long the previous main loop took to run (in us)
+    Timer loop_timer{1000000};  // how long the previous main loop took to run (in us)
     int loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
     float loop_sum_s, loopfreq_hz;
     int looptimes_us[20];

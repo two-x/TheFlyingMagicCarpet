@@ -291,7 +291,7 @@ class JagMotor : public ServoMotor {
   protected:
     CarBattery* mulebatt;
     float car_batt_fake_v = 12.0;
-    Timer volt_check_timer = Timer(3500000);
+    Timer volt_check_timer{3500000};
   public:
     using ServoMotor::ServoMotor;
     float duty_fwd_pc = 100;  // default. subclasses override as necessary

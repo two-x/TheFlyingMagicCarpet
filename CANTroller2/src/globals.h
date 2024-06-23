@@ -137,7 +137,8 @@ bool button_test_heartbeat_color = false; // makes boot button short press chang
 bool wifi_client_mode = false;       // should wifi be in client or access point mode?
 bool screensaver_enabled = true;     // does fullscreen screensaver start automatically when in powerdown, after a delay?
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
-bool use_tft_colors_for_neo = false;
+bool use_tft_colors_for_neo = true;  // should neopixel colors be based on onscreen icon colors? (otherwise they'll split the full hue spectrum amongst themselves)
+bool print_error_changes = true;     // should diag print status changes and new error events to console?
 
 // global tunable variables
 float float_zero = 0.000069;         // if two floats being compared are closer than this, we consider them equal
