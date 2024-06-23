@@ -81,6 +81,7 @@ class CollisionsSaver {
     volatile int _loop_count = 0;
     Timer gravtimer;
     CollisionsSaver() {}
+  private:
     void drawfunc() {
         auto sprwidth = vp->w;
         auto sprheight = vp->h;
@@ -113,22 +114,6 @@ class CollisionsSaver {
         a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
         a->m = 4 + (ball_count & 0x07);
     }
-    // void set_gravity(int newgrav) { ball_gravity = newgrav; }
-    void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
-        // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
-        lastx = touchball.x;
-        lasty = touchball.y;
-        touchx = x;
-        touchy = y;
-        touchnow = true;
-        touchball.x = constrain(touchx, touchball_r, vp->w - touchball_r) << SHIFTSIZE;
-        touchball.y = constrain(touchy, touchball_r, vp->h - touchball_r) << SHIFTSIZE;
-        touchball.dx = (touchball.x - lastx) / 2;
-        touchball.dy = (touchball.y - lasty) / 2;
-    }
-    // ball_info_t temp_ball(int x, int y, int dx, int dy, int r, int m, uint8_t color) {
-    //     return { x, y, dx, dy, r, m, color }; // Uniform initialization
-    // }
     bool mainfunc(void) {
         bool new_round = false;
         static constexpr float e = 0.999;  // Coefficient of friction
@@ -223,6 +208,19 @@ class CollisionsSaver {
         _ball_count = ball_count;
         return new_round;
     }
+  public:
+    void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
+        // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
+        lastx = touchball.x;
+        lasty = touchball.y;
+        touchx = x;
+        touchy = y;
+        touchnow = true;
+        touchball.x = constrain(touchx, touchball_r, vp->w - touchball_r) << SHIFTSIZE;
+        touchball.y = constrain(touchy, touchball_r, vp->h - touchball_r) << SHIFTSIZE;
+        touchball.dx = (touchball.x - lastx) / 2;
+        touchball.dy = (touchball.y - lasty) / 2;
+    }
     void setup(LGFX_Sprite* _nowspr, viewport* _vp) {
         sprite = _nowspr;
         vp = _vp;
@@ -256,15 +254,14 @@ class CollisionsSaver {
         drawfunc();
         return !round_over;  // not done yet
     }
-    void saver_touch(int, int) {};  // unused
 };
 class EraserSaver {  // draws colorful patterns to exercise
-    enum savershapes { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, Worm, Rotate, NumSaverShapes };
  private:
+    enum savershapes { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, Worm, Rotate, NumSaverShapes };
     LGFX_Sprite* sprite;
     viewport* vp;
     int wormpos[2] = {0, 0}, wormvel[2] = {0, 0}, wormsign[2] = {1, 1}, wormd[2] = {20, 20};
-    int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128, boxsize[2];
+    int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128, boxsize[2], mindot = 4, adddot = 4;
     int sprsize[2], rotate = -1, scaler = 1, season = 0, last_season = 0, procession = 3, last_procession = 3, numseasons = 4;
     int point[2], plast[2], er[2], erpos_max[2], wormstripe = 2;
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
@@ -343,12 +340,8 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
     }
   private:
-    void drawsprite() {
-        point[HORZ] = rn(vp->w);
-        point[VERT] = rn(vp->h);
-        if (shape == Rotate) ++rotate %= NumSaverShapes;
-        else rotate = shape;
-        if ((cycle != 2) || !has_eraser) {
+    void update_pen() {
+        if (cycle != 2) {
             if (pentimer.expireset()) {
                 if (season == 1 && season == 3) {
                     pensat += (float)pensatdir * 1.5;
@@ -365,219 +358,217 @@ class EraserSaver {  // draws colorful patterns to exercise
                 if (!(bool)rn(30)) penhue = rn(65536);
                 pencolor = hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
             }
-            spothue = (uint16_t)(spothue + (spotrate >> 2) % sizeof(spothue));
-            if (!(bool)rn(20)) spothue = rn(65535);
-            if (rotate == Wedges) {
-                uint8_t wcball, wctip;
-                uint16_t hue = rn(65536);
-                uint8_t brt = 156 + rn(100);
-                if (season == 1) {
-                    wctip = hsv_to_rgb<uint8_t>(hue, 0, brt);
-                    wcball = hsv_to_rgb<uint8_t>(hue, 64, brt);
-                }
-                else if (season == 3) {
-                    wctip = hsv_to_rgb<uint8_t>(hue, rn(256), brt);
-                    wcball = hsv_to_rgb<uint8_t>(hue, 64, rn(64));
-                }
-                else {
-                    wcball = hsv_to_rgb<uint8_t>(hue, 127 + (spothue >> (season + 5)), 200 + rn(56));
-                    wctip = wclast;
-                }
-                float im = 0;
-                if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
-                sprite->fillCircle(plast[HORZ] + vp->x, plast[VERT] + vp->y, 3, wcball);
-                for (int h=-4; h<=4; h++)
-                    sprite->drawGradientLine(point[HORZ] + vp->x, point[VERT] + vp->y, plast[HORZ]  + vp->x + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + vp->y + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wctip, wcball);
-                wclast = wcball;
-            }
-            else if (rotate == Ellipses) {
-                int d[2] = {10 + rn(30), 10 + rn(30)};
-                uint8_t sat, brt;
-                uint16_t mult = rn(2000), hue = spothue + rn(3000);
-                spotrate = (int)((season * 200) + rn(200));
-                sat = 100 + rn(156);
-                brt = 120 + rn(136);
-                for (int i = 0; i < 6 + rn(20); i++) { 
-                    sprite->drawEllipse(point[HORZ] + vp->x, point[VERT] + vp->y, scaler * d[0] - i, scaler * d[1] + i, hsv_to_rgb<uint8_t>(hue + mult * i, sat, brt));
-                }
-            }
-            else if (rotate == Rings) {
-                if (extraeffectstimer.expired()) {
-                    spotrate = (int)(200 + rn(800));
-                    extraeffectstimer.set(500000 * (1 + rn(4)));
-                }
-                int d = 6 + rn(45);
-                uint8_t sat, brt, c, c2;
-                uint16_t hue;
-                uint16_t hue_common = hue = spothue + 32768 * rn(2) + rn(1500);
-                if (season == 0) {
-                    hue = hue_common;
-                    sat = 75 + 100 * rn(2);
-                    brt = 150 + rn(56);
-                }
-                else if (season == 1) {
-                    hue = (penhue + rn(2) * 32781) % 65563;
-                    sat = pensat + rn(100) - 100;
-                    brt = 150 + rn(106);
-                }
-                else if (season == 2) {
-                    hue = hue_common;
-                    sat = 255 - (uint8_t)(spothue >> (6 + rn(3) + season));
-                    brt = 175 + rn(80);
-                }
-                else if (season == 3) {
-                    hue = hue_common;
-                    sat = 175 + 75 * rn(2);
-                    brt = 200 + rn(56);
-                }
-                c = hsv_to_rgb<uint8_t>(hue, sat, brt);
-                c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
-                // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
-                for (int xo = -1; xo <= 1; xo += 2) {
-                    sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler, c);
-                    sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y + xo, d * scaler, c);
-                    sprite->drawCircle(point[HORZ] + vp->x + xo, point[VERT] + vp->y, d * scaler, c);
-                }
-                for (int edge = -1; edge <= 1; edge += 2)
-                    sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler + edge, c2);
-            }
-            else if (rotate == Dots) {
-                int punches_left;
-                spotrate = (int)(rn(900));
-                static bool punchdelay;
-                static bool was_eraser;
-                uint8_t sat = (30 * season) + rn(256 - 30 * season);
-                if (season == 3) {
-                    was_eraser = has_eraser;
-                    has_eraser = false;
-                }
-                else if (season == 0 && last_season == 3) {  // on new years we slam them with a few big punches
-                    punchdelay = true;
-                    punches_left = 8;
-                    // sprite->fillCircle((vp->w >> 1) + vp->x, (vp->h >> 1) + vp->y, (int)((float)std::min(vp->h, vp->w) * 0.38), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
-                    sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (50 + rn(20)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
-                }
-                else if (!punchdelay) punches_left = 0;
-                if (punches_left > 0) {
-                    if (extraeffectstimer.expired()) {
-                        extraeffectstimer.set(50000 * (9 - punches_left--));
-                        sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (50 + rn(20)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
-                        if (punches_left <= 0) {
-                            season = last_season = 0;
-                            has_eraser = was_eraser;
-                            punchdelay = false;
-                            seasontimer.reset();
-                        }
-                    }
-                }
-                else {
-                    int bigger = 1 + rn(3);
-                    for (int star = 0; star < 12; star++)
-                        sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (2 + rn(1 + bigger * season)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
-                }
-            }
-            else if (rotate == Boxes) {
-                uint8_t boxcolor;
-                boxrad = rn(1 + rn(2) * season);  // note this will crash us!  ->  boxrad = rn(5 * season);
-                boxminsize = 2 * boxrad + 5;
-                int longer = rn(2);
-                boxsize[longer] = boxminsize + rn(vp->w - boxminsize);
-                boxsize[!longer] = boxminsize + rn(boxsize[longer] >> 2);  // cheesy attempt to work around crazy-values bug
-                point[HORZ] = rn(vp->w) - (boxsize[HORZ] >> 1);
-                point[VERT] = rn(vp->h) - (boxsize[VERT] >> 1);
-                for (int axis=HORZ; axis<=VERT; axis++) {
-                    if (point[axis] < 0) {
-                        boxsize[axis] += point[axis];
-                        point[axis] = -boxrad;
-                    }
-                }
-                if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
-                if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
-                int shells = 1 + (!(bool)rn(5)) ? 1 + rn(4) : 0;
-                int steps[2] = { boxsize[HORZ] / (shells+1), boxsize[VERT] / (shells+1) };
-                for (int mat=0; mat<shells; mat++) {
-                    if (season == 0) boxcolor = rando_color();
-                    else if (season == 1) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)rn(65535), rn(256), rn(256));
-                    else if (season == 2) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(1024)) % 65535), 150 + rn(56), 255);
-                    else if (season == 3) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(2) * 32767 + rn(512)) % 65535), 150 + rn(56), 255);
-                    for (int axis=HORZ; axis<=VERT; axis++) {
-                        boxsize[axis] -= steps[axis];
-                        point[axis] += (steps[axis] >> 1);
-                    }
-                    sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, boxcolor);  // Change colors as needed
-                }
-            }
-            else if (rotate == Ascii) {
-                static float offset[2];
-                static int final[2];
-                uint16_t hue;
-                uint8_t sat;
-                sprite->setTextSize(1);
-                sprite->setTextDatum(textdatum_t::middle_center);
-                sprite->setFont(&fonts::Font4);
-                for (int star = 0; star < 4; star++) {
-                    point[HORZ] = rn(vp->w);
-                    point[VERT] = rn(vp->h);
-                    if (procession > 4) {
-                        hue = (vp->h * (int)(season > 1)) - point[VERT] * 65535 / vp->h;
-                        sat = (vp->w * (int)(season == 1 || season == 3)) - point[HORZ] * 255 / vp->w;
-                    }
-                    else {
-                        hue = (vp->w * (int)(season == 0 || season == 2)) - point[HORZ] * 65535 / vp->w;
-                        sat = (vp->h * (int)(season < 2)) - point[VERT] * 255 / vp->h;
-                    }
-                    for (int axis=HORZ; axis <= VERT; axis++) offset[axis] += (float)rn(100) / 100;
-                    final[HORZ] = (point[HORZ] + ((season < 3) ? (int)(offset[HORZ]) : 0)) % vp->w + vp->x;
-                    final[VERT] = (point[VERT] + ((season > 0) ? (int)(offset[VERT]) : 0)) % vp->h + vp->y;
-                    String letter = (String)((char)(0x21 + rn(0x5d)));
-                    uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue < (32767 / (season+1))) + rn(56));
-                    sprite->drawString(letter, final[HORZ] + 1, final[VERT] + 1);  // these will not work at extreme sides
-                    sprite->drawString(letter, final[HORZ] - 1, final[VERT] - 1);  // these will not work at extreme sides
-                    sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue > 32767) + rn(56)));
-                    sprite->drawString(letter, final[HORZ], final[VERT]);
-                    sprite->setTextColor(BLK);  // allows subliminal messaging
-                }
-                sprite->setFont(&fonts::Font0);
-            }
-            else if (rotate == Worm) {
-                int point[2];
-                has_eraser = saver_lotto = false;
-                lucktimer.reset();
-                uint8_t c = (!wormstripe) ? BLK : pencolor;
-                if (extraeffectstimer.expired()) {
-                    ++wormstripe %= 2;
-                    extraeffectstimer.set(300000 * ((!wormstripe) ? 1 : 4));
-                }
-                int wormposmax[2] = {(vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2};
-                if (wormmovetimer.expireset()) {
-                    for (int axis = HORZ; axis <= VERT; axis++) {
-                        wormpos[axis] += (wormvel[axis] >> 6) * wormsign[axis];
-                        if ((wormpos[axis] * wormsign[axis]) >> shifter >= wormposmax[axis] + 2) {
-                            wormpos[axis] = (wormsign[axis] * wormposmax[axis]) << shifter;
-                            wormsign[axis] *= -1;
-                            if (wormvel[1-axis] < (1 << 6)) wormvel[1-axis] = wormvel[1-axis] << 1;
-                        }
-                    }
-                }
-                for (int axis = HORZ; axis <= VERT; axis++) {
-                    if (!(bool)rn(3)) wormd[axis] = constrain(wormd[axis] + rn(3) - 1, wormdmin, wormdmax);
-                }
-                if (wormtimer.expireset()) {
-                    for (int axis = HORZ; axis <= VERT; axis++) {
-                        wormvel[axis] = constrain(wormvel[axis] + rn(255) - 127, 0, wormvelmax);
-                    }
-                }
-                for (int xo1 = -1; xo1 <= 1; xo1 += 2) {
-                    point[HORZ] = (vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x + xo1;
-                    point[VERT] = (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y + xo1;
-                    for (int xo2 = -1; xo2 <= 1; xo2 += 2) {
-                        sprite->drawEllipse(point[HORZ], point[VERT], wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
-                        sprite->drawEllipse(point[HORZ] + xo2, point[VERT] + xo2, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
-                        sprite->drawEllipse(point[HORZ] + xo2, point[VERT], wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
-                    }
+        }
+        spothue = (uint16_t)(spothue + (spotrate >> 2) % sizeof(spothue));
+        if (!(bool)rn(20)) spothue = rn(65535);
+    }
+    void run_wedges() {
+        uint8_t wcball, wctip;
+        uint16_t hue = rn(65536);
+        uint8_t brt = 156 + rn(100);
+        if (season == 1) {
+            wctip = hsv_to_rgb<uint8_t>(hue, 0, brt);
+            wcball = hsv_to_rgb<uint8_t>(hue, 64, brt);
+        }
+        else if (season == 3) {
+            wctip = hsv_to_rgb<uint8_t>(hue, rn(256), brt);
+            wcball = hsv_to_rgb<uint8_t>(hue, 64, rn(64));
+        }
+        else {
+            wcball = hsv_to_rgb<uint8_t>(hue, 127 + (spothue >> (season + 5)), 200 + rn(56));
+            wctip = wclast;
+        }
+        float im = 0;
+        if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
+        sprite->fillCircle(plast[HORZ] + vp->x, plast[VERT] + vp->y, 3, wcball);
+        for (int h=-4; h<=4; h++)
+            sprite->drawGradientLine(point[HORZ] + vp->x, point[VERT] + vp->y, plast[HORZ]  + vp->x + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + vp->y + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wctip, wcball);
+        wclast = wcball;
+    }
+    void run_ellipses() {
+        int d[2] = {10 + rn(30), 10 + rn(30)};
+        uint8_t sat, brt;
+        uint16_t mult = rn(2000), hue = spothue + rn(3000);
+        spotrate = (int)((season * 200) + rn(200));
+        sat = 100 + rn(156);
+        brt = 120 + rn(136);
+        for (int i = 0; i < 6 + rn(20); i++) { 
+            sprite->drawEllipse(point[HORZ] + vp->x, point[VERT] + vp->y, scaler * d[0] - i, scaler * d[1] + i, hsv_to_rgb<uint8_t>(hue + mult * i, sat, brt));
+        }
+    }
+    void run_rings() {
+        if (extraeffectstimer.expired()) {
+            spotrate = (int)(200 + rn(800));
+            extraeffectstimer.set(500000 * (1 + rn(4)));
+        }
+        int d = 6 + rn(45);
+        uint8_t sat, brt, c, c2;
+        uint16_t hue;
+        uint16_t hue_common = hue = spothue + 32768 * rn(2) + rn(1500);
+        if (season == 0) {
+            hue = hue_common;
+            sat = 75 + 100 * rn(2);
+            brt = 150 + rn(56);
+        }
+        else if (season == 1) {
+            hue = (penhue + rn(2) * 32781) % 65563;
+            sat = pensat + rn(100) - 100;
+            brt = 150 + rn(106);
+        }
+        else if (season == 2) {
+            hue = hue_common;
+            sat = 255 - (uint8_t)(spothue >> (6 + rn(3) + season));
+            brt = 175 + rn(80);
+        }
+        else if (season == 3) {
+            hue = hue_common;
+            sat = 175 + 75 * rn(2);
+            brt = 200 + rn(56);
+        }
+        c = hsv_to_rgb<uint8_t>(hue, sat, brt);
+        c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
+        // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
+        for (int xo = -1; xo <= 1; xo += 2) {
+            sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler, c);
+            sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y + xo, d * scaler, c);
+            sprite->drawCircle(point[HORZ] + vp->x + xo, point[VERT] + vp->y, d * scaler, c);
+        }
+        for (int edge = -1; edge <= 1; edge += 2)
+            sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler + edge, c2);
+    }
+    void run_dots() {
+        static int punches_left;
+        static bool punchdelay;
+        static bool was_eraser;
+        spotrate = (int)(rn(900));
+        uint8_t sat = (30 * season) + rn(256 - 30 * season);
+        if (procession < last_procession) {  // on leap year we slam them with a few big punches
+            was_eraser = has_eraser;
+            has_eraser = false;
+            punchdelay = true;
+            punches_left = 8;
+        }
+        else if (!punchdelay) punches_left = 0;
+        if (season != last_season) {
+            mindot = constrain(mindot + rn(4) - 2, 2, 11);
+            adddot = constrain(adddot + rn(4) - 2, 2, 16 - mindot);
+        }
+        if (punches_left > 0) {
+            if (extraeffectstimer.expired()) {
+                extraeffectstimer.set(40000 * (9 - punches_left--));
+                sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (50 + rn(20)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
+                if (punches_left <= 0) {
+                    has_eraser = was_eraser;
+                    punchdelay = false;
                 }
             }
         }
+        else for (int star = 0; star < 12; star++) {
+            sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (mindot + rn(adddot)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);     
+        }
+    }
+    void run_boxes() {
+        uint8_t boxcolor;
+        boxrad = rn(1 + rn(2) * season);  // note this will crash us!  ->  boxrad = rn(5 * season);
+        boxminsize = 2 * boxrad + 5;
+        int longer = rn(2);
+        boxsize[longer] = boxminsize + rn(vp->w - boxminsize);
+        boxsize[!longer] = boxminsize + rn(boxsize[longer] >> 2);  // cheesy attempt to work around crazy-values bug
+        point[HORZ] = rn(vp->w) - (boxsize[HORZ] >> 1);
+        point[VERT] = rn(vp->h) - (boxsize[VERT] >> 1);
+        for (int axis=HORZ; axis<=VERT; axis++) {
+            if (point[axis] < 0) {
+                boxsize[axis] += point[axis];
+                point[axis] = -boxrad;
+            }
+        }
+        if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
+        if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
+        int shells = 1 + (!(bool)rn(5)) ? 1 + rn(4) : 0;
+        int steps[2] = { boxsize[HORZ] / (shells+1), boxsize[VERT] / (shells+1) };
+        for (int mat=0; mat<shells; mat++) {
+            if (season == 0) boxcolor = rando_color();
+            else if (season == 1) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)rn(65535), rn(256), rn(256));
+            else if (season == 2) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(1024)) % 65535), 150 + rn(56), 255);
+            else if (season == 3) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(2) * 32767 + rn(512)) % 65535), 150 + rn(56), 255);
+            for (int axis=HORZ; axis<=VERT; axis++) {
+                boxsize[axis] -= steps[axis];
+                point[axis] += (steps[axis] >> 1);
+            }
+            sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, boxcolor);  // Change colors as needed
+        }
+    }
+    void run_ascii() {
+        static float offset[2];
+        static int final[2];
+        uint16_t hue;
+        uint8_t sat;
+        sprite->setTextSize(1);
+        sprite->setTextDatum(textdatum_t::middle_center);
+        sprite->setFont(&fonts::Font4);
+        for (int star = 0; star < 4; star++) {
+            point[HORZ] = rn(vp->w);
+            point[VERT] = rn(vp->h);
+            if (procession > 4) {
+                hue = (vp->h * (int)(season > 1)) - point[VERT] * 65535 / vp->h;
+                sat = (vp->w * (int)(season == 1 || season == 3)) - point[HORZ] * 255 / vp->w;
+            }
+            else {
+                hue = (vp->w * (int)(season == 0 || season == 2)) - point[HORZ] * 65535 / vp->w;
+                sat = (vp->h * (int)(season < 2)) - point[VERT] * 255 / vp->h;
+            }
+            for (int axis=HORZ; axis <= VERT; axis++) offset[axis] += (float)rn(100) / 100;
+            final[HORZ] = (point[HORZ] + ((season < 3) ? (int)(offset[HORZ]) : 0)) % vp->w + vp->x;
+            final[VERT] = (point[VERT] + ((season > 0) ? (int)(offset[VERT]) : 0)) % vp->h + vp->y;
+            String letter = (String)((char)(0x21 + rn(0x5d)));
+            uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue < (32767 / (season+1))) + rn(56));
+            sprite->drawString(letter, final[HORZ] + 1, final[VERT] + 1);  // these will not work at extreme sides
+            sprite->drawString(letter, final[HORZ] - 1, final[VERT] - 1);  // these will not work at extreme sides
+            sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue > 32767) + rn(56)));
+            sprite->drawString(letter, final[HORZ], final[VERT]);
+            sprite->setTextColor(BLK);  // allows subliminal messaging
+        }
+        sprite->setFont(&fonts::Font0);
+    }
+    void run_worm() {
+        int point[2];
+        has_eraser = saver_lotto = false;
+        lucktimer.reset();
+        uint8_t c = (!wormstripe) ? BLK : pencolor;
+        if (extraeffectstimer.expired()) {
+            ++wormstripe %= 2;
+            extraeffectstimer.set(300000 * ((!wormstripe) ? 1 : 4));
+        }
+        int wormposmax[2] = {(vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2};
+        if (wormmovetimer.expireset()) {
+            for (int axis = HORZ; axis <= VERT; axis++) {
+                wormpos[axis] += (wormvel[axis] >> 6) * wormsign[axis];
+                if ((wormpos[axis] * wormsign[axis]) >> shifter >= wormposmax[axis] + 2) {
+                    wormpos[axis] = (wormsign[axis] * wormposmax[axis]) << shifter;
+                    wormsign[axis] *= -1;
+                    if (wormvel[1-axis] < (1 << 6)) wormvel[1-axis] = wormvel[1-axis] << 1;
+                }
+            }
+        }
+        for (int axis = HORZ; axis <= VERT; axis++) {
+            if (!(bool)rn(3)) wormd[axis] = constrain(wormd[axis] + rn(3) - 1, wormdmin, wormdmax);
+        }
+        if (wormtimer.expireset()) {
+            for (int axis = HORZ; axis <= VERT; axis++) {
+                wormvel[axis] = constrain(wormvel[axis] + rn(255) - 127, 0, wormvelmax);
+            }
+        }
+        for (int xo1 = -1; xo1 <= 1; xo1 += 2) {
+            point[HORZ] = (vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x + xo1;
+            point[VERT] = (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y + xo1;
+            for (int xo2 = -1; xo2 <= 1; xo2 += 2) {
+                sprite->drawEllipse(point[HORZ], point[VERT], wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
+                sprite->drawEllipse(point[HORZ] + xo2, point[VERT] + xo2, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
+                sprite->drawEllipse(point[HORZ] + xo2, point[VERT], wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
+            }
+        }
+    }
+    void the_eraser() {
         if ((cycle != 0) && has_eraser) {
             int erpos_max[2] = {(vp->w - eraser_rad) / 2, (vp->h - eraser_rad) / 2};
             for (int axis = HORZ; axis <= VERT; axis++) {
@@ -604,6 +595,21 @@ class EraserSaver {  // draws colorful patterns to exercise
             sprite->setFont(&fonts::Font0);
             sprite->setTextDatum(textdatum_t::top_left);
         }
+    }
+    void drawsprite() {
+        point[HORZ] = rn(vp->w);
+        point[VERT] = rn(vp->h);
+        if (shape == Rotate) ++rotate %= NumSaverShapes;
+        else rotate = shape;
+        update_pen();
+        if (rotate == Wedges) run_wedges();
+        else if (rotate == Ellipses) run_ellipses();
+        else if (rotate == Rings) run_rings();
+        else if (rotate == Dots) run_dots();
+        else if (rotate == Boxes) run_boxes();
+        else if (rotate == Ascii) run_ascii();
+        else if (rotate == Worm) run_worm();
+        the_eraser();
         for (int axis = HORZ; axis <= VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
     }
 };
@@ -715,35 +721,6 @@ class PanelAppManager {
     int64_t fps_mark;
     bool simulating_last = false, mule_drawn = false, dirty = true;
     int ui_context_last = MuleChassisUI;
-  public:
-    EZReadDrawer* ezdraw;
-    int sec, psec, _width, _height, _myfps = 0, frame_count = 0;
-    bool anim_reset_request = false;
-    PanelAppManager(EZReadDrawer* _ez) : ezdraw(_ez) {}
-    void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
-        ++nowsaver %= NumSaverMenu;
-        anim_reset_request = true;
-        still_running = 1;
-    }
-    void setup(LGFX* _lgfx, Simulator* _sim, Touchscreen* _touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
-        Serial.printf("  panel app manager init ..");
-        mylcd = _lgfx;
-        sim = _sim;
-        touch = _touch;
-        set_vp(_cornerx, _cornery, _sprwidth, _sprheight);
-        _width = vp.w << SHIFTSIZE;
-        _height = vp.h << SHIFTSIZE;
-        Serial.printf(" screensavers & ezread console .. ");
-        eSaver.setup(&framebuf[flip], &vp);
-        cSaver.setup(&framebuf[flip], &vp);
-        ezdraw->setup(&vp);
-        Serial.printf("set up\n");
-    }
-    void reset() {
-        if (nowsaver == Eraser) eSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
-        else if (nowsaver == Collisions) cSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
-        anim_reset_request = false;
-    }
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint8_t color) {
         if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32x32x8, BLK);
         else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32x32x8, BLK);
@@ -771,8 +748,8 @@ class PanelAppManager {
                     if (!sim->can_sim(sens::joy)) do_draw = false;
                 }
                 if (do_draw) {
-                    int cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + vp.x - 5 + 2;
-                    int cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + vp.y - 1;
+                    int cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + disp_simbuttons_x - 5 + 2;
+                    int cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + disp_simbuttons_y - 1;
                     if (simgrid[row][col] != "    ") {
                         draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], YEL);  // for 3d look
                         draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
@@ -819,6 +796,50 @@ class PanelAppManager {
             oldfps = dispfps;
         }
     }
+    bool touched() {
+        if (touch->touched()) {
+            touchp[HORZ] = touch->touch_pt(HORZ) - vp.x;
+            touchp[VERT] = touch->touch_pt(VERT) - vp.y;
+            return true;
+        }
+        return false;
+    }
+    int touch_pt(int axis) { return touchp[axis]; }
+  public:
+    EZReadDrawer* ezdraw;
+    int sec, psec, _width, _height, _myfps = 0, frame_count = 0;
+    bool anim_reset_request = false;
+    PanelAppManager(EZReadDrawer* _ez) : ezdraw(_ez) {}
+    void set_vp(int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
+        vp.x = _cornerx;
+        vp.y = _cornery;
+        vp.w = _sprwidth;
+        vp.h = _sprheight;
+    }
+    void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
+        ++nowsaver %= NumSaverMenu;
+        anim_reset_request = true;
+        still_running = 1;
+    }
+    void setup(LGFX* _lgfx, Simulator* _sim, Touchscreen* _touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
+        Serial.printf("  panel app manager init ..");
+        mylcd = _lgfx;
+        sim = _sim;
+        touch = _touch;
+        set_vp(_cornerx, _cornery, _sprwidth, _sprheight);
+        _width = vp.w << SHIFTSIZE;
+        _height = vp.h << SHIFTSIZE;
+        Serial.printf(" screensavers & ezread console .. ");
+        eSaver.setup(&framebuf[flip], &vp);
+        cSaver.setup(&framebuf[flip], &vp);
+        ezdraw->setup(&vp);
+        Serial.printf("set up\n");
+    }
+    void reset() {
+        if (nowsaver == Eraser) eSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
+        else if (nowsaver == Collisions) cSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
+        anim_reset_request = false;
+    }
     float update(LGFX_Sprite* spr, bool argdirty=false) {
         if ((ui_context_last != ScreensaverUI) && (ui_context == ScreensaverUI)) change_saver();  // ptrsaver->reset();
         if (ui_context_last != ui_context) dirty = true;
@@ -854,9 +875,7 @@ class PanelAppManager {
             }
             if (!(bool)still_running) change_saver();
         }
-        else if (ui_context == EZReadUI) {
-            ezdraw->update(spr);
-        }
+        else if (ui_context == EZReadUI) ezdraw->update(spr);
         else if (ui_context == MuleChassisUI) {
             if (!mule_drawn) {
                 spr->fillSprite(BLK);
@@ -865,9 +884,7 @@ class PanelAppManager {
             }
         }
         spr->clearClipRect();
-        if (sim->enabled()) {
-            draw_simbuttons(spr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-        }
+        if (sim->enabled()) draw_simbuttons(spr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
         else if (simulating_last) {
             spr->fillRect(vp.x, vp.y, vp.w, vp.h, BLK);
             dirty = true;
@@ -877,23 +894,6 @@ class PanelAppManager {
         dirty = false;
         calc_fps();
         return myfps;
-    }
-    void set_vp(int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
-        vp.x = _cornerx;
-        vp.y = _cornery;
-        vp.w = _sprwidth;
-        vp.h = _sprheight;
-    }
-    bool touched() {
-        if (touch->touched()) {
-            touchp[HORZ] = touch->touch_pt(HORZ) - vp.x;
-            touchp[VERT] = touch->touch_pt(VERT) - vp.y;
-            return true;
-        }
-        return false;
-    }
-    int touch_pt(int axis) {
-        return touchp[axis];
     }
 };
 #ifdef CONVERT_IMAGE 
