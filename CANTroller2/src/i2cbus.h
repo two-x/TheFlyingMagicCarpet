@@ -187,7 +187,7 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
 // code: 0x2H,0xLL = speedometer value update. 12-bit value contained in HLL is speed in hundredths-of-mph
 class LightingBox {  // represents the lighting controller i2c slave endpoint
   private:
-    Timer send_timer = Timer(250000);
+    Timer send_timer{250000};
     int runmode_last = STANDBY;
     uint16_t speed_last;
     uint8_t status_nibble_last;

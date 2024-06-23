@@ -151,7 +151,7 @@ class Display {
     Touchscreen* touch;
     Simulator* sim;
     IdiotLights* idiots;
-    Timer valuesRefreshTimer = Timer(160000);  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
+    Timer valuesRefreshTimer{160000};  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
     uint8_t palettesize = 2;
     // uint16_t palette[256] = { BLK, WHT };
     static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
