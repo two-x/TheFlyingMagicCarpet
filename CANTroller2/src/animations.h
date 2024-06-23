@@ -76,9 +76,10 @@ class CollisionsSaver {
     float ball_radius_base = 4.5 / 235.0;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
     float ball_radius_modifier = 2.6 / 235.0;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
     uint8_t ball_redoubler_rate = 0x18;  // originally 0x07
-    uint8_t ball_gravity = 16;  // originally 0 with suggestion of 4
+    int8_t ball_gravity = 16;  // ball_gravity = 16;  // originally 0 with suggestion of 4
     volatile bool _is_running;
     volatile int _loop_count = 0;
+    Timer gravtimer;
     CollisionsSaver() {}
     void drawfunc() {
         auto sprwidth = vp->w;
@@ -112,6 +113,7 @@ class CollisionsSaver {
         a->r = sqrme << SHIFTSIZE;  // (sqrme * sqrme)));
         a->m = 4 + (ball_count & 0x07);
     }
+    // void set_gravity(int newgrav) { ball_gravity = newgrav; }
     void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
         // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
         lastx = touchball.x;
@@ -247,6 +249,10 @@ class CollisionsSaver {
         sprite = _nowspr;
         vp = _vp;
         bool round_over = mainfunc();
+        if (gravtimer.expired()) {
+            ball_gravity = constrain((ball_gravity + rn(6) - 3), -18, 28);
+            gravtimer.set(1000000 * (2 + rn(4)));
+        }
         drawfunc();
         return !round_over;  // not done yet
     }
@@ -259,7 +265,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     viewport* vp;
     int wormpos[2] = {0, 0}, wormvel[2] = {0, 0}, wormsign[2] = {1, 1}, wormd[2] = {20, 20};
     int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128, boxsize[2];
-    int sprsize[2], rotate = -1, scaler = 1, season = 0, last_season = 0, numseasons = 4;
+    int sprsize[2], rotate = -1, scaler = 1, season = 0, last_season = 0, procession = 3, last_procession = 3, numseasons = 4;
     int point[2], plast[2], er[2], erpos_max[2], wormstripe = 2;
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, now = 0;
@@ -313,10 +319,13 @@ class EraserSaver {  // draws colorful patterns to exercise
             if (cycle == 0) change_pattern(-1);
             saverCycleTimer.set((saver_cycletime_us / ((cycle == 2) ? 5 : 1)) << (shape == Worm));
         }
-        last_season = season;
         if (seasontimer.expireset()) {
+            last_season = season;
             ++season %= numseasons;
             seasontimer.set(3200000 * (1 + rn(4)));
+            last_procession = procession;
+            procession += season;
+            procession %= 10;
         }
         drawsprite();
         return shapes_done;
@@ -509,13 +518,13 @@ class EraserSaver {  // draws colorful patterns to exercise
                 for (int star = 0; star < 4; star++) {
                     point[HORZ] = rn(vp->w);
                     point[VERT] = rn(vp->h);
-                    if (season == 0 || season == 4) {
+                    if (procession > 4) {
                         hue = (vp->h * (int)(season > 1)) - point[VERT] * 65535 / vp->h;
                         sat = (vp->w * (int)(season == 1 || season == 3)) - point[HORZ] * 255 / vp->w;
                     }
                     else {
                         hue = (vp->w * (int)(season == 0 || season == 2)) - point[HORZ] * 65535 / vp->w;
-                        sat = (vp->h * (int)(season < 1)) - point[VERT] * 255 / vp->h;
+                        sat = (vp->h * (int)(season < 2)) - point[VERT] * 255 / vp->h;
                     }
                     for (int axis=HORZ; axis <= VERT; axis++) offset[axis] += (float)rn(100) / 100;
                     final[HORZ] = (point[HORZ] + ((season < 3) ? (int)(offset[HORZ]) : 0)) % vp->w + vp->x;
@@ -795,15 +804,15 @@ class PanelAppManager {
     void display_fps(LGFX_Sprite* spr) {
         if (auto_saver_enabled && autosaver_display_fps) {
             if (fps_timer2.expireset()) dispfps = (int)myfps;
-            spr->setFont(&fonts::Font0);
+            spr->setFont(&fonts::TomThumb);
             spr->setTextDatum(textdatum_t::top_left);
             spr->setTextColor(BLK);
-            spr->setCursor(9, 9);
-            spr->print(std::to_string(oldfps).c_str());
-            spr->setCursor(11, 11);
-            spr->print(std::to_string(oldfps).c_str());
             spr->setCursor(10, 10);
             spr->print(std::to_string(oldfps).c_str());
+            spr->setCursor(9, 9);
+            spr->print(std::to_string(dispfps).c_str());
+            spr->setCursor(11, 11);
+            spr->print(std::to_string(dispfps).c_str());
             spr->setTextColor(LGRY);
             spr->setCursor(10, 10);
             spr->print(std::to_string(dispfps).c_str());
