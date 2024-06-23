@@ -84,9 +84,9 @@ void NeopixelStrip::heartbeat_ena(bool onoroff) { neo_heartbeat = onoroff; } // 
 void NeopixelStrip::setBoolState(int _idiot, bool state) { fset[_idiot][onoff] = state; }
 void NeopixelStrip::setsat(float sat_pc) { neosat = sat_pc; recolor_idiots(-1); }
 uint32_t NeopixelStrip::idiot_neo_color(int _idiot) { return color_to_888(cidiot[_idiot][cnow]); }
-uint16_t NeopixelStrip::get_hue(RgbColor rgb) { HslColor hsl(rgb); return static_cast<uint16_t>(hsl.H * 65535); }  // Convert hue from float [0.0, 1.0] to 16-bit integer [0, 65535]
-uint8_t NeopixelStrip::get_sat(RgbColor rgb) { HslColor hsl(rgb); return static_cast<uint8_t>(hsl.S * 255); } // Convert saturation from float [0.0, 1.0] to 16-bit integer [0, 65535]
-uint8_t NeopixelStrip::get_brite(RgbColor rgb) { HslColor hsl(rgb); return static_cast<uint8_t>(hsl.L * 255); } // Convert saturation from float [0.0, 1.0] to 16-bit integer [0, 65535]
+uint16_t NeopixelStrip::get_hue(neorgb_t rgb) { return static_cast<uint16_t>(((HslColor)rgb).H * 65535); }  // Convert hue from float [0.0, 1.0] to 16-bit integer [0, 65535]
+uint8_t NeopixelStrip::get_sat(neorgb_t rgb) { return static_cast<uint8_t>(((HslColor)rgb).S * 255); } // Convert saturation from float [0.0, 1.0] to 16-bit integer [0, 65535]
+uint8_t NeopixelStrip::get_brite(neorgb_t rgb) { return static_cast<uint8_t>(((HslColor)rgb).L * 255); } // Convert saturation from float [0.0, 1.0] to 16-bit integer [0, 65535]
 
 // recolor reduces the given color in brightness and saturation to match the percents given, and returns the modified color. pass in 100.0 to leave either brightness or sat unchanged
 neorgb_t NeopixelStrip::recolor(neorgb_t orig, float bright_pc=100.0, float sat_pc=100.0) {
