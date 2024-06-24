@@ -496,15 +496,18 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
   protected:
     FS3000 _sensor;
     float goodreading = NAN;
-    int64_t airvelo_read_period_us = 35000;
-    Timer airveloTimer;
+    int64_t airvelo_read_period_us = 85000;
+    Timer airveloTimer{85000};
+  public:
     float read_sensor() {
         if (!_i2c->detected(i2c_airvelo)) return NAN;
-        else if (_i2c->not_my_turn(i2c_airvelo)) return goodreading;
-        else if (airveloTimer.expireset()) goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
+        // if (force) goodreading = _sensor.readMilesPerHour();
+        else if (!_i2c->not_my_turn(i2c_airvelo)) {
+            if (airveloTimer.expireset()) goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
+        }
+        // ezread.squintf("a:%.3lf\n", goodreading);
         return goodreading;
     }
-  public:
     static constexpr uint8_t addr = 0x28;
     sens senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
@@ -520,6 +523,7 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     }
     void setup() {  // ezread.squintf("%s..", _long_name.c_str());
         I2CSensor::setup();
+        set_conversions(1.0, 0.0);
         set_si(0.0);  // initialize value
         set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
@@ -535,7 +539,8 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
             }
             else {
                 _sensor.setRange(AIRFLOW_RANGE_15_MPS);
-                ezread.squintf(" and responding properly\n");
+                ezread.squintf(", responding properly\n");
+                set_source(src::PIN); // sensor working
             }
         }
         else {
@@ -549,22 +554,26 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
   protected:
     SparkFun_MicroPressure _sensor;
     float goodreading = NAN;
-    Timer mapreadTimer;
+    Timer mapreadTimer{100000};
     int mapread_timeout = 100000, mapretry_timeout = 10000;
+  public:
     float read_sensor() {
+        // ezread.squintf("det m:%d\n", _i2c->detected(i2c_map));
         if (!_i2c->detected(i2c_map)) return NAN;
-        else if (_i2c->not_my_turn(i2c_map)) return goodreading;
-        else if (mapreadTimer.expired()) {
-            float temp = _sensor.readPressure(ATM, true);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
-            if (!std::isnan(temp)) {
-                goodreading = temp;
-                mapreadTimer.set(mapread_timeout);
+        // if (force) goodreading = _sensor.readPressure(ATM, false);
+        else if (!_i2c->not_my_turn(i2c_map)) {
+            if (mapreadTimer.expired()) {
+                float temp = _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
+                if (!std::isnan(temp)) {
+                    goodreading = temp;
+                    mapreadTimer.set(mapread_timeout);
+                }
+                else mapreadTimer.set(mapretry_timeout);  // ezread.squintf("av:%f\n", goodreading);
             }
-            else mapreadTimer.set(mapretry_timeout);  // ezread.squintf("av:%f\n", goodreading);
         }
+        // ezread.squintf("m:%.3lf\n", goodreading);
         return goodreading;
     }
-  public:
     static constexpr uint8_t addr = 0x18;  // NOTE: would all MAPSensors have the same address?  ANS: yes by default, or an alternate fixed addr can be hardware-selected by hooking a pin low or something
     sens senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
@@ -580,6 +589,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     void setup() {
         // ezread.squintf("%s..", _long_name.c_str());
         I2CSensor::setup();
+        set_conversions(1.0, 0.0);
         set_si(1.0);  // initialize value
         set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68, 1.02);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
@@ -593,7 +603,11 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
                 ezread.squintf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
                 set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
             }
-            else ezread.squintf(" and reading %f atm\n", _sensor.readPressure(ATM));
+            else {
+                float readval = read_sensor();  // _sensor.readPressure(ATM);
+                ezread.squintf(" and reading %.4f atm\n", readval);
+                set_source(src::PIN); // sensor working
+            }
         }
         else {
             ezread.squintf("\n");
