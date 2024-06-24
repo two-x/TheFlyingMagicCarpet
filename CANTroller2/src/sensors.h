@@ -554,7 +554,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
   protected:
     SparkFun_MicroPressure _sensor;
     float goodreading = NAN;
-    Timer mapreadTimer{100000};
+    Timer mapreadTimer{0};
     int mapread_timeout = 100000, mapretry_timeout = 10000;
   public:
     float read_sensor() {

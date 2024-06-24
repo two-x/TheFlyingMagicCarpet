@@ -2,20 +2,24 @@
 #pragma once
 #include "freertos/FreeRTOS.h"  // for semaphores
 #include "freertos/semphr.h"  // for semaphores
-#include <esp_partition.h>
-#include <random>
 #include "globals.h"
-#include "sensors.h"  // includes uictrl.h, i2cbus.h
-#include "motors.h"  // includes qpid.h, temperature.h
 
-// Instantiate objects
+#include <random>
 std::random_device rd;
 std::mt19937 gen(rd());  // randomizer
+int rn(int values=256) {  // Generate a random number between 0 and values-1
+    std::uniform_int_distribution<> dis(0, values - 1);
+    return dis(gen);
+}
 
+// Instantiate objects
+#include "sensors.h"  // includes uictrl.h, i2cbus.h
 static Preferences prefs;  // Persistent config storage
 static Potentiometer pot(pot_pin);
 static Simulator sim(pot, &prefs);
 static Hotrc hotrc(&sim, &pot);
+
+#include "motors.h"  // includes qpid.h, temperature.h
 static TemperatureSensorManager tempsens(onewire_pin);
 static CarBattery mulebatt(mulebatt_pin);
 static PressureSensor pressure(pressure_pin);
@@ -30,10 +34,6 @@ static BrakeControl brake(brake_pwm_pin, 50);
 static SteeringControl steer(steer_pwm_pin, 50);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
 
-int rn(int values=256) {  // Generate a random number between 0 and values-1
-    std::uniform_int_distribution<> dis(0, values - 1);
-    return dis(gen);
-}
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
     ezread.squintf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
     if (running_on_devboard) return;      // override settings if running on the real car
@@ -47,6 +47,7 @@ void set_board_defaults() {          // true for dev boards, false for printed b
     print_framebuffers = false;
     print_task_stack_usage = false;
 }
+
 void sim_setup() {
     sim.register_device(sens::pressure, pressure, pressure.source());
     sim.register_device(sens::brkpos, brkpos, brkpos.source());
@@ -73,6 +74,13 @@ void sim_setup() {
     // for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
     // sim.set_potmap(sens::none);        
 }
+
+void set_syspower(bool setting) {
+    syspower = setting | keep_system_powered;
+    not_syspower = !syspower;
+    write_pin(syspower_pin, syspower);
+}
+
 // RTOS task that updates temp sensors in a separate task
 void update_temperature_sensors(void *parameter) {
     while (true) {
@@ -87,11 +95,7 @@ void update_temperature_sensors(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-void set_syspower(bool setting) {
-    syspower = setting | keep_system_powered;
-    not_syspower = !syspower;
-    write_pin(syspower_pin, syspower);
-}
+
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
 float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     static float maf_map_last;
@@ -117,6 +121,7 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
     // ezread.squintf("maf: %.3lf\n", maf);
     return maf;
 }
+
 // RTOS task that updates map and airflow sensors, and mass airflow calculation
 void maf_update(void *parameter) {
     while (true) {
@@ -127,26 +132,7 @@ void maf_update(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(95)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-on-esp32-with-psram#
-    Serial.printf("PSRAM..");
-    #ifndef BOARD_HAS_PSRAM
-    Serial.printf(" support is currently disabled\n");
-    return;
-    #endif
-    if (psramInit()) Serial.printf(" is correctly initialized, ");
-    else Serial.printf(" is not available, ");
-    // int available_PSRAM_size = ESP.getFreePsram();
-    // Serial.println((String)"  PSRAM Size available (bytes): " + available_PSRAM_size);
-    // int *array_int = (int *) ps_malloc(1000 * sizeof(int)); // Create an integer array of 1000
-    // array_int[0] = 42;
-    // array_int[999] = 42; //We access array values like classic array
-    // int available_PSRAM_size_after = ESP.getFreePsram();
-    // Serial.println((String)"  PSRAM Size available (bytes): " + available_PSRAM_size_after); // Free memory space has decreased
-    // int array_size = available_PSRAM_size - available_PSRAM_size_after;
-    // Serial.println((String)"Array size in PSRAM in bytes: " + array_size);
-    // // free(array_int); //The allocated memory is freed.
-    Serial.println((String)"size (B): " +ESP.getFreePsram());
-}
+
 class ToggleSwitch {
   public:
     bool val = LOW;  // pin low means val high
@@ -171,6 +157,7 @@ class ToggleSwitch {
         if (last != val) kick_inactivity_timer(HUTogSw);
     }
 };
+
 // the basic mode switch puts either a pullup or pulldown onto the serial tx pin. so to read it we must turn off the serial console, read the pin, then turn the console back on
 // to limit interruptions in the console, we only read every few seconds, and only when not in a driving mode
 class BasicModeSwitch : public ToggleSwitch {
@@ -198,21 +185,19 @@ class BasicModeSwitch : public ToggleSwitch {
 };
 static BasicModeSwitch basicsw(tx_basic_pin);
 
-void initialize_pins_and_console() {  // set up those straggler pins which aren't taken care of inside class objects
-    set_pin(sdcard_cs_pin, OUTPUT, HIGH);     // deasserting unused cs line ensures available spi bus
+void initialize_pins_and_console() {                        // set up those straggler pins which aren't taken care of inside class objects
+    set_pin(sdcard_cs_pin, OUTPUT, HIGH);                   // deasserting unused cs line ensures available spi bus
     set_pin(syspower_pin, OUTPUT, syspower);
-    set_pin(extra_pin, INPUT_PULLUP);         // avoid undefined inputs
-    if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);         // avoid voltage level contention
-    if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);         // avoid voltage level contention
-    // set_pin(tx_basic_pin, INPUT);             // UART:  1st detect breadboard vs. vehicle PCB using TX pin pullup, then repurpose pin for UART and start UART 
-    // fun_flag = (read_pin(tx_basic_pin));       // detect bit at boot, can be used for any hardware devation we might need
-    // basicsw.val = fun_flag;
+    set_pin(extra_pin, INPUT_PULLUP);                       // avoid undefined inputs
+    if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
+    if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
     basicsw.read();
     Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
     delay(1200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     Serial.printf("** Setup begin..\nSerial console started..\n");
     ezread.squintf("Syspower is %s, basicsw read: %s\n", syspower ? "on" : "off", basicsw.val ? "high" : "low");    
 }
+
 class Ignition {
   private:
     int ign_req = REQ_NA, panic_req = REQ_NA, pin;
@@ -259,6 +244,7 @@ class Ignition {
         panic_req = ign_req = REQ_NA;  // cancel outstanding requests
     }
 };
+
 class Starter {
   private:
     int pushbrake_timeout = 6000000;
@@ -421,6 +407,7 @@ void update_web(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(20)); // Delay for 20ms, hopefully that's fast enough
     }
 }
+
 void stop_console() {
     Serial.printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) {
@@ -431,6 +418,7 @@ void stop_console() {
     ezread.printf(DCYN, "magic carpet is booted\n");
     // ezread.printf("welcome to EZ-Read Console");
 }
+
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
     if (bootbutton.shortpress()) {

@@ -137,7 +137,7 @@ bool button_test_heartbeat_color = false; // makes boot button short press chang
 bool wifi_client_mode = false;       // should wifi be in client or access point mode?
 bool screensaver_enabled = true;     // does fullscreen screensaver start automatically when in powerdown, after a delay?
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
-bool use_tft_colors_for_neo = true;  // should neopixel colors be based on onscreen icon colors? (otherwise they'll split the full hue spectrum amongst themselves)
+bool use_tft_colors_for_neo = false;  // should neopixel colors be based on onscreen icon colors? (otherwise they'll split the full hue spectrum amongst themselves)
 bool print_error_changes = true;     // should diag print status changes and new error events to console?
 
 // global tunable variables
@@ -153,8 +153,7 @@ float maf_max_gps = 50.0; // i just made this number up as i have no idea what's
 float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change value at this percent of their overall range per second
 bool flashdemo = false;
 float neobright = 20.0;   // default for us dim/brighten the neopixels in percent
-float neosat = 100.0;  // default saturation of neopixels in percent
-float desat_of_ten = 0.0;  // out of 10.0
+float neosat = 90.0;  // default saturation of neopixels in percent
 
 // non-tunable values. probably these belong with their related code
 float permanan = NAN;
