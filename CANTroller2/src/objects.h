@@ -93,7 +93,7 @@ void set_syspower(bool setting) {
     write_pin(syspower_pin, syspower);
 }
 // Calculates massairflow in g/s using values passed in if present, otherwise it reads fresh values
-float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
+float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // mdot (kg/s) = density (kg/m3) * v (m/s) * A (m2) .  And density = P/RT.  So,   mdot = v * A * P / (R * T)  in kg/s
     static float maf_map_last;
     static float maf_velo_last;
     float temp = _ambient;
@@ -102,8 +102,8 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
     if (std::isnan(_ambient)) {
         if (new_velo == maf_velo_last && new_map == maf_map_last) return maf_gps;  // if no new sensor readings, don't recalculate the same value
         temp = tempsens.val(loc::AMBIENT);
-        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::ENGINE);
-        if (std::isnan(temp)) return -1;  // Avoid crashing due to trying to read absent sensor
+        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::BRAKE);
+        if (std::isnan(temp)) return NAN;  // Avoid crashing due to trying to read absent sensor
     }
     maf_velo_last = new_velo;
     maf_map_last = new_map;
@@ -114,7 +114,18 @@ float massairflow(float _map = NAN, float _airvelo = NAN, float _ambient = NAN) 
     float P = 101325.0 * (std::isnan(_map) ? new_map : _map);  // in Pa   101325 Pa/atm  1 Pa = 1 J/m3
     float maf = v * Ain2 * P * 1000.0 / (R * T * 1550);  // mass air flow in grams per second (g/s)   (1000 g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
     if (std::abs(maf) < 0.001) maf = 0;
+    // ezread.squintf("maf: %.3lf\n", maf);
     return maf;
+}
+// RTOS task that updates map and airflow sensors, and mass airflow calculation
+void maf_update(void *parameter) {
+    while (true) {
+        mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
+        vTaskDelay(pdMS_TO_TICKS(5)); // Delay to allow other tasks to do stuff
+        airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
+        maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+        vTaskDelay(pdMS_TO_TICKS(95)); // Delay for a second to avoid updating the sensors too frequently
+    }
 }
 void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-on-esp32-with-psram#
     Serial.printf("PSRAM..");

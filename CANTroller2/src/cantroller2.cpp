@@ -1,6 +1,6 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
-TaskHandle_t temptask = NULL, webtask = NULL, pushTaskHandle = NULL, drawTaskHandle = NULL;
+TaskHandle_t temptask = NULL, webtask = NULL, maftask = NULL, pushTaskHandle = NULL, drawTaskHandle = NULL;
 
 void setup() {
     initialize_pins_and_console();
@@ -27,6 +27,7 @@ void setup() {
     speedo.setup();
     airvelo.setup();           // must be done after i2c is started
     mapsens.setup();
+    xTaskCreatePinnedToCore(maf_update, "taskMAF", 4096, NULL, 4, &maftask, CONFIG_ARDUINO_RUNNING_CORE);  // update mass airflow determination, including reading map and airvelo sensors
     lightbox.setup();
     fuelpump.setup();
     starter.setup();
@@ -59,9 +60,6 @@ void loop() {                  // arduino-style loop() is like main() but with a
     tach.update();             // get pulse timing from hall effect tachometer on flywheel
     speedo.update();           // get pulse timing from hall effect speedometer on axle
     mulebatt.update();         // vehicle battery voltage
-    airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
-    mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
-    maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
     hotrc.update();            // ~100us for all hotrc functions
     run.mode_logic();          // runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in standby mode with no activity
     gas.update();              // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
