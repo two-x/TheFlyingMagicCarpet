@@ -121,7 +121,7 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
 void maf_update(void *parameter) {
     while (true) {
         mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
-        vTaskDelay(pdMS_TO_TICKS(5)); // Delay to allow other tasks to do stuff
+        vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
         airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
         maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
         vTaskDelay(pdMS_TO_TICKS(95)); // Delay for a second to avoid updating the sensors too frequently
