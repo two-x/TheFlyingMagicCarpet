@@ -23,7 +23,7 @@ neorgb_t color_to_neo(uint8_t color332) { return neorgb_t(color332 & 0xe0, (colo
 class NeopixelStrip {
   public:
     static const int idiotcount = 7;
-    NeopixelStrip(int argpin) { pin = argpin; }
+    NeopixelStrip(int argpin) : pin(argpin) {}
     void setup(bool viewcontext=NITE);
     void setbright(float bright_pc);
     void setsat(float sat_pc);
@@ -32,11 +32,10 @@ class NeopixelStrip {
     void heartcolor_override(uint8_t color);
     int neopixelsAvailable();
     void setBoolState(int _idiot, bool state);
-    void setflash(int _idiot, int count, int pulseh=1, int pulsel=1, int onbrit=-1, uint32_t color=0xffffff);
+    void setflash(int _idiot, int count, int pulseh=1, int pulsel=1, int onbrit=-1, uint32_t color=0);
     void update(uint16_t heart_color);
     void enable_flashdemo(bool ena);
     uint32_t idiot_neo_color(int _idiot);
-    void autocolor_leds();
     bool newIdiotLight(int _idiot, uint8_t color332, bool startboolstate = 0);
   private:
     enum brightness_presets : int { B_OFF, B_MIN, B_LO, B_MED, B_HI, B_EXT, B_MAX };
@@ -57,7 +56,7 @@ class NeopixelStrip {
     float neobright_last, correction[3] = { 1.0, 0.9, 1.0 };  // Applied to brightness of rgb elements
     Timer neoFadeTimer{neo_fade_timeout_us}, neoHeartbeatTimer, flashtimer;
     int pin = -1, heartbeat_state = 0, heartbeat_level = 0, fquantum_us = 50000;  // time resolution of flashes
-    int heartbeat_ekg_us[4] = {250000, 240000, 620000, 2000000};  // {187500, 125000, 562500, 1250000};
+    int heartbeat_ekg_us[4] = {250000, 240000, 620000, 2000000};
     int fset[idiotcount][fnumset], heartbeat_pulse = 255, lomultiplier = 3;  // lobright is hibright divided by this twice
     int fevents[idiotcount][fevpages], fevcurrpage = 0; int fevfilled = 0; int nowtime_us, nowepoch;  // , fevmask_master;
     neorgb_t neostrip[numpixels], cidiot[idiotcount][cnumcolors], heartbeatColor, heartbeatNow;
@@ -88,7 +87,7 @@ uint16_t NeopixelStrip::get_hue(neorgb_t rgb) { return static_cast<uint16_t>(((H
 uint8_t NeopixelStrip::get_sat(neorgb_t rgb) { return static_cast<uint8_t>(((HslColor)rgb).S * 255); } // Convert saturation from float [0.0, 1.0] to 16-bit integer [0, 65535]
 uint8_t NeopixelStrip::get_brite(neorgb_t rgb) { return static_cast<uint8_t>(((HslColor)rgb).L * 255); } // Convert saturation from float [0.0, 1.0] to 16-bit integer [0, 65535]
 
-// recolor reduces the given color in brightness and saturation to match the percents given, and returns the modified color. pass in 100.0 to leave either brightness or sat unchanged
+// recolor sets overall brightness and reduces saturation to match the percents given, and returns the modified color. pass in 100.0 to leave either brightness or sat unchanged
 neorgb_t NeopixelStrip::recolor(neorgb_t orig, float bright_pc=100.0, float sat_pc=100.0) {
     uint8_t newbrite = (uint8_t)((float)(get_brite(orig)) * bright_pc / 100.0);  // uint8_t newbrite = (uint8_t)(bright_pc / 100.0);
     uint8_t newsat = (uint8_t)((float)(get_sat(orig)) * sat_pc / 100.0);
@@ -195,7 +194,7 @@ bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolst
 //   pulseh = high pulse width of each blink, in increments of 50 ms (of which there are max 128 per cycle)
 //   pulsel = low pulse width of each blink, in increments of 50 ms (of which there are max 128 per cycle)
 //   onbrit = percent brightness to apply during high pulses (use -1 to avoid)
-//   color  = alternate color to apply during high pulses (use -1 to avoid)
+//   color  = alternate color to apply during high pulses (defaults to normal idiot light color)
 void NeopixelStrip::setflash(int _idiot, int count, int pulseh, int pulsel, int onbrit, uint32_t color) {
     fset[_idiot][fcount] = count;
     fset[_idiot][fpulseh] = std::max((int)pulseh, 1);
@@ -204,24 +203,21 @@ void NeopixelStrip::setflash(int _idiot, int count, int pulseh, int pulsel, int 
     fcbase[_idiot] = color;
     set_fcolor(_idiot);
     for (int pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
-    uint filled = 0;
-    uint lstop;
+    uint lstop, filled = 0;
     uint patternlen = fset[_idiot][fcount] * (fset[_idiot][fpulseh] + fset[_idiot][fpulsel]);
     uint reps = 1 + (patternlen < fevresolution / 3);  // For shorter flash patterns repeat them multiple times in each cycle
     for (int rep = 1; rep <= reps; rep++) {        
         lstop = std::min(fevresolution, filled + patternlen);
         while (filled < lstop) {
-            for (int hbit = 0; hbit < fset[_idiot][fpulseh]; hbit++)
-                if (filled < lstop) fevpush(_idiot, filled++, 1);
-            for (int lbit = 0; lbit < fset[_idiot][fpulsel]; lbit++)
-                if (filled < lstop) fevpush(_idiot, filled++, 0); 
+            for (int hbit = 0; hbit < fset[_idiot][fpulseh]; hbit++) if (filled < lstop) fevpush(_idiot, filled++, 1);
+            for (int lbit = 0; lbit < fset[_idiot][fpulsel]; lbit++) if (filled < lstop) fevpush(_idiot, filled++, 0); 
         }
         filled = fevresolution / reps;
     }
 }
 void NeopixelStrip::set_fcolor(int _idiot) {  // flashing event : push a flash sequence bit into the data page
     int brite = (fset[_idiot][fonbrit] > 0) ? fset[_idiot][fonbrit] : hibright;
-    if (fcbase[_idiot] < 0) cidiot[_idiot][cflash] = cidiot[_idiot][cnormal];
+    if (!fcbase[_idiot]) cidiot[_idiot][cflash] = cidiot[_idiot][cnormal];
     cidiot[_idiot][cflash] = recolor(cidiot[_idiot][cflash], (float)brite, neosat);
 }
 bool NeopixelStrip::fevpop(int _idiot, uint pop_off) {  // flashing event : pop a flash sequence bit out from the data page
@@ -246,12 +242,9 @@ void NeopixelStrip::enable_flashdemo(bool ena) {
     }
 }
 void NeopixelStrip::update_idiot(int _idiot) {
-    cidiot[_idiot][clast] = cidiot[_idiot][cnow];                                           // remember previous color
-    // neorgb_t newnow = (fset[_idiot][onoff]) ? cidiot[_idiot][con] : cidiot[_idiot][coff];   // prepare which color of con or coff depending on state of idiotlight
-    // if (!fset[_idiot][fcount]) cidiot[_idiot][cnow] = newnow;                               // if not flashing, set color to prepared color
-    // else cidiot[_idiot][cnow] = fevpop(_idiot, nowepoch) ? cidiot[_idiot][cflash] : newnow; // otherwise pop the next flashing bit and if high, set color to flash color, otherwise the prepared color
-    cidiot[_idiot][cnow] = fset[_idiot][onoff] ? cidiot[_idiot][con] : cidiot[_idiot][coff];
-    if (fset[_idiot][fcount]) if (fevpop(_idiot, nowepoch)) cidiot[_idiot][cnow] = cidiot[_idiot][cflash];
+    cidiot[_idiot][clast] = cidiot[_idiot][cnow];                                                          // remember previous color
+    cidiot[_idiot][cnow] = fset[_idiot][onoff] ? cidiot[_idiot][con] : cidiot[_idiot][coff];               // set color to con or coff depending on state of idiotlight
+    if (fset[_idiot][fcount]) if (fevpop(_idiot, nowepoch)) cidiot[_idiot][cnow] = cidiot[_idiot][cflash]; // if flashing, override with the flash color
 }
 void NeopixelStrip::update(uint16_t heart_color) {
     set_heartcolor(heart_color);

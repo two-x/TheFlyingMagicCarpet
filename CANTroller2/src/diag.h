@@ -1,6 +1,7 @@
 #pragma once
 #include "Arduino.h"
 #include <esp_task_wdt.h>
+#include <esp_partition.h>
 #include <iostream>
 #include <iomanip>  // For formatting console loop timing string output
 
@@ -559,6 +560,7 @@ class BootMonitor {
     void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, int sec = -1) {
         task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;
         if (sec >= 0) timeout_sec = sec;
+        psram_setup();
         myprefs->begin("FlyByWire", false);
         bootcounter();
         set_codestatus(Booting);
@@ -637,6 +639,26 @@ class BootMonitor {
         boot_to_runmode = (codestatus_postmortem == Driving) ? FLY : HOLD;
         ignition.request(REQ_ON);
         // gas.(brake.pc[STOP]);  // brake.pid_targ_pc(brake.pc[STOP]);
+    }
+    void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-on-esp32-with-psram#
+        Serial.printf("PSRAM..");
+        #ifndef BOARD_HAS_PSRAM
+        Serial.printf(" support is currently disabled\n");
+        return;
+        #endif
+        if (psramInit()) Serial.printf(" is correctly initialized, ");
+        else Serial.printf(" is not available, ");
+        // int available_PSRAM_size = ESP.getFreePsram();
+        // Serial.println((String)"  PSRAM Size available (bytes): " + available_PSRAM_size);
+        // int *array_int = (int *) ps_malloc(1000 * sizeof(int)); // Create an integer array of 1000
+        // array_int[0] = 42;
+        // array_int[999] = 42; //We access array values like classic array
+        // int available_PSRAM_size_after = ESP.getFreePsram();
+        // Serial.println((String)"  PSRAM Size available (bytes): " + available_PSRAM_size_after); // Free memory space has decreased
+        // int array_size = available_PSRAM_size - available_PSRAM_size_after;
+        // Serial.println((String)"Array size in PSRAM in bytes: " + array_size);
+        // // free(array_int); //The allocated memory is freed.
+        Serial.println((String)"size (B): " +ESP.getFreePsram());
     }
     void print_partition_table() {
         if (!running_on_devboard) return;

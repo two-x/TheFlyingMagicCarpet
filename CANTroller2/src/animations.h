@@ -76,7 +76,7 @@ class CollisionsSaver {
     float ball_radius_base = 4.5 / 235.0;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
     float ball_radius_modifier = 2.6 / 235.0;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
     uint8_t ball_redoubler_rate = 0x18;  // originally 0x07
-    int8_t ball_gravity = 16;  // ball_gravity = 16;  // originally 0 with suggestion of 4
+    int8_t ball_gravity_x = 0, ball_gravity_y = 16;  // ball_gravity = 16;  // originally 0 with suggestion of 4
     volatile bool _is_running;
     volatile int _loop_count = 0;
     Timer gravtimer;
@@ -140,7 +140,8 @@ class CollisionsSaver {
         for (int i = 0; i < ball_count + touchnow; i++) {
             a = (i == ball_count) ? &touchball : &balls[i];
             if (i < ball_count) {
-                a->dy += ball_gravity; // gravity
+                a->dx += ball_gravity_x; // gravity horz
+                a->dy += ball_gravity_y; // gravity vert
                 a->x += a->dx;
                 if (a->x < a->r) {
                     a->x = a->r;
@@ -248,8 +249,9 @@ class CollisionsSaver {
         vp = _vp;
         bool round_over = mainfunc();
         if (gravtimer.expired()) {
-            ball_gravity = constrain((ball_gravity + rn(6) - 3), -18, 28);
-            gravtimer.set(1000000 * (2 + rn(4)));
+            ball_gravity_x = constrain((ball_gravity_x + rn(6) - 3), -18, 28);
+            ball_gravity_y = constrain((ball_gravity_y + rn(6) - 3), -18, 28);
+            gravtimer.set(500000 * (2 + rn(4)));
         }
         drawfunc();
         return !round_over;  // not done yet

@@ -14,7 +14,6 @@ void setup() {
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 4096 works, 3072 failed,  priority is from 0 to 24=highest    
     set_board_defaults();       // set variables as appropriate if on a breadboard
     run_tests();
-    psram_setup();
     watchdog.setup(&temptask, &webtask, &drawTaskHandle, &pushTaskHandle);
     bootbutton.setup();
     hotrc.setup();
