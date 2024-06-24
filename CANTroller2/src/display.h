@@ -2,7 +2,6 @@
 #include "animations.h"
 #include "neopixel.h"
 
-// #define disp_vshift_pix 2  // Unknown.  Note: At smallest text size, characters are 5x7 pix + pad on rt and bot for 6x8 pix.
 #define disp_runmode_text_x 12
 #define disp_lines 24  // Max lines of text displayable at line height = disp_line_height_pix
 #define disp_fixed_lines 8  // Lines of static variables/values always displayed
@@ -23,9 +22,8 @@ std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pa
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
-// These defines are just a convenience to keep the below datapage strings array initializations aligned in neat rows & cols for legibility
-#define stEr "St\x88r"
-#define brAk "Br\x83k"
+#define stEr "St\x88r"     // These defines are just a convenience to keep the below datapage strings ..
+#define brAk "Br\x83k"     //   .. array initializations aligned in neat rows & cols for legibility
 #define spEd "Sp\x88""d"
 #define b1nary "  \xa7"
 #define scroll "\x12"
@@ -99,19 +97,6 @@ static constexpr uint8_t unitmaps[20][13] = {  // now 13x7-pixel bitmaps for uni
     // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x7e, 0x3f, 0x00, 0x7e, 0x3f, 0x10, },  // thick-ass scroll arrows from the 80s
     // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x7e, 0x07, 0x00, 0x70, 0x3f, 0x18, },  // scroll arrows - curvy and sorta disfigured
     // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x66, 0x7f, 0x66, 0x60, 0x00, },  // 0/1 - to indicate binary value. right-aligned to maybe distinguish it from actual units
-    // { 0x7e, 0x20, 0x20, 0x3c, 0x00, 0x24, 0x2a, 0x2a, 0x12, 0x00, 0x70, 0x0e, 0x00, 0x24, 0x2a, 0x2a, 0x12, },  // usps - microseconds per second
-    // { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, },  // us - b/c the font's lowercase mu character doesn't work
-    // { 0x1f, 0x01, 0x00, 0x3f, 0x09, 0x0e, 0x00, 0x0f, 0x01, 0x0e, 0x01, 0x0e, 0x60, 0x1c, 0x00, 0x58, 0x74, },  // rpm/s (or rot/m*s) - rate of change of engine rpm
-    // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x02, 0x7f, 0x00, 0x7f, 0x20, 0x10, },  // scroll arrows - to indicate multiple choices
-    // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x1c, 0x22, 0x22, 0x1c, 0x00, 0x00, },  // 0/1 - to indicate binary value
-    // { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // % - we use this a lot and the font % looks feeble
-    // { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
-    // { 0x41, 0x22, 0x22, 0x00, 0x00, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x41, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
-    // { 0x3d, 0x00, 0x3e, 0x02, 0x3c, 0x00, 0x7f, 0x00, 0x3e, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x1a, 0x00, 0x3d, },  // inches or psi "in|psi" - that's right SIX characters in a 3 font-width space, haha.  get a microscope
-    // { 0x06, 0x0f, 0x09, 0x4f, 0x66, 0x50, 0x48, 0x4c, 0x72, 0x41, 0x40, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, },  // angular degrees
-    // { 0x30, 0x48, 0x48, 0x30, 0x00, 0x10, 0x7c, 0x12, 0x04, 0x00, 0x02, 0x7f, 0x00, 0x3e, 0x51, 0x49, 0x3e, },  // of 10
-//  { 0x7e, 0x20, 0x3e, 0x20, 0x00, 0x0c, 0x52, 0x4a, 0x3c, 0x00, 0x60, 0x18, 0x06, 0x00, 0x2c, 0x2a, 0x32, },  // ug/s - for manifold mass airflow
-//  { 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x02, 0x7f, 0x02, 0x04, 0x00, 0x10, 0x20, 0x7f, 0x20, 0x10, 0x00, },  // scroll arrows - to indicate multiple choices
 
 static EZReadDrawer ezdraw(&ezread);
 static PanelAppManager panel(&ezdraw);
@@ -578,7 +563,6 @@ class Display {
         }
         draw_fixed(page, disp_datapage_last, true, forced);  // Erase and redraw variable names and units for data on this page
         draw_string(disp_datapage_title_x, 0, pagecard[page], pagecard[disp_datapage_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
-        // disp_datapage_dirty = false;
         disp_datapage_last = page;
         disp_units_dirty = true;
         disp_datapage_dirty = false;
@@ -689,7 +673,6 @@ class Display {
         disp_idiots_dirty = false;
     }
     void disp_menu_bools() {
-        // if (!disp_bools_dirty) return;
         draw_bool((run.mode == CAL), 2, disp_bools_dirty);
         draw_bool((run.mode == BASIC), 3, disp_bools_dirty);
         draw_bool(ignition.signal, 4, disp_bools_dirty);
@@ -706,7 +689,6 @@ class Display {
     // * draw_ascii (int_line, string)  // string must be length 6 max
     // * draw_eraseval (int_line)  // leaves the entry blank. use for every line not containing a value
     void disp_datapage_values() {
-        // if (!disp_values_dirty) return;
         float drange;
         drawval(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
         drawval(2, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
@@ -780,7 +762,6 @@ class Display {
             drawval(11, speedo.opmin(), speedo.absmin(), speedo.absmax());
             drawval(22, speedo.opmax(), speedo.absmin(), speedo.absmax());
             drawval(23, speedo.idle(), speedo.opmin(), speedo.opmax());
-            // for (int myline=9; myline<=18; myline++) draw_eraseval(myline);
         }
         else if (datapage == PG_PWMS) {
             drawval(9, gas.deg[OUT], gas.deg[OPMIN], gas.deg[OPMAX]);
@@ -863,16 +844,12 @@ class Display {
         }
         else if (datapage == PG_CPID) {
             drange = tach.opmax() - tach.idle();
-            // draw_truth(9, gas.cruise_pid_enabled, 1);
             drawval(9, gas.cruisepid.target(), speedo.idle(), speedo.opmax());
             drawval(10, gas.cruisepid.err(), speedo.idle()-speedo.opmax(), speedo.opmax()-speedo.idle());
             drawval(11, gas.cruisepid.pterm(), -drange, drange);
             drawval(12, gas.cruisepid.iterm(), -drange, drange);
             drawval(13, gas.cruisepid.dterm(), -drange, drange);
             // drawval(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
-            // ezread.squintf("min:%lf max:%lf", gas.pc[OPMIN], gas.pc[OPMAX]);
-            // ezread.squintf(" gmin():%lf gmax():%lf", gas.pid.outmin(), gas.pid.outmax());
-            // ezread.squintf(" cmin():%lf cmax():%lf", gas.cruisepid.outmin(), gas.cruisepid.outmax());
             drawval(14, gas.throttle_target_pc, 0.0f, 100.0f);
             for (int line=15; line<=19; line++) draw_eraseval(line);
             drawval(20, cruise_delta_max_pc_per_s, 1, 35);
@@ -917,15 +894,11 @@ class Display {
             drawval(16, encoder.spinrate(), 0.0, encoder.spinrate_max());
             drawval(17, encoder.accel_factor(), 1, encoder.accel_max());
             drawval(18, looptimer.uptime());
-            // drawval(13, drawclock, 0, refresh_limit);
-            // drawval(14, pushclock, 0, refresh_limit);
-            // drawval(15, idleclock, 0, refresh_limit);
             drawval(19, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
             draw_truth(20, flashdemo, 0);
             drawval(21, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
             drawval(22, neosat, 1.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
             draw_ascii(23, uicontextcard[ui_context]);
-            // draw_truth(19, (ui_context == ScreensaverUI), 0);
         }
         disp_values_dirty = false;
     }
@@ -934,22 +907,18 @@ class Display {
         if (!display_enabled) return false;
         if (reset_request) reset(spr);
         auto_saver();
-            // if (run.display_reset_requested) init();
-            // run.display_reset_requested = false;
         if (!auto_saver_enabled) {
             tiny_text();
             update_idiots(disp_idiots_dirty);
             if (disp_datapage_dirty) draw_datapage(datapage, true);
             if (disp_menus_dirty) draw_menus(false);
             if (disp_selection_dirty) draw_selected_name(tunctrl, sel, sel_last, sel_last_last);
-            
             if (run.mode != runmode_last) disp_runmode_dirty = true;
             if (disp_values_dirty || disp_runmode_dirty || valuesRefreshTimer.expireset()) {
                 disp_menu_bools();
                 disp_datapage_values();
             }
             if (disp_units_dirty) draw_unitvals(datapage);
-            // if (disp_datapage_dirty) draw_unitvals(datapage);  // draw unit strings after values in case long old value erasure might chop off the unit strings
             if (disp_runmode_dirty) draw_runmode(run.mode, NON);
         }
         if (sim->enabled() != sim_last) disp_simbuttons_dirty = true;
@@ -959,7 +928,6 @@ class Display {
         return true;
     }
     void push_task() {
-        // ezread.squintf("f%d push@ 0x%08x vs 0x%08x\n", flip, &framebuf[flip], &framebuf[!flip]);
         if (print_framebuffers) {  // warning this *severely* slows everything down, ~.25 sec/loop. consider disabling word wrap in terminal output
             ezread.squintf("flip=%d\n", flip);
             printframebufs(2);
@@ -971,7 +939,6 @@ class Display {
     }
     void draw_task() {
         int mark = (int)esp_timer_get_time();
-        // ezread.squintf("f%d draw@ 0x%08x\n", flip, &framebuf[flip]);
         draw_all(&framebuf[flip]);
         drawclock = (int)(esp_timer_get_time() - mark);
         idleclock = refresh_limit - pushclock - drawclock;
@@ -1035,7 +1002,6 @@ class Display {
             panel.set_vp(disp_apppanel_x, disp_apppanel_y, disp_apppanel_w, disp_apppanel_h);
             reset_request = true;
             if (was_simulating) sim->enable();
-            // ui_context = DatapagesUI;
         }
         autosaver_request = REQ_NA;
     }
@@ -1075,7 +1041,6 @@ class Tuner {
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
     int idelta = 0, idelta_encoder = 0;  // idelta is integer edit value accelerated, and is used for all tuning edits regardless if int float or bool
     int rdelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
-    // float fdelta = 0.0;  // fdelta is float edit value accelerated
     void update(int rmode) {
         process_inputs();
         edit_values(rmode);
@@ -1087,11 +1052,9 @@ class Tuner {
     // numeric edits are scaled proportional to the magnitude of the current value. you can specify a minimum decimal place to scale to (keeps from being impossible to cross zero)
     // edit acceleration can be removed for ints if dropdown is set to true (for selection lists, etc.)
     float tune(float orig_val, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-3) {
-        // if (sig_digits < 0) sig_digits = disp_default_float_sig_dig;
         int sig_digits = disp_default_float_sig_dig;
         int sig_place = std::max(screen->significant_place(orig_val), min_sig_edit_place + sig_digits);
         float scale = 1.0;  // needs to change if disp_default_float_sig_dig is modified !!
-        // if (sig_place < 0) sig_place++;  // because place skips 0
         while (sig_place > sig_digits) {  
             scale *= 10.0;
             sig_place--;
@@ -1189,10 +1152,6 @@ class Tuner {
                 else if (sel == 12) brkpos.set_oplim(tune(brkpos.opmin(), brkpos.absmin(), brkpos.opmax()), NAN);
                 else if (sel == 13) brkpos.set_oplim(NAN, tune(brkpos.opmax(), brkpos.opmin(), brkpos.absmax()));
                 else if (sel == 14) tune(brkpos.zeropoint_ptr(), brkpos.opmin(), brkpos.opmax());
-                // if (sel == 11) adj_val(airvelo.opmax_ptr(), fdelta, airvelo.opmin(), airvelo.absmax());
-                // else if (sel == 12) adj_val(mapsens.opmin_ptr(), fdelta, mapsens.absmin(), mapsens.opmax());
-                // else if (sel == 13) adj_val(mapsens.opmax_ptr(), fdelta, mapsens.opmin(), mapsens.absmax());
-                // else if (sel == 14) adj_val(brkpos.zeropoint_ptr(), fdelta, brkpos.opmin(), brkpos.opmax());
             }
             else if (datapage == PG_PULS) {
                 if (sel == 10) tach.set_oplim(tune(tach.opmin(), tach.absmin(), tach.opmax()), NAN);
@@ -1200,7 +1159,6 @@ class Tuner {
                 else if (sel == 12) speedo.set_oplim(tune(speedo.opmin(), speedo.absmin(), speedo.opmax()), NAN);
                 else if (sel == 13) speedo.set_oplim(NAN, tune(speedo.opmax(), speedo.opmin(), speedo.absmax()));
                 else if (sel == 14) tune(speedo.idle_ptr(), speedo.opmin(), speedo.opmax());
-                // if (sel == 10) adj_bool(&web_disabled, -1 * rdelta);  // note this value is inverse to how it's displayed, same for the value display entry
             }                
             else if (datapage == PG_PWMS) {
                 if (sel == 11) { tune(&gas.si[OPMIN], gas.si[ABSMIN], gas.si[OPMAX]); gas.derive(); }
@@ -1286,8 +1244,6 @@ bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickT
     }
     return pdFALSE;
 }
-// pushbuf_sem = xSemaphoreCreateMutexStatic(&push_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&push_semaphorebuf_sem);
-// drawbuf_sem = xSemaphoreCreateMutexStatic(&draw_semaphorebuf_sem);  // xSemaphoreCreateBinaryStatic(&draw_semaphorebuf_sem);
 static void push_task_wrapper(void *parameter) {
     while (true) {
         if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
@@ -1295,8 +1251,7 @@ static void push_task_wrapper(void *parameter) {
             xSemaphoreGive(pushbuf_sem);
             xSemaphoreGive(drawbuf_sem);
         }
-        vTaskDelay(pdMS_TO_TICKS(2)); 
-        // vTaskDelete(NULL);
+        vTaskDelay(pdMS_TO_TICKS(2));  // vTaskDelete(NULL);
     }
 }
 static void draw_task_wrapper(void *parameter) {

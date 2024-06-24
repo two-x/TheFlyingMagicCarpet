@@ -130,7 +130,6 @@ void NeopixelStrip::setup(bool viewcontext) {
     heartbeat_brightness = brightlev[context][B_LO];
     neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
     neoFadeTimer.reset();
-    // setbright(neobright);
     heartbeat_ena(true);
     ezread.squintf("refresh.. ");
     flashtimer.set(fquantum_us * (int)fevresolution);
