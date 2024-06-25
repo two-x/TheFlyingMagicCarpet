@@ -1210,7 +1210,7 @@ class Tuner {
             }
             else if (datapage == PG_UI) {
                 if (sel == 9) ezread.lookback(tune(ezread.offset)); 
-                else if (sel == 10) tune(&flashdemo);  //  neo->enable_flashdemo(flashdemo); }
+                else if (sel == 10) neo->flashdemo_ena(tune());  //  neo->enable_flashdemo(flashdemo); }
                 else if (sel == 11) neo->sleepmode_ena(tune());  //  neo->enable_flashdemo(flashdemo); }
                 else if (sel == 12) neo->setbright(tune(neobright, 0.0, 100.0));  //  neo->setbright(neobright); }
                 else if (sel == 13) neo->setsat(tune(neosat, 0.0, 100.0));  //  neo->setbright(neobright); }

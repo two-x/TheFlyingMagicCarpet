@@ -293,22 +293,23 @@ uint8_t rando_color() {
 
 class Timer {  // !!! beware, this 54-bit microsecond timer overflows after every 571 years
   protected:
-    volatile int64_t start_us, timeout_us;
+    volatile int64_t start, tout;
   public:
     Timer() { reset(); }
-    Timer(int arg_timeout_us) { set ((int64_t)arg_timeout_us); }
-    void set (int64_t arg_timeout_us) {
-        timeout_us = arg_timeout_us;
-        start_us = esp_timer_get_time();
+    Timer(int arg_timeout) { set (arg_timeout); }
+    void set (int arg_timeout) {                                          // sets the timeout to the given number of microsconds and zeroes the timer
+        tout = (int64_t)arg_timeout;
+        start = esp_timer_get_time();
     }
-    void reset() { start_us = esp_timer_get_time(); }
-    bool expired() { return esp_timer_get_time() >= start_us + timeout_us; }
-    int64_t elapsed() { return esp_timer_get_time() - start_us; }
-    int64_t timeout() { return timeout_us; }
-    bool expireset() {  // Like expired() but immediately resets if expired
-        int64_t now_us = esp_timer_get_time();
-        if (now_us < start_us + timeout_us) return false;
-        start_us = now_us;
+    void reset() { start = esp_timer_get_time(); }                            // zeroes the timer
+    bool expired() { return esp_timer_get_time() >= start + tout; }           // returns whether more than the previously-set timeout has elapsed since last reset
+    int elapsed() { return esp_timer_get_time() - start; }                // returns microseconds elapsed since last reset
+    bool elapsed(int check) { return esp_timer_get_time() - start >= check; } // returns whether the given amount of microseconds have elapsed since last reset
+    int timeout() { return tout; }                                        // returns the currently set timeout value in microseconds
+    bool expireset() {                                                        // like expired() but immediately resets if expired
+        int64_t now = esp_timer_get_time();
+        if (now < start + tout) return false;
+        start = now;
         return true;
     }    
 };

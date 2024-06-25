@@ -35,7 +35,7 @@ class NeopixelStrip {
     void setBoolState(int _idiot, bool state);
     void setflash(int _idiot, int count, int pulseh=1, int pulsel=1, int onbrit=-1, uint32_t color=0);
     void update(int runmode);
-    void enable_flashdemo(bool ena);
+    void flashdemo_ena(bool ena);
     uint32_t idiot_neo_color(int _idiot);
     bool newIdiotLight(int _idiot, uint8_t color332, bool startboolstate = 0);
     void sleepmode_ena(bool ena);
@@ -219,8 +219,9 @@ void NeopixelStrip::setflash(int _idiot, int count, int pulseh, int pulsel, int 
     // }
 }
 void NeopixelStrip::set_fcolor(int _idiot) {  // flashing event : push a flash sequence bit into the data page
-    int brite = (fset[_idiot][fonbrit] > 0) ? fset[_idiot][fonbrit] : hibright;
+    int brite = (fset[_idiot][fonbrit] >= 0) ? fset[_idiot][fonbrit] : hibright;
     if (!fcbase[_idiot]) cidiot[_idiot][cflash] = cidiot[_idiot][cnormal];
+    else cidiot[_idiot][cflash] = fcbase[_idiot];
     cidiot[_idiot][cflash] = recolor(cidiot[_idiot][cflash], (float)brite, neosat);
 }
 bool NeopixelStrip::fevpop(int _idiot, uint pop_off) {  // flashing event : pop a flash sequence bit out from the data page
@@ -231,11 +232,11 @@ void NeopixelStrip::fevpush(int _idiot, uint push_off, bool push_val) {  // flas
     int page = push_off / 32;  // divide by 32
     fevents[_idiot][page] |= (push_val << (push_off - 32 * page));
 }
-void NeopixelStrip::enable_flashdemo(bool ena) {
+void NeopixelStrip::flashdemo_ena(bool ena) {
     flashdemo = ena;
     if (flashdemo) {
-        setflash(4, 8, 8, 8, 20, -1);  // brightness toggle in a continuous squarewave
-        setflash(5, 3, 1, 2, 85);      // three super-quick bright white flashes
+        setflash(4, 8, 8, 8, 20);  // brightness toggle in a continuous squarewave
+        setflash(5, 3, 1, 2, 100, 0xffffff);      // three super-quick bright white flashes
         setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
     }
     else {
@@ -273,77 +274,35 @@ void NeopixelStrip::sleepmode_ena(bool ena) {
     sleepmode = ena;
 }
 void NeopixelStrip::knightrider() {
-    static uint32_t leds[striplength];
-    static Timer brighttimer;
-    static Timer dimtimer;
-    static int brightpoint;
-    static int dimpoint;
-    static int brightgoal;
-    static int dimgoal;
-    static bool moving;
-    static bool moving_last;
-    int brightrate_max = 300000, dimrate = 200000, stopdelay = 100000, trail = 4, brightrate;
-    float dim_brightness = 15.0;  // as a percent of brightpoint brightness
-    uint32_t brightcolor = 0xff0000;
-    uint32_t dimcolor = recolor(brightcolor, dim_brightness);
-    if (moving && !moving_last) {
-        brighttimer.set(brightrate);
-        dimtimer.set(dimrate);
-        brightgoal = striplength - brightgoal;
-        dimgoal = striplength - dimgoal;
-    }
-    else if (!moving && moving_last) brighttimer.set(stopdelay);
-    moving_last = moving;
-    if (moving) {  // if moving
-        if (dimtimer.expired()) {
-            dimpoint += (dimgoal > dimpoint) ? 1 : -1;  // advance dimpoint
-            dimtimer.set(brightrate_max * std::abs(brightpoint - brightgoal) / striplength);
-        }
-        // if (brightpoint == brightgoal) moving = false;
-        if (brightpoint != brightgoal) {
-            if (brighttimer.expired()) {
-                brightpoint += (brightgoal > brightpoint) ? 1 : -1;  // advance brightpoint
-                brighttimer.set(brightrate_max - brightrate_max * std::abs(brightpoint - brightgoal) / striplength);
-            }
+    static Timer movementTimer{150000};
+    static int currentPos = 0;
+    static int direction = 1;  // 1 for right, -1 for left
+    const int trailLength = 4;  // Length of the fading trail
+    const uint32_t mainColor = 0xff0000;  // Red color
+    const uint32_t dimColor = recolor(mainColor, 15.0);  // Dimmed color
+    const float maxSpeed = 20.0;  // Fastest speed (milliseconds per step)
+    const float minSpeed = 100.0;  // Slowest speed (milliseconds per step)
+    float positionPercent = (float)currentPos / (striplength - 1);  // Calculate the position as a percentage of the strip length
+    float speed = maxSpeed + (minSpeed - maxSpeed) * positionPercent;  // Calculate the speed based on the position (decelerates as it moves)
+    if (movementTimer.expireset()) {  // if (movementTimer.elapsed((int)moveInterval)) {
+        currentPos += direction; // Move the bright point
+        if (currentPos <= 0 || currentPos >= striplength - 1) {
+            direction = -direction;  // Reverse direction at the ends
+            currentPos = max(0, min(striplength - 1, currentPos));  // Clamp position within bounds
         }
     }
-    else if (brighttimer.expired()) moving = true;
-    int spread = std::abs(brightpoint - dimpoint);
-    int britesteps = get_brite(brightcolor) / trail;
-    neoobj.SetPixelColor(brightpoint, color_to_neo(recolor(brightcolor, neobright)));
-    if (dimpoint != brightpoint) neoobj.SetPixelColor(dimpoint, color_to_neo(recolor(dimcolor, neobright)));
-    for (int i=0; i<striplength; i++) {
-        if (brightpoint > dimpoint) {  // if moving to the right
-            if (i > dimpoint && i < brightpoint) {
-                uint32_t color = recolor(brightcolor, neobright * map((float)i, (float)dimpoint, (float)brightpoint, dim_brightness, 100.0) / 100.0);
-                neoobj.SetPixelColor(i, color_to_neo(color));
-            }
-            else if (i < dimpoint || i > brightpoint) neoobj.SetPixelColor(i, color_to_neo((uint32_t)0));
-        }
-        else {  // if moving to the left or points have collided at the endpoint
-            if (i < dimpoint && i > brightpoint) {
-                uint32_t color = recolor(brightcolor, neobright * map((float)i, (float)dimpoint, (float)brightpoint, dim_brightness, 100.0) / 100.0);
-                neoobj.SetPixelColor(i, color_to_neo(color));
-            }
-            else if (i > dimpoint || i < brightpoint) neoobj.SetPixelColor(i, color_to_neo((uint32_t)0));
+    for (int i = 0; i < striplength; i++)  neoobj.SetPixelColor(i, color_to_neo((uint32_t)0));   // Clear the strip   
+    neoobj.SetPixelColor(currentPos, color_to_neo(recolor(mainColor, neobright)));  // Set the bright point
+    for (int i = 1; i <= trailLength; i++) { // Set the trailing effect
+        int trailPos = currentPos - i * direction;
+        if (trailPos >= 0 && trailPos < striplength) {
+            float trailBrightness = 100.0 * (trailLength - i) / trailLength;
+            neoobj.SetPixelColor(trailPos, color_to_neo(recolor(mainColor, neobright * trailBrightness / 100.0)));
         }
     }
-    if (dimpoint == dimgoal && brightpoint == brightgoal && moving_last == true) moving = false;
-    neoobj.Show();
+    neoobj.Show(); // Show the updated strip
 }
 
-// class IdiotLight {  // defunct: currently not using individual instances for each idiot light. i couldn't get it to work
-//     public:
-//     bool* val = nullptr;
-//     char letters[3] = "--";
-//     uint8_t bitmap[11] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-//     uint8_t color = DGRY;
-//     bool last;  // = 0;
-//     IdiotLight(bool* _val, uint8_t* _map) : val(_val) {
-//         for (int i=0; i<11; i++) bitmap[i] = _map[i];
-//         last = *val;
-//     } 
-// };
 class IdiotLights {
 //   private: bool fixed_one = true, fixed_zero = false; bool* _one = &fixed_one; bool* _zero = &fixed_zero;
   public:
@@ -460,3 +419,16 @@ class IdiotLights {
         }
     }
 };
+
+// class IdiotLight {  // defunct: currently not using individual instances for each idiot light. i couldn't get it to work
+//     public:
+//     bool* val = nullptr;
+//     char letters[3] = "--";
+//     uint8_t bitmap[11] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+//     uint8_t color = DGRY;
+//     bool last;  // = 0;
+//     IdiotLight(bool* _val, uint8_t* _map) : val(_val) {
+//         for (int i=0; i<11; i++) bitmap[i] = _map[i];
+//         last = *val;
+//     } 
+// };
