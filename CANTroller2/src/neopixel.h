@@ -270,8 +270,7 @@ void NeopixelStrip::update(int runmode) {
     flashtimer.expireset();
 }
 void NeopixelStrip::sleepmode_ena(bool ena) {
-    if (ena && !sleepmode);  // reseet knightrider parameters if needed
-    else if (!ena && sleepmode) refresh(true);
+    if (!ena && sleepmode) refresh(true);
     sleepmode = ena;
 }
 void NeopixelStrip::knightrider() {
