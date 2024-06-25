@@ -253,6 +253,7 @@ void NeopixelStrip::update_idiot(int _idiot) {
 void NeopixelStrip::update(int runmode) {
     static int runmode_last;
     if (runmode != runmode_last) sleepmode_ena(runmode == LOWPOWER);
+    runmode_last = runmode;
     if (sleepmode) {
         knightrider();
         return;
@@ -274,30 +275,28 @@ void NeopixelStrip::sleepmode_ena(bool ena) {
     sleepmode = ena;
 }
 void NeopixelStrip::knightrider() {
-    static Timer movementTimer{150000};
-    static int currentPos = 0;
-    static int direction = 1;  // 1 for right, -1 for left
-    const int trailLength = 4;  // Length of the fading trail
-    const uint32_t mainColor = 0xff0000;  // Red color
-    const uint32_t dimColor = recolor(mainColor, 15.0);  // Dimmed color
-    const float maxSpeed = 20.0;  // Fastest speed (milliseconds per step)
-    const float minSpeed = 100.0;  // Slowest speed (milliseconds per step)
-    float positionPercent = (float)currentPos / (striplength - 1);  // Calculate the position as a percentage of the strip length
-    float speed = maxSpeed + (minSpeed - maxSpeed) * positionPercent;  // Calculate the speed based on the position (decelerates as it moves)
-    if (movementTimer.expireset()) {  // if (movementTimer.elapsed((int)moveInterval)) {
-        currentPos += direction; // Move the bright point
-        if (currentPos <= 0 || currentPos >= striplength - 1) {
+    static Timer knighttimer{150000};
+    static int posn = 0;
+    static int direction = 1;        // 1 for right, -1 for left
+    const int trail = 4;             // Length of the fading trail
+    const uint32_t knightcolor = 0xff0000;  // Red color
+    const float maxspeed = 20.0;     // Fastest speed (milliseconds per step)
+    const float minspeed = 100.0;    // Slowest speed (milliseconds per step)
+    float speed = maxspeed + (minspeed - maxspeed) * (float)posn / (striplength - 1);  // Calculate the speed based on the position (decelerates as it moves)
+    if (knighttimer.expireset()) {   // if (knighttimer.elapsed((int)moveInterval)) {
+        posn += direction;           // Move the bright point
+        if (posn <= 0 || posn >= striplength - 1) {
             direction = -direction;  // Reverse direction at the ends
-            currentPos = max(0, min(striplength - 1, currentPos));  // Clamp position within bounds
+            posn = max(0, min(striplength - 1, posn));  // Clamp position within bounds
         }
     }
     for (int i = 0; i < striplength; i++)  neoobj.SetPixelColor(i, color_to_neo((uint32_t)0));   // Clear the strip   
-    neoobj.SetPixelColor(currentPos, color_to_neo(recolor(mainColor, neobright)));  // Set the bright point
-    for (int i = 1; i <= trailLength; i++) { // Set the trailing effect
-        int trailPos = currentPos - i * direction;
-        if (trailPos >= 0 && trailPos < striplength) {
-            float trailBrightness = 100.0 * (trailLength - i) / trailLength;
-            neoobj.SetPixelColor(trailPos, color_to_neo(recolor(mainColor, neobright * trailBrightness / 100.0)));
+    neoobj.SetPixelColor(posn, color_to_neo(recolor(knightcolor, neobright)));  // Set the bright point
+    for (int i = 1; i <= trail; i++) {  // Set the trailing effect
+        int trailposn = posn - i * direction;
+        if (trailposn >= 0 && trailposn < striplength) {
+            float trailBrightness = 100.0 * (trail - i) / trail;
+            neoobj.SetPixelColor(trailposn, color_to_neo(recolor(knightcolor, neobright * trailBrightness / 100.0)));
         }
     }
     neoobj.Show(); // Show the updated strip
