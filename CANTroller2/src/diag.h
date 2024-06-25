@@ -59,6 +59,7 @@ class DiagRuntime {
     bool err_sens[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE/WARN] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
     bool err_last[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE/WARN] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
     // Device* devices[NumTelemetryFull];
+    int registered_errcount[NUM_ERR_TYPES];
     float* devices[NumTelemetryFull][NumDiagVals];  //
     bool registered[NumTelemetryFull];
     float violating_value[NumTelemetryFull];
@@ -69,19 +70,6 @@ class DiagRuntime {
         CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, Ignition* a_ignition)
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
           steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition) {}
-
-    // void register_device(int _enumname, Device* _device) {  // registers devices that are children of Device class
-    // }
-    // void register_device(int _enumname, ServoMotor* _device) {  // registers devices that are children of ServoMotor class
-    // }
-    void register_device(int _enumname, float* _value, float* _min, float* _max, float* _margin) {  // registers devices that are children of ServoMotor class
-        devices[_enumname][DiagVal] = _value;
-        devices[_enumname][DiagMin] = _min;
-        devices[_enumname][DiagMax] = _max;
-        devices[_enumname][DiagMargin] = _margin;
-        registered[_enumname] = true;
-    }
-
     void setup() {
         for (int i=0; i<NUM_ERR_TYPES; i++)
             for (int j=0; j<NumTelemetryFull; j++) {
@@ -113,19 +101,6 @@ class DiagRuntime {
         // register_bool_device(_Ignition, ignition->signal_ptr());
         // register_bool_device(_Starter, starter->signal_ptr());
         // register_bool_device(_FuelPump, fuelpump->signal_ptr());
-    }
-    void update_status_words() {}
-    void setflag(int device, int errtype, bool stat) {  // this sets the error flag in err_sens[type] array, and if device is registered, also in the status words
-        err_sens[errtype][device] = stat;
-        errstatus[errtype] = (errstatus[errtype] & ~(1 << device)) | ((stat && registered[device]) << device);  // replaces the device's error bit in status word with updated value
-    }
-    void checkrange(int _sens, bool extra_condition = true) {
-        bool last_rangerr = err_sens[RANGE][_sens];
-        bool rangerr = extra_condition && ((*devices[_sens][DiagVal] < *devices[_sens][DiagMin] - *devices[_sens][DiagMargin]) || (*devices[_sens][DiagVal] > *devices[_sens][DiagMax] + *devices[_sens][DiagMargin]));
-        if (rangerr != last_rangerr) {
-            setflag(_sens, RANGE, rangerr);
-            violating_value[_sens] = *devices[_sens][DiagVal];  
-        }
     }
     void update(int _runmode) {
         if (first_boot) {  // don't run too soon before sensors get initialized etc.
@@ -168,6 +143,8 @@ class DiagRuntime {
             // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LOWPOWER));
             set_sensorgroups();
             set_sensidiots();
+
+            count_errors();
             set_idiot_blinks();
             report_changes();  // detect and report changes in any error values
             dump_errorcode_update();
@@ -177,7 +154,28 @@ class DiagRuntime {
             // make_log_entry();
         }
     }
+    int errorcount(int errtype) { return registered_errcount[errtype]; }
   private:
+    void register_device(int _enumname, float* _value, float* _min, float* _max, float* _margin) {  // registers devices that are children of ServoMotor class
+        devices[_enumname][DiagVal] = _value;
+        devices[_enumname][DiagMin] = _min;
+        devices[_enumname][DiagMax] = _max;
+        devices[_enumname][DiagMargin] = _margin;
+        registered[_enumname] = true;
+    }
+    void update_status_words() {}
+    void setflag(int device, int errtype, bool stat) {  // this sets the error flag in err_sens[type] array, and if device is registered, also in the status words
+        err_sens[errtype][device] = stat;
+        errstatus[errtype] = (errstatus[errtype] & ~(1 << device)) | ((stat && registered[device]) << device);  // replaces the device's error bit in status word with updated value
+    }
+    void checkrange(int _sens, bool extra_condition = true) {
+        bool last_rangerr = err_sens[RANGE][_sens];
+        bool rangerr = extra_condition && ((*devices[_sens][DiagVal] < *devices[_sens][DiagMin] - *devices[_sens][DiagMargin]) || (*devices[_sens][DiagVal] > *devices[_sens][DiagMax] + *devices[_sens][DiagMargin]));
+        if (rangerr != last_rangerr) {
+            setflag(_sens, RANGE, rangerr);
+            violating_value[_sens] = *devices[_sens][DiagVal];  
+        }
+    }
     void set_sensorgroups() {
         for (int typ=0; typ<NUM_ERR_TYPES; typ++) {
             setflag(_HotRC, typ, err_sens[typ][_HotRCHorz] || err_sens[typ][_HotRCVert] || err_sens[typ][_HotRCCh3] || err_sens[typ][_HotRCCh4]);
@@ -191,6 +189,12 @@ class DiagRuntime {
         for (int err=0; err<=_GPIO; err++) {
             sensidiots[err] = false;
             for (int typ=0; typ<NUM_ERR_TYPES; typ++) sensidiots[err] = sensidiots[err] || err_sens[typ][err];
+        }
+    }
+    void count_errors() {
+        for (int t=LOST; t<=WARN; t++) {
+            registered_errcount[t] = 0;
+            for (int j=0; j<NumTelemetryFull; j++) if (registered[j] && err_sens[t][j]) registered_errcount[t]++;
         }
     }
     void set_idiot_blinks() {  // adds blink code to lost and range err neopixels corresponing to the lowest numbered failing sensor
