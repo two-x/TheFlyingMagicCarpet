@@ -22,6 +22,7 @@ neorgb_t color_to_neo(uint8_t color332) { return neorgb_t(color332 & 0xe0, (colo
 
 class NeopixelStrip {
   public:
+    bool sleepmode = false;
     static const int idiotcount = 7;
     NeopixelStrip(int argpin) : pin(argpin) {}
     void setup(bool viewcontext=NITE);
@@ -33,10 +34,11 @@ class NeopixelStrip {
     int neopixelsAvailable();
     void setBoolState(int _idiot, bool state);
     void setflash(int _idiot, int count, int pulseh=1, int pulsel=1, int onbrit=-1, uint32_t color=0);
-    void update(uint16_t heart_color);
+    void update(int runmode);
     void enable_flashdemo(bool ena);
     uint32_t idiot_neo_color(int _idiot);
     bool newIdiotLight(int _idiot, uint8_t color332, bool startboolstate = 0);
+    void sleepmode_ena(bool ena);
   private:
     enum brightness_presets : int { B_OFF, B_MIN, B_LO, B_MED, B_HI, B_EXT, B_MAX };
     enum ledset : int { onoff, fcount, fpulseh, fpulsel, fonbrit, fnumset };  // just a bunch of int variables needed for each of the neo idiot lights
@@ -71,8 +73,9 @@ class NeopixelStrip {
     uint16_t get_hue(RgbColor rgb); // Function to convert RGB888 to 16-bit hue value
     uint8_t get_sat(RgbColor rgb);
     uint8_t get_brite(RgbColor rgb);
-    void refresh();
+    void refresh(bool force=false);
     void heartbeat_update();
+    void knightrider();
 };
 // float NeopixelStrip::maxelement(float r, float g, float b) { return (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b); }  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
 // float NeopixelStrip::midelement(float r, float g, float b) { return (r >= g) ? ((g >= b) ? g : ((r >= b) ? b : r)) : ((r >= b) ? r : ((b >= g) ? g : b)); } // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
@@ -108,12 +111,12 @@ void NeopixelStrip::recolor_idiots(int _idiot) {  // call w/ -1 to recolor all i
         if (fset[i][fcount]) set_fcolor(i);
     }
 }
-void NeopixelStrip::refresh() {
+void NeopixelStrip::refresh(bool force) {
     int numledstowrite = (heartbeatNow != neostrip[0]);
     neostrip[0] = heartbeatNow;
     neoobj.SetPixelColor(0, heartbeatNow);
     for (int i=0; i<idiotcount; i++) {
-        if (cidiot[i][cnow] != neostrip[i+1]) {
+        if (cidiot[i][cnow] != neostrip[i+1] || force) {
             neoobj.SetPixelColor (1+i, cidiot[i][cnow]);
             neostrip[i + 1] = cidiot[i][cnow];  // color_to_neo(cidiot[i][cnow]);
             numledstowrite = 2 + i;  // + idiotCount;
@@ -246,8 +249,14 @@ void NeopixelStrip::update_idiot(int _idiot) {
     cidiot[_idiot][cnow] = fset[_idiot][onoff] ? cidiot[_idiot][con] : cidiot[_idiot][coff];               // set color to con or coff depending on state of idiotlight
     if (fset[_idiot][fcount]) if (fevpop(_idiot, nowepoch)) cidiot[_idiot][cnow] = cidiot[_idiot][cflash]; // if flashing, override with the flash color
 }
-void NeopixelStrip::update(uint16_t heart_color) {
-    set_heartcolor(heart_color);
+void NeopixelStrip::update(int runmode) {
+    static int runmode_last;
+    if (runmode != runmode_last) sleepmode_ena(runmode == LOWPOWER);
+    if (sleepmode) {
+        knightrider();
+        return;
+    }
+    set_heartcolor(colorcard[runmode]);
     heartbeat_update();  // Update our beating heart
     nowtime_us = (int)flashtimer.elapsed();
     nowepoch = nowtime_us / fquantum_us;
@@ -258,6 +267,71 @@ void NeopixelStrip::update(uint16_t heart_color) {
     refresh();
     flashtimer.expireset();
 }
+void NeopixelStrip::sleepmode_ena(bool ena) {
+    if (ena && !sleepmode);  // reseet knightrider parameters if needed
+    else if (!ena && sleepmode) refresh(true);
+    sleepmode = ena;
+}
+void NeopixelStrip::knightrider() {
+    static uint32_t leds[striplength];
+    static Timer brighttimer;
+    static Timer dimtimer;
+    static int brightpoint;
+    static int dimpoint;
+    static int brightgoal;
+    static int dimgoal;
+    static bool moving;
+    static bool moving_last;
+    int brightrate_max = 300000, dimrate = 200000, stopdelay = 100000, trail = 4, brightrate;
+    float dim_brightness = 15.0;  // as a percent of brightpoint brightness
+    uint32_t brightcolor = 0xff0000;
+    uint32_t dimcolor = recolor(brightcolor, dim_brightness);
+    if (moving && !moving_last) {
+        brighttimer.set(brightrate);
+        dimtimer.set(dimrate);
+        brightgoal = striplength - brightgoal;
+        dimgoal = striplength - dimgoal;
+    }
+    else if (!moving && moving_last) brighttimer.set(stopdelay);
+    moving_last = moving;
+    if (moving) {  // if moving
+        if (dimtimer.expired()) {
+            dimpoint += (dimgoal > dimpoint) ? 1 : -1;  // advance dimpoint
+            dimtimer.set(brightrate_max * std::abs(brightpoint - brightgoal) / striplength);
+        }
+        // if (brightpoint == brightgoal) moving = false;
+        if (brightpoint != brightgoal) {
+            if (brighttimer.expired()) {
+                brightpoint += (brightgoal > brightpoint) ? 1 : -1;  // advance brightpoint
+                brighttimer.set(brightrate_max - brightrate_max * std::abs(brightpoint - brightgoal) / striplength);
+            }
+        }
+    }
+    else if (brighttimer.expired()) moving = true;
+    int spread = std::abs(brightpoint - dimpoint);
+    int britesteps = get_brite(brightcolor) / trail;
+    neoobj.SetPixelColor(brightpoint, color_to_neo(recolor(brightcolor, neobright)));
+    if (dimpoint != brightpoint) neoobj.SetPixelColor(dimpoint, color_to_neo(recolor(dimcolor, neobright)));
+    for (int i=0; i<striplength; i++) {
+        if (brightpoint > dimpoint) {  // if moving to the right
+            if (i > dimpoint && i < brightpoint) {
+                uint32_t color = recolor(brightcolor, neobright * map((float)i, (float)dimpoint, (float)brightpoint, dim_brightness, 100.0) / 100.0);
+                neoobj.SetPixelColor(i, color_to_neo(color));
+            }
+            else if (i < dimpoint || i > brightpoint) neoobj.SetPixelColor(i, color_to_neo((uint32_t)0));
+        }
+        else {  // if moving to the left or points have collided at the endpoint
+            if (i < dimpoint && i > brightpoint) {
+                uint32_t color = recolor(brightcolor, neobright * map((float)i, (float)dimpoint, (float)brightpoint, dim_brightness, 100.0) / 100.0);
+                neoobj.SetPixelColor(i, color_to_neo(color));
+            }
+            else if (i > dimpoint || i < brightpoint) neoobj.SetPixelColor(i, color_to_neo((uint32_t)0));
+        }
+    }
+    if (dimpoint == dimgoal && brightpoint == brightgoal && moving_last == true) moving = false;
+    neoobj.Show();
+}
+
 // class IdiotLight {  // defunct: currently not using individual instances for each idiot light. i couldn't get it to work
 //     public:
 //     bool* val = nullptr;

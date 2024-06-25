@@ -16,7 +16,6 @@
 #define disp_bargraphs_x 113  // 122
 #define disp_datapage_title_x 83
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
-uint8_t colorcard[NUM_RUNMODES] = { MGT, PUR, RED, ORG, YEL, GRN, TEAL, WHT };
 std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
@@ -38,7 +37,7 @@ std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 static std::string telemetry[disp_fixed_lines] = { "Handle V", "Handle H", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 7, 11, 11, 11, 13, 4, 10 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 7, 11, 11, 11, 13, 4, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
@@ -52,7 +51,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, __________, __________, __________, __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, __________, "No Temps", "StopWifi", },  // PG_TEMP
     { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "LoopFreq", "FramRate", "HumanAct", " Touch X", " Touch Y", "SpinRate", "   Accel", "  Uptime", "EZScroll", "BlnkDemo", neo_bright, "NeoSatur", "PanelApp", },  // PG_UI
+    { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "SpinRate", "   Accel", "  Uptime", "EZScroll", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", "PanelApp", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "psi",  "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, "%",    "%",    },  // PG_RUN
@@ -67,7 +66,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, b1nary, b1nary, },  // PG_TEMP
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us",   "us",   "Hz",   "fps",  scroll, "pix",  "pix",  "Hz",   "x",    "min",  "lin",  "eyes", "%",    "%",    scroll, },  // PG_UI
+    { "us",   "us",   "fps",  scroll, "pix",  "pix",  "Hz",   "x",    "min",  "lin",  b1nary, "eyes", "%",    "%",    scroll, },  // PG_UI
 };
 static std::string unitmapnames[20] = { "us", scroll, b1nary, "%", "ohm", "eyes", degree, degreF, "mph", "rpm", "psi", "atm", "g/s", "adc", "pix", "min", "%/s", degsec, "fps", "lin" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[20][13] = {  // now 13x7-pixel bitmaps for unit strings. required when string is over 2 characters
@@ -660,11 +659,13 @@ class Display {
                 if (idiots->val(i) != idiots->last[i]) neo->setBoolState(i, idiots->val(i));
             }
             if (i == LOST || i == RANGE) {
-                if (diag.most_critical_last[i] != diag.most_critical_sensor[i]) {
-                    if (diag.most_critical_sensor[i] == _None) neo->setflash((int)i, 0);
-                    else neo->setflash((int)i, diag.most_critical_sensor[i] + 1, 2, 6, 1, 0);
-                }
-                diag.most_critical_last[i] = diag.most_critical_sensor[i];
+                if (!diag.errorcount(i)) neo->setflash(i, 0);
+                else neo->setflash((int)i, diag.errorcount(i), 2, 6, 1, 0);
+                // if (diag.most_critical_last[i] != diag.most_critical_sensor[i]) {
+                //     if (diag.most_critical_sensor[i] == _None) neo->setflash((int)i, 0);
+                //     else neo->setflash((int)i, diag.most_critical_sensor[i] + 1, 2, 6, 1, 0);
+                // }
+                // diag.most_critical_last[i] = diag.most_critical_sensor[i];
             }
             if (force || (idiots->val(i) ^ idiots->last[i])) {
                 draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + idiots_spacing_x + 1) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int)(i / idiots->row_count));
@@ -886,16 +887,17 @@ class Display {
         else if (datapage == PG_UI) {
             drawval(9, loop_avg_us);
             drawval(10, looptimer.loop_peak_us);
-            drawval(11, (int)looptimer.loopfreq_hz);
-            drawval(12, fps);
-            draw_ascii(13, activitiescard[last_activity]);
-            drawval(14, touch->touch_pt(0), 0, disp_width_pix);
-            drawval(15, touch->touch_pt(1), 0, disp_height_pix);
-            drawval(16, encoder.spinrate(), 0.0, encoder.spinrate_max());
-            drawval(17, encoder.accel_factor(), 1, encoder.accel_max());
-            drawval(18, looptimer.uptime());
-            drawval(19, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
-            draw_truth(20, flashdemo, 0);
+            // drawval(11, (int)looptimer.loopfreq_hz);
+            drawval(11, fps);
+            draw_ascii(12, activitiescard[last_activity]);
+            drawval(13, touch->touch_pt(0), 0, disp_width_pix);
+            drawval(14, touch->touch_pt(1), 0, disp_height_pix);
+            drawval(15, encoder.spinrate(), 0.0, encoder.spinrate_max());
+            drawval(16, encoder.accel_factor(), 1, encoder.accel_max());
+            drawval(17, looptimer.uptime());
+            drawval(18, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
+            draw_truth(19, flashdemo, 0);
+            draw_truth(20, neo->sleepmode, 0);
             drawval(21, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
             drawval(22, neosat, 1.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
             draw_ascii(23, uicontextcard[ui_context]);
@@ -1222,8 +1224,9 @@ class Tuner {
                 else if (sel == 14) cal_gasmode_request = tune();
             }
             else if (datapage == PG_UI) {
-                if (sel == 10) ezread.lookback(tune(ezread.offset)); 
-                else if (sel == 11) tune(&flashdemo);  //  neo->enable_flashdemo(flashdemo); }
+                if (sel == 9) ezread.lookback(tune(ezread.offset)); 
+                else if (sel == 10) tune(&flashdemo);  //  neo->enable_flashdemo(flashdemo); }
+                else if (sel == 11) neo->sleepmode_ena(tune());  //  neo->enable_flashdemo(flashdemo); }
                 else if (sel == 12) neo->setbright(tune(neobright, 0.0, 100.0));  //  neo->setbright(neobright); }
                 else if (sel == 13) neo->setsat(tune(neosat, 0.0, 100.0));  //  neo->setbright(neobright); }
                 else if (sel == 14) tune(&ui_context, 0, NumContextsUI-1, true);

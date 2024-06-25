@@ -67,7 +67,7 @@ void loop() {                  // arduino-style loop() is like main() but with a
     touch.update();            // read touchscreen input and do what it tells us to
     tuner.update(run.mode);    // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update(run.mode);     // notice any screwy conditions or suspicious shenanigans - consistent 200us
-    neo.update(colorcard[run.mode]);          // update/send neopixel colors 
+    neo.update(run.mode);          // update/send neopixel colors 
     lightbox.update(run.mode, speedo.val());  // communicate any relevant data to the lighting controller
     looptimer.update();                       // looptimer.mark("F");
     vTaskDelay(pdMS_TO_TICKS(1));             // momentarily pause continuous execution for multitasking purposes. delays the loop but in a good way
