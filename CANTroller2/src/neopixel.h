@@ -301,6 +301,51 @@ void NeopixelStrip::knightrider() {
     }
     neoobj.Show(); // Show the updated strip
 }
+// void NeopixelStrip::knightrider() {
+//     static Timer knighttimer{15000};
+//     static float posn = 0.0f;
+//     static int direction = 1;        // 1 for right, -1 for left
+//     const int trail = 4;             // Length of the fading trail
+//     const uint32_t basecolor = 0xff0000;  // Red color
+//     const float maxspeed = 20.0;     // Fastest speed (ms per step)
+//     const float minspeed = 100.0;    // Slowest speed (ms per step)
+//     float speed = 1000.0 * maxspeed + (minspeed - maxspeed) * (float)posn / (striplength - 1);  // Calculate the speed based on the position (decelerates as it moves) in us
+//     if (knighttimer.expired()) {   // if (knighttimer.elapsed((int)moveInterval)) {
+//         posn += direction * 0.1f;    // Move the bright point fractionally
+//         if (posn <= 0 || posn >= striplength) {
+//             direction = -direction;  // Reverse direction at the ends
+//             posn = constrain(posn, 0.0, (float)(striplength - 1));
+//         }
+//         knighttimer.set(speed);
+//         // Serial.printf("%.1lf ", posn);
+//         // for (int i = 1; i < striplength; i++) {
+//         //     // int x = map((int)(neoobj.GetPixelColor(i).R), 0, 255, 0, 9);
+//         //     uint32_t x = (color_to_888(neoobj.GetPixelColor(i))) >> 16;
+//         //     // Serial.printf("%d", x);
+//         //     Serial.printf("%02x ", x);
+//         // }
+//         // Serial.printf("\n");
+//     }
+//     neoobj.ClearTo(0);
+//     int iposn = (int)posn;
+//     float frac = posn - iposn;
+//     if (direction) frac = 1.0 - frac;
+//     uint32_t brightcolor = recolor(basecolor, neobright);
+//     uint32_t dimcolor = recolor(basecolor, neobright * (1.0 - frac));
+//     // Serial.printf("p:%.1lf i:%d f:%.1lf b:%06x d:%06x\n", posn, iposn, frac, brightcolor, dimcolor);
+//     // else recolor(basecolor, neobright * (1.0 - (posn - iposn)));
+//     neoobj.SetPixelColor(iposn, color_to_neo(brightcolor));  // Set the bright point
+//     if (iposn + direction >= 0 && iposn + direction < striplength) {
+//         neoobj.SetPixelColor(iposn + direction, color_to_neo(dimcolor));
+//     }
+//     for (int i = 1; i <= trail; i++) {  // Set the trailing effect
+//         int trailposn = posn - i * direction;
+//         if (trailposn >= 0 && trailposn < striplength) {
+//             neoobj.SetPixelColor(trailposn, color_to_neo(recolor(basecolor, neobright * (trail - i) / trail)));
+//         }
+//     }
+//     neoobj.Show(); // Show the updated strip
+// }
 
 class IdiotLights {
 //   private: bool fixed_one = true, fixed_zero = false; bool* _one = &fixed_one; bool* _zero = &fixed_zero;
