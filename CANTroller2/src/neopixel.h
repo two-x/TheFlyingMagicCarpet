@@ -13,7 +13,7 @@ uint32_t color_to_888(neorgb_t colorneo) { return (static_cast<uint32_t>(colorne
 uint16_t color_to_565(uint32_t color888) { return static_cast<uint16_t>(((color888 & 0xf80000) >> 8) | ((color888 & 0xfc00) >> 5) | ((color888 & 0xf8) >> 3)); }  // Convert uint32 color in format 0x00RRGGBB to uint16 5-6-5 encoded color value suitable for screen
 uint16_t color_to_565(uint8_t color332) { return ((static_cast<uint16_t>(color332) & 0xe0) << 8) | ((static_cast<uint16_t>(color332) & 0x1c) << 6) | ((static_cast<uint16_t>(color332) & 0x3) << 3); }  // Convert uint32 color in format 0x00RRGGBB to uint16 5-6-5 encoded color value suitable for screen
 uint16_t color_to_565(neorgb_t colorneo) { return ((static_cast<uint16_t>(colorneo.R) & 0xf8) << 8) | ((static_cast<uint16_t>(colorneo.G) & 0xfc) << 3) | (((static_cast<uint16_t>(colorneo.B) & 0xf8) >> 3)); }
-uint8_t color_to_332(uint16_t color565) { return static_cast<uint8_t>(((color565 & 0xe000) >> 8) | ((color565 & 0x700) >> 6) | ((color565 & 0x18) >> 3)); }  // Convert uint32 color in format 0x00RRGGBB to uint16 5-6-5 encoded color value suitable for screen
+uint8_t color_to_332(uint16_t color565) { return static_cast<uint8_t>(((color565 & 0xe000) >> 8) | ((color565 & 0x700) >> 6) | ((color565 & 0x18) >> 3)); }  // Convert uint32 color in format 0x00RRGGBB to uint8 3-3-2 encoded color value suitable for frame buffers
 uint8_t color_to_332(uint32_t color888) { return static_cast<uint8_t>(((color888 & 0xe00000) >> 16) | ((color888 & 0xe000) >> 11) | ((color888 & 0xc0) >> 6)); }
 uint8_t color_to_332(neorgb_t colorneo) { return (colorneo.R & 0xe0) | ((colorneo.G & 0xe0) >> 3) | ((colorneo.B & 0xc0) >> 6); }
 neorgb_t color_to_neo(uint32_t color888) { return neorgb_t((color888 >> 16) & 0xff, (color888 >> 8) & 0xff, color888 & 0xff); }  // (static_cast<uint32_t>(color.W) << 24) |
@@ -208,15 +208,15 @@ void NeopixelStrip::setflash(int _idiot, int count, int pulseh, int pulsel, int 
     for (int pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
     uint lstop, filled = 0;
     uint patternlen = fset[_idiot][fcount] * (fset[_idiot][fpulseh] + fset[_idiot][fpulsel]);
-    uint reps = 1 + (patternlen < fevresolution / 3);  // For shorter flash patterns repeat them multiple times in each cycle
-    for (int rep = 1; rep <= reps; rep++) {        
-        lstop = std::min(fevresolution, filled + patternlen);
-        while (filled < lstop) {
-            for (int hbit = 0; hbit < fset[_idiot][fpulseh]; hbit++) if (filled < lstop) fevpush(_idiot, filled++, 1);
-            for (int lbit = 0; lbit < fset[_idiot][fpulsel]; lbit++) if (filled < lstop) fevpush(_idiot, filled++, 0); 
-        }
-        filled = fevresolution / reps;
+    // uint reps = 1 + (patternlen < fevresolution / 3);  // For shorter flash patterns repeat them multiple times in each cycle
+    // for (int rep = 1; rep <= reps; rep++) {        
+    lstop = std::min(fevresolution, filled + patternlen);
+    while (filled < lstop) {
+        for (int hbit = 0; hbit < fset[_idiot][fpulseh]; hbit++) if (filled < lstop) fevpush(_idiot, filled++, 1);
+        for (int lbit = 0; lbit < fset[_idiot][fpulsel]; lbit++) if (filled < lstop) fevpush(_idiot, filled++, 0); 
     }
+    filled = fevresolution;  // filled = fevresolution / reps;
+    // }
 }
 void NeopixelStrip::set_fcolor(int _idiot) {  // flashing event : push a flash sequence bit into the data page
     int brite = (fset[_idiot][fonbrit] > 0) ? fset[_idiot][fonbrit] : hibright;
@@ -224,11 +224,11 @@ void NeopixelStrip::set_fcolor(int _idiot) {  // flashing event : push a flash s
     cidiot[_idiot][cflash] = recolor(cidiot[_idiot][cflash], (float)brite, neosat);
 }
 bool NeopixelStrip::fevpop(int _idiot, uint pop_off) {  // flashing event : pop a flash sequence bit out from the data page
-    int page = pop_off >> 6;  // divide by 32
+    int page = pop_off / 32;  // divide by 32
     return (fevents[_idiot][page] >> (pop_off - 32 * page)) & 1;
 }
 void NeopixelStrip::fevpush(int _idiot, uint push_off, bool push_val) {  // flashing event : push a flash sequence bit into the data page
-    int page = push_off >> 6;  // divide by 32
+    int page = push_off / 32;  // divide by 32
     fevents[_idiot][page] |= (push_val << (push_off - 32 * page));
 }
 void NeopixelStrip::enable_flashdemo(bool ena) {

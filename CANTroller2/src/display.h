@@ -21,8 +21,8 @@ std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pa
 std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
-#define stEr "St\x88r"     // These defines are just a convenience to keep the below datapage strings ..
-#define brAk "Br\x83k"     //   .. array initializations aligned in neat rows & cols for legibility
+#define stEr "St\x88r"     // These defines are just a convenience to keep the below datapage strings
+#define brAk "Br\x83k"     //   array initializations aligned in neat rows & cols for legibility
 #define spEd "Sp\x88""d"
 #define b1nary "  \xa7"
 #define scroll "\x12"
@@ -100,15 +100,8 @@ static constexpr uint8_t unitmaps[20][13] = {  // now 13x7-pixel bitmaps for uni
 static EZReadDrawer ezdraw(&ezread);
 static PanelAppManager panel(&ezdraw);
 volatile float fps = 0.0;
-volatile bool is_pushing = 0;
-volatile bool is_drawing = 0;
-volatile int pushclock;
-volatile int drawclock;
-volatile int idleclock;
+// int pushclock, drawclock, idleclock;
 volatile bool reset_request = false;
-volatile bool pushtime = 0;
-volatile bool drawn = false;
-volatile bool pushed = true;
 
 SemaphoreHandle_t pushbuf_sem;  // StaticSemaphore_t push_semaphorebuf_sem;
 SemaphoreHandle_t drawbuf_sem;  // StaticSemaphore_t draw_semaphorebuf_sem;
@@ -378,7 +371,7 @@ class Display {
         sprptr->setTextColor(color);  // text units strings must be 2 chars max
         sprptr->print(text.c_str());
     }
-    // draw_fixed displays 20 rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
+    // draw_fixed displays rows of text strings with variable names. and also a column of text indicating units, plus boolean names, all in grey.
     void draw_fixed(int page, int page_last, bool redraw_all=true, bool forced=false) {  // set redraw_tuning_corner to true in order to just erase the tuning section and redraw
         static int fixed_page_last;
         sprptr->setTextColor(LGRY);
@@ -397,9 +390,6 @@ class Display {
                 draw_string(disp_datapage_names_x, y_pos, datapage_names[page_last][lineno], datapage_names[page_last][lineno], BLK, NON, forced);  // erase old value
                 draw_string_units(disp_datapage_units_x, y_pos, tuneunits[page_last][lineno], tuneunits[page_last][lineno], BLK, NON);  // erase unit string here in case new long value string overlaps old units string. draw new unit string after values are drawn
                 draw_string(disp_datapage_names_x, y_pos, datapage_names[page][lineno], datapage_names[page][lineno], LGRY, NON, forced);  //draw new value
-                // commenting these two lines doesn't seem to mess up the rendering of the bargraphs when i flip thru the datapages ... so what are they for?!
-                // sprptr->fillRect(disp_bargraphs_x - 1, (lineno + disp_fixed_lines + 1) * disp_line_height_pix, disp_bargraph_width + 2, 4, BLK);
-                // if (disp_needles[index] >= 0) draw_bargraph_needle(-1, disp_needles[index], y_pos + 1, BLK);  // Let's draw a needle
                 disp_bargraphs[lineno] = false;
             }
         }
@@ -630,6 +620,10 @@ class Display {
             draw_reticle(spr, disp_width_pix-touch_reticle_offset, disp_height_pix-touch_reticle_offset);
         }
     }
+    void draw_temp(loc location, int draw_index) {
+        if (!tempsens.detected(location)) draw_eraseval(draw_index);
+        else drawval(draw_index, tempsens.val(location), tempsens.opmin(location), tempsens.opmax(location));  //temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
+    }
     void draw_idiotbitmap(int i, int x, int y) {
         uint8_t bg = idiots->val(i) ? idiots->color[ON][i] : BLK;
         uint8_t color = idiots->val(i) ? BLK : idiots->color[OFF][i];
@@ -637,10 +631,6 @@ class Display {
         for (int xo = 0; xo < (2 * disp_font_width - 1); xo++)
             for (int yo = 0; yo < disp_font_height - 1; yo++)
                 sprptr->drawPixel(x + xo + 1, y + yo + 1, ((idiots->icon[i][xo] >> yo) & 1) ? color : bg);
-    }
-    void draw_temp(loc location, int draw_index) {
-        if (!tempsens.detected(location)) draw_eraseval(draw_index);
-        else drawval(draw_index, tempsens.val(location), tempsens.opmin(location), tempsens.opmax(location));  //temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
     }
     void draw_idiotlight(int i, int x, int y) {
         if (!idiots->val(i)) sprptr->fillRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, BLK);  // erase rectangle when turning off. need to test if this is necessary
@@ -661,11 +651,6 @@ class Display {
             if (i == LOST || i == RANGE) {
                 if (!diag.errorcount(i)) neo->setflash(i, 0);
                 else neo->setflash((int)i, diag.errorcount(i), 2, 6, 1, 0);
-                // if (diag.most_critical_last[i] != diag.most_critical_sensor[i]) {
-                //     if (diag.most_critical_sensor[i] == _None) neo->setflash((int)i, 0);
-                //     else neo->setflash((int)i, diag.most_critical_sensor[i] + 1, 2, 6, 1, 0);
-                // }
-                // diag.most_critical_last[i] = diag.most_critical_sensor[i];
             }
             if (force || (idiots->val(i) ^ idiots->last[i])) {
                 draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + idiots_spacing_x + 1) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int)(i / idiots->row_count));
@@ -937,13 +922,13 @@ class Display {
         diffpush(&framebuf[flip], &framebuf[!flip]);
         flip = !flip;
         sprptr = &framebuf[flip];
-        pushclock = (int)(esp_timer_get_time() - screen_refresh_time);
+        // pushclock = (int)(esp_timer_get_time() - screen_refresh_time);
     }
     void draw_task() {
         int mark = (int)esp_timer_get_time();
         draw_all(&framebuf[flip]);
-        drawclock = (int)(esp_timer_get_time() - mark);
-        idleclock = refresh_limit - pushclock - drawclock;
+        // drawclock = (int)(esp_timer_get_time() - mark);
+        // idleclock = refresh_limit - pushclock - drawclock;
     }
     void diffpush(LGFX_Sprite* source, LGFX_Sprite* ref) {
         union {  // source
