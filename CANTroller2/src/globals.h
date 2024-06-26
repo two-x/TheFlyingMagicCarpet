@@ -173,10 +173,11 @@ bool car_hasnt_moved = false;           // minor state variable for fly mode - W
 bool powering_up = false;               // minor state variable for lowpower mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
-bool basicmode_request = false;
-int autosaver_request = REQ_NA;
+bool in_basicmode = false;              // bool basicmode_request = false;
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN;                  // which of the dataset pages is currently displayed and available to edit?
+int autosaver_request = REQ_NA;
+volatile bool auto_saver_enabled = false;
 volatile int sel = 0;                   // in the real time tuning UI, which of the editable values is selected. -1 for none 
 volatile int sel_last = 0;          
 volatile int sel_last_last = 0;          

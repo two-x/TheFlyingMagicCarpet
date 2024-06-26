@@ -3,7 +3,7 @@
 #include "tftsetup.h"
 #include "inputs.h"
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-static MomentaryButton bootbutton(boot_sw_pin, false);
+static BootButton bootbutton(boot_sw_pin);
 
 // #define touch_simbutton 38
 #define disp_apppanel_x 150
@@ -34,7 +34,7 @@ volatile int _loop_count;
 static constexpr int SHIFTSIZE = 8;
 volatile bool flip = 0;
 volatile int refresh_limit = 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
-volatile bool auto_saver_enabled = false;
+// volatile bool auto_saver_enabled = false;
 volatile int screen_refresh_time;
 // Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
 LGFX lcd;

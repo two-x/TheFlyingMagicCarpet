@@ -134,56 +134,32 @@ void maf_update(void *parameter) {
 }
 
 class ToggleSwitch {
-  public:
-    bool val = LOW;  // pin low means val high
   protected:
-    int pin;
-    bool last = 0;
+    bool _assertion_level = LOW, _pin_val = HIGH, _val = LOW, _last = LOW;  // pin low means val high
+    int _pin;
     sens attached_sensor = sens::none;
-    void readswpin() {
-        last = val;
+    void readpin() {
+        _last = _val;
         do {
-            val = digitalRead(pin);   // !value because electrical signal is active low
-        } while (val == digitalRead(pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+            _pin_val = digitalRead(_pin);   // !value because electrical signal is active low
+        } while (_pin_val == digitalRead(_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+        _val = _assertion_level ? _pin_val : !_pin_val;
+        if (_last != _val) kick_inactivity_timer(HUTogSw);
     }
   public:
-    ToggleSwitch(int _pin, sens _sens=sens::none) : pin(_pin), attached_sensor(_sens) {}
-    void setup() {
-        set_pin(pin, INPUT_PULLUP);
-        readswpin();
+    ToggleSwitch(int apin, sens _sens=sens::none, int pinconfig=INPUT_PULLUP) : _pin(apin), attached_sensor(_sens) {
+        set_pin(_pin, pinconfig);
+        _assertion_level = (pinconfig == INPUT_PULLUP) ? LOW : HIGH;
     }
-    void update() {
-        if ((attached_sensor == sens::none) || !sim.simulating(attached_sensor)) readswpin();
-        if (last != val) kick_inactivity_timer(HUTogSw);
+    void read() {
+        if ((attached_sensor == sens::none) || !sim.simulating(attached_sensor)) readpin();
     }
+    bool val() { return _val; }
+    bool pin_val() { return _pin_val; }
+    bool assertion_level() { return _assertion_level; }
 };
 
-// the basic mode switch puts either a pullup or pulldown onto the serial tx pin. so to read it we must turn off the serial console, read the pin, then turn the console back on
-// to limit interruptions in the console, we only read every few seconds, and only when not in a driving mode
-class BasicModeSwitch : public ToggleSwitch {
-  public:
-    BasicModeSwitch(int _pin) : ToggleSwitch(_pin, sens::basicsw) {}
-    void read() {  // ensure console is not active when calling this
-        set_pin(pin, INPUT);
-        val = digitalRead(pin);
-        // readswpin();
-        if (last != val) kick_inactivity_timer(HUTogSw);
-    }
-    void reread(int runmode) {
-        if (sim.simulating(attached_sensor)) return;
-        if (runmode == FLY || runmode == HOLD || runmode == CRUISE) return;
-        if (console_enabled) {
-            // delay(200);  // give time for serial to print everything in its buffer
-            Serial.end();  // close serial console to prevent crashes due to error printing
-        }
-        read();
-        if (console_enabled) {
-            Serial.begin(115200);  // restart serial console to prevent crashes due to error printing
-            // delay(1500);  // note we will miss console messages for a bit surrounding a read, unless we add back these delays
-        }
-    }
-};
-static BasicModeSwitch basicsw(tx_basic_pin);
+static ToggleSwitch basicsw(tx_basic_pin, sens::basicsw, INPUT);
 
 void initialize_pins_and_console() {                        // set up those straggler pins which aren't taken care of inside class objects
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);                   // deasserting unused cs line ensures available spi bus
@@ -192,11 +168,38 @@ void initialize_pins_and_console() {                        // set up those stra
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
     basicsw.read();
+    in_basicmode = basicsw.val();
     Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
-    delay(1200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    delay(2200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     Serial.printf("** Setup begin..\nSerial console started..\n");
-    ezread.squintf("Syspower is %s, basicsw read: %s\n", syspower ? "on" : "off", basicsw.val ? "high" : "low");    
+    delay(2200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    
 }
+
+// the basic mode switch puts either a pullup or pulldown onto the serial tx pin. so to read it we must turn off the serial console, read the pin, then turn the console back on
+// to limit interruptions in the console, we only read every few seconds, and only when not in a driving mode
+// class BasicModeSwitch : public ToggleSwitch {
+//   public:
+//     BasicModeSwitch(int apin) : ToggleSwitch(apin, sens::basicsw, INPUT) { 
+//         readpin();  // read the pin when we get instantiated
+//         in_basicmode = _val;
+//     }
+//     void reread(int runmode) {
+//         if (sim.simulating(attached_sensor)) return;
+//         if (runmode == FLY || runmode == HOLD || runmode == CRUISE) return;
+//         if (console_enabled) {
+//             // delay(200);  // give time for serial to print everything in its buffer
+//             Serial.end();  // close serial console to prevent crashes due to error printing
+//         }
+//         readpin();
+//         in_basicmode = _val;
+//         if (console_enabled) {
+//             Serial.begin(115200);  // restart serial console to prevent crashes due to error printing
+//             // delay(1500);  // note we will miss console messages for a bit surrounding a read, unless we add back these delays
+//         }
+//     }
+// };
+// static BasicModeSwitch basicsw(tx_basic_pin);
 
 class Ignition {
   private:
@@ -313,8 +316,9 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     float volts = 0.0;
     float turnon_rpm = 50.0;
     float duty, pwm_period = 25000;  // used for software pwm timing
-    int adc = 0;
+    int adc = 0, now_req = REQ_NA;
     bool status = LOW, status_inverse = HIGH, pump_last = LOW, sw_pwm_out_now = LOW;
+    void request(int req) { now_req = req; }  // squintf("r:%d n:%d\n", req, now_req);}
   private:
     bool variable_speed_output = false;  // this interferes with the gas servo pwm when enabled
     bool use_software_pwm = true;  // avoid using hardware resources for variable output, we can fake it with a timer
@@ -341,22 +345,22 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
   public:
     FuelPump(int _pin) : pin(_pin) {}
     void update() {
+        static bool autoreq;  // true if engine conditions warrant fuel pump to turn on
+        static bool autoreq_last;  // true if engine conditions warrant fuel pump to turn on
         if (!fuelpump_supported || !captouch) return;
         float tachnow = tach.val();
         pump_last = status;
-        if (starter.motor || (ignition.signal && (tachnow >= turnon_rpm))) {
-            volts = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], on_min_v, on_max_v);
-            volts = constrain(volts, on_min_v, on_max_v);
-            adc = map((int)volts, 0, (int)on_max_v, 0, 255);
-            duty = 100.0 * volts / on_max_v;
-            status = HIGH;
-        }
-        else {
-            volts = off_v;
-            adc = 0;
-            duty = 0.0;
-            status = LOW;
-        }
+        if (now_req == REQ_TOG) now_req = status ? REQ_NA : REQ_ON;
+        autoreq_last = autoreq;
+        autoreq = starter.motor || (ignition.signal && (tachnow >= turnon_rpm));
+        if (autoreq && !autoreq_last) now_req = REQ_NA;  // if engine needs on/off, previous manual requests are canceled
+        if (now_req == REQ_ON) volts = on_max_v;  // if manually turned on
+        else if (autoreq) volts = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], on_min_v, on_max_v);  // if engine needs fuel
+        else volts = off_v;  // turn off fuel
+        volts = constrain(volts, off_v, on_max_v);
+        adc = map((int)volts, 0, (int)on_max_v, 0, 255);
+        duty = 100.0 * volts / on_max_v;
+        status = (volts >= on_min_v) ? HIGH : LOW;
         status_inverse = !status;  // for idiot light
         writepin();
     }
@@ -409,7 +413,8 @@ void update_web(void *parameter) {
 }
 
 void stop_console() {
-    Serial.printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
+    ezread.squintf("Syspower is %s, basicsw read: %s\n", syspower ? "on" : "off", basicsw.val() ? "high" : "low");    
+    ezread.printf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) {
         delay(200);  // give time for serial to print everything in its buffer
         Serial.end();  // close serial console to prevent crashes due to error printing
@@ -419,19 +424,19 @@ void stop_console() {
     // ezread.printf("welcome to EZ-Read Console");
 }
 
-void bootbutton_actions() {  // temporary (?) functionality added for development convenience
-    if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
-    if (bootbutton.shortpress()) {
-        if (auto_saver_enabled) panel.change_saver();
-        // else sim.toggle();
-        else {
-            sim.toggle();
-            pressure.print_config(true);
-            brkpos.print_config(true);
-            speedo.print_config(true);
-            tach.print_config(true);
-            mulebatt.print_config(true);
-            // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
-        }
-    }
-}
+// void bootbutton_actions() {  // temporary (?) functionality added for development convenience
+//     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
+//     if (bootbutton.shortpress()) {
+//         if (auto_saver_enabled) panel.change_saver();
+//         // else sim.toggle();
+//         else {
+//             sim.toggle();
+//             pressure.print_config(true);
+//             brkpos.print_config(true);
+//             speedo.print_config(true);
+//             tach.print_config(true);
+//             mulebatt.print_config(true);
+//             // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
+//         }
+//     }
+// }
