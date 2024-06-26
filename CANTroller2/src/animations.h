@@ -34,7 +34,7 @@ volatile int _loop_count;
 static constexpr int SHIFTSIZE = 8;
 volatile bool flip = 0;
 volatile int refresh_limit = 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
-volatile bool auto_saver_enabled = false;
+// volatile bool auto_saver_enabled = false;
 volatile int screen_refresh_time;
 // Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
 LGFX lcd;

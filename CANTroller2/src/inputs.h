@@ -402,7 +402,7 @@ class Touchscreen {
         else if (tbox == 0x20 && sim.enabled() && longpress()) calmode_request = true;
         else if (tbox == 0x40 && sim.enabled() && longpress()) ignition.request(REQ_TOG);
         else if (tbox == 0x50 && sim.enabled() && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
-        else if (tbox == 0x30 && sim.simulating(sens::basicsw) && longpress()) basicmode_request = true;
+        else if (tbox == 0x30 && sim.simulating(sens::basicsw) && longpress()) in_basicmode = !in_basicmode;
         else if (tbox == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(tedit); // (+= 25) Pressed the increase brake pressure button
         else if (tbox == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(-tedit); // (-= 25) Pressed the decrease brake pressure button
         else if (tbox == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(0.01 * tedit); // (-= 25) Pressed the decrease brake pressure button
