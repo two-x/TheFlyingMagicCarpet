@@ -64,7 +64,7 @@ void loop() {                  // arduino-style loop() is like main() but with a
     gas.update();              // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
     brake.update();            // drive motor output based on controller inputs, feedback, run mode, etc.
     steer.update();            // drive motor output based on controller inputs, run mode, etc.
-    touch.update();            // read touchscreen input and do what it tells us to
+    touch.update(run.mode);            // read touchscreen input and do what it tells us to
     tuner.update(run.mode);    // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update(run.mode);     // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update(run.mode);          // update/send neopixel colors 
