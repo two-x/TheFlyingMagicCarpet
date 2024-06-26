@@ -257,10 +257,9 @@ class Touchscreen {
     int tlast_x, tlast_y;
     Timer touchHoldTimer{550000};  // Hold this long to count as a long press
     Timer touchAccelTimer{400000};
-    Timer rejectiontimer{25000};  // Won't allow a new press within this long after an old press (prevent accidental double clicks)
     Timer touchSenseTimer{15000};  // touch chip can't respond faster than some time period
     Timer keyRepeatTimer{250000};  // for editing parameters with only a few values, auto repeat is this slow
-    bool touchPrintEnabled = true, rejectiontimer_active = false;
+    bool touchPrintEnabled = true;
     unsigned long lastTouchPrintTime = 0;
     const unsigned long touchPrintInterval = 500; // Adjust this interval as needed (in milliseconds)
     enum touch_axis : int { xx, yy, zz };
@@ -269,11 +268,13 @@ class Touchscreen {
     // uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     // lcd.setTouch(touch_cal_data);
     void get_touch_debounced() {  // this rejects short spurious touch or un-touch blips
+        static bool rejectiontimer_active;
+        static Timer rejectiontimer;             // timer for required minimum duration of new presses, or removal of old presses
         uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
         bool touch_triggered = (count > 0);
         if (nowtouch != touch_triggered) {       // if the hardware returned opposite our current filtered state, get triggered
             if (!rejectiontimer_active) {        // if we're not already waiting for validity
-                rejectiontimer.reset();          // reset the timer. the touch must stay triggered through expiration for valid change in touch state
+                rejectiontimer.set(25000);       // reset the timer. the touch must stay triggered for this long (in us) for valid change in touch state
                 rejectiontimer_active = true;    // remember we are now triggered and waiting for validity
             }
             else if (rejectiontimer.expired()) { // levels have held through entire validity wait timeout
@@ -290,12 +291,12 @@ class Touchscreen {
     int idelta = 0;
     bool increment_datapage = false, increment_sel = false;
     Touchscreen() {}
-    void setup(LGFX* tft, I2C* i2c, int width, int height) {
+    void setup(LGFX* tft, I2C* i2c) {
         if (!display_enabled) return;
         _tft = tft;
         _i2c = i2c;
-        disp_size[HORZ] = width;
-        disp_size[VERT] = height;
+        disp_size[HORZ] = disp_width_pix;
+        disp_size[VERT] = disp_height_pix;
         captouch = (i2c->detected(i2c_touch));
         Serial.printf("Touchscreen.. %s panel\n", (captouch) ? "detected captouch" : "using resistive");
     }
@@ -337,7 +338,7 @@ class Touchscreen {
         if (touchSenseTimer.expireset()) {
             get_touch_debounced();
             if (nowtouch) {
-                kick_inactivity_timer(HUTouch);  // evidence of user activity
+                kick_inactivity_timer(HUTouch);  // register evidence of user activity to prevent going to sleep
                 for (int axis=0; axis<=1; axis++) {
                     // if (captouch) tft_touch[axis] = touch_read[axis];  // disp_width - 1 - touch_read[xx];
                     tft_touch[axis] = map(touch_read[axis], corners[captouch][axis][tsmin], corners[captouch][axis][tsmax], 0, disp_size[axis]);
@@ -345,28 +346,26 @@ class Touchscreen {
                     if (flip_the_screen) tft_touch[axis] = disp_size[axis] - tft_touch[axis];
                     if (!landed_coordinates_valid) {
                         landed[axis] = tft_touch[axis];
-                        if (axis) {
-                            landed_coordinates_valid = true;  // on 2nd time thru set this true
-                        }
+                        if (axis) landed_coordinates_valid = true;  // on 2nd time thru set this true
                     }
                 }
                 if (ui_context != ScreensaverUI) {
                     if (touchHoldTimer.elapsed() > (tedit_exponent + 1) * touchAccelTimer.timeout()) {
                         tedit_exponent = constrain(tedit_exponent+1, 0, tedit_exponent_max);
                     }
-                    tedit = (float)(1 << tedit_exponent); // Update the touch acceleration value
+                    tedit = (float)(1 << tedit_exponent); // update the touch acceleration value
                     process_ui(runmode);
                 }
             }
-            else {  // if not being touched
-                if (lasttouch) {
-                    landed_coordinates_valid = false;
-                    idelta = 0;  // Stop changing the value
-                    tedit_exponent = 0;
-                    tedit = (float)(1 << tedit_exponent); // Reset touch acceleration value to 1
+            else {                                        // if not being touched
+                if (lasttouch) {                          // if touch was only just now removed
+                    landed_coordinates_valid = false;     // indicate touch coordinates are stale
+                    idelta = 0;                           // stop changing the value
+                    tedit_exponent = 0;                   // reset acceleration factor
+                    tedit = (float)(1 << tedit_exponent); // reset touch acceleration value to 1
                 }
                 touchHoldTimer.reset();
-                touch_longpress_valid = true;
+                touch_longpress_valid = true;             // allow for new longpress events
             }
         }
         _i2c->pass_i2c_baton();

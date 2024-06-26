@@ -550,7 +550,7 @@ class BootMonitor {
     uint32_t codestatus_postmortem;
     std::string codestatuscard[NumCodeStatuses] = { "confused", "booting", "parked", "stopped", "driving" };
     Timer highWaterTimer{30000000};
-    TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4;
+    TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4; TaskHandle_t* task5;
     UBaseType_t highWaterBytes;
     bool was_panicked = false;
   public:
@@ -561,8 +561,8 @@ class BootMonitor {
         if (codestatus_last != codestatus) myprefs->putUInt("codestatus", codestatus);
         codestatus_last = codestatus;
     }
-    void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, int sec = -1) {
-        task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;
+    void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, TaskHandle_t* t5, int sec = -1) {
+        task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;  task5 = t5;
         if (sec >= 0) timeout_sec = sec;
         psram_setup();
         myprefs->begin("FlyByWire", false);
@@ -588,7 +588,7 @@ class BootMonitor {
         pet();
         if (codestatus == Booting) set_codestatus(Confused);  // we are not booting any more
         write_uptime();
-        print_high_water(task1, task2, task3, task4);
+        print_high_water(task1, task2, task3, task4, task5);
     }
   private:
     void bootcounter() {
@@ -619,7 +619,7 @@ class BootMonitor {
         }
         else ezread.squintf("under 1 min uptime\n");
     }
-    void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
+    void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4, xTaskHandle* t5) {
         if (print_task_stack_usage && highWaterTimer.expireset()) {
             ezread.squintf("mem minfree(B): heap:%d", xPortGetMinimumEverFreeHeapSize());            
             highWaterBytes = uxTaskGetStackHighWaterMark(*t1) * sizeof(StackType_t);
@@ -629,7 +629,9 @@ class BootMonitor {
             highWaterBytes = uxTaskGetStackHighWaterMark(*t3) * sizeof(StackType_t);
             ezread.squintf(", drawtask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t4) * sizeof(StackType_t);
-            ezread.squintf(", pushtask:%d\n", highWaterBytes);
+            ezread.squintf(", pushtask:%d", highWaterBytes);
+            highWaterBytes = uxTaskGetStackHighWaterMark(*t5) * sizeof(StackType_t);
+            ezread.squintf(", maftask:%d\n", highWaterBytes);
         }
     }
     void recover_status() {

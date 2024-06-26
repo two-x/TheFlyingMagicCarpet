@@ -6,7 +6,7 @@ void setup() {
     initialize_pins_and_console();
     semaphore_setup();
     i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);
-    touch.setup(&lcd, &i2c, disp_width_pix, disp_height_pix);
+    touch.setup(&lcd, &i2c);
     screen.setup();             // start up the screen asap so we can monitor the boot progress on the ezread console
     xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 2048, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);      // 2048 works, 1024 failed
     xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // 4096 works, 2048 failed
@@ -14,7 +14,7 @@ void setup() {
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 4096 works, 3072 failed,  priority is from 0 to 24=highest    
     set_board_defaults();       // set variables as appropriate if on a breadboard
     run_tests();
-    watchdog.setup(&temptask, &webtask, &drawTaskHandle, &pushTaskHandle);
+    watchdog.setup(&temptask, &webtask, &drawTaskHandle, &pushTaskHandle, &maftask);
     bootbutton.setup();
     hotrc.setup();
     pot.setup();
