@@ -715,6 +715,7 @@ class PanelAppManager {
     CollisionsSaver cSaver;
     Simulator* sim;
     Touchscreen* touch;
+    EZReadDrawer* ezdraw;
     int touchp[2], dispfps;
     int corner[2], sprsize[2];
     Timer fps_timer, fps_timer2{250000};
@@ -808,7 +809,6 @@ class PanelAppManager {
     }
     int touch_pt(int axis) { return touchp[axis]; }
   public:
-    EZReadDrawer* ezdraw;
     int sec, psec, _width, _height, _myfps = 0, frame_count = 0;
     bool anim_reset_request = false;
     PanelAppManager(EZReadDrawer* _ez) : ezdraw(_ez) {}
@@ -876,12 +876,14 @@ class PanelAppManager {
                 display_fps(spr);
             }
             if (!(bool)still_running) change_saver();
+            if (bootbutton.shortpress()) change_saver();
         }
         else if (ui_context == EZReadUI) ezdraw->update(spr);
         else if (ui_context == MuleChassisUI) {
             if (!mule_drawn) {
                 spr->fillSprite(BLK);
-                spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
+                spr->pushImageRotateZoom(vp.x + (vp.w - 145) / 2, vp.y + (vp.h - 74) / 2, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
+                // spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
                 mule_drawn = true;
             }
         }

@@ -18,7 +18,7 @@
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
 std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
-std::string top_menu_buttons[4]  = { " CAL ", "BASIC", " IGN ", "POWER" };  // Pad shorter names with spaces to center
+std::string top_menu_buttons[4]  = { " CAL ", "Fuel ", " IGN ", "POWER" };  // Pad shorter names with spaces to center
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 #define stEr "St\x88r"     // These defines are just a convenience to keep the below datapage strings
