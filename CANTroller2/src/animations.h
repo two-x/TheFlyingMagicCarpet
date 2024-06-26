@@ -3,7 +3,7 @@
 #include "tftsetup.h"
 #include "inputs.h"
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-static MomentaryButton bootbutton(boot_sw_pin, false);
+static BootButton bootbutton(boot_sw_pin);
 
 // #define touch_simbutton 38
 #define disp_apppanel_x 150
@@ -34,7 +34,6 @@ volatile int _loop_count;
 static constexpr int SHIFTSIZE = 8;
 volatile bool flip = 0;
 volatile int refresh_limit = 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
-volatile bool auto_saver_enabled = false;
 volatile int screen_refresh_time;
 // Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
 LGFX lcd;
@@ -715,6 +714,7 @@ class PanelAppManager {
     CollisionsSaver cSaver;
     Simulator* sim;
     Touchscreen* touch;
+    EZReadDrawer* ezdraw;
     int touchp[2], dispfps;
     int corner[2], sprsize[2];
     Timer fps_timer, fps_timer2{250000};
@@ -808,7 +808,6 @@ class PanelAppManager {
     }
     int touch_pt(int axis) { return touchp[axis]; }
   public:
-    EZReadDrawer* ezdraw;
     int sec, psec, _width, _height, _myfps = 0, frame_count = 0;
     bool anim_reset_request = false;
     PanelAppManager(EZReadDrawer* _ez) : ezdraw(_ez) {}
@@ -876,12 +875,13 @@ class PanelAppManager {
                 display_fps(spr);
             }
             if (!(bool)still_running) change_saver();
+            if (bootbutton.shortpress()) change_saver();
         }
         else if (ui_context == EZReadUI) ezdraw->update(spr);
         else if (ui_context == MuleChassisUI) {
             if (!mule_drawn) {
                 spr->fillSprite(BLK);
-                spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
+                spr->pushImageRotateZoom(vp.x + (vp.w - 145) / 2, vp.y + (vp.h - 74) / 2, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
                 mule_drawn = true;
             }
         }

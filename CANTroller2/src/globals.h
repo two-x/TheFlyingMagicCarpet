@@ -173,10 +173,11 @@ bool car_hasnt_moved = false;           // minor state variable for fly mode - W
 bool powering_up = false;               // minor state variable for lowpower mode
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
-bool basicmode_request = false;
-int autosaver_request = REQ_NA;
+bool in_basicmode = false;              // bool basicmode_request = false;
 int tunctrl = OFF, tunctrl_last = OFF;
 int datapage = PG_RUN;                  // which of the dataset pages is currently displayed and available to edit?
+int autosaver_request = REQ_NA;
+volatile bool auto_saver_enabled = false;
 volatile int sel = 0;                   // in the real time tuning UI, which of the editable values is selected. -1 for none 
 volatile int sel_last = 0;          
 volatile int sel_last_last = 0;          
@@ -233,26 +234,109 @@ void ema_filt(RAW_T _raw, FILT_T* _filt, float _alpha) {
     float _filt_f = static_cast<float>(*_filt);
     *_filt = static_cast<FILT_T>(ema_filt(_raw_f, _filt_f, _alpha));
 }
-// functions for changing values while respecting min and max constraints. used in tuner ui
-template <typename T>
-T adj_val(T variable, T modify, T low_limit, T high_limit) {
-    T oldval = variable;
-    if (std::is_same<T, int>::value) variable += (T)modify;
-    else if (std::is_same<T, float>::value) variable += (T)(modify * tuning_rate_pcps * (high_limit-low_limit) * loop_avg_us / (1000000 * 100.0));
-    return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
+
+// significant_place() is used by tune() functions below
+int significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
+    int place = 1;
+    if (value >= 1) { // int vallog = std::log10(value);  // Can be sped up
+        while (value >= 10) {
+            value /= 10.0;
+            place++;  // ex. 100.34 -> 3
+        }
+    }
+    else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
+        place = 0;
+        while (value < 1) {
+            value *= 10.0;
+            place--;  // ex. 0.00334 -> -3
+        }
+    }
+    return place;
 }
-bool adj_val(int *variable, int modify, int low_limit, int high_limit) { // sets an int reference to new val constrained to given range
-    int oldval = *variable;
-    *variable = adj_val(*variable, modify, low_limit, high_limit);
-    return (*variable != oldval);
+int significant_place(int value) {  // Returns the length in digits of a positive integer value
+    int place = 1;
+    while (value >= 10) {
+        value /= 10;
+        place++;
+    }
+    return place;
 }
-bool adj_val(float *variable, float modify, float low_limit, float high_limit) { // sets an int reference to new val constrained to given range
-    float oldval = *variable;
-    *variable = adj_val(*variable, modify, low_limit, high_limit);
-    return (*variable != oldval);
+// tune() : modifies a float/int/bool value according to idelta (a global int)  (this replaces adj_val() function)
+// feed in the original float or int value, get new edited accelerated and constrianed value modified by idelta
+// call w/o arguments to get a bool value determined by idelta.
+// alternately, give a pointer instead of a number to change the value directly instead of returning it (works w/ bools too)
+// note idelta must be already set to the desired integer edit value
+// numeric edits are scaled proportional to the magnitude of the current value. you can specify a minimum decimal place to scale to (keeps from being impossible to cross zero)
+// edit acceleration can be removed for ints if dropdown is set to true (for selection lists, etc.)
+#define disp_default_float_sig_dig 3  // Significant digits displayed for float values. Higher causes more screen draws
+int idelta = 0;
+float tune(float orig_val, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-3) {  // feed in float value, get new constrianed float val, modified by idelta scaled to the magnitude of the value
+    int sig_digits = disp_default_float_sig_dig;
+    int sig_place = std::max(significant_place(orig_val), min_sig_edit_place + sig_digits);
+    float scale = 1.0;  // needs to change if disp_default_float_sig_dig is modified !!
+    while (sig_place > sig_digits) {  
+        scale *= 10.0;
+        sig_place--;
+    }
+    while (sig_place < sig_digits) {
+        scale /= 10.0;
+        sig_place++;
+    }
+    float ret = orig_val + (float)(idelta) * scale;
+    if (std::isnan(min_val)) min_val = ret;
+    if (std::isnan(max_val)) max_val = ret;
+    idelta = 0;
+    return constrain(ret, min_val, max_val);  // Serial.printf("o:%lf id:%d sc:%lf, min:%lf, max:%lf ret:%lf\n", orig_val, idelta, scale, min_val, max_val, ret);
 }
-bool adj_bool(bool val, int delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0
-void adj_bool(bool *val, int delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
+int tune(int orig_val, int min_val=-1, int max_val=-1, bool dropdown=false) {  // feed in int value, get new constrianed int val, modified by idelta scaled to the magnitude of the value
+    int sig_place = significant_place(orig_val);
+    int scale = 1;
+    if (dropdown) idelta = constrain(idelta, -1, 1);
+    else while (sig_place > 4) {
+        scale *= 10;
+        sig_place--;
+    }
+    int ret = orig_val + idelta * scale;
+    if (max_val <= min_val) max_val = ret;
+    if (min_val == -1) min_val = ret;
+    idelta = 0;
+    return constrain(ret, min_val, max_val);
+}
+bool tune() {  // overloaded to return bool value. idelta == 0 or -1 return false and 1+ returns true.
+    bool ret = (idelta > 0);
+    idelta = 0;
+    return ret;
+}
+void tune(float* orig_ptr, float min_val=NAN, float max_val=NAN, int sig_digits=-1) {  // overloaded to directly modify float at given address
+    *orig_ptr = tune(*orig_ptr, min_val, max_val, sig_digits);
+}
+void tune(int* orig_ptr, int min_val=-1, int max_val=-1, bool dropdown=false) {  // overloaded to directly modify int at given address
+    *orig_ptr = tune(*orig_ptr, min_val, max_val, dropdown);
+}
+void tune(bool* orig_ptr) {  // overloaded to directly modify bool at given address
+    *orig_ptr = tune();
+}
+
+// // functions for changing values while respecting min and max constraints. used in tuner ui
+// template <typename T>
+// T adj_val(T variable, T modify, T low_limit, T high_limit) {
+//     T oldval = variable;
+//     if (std::is_same<T, int>::value) variable += (T)modify;
+//     else if (std::is_same<T, float>::value) variable += (T)(modify * tuning_rate_pcps * (high_limit-low_limit) * loop_avg_us / (1000000 * 100.0));
+//     return variable < low_limit ? low_limit : (variable > high_limit ? high_limit : variable);
+// }
+// bool adj_val(int *variable, int modify, int low_limit, int high_limit) { // sets an int reference to new val constrained to given range
+//     int oldval = *variable;
+//     *variable = adj_val(*variable, modify, low_limit, high_limit);
+//     return (*variable != oldval);
+// }
+// bool adj_val(float *variable, float modify, float low_limit, float high_limit) { // sets an int reference to new val constrained to given range
+//     float oldval = *variable;
+//     *variable = adj_val(*variable, modify, low_limit, high_limit);
+//     return (*variable != oldval);
+// }
+// bool adj_bool(bool val, int delta) { return delta != 0 ? delta > 0 : val; } // returns 1 on delta=1, 0 on delta=-1, or val on delta=0
+// void adj_bool(bool *val, int delta) { *val = adj_bool(*val, delta); }       // sets a bool reference to 1 on 1 delta or 0 on -1 delta
 
 template <typename T>
 T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {

@@ -281,11 +281,13 @@ class ServoMotor {
         lastoutput = pc[OUT];    
     }
   protected:
-    void rate_limiter() {
-        if (std::abs(max_out_change_rate_pcps) < float_zero) return;  // this feature is disabled by setting max rate to 0
+    bool rate_limiter() {  // returns true if change was made to the output
+        if (std::abs(max_out_change_rate_pcps) < float_zero) return false;  // this feature is disabled by setting max rate to 0
         float max_out_change_pc = max_out_change_rate_pcps * outchangetimer.elapsed() / 1000000.0;
         outchangetimer.reset();
+        float old_out = pc[OUT];
         pc[OUT] = constrain(pc[OUT], lastoutput - max_out_change_pc, lastoutput + max_out_change_pc);
+        return (std::abs(old_out - pc[OUT]) > float_zero);
     }
 };
 class JagMotor : public ServoMotor {

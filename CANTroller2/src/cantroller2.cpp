@@ -6,7 +6,7 @@ void setup() {
     initialize_pins_and_console();
     semaphore_setup();
     i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);
-    touch.setup(&lcd, &i2c, disp_width_pix, disp_height_pix);
+    touch.setup(&lcd, &i2c);
     screen.setup();             // start up the screen asap so we can monitor the boot progress on the ezread console
     xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 2048, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);      // 2048 works, 1024 failed
     xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // 4096 works, 2048 failed
@@ -14,7 +14,7 @@ void setup() {
     xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 4096 works, 3072 failed,  priority is from 0 to 24=highest    
     set_board_defaults();       // set variables as appropriate if on a breadboard
     run_tests();
-    watchdog.setup(&temptask, &webtask, &drawTaskHandle, &pushTaskHandle);
+    watchdog.setup(&temptask, &webtask, &drawTaskHandle, &pushTaskHandle, &maftask);
     bootbutton.setup();
     hotrc.setup();
     pot.setup();
@@ -49,7 +49,7 @@ void loop() {                  // arduino-style loop() is like main() but with a
     watchdog.update();         // pet the watchdog regularly to prevent reset
     ignition.update(run.mode); // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();       // read the builtin button
-    bootbutton_actions();      // temporary (?) functionality added for development convenience
+    // bootbutton_actions();      // temporary (?) functionality added for development convenience
     starter.update();          // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();          // read encoder input signals  // 20 us per loop
     pot.update();              // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
@@ -64,10 +64,10 @@ void loop() {                  // arduino-style loop() is like main() but with a
     gas.update();              // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
     brake.update();            // drive motor output based on controller inputs, feedback, run mode, etc.
     steer.update();            // drive motor output based on controller inputs, run mode, etc.
-    touch.update();            // read touchscreen input and do what it tells us to
+    touch.update(run.mode);    // read touchscreen input and do what it tells us to
     tuner.update(run.mode);    // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update(run.mode);     // notice any screwy conditions or suspicious shenanigans - consistent 200us
-    neo.update(run.mode);          // update/send neopixel colors 
+    neo.update(run.mode);      // update/send neopixel colors 
     lightbox.update(run.mode, speedo.val());  // communicate any relevant data to the lighting controller
     looptimer.update();                       // looptimer.mark("F");
     vTaskDelay(pdMS_TO_TICKS(1));             // momentarily pause continuous execution for multitasking purposes. delays the loop but in a good way

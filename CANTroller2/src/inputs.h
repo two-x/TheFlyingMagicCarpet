@@ -1,33 +1,81 @@
 #pragma once
 #include "FunctionalInterrupt.h"
-class MomentaryButton {
+
+class ToggleSwitch {
+  protected:
+    bool _assertion_level = LOW, _pin_val = HIGH, _val = LOW, _last = LOW;  // pin low means val high
+    int _pin;
+    sens attached_sensor = sens::none;
+    void readpin() {
+        _last = _val;
+        do {
+            _pin_val = digitalRead(_pin);   // !value because electrical signal is active low
+        } while (_pin_val == digitalRead(_pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+        _val = _assertion_level ? _pin_val : !_pin_val;
+        if (_last != _val) kick_inactivity_timer(HUTogSw);
+    }
+  public:
+    ToggleSwitch(int apin, sens _sens=sens::none, int pinconfig=INPUT_PULLUP) : _pin(apin), attached_sensor(_sens) {
+        set_pin(_pin, pinconfig);
+        _assertion_level = (pinconfig == INPUT_PULLUP) ? LOW : HIGH;
+    }
+    void read() {
+        if ((attached_sensor == sens::none) || !sim.simulating(attached_sensor)) readpin();
+    }
+    bool val() { return _val; }
+    bool pin_val() { return _pin_val; }
+    bool assertion_level() { return _assertion_level; }
+};
+
+// the basic mode switch puts either a pullup or pulldown onto the serial tx pin. so to read it we must turn off the serial console, read the pin, then turn the console back on
+// to limit interruptions in the console, we only read every few seconds, and only when not in a driving mode
+class BasicModeSwitch : public ToggleSwitch {
+  public:
+    BasicModeSwitch(int apin) : ToggleSwitch(apin, sens::basicsw, INPUT) { 
+        readpin();  // read the pin when we get instantiated
+        in_basicmode = _val;
+    }
+    void reread(int runmode) {
+        if (sim.simulating(attached_sensor)) return;
+        if (runmode == FLY || runmode == HOLD || runmode == CRUISE) return;
+        if (console_enabled) {
+            // delay(200);  // give time for serial to print everything in its buffer
+            Serial.end();  // close serial console to prevent crashes due to error printing
+        }
+        readpin();
+        in_basicmode = _val;
+        if (console_enabled) {
+            Serial.begin(115200);  // restart serial console to prevent crashes due to error printing
+            // delay(1500);  // note we will miss console messages for a bit surrounding a read, unless we add back these delays
+        }
+    }
+};
+static BasicModeSwitch basicsw(tx_basic_pin);
+
+class MomentarySwitch {
   private:
     int _sw_action = swNONE;  // Flag for encoder handler to know an encoder switch action needs to be handled
     bool _timer_active = false;  // Flag to prevent re-handling long presses if the sw is just kept down
     bool _suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
     bool activity_timer_keepalive = true;  // will activity on this switch be considered that the user is active?
-    Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
-    //  ---- tunable ----
     Timer _longPressTimer{300000};  // Used to time long button presses
   public:
-    int _sw_pin = -1;
-    bool now = false;  // Remember whether switch is being pressed
-    MomentaryButton() {}
-    MomentaryButton(int pin, bool _act_keepalive=true) : _sw_pin(pin), activity_timer_keepalive(_act_keepalive) {}
-    void set_pin(int pin) {
-        _sw_pin = pin;
-    }
+    int _pin = -1;
+    bool _val = false;  // Remember whether switch is being pressed
+    MomentarySwitch() {}
+    MomentarySwitch(int pin, bool _act_keepalive=true) : _pin(pin), activity_timer_keepalive(_act_keepalive) {}
+    void set_pin(int pin) { _pin = pin; }
     void update() {
         // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
         // Encoder handler routines should act whenever encoder_sw_action is swSHORT or swLONG, setting it back to
         // swNONE once handled. When handling press, if encoder_long_clicked is nonzero then press is a long press
-        bool myread = now;
+        bool myread = _val;
         do {
-            myread = digitalRead(_sw_pin);   // !value because electrical signal is active low
-        } while (myread != digitalRead(_sw_pin)); // some pins have a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+            myread = digitalRead(_pin);   // !value because electrical signal is active low
+        } while (myread != digitalRead(_pin)); // some pins have a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
 
         if (!myread) {  // if encoder sw is being pressed (switch is active low)
-            if (!now) {  // if the press just occurred
+            if (!_val) {  // if the press just occurred
                 if (activity_timer_keepalive) kick_inactivity_timer(HUMomDown);  // evidence of user activity
                 _longPressTimer.reset();  // start a press timer
                 _timer_active = true;  // flag to indicate timing for a possible long press
@@ -37,28 +85,22 @@ class MomentaryButton {
                 _timer_active = false;  // Keeps us from entering this logic again until after next sw release (to prevent repeated long presses)
                 _suppress_click = true;  // Prevents the switch release after a long press from causing a short press
             }
-            now = true;  // Remember a press is in effect
+            _val = true;  // Remember a press is in effect
         }
         else {  // if encoder sw is not being pressed
-            if (now) {
+            if (_val) {
                 if (activity_timer_keepalive) kick_inactivity_timer(HUMomUp);  // evidence of user activity
                 if(!_suppress_click) _sw_action = swSHORT;  // if the switch was just released, a short press occurred, which must be handled
             }
             _timer_active = false;  // Allows detection of next long press event
-            now = false;  // Remember press is not in effect
+            _val = false;  // Remember press is not in effect
             _suppress_click = false;  // End click suppression
         }
-    }
-    bool pressed() {
-        return now;
     }
     int press_event(bool autoreset = true) {
         int ret = _sw_action;
         if (autoreset) _sw_action = swNONE;
         return ret;
-    }
-    void press_reset() {
-        _sw_action = swNONE;
     }
     bool longpress(bool autoreset=true) {  // code may call this to check for long press and if so act upon it. Resets the long press if asserted
         bool ret = (_sw_action == swLONG);
@@ -70,12 +112,36 @@ class MomentaryButton {
         if (ret && autoreset) _sw_action = swNONE;
         return ret;
     }
-    void setup(int pin = -1) {
-        if (pin != -1) _sw_pin = pin;
-        pinMode(_sw_pin, INPUT_PULLUP);
+    void setup(int pin=-1) {
+        if (pin != -1) _pin = pin;
+        pinMode(_pin, INPUT_PULLUP);
     }
-    void setLongPressTimer(int t){
-        _longPressTimer.set(t);
+    void press_reset() { _sw_action = swNONE; }
+    bool val() { return _val; }
+    bool* ptr() { return &_val; }
+    void setLongPressTimer(int t) { _longPressTimer.set(t); }
+};
+class BootButton : public MomentarySwitch {
+  protected:
+    void actions() {  // temporary (?) functionality added for development convenience
+        if (longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
+        if (shortpress()) {
+            if (!auto_saver_enabled) {
+                sim.toggle();
+                pressure.print_config(true);
+                brkpos.print_config(true);
+                speedo.print_config(true);
+                tach.print_config(true);
+                mulebatt.print_config(true);
+                // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
+            }
+        }
+    }
+  public:
+    BootButton(int apin) : MomentarySwitch(apin, false) {}
+    void update() {
+        MomentarySwitch::update();
+        actions();
     }
 };
 class Encoder {
@@ -150,7 +216,7 @@ class Encoder {
     float _spinrate, _spinrate_max;  // , spinrate_accel_thresh;  // in Hz
     int _accel_factor = 1;
   public:
-    MomentaryButton button;
+    MomentarySwitch button;
     bool enc_a, val_a_isr = LOW;  // if initializing HIGH sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
     bool enc_b, val_b_isr = HIGH;
     float _accel_max = 25.0;  // Maximum acceleration factor    
@@ -231,9 +297,11 @@ class Encoder {
     }
     // void rezero() { _delta = 0; }  // Handling code needs to call to rezero after reading rotations
 };
-#define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
-#define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
-#define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
+#define touch_cells_v 5  // how many cells vertically
+#define touch_cells_h 6  // how many cells across
+#define touch_cell_v_pix disp_height_pix / touch_cells_v  // 48 // When touchscreen gridded as buttons, height of each button
+#define touch_cell_h_pix disp_width_pix / touch_cells_h  // 53 // When touchscreen gridded as buttons, width of each button
+#define touch_margin_h_pix (disp_width_pix - (touch_cell_h_pix * touch_cells_h)) / 2  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 #define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
 #define disp_tuning_lines 15  // Lines of dynamic variables/values in dataset pages 
 class Touchscreen {
@@ -252,24 +320,24 @@ class Touchscreen {
     int tlast_x, tlast_y;
     Timer touchHoldTimer{550000};  // Hold this long to count as a long press
     Timer touchAccelTimer{400000};
-    Timer rejectiontimer{25000};  // Won't allow a new press within this long after an old press (prevent accidental double clicks)
     Timer touchSenseTimer{15000};  // touch chip can't respond faster than some time period
     Timer keyRepeatTimer{250000};  // for editing parameters with only a few values, auto repeat is this slow
-    bool touchPrintEnabled = true, rejectiontimer_active = false;
+    bool touchPrintEnabled = true;
     unsigned long lastTouchPrintTime = 0;
     const unsigned long touchPrintInterval = 500; // Adjust this interval as needed (in milliseconds)
     enum touch_axis : int { xx, yy, zz };
     enum touch_lim : int { tsmin, tsmax };
     int trow, tcol, disp_size[2], touch_read[3], tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by subsequent dragging
-    uint16_t tbox;  // imagine screen divided into rows and columns as touch buttons. First byte encodes row, 2nd byte is column 
     // uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     // lcd.setTouch(touch_cal_data);
-    void get_touch_debounced() {  // this rejects short spurious touch or un-touch blips
+    void get_touch_debounced() {                 // this rejects short spurious touch or un-touch blips, (which were happening on the captouch panel due to being pressed against the box lid)
+        static bool rejectiontimer_active;
+        static Timer rejectiontimer;             // timer for required minimum duration of new presses, or removal of old presses
         uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
         bool touch_triggered = (count > 0);
         if (nowtouch != touch_triggered) {       // if the hardware returned opposite our current filtered state, get triggered
             if (!rejectiontimer_active) {        // if we're not already waiting for validity
-                rejectiontimer.reset();          // reset the timer. the touch must stay triggered through expiration for valid change in touch state
+                rejectiontimer.set(25000);       // reset the timer. the touch must stay triggered for this long (in us) for valid change in touch state
                 rejectiontimer_active = true;    // remember we are now triggered and waiting for validity
             }
             else if (rejectiontimer.expired()) { // levels have held through entire validity wait timeout
@@ -279,17 +347,18 @@ class Touchscreen {
         }
         else rejectiontimer_active = false;      // cancel our trigger, and be ready to retrigger
     }
+    void edit_up() { idelta = (int)tedit; }
+    void edit_dn() { idelta = -(int)tedit; }
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
-    int idelta = 0;
     bool increment_datapage = false, increment_sel = false;
     Touchscreen() {}
-    void setup(LGFX* tft, I2C* i2c, int width, int height) {
+    void setup(LGFX* tft, I2C* i2c) {
         if (!display_enabled) return;
         _tft = tft;
         _i2c = i2c;
-        disp_size[HORZ] = width;
-        disp_size[VERT] = height;
+        disp_size[HORZ] = disp_width_pix;
+        disp_size[VERT] = disp_height_pix;
         captouch = (i2c->detected(i2c_touch));
         Serial.printf("Touchscreen.. %s panel\n", (captouch) ? "detected captouch" : "using resistive");
     }
@@ -326,12 +395,12 @@ class Touchscreen {
         idelta = 0;
         return ret;
     }
-    void update() {
+    void update(int runmode) {
         if (captouch && _i2c->not_my_turn(i2c_touch)) return;
         if (touchSenseTimer.expireset()) {
             get_touch_debounced();
             if (nowtouch) {
-                kick_inactivity_timer(HUTouch);  // evidence of user activity
+                kick_inactivity_timer(HUTouch);  // register evidence of user activity to prevent going to sleep
                 for (int axis=0; axis<=1; axis++) {
                     // if (captouch) tft_touch[axis] = touch_read[axis];  // disp_width - 1 - touch_read[xx];
                     tft_touch[axis] = map(touch_read[axis], corners[captouch][axis][tsmin], corners[captouch][axis][tsmax], 0, disp_size[axis]);
@@ -339,36 +408,38 @@ class Touchscreen {
                     if (flip_the_screen) tft_touch[axis] = disp_size[axis] - tft_touch[axis];
                     if (!landed_coordinates_valid) {
                         landed[axis] = tft_touch[axis];
-                        if (axis) {
-                            landed_coordinates_valid = true;  // on 2nd time thru set this true
-                        }
+                        if (axis) landed_coordinates_valid = true;  // on 2nd time thru set this true
                     }
                 }
-                if (ui_context != ScreensaverUI) {
+                if (ui_context != ScreensaverUI) {  // unless currently doing a screensaver
                     if (touchHoldTimer.elapsed() > (tedit_exponent + 1) * touchAccelTimer.timeout()) {
                         tedit_exponent = constrain(tedit_exponent+1, 0, tedit_exponent_max);
                     }
-                    tedit = (float)(1 << tedit_exponent); // Update the touch acceleration value
-                    process_ui();
+                    tedit = (float)(1 << tedit_exponent); // update the touch acceleration value
+                    process_ui(runmode);
                 }
             }
-            else {  // if not being touched
-                if (lasttouch) {
-                    landed_coordinates_valid = false;
-                    idelta = 0;  // Stop changing the value
-                    tedit_exponent = 0;
-                    tedit = (float)(1 << tedit_exponent); // Reset touch acceleration value to 1
+            else {                                        // if not being touched
+                if (lasttouch) {                          // if touch was only just now removed
+                    landed_coordinates_valid = false;     // indicate touch coordinates are stale
+                    idelta = 0;                           // stop changing the value
+                    tedit_exponent = 0;                   // reset acceleration factor
+                    tedit = (float)(1 << tedit_exponent); // reset touch acceleration value to 1
                 }
                 touchHoldTimer.reset();
-                touch_longpress_valid = true;
+                touch_longpress_valid = true;             // allow for new longpress events
             }
         }
         _i2c->pass_i2c_baton();
         lasttouch = nowtouch;
     }
-    void process_ui() {
+    void process_ui(int runmode) {
         if (!nowtouch) return;
-        tbox = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5) << 4) | constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
+        bool menusafe = (runmode != FLY && runmode != HOLD && runmode != CRUISE);
+        
+        // tbox : section screen into 6x5 cells, with touched cell encoded as a hex byte with 1st nibble = col and 2nd nibble = row
+        uint8_t tbox = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, touch_cells_h - 1) << 4) | constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, touch_cells_v - 1);
+        
         // ezread.squintf("n%dl%dv%d q%02x tx:%3d ty:%3d e%d x%d\r", nowtouch, lasttouch, landed_coordinates_valid, tbox, tft_touch[0], tft_touch[1], tedit, (int)tedit_exponent);
         // std::cout << "n" << nowtouch << " e" << tedit << " x" << tedit_exponent << "\r";
         if (tbox == 0x00 && onrepeat()) increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
@@ -388,33 +459,34 @@ class Touchscreen {
         }
         else if (tbox == 0x02) {  // Pressed the increase value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tunctrl == EDIT) idelta = (int)tedit;  // If in edit mode, increase the value
+            else if (tunctrl == EDIT) edit_up();  // If in edit mode, increase the value
         }
         else if (tbox == 0x03) {  // Pressed the decrease value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tunctrl == EDIT) idelta = (int)(-tedit);  // If in edit mode, decrease the value
+            else if (tunctrl == EDIT) edit_dn();  // If in edit mode, decrease the value
         }
-        else if (tbox == 0x21) ezread.lookback(ezread.offset + tedit);
+        else if (tbox == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
+        else if (tbox == 0x21) { edit_up(); ezread.lookback(tune(ezread.offset, 0, ezread.bufferSize)); }
         else if (tbox == 0x22 && onrepeat()) ezread.lookback(ezread.offset + 1);
         else if (tbox == 0x23 && onrepeat()) ezread.lookback(ezread.offset - 1);
-        else if (tbox == 0x24) ezread.lookback(ezread.offset - tedit);
-        else if (tbox == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
-        else if (tbox == 0x20 && sim.enabled() && longpress()) calmode_request = true;
-        else if (tbox == 0x40 && sim.enabled() && longpress()) ignition.request(REQ_TOG);
-        else if (tbox == 0x50 && sim.enabled() && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
-        else if (tbox == 0x30 && sim.simulating(sens::basicsw) && longpress()) basicmode_request = true;
-        else if (tbox == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(tedit); // (+= 25) Pressed the increase brake pressure button
-        else if (tbox == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(-tedit); // (-= 25) Pressed the decrease brake pressure button
-        else if (tbox == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(0.01 * tedit); // (-= 25) Pressed the decrease brake pressure button
-        else if (tbox == 0x34 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(-0.01 * tedit); // (-= 25) Pressed the decrease brake pressure button
-        else if (tbox == 0x41 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.tedit(tedit);
-        else if (tbox == 0x42 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.tedit(-tedit);
-        else if (tbox == 0x43 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        else if (tbox == 0x44 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        else if (tbox == 0x51 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.tedit(tedit);
-        else if (tbox == 0x52 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.tedit(-tedit);
-        else if (tbox == 0x53 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-        else if (tbox == 0x54 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+        else if (tbox == 0x24) { edit_dn(); ezread.lookback(tune(ezread.offset, 0, ezread.bufferSize)); }
+        else if (tbox == 0x20 && menusafe && longpress()) calmode_request = true;
+        else if (tbox == 0x30 && menusafe && longpress()) fuelpump.request(REQ_TOG);
+        else if (tbox == 0x40 && menusafe && longpress()) ignition.request(REQ_TOG);
+        else if (tbox == 0x50 && menusafe && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
+        // else if (tbox == 0x30 && sim.simulating(sens::basicsw) && longpress()) basicmode_request = true;
+        else if (tbox == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) { edit_up(); pressure.set_si(tune(pressure.val(), pressure.opmin(), pressure.opmax())); }  // Pressed the increase brake pressure button
+        else if (tbox == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) { edit_dn(); pressure.set_si(tune(pressure.val(), pressure.opmin(), pressure.opmax())); }
+        else if (tbox == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) { edit_up(); brkpos.set_si(tune(brkpos.val(), brkpos.opmin(), brkpos.opmax())); }
+        else if (tbox == 0x34 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) { edit_dn(); brkpos.set_si(tune(brkpos.val(), brkpos.opmin(), brkpos.opmax())); }
+        else if (tbox == 0x41 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) { edit_up(); tach.set_si(tune(tach.val(), tach.opmin(), tach.opmax())); }
+        else if (tbox == 0x42 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) { edit_dn(); tach.set_si(tune(tach.val(), tach.opmin(), tach.opmax())); }
+        else if (tbox == 0x43 && sim.simulating(sens::joy)) { edit_up(); tune(&hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]); }
+        else if (tbox == 0x44 && sim.simulating(sens::joy)) { edit_dn(); tune(&hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]); }
+        else if (tbox == 0x51 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) { edit_up(); speedo.set_si(tune(speedo.val(), speedo.opmin(), speedo.opmax())); }
+        else if (tbox == 0x52 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) { edit_dn(); speedo.set_si(tune(speedo.val(), speedo.opmin(), speedo.opmax())); }
+        else if (tbox == 0x53 && sim.simulating(sens::joy)) { edit_up(); tune(&hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]); }
+        else if (tbox == 0x54 && sim.simulating(sens::joy)) { edit_dn(); tune(&hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]); }
     }
     void enableTouchPrint(bool enable) {
         touchPrintEnabled = enable;
