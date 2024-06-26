@@ -231,9 +231,11 @@ class Encoder {
     }
     // void rezero() { _delta = 0; }  // Handling code needs to call to rezero after reading rotations
 };
-#define touch_cell_v_pix 48  // When touchscreen gridded as buttons, height of each button
-#define touch_cell_h_pix 53  // When touchscreen gridded as buttons, width of each button
-#define touch_margin_h_pix 1  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
+#define touch_cells_v 5  // how many cells vertically
+#define touch_cells_h 6  // how many cells across
+#define touch_cell_v_pix disp_height_pix / touch_cells_v  // 48 // When touchscreen gridded as buttons, height of each button
+#define touch_cell_h_pix disp_width_pix / touch_cells_h  // 53 // When touchscreen gridded as buttons, width of each button
+#define touch_margin_h_pix (disp_width_pix - (touch_cell_h_pix * touch_cells_h)) / 2  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 #define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
 #define disp_tuning_lines 15  // Lines of dynamic variables/values in dataset pages 
 class Touchscreen {
@@ -261,7 +263,6 @@ class Touchscreen {
     enum touch_axis : int { xx, yy, zz };
     enum touch_lim : int { tsmin, tsmax };
     int trow, tcol, disp_size[2], touch_read[3], tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by subsequent dragging
-    uint16_t tbox;  // imagine screen divided into rows and columns as touch buttons. First byte encodes row, 2nd byte is column 
     // uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // Got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     // lcd.setTouch(touch_cal_data);
     void get_touch_debounced() {  // this rejects short spurious touch or un-touch blips
@@ -326,7 +327,7 @@ class Touchscreen {
         idelta = 0;
         return ret;
     }
-    void update() {
+    void update(int runmode) {
         if (captouch && _i2c->not_my_turn(i2c_touch)) return;
         if (touchSenseTimer.expireset()) {
             get_touch_debounced();
@@ -349,7 +350,7 @@ class Touchscreen {
                         tedit_exponent = constrain(tedit_exponent+1, 0, tedit_exponent_max);
                     }
                     tedit = (float)(1 << tedit_exponent); // Update the touch acceleration value
-                    process_ui();
+                    process_ui(runmode);
                 }
             }
             else {  // if not being touched
@@ -366,9 +367,13 @@ class Touchscreen {
         _i2c->pass_i2c_baton();
         lasttouch = nowtouch;
     }
-    void process_ui() {
+    void process_ui(int runmode) {
         if (!nowtouch) return;
-        tbox = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5) << 4) | constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
+        bool menusafe = (runmode != FLY && runmode != HOLD && runmode != CRUISE);
+        
+        // tbox : section screen into 6x5 cells, with touched cell encoded as a hex byte with 1st nibble = col and 2nd nibble = row
+        uint8_t tbox = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, touch_cells_h - 1) << 4) | constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, touch_cells_v - 1);
+
         // ezread.squintf("n%dl%dv%d q%02x tx:%3d ty:%3d e%d x%d\r", nowtouch, lasttouch, landed_coordinates_valid, tbox, tft_touch[0], tft_touch[1], tedit, (int)tedit_exponent);
         // std::cout << "n" << nowtouch << " e" << tedit << " x" << tedit_exponent << "\r";
         if (tbox == 0x00 && onrepeat()) increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
@@ -399,10 +404,10 @@ class Touchscreen {
         else if (tbox == 0x23 && onrepeat()) ezread.lookback(ezread.offset - 1);
         else if (tbox == 0x24) ezread.lookback(ezread.offset - tedit);
         else if (tbox == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
-        else if (tbox == 0x20 && sim.enabled() && longpress()) calmode_request = true;
-        else if (tbox == 0x40 && sim.enabled() && longpress()) ignition.request(REQ_TOG);
-        else if (tbox == 0x50 && sim.enabled() && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
-        else if (tbox == 0x30 && sim.simulating(sens::basicsw) && longpress()) in_basicmode = !in_basicmode;
+        else if (tbox == 0x20 && menusafe && longpress()) calmode_request = true;
+        else if (tbox == 0x30 && menusafe && longpress()) fuelpump.request(REQ_TOG);
+        else if (tbox == 0x40 && menusafe && longpress()) ignition.request(REQ_TOG);
+        else if (tbox == 0x50 && menusafe && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
         else if (tbox == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(tedit); // (+= 25) Pressed the increase brake pressure button
         else if (tbox == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(-tedit); // (-= 25) Pressed the decrease brake pressure button
         else if (tbox == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(0.01 * tedit); // (-= 25) Pressed the decrease brake pressure button

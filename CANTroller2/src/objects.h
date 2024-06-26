@@ -306,6 +306,7 @@ class Starter {
 static Ignition ignition(ignition_pin);
 static Starter starter(starter_pin);
 
+
 class FuelPump {  // drives power to the fuel pump when the engine is turning
   public:
     float off_v = 0.0;
@@ -314,8 +315,9 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     float volts = 0.0;
     float turnon_rpm = 50.0;
     float duty, pwm_period = 25000;  // used for software pwm timing
-    int adc = 0;
+    int adc = 0, now_req = REQ_NA;
     bool status = LOW, status_inverse = HIGH, pump_last = LOW, sw_pwm_out_now = LOW;
+    void request(int req) { now_req = req; }  // squintf("r:%d n:%d\n", req, now_req);}
   private:
     bool variable_speed_output = false;  // this interferes with the gas servo pwm when enabled
     bool use_software_pwm = true;  // avoid using hardware resources for variable output, we can fake it with a timer
@@ -342,22 +344,22 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
   public:
     FuelPump(int _pin) : pin(_pin) {}
     void update() {
+        static bool autoreq;  // true if engine conditions warrant fuel pump to turn on
+        static bool autoreq_last;  // true if engine conditions warrant fuel pump to turn on
         if (!fuelpump_supported || !captouch) return;
         float tachnow = tach.val();
         pump_last = status;
-        if (starter.motor || (ignition.signal && (tachnow >= turnon_rpm))) {
-            volts = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], on_min_v, on_max_v);
-            volts = constrain(volts, on_min_v, on_max_v);
-            adc = map((int)volts, 0, (int)on_max_v, 0, 255);
-            duty = 100.0 * volts / on_max_v;
-            status = HIGH;
-        }
-        else {
-            volts = off_v;
-            adc = 0;
-            duty = 0.0;
-            status = LOW;
-        }
+        if (now_req == REQ_TOG) now_req = status ? REQ_NA : REQ_ON;
+        autoreq_last = autoreq;
+        autoreq = starter.motor || (ignition.signal && (tachnow >= turnon_rpm));
+        if (autoreq && !autoreq_last) now_req = REQ_NA;  // if engine needs on/off, previous manual requests are canceled
+        if (now_req == REQ_ON) volts = on_max_v;  // if manually turned on
+        else if (autoreq) volts = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], on_min_v, on_max_v);  // if engine needs fuel
+        else volts = off_v;  // turn off fuel
+        volts = constrain(volts, off_v, on_max_v);
+        adc = map((int)volts, 0, (int)on_max_v, 0, 255);
+        duty = 100.0 * volts / on_max_v;
+        status = (volts >= on_min_v) ? HIGH : LOW;
         status_inverse = !status;  // for idiot light
         writepin();
     }
