@@ -18,7 +18,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void setup() { mode = watchdog.boot_to_runmode; }  // we don't really need to set up anything, unless we need to recover to a specific runmode after crash
     int mode_logic() {
         if (mode != LOWPOWER && mode != CAL) {
-            if (basicsw.val) mode = BASIC;  // if basicmode switch on --> Basic Mode
+            if (in_basicmode) mode = BASIC;  // basicsw.val() if basicmode switch on --> Basic Mode
             else if (!ignition.signal) mode = STANDBY;
             else if (tach.stopped()) mode = STALL;  // otherwise if engine not running --> Stall Mode
         }
@@ -60,12 +60,12 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             gas.setmode(ParkMotor);  // Upon entering basic mode, the brake and gas actuators need to be parked out of the way so the pedals can be used.
             brake.setmode(ParkMotor);
             steer.setmode(OpenLoop);
-            powering_up = basicmode_request = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from lowpower mode
+            powering_up = false;  // basicmode_request =  to cover unlikely edge case where basic mode switch is enabled during wakeup from lowpower mode
             watchdog.set_codestatus(Parked);
         }
         if (hotrc.sw_event(CH4) && !ignition.signal) mode = LOWPOWER;
-        if (!basicsw.val && !tach.stopped()) mode = speedo.stopped() ? HOLD : FLY;  // If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
-        if (basicmode_request) mode = STANDBY;  // if fully shut down and cal mode requested, go to cal mode
+        if (!in_basicmode && !tach.stopped()) mode = speedo.stopped() ? HOLD : FLY;  // basicsw.val()  If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
+        // if (basicmode_request) mode = STANDBY;  // if fully shut down and cal mode requested, go to cal mode
     }
     void run_lowpowerMode() {  // turns off syspower and just idles. sleep_request are handled here or in standby mode below
         if (we_just_switched_modes) {
@@ -81,13 +81,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             powering_up = true;
             autosaver_request = REQ_OFF;
         }
-        if (powering_up && pwrup_timer.expired()) mode = (basicsw.val) ? BASIC : STANDBY;  // finish powering up . display->all_dirty();  // tells display to redraw everything. display must set back to false
+        if (powering_up && pwrup_timer.expired()) mode = (in_basicmode) ? BASIC : STANDBY;  // basicsw.val()  finish powering up . display->all_dirty();  // tells display to redraw everything. display must set back to false
         sleep_request = REQ_NA;
     }
     void run_standbyMode() { // In standby mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
             standby_incomplete = !powering_up;   // if waking up from sleep standby is already complete
-            powering_up = calmode_request = basicmode_request = autosaver_request = REQ_OFF;
+            powering_up = calmode_request = autosaver_request = REQ_OFF;  // = basicmode_request 
             gas.setmode(ParkMotor);                 // carburetor parked 
             brake.setmode(AutoStop);                // if car is moving begin autostopping
             standby_timer.reset();
@@ -106,7 +106,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             watchdog.set_codestatus(Parked);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
             if (hotrc.sw_event(CH4) || (user_inactivity_timer.elapsed() > lowpower_delay) || sleep_request == REQ_TOG || sleep_request == REQ_ON) mode = LOWPOWER;
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
-            if (basicmode_request) mode = BASIC;  // if fully shut down and basic mode requested, go to basic mode
+            // if (basicmode_request) mode = BASIC;  // if fully shut down and basic mode requested, go to basic mode
             if (user_inactivity_timer.elapsed() > screensaver_delay) autosaver_request = REQ_ON;
         }
         if ((speedo.stopped() || allow_rolling_start) && ignition.signal && !panicstop && !tach.stopped()) mode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically

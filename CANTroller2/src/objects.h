@@ -166,6 +166,7 @@ class BasicModeSwitch : public ToggleSwitch {
     void read() {  // ensure console is not active when calling this
         set_pin(pin, INPUT);
         val = digitalRead(pin);
+        in_basicmode = val;
         // readswpin();
         if (last != val) kick_inactivity_timer(HUTogSw);
     }
