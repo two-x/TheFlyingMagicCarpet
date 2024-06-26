@@ -231,11 +231,14 @@ class Encoder {
     }
     // void rezero() { _delta = 0; }  // Handling code needs to call to rezero after reading rotations
 };
-#define touch_cells_v 5  // how many cells vertically
-#define touch_cells_h 6  // how many cells across
-#define touch_cell_v_pix disp_height_pix / touch_cells_v  // 48 // When touchscreen gridded as buttons, height of each button
-#define touch_cell_h_pix disp_width_pix / touch_cells_h  // 53 // When touchscreen gridded as buttons, width of each button
-#define touch_margin_h_pix (disp_width_pix - (touch_cell_h_pix * touch_cells_h)) / 2  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
+// #define touch_cells_v 5  // how many cells vertically
+// #define touch_cells_h 6  // how many cells across
+// #define touch_cell_v_pix disp_height_pix / touch_cells_v  // 48 // When touchscreen gridded as buttons, height of each button
+// #define touch_cell_h_pix disp_width_pix / touch_cells_h  // 53 // When touchscreen gridded as buttons, width of each button
+// #define touch_margin_h_pix (disp_width_pix - (touch_cell_h_pix * touch_cells_h)) / 2  // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
+#define touch_cell_v_pix 48  // disp_height_pix / touch_cells_v  // 48 // When touchscreen gridded as buttons, height of each button
+#define touch_cell_h_pix 53  // disp_width_pix / touch_cells_h  // 53 // When touchscreen gridded as buttons, width of each button
+#define touch_margin_h_pix 1  // (disp_width_pix - (touch_cell_h_pix * touch_cells_h)) / 2  // 1 // On horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 #define touch_reticle_offset 50  // Distance of center of each reticle to nearest screen edge
 #define disp_tuning_lines 15  // Lines of dynamic variables/values in dataset pages 
 class Touchscreen {
@@ -280,6 +283,8 @@ class Touchscreen {
         }
         else rejectiontimer_active = false;      // cancel our trigger, and be ready to retrigger
     }
+    void edit_up() { idelta = (int)tedit; }
+    void edit_dn() { idelta = -(int)tedit; }
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
     int idelta = 0;
@@ -372,8 +377,8 @@ class Touchscreen {
         bool menusafe = (runmode != FLY && runmode != HOLD && runmode != CRUISE);
         
         // tbox : section screen into 6x5 cells, with touched cell encoded as a hex byte with 1st nibble = col and 2nd nibble = row
-        uint8_t tbox = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, touch_cells_h - 1) << 4) | constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, touch_cells_v - 1);
-
+        uint16_t tbox = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5) << 4) | constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
+        
         // ezread.squintf("n%dl%dv%d q%02x tx:%3d ty:%3d e%d x%d\r", nowtouch, lasttouch, landed_coordinates_valid, tbox, tft_touch[0], tft_touch[1], tedit, (int)tedit_exponent);
         // std::cout << "n" << nowtouch << " e" << tedit << " x" << tedit_exponent << "\r";
         if (tbox == 0x00 && onrepeat()) increment_datapage = true;  // Displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
@@ -393,33 +398,34 @@ class Touchscreen {
         }
         else if (tbox == 0x02) {  // Pressed the increase value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tunctrl == EDIT) idelta = (int)tedit;  // If in edit mode, increase the value
+            else if (tunctrl == EDIT) edit_up();  // If in edit mode, increase the value
         }
         else if (tbox == 0x03) {  // Pressed the decrease value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;  // If just entering edit mode, don't change the value yet
-            else if (tunctrl == EDIT) idelta = (int)(-tedit);  // If in edit mode, decrease the value
+            else if (tunctrl == EDIT) edit_dn();  // If in edit mode, decrease the value
         }
-        else if (tbox == 0x21) ezread.lookback(ezread.offset + tedit);
+        else if (tbox == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
+        else if (tbox == 0x21) { edit_up(); ezread.lookback(tune(ezread.offset, 0, ezread.bufferSize)); }
         else if (tbox == 0x22 && onrepeat()) ezread.lookback(ezread.offset + 1);
         else if (tbox == 0x23 && onrepeat()) ezread.lookback(ezread.offset - 1);
-        else if (tbox == 0x24) ezread.lookback(ezread.offset - tedit);
-        else if (tbox == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
+        else if (tbox == 0x24) { edit_dn(); ezread.lookback(tune(ezread.offset, 0, ezread.bufferSize)); }
         else if (tbox == 0x20 && menusafe && longpress()) calmode_request = true;
         else if (tbox == 0x30 && menusafe && longpress()) fuelpump.request(REQ_TOG);
         else if (tbox == 0x40 && menusafe && longpress()) ignition.request(REQ_TOG);
         else if (tbox == 0x50 && menusafe && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
-        else if (tbox == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(tedit); // (+= 25) Pressed the increase brake pressure button
-        else if (tbox == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.tedit(-tedit); // (-= 25) Pressed the decrease brake pressure button
-        else if (tbox == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(0.01 * tedit); // (-= 25) Pressed the decrease brake pressure button
-        else if (tbox == 0x34 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.tedit(-0.01 * tedit); // (-= 25) Pressed the decrease brake pressure button
-        else if (tbox == 0x41 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.tedit(tedit);
-        else if (tbox == 0x42 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.tedit(-tedit);
-        else if (tbox == 0x43 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        else if (tbox == 0x44 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[VERT][FILT], -tedit, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        else if (tbox == 0x51 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.tedit(tedit);
-        else if (tbox == 0x52 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.tedit(-tedit);
-        else if (tbox == 0x53 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-        else if (tbox == 0x54 && sim.simulating(sens::joy)) adj_val(&hotrc.pc[HORZ][FILT], -tedit, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+        // else if (tbox == 0x30 && sim.simulating(sens::basicsw) && longpress()) basicmode_request = true;
+        else if (tbox == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) { edit_up(); pressure.set_si(tune(pressure.val(), pressure.opmin(), pressure.opmax())); }  // Pressed the increase brake pressure button
+        else if (tbox == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) { edit_dn(); pressure.set_si(tune(pressure.val(), pressure.opmin(), pressure.opmax())); }
+        else if (tbox == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) { edit_up(); brkpos.set_si(tune(brkpos.val(), brkpos.opmin(), brkpos.opmax())); }
+        else if (tbox == 0x34 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) { edit_dn(); brkpos.set_si(tune(brkpos.val(), brkpos.opmin(), brkpos.opmax())); }
+        else if (tbox == 0x41 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) { edit_up(); tach.set_si(tune(tach.val(), tach.opmin(), tach.opmax())); }
+        else if (tbox == 0x42 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) { edit_dn(); tach.set_si(tune(tach.val(), tach.opmin(), tach.opmax())); }
+        else if (tbox == 0x43 && sim.simulating(sens::joy)) { edit_up(); tune(&hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]); }
+        else if (tbox == 0x44 && sim.simulating(sens::joy)) { edit_dn(); tune(&hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]); }
+        else if (tbox == 0x51 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) { edit_up(); speedo.set_si(tune(speedo.val(), speedo.opmin(), speedo.opmax())); }
+        else if (tbox == 0x52 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) { edit_dn(); speedo.set_si(tune(speedo.val(), speedo.opmin(), speedo.opmax())); }
+        else if (tbox == 0x53 && sim.simulating(sens::joy)) { edit_up(); tune(&hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]); }
+        else if (tbox == 0x54 && sim.simulating(sens::joy)) { edit_dn(); tune(&hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]); }
     }
     void enableTouchPrint(bool enable) {
         touchPrintEnabled = enable;

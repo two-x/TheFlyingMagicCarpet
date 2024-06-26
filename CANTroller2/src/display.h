@@ -274,31 +274,6 @@ class Display {
         if (halvings == 1) return ((color & 0xf000) | (color & 0x7c0) | (color & 0x1e)) >> 1;
         else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
     }
-    int significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
-        int place = 1;
-        if (value >= 1) { // int vallog = std::log10(value);  // Can be sped up
-            while (value >= 10) {
-                value /= 10.0;
-                place++;  // ex. 100.34 -> 3
-            }
-        }
-        else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
-            place = 0;
-            while (value < 1) {
-                value *= 10.0;
-                place--;  // ex. 0.00334 -> -3
-            }
-        }
-        return place;
-    }
-    int significant_place(int value) {  // Returns the length in digits of a positive integer value
-        int place = 1;
-        while (value >= 10) {
-            value /= 10;
-            place++;
-        }
-        return place;
-    }
   private:
     void drawWideLine(int x0, int y0, int x1, int y1, float wd) {  // took from http://members.chello.at/~easyfilter/bresenham.html
         int dx = std::abs(x1-x0), sx = x0 < x1 ? 1 : -1; 
@@ -1025,59 +1000,11 @@ class Tuner {
     int datapage_last;
   public:
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
-    int idelta = 0, idelta_encoder = 0;  // idelta is integer edit value accelerated, and is used for all tuning edits regardless if int float or bool
+    int idelta_encoder = 0;  // idelta is integer edit value accelerated, and is used for all tuning edits regardless if int float or bool
     int rdelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
     void update(int rmode) {
         process_inputs();
         edit_values(rmode);
-    }
-    // feed in the original float or int value, get new edited accelerated and constrianed value modified by idelta
-    // call w/o arguments to get a bool value determined by idelta.
-    // alternately, give a pointer instead of a number to change the value directly instead of returning it (works w/ bools too)
-    // note idelta must be already set to the desired integer edit value
-    // numeric edits are scaled proportional to the magnitude of the current value. you can specify a minimum decimal place to scale to (keeps from being impossible to cross zero)
-    // edit acceleration can be removed for ints if dropdown is set to true (for selection lists, etc.)
-    float tune(float orig_val, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-3) {
-        int sig_digits = disp_default_float_sig_dig;
-        int sig_place = std::max(screen->significant_place(orig_val), min_sig_edit_place + sig_digits);
-        float scale = 1.0;  // needs to change if disp_default_float_sig_dig is modified !!
-        while (sig_place > sig_digits) {  
-            scale *= 10.0;
-            sig_place--;
-        }
-        while (sig_place < sig_digits) {
-            scale /= 10.0;
-            sig_place++;
-        }
-        float ret = orig_val + (float)(idelta) * scale;
-        if (std::isnan(min_val)) min_val = ret;
-        if (std::isnan(max_val)) max_val = ret;
-        return constrain(ret, min_val, max_val);  // Serial.printf("o:%lf id:%d sc:%lf, min:%lf, max:%lf ret:%lf\n", orig_val, idelta, scale, min_val, max_val, ret);
-    }
-    void tune(float* orig_ptr, float min_val=NAN, float max_val=NAN, int sig_digits=-1) {
-        *orig_ptr = tune(*orig_ptr, min_val, max_val, sig_digits);
-    }
-    int tune(int orig_val, int min_val=-1, int max_val=-1, bool dropdown=false) {  // feed in int value and edit amount, get new edited accelerated and constrianed int val
-        int sig_place = screen->significant_place(orig_val);
-        int scale = 1;
-        if (dropdown) idelta = constrain(idelta, -1, 1);
-        else while (sig_place > 4) {
-            scale *= 10;
-            sig_place--;
-        }
-        int ret = orig_val + idelta * scale;
-        if (max_val <= min_val) max_val = ret;
-        if (min_val == -1) min_val = ret;
-        return constrain(ret, min_val, max_val);
-    }
-    void tune(int* orig_ptr, int min_val=-1, int max_val=-1, bool dropdown=false) {
-        *orig_ptr = tune(*orig_ptr, min_val, max_val, dropdown);
-    }
-    bool tune() {  // feed 0 or -1 for false, or 1 or more for true.
-        return (idelta > 0);
-    }
-    void tune(bool* orig_ptr) {
-        *orig_ptr = tune();
     }
   private:
     void process_inputs() {
