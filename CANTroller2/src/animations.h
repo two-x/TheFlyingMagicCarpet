@@ -244,15 +244,13 @@ class CollisionsSaver {
         // screenRefreshTimer.set(refresh_limit);
         _is_running = true;
     }
-    void meander_gravity() {
+    void meandering_gravity() {
         if (gravtimer.expired()) {
-            float radius = 15.0, angleIncrement = 10.0 * M_PI / 180.0; // Increment in radians
-            float cosInc = 0.985, sinInc = 0.174; // precomputed trig values
-            static float x = radius, y = 0.0, mag = 0.5;
-            // std::cout << "x: " << x << ", y: " << y << std::endl;
+            float radius = 25.0, cosinc = 0.985, sininc = 0.174; // precomputed trig values  // angleinc = 10.0 * M_PI / 180.0; // Increment in radians
+            static float x = 0, y = radius, mag = 0.5;
             mag = constrain((float)(mag + 0.01 * (float)(rn(70) - 35)), 0.0f, 1.0f);
-            x = x * cosInc - y * sinInc; // apply rotation and get new coordinates
-            y = x * sinInc + y * cosInc;
+            x = x * cosinc - y * sininc; // apply rotation and get new coordinates
+            y = x * sininc + y * cosinc;
             ball_gravity_x = (int)(x * mag);  // ball_gravity_x = constrain((ball_gravity_x + rn(6) - 3), -18, 28);
             ball_gravity_y = (int)(y * mag);  // ball_gravity_y = constrain((ball_gravity_y + rn(6) - 3), -18, 28);
             gravtimer.set(500000 * (3 + rn(3)));
@@ -262,7 +260,7 @@ class CollisionsSaver {
         sprite = _nowspr;
         vp = _vp;
         bool round_over = mainfunc();
-        meander_gravity();
+        meandering_gravity();
         drawfunc();
         return !round_over;  // not done yet
     }
@@ -274,7 +272,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     viewport* vp;
     int wormpos[2] = {0, 0}, wormvel[2] = {0, 0}, wormsign[2] = {1, 1}, wormd[2] = {20, 20};
     int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128, boxsize[2], mindot = 4, adddot = 4;
-    int sprsize[2], rotate = -1, scaler = 1, season = 0, last_season = 0, procession = 3, last_procession = 3, numseasons = 4;
+    int sprsize[2], rotate = -1, scaler = 1, season = rn(4), last_season = 0, procession = rn(10), last_procession = 3, numseasons = 4;
     int point[2], plast[2], er[2], erpos_max[2], wormstripe = 2;
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, now = 0;
@@ -335,6 +333,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             last_procession = procession;
             procession += season;
             procession %= 10;
+            // Serial.printf("p:%d s:%d\n", procession, season);
         }
         drawsprite();
         return shapes_done;
@@ -413,7 +412,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             spotrate = (int)(200 + rn(800));
             extraeffectstimer.set(500000 * (1 + rn(4)));
         }
-        int d = 6 + rn(45);
+        int d = 3 + rn(12 + (procession - 4) * 2);
         uint8_t sat, brt, c, c2;
         uint16_t hue;
         uint16_t hue_common = hue = spothue + 32768 * rn(2) + rn(1500);
@@ -464,8 +463,8 @@ class EraserSaver {  // draws colorful patterns to exercise
         else if (!punchdelay) punches_left = 0;
         oldproc = procession;
         if (season != last_season) {
-            mindot = constrain(mindot + rn(4) - 2, 2, 11);
-            adddot = constrain(adddot + rn(4) - 2, 2, 16 - mindot);
+            mindot = constrain(mindot + rn(4) - 2, 1, 8);
+            adddot = constrain(adddot + rn(4) - 2, 2, 11 - mindot);
         }
         int squarechance = constrain(procession - 2, 0, 5);
         if (squarechance == 5) squarechance = 1;
@@ -475,7 +474,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 extraeffectstimer.set(30000 * (9 - punches_left--));
                 int r = scaler * (25 + rn(15));
                 c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
-                if (squarechance) sprite->fillRect(rn(vp->w) + vp->x - r/2, rn(vp->h) + vp->y - r/2, r, r, c); 
+                if (squarechance) sprite->fillRect(rn(vp->w) + vp->x - r/2, rn(vp->h) + vp->y - r/2, r * 2, r * 2, c); 
                 else sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, r, c);  // hue_to_rgb16(rn(255)), BLK);
                 if (punches_left <= 0) {
                     has_eraser = was_eraser;
@@ -486,7 +485,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         else for (int star = 0; star < (13 - adddot/2); star++) {
             int r = scaler * (mindot + rn(adddot));
             c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
-            if (squarechance) sprite->fillRect(rn(vp->w) + vp->x - r/2, rn(vp->h) + vp->y - r/2, r, r, c);  // hue_to_rgb16(rn(255)), BLK);     
+            if (squarechance) sprite->fillRect(rn(vp->w) + vp->x - r/2, rn(vp->h) + vp->y - r/2, r * 2, r * 2, c);  // hue_to_rgb16(rn(255)), BLK);     
             else sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, r, c);  // hue_to_rgb16(rn(255)), BLK);     
         }
     }
@@ -522,7 +521,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
     }
     void run_ascii() {
-        static float offset[2];
+        // static float offset[2];
         static int final[2];
         uint16_t hue;
         uint8_t sat;
@@ -530,8 +529,8 @@ class EraserSaver {  // draws colorful patterns to exercise
         sprite->setTextDatum(textdatum_t::middle_center);
         sprite->setFont(&fonts::Font4);
         for (int star = 0; star < 4; star++) {
-            point[HORZ] = rn(vp->w);
-            point[VERT] = rn(vp->h);
+            final[HORZ] = point[HORZ] = rn(vp->w);
+            final[VERT] = point[VERT] = rn(vp->h);
             if (procession > 4) {
                 hue = (vp->h * (int)(season > 1)) - point[VERT] * 65535 / vp->h;
                 sat = (vp->w * (int)(season == 1 || season == 3)) - point[HORZ] * 255 / vp->w;
@@ -540,17 +539,18 @@ class EraserSaver {  // draws colorful patterns to exercise
                 hue = (vp->w * (int)(season == 0 || season == 2)) - point[HORZ] * 65535 / vp->w;
                 sat = (vp->h * (int)(season < 2)) - point[VERT] * 255 / vp->h;
             }
-            for (int axis=HORZ; axis <= VERT; axis++) offset[axis] += (float)rn(100) / 100;
-            final[HORZ] = (point[HORZ] + ((season < 3) ? (int)(offset[HORZ]) : 0)) % vp->w + vp->x;
-            final[VERT] = (point[VERT] + ((season > 0) ? (int)(offset[VERT]) : 0)) % vp->h + vp->y;
+            // for (int axis=HORZ; axis <= VERT; axis++) offset[axis] += (float)rn(100) / 100;
+            // final[HORZ] = (point[HORZ] + ((season < 3) ? (int)(offset[HORZ]) : 0)) % vp->w + vp->x;
+            // final[VERT] = (point[VERT] + ((season > 0) ? (int)(offset[VERT]) : 0)) % vp->h + vp->y;
             String letter = (String)((char)(0x21 + rn(0x5d)));
             uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue < (32767 / (season+1))) + rn(56));
+            sprite->setTextColor(BLK);  // allows subliminal messaging
             sprite->drawString(letter, final[HORZ] + 1, final[VERT] + 1);  // these will not work at extreme sides
             sprite->drawString(letter, final[HORZ] - 1, final[VERT] - 1);  // these will not work at extreme sides
             sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue > 32767) + rn(56)));
             sprite->drawString(letter, final[HORZ], final[VERT]);
-            sprite->setTextColor(BLK);  // allows subliminal messaging
         }
+        sprite->setTextColor(BLK);  // allows subliminal messaging
         sprite->setFont(&fonts::Font0);
     }
     void run_worm() {
@@ -611,7 +611,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (lucktimer.expired())  {
             saver_lotto = !saver_lotto;
-            lucktimer.set(2100000 + !saver_lotto * (200 + rn(700)) * 4000000);
+            lucktimer.set(1400000 + !saver_lotto * (200 + 3 * rn(255)) * 4000000);
         } 
         if (saver_lotto) {
             sprite->setTextDatum(textdatum_t::middle_center);
@@ -906,8 +906,10 @@ class PanelAppManager {
         else if (ui_context == MuleChassisUI) {
             if (!mule_drawn) {
                 spr->fillSprite(BLK);
-                spr->pushImageRotateZoom(vp.x + (vp.w - 145) / 2, vp.y + (vp.h - 74) / 2, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
-                // spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, 82, 37, 0, 1, 1, 145, 74, mulechassis_145x74x8, BLK);
+                float w = 145.0, h = 74.0;
+                // spr->pushImageRotateZoom(vp.x, vp.y, w / 2, h / 2, 0, vp.w / w, vp.h / h, w, h, mulechassis_145x74x8, BLK);
+                // spr->pushImageRotateZoom(vp.x + (vp.w - 145) / 2, vp.y + (vp.h - 74) / 2, 82, 37, 0, vp.w / 145, vp.h / 74, 145, 74, mulechassis_145x74x8, BLK);
+                spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, w / 2, h / 2, 0, 1, 1, w, h, mulechassis_145x74x8, BLK);
                 mule_drawn = true;
             }
         }

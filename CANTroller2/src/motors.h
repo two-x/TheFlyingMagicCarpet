@@ -12,6 +12,12 @@
 // https://www.youtube.com/watch?v=qKy98Cbcltw&ab_channel=Horizon4electronics
 class QPID {
   public:
+    // ctrl: sets the controller mode to manual (0), automatic (1) or timer (2) when the transition from manual to automatic or timer occurs, the controller is automatically initialized.
+    // cdir: the PID will either be connected to a direct acting process (+output leads to +input) or a reverse acting process(+output leads to -input)
+    // pmod: sets the computation method for the proportional term, to compute based either on error (default), on measurement, or the average of both
+    // dmod: sets the computation method for the derivative term, to compute based either on error or on measurement (default)
+    // awmode: sets the integral anti-windup mode to one of clamp, which clamps the output after adding integral and proportional (on measurement) terms,
+    //   or cond (default), which provides some integral correction, prevents deep saturation and reduces overshoot. Option off disables anti-windup altogether
     enum class ctrl : int {manual, automatic, toggle};            // controller mode
     enum class cdir : int {reverse=-1, direct=1};                 // controller direction
     enum class pmod : int {onerr, onmeas, onerrmeas};             // proportional mode
@@ -136,13 +142,10 @@ class QPID {
         _ki = a_ki * sampletime_sec;
         _kd = a_kd / sampletime_sec;
     }
-    // set_tunings  Set Tunings using the last remembered pmode, dmode and awmode settings.
-    // void set_tunings(float a_kp, float a_ki, float a_kd) {
-    void set_tunings(float a_kp, float a_ki, float a_kd) {
+    void set_tunings(float a_kp, float a_ki, float a_kd) {  // set Tunings using the last remembered pmode, dmode and awmode settings.
         set_tunings(a_kp, a_ki, a_kd, _pmode, _dmode, _awmode);
     }
-    // set_sampletime  Sets the period, in microseconds, at which the calculation is performed.
-    void set_sampletime(int a_sampletime) {
+    void set_sampletime(int a_sampletime) {  // set_sampletime  Sets the period, in microseconds, at which the calculation is performed.
         if (a_sampletime > 0 && _sampletime) {  // added more divide by zero protection
             float ratio  = (float)a_sampletime / (float)_sampletime;
             _ki *= ratio;
@@ -150,9 +153,7 @@ class QPID {
             _sampletime = a_sampletime;
         }
     }
-    // set_mode Sets the controller mode to manual (0), automatic (1) or timer (2) when the transition 
-    // from manual to automatic or timer occurs, the controller is automatically initialized.
-    void set_mode(ctrl a_mode) {
+    void set_mode(ctrl a_mode) {  // set control mode
         if (_mode == ctrl::manual && a_mode != ctrl::manual) { // just went from manual to automatic
             _mode = ctrl::automatic;
             init();
@@ -160,8 +161,7 @@ class QPID {
         else if (_mode == ctrl::automatic && a_mode != ctrl::automatic) _mode = ctrl::manual;
     }
     void set_mode(int a_mode) { set_mode((ctrl)a_mode); }
-    // Does all the things that need to happen to ensure a bumpless transfer from manual to automatic mode.
-    void reset() {
+    void reset() {  // Does all the things that need to happen to ensure a bumpless transfer from manual to automatic mode.
         lasttime = micros() - _sampletime;
         lastin = 0; _outsum = 0;
         _pterm = 0; _iterm = 0; _dterm = 0;
@@ -169,15 +169,12 @@ class QPID {
     void set_kp(float a_kp) { set_tunings(std::max(0.0f, a_kp), dispki, dispkd, _pmode, _dmode, _awmode); }
     void set_ki(float a_ki) { set_tunings(dispkp, std::max(0.0f, a_ki), dispkd, _pmode, _dmode, _awmode); }
     void set_kd(float a_kd) { set_tunings(dispkp, dispki, std::max(0.0f, a_kd), _pmode, _dmode, _awmode); }
-    // void add_kp(float add) { set_kp(dispkp + add); }
-    // void add_ki(float add) { set_ki(dispki + add); }
-    // void add_kd(float add) { set_kd(dispkd + add); }
-    // void add_sampletime(int add) { set_sampletime(_sampletime + add);}
     void set_centmode(centmod a_centmode) { _centmode = a_centmode; }
     void set_centmode(int a_centmode) { _centmode = (centmod)a_centmode; }
     void set_cent(float a_cent) { if (*_outmin <= a_cent && *_outmax >= a_cent) _cent = a_cent; }
     void set_target(float a_target) { _target = a_target; }
-    void set_output(float a_output) { 
+    void set_output(float a_output) {
+        float oldout = _output;
         a_output = constrain(a_output, *_outmin, *_outmax);
         if (std::abs(_output) > float_zero) {
             float ratio = a_output / _output;
@@ -185,31 +182,24 @@ class QPID {
             _outsum *= ratio;
         }
         else _output = _outsum = a_output;
-        pause_diff = true;
+        if (std::abs(oldout - _output) > _dterm) pause_diff = true;  // will skip differential effect on net compute cycle if output changed significantly
     }
     void set_iaw_cond_thresh(float thresh) { _iaw_cond_thresh = std::max(0.0f, thresh); }  // place the integral windup limit to be this fraction of the output range 
-    // The PID will either be connected to a direct acting process (+output leads to +input) or a reverse acting process(+output leads to -input).
     void set_dir(cdir a_dir) { _dir = a_dir; }
     void set_dir(int a_dir) { _dir = (cdir)a_dir; }
-    // Sets the computation method for the proportional term, to compute based either on error (default), on measurement, or the average of both.
     void set_pmode(pmod a_pmode) { _pmode = a_pmode; }
     void set_pmode(int a_pmode) { _pmode = (pmod)a_pmode; }
-    // Sets the computation method for the derivative term, to compute based either on error or on measurement (default).
     void set_dmode(dmod a_dmode) { _dmode = a_dmode; }
     void set_dmode(int a_dmode) { _dmode = (dmod)a_dmode; }
-    // Sets the integral anti-windup mode to one of clamp, which clamps the output after adding integral and proportional (on measurement) terms,
-    // or cond (default), which provides some integral correction, prevents deep saturation and reduces overshoot. Option off disables anti-windup altogether.
     void set_awmode(awmod a_awmode) { _awmode = a_awmode; }
     void set_awmode(int a_awmode) { _awmode = (awmod)a_awmode; }
-    // sets the output summation value
-    void set_outsum(float a_outsum) { _outsum = a_outsum; }
+    void set_outsum(float a_outsum) { _outsum = a_outsum; }  // sets the value of the integral
     void set_limits(float* a_min, float* a_max) {
         _outmin = a_min;
         _outmax = a_max;
         _output = constrain(_output, *_outmin, *_outmax);
         _outsum = constrain(_outsum, *_outmin, *_outmax);
     }
-    // Getter functions
     float err() { return _err; }
     float kp() { return dispkp; }
     float ki() { return dispki; }
@@ -234,7 +224,7 @@ class QPID {
     float* target_ptr() { return &_target; }
 };
 
-static std::string motormodecard[NumMotorModes] = { "NA", "Halt", "Idle", "Releas", "OpLoop", "Thresh", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start" };
+static std::string motormodecard[NumMotorModes] = { "NA", "Halt", "Idle", "Releas", "OpLoop", "PropLp", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start" };
 static std::string cruiseschemecard[NumCruiseSchemes] = { "FlyPID", "TrPull", "TrHold" };
 static std::string brakefeedbackcard[NumBrakeFB] = { "BkPosn", "BkPres", "Hybrid", "None" };
 static std::string openloopmodecard[NumOpenLoopModes] = { "Median", "AutRel", "ARHold" };
@@ -372,14 +362,14 @@ class ThrottleControl : public ServoMotor {
     Timer cruiseDeltaTimer, throttleRateTimer;
     bool pid_ena_last = false, cruise_pid_ena_last = false;
   public:
-    // replace
+    // replace this: ...
     using ServoMotor::ServoMotor;
     float tach_last, throttle_target_pc, governor = 95;  //, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
-    // with:
+    // ... with:
     // ThrottleServo servo;
     // ThrottleControl(int pin, int freq) {
     //     servo = ThrottleServo(pin, freq);
@@ -415,7 +405,7 @@ class ThrottleControl : public ServoMotor {
     }
     void linearize_throttle() {  // todo : compensate for at least 3 known sources of non-linearity in the throttle
         // 1. The coin-shaped butterfly valve blocks the cylindrical carb intake passage. The engine power is a function
-        // of the airflow which is a function of the elliptical cross-section of the valve as it rotates. Here's math:
+        // of the airflow which is proportional to the elliptical cross-section of the valve as it rotates. That math:
         // d = throttle intake / valve diameter (about 1 inch)
         // g = angle of valve, with 90 deg = full closed and 0 deg = full open
         // Open Area:  A = pi/4 * d^2 - pi * d^2 * cos(g)    // in squared units of d
@@ -425,7 +415,7 @@ class ThrottleControl : public ServoMotor {
         // when the throttle is closed vs. when it's open. Need to do the math for this, but I imagine it'll be another 
         // curve from 1 to 0, perhaps another cosine, to multiply by depending on current servo angle. Note it's possible
         // to mechanically nullify this pull angle non-linearity by having a rotational linkage instead of servo horns,
-        // for example like a belt, or maybe pulleys on both servo and valve with a string wrapped around them.
+        // for example like a belt, or maybe pulleys on both servo and valve with a cord wrapped around them.
         //
         // 3. The engine will characteristically produce power as a nonlinear function of carb airflow. Data for this would
         // be nice. [Research into typical curves] < [Specific performance data for this engine] < [Do empirical testing].
@@ -528,7 +518,7 @@ class ThrottleControl : public ServoMotor {
         else if (motormode == ParkMotor || motormode == Halt) pc[OUT] = constrain(pc[OUT], pc[PARKED], pc[GOVERN]);
         else pc[OUT] = constrain(pc[OUT], idle_pc, pc[GOVERN]);
         if (motormode == ActivePID) pid.set_output(pc[OUT]);  // feed possibly-modified output value back into pid
-        if ((motormode == Cruise) && cruise_pid_enabled) cruisepid.set_output(throttle_target_pc);  // feed possibly-modified output value back into pid
+        // if ((motormode == Cruise) && cruise_pid_enabled) cruisepid.set_output(throttle_target_pc);  // feed possibly-modified output value back into pid
     }
   public:
     void setmode(int _mode) {
@@ -625,7 +615,7 @@ class BrakeControl : public JagMotor {
     float press_kd = 0.000;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     float posn_kp = 80.0;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float posn_ki = 35.5;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float posn_kd = 22.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    float posn_kd = 0.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr int pid_timeout = 40000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     int dominantsens_last = PositionFB, preforce_request;    // float posn_inflect, pres_inflect, pc_inflect;
@@ -635,7 +625,7 @@ class BrakeControl : public JagMotor {
     bool feedback_enabled[NumBrakeSens];
     void set_dominant_sensor(float _hybrid_ratio) {
         if (feedback == PressureFB || feedback == PositionFB) dominantsens = feedback;
-        else if (std::isnan(_hybrid_ratio)) return;
+        else if (std::isnan(_hybrid_ratio)) return;  // dominantsens = NoneFB;
         else dominantsens = (int)(_hybrid_ratio + 0.5) ? PressureFB : PositionFB;  // round to 0 or 1, the indices of posn and pres respectively
         if (dominantsens == PositionFB) pid_dom = &(pids[PositionFB]);
         else pid_dom = &(pids[PressureFB]);
@@ -660,7 +650,7 @@ class BrakeControl : public JagMotor {
     float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, target_pc, pid_err_pc;
     float combined_read_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
     float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
-    float open_loop_attenuation_pc = 75.0, thresh_loop_attenuation_pc = 65.0, thresh_loop_hysteresis_pc = 2.0;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
+    float open_loop_attenuation_pc = 75.0, thresh_loop_attenuation_pc = 45.0, thresh_loop_hysteresis_pc = 2.0;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
     void derive() {  // to-do below: need stop/hold values for posn only operation!
         JagMotor::derive();
         // pc[MARGIN] = 100.0 * pressure->margin() / (pressure->opmax() - pressure->opmin());
@@ -714,8 +704,7 @@ class BrakeControl : public JagMotor {
                 }
             }
             motor_heat = constrain(motor_heat, motor_heat_min, motor_heat_max);
-        }
-        // that's great to have some idea whether the motor is hot. but we need to take some actions in response
+        }  // that's great to have some idea whether the motor is hot. but we need to take some actions in response
     }
     // the brake can be controlled by a pid or open loop. either way it will use all enabled sensors as     // the influence on the final output from the pressure and position pids is weighted based on the pressure reading
     // as the brakes are pressurized beyond X psi, use pressure reading, otherwise use position as feedback, because
@@ -755,30 +744,33 @@ class BrakeControl : public JagMotor {
         else if (feedback == HybridFB) combined_read_pc = get_hybrid_brake_pc(pressure->pc(), brkpos->pc());
         else combined_read_pc = NAN;
     }
-    float calc_thresh_loop_out() {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
+    float calc_prop_loop_out() {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
         float err = (combined_read_pc - target_pc);
         if (std::abs(err) < thresh_loop_hysteresis_pc) return pc[STOP];
         if (err > 0.0) return thresh_loop_attenuation_pc * pc[OPMIN];
         return thresh_loop_attenuation_pc * pc[OPMAX];
     }
+    // float calc_prop_loop_out() {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
+    //     float err = (combined_read_pc - target_pc);
+    //     return pc[OPMIN] + pc[OPMAX] * err / (pc[OPMAX]);
+    // }
     float calc_loop_out() {  // returns motor output percent calculated based on current target_pc or target[] values, in a way consistent w/ current config
-        if (motormode == ThreshLoop) return calc_thresh_loop_out();
+        if (motormode == PropLoop) return calc_prop_loop_out();
         else if (motormode == ActivePID) return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // combine pid outputs weighted by the multiplier
         else return pc[STOP];  // this should not happen, maybe print an error message
     }
     float calc_open_out() {
-        // this line releases brake whenever trigger is released, and presses proportional to trigger push. must hold trigger steady to stop brakes where they are
-        if (openloop_mode == AutoRelHoldable) {
+        if (openloop_mode == AutoRelHoldable) {  // AutoRelHoldable: releases brake whenever trigger is released, and presses brake when trigger pulled to max. anywhere in between stops brake movement
             if (hotrc->pc[VERT][FILT] <= hotrc->pc[VERT][OPMIN] + hotrc->pc[VERT][MARGIN])
                 set_target(open_loop_attenuation_pc * pc[OPMAX] / 100.0);
             else if (hotrc->joydir() == JOY_DN) set_target(pc[STOP]);
             else set_target(pc[OPMIN]);
         }
-        else if (openloop_mode == AutoRelease) {
+        else if (openloop_mode == AutoRelease) {  // AutoRelease: releases brake whenever trigger is released, and presses brake proportional to trigger push. must hold trigger steady to stop brakes where they are
             if (hotrc->joydir() == JOY_DN) set_target(open_loop_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], pc[STOP], pc[OPMAX]) / 100.0);
             else set_target(pc[OPMIN]);
         }
-        else {  // if openloopmode == Median
+        else {  // Median: holds brake when trigger is released, or if pulled to exactly halfway point. trigger pulls over or under halfway either proportionally apply or release the brake
             if (hotrc->joydir() == JOY_DN) set_target(open_loop_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], pc[OPMIN], pc[OPMAX]) / 100.0);
             else set_target(pc[STOP]);
         }
@@ -855,7 +847,7 @@ class BrakeControl : public JagMotor {
         else if (motormode == ParkMotor) {
             parking = goto_fixed_point(0.0, parked());
         }
-        else if ((motormode == ThreshLoop) || (motormode == ActivePID)) {
+        else if ((motormode == PropLoop) || (motormode == ActivePID)) {
             if (hotrc->joydir(VERT) != JOY_DN) set_target(pc[STOP]);  // let off the brake
             else set_target(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
             pc[OUT] = calc_loop_out();
@@ -870,14 +862,14 @@ class BrakeControl : public JagMotor {
         else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);                     // constrain motor value to operational range
         rate_limiter();  // changerate_limiter();
         if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;                                 // prevent stupidly small values which i was seeing
-        for (int p = PositionFB; p <= PressureFB; p++) pids[p].set_output(pc[OUT]);  // feed the final value back into the pids
+        for (int p = PositionFB; p <= PressureFB; p++) if (feedback_enabled[p]) pids[p].set_output(pc[OUT]);  // feed the final value back into the pids
     }
   public:
     void setmode(int _mode, bool external_request=true) {  // external_request set to false when calling from inside the class (to remember what the outside world wants the mode to be)   
         bool mode_forced = false;                                                 // note whether requested mode was overriden
         int save_mode_request = _mode;
         if (feedback == NoneFB) {                                                 // if there is no feedback
-            if (_mode == ActivePID || _mode == ThreshLoop) { 
+            if (_mode == ActivePID || _mode == PropLoop) { 
                 // preforce_drivemode = _mode;                                       // remember our requested drive mode before demoting to openloop mode, so we can restore it if settings changed
                 mode_forced = true;
                 _mode = OpenLoop;      // can't use loops, drop to openloop instead
@@ -894,7 +886,7 @@ class BrakeControl : public JagMotor {
             // else if (_mode == Release || _mode == ParkMotor) _mode = Halt;   // in openloop we lose some safeties, only use if necessary 
         }
         else if (!pid_enabled) {                         // if we have feedback but pid is disabled in config
-            if (_mode == ActivePID) _mode = ThreshLoop;  // drop to simple threshold-based loop scheme
+            if (_mode == ActivePID) _mode = PropLoop;  // drop to simple threshold-based loop scheme
         }
         if (_mode == motormode) return;
         if (external_request) preforce_request = save_mode_request;  // remember what the outside world actually asked for, in case we override it but later wish to go back

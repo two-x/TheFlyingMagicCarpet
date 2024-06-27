@@ -83,7 +83,7 @@ enum runmode { BASIC=0, LOWPOWER=1, STANDBY=2, STALL=3, HOLD=4, FLY=5, CRUISE=6,
 enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes=3 };
 enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
-enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, ThreshLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, NumMotorModes=13 };
+enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, NumMotorModes=13 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
 enum openloopmodes { MedianPoint, AutoRelease, AutoRelHoldable, NumOpenLoopModes };
 enum brakeextra { NumBrakeSens=2 };
@@ -226,7 +226,8 @@ float convert_units(float from_units, float convert_factor, bool invert, float i
 // Exponential Moving Average filter : smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
 // pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
 float ema_filt(float _raw, float _filt, float _alpha) {
-    return (_alpha * _raw) + ((1 - _alpha) * _filt);
+    _alpha = constrain(_alpha, 0.0, 1.0);
+    return (_alpha * _raw) + ((1.0 - _alpha) * _filt);
 }
 template<typename RAW_T, typename FILT_T>
 void ema_filt(RAW_T _raw, FILT_T* _filt, float _alpha) {
@@ -268,8 +269,8 @@ int significant_place(int value) {  // Returns the length in digits of a positiv
 // numeric edits are scaled proportional to the magnitude of the current value. you can specify a minimum decimal place to scale to (keeps from being impossible to cross zero)
 // edit acceleration can be removed for ints if dropdown is set to true (for selection lists, etc.)
 #define disp_default_float_sig_dig 3  // Significant digits displayed for float values. Higher causes more screen draws
-int idelta = 0;
-float tune(float orig_val, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-3) {  // feed in float value, get new constrianed float val, modified by idelta scaled to the magnitude of the value
+// int idelta = 0;
+float tune(float orig_val, int idelta, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-3) {  // feed in float value, get new constrianed float val, modified by idelta scaled to the magnitude of the value
     int sig_digits = disp_default_float_sig_dig;
     int sig_place = std::max(significant_place(orig_val), min_sig_edit_place + sig_digits);
     float scale = 1.0;  // needs to change if disp_default_float_sig_dig is modified !!
@@ -284,10 +285,9 @@ float tune(float orig_val, float min_val=NAN, float max_val=NAN, int min_sig_edi
     float ret = orig_val + (float)(idelta) * scale;
     if (std::isnan(min_val)) min_val = ret;
     if (std::isnan(max_val)) max_val = ret;
-    idelta = 0;
     return constrain(ret, min_val, max_val);  // Serial.printf("o:%lf id:%d sc:%lf, min:%lf, max:%lf ret:%lf\n", orig_val, idelta, scale, min_val, max_val, ret);
 }
-int tune(int orig_val, int min_val=-1, int max_val=-1, bool dropdown=false) {  // feed in int value, get new constrianed int val, modified by idelta scaled to the magnitude of the value
+int tune(int orig_val, int idelta, int min_val=-1, int max_val=-1, bool dropdown=false) {  // feed in int value, get new constrianed int val, modified by idelta scaled to the magnitude of the value
     int sig_place = significant_place(orig_val);
     int scale = 1;
     if (dropdown) idelta = constrain(idelta, -1, 1);
@@ -298,22 +298,20 @@ int tune(int orig_val, int min_val=-1, int max_val=-1, bool dropdown=false) {  /
     int ret = orig_val + idelta * scale;
     if (max_val <= min_val) max_val = ret;
     if (min_val == -1) min_val = ret;
-    idelta = 0;
     return constrain(ret, min_val, max_val);
 }
-bool tune() {  // overloaded to return bool value. idelta == 0 or -1 return false and 1+ returns true.
+bool tune(int idelta) {  // overloaded to return bool value. idelta == 0 or -1 return false and 1+ returns true.
     bool ret = (idelta > 0);
-    idelta = 0;
     return ret;
 }
-void tune(float* orig_ptr, float min_val=NAN, float max_val=NAN, int sig_digits=-1) {  // overloaded to directly modify float at given address
-    *orig_ptr = tune(*orig_ptr, min_val, max_val, sig_digits);
+void tune(float* orig_ptr, int idelta, float min_val=NAN, float max_val=NAN, int sig_digits=-1) {  // overloaded to directly modify float at given address
+    *orig_ptr = tune(*orig_ptr, idelta, min_val, max_val, sig_digits);
 }
-void tune(int* orig_ptr, int min_val=-1, int max_val=-1, bool dropdown=false) {  // overloaded to directly modify int at given address
-    *orig_ptr = tune(*orig_ptr, min_val, max_val, dropdown);
+void tune(int* orig_ptr, int idelta, int min_val=-1, int max_val=-1, bool dropdown=false) {  // overloaded to directly modify int at given address
+    *orig_ptr = tune(*orig_ptr, idelta, min_val, max_val, dropdown);
 }
-void tune(bool* orig_ptr) {  // overloaded to directly modify bool at given address
-    *orig_ptr = tune();
+void tune(bool* orig_ptr, int idelta) {  // overloaded to directly modify bool at given address
+    *orig_ptr = tune(idelta);
 }
 
 template <typename T>

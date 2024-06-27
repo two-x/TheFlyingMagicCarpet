@@ -65,6 +65,8 @@ class Potentiometer {
     float opmax() { return _opmax; }
     float opmin_native() { return _opmin_native; }
     float opmax_native() { return _opmax_native; }
+    float absmin_native() { return _absmin_native; }
+    float absmax_native() { return _absmax_native; }
     float margin() { return _margin_pc; }
     float* ptr() { return &_pc; }
     float* raw_ptr() { return &_raw; }
@@ -239,7 +241,7 @@ class Transducer : public Device {
     TransDir _dir = TransDir::FWD;
     int conversion_method = LinearMath;  // the default method
     Param _si, _native;
-    float _zeropoint, _si_raw;  // si_raw is an output for display purposes, only meaningful for sensors, not actuators. managed here because that's easier
+    float _zeropoint, _si_raw;  // si_raw is only meaningful for sensors, not actuators. managed here because that's easier
   public:
     Transducer(int arg_pin) : Device(arg_pin) {
         _long_name = "Unknown transducer";
@@ -407,6 +409,8 @@ class Transducer : public Device {
     float zeropoint() { return _zeropoint; }  // zeropoint is the pressure at which we can consider the brake is released (if position is unavailable)
     float zeropoint_pc() { return to_pc(_zeropoint); }
     float* zeropoint_ptr() { return &_zeropoint; }
+    float mfactor() { return _mfactor; }
+    float boffset() { return _boffset; }
 };
 
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
@@ -426,7 +430,7 @@ class Sensor : public Transducer {
     void calculate_ema() { // Exponential Moving Average
         if (_first_filter_run) {
             set_si(_si_raw);
-            _first_filter_run = false;  // soren: I commented this out, wouldn't this always turn on filtering?
+            _first_filter_run = false;
         }
         else set_si(ema_filt(_si_raw, _si.val(), _ema_alpha));
     }
@@ -652,11 +656,11 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
     CarBattery() = delete;    
     void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
         AnalogSensor::setup();
-        set_conversions(0.00404, 0.0);  // 240605 m calculated from multimeter readings vs adc counts taken across a few samples
+        set_conversions(0.004075, 0.0);  // 240627 calibrated against my best multimeter: m = 0.004075
         set_abslim(0.0, 15.1);  // set abs range. dictated in this case by the max voltage a battery charger might output
         set_oplim(10.7, 13.9);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
         set_si(11.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
-        set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
+        set_ema_alpha(0.999);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         print_config();
     }
