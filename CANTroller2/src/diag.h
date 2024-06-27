@@ -114,15 +114,6 @@ class DiagRuntime {
             // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
             // informed trouble code. Much like the engine computer in cars nowadays, which keep track of any detectable failures for you to
             // retreive with an OBD tool. Some checks are below, along with other possible things to check for:
-            bool not_detected = false;  // first reset
-            // for (int cat = 0; cat < NUM_TEMP_CATEGORIES; cat++) temp_err[cat] = false;  // first reset
-            // for (int l = 0; l < tempsens->locint(); l++) {
-            //     if (!tempsens->detected(l)) not_detected = true;
-            //     else if (tempsens->val(l) >= temp_lims_f[tempsens->errclass(l)][WARNING]) temp_err[tempsens->errclass(l)] = true;
-            // }
-            // setflag(_TempEng, LOST, not_detected);
-
-            // Detect sensors disconnected or giving out-of-range readings.
             // TODO : The logic of this for each sensor should be moved to devices.h objects
             TempFailure();
 
@@ -132,8 +123,6 @@ class DiagRuntime {
             checkrange(_MuleBatt);
             // setflag(_Throttle, RANGE, gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
             // setflag(_SteerMotor, RANGE, steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
-            // setflag(_MuleBatt, RANGE, mulebatt->val() < mulebatt->opmin() || mulebatt->val() > mulebatt->opmax());
-            
             // setflag(_Ignition, LOST, !ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
 
             BrakeFailure();            
@@ -647,13 +636,13 @@ class BootMonitor {
         // gas.(brake.pc[STOP]);  // brake.pid_targ_pc(brake.pc[STOP]);
     }
     void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-on-esp32-with-psram#
-        Serial.printf("PSRAM..");
+        ezread.squintf("PSRAM..");
         #ifndef BOARD_HAS_PSRAM
-        Serial.printf(" support is currently disabled\n");
+        ezread.squintf(" support is currently disabled\n");
         return;
         #endif
-        if (psramInit()) Serial.printf(" is correctly initialized, ");
-        else Serial.printf(" is not available, ");
+        if (psramInit()) ezread.squintf(" is correctly initialized, ");
+        else ezread.squintf(" is not available, ");
         // int available_PSRAM_size = ESP.getFreePsram();
         // Serial.println((String)"  PSRAM Size available (bytes): " + available_PSRAM_size);
         // int *array_int = (int *) ps_malloc(1000 * sizeof(int)); // Create an integer array of 1000
@@ -668,11 +657,11 @@ class BootMonitor {
     }
     void print_partition_table() {
         if (!running_on_devboard) return;
-        Serial.printf("\nPartition Typ SubT  Address SizeByte   kB\n");
+        ezread.squintf("\nPartition Typ SubT  Address SizeByte   kB\n");
         esp_partition_iterator_t iterator = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
         const esp_partition_t *partition;
         while ((partition = esp_partition_get(iterator)) != NULL) {
-            Serial.printf(" %8s %3d 0x%02x 0x%06x 0x%06x %4d\n", partition->label, partition->type, partition->subtype, partition->address, partition->size, (partition->size)/1024);
+            ezread.squintf(" %8s %3d 0x%02x 0x%06x 0x%06x %4d\n", partition->label, partition->type, partition->subtype, partition->address, partition->size, (partition->size)/1024);
             if (!strcmp(partition->label, "coredump")) break;
             iterator = esp_partition_next(iterator);
         }

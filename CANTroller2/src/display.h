@@ -18,7 +18,7 @@
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
 std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
-std::string top_menu_buttons[4]  = { " CAL ", "Fuel ", " IGN ", "POWER" };  // Pad shorter names with spaces to center
+std::string top_menu_buttons[4]  = { "CAL", "FUEL", "IGN", "POWER" };
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 #define stEr "St\x88r"     // These defines are just a convenience to keep the below datapage strings
@@ -41,7 +41,7 @@ static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
-    { " Pot Raw", "BkPosRaw", "BkPosRaw", brAk"Posn", brAk"Posn", "PressRaw", "PressRaw", "Pressure", "Pressure", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PG_SENS
+    { " Pot Raw", brAk"Posn", brAk"Posn", brAk"Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PG_SENS
     { "TachPuls", "Tach Raw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpeedRaw", "   Speed", "   Speed", spEd"AMin", spEd"AMax", "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", spEd"Idle", },  // PG_PULS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", __________, __________, __________, __________, "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
@@ -56,7 +56,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "psi",  "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, "%",    "%",    },  // PG_RUN
     { "us",   "us",   "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, "mph",  "atm",  "atm",  "us",   "us",   },  // PG_JOY
-    { "adc",  "adc",  "in",   "in",   "%",    "adc",  "psi",  "psi",  "%",    ______, "psi",  "psi",  "in",   "in",   "in",   },  // PG_SENS
+    { "adc",  "adc",  "in",   "%",    "adc",  "psi",  "%",    "adc",  "V",    ______, "psi",  "psi",  "in",   "in",   "in",  },  // PG_SENS
     { "ms",   "Hz",   "rpm",  "ms",   "Hz",   "mph",  "mph",  "%",    "ms",   "ms",   "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    ______, ______, ______, ______, "%",    degree, degree, degreF, degreF, },  // PG_IDLE
@@ -152,7 +152,7 @@ class Display {
     volatile bool disp_datapage_dirty;
     volatile bool disp_values_dirty;
     volatile bool disp_data_dirty[disp_lines];
-    volatile bool disp_bools_dirty;
+    volatile bool disp_menutoggles_dirty;
     volatile bool disp_menus_dirty;
     volatile bool disp_runmode_dirty;
     volatile bool disp_simbuttons_dirty;
@@ -242,7 +242,7 @@ class Display {
             disp_data_dirty[i] = true;
             disp_bargraphs[i] = false;
         }
-        disp_bools_dirty = disp_selection_dirty = disp_datapage_dirty = disp_menus_dirty = true;
+        disp_menutoggles_dirty = disp_selection_dirty = disp_datapage_dirty = disp_menus_dirty = true;
         disp_runmode_dirty = disp_simbuttons_dirty = disp_values_dirty = true;
         ui_context = ui_default;
     }
@@ -549,7 +549,7 @@ class Display {
         last_selected = selection;
         disp_selection_dirty = false;    
     }
-    void draw_bool(bool value, int col, bool force=false) {  // Draws values of boolean data
+    void draw_menu_toggle(bool value, int col, bool force=false) {  // Draws values of boolean data
         if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
             int x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - top_menu_buttons[col-2].length()*(disp_font_width>>1) + 1;
             sprptr->setTextDatum(textdatum_t::top_left);
@@ -634,11 +634,11 @@ class Display {
         disp_idiots_dirty = false;
     }
     void disp_menu_bools() {
-        draw_bool((run.mode == CAL), 2, disp_bools_dirty);
-        draw_bool((run.mode == BASIC), 3, disp_bools_dirty);
-        draw_bool(ignition.signal, 4, disp_bools_dirty);
-        draw_bool(syspower, 5, disp_bools_dirty);
-        disp_bools_dirty = false;
+        draw_menu_toggle((run.mode == CAL), 2, disp_menutoggles_dirty);
+        draw_menu_toggle(fuelpump.status(), 3, disp_menutoggles_dirty);
+        draw_menu_toggle(ignition.signal, 4, disp_menutoggles_dirty);
+        draw_menu_toggle(syspower, 5, disp_menutoggles_dirty);
+        disp_menutoggles_dirty = false;
     }
     // value rendering options:  for [optional] arguments use -1 (for int) or NAN (for float) to get the default, same as not including. Default sig_places for floats is 3
     // * drawval (int_line, float_value)  // for floats
@@ -662,7 +662,7 @@ class Display {
         if (datapage == PG_RUN) {
             drawval(9, pressure.val(), pressure.opmin(), pressure.opmax());
             drawval(10, brkpos.val(), brkpos.opmin(), brkpos.opmax());
-            drawval(11, mulebatt.val(), mulebatt.opmin(), mulebatt.opmax());
+            drawval(11, mulebatt.val(), mulebatt.opmin(), mulebatt.opmax(), NAN, 4);
             drawval(12, pot.val(), pot.opmin(), pot.opmax());
             drawval(13, airvelo.val(), airvelo.opmin(), airvelo.opmax());
             drawval(14, mapsens.val(), mapsens.opmin(), mapsens.opmax());
@@ -691,15 +691,17 @@ class Display {
             drawval(23, hotrc.deadband_us, 0, 100);
         }
         else if (datapage == PG_SENS) {
-            drawval(9, pot.native(), pot.opmin_native(), pot.opmax_native());
+            drawval(9, pot.native(), pot.absmin_native(), pot.absmax_native());
             drawval(10, brkpos.native(), brkpos.opmin_native(), brkpos.opmax_native());
-            drawval(11, brkpos.raw(), brkpos.opmin(), brkpos.opmax());
-            drawval(12, brkpos.val(), brkpos.opmin(), brkpos.opmax());
-            drawval(13, brkpos.pc(), 0.0, 100.0);
-            drawval(14, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
-            drawval(15, pressure.raw(), pressure.opmin(), pressure.opmax());
-            drawval(16, pressure.val(), pressure.opmin(), pressure.opmax());
-            drawval(17, pressure.pc(), 0.0, 100.0);
+            drawval(11, brkpos.val(), brkpos.opmin(), brkpos.opmax());
+            drawval(12, brkpos.pc(), 0.0, 100.0);
+            drawval(13, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
+            drawval(14, pressure.val(), pressure.opmin(), pressure.opmax());
+            drawval(15, pressure.pc(), 0.0, 100.0);
+            // drawval(11, brkpos.raw(), brkpos.opmin(), brkpos.opmax());
+            // drawval(15, pressure.raw(), pressure.opmin(), pressure.opmax());
+            drawval(16, mulebatt.native(), mulebatt.opmin_native(), mulebatt.opmax_native());
+            drawval(17, mulebatt.val(), mulebatt.opmin(), mulebatt.opmax(), NAN, 4);
             draw_eraseval(18);
             drawval(19, pressure.opmin(), pressure.absmin(), pressure.absmax());
             drawval(20, pressure.opmax(), pressure.absmin(), pressure.absmax());
@@ -743,7 +745,7 @@ class Display {
             drawval(11, gas.idle_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
             drawval(12, gas.idle_si[OUT], gas.si[OPMIN], gas.si[OPMAX]);
             drawval(13, tach.idle(), tach.opmin(), tach.opmax());
-            drawval(14, fuelpump.volts, fuelpump.off_v, fuelpump.on_max_v);
+            drawval(14, fuelpump.volts(), fuelpump.off_v, fuelpump.on_max_v);
             for (int line=15; line<=18; line++) draw_eraseval(line);
             drawval(19, gas.starting_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
             drawval(20, gas.idle_si[OPMAX], gas.idle_si[ABSMIN], gas.idle_si[ABSMAX], -1, 4);
@@ -1000,7 +1002,7 @@ class Tuner {
     int datapage_last;
   public:
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
-    int idelta_encoder = 0;  // idelta is integer edit value accelerated, and is used for all tuning edits regardless if int float or bool
+    int id, id_encoder = 0;  // idelta is integer edit value accelerated, and is used for all tuning edits regardless if int float or bool
     int rdelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
     void update(int rmode) {
         process_inputs();
@@ -1008,7 +1010,7 @@ class Tuner {
     }
   private:
     void process_inputs() {
-        if (!tuningEditTimer.expired()) return;
+        if (!tuningEditTimer.expired() || auto_saver_enabled) return;
         tuningEditTimer.reset();
         if (!screen->disp_selection_dirty) {
             sel_last = sel;
@@ -1024,16 +1026,16 @@ class Tuner {
             }
             else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
         }
-        idelta_encoder = encoder.rotation(true);   // accelerated
-        rdelta_encoder = constrain(idelta_encoder, -1, 1);
+        id_encoder = encoder.rotation(true);   // accelerated
+        rdelta_encoder = constrain(id_encoder, -1, 1);
         if (tunctrl == SELECT) sel += rdelta_encoder;  // If overflow constrain will fix in general handler below
         else if (tunctrl == OFF) datapage += rdelta_encoder;  // If overflow tconstrain will fix in general below
         if (touch->increment_sel) ++sel %= disp_tuning_lines;
         if (touch->increment_datapage) ++datapage %= NUM_DATAPAGES;
         touch->increment_sel = touch->increment_datapage = false;
-        idelta = idelta_encoder + touch->get_delta();  // Allow edits using the encoder or touchscreen
-        if (pot_tuner_acceleration && !sim.potmapping()) idelta = constrain(idelta * (int)(map(pot.val(), 0.0, 100.0, 1.0, 10.0)), 1, (int)encoder._accel_max); // {  // use pot to control level of acceleration
-        if (tunctrl != tunctrl_last || datapage != datapage_last || sel != sel_last || idelta) tuningAbandonmentTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
+        id = id_encoder + touch->get_delta();  // Allow edits using the encoder or touchscreen
+        if (pot_tuner_acceleration && !sim.potmapping()) id = constrain(id * (int)(map(pot.val(), 0.0, 100.0, 1.0, 10.0)), 1, (int)encoder._accel_max); // {  // use pot to control level of acceleration
+        if (tunctrl != tunctrl_last || datapage != datapage_last || sel != sel_last || id) tuningAbandonmentTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
         else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
         datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
         if (datapage != datapage_last) {
@@ -1047,102 +1049,103 @@ class Tuner {
         if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selection_dirty = true;
     }
     void edit_values(int rmode) {
-        if (tunctrl == EDIT && idelta) {  // Change tunable values when editing
+        if (tunctrl == EDIT && id) {  // Change tunable values when editing
             if (datapage == PG_RUN) {
-                if (sel == 13) { tune(&gas.governor, 0, 100); gas.derive(); }
-                else if (sel == 14) tune(&steer.steer_safe_pc, 0, 100);
+                if (sel == 13) { tune(&gas.governor, id, 0, 100); gas.derive(); }
+                else if (sel == 14) tune(&steer.steer_safe_pc, id, 0, 100);
             }
             else if (datapage == PG_JOY) {
-                if (sel == 10) airvelo.set_oplim(NAN, tune(airvelo.opmax(), airvelo.opmin(), airvelo.absmax()));
-                else if (sel == 11) mapsens.set_oplim(tune(mapsens.opmin(), mapsens.absmin(), mapsens.opmax()), NAN);
-                else if (sel == 12) mapsens.set_oplim(NAN, tune(mapsens.opmax(), mapsens.opmin(), mapsens.absmax()));
-                else if (sel == 13) tune(&hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
-                else if (sel == 14) { tune(&hotrc.deadband_us, 0, 100); hotrc.derive(); }
+                if (sel == 10) airvelo.set_oplim(NAN, tune(airvelo.opmax(), id, airvelo.opmin(), airvelo.absmax()));
+                else if (sel == 11) mapsens.set_oplim(tune(mapsens.opmin(), id, mapsens.absmin(), mapsens.opmax()), NAN);
+                else if (sel == 12) mapsens.set_oplim(NAN, tune(mapsens.opmax(), id, mapsens.opmin(), mapsens.absmax()));
+                else if (sel == 13) tune(&hotrc.failsafe_us, id, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
+                else if (sel == 14) { tune(&hotrc.deadband_us, id, 0, 100); hotrc.derive(); }
             }
             else if (datapage == PG_SENS) {
-                if (sel == 10) pressure.set_oplim(tune(pressure.opmin(), pressure.absmin(), pressure.opmax()), NAN);
-                else if (sel == 11) pressure.set_oplim(NAN, tune(pressure.opmax(), pressure.opmin(), pressure.absmax()));
-                else if (sel == 12) brkpos.set_oplim(tune(brkpos.opmin(), brkpos.absmin(), brkpos.opmax()), NAN);
-                else if (sel == 13) brkpos.set_oplim(NAN, tune(brkpos.opmax(), brkpos.opmin(), brkpos.absmax()));
-                else if (sel == 14) tune(brkpos.zeropoint_ptr(), brkpos.opmin(), brkpos.opmax());
+                if (sel == 10) pressure.set_oplim(tune(pressure.opmin(), id, pressure.absmin(), pressure.opmax()), NAN);
+                else if (sel == 11) pressure.set_oplim(NAN, tune(pressure.opmax(), id, pressure.opmin(), pressure.absmax()));
+                else if (sel == 12) brkpos.set_oplim(tune(brkpos.opmin(), id, brkpos.absmin(), brkpos.opmax()), NAN);
+                else if (sel == 13) brkpos.set_oplim(NAN, tune(brkpos.opmax(), id, brkpos.opmin(), brkpos.absmax()));
+                else if (sel == 14) tune(brkpos.zeropoint_ptr(), id, brkpos.opmin(), brkpos.opmax());
+                // else if (sel == 14) mulebatt.set_conversions(tune(mulebatt.mfactor(), id, 0.001, 0.009, -5), NAN);  // this works till you try to tune it, any edit causes conversion failures (showing nan result) followed by crash
             }
             else if (datapage == PG_PULS) {
-                if (sel == 10) tach.set_oplim(tune(tach.opmin(), tach.absmin(), tach.opmax()), NAN);
-                else if (sel == 11) tach.set_oplim(NAN, tune(tach.opmax(), tach.opmin(), tach.absmax()));
-                else if (sel == 12) speedo.set_oplim(tune(speedo.opmin(), speedo.absmin(), speedo.opmax()), NAN);
-                else if (sel == 13) speedo.set_oplim(NAN, tune(speedo.opmax(), speedo.opmin(), speedo.absmax()));
-                else if (sel == 14) tune(speedo.idle_ptr(), speedo.opmin(), speedo.opmax());
+                if (sel == 10) tach.set_oplim(tune(tach.opmin(), id, tach.absmin(), tach.opmax()), NAN);
+                else if (sel == 11) tach.set_oplim(NAN, tune(tach.opmax(), id, tach.opmin(), tach.absmax()));
+                else if (sel == 12) speedo.set_oplim(tune(speedo.opmin(), id, speedo.absmin(), speedo.opmax()), NAN);
+                else if (sel == 13) speedo.set_oplim(NAN, tune(speedo.opmax(), id, speedo.opmin(), speedo.absmax()));
+                else if (sel == 14) tune(speedo.idle_ptr(), id, speedo.opmin(), speedo.opmax());
             }                
             else if (datapage == PG_PWMS) {
-                if (sel == 11) { tune(&gas.si[OPMIN], gas.si[ABSMIN], gas.si[OPMAX]); gas.derive(); }
-                else if (sel == 12) { tune(&gas.si[OPMAX], gas.si[OPMIN], gas.si[ABSMAX]); gas.derive(); }
-                else if (sel == 13) { tune(&brake.us[STOP], brake.us[OPMIN], brake.us[OPMAX]); brake.derive(); }
-                else if (sel == 14) { tune(&brake.duty_fwd_pc, 0.0f, 100.0f); brake.derive(); }
+                if (sel == 11) { tune(&gas.si[OPMIN], id, gas.si[ABSMIN], gas.si[OPMAX]); gas.derive(); }
+                else if (sel == 12) { tune(&gas.si[OPMAX], id, gas.si[OPMIN], gas.si[ABSMAX]); gas.derive(); }
+                else if (sel == 13) { tune(&brake.us[STOP], id, brake.us[OPMIN], brake.us[OPMAX]); brake.derive(); }
+                else if (sel == 14) { tune(&brake.duty_fwd_pc, id, 0.0f, 100.0f); brake.derive(); }
             }
             else if (datapage == PG_IDLE) {
-                if (sel == 10) tune(&gas.starting_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
-                else if (sel == 11) gas.set_idlecold(tune(gas.idlecold(), gas.idle_si[OPMIN], gas.idle_si[OPMAX]));
-                else if (sel == 12) gas.set_idlehot(tune(gas.idlehot(), gas.idle_si[OPMIN], gas.idle_si[OPMAX]));
-                else if (sel == 13) gas.set_tempcold(tune(gas.idletemp_f[OPMIN], gas.idletemp_f[ABSMIN], gas.idletemp_f[OPMAX]));
-                else if (sel == 14) gas.set_temphot(tune(gas.idletemp_f[OPMAX], gas.idletemp_f[OPMIN], gas.idletemp_f[ABSMAX]));
+                if (sel == 10) tune(&gas.starting_pc, id, gas.pc[OPMIN], gas.pc[OPMAX]);
+                else if (sel == 11) gas.set_idlecold(tune(gas.idlecold(), id, gas.idle_si[OPMIN], gas.idle_si[OPMAX]));
+                else if (sel == 12) gas.set_idlehot(tune(gas.idlehot(), id, gas.idle_si[OPMIN], gas.idle_si[OPMAX]));
+                else if (sel == 13) gas.set_tempcold(tune(gas.idletemp_f[OPMIN], id, gas.idletemp_f[ABSMIN], gas.idletemp_f[OPMAX]));
+                else if (sel == 14) gas.set_temphot(tune(gas.idletemp_f[OPMAX], id, gas.idletemp_f[OPMIN], gas.idletemp_f[ABSMAX]));
             }
             else if (datapage == PG_MOTR) {
-                if (sel == 7) brake.update_ctrl_config((int)tune());
-                else if (sel == 8) brake.update_ctrl_config(-1, tune(brake.feedback, 0, NumBrakeFB-1, true));
-                else if (sel == 9) brake.update_ctrl_config(-1, -1, tune(brake.openloop_mode, 0, NumOpenLoopModes-1, true));
-                else if (sel == 10) brake.enforce_positional_limits = tune();
-                else if (sel == 11) tune(&brake.max_out_change_rate_pcps, 0.0, 1000.0);
-                else if (sel == 12) gas.update_ctrl_config((int)tune());
-                else if (sel == 13) gas.update_cruise_ctrl_config((int)tune());
-                else if (sel == 14) gas.set_cruise_scheme(tune(gas.cruise_adjust_scheme, 0, NumCruiseSchemes-1, true));
+                if (sel == 7) brake.update_ctrl_config((int)tune(id));
+                else if (sel == 8) brake.update_ctrl_config(-1, tune(brake.feedback, id, 0, NumBrakeFB-1, true));
+                else if (sel == 9) brake.update_ctrl_config(-1, -1, tune(brake.openloop_mode, id, 0, NumOpenLoopModes-1, true));
+                else if (sel == 10) brake.enforce_positional_limits = tune(id);
+                else if (sel == 11) tune(&brake.max_out_change_rate_pcps, id, 0.0, 1000.0);
+                else if (sel == 12) gas.update_ctrl_config((int)tune(id));
+                else if (sel == 13) gas.update_cruise_ctrl_config((int)tune(id));
+                else if (sel == 14) gas.set_cruise_scheme(tune(gas.cruise_adjust_scheme, id, 0, NumCruiseSchemes-1, true));
 
             }
             else if (datapage == PG_BPID) {
-                if (sel == 11) brake.pid_dom->set_sampletime(tune(brake.pid_dom->sampletime()));
-                else if (sel == 12) brake.pid_dom->set_kp(tune(brake.pid_dom->kp(), 0.0, NAN));
-                else if (sel == 13) brake.pid_dom->set_ki(tune(brake.pid_dom->ki(), 0.0, NAN));
-                else if (sel == 14) brake.pid_dom->set_kd(tune(brake.pid_dom->kd(), 0.0, NAN));
+                if (sel == 11) brake.pid_dom->set_sampletime(tune(brake.pid_dom->sampletime(), id, 1000));
+                else if (sel == 12) brake.pid_dom->set_kp(tune(brake.pid_dom->kp(), id, 0.0, NAN));
+                else if (sel == 13) brake.pid_dom->set_ki(tune(brake.pid_dom->ki(), id, 0.0, NAN));
+                else if (sel == 14) brake.pid_dom->set_kd(tune(brake.pid_dom->kd(), id, 0.0, NAN));
             }
             else if (datapage == PG_GPID) {
-                if (sel == 11) gas.set_changerate_deg(tune(gas.max_throttle_angular_velocity_degps, 0.0f, 180.0f));
-                else if (sel == 12) gas.pid.set_kp(tune(gas.pid.kp(), 0.0, NAN));
-                else if (sel == 13) gas.pid.set_ki(tune(gas.pid.ki(), 0.0, NAN));
-                else if (sel == 14) gas.pid.set_kd(tune(gas.pid.kd(), 0.0, NAN));
+                if (sel == 11) gas.set_changerate_deg(tune(gas.max_throttle_angular_velocity_degps, id, 0.0f, 180.0f));
+                else if (sel == 12) gas.pid.set_kp(tune(gas.pid.kp(), id, 0.0, NAN));
+                else if (sel == 13) gas.pid.set_ki(tune(gas.pid.ki(), id, 0.0, NAN));
+                else if (sel == 14) gas.pid.set_kd(tune(gas.pid.kd(), id, 0.0, NAN));
 
             }
             else if (datapage == PG_CPID) {
-                if (sel == 11) tune(&cruise_delta_max_pc_per_s, 1.0, 35.0);
-                else if (sel == 12) gas.cruisepid.set_kp(tune(gas.cruisepid.kp(), 0.0, NAN));
-                else if (sel == 13) gas.cruisepid.set_ki(tune(gas.cruisepid.ki(), 0.0, NAN));
-                else if (sel == 14) gas.cruisepid.set_kd(tune(gas.cruisepid.kd(), 0.0, NAN));
+                if (sel == 11) tune(&cruise_delta_max_pc_per_s, id, 1.0, 35.0);
+                else if (sel == 12) gas.cruisepid.set_kp(tune(gas.cruisepid.kp(), id, 0.0, NAN));
+                else if (sel == 13) gas.cruisepid.set_ki(tune(gas.cruisepid.ki(), id, 0.0, NAN));
+                else if (sel == 14) gas.cruisepid.set_kd(tune(gas.cruisepid.kd(), id, 0.0, NAN));
             }
             else if (datapage == PG_TEMP) {
-                if (sel == 13) dont_take_temperatures = tune();
-                else if (sel == 14) web_disabled = tune();
+                if (sel == 13) dont_take_temperatures = tune(id);
+                else if (sel == 14) web_disabled = tune(id);
             }
             else if (datapage == PG_SIM) {
                 screen->disp_simbuttons_dirty = true;  // any of the following will necessitate a redraw of the simbuttons
-                if (sel == 4) sim.set_can_sim(sens::joy, tune());
-                else if (sel == 5) sim.set_can_sim(sens::pressure, tune());
-                else if (sel == 6) sim.set_can_sim(sens::brkpos, tune());
-                else if (sel == 7) sim.set_can_sim(sens::speedo, tune());
-                else if (sel == 8) sim.set_can_sim(sens::tach, tune());
-                else if (sel == 9) sim.set_can_sim(sens::airvelo, tune());
-                else if (sel == 10) sim.set_can_sim(sens::mapsens, tune());
-                else if (sel == 11) sim.set_can_sim(sens::basicsw, tune());
-                else if (sel == 12) sim.set_potmap((sens)(tune((int)sim.potmap(), 0, (int)(sens::starter) - 1, true)));
-                else if (sel == 13) cal_brakemode_request = tune();
-                else if (sel == 14) cal_gasmode_request = tune();
+                if (sel == 4) sim.set_can_sim(sens::joy, tune(id));
+                else if (sel == 5) sim.set_can_sim(sens::pressure, tune(id));
+                else if (sel == 6) sim.set_can_sim(sens::brkpos, tune(id));
+                else if (sel == 7) sim.set_can_sim(sens::speedo, tune(id));
+                else if (sel == 8) sim.set_can_sim(sens::tach, tune(id));
+                else if (sel == 9) sim.set_can_sim(sens::airvelo, tune(id));
+                else if (sel == 10) sim.set_can_sim(sens::mapsens, tune(id));
+                else if (sel == 11) sim.set_can_sim(sens::basicsw, tune(id));
+                else if (sel == 12) sim.set_potmap((sens)(tune((int)sim.potmap(), id, 0, (int)(sens::starter) - 1, true)));
+                else if (sel == 13) cal_brakemode_request = tune(id);
+                else if (sel == 14) cal_gasmode_request = tune(id);
             }
             else if (datapage == PG_UI) {
-                if (sel == 9) ezread.lookback(tune(ezread.offset)); 
-                else if (sel == 10) neo->flashdemo_ena(tune());  //  neo->enable_flashdemo(flashdemo); }
-                else if (sel == 11) neo->sleepmode_ena(tune());  //  neo->enable_flashdemo(flashdemo); }
-                else if (sel == 12) neo->setbright(tune(neobright, 0.0, 100.0));  //  neo->setbright(neobright); }
-                else if (sel == 13) neo->setsat(tune(neosat, 0.0, 100.0));  //  neo->setbright(neobright); }
-                else if (sel == 14) tune(&ui_context, 0, NumContextsUI-1, true);
+                if (sel == 9) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize)); 
+                else if (sel == 10) neo->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
+                else if (sel == 11) neo->sleepmode_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
+                else if (sel == 12) neo->setbright(tune(neobright, id, 0.0, 100.0));  //  neo->setbright(neobright); }
+                else if (sel == 13) neo->setsat(tune(neosat, id, 0.0, 100.0));  //  neo->setbright(neobright); }
+                else if (sel == 14) tune(&ui_context, id, 0, NumContextsUI-1, true);
             }
-            idelta = 0;
+            id = 0;
         }
     }
 };

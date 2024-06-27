@@ -355,7 +355,7 @@ class IdiotLights {
     bool* vals[iconcount] = {  // 6 per line
         &diag.err_sens_alarm[LOST], &diag.err_sens_alarm[RANGE], &diag.err_sens[RANGE][_TempEng], &diag.err_sens[RANGE][_TempWheel], hotrc.radiolost_ptr(), &panicstop,
         &standby_incomplete, &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting, &car_hasnt_moved, 
-        &starter.motor, &fuelpump.status_inverse, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_inactive_ptr(), tach.pin_inactive_ptr(),
+        &starter.motor, fuelpump.status_inverse_ptr(), &brake.posn_pid_active, &brake.no_feedback, speedo.pin_inactive_ptr(), tach.pin_inactive_ptr(),
         &bootbutton.now, &nowtouch, &encoder.enc_a, sim.enabled_ptr(), &running_on_devboard, &not_syspower,
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
         &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &sensidiots[_MuleBatt], &sensidiots[_Other], &sensidiots[_GPIO],
@@ -448,7 +448,7 @@ class IdiotLights {
         myneo = _neo;
         // int n = new_idiot(&(err_sens_alarm[LOST]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
         for (int i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[ON][i], val(i));
-        ezread.squintf("Idiot lights set up %d icons & %d neopixel hazard leds\n", iconcount, myneo->idiotcount);
+        ezread.squintf("Idiot lights set up %d icons & %d neopix hazards\n", iconcount, myneo->idiotcount);
     }
     bool val(int index) { return *(vals[index]); }
     bool* ptr(int index) { return vals[index]; }
