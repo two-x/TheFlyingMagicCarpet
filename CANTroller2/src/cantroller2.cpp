@@ -1,6 +1,6 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
-TaskHandle_t temptask = NULL, webtask = NULL, maftask = NULL, pushTaskHandle = NULL, drawTaskHandle = NULL;
+TaskHandle_t temptask = NULL, webtask = NULL, maftask = NULL, pushtask = NULL, drawtask = NULL;
 
 void setup() {
     initialize_pins_and_console();
@@ -8,13 +8,13 @@ void setup() {
     i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);
     touch.setup(&lcd, &i2c);
     screen.setup();             // start up the screen asap so we can monitor the boot progress on the ezread console
-    xTaskCreatePinnedToCore(push_task_wrapper, "taskPush", 2048, NULL, 4, &pushTaskHandle, CONFIG_ARDUINO_RUNNING_CORE);      // 2048 works, 1024 failed
-    xTaskCreatePinnedToCore(draw_task_wrapper, "taskDraw", 4096, NULL, 4, &drawTaskHandle, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // 4096 works, 2048 failed
+    xTaskCreatePinnedToCore(push_task, "taskPush", 2048, NULL, 4, &pushtask, CONFIG_ARDUINO_RUNNING_CORE);      // 2048 works, 1024 failed
+    xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 4, &drawtask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // 4096 works, 2048 failed
     running_on_devboard = !tempsens.setup();  // onewire bus and temp sensors
-    xTaskCreatePinnedToCore(update_temperature_sensors, "Update Temp Sensors", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 4096 works, 3072 failed,  priority is from 0 to 24=highest    
+    xTaskCreatePinnedToCore(tempsens_task, "taskTemp", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 4096 works, 3072 failed,  priority is from 0 to 24=highest    
     set_board_defaults();       // set variables as appropriate if on a breadboard
     run_tests();
-    watchdog.setup(&temptask, &webtask, &drawTaskHandle, &pushTaskHandle, &maftask);
+    watchdog.setup(&temptask, &webtask, &drawtask, &pushtask, &maftask);
     bootbutton.setup();
     hotrc.setup();
     pot.setup();
@@ -26,7 +26,7 @@ void setup() {
     speedo.setup();
     airvelo.setup();           // must be done after i2c is started
     mapsens.setup();
-    xTaskCreatePinnedToCore(maf_update, "taskMAF", 4096, NULL, 4, &maftask, CONFIG_ARDUINO_RUNNING_CORE);  // update mass airflow determination, including reading map and airvelo sensors
+    xTaskCreatePinnedToCore(maf_task, "taskMAF", 4096, NULL, 4, &maftask, CONFIG_ARDUINO_RUNNING_CORE);  // update mass airflow determination, including reading map and airvelo sensors
     lightbox.setup();
     fuelpump.setup();
     starter.setup();
@@ -41,7 +41,7 @@ void setup() {
     ignition.setup();          // must be after diag setup
     run.setup();               // initialize runmode state machine. must be after diag setup
     web.setup();               // start up access point, web server, and json-enabled web socket for diagnostic phone interface
-    xTaskCreatePinnedToCore(update_web, "Update Web Services", 3166, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. with 4096 wifi runs but fails to connect (maybe unrelated?).  2048 is too low, it crashes when client connects  16384
+    xTaskCreatePinnedToCore(web_task, "taskWeb", 3166, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. with 4096 wifi runs but fails to connect (maybe unrelated?).  2048 is too low, it crashes when client connects  16384
     stop_console();
     looptimer.setup();
 }

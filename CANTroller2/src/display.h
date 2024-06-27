@@ -105,8 +105,8 @@ volatile bool reset_request = false;
 
 SemaphoreHandle_t pushbuf_sem;  // StaticSemaphore_t push_semaphorebuf_sem;
 SemaphoreHandle_t drawbuf_sem;  // StaticSemaphore_t draw_semaphorebuf_sem;
-static void push_task_wrapper(void *parameter);
-static void draw_task_wrapper(void *parameter);
+static void push_task(void *parameter);
+static void draw_task(void *parameter);
 void semaphore_setup() {
     ezread.squintf("Semaphores..");
     pushbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
@@ -890,7 +890,7 @@ class Display {
         disp_simbuttons_dirty = false;
         return true;
     }
-    void push_task() {
+    void do_push() {
         if (print_framebuffers) {  // warning this *severely* slows everything down, ~.25 sec/loop. consider disabling word wrap in terminal output
             ezread.squintf("flip=%d\n", flip);
             printframebufs(2);
@@ -900,7 +900,7 @@ class Display {
         sprptr = &framebuf[flip];
         // pushclock = (int)(esp_timer_get_time() - screen_refresh_time);
     }
-    void draw_task() {
+    void do_draw() {
         int mark = (int)esp_timer_get_time();
         draw_all(&framebuf[flip]);
         // drawclock = (int)(esp_timer_get_time() - mark);
@@ -1161,22 +1161,22 @@ bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickT
     }
     return pdFALSE;
 }
-static void push_task_wrapper(void *parameter) {
+static void push_task(void *parameter) {
     while (true) {
         if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
-            screen.push_task();
+            screen.do_push();
             xSemaphoreGive(pushbuf_sem);
             xSemaphoreGive(drawbuf_sem);
         }
         vTaskDelay(pdMS_TO_TICKS(2));  // vTaskDelete(NULL);
     }
 }
-static void draw_task_wrapper(void *parameter) {
+static void draw_task(void *parameter) {
     while (true) {
         // if ((esp_timer_get_time() - screen_refresh_time > refresh_limit) || always_max_refresh || auto_saver_enabled) {
         if (xSemaphoreTake(drawbuf_sem, portMAX_DELAY) == pdTRUE) {
             screen_refresh_time = esp_timer_get_time();
-            screen.draw_task();
+            screen.do_draw();
             xSemaphoreGive(drawbuf_sem);
         }
         vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
