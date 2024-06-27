@@ -242,5 +242,13 @@ class WebManager {
         // if (<activity in web page is detected>) kick_inactivity_timer(HUWeb);  // evidence of user activity
     }
 };
+#endif  // end of if wifi/web is enabled
 
-#endif
+static WebManager web(&looptimer);
+
+void web_task(void *parameter) {
+    while (true) {
+        web.update();
+        vTaskDelay(pdMS_TO_TICKS(20)); // Delay for 20ms, hopefully that's fast enough
+    }
+}

@@ -82,7 +82,7 @@ void set_syspower(bool setting) {
 }
 
 // RTOS task that updates temp sensors in a separate task
-void update_temperature_sensors(void *parameter) {
+void tempsens_task(void *parameter) {
     while (true) {
         if (!dont_take_temperatures)
             tempsens.update_temperatures();
@@ -123,7 +123,7 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
 }
 
 // RTOS task that updates map and airflow sensors, and mass airflow calculation
-void maf_update(void *parameter) {
+void maf_task(void *parameter) {
     while (true) {
         mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
         vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
@@ -393,19 +393,11 @@ static BootMonitor watchdog(&prefs, &looptimer);
 static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition);
 
 #include "web.h"
-static WebManager web(&looptimer);
 
 #include "runmodes.h"
 static RunModeManager run;
 
 #include "display.h"  // includes neopixel.h, touch.h
-
-void update_web(void *parameter) {
-    while (true) {
-        web.update();
-        vTaskDelay(pdMS_TO_TICKS(20)); // Delay for 20ms, hopefully that's fast enough
-    }
-}
 
 void stop_console() {
     ezread.squintf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
@@ -430,6 +422,10 @@ void bootbutton_actions() {  // temporary (?) functionality added for developmen
             speedo.print_config(true);
             tach.print_config(true);
             mulebatt.print_config(true);
+            ezread.squintf("addr: batt:%08X touch:%08X\n", &sensidiots[_MuleBatt], &nowtouch);
+            for (int i=0; i<NumTelemetryFull; i++) {
+                ezread.squintf("%02d: %08X %s\n", i, &sensidiots[i], diag.err_sens_card[i].c_str());            
+            }
             // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
         }
     }
