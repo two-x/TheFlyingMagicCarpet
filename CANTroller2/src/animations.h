@@ -244,15 +244,25 @@ class CollisionsSaver {
         // screenRefreshTimer.set(refresh_limit);
         _is_running = true;
     }
+    void meander_gravity() {
+        if (gravtimer.expired()) {
+            float radius = 5.0, angleIncrement = 10.0 * M_PI / 180.0; // Increment in radians
+            float cosInc = 0.985, sinInc = 0.174; // precomputed trig values
+            static float x = radius, y = 0.0, mag = 0.5;
+            // std::cout << "x: " << x << ", y: " << y << std::endl;
+            mag = constrain((float)(mag + 0.01 * (float)(rn(70) - 35)), 0.0f, 1.0f);
+            x = x * cosInc - y * sinInc; // apply rotation and get new coordinates
+            y = x * sinInc + y * cosInc;
+            ball_gravity_x = (int)(x * mag);  // ball_gravity_x = constrain((ball_gravity_x + rn(6) - 3), -18, 28);
+            ball_gravity_y = (int)(y * mag);  // ball_gravity_y = constrain((ball_gravity_y + rn(6) - 3), -18, 28);
+            gravtimer.set(500000 * (3 + rn(3)));
+        }
+    }
     int update(LGFX_Sprite* _nowspr, viewport* _vp) {
         sprite = _nowspr;
         vp = _vp;
         bool round_over = mainfunc();
-        if (gravtimer.expired()) {
-            ball_gravity_x = constrain((ball_gravity_x + rn(6) - 3), -18, 28);
-            ball_gravity_y = constrain((ball_gravity_y + rn(6) - 3), -18, 28);
-            gravtimer.set(500000 * (2 + rn(4)));
-        }
+        meander_gravity();
         drawfunc();
         return !round_over;  // not done yet
     }
@@ -274,7 +284,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     uint16_t spothue = 65535, penhue = rn(65535);
     int spotrate = 300, huebase = 0;
     int num_cycles = 3, cycle = 0, boxrad, boxminsize, boxmaxarea = 200, shape = rn(Rotate), pensatdir = 1;
-    static constexpr int saver_cycletime_us = 18000000;
+    static constexpr int saver_cycletime_us = 35000000;
     Timer saverCycleTimer, pentimer{70000}, lucktimer, seasontimer, spottimer{2000000};
     Timer wormmovetimer{20000}, wormtimer{1000000}, extraeffectstimer{2850000};
     bool saver_lotto = false, has_eraser = true;
@@ -492,7 +502,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             if (season == 0) boxcolor = rando_color();
             else if (season == 1) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)rn(65535), rn(256), rn(256));
             else if (season == 2) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(1024)) % 65535), 150 + rn(56), 255);
-            else if (season == 3) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(2) * 32767 + rn(512)) % 65535), 150 + rn(56), 255);
+            else if (season == 3) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(2) * 32767 + rn(512)) % 65535), 100 + rn(106), 255);
             for (int axis=HORZ; axis<=VERT; axis++) {
                 boxsize[axis] -= steps[axis];
                 point[axis] += (steps[axis] >> 1);
@@ -536,7 +546,10 @@ class EraserSaver {  // draws colorful patterns to exercise
         int point[2];
         has_eraser = saver_lotto = false;
         lucktimer.reset();
-        uint8_t c = (!wormstripe) ? BLK : pencolor;
+        uint8_t sat;
+        if (season > 1) sat = pensat;
+        else sat = 150 + (int)(105.0 * (float)(((procession > 5) ? 10 - procession : procession)) / 5.0); 
+        uint8_t c = (!wormstripe) ? BLK : hsv_to_rgb<uint8_t>(penhue, sat, 200 + rn(56));;
         if (extraeffectstimer.expired()) {
             ++wormstripe %= 2;
             extraeffectstimer.set(300000 * ((!wormstripe) ? 1 : 4));
@@ -587,7 +600,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (lucktimer.expired())  {
             saver_lotto = !saver_lotto;
-            lucktimer.set(2900000 + !saver_lotto * (5 + rn(800)) * 4000000);
+            lucktimer.set(2900000 + !saver_lotto * (50 + rn(700)) * 4000000);
         } 
         if (saver_lotto) {
             sprite->setTextDatum(textdatum_t::middle_center);
