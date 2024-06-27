@@ -246,7 +246,7 @@ class CollisionsSaver {
     }
     void meander_gravity() {
         if (gravtimer.expired()) {
-            float radius = 5.0, angleIncrement = 10.0 * M_PI / 180.0; // Increment in radians
+            float radius = 15.0, angleIncrement = 10.0 * M_PI / 180.0; // Increment in radians
             float cosInc = 0.985, sinInc = 0.174; // precomputed trig values
             static float x = radius, y = 0.0, mag = 0.5;
             // std::cout << "x: " << x << ", y: " << y << std::endl;
@@ -453,30 +453,41 @@ class EraserSaver {  // draws colorful patterns to exercise
         static bool punchdelay;
         static bool was_eraser;
         spotrate = (int)(rn(900));
-        uint8_t sat = (30 * season) + rn(256 - 30 * season);
-        if (procession < last_procession) {  // on leap year we slam them with a few big punches
+        uint8_t c, sat = (30 * season) + rn(256 - 30 * season);
+        static bool oldproc;
+        if (procession < oldproc) {  // on leap year we slam them with a few bigger punches
             was_eraser = has_eraser;
             has_eraser = false;
             punchdelay = true;
             punches_left = 8;
         }
         else if (!punchdelay) punches_left = 0;
+        oldproc = procession;
         if (season != last_season) {
             mindot = constrain(mindot + rn(4) - 2, 2, 11);
             adddot = constrain(adddot + rn(4) - 2, 2, 16 - mindot);
         }
+        int squarechance = constrain(procession - 2, 0, 5);
+        if (squarechance == 5) squarechance = 1;
+        else if (squarechance) squarechance = (int)(rn(squarechance) > 1);
         if (punches_left > 0) {
             if (extraeffectstimer.expired()) {
-                extraeffectstimer.set(40000 * (9 - punches_left--));
-                sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (50 + rn(20)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);
+                extraeffectstimer.set(30000 * (9 - punches_left--));
+                int r = scaler * (25 + rn(15));
+                c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
+                if (squarechance) sprite->fillRect(rn(vp->w) + vp->x - r/2, rn(vp->h) + vp->y - r/2, r, r, c); 
+                else sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, r, c);  // hue_to_rgb16(rn(255)), BLK);
                 if (punches_left <= 0) {
                     has_eraser = was_eraser;
                     punchdelay = false;
                 }
             }
         }
-        else for (int star = 0; star < 12; star++) {
-            sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, scaler * (mindot + rn(adddot)), hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126)));  // hue_to_rgb16(rn(255)), BLK);     
+        else for (int star = 0; star < (13 - adddot/2); star++) {
+            int r = scaler * (mindot + rn(adddot));
+            c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
+            if (squarechance) sprite->fillRect(rn(vp->w) + vp->x - r/2, rn(vp->h) + vp->y - r/2, r, r, c);  // hue_to_rgb16(rn(255)), BLK);     
+            else sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, r, c);  // hue_to_rgb16(rn(255)), BLK);     
         }
     }
     void run_boxes() {
@@ -547,8 +558,8 @@ class EraserSaver {  // draws colorful patterns to exercise
         has_eraser = saver_lotto = false;
         lucktimer.reset();
         uint8_t sat;
-        if (season > 1) sat = pensat;
-        else sat = 150 + (int)(105.0 * (float)(((procession > 5) ? 10 - procession : procession)) / 5.0); 
+        if (season == 0 || season == 2) sat = pensat;
+        else sat = 105 + (int)(150.0 * (float)(((procession > 5) ? 10 - procession : procession)) / 5.0); 
         uint8_t c = (!wormstripe) ? BLK : hsv_to_rgb<uint8_t>(penhue, sat, 200 + rn(56));;
         if (extraeffectstimer.expired()) {
             ++wormstripe %= 2;
@@ -600,7 +611,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (lucktimer.expired())  {
             saver_lotto = !saver_lotto;
-            lucktimer.set(2900000 + !saver_lotto * (50 + rn(700)) * 4000000);
+            lucktimer.set(2100000 + !saver_lotto * (200 + rn(700)) * 4000000);
         } 
         if (saver_lotto) {
             sprite->setTextDatum(textdatum_t::middle_center);
