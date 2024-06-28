@@ -358,7 +358,7 @@ class IdiotLights {
         &starter.motor, fuelpump.status_inverse_ptr(), &brake.posn_pid_active, &brake.no_feedback, speedo.pin_inactive_ptr(), tach.pin_inactive_ptr(),
         &bootbutton.now, &nowtouch, &encoder.enc_a, sim.enabled_ptr(), &running_on_devboard, &not_syspower,  // 
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
-        &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &sensidiots[_MuleBatt], &sensidiots[_Other], &sensidiots[_GPIO],
+        &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],  // &sensidiots[_MuleBatt]
     };  // , &encoder.enc_b, &starter.req_active, &web_disabled, &powering_up
         // _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero,
     uint8_t icon[iconcount][11] = {

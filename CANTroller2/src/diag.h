@@ -120,11 +120,10 @@ class DiagRuntime {
             checkrange(_Pot);
             checkrange(_Throttle);
             checkrange(_SteerMotor);
-            checkrange(_MuleBatt);
             // setflag(_Throttle, RANGE, gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
             // setflag(_SteerMotor, RANGE, steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
             // setflag(_Ignition, LOST, !ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
-
+            BatteryFailure();            
             BrakeFailure();            
             HotRCFailure();
             SpeedoFailure();
@@ -144,6 +143,7 @@ class DiagRuntime {
         }
     }
     int errorcount(int errtype) { return registered_errcount[errtype]; }
+    bool battrangeerr;
   private:
     void register_device(int _enumname, float* _value, float* _min, float* _max, float* _margin) {  // registers devices that are children of ServoMotor class
         devices[_enumname][DiagVal] = _value;
@@ -232,6 +232,15 @@ class DiagRuntime {
     }
     int worst_sensor(int type) {
         return most_critical_sensor[type];  // for global awareness
+    }
+    void BatteryFailure() {
+        bool last_rangerr = battrangeerr;
+        int _sens = _MuleBatt;
+        battrangeerr = ((*devices[_sens][DiagVal] < *devices[_sens][DiagMin] - *devices[_sens][DiagMargin]) || (*devices[_sens][DiagVal] > *devices[_sens][DiagMax] + *devices[_sens][DiagMargin]));
+        if (battrangeerr != last_rangerr) {
+            violating_value[_sens] = *devices[_sens][DiagVal];  
+        }
+        // checkrange(_MuleBatt);
     }
     void TempFailure() {
         for (int i=_TempEng; i<=_TempAmb; i++) {
