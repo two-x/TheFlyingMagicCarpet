@@ -179,7 +179,7 @@ class BasicModeSwitch : public ToggleSwitch {
         }
         read();
         if (console_enabled) {
-            Serial.begin(115200);  // restart serial console to prevent crashes due to error printing
+            Serial.begin(115200);  // (230400) (115200);  // restart serial console to prevent crashes due to error printing
             // delay(1500);  // note we will miss console messages for a bit surrounding a read, unless we add back these delays
         }
     }
@@ -411,12 +411,14 @@ void stop_console() {
 }
 
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
+    Timer printtimer;
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
     if (bootbutton.shortpress()) {
         if (auto_saver_enabled) panel.change_saver();
         // else sim.toggle();
         else {
             sim.toggle();
+            printtimer.reset();
             pressure.print_config(true);
             brkpos.print_config(true);
             speedo.print_config(true);
@@ -426,6 +428,8 @@ void bootbutton_actions() {  // temporary (?) functionality added for developmen
             for (int i=0; i<NumTelemetryFull; i++) {
                 ezread.squintf("%02d: %08X %s\n", i, &sensidiots[i], diag.err_sens_card[i].c_str());            
             }
+            int elapsed = printtimer.elapsed();
+            ezread.squintf("printed in: %ld us\n", elapsed);
             // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
         }
     }

@@ -269,7 +269,6 @@ int significant_place(int value) {  // Returns the length in digits of a positiv
 // numeric edits are scaled proportional to the magnitude of the current value. you can specify a minimum decimal place to scale to (keeps from being impossible to cross zero)
 // edit acceleration can be removed for ints if dropdown is set to true (for selection lists, etc.)
 #define disp_default_float_sig_dig 3  // Significant digits displayed for float values. Higher causes more screen draws
-// int idelta = 0;
 float tune(float orig_val, int idelta, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-3) {  // feed in float value, get new constrianed float val, modified by idelta scaled to the magnitude of the value
     int sig_digits = disp_default_float_sig_dig;
     int sig_place = std::max(significant_place(orig_val), min_sig_edit_place + sig_digits);
@@ -314,7 +313,7 @@ void tune(bool* orig_ptr, int idelta) {  // overloaded to directly modify bool a
     *orig_ptr = tune(idelta);
 }
 
-template <typename T>
+template <typename T>  // feed me hue/sat/bright values and get back an rgb color formatted as rgb332 (8b), rgb565 (16b), or rgb888 (32b)
 T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
     uint8_t rgb[3] = { 0, 0, 0 };  // [r,g,b];
     hue = (hue * 1530L + 32768) / 65536;
@@ -336,17 +335,11 @@ T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
     uint8_t s2 = 255 - sat; // 255 to 0
     uint16_t out[3];
     for (int led=0; led<3; led++) out[led] = (((((rgb[led] * s1) >> 8) + s2) * v1) & 0xff00) >> 8;
-    // if (fake_color332) {
-    //     if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xe0) << 8) | ((out[1] & 0xe0) << 5) | ((out[2] & 0xc0) >> 3);
-    // }
+    // if (fake_color332) if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xe0) << 8) | ((out[1] & 0xe0) << 5) | ((out[2] & 0xc0) >> 3);
     if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xf8) << 8) | ((out[1] & 0xfc) << 5) | (out[2] >> 3);
     else if (std::is_same<T, uint8_t>::value) return (T)((out[0] & 0xe0) | ((out[1] & 0xe0) >> 3) | ((out[2] & 0xc0) >> 6));
     else if (std::is_same<T, uint32_t>::value) return (T)((out[0] << 16) | (out[1] << 8) | out[2]);
 }
-// template <typename T>
-// T hsv_to_rgb(uint8_t hue, uint8_t sat, uint8_t val) {
-//     return hsv_to_rgb((uint16_t)hue << 8, sat, val);
-// }
 uint8_t rando_color() {
     return ((uint8_t)random(0x7) << 5) | ((uint8_t)random(0x7) << 2) | (uint8_t)random(0x3); 
 }
@@ -357,23 +350,22 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
   public:
     Timer() { reset(); }
     Timer(int arg_timeout) { set (arg_timeout); }
-    void set (int arg_timeout) {                                          // sets the timeout to the given number of microsconds and zeroes the timer
+    void set (int arg_timeout) {                                              // sets the timeout to the given number (in us) and zeroes the timer
         tout = (int64_t)arg_timeout;
         start = esp_timer_get_time();
     }
     void reset() { start = esp_timer_get_time(); }                            // zeroes the timer
+    int elapsed() { return esp_timer_get_time() - start; }                    // returns microseconds elapsed since last reset
+    bool elapsed(int check) { return esp_timer_get_time() - start >= check; } // returns whether the given amount of us have elapsed since last reset
+    int timeout() { return tout; }                                            // returns the currently set timeout value in us
     bool expired() { return esp_timer_get_time() >= start + tout; }           // returns whether more than the previously-set timeout has elapsed since last reset
-    int elapsed() { return esp_timer_get_time() - start; }                // returns microseconds elapsed since last reset
-    bool elapsed(int check) { return esp_timer_get_time() - start >= check; } // returns whether the given amount of microseconds have elapsed since last reset
-    int timeout() { return tout; }                                        // returns the currently set timeout value in microseconds
-    bool expireset() {                                                        // like expired() but immediately resets if expired
+    bool expireset() {                                                        // like expired() but automatically resets if expired
         int64_t now = esp_timer_get_time();
         if (now < start + tout) return false;
         start = now;
         return true;
     }    
 };
-Timer user_inactivity_timer;  // how long of not touching it before it goes to low power mode
 
 const uint8_t BLK  = 0x00;  // greyscale: full black (RGB elements off)
 const uint8_t DGRY = 0x49;  // pseudo-greyscale: very dark grey (blueish)
@@ -424,8 +416,9 @@ uint8_t colorcard[NUM_RUNMODES] = { MGT, PUR, RED, ORG, YEL, GRN, TEAL, WHT };
 // kick_inactivity_timer() function to call whenever human activity occurs, for accurate inactivity timeout feature
 //   integer argument encodes which source of human activity has kicked the timer. Here are the codes:
 enum human_activities { HUNone=-1, HUMomDown=0, HUMomUp=1, HUEncTurn=2, HUWeb=3, HUTouch=4, HURCTog=5, HURCTrig=6, HUPot=7, HUTogSw=8, HUNumActivities=9 };
-int last_activity = HUNone;
 std::string activitiescard[HUNumActivities] = { "msw_dn", "msw_up", "encodr", "web", "touch", "rc_btn", "rctrig", "pot", "tog_sw" };
+Timer user_inactivity_timer;  // how long of not touching it before it goes to low power mode
+int last_activity = HUNone;
 void kick_inactivity_timer(int source=-1) {
     if (source < 0) return;
     user_inactivity_timer.reset();  // evidence of user activity
