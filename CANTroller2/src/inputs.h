@@ -246,12 +246,12 @@ class Touchscreen {
     LGFX* _tft;
     I2C* _i2c;
     int corners[2][2][2] = { { { -25, -3549 }, { 185, 3839 } },  // [restouch][xx/yy][min/max]  // Read resistance values from upper-left and lower-right corners of screen, for calibration
-                                 { { -100, 319 }, { 0, 174 } } };   // [captouch][xx/yy][min/max]  // Read resistance values from upper-left and lower-right corners of screen, for calibration
+                             { { -100, 319 },  { 0, 174 } } };   // [captouch][xx/yy][min/max]  // Read resistance values from upper-left and lower-right corners of screen, for calibration
     bool touch_longpress_valid = true;
     bool landed_coordinates_valid = false;
     bool lasttouch = false;
     int fd_exponent = 0;
-    float fd = (float)(1 << fd_exponent);
+    float fd = (float)(1 << fd_exponent);  // float delta
     int touch_fudge = 0;
     int fd_exponent_max = 6;
     int tlast_x, tlast_y;
@@ -259,7 +259,7 @@ class Touchscreen {
     Timer touchAccelTimer{400000};
     Timer touchSenseTimer{15000};  // touch chip can't respond faster than some time period
     Timer keyRepeatTimer{250000};  // for editing parameters with only a few values, auto repeat is this slow
-    bool touchPrintEnabled = true;
+    bool touchPrintEnabled = true;  // , nowtouch = false, nowtouch2 = false;
     unsigned long lastTouchPrintTime = 0;
     const unsigned long touchPrintInterval = 500; // Adjust this interval as needed (in milliseconds)
     enum touch_axis : int { xx, yy, zz };
@@ -301,6 +301,7 @@ class Touchscreen {
         Serial.printf("Touchscreen.. %s panel\n", (captouch) ? "detected captouch" : "using resistive");
     }
     bool touched() { return nowtouch; }
+    bool* nowtouch_ptr() { return &nowtouch; }
     int touch_x() { return tft_touch[xx]; }
     int touch_y() { return tft_touch[yy]; }
     int16_t touch_pt(uint8_t axis) { return tft_touch[axis]; }
