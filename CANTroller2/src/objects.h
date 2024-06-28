@@ -424,7 +424,7 @@ void bootbutton_actions() {  // temporary (?) functionality added for developmen
             speedo.print_config(true);
             tach.print_config(true);
             mulebatt.print_config(true);
-            ezread.squintf("addr: batt:%08X touch:%08X\n", &sensidiots[_MuleBatt], &nowtouch);
+            ezread.squintf("addr: batt:%08X touch:%08X\n", &sensidiots[_MuleBatt], touch.nowtouch_ptr());
             for (int i=0; i<NumTelemetryFull; i++) {
                 ezread.squintf("%02d: %08X %s\n", i, &sensidiots[i], diag.err_sens_card[i].c_str());            
             }

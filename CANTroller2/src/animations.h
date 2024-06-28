@@ -272,7 +272,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     viewport* vp;
     int wormpos[2] = {0, 0}, wormvel[2] = {0, 0}, wormsign[2] = {1, 1}, wormd[2] = {20, 20};
     int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128, boxsize[2], mindot = 4, adddot = 4;
-    int sprsize[2], rotate = -1, scaler = 1, season = rn(4), last_season = 0, procession = rn(10), last_procession = 3, numseasons = 4;
+    int sprsize[2], rotate = -1, scaler = 1, season = rn(4), last_season = 0, precession = rn(10), last_precession = 3, numseasons = 4;
     int point[2], plast[2], er[2], erpos_max[2], wormstripe = 2;
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, now = 0;
@@ -330,10 +330,10 @@ class EraserSaver {  // draws colorful patterns to exercise
             last_season = season;
             ++season %= numseasons;
             seasontimer.set(3200000 * (1 + rn(4)));
-            last_procession = procession;
-            procession += season;
-            procession %= 10;
-            // Serial.printf("p:%d s:%d\n", procession, season);
+            last_precession = precession;
+            precession += season;
+            precession %= 10;
+            Serial.printf("p:%d s:%d\n", precession, season);
         }
         drawsprite();
         return shapes_done;
@@ -393,18 +393,19 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
         sprite->fillCircle(plast[HORZ] + vp->x, plast[VERT] + vp->y, 3, wcball);
         for (int h=-4; h<=4; h++)
-            sprite->drawGradientLine(point[HORZ] + vp->x, point[VERT] + vp->y, plast[HORZ]  + vp->x + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + vp->y + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wctip, wcball);
+            sprite->drawGradientLine(point[HORZ] + vp->x, point[VERT] + vp->y, plast[HORZ] + vp->x + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + vp->y + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wctip, wcball);
         wclast = wcball;
     }
     void run_ellipses() {
-        int d[2] = {10 + rn(30), 10 + rn(30)};
+        int d[2] = {10 + rn(30), 10 + rn(30)};  //  this crashes after 10 seconds:  int d[2] = { 5 + rn(20 * (int)(season / 2)), 5 + rn(20 * (int(season / 2))) };  // 
         uint8_t sat, brt;
         uint16_t mult = rn(2000), hue = spothue + rn(3000);
         spotrate = (int)((season * 200) + rn(200));
         sat = 100 + rn(156);
         brt = 120 + rn(136);
-        for (int i = 0; i < 6 + rn(20); i++) { 
-            sprite->drawEllipse(point[HORZ] + vp->x, point[VERT] + vp->y, scaler * d[0] - i, scaler * d[1] + i, hsv_to_rgb<uint8_t>(hue + mult * i, sat, brt));
+        for (int i = 0; i < 6 + rn(20); i++) {
+            uint8_t c = hsv_to_rgb<uint8_t>(hue + mult * i, sat, brt);
+            sprite->drawEllipse(point[HORZ] + vp->x, point[VERT] + vp->y, scaler * d[0] - i, scaler * d[1] + i, c);
         }
     }
     void run_rings() {
@@ -412,13 +413,13 @@ class EraserSaver {  // draws colorful patterns to exercise
             spotrate = (int)(200 + rn(800));
             extraeffectstimer.set(500000 * (1 + rn(4)));
         }
-        int d = 3 + rn(12 + (procession - 4) * 2);
+        int d = 3 + rn(14 + (precession - 4) * 2);
         uint8_t sat, brt, c, c2;
         uint16_t hue;
         uint16_t hue_common = hue = spothue + 32768 * rn(2) + rn(1500);
         if (season == 0) {
             hue = hue_common;
-            sat = 75 + 100 * rn(2);
+            sat = (!rn(4)) ? 200 + rn(50) : 75 + 100 * rn(2);
             brt = 150 + rn(56);
         }
         else if (season == 1) {
@@ -437,7 +438,9 @@ class EraserSaver {  // draws colorful patterns to exercise
             brt = 200 + rn(56);
         }
         c = hsv_to_rgb<uint8_t>(hue, sat, brt);
-        c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
+        if (!(precession % 3)) c2 = c;  // hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
+        else if (!(precession % 2)) c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
+        else c2 = BLK;  // 
         // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
         for (int xo = -1; xo <= 1; xo += 2) {
             sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler, c);
@@ -454,39 +457,55 @@ class EraserSaver {  // draws colorful patterns to exercise
         spotrate = (int)(rn(900));
         uint8_t c, sat = (30 * season) + rn(256 - 30 * season);
         static bool oldproc;
-        if (procession < oldproc) {  // on leap year we slam them with a few bigger punches
+        if (precession < oldproc) {  // on leap year we slam them with a few bigger punches
             was_eraser = has_eraser;
             has_eraser = false;
             punchdelay = true;
             punches_left = 8;
         }
         else if (!punchdelay) punches_left = 0;
-        oldproc = procession;
+        oldproc = precession;
         if (season != last_season) {
             mindot = constrain(mindot + rn(4) - 2, 1, 8);
             adddot = constrain(adddot + rn(4) - 2, 2, 11 - mindot);
         }
-        int squarechance = constrain(procession - 2, 0, 5);
-        if (squarechance == 5) squarechance = 1;
-        else if (squarechance) squarechance = (int)(rn(squarechance) > 1);
+        int r, myshape = (season + precession) % 3;
+        // int squarechance = constrain(precession - 2, 0, 5);
+        // if (squarechance == 5) squarechance = 1;
+        // else if (squarechance) squarechance = (int)(rn(squarechance) > 1);
+        // for upright equilateral triangle with origin at 0,0 and peak at 0,1 the bottom right corner is at sqrt(3)/3,-1/3
+        float rt3over3 = 0.6;
+        int stars = 13 - (adddot / 2) - (mindot + adddot > 8) ? 3 : 0;
         if (punches_left > 0) {
             if (extraeffectstimer.expired()) {
                 extraeffectstimer.set(30000 * (9 - punches_left--));
-                int r = scaler * (25 + rn(15));
+                r = scaler * (25 + rn(15));
+                int p[2] = { rn(vp->w) + vp->x, rn(vp->h) + vp->y };
                 c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
-                if (squarechance) sprite->fillRect(rn(vp->w) + vp->x - r/2, rn(vp->h) + vp->y - r/2, r * 2, r * 2, c); 
-                else sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, r, c);  // hue_to_rgb16(rn(255)), BLK);
+                if (myshape == 0) sprite->fillCircle(p[0], p[1], r, c);  // hue_to_rgb16(rn(255)), BLK);
+                else if (myshape == 1) sprite->fillRect(p[0] - r/2, p[1] - r/2, r * 2, r * 2, c); 
+                else {
+                    int pt2[2] = { p[0] - (int)(rt3over3 * (float)r), p[1] - int(0.33 * (float)r) };
+                    int pt3[2] = { p[0] + (int)(rt3over3 * (float)r), pt2[1] };                    
+                    sprite->fillTriangle(p[0], p[1] - r, pt2[0], pt2[1], pt3[0], pt3[1], c);
+                }
                 if (punches_left <= 0) {
                     has_eraser = was_eraser;
                     punchdelay = false;
                 }
             }
         }
-        else for (int star = 0; star < (13 - adddot/2); star++) {
-            int r = scaler * (mindot + rn(adddot));
+        else for (int star = 0; star < stars; star++) {
+            r = scaler * (mindot + rn(adddot));
+            int p[2] = { rn(vp->w) + vp->x, rn(vp->h) + vp->y };
             c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
-            if (squarechance) sprite->fillRect(rn(vp->w) + vp->x - r/2, rn(vp->h) + vp->y - r/2, r * 2, r * 2, c);  // hue_to_rgb16(rn(255)), BLK);     
-            else sprite->fillCircle(rn(vp->w) + vp->x, rn(vp->h) + vp->y, r, c);  // hue_to_rgb16(rn(255)), BLK);     
+            if (myshape == 0) sprite->fillCircle(p[0], p[1], r, c);
+            else if (myshape == 1) sprite->fillRect(p[0] - r/2, p[1] - r/2, r * 2, r * 2, c);
+            else {
+                int pt2[2] = { p[0] - (int)(rt3over3 * (float)r), p[1] - int(0.33 * (float)r) };
+                int pt3[2] = { p[0] + (int)(rt3over3 * (float)r), pt2[1] };                    
+                sprite->fillTriangle(p[0], p[1] - r, pt2[0], pt2[1], pt3[0], pt3[1], c);
+            }
         }
     }
     void run_boxes() {
@@ -511,8 +530,8 @@ class EraserSaver {  // draws colorful patterns to exercise
         for (int mat=0; mat<shells; mat++) {
             if (season == 0) boxcolor = rando_color();
             else if (season == 1) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)rn(65535), rn(256), rn(256));
-            else if (season == 2) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(1024)) % 65535), 150 + rn(56), 255);
-            else if (season == 3) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(2) * 32767 + rn(512)) % 65535), 100 + rn(106), 255);
+            else if (season == 2) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(2) * 32767 + rn(512)) % 65535), 100 + rn(106), 255);
+            else if (season == 3) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(1024)) % 65535), 150 + rn(56), 255);
             for (int axis=HORZ; axis<=VERT; axis++) {
                 boxsize[axis] -= steps[axis];
                 point[axis] += (steps[axis] >> 1);
@@ -521,7 +540,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
     }
     void run_ascii() {
-        // static float offset[2];
+        static float offset[2];
         static int final[2];
         uint16_t hue;
         uint8_t sat;
@@ -529,26 +548,26 @@ class EraserSaver {  // draws colorful patterns to exercise
         sprite->setTextDatum(textdatum_t::middle_center);
         sprite->setFont(&fonts::Font4);
         for (int star = 0; star < 4; star++) {
-            final[HORZ] = point[HORZ] = rn(vp->w);
-            final[VERT] = point[VERT] = rn(vp->h);
-            if (procession > 4) {
+            point[HORZ] = rn(vp->w);
+            point[VERT] = rn(vp->h);
+            if (precession > 4) {
                 hue = (vp->h * (int)(season > 1)) - point[VERT] * 65535 / vp->h;
-                sat = (vp->w * (int)(season == 1 || season == 3)) - point[HORZ] * 255 / vp->w;
+                sat = point[HORZ] * -255 / vp->w;
             }
             else {
                 hue = (vp->w * (int)(season == 0 || season == 2)) - point[HORZ] * 65535 / vp->w;
-                sat = (vp->h * (int)(season < 2)) - point[VERT] * 255 / vp->h;
+                sat = point[VERT] * -255 / vp->h;
             }
-            // for (int axis=HORZ; axis <= VERT; axis++) offset[axis] += (float)rn(100) / 100;
-            // final[HORZ] = (point[HORZ] + ((season < 3) ? (int)(offset[HORZ]) : 0)) % vp->w + vp->x;
-            // final[VERT] = (point[VERT] + ((season > 0) ? (int)(offset[VERT]) : 0)) % vp->h + vp->y;
-            String letter = (String)((char)(0x21 + rn(0x5d)));
+            for (int axis=HORZ; axis <= VERT; axis++) offset[axis] += (float)rn(100) / 100;
+            final[HORZ] = (point[HORZ] + ((season < 3) ? (int)(offset[HORZ]) : 0)) % vp->w + vp->x;
+            final[VERT] = (point[VERT] + ((season > 0) ? (int)(offset[VERT]) : 0)) % vp->h + vp->y;
+            std::string letter = std::string(1, static_cast<char>(0x21 + rn(0x5d)));
             uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue < (32767 / (season+1))) + rn(56));
             sprite->setTextColor(BLK);  // allows subliminal messaging
-            sprite->drawString(letter, final[HORZ] + 1, final[VERT] + 1);  // these will not work at extreme sides
-            sprite->drawString(letter, final[HORZ] - 1, final[VERT] - 1);  // these will not work at extreme sides
+            sprite->drawString(letter.c_str(), final[HORZ] + 1, final[VERT] + 1);  // these will not work at extreme sides
+            sprite->drawString(letter.c_str(), final[HORZ] - 1, final[VERT] - 1);  // these will not work at extreme sides
             sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue > 32767) + rn(56)));
-            sprite->drawString(letter, final[HORZ], final[VERT]);
+            sprite->drawString(letter.c_str(), final[HORZ], final[VERT]);
         }
         sprite->setTextColor(BLK);  // allows subliminal messaging
         sprite->setFont(&fonts::Font0);
@@ -559,7 +578,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         lucktimer.reset();
         uint8_t sat;
         if (season == 0 || season == 2) sat = pensat;
-        else sat = 105 + (int)(150.0 * (float)(((procession > 5) ? 10 - procession : procession)) / 5.0); 
+        else sat = 105 + (int)(150.0 * (float)(((precession > 5) ? 10 - precession : precession)) / 5.0); 
         uint8_t c = (!wormstripe) ? BLK : hsv_to_rgb<uint8_t>(penhue, sat, 200 + rn(56));;
         if (extraeffectstimer.expired()) {
             ++wormstripe %= 2;
@@ -611,7 +630,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (lucktimer.expired())  {
             saver_lotto = !saver_lotto;
-            lucktimer.set(1400000 + !saver_lotto * (200 + 3 * rn(255)) * 4000000);
+            lucktimer.set(1900000 + !saver_lotto * (200 + 3 * rn(255)) * 4000000);
         } 
         if (saver_lotto) {
             sprite->setTextDatum(textdatum_t::middle_center);
