@@ -688,7 +688,7 @@ class Display {
             drawval(20, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
             drawval(21, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
             drawval(22, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
-            drawval(23, hotrc.deadband_us, 0, 100);
+            drawval(23, hotrc.deadband_us, 0.0, 100.0);
         }
         else if (datapage == PG_SENS) {
             drawval(9, pot.native(), pot.absmin_native(), pot.absmax_native());

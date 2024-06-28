@@ -45,7 +45,7 @@ class Potentiometer {
         if (pot_timer.expireset()) {
             _native = static_cast<float>(analogRead(_pin));
             _raw = map(_native, _opmin_native, _opmax_native, _opmin, _opmax);
-            ema_filt(_raw, &_pc, _ema_alpha);
+            _pc = ema_filt(_raw, _pc, _ema_alpha);
             _pc = constrain(_pc, _absmin, _absmax); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
             if (std::abs(_pc - _activity_ref) > _margin_pc) {
                 // ezread.squintf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
@@ -438,8 +438,12 @@ class Sensor : public Transducer {
         if (_first_filter_run) {
             set_si(_si_raw);
             _first_filter_run = false;
+            Serial.printf("x");
+            return;
         }
-        else set_si(ema_filt(_si_raw, _si.val(), _ema_alpha));
+        Serial.printf("+ (%.4lf)", _si_raw);
+        
+        set_si(ema_filt(_si_raw, _si.val(), _ema_alpha));
     }
     virtual void set_val_from_sim() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
         // sim_si(sim_val);                  // wtf is this supposed to do?
@@ -667,11 +671,16 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
         set_abslim(0.0, 15.1);  // set abs range. dictated in this case by the max voltage a battery charger might output
         set_oplim(10.7, 13.9);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
         set_si(11.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
-        set_ema_alpha(0.999);  // note: all the conversion constants for this sensor are actually correct being the defaults 
+        set_ema_alpha(0.005);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         set_can_source(src::POT, true);
         print_config();
     }
     void set_val_from_sim() { set_si(12.0); }  // what exactly is going on here? maybe an attempt to prevent always showing battery errors on dev boards?
+    void update() {
+        Serial.printf("\n\n%.4lf", val());
+        Device::update();
+        Serial.printf(" -> %.4lf\n\n", val());
+    }
 };
 // PressureSensor represents a brake fluid pressure sensor.
 // It extends AnalogSensor to handle reading an analog pin
@@ -1277,7 +1286,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
   public:
     float ema_alpha = 0.065;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
     float pc[NUM_AXES][NUM_VALUS];           // values range from -100% to 100% are all derived or auto-assigned
-    int us[NUM_CHANS][NUM_VALUS] = {
+    float us[NUM_CHANS][NUM_VALUS] = {
         // vals for hotrc v1 (with matte black "HotRC" sticker/receiver)
         // {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         // { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
@@ -1289,13 +1298,13 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         { 1202, 1606, 1806, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         { 1304, 1505, 1705, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
     float ema_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]
-    int absmin_us = 880;
-    int absmax_us = 2091;
-    int deadband_us = 15;  // All [DBBOT] and [DBTOP] values above are derived from this by calling derive()
-    int margin_us = 13;  // All [MARGIN] values above are derived from this by calling derive()
-    int failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
-    int failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
-    int failsafe_pad_us = 10;
+    float absmin_us = 880;
+    float absmax_us = 2091;
+    float deadband_us = 15;  // All [DBBOT] and [DBTOP] values above are derived from this by calling derive()
+    float margin_us = 13;  // All [MARGIN] values above are derived from this by calling derive()
+    float failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
+    float failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
+    float failsafe_pad_us = 10;
   private:
     Simulator* sim;
     Potentiometer* pot;
@@ -1355,7 +1364,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
         return retval;        
     }
     void set_pc(int axis, int param, float val) { pc[axis][param] = val; }
-    void set_us(int axis, int param, int val) { us[axis][param] = val; }
+    void set_us(int axis, int param, float val) { us[axis][param] = val; }
     int next_unfilt_rawval (int axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
     int joydir(int axis = VERT) {
         if (axis == VERT) return ((pc[axis][FILT] > pc[axis][DBTOP]) ? JOY_UP : ((pc[axis][FILT] < pc[axis][DBBOT]) ? JOY_DN : JOY_CENT));
@@ -1364,7 +1373,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
   private:
     void toggles_update() {  //
         for (int chan = CH3; chan <= CH4; chan++) {
-            us[chan][RAW] = (int)(rmt[chan].readPulseWidth(true));
+            us[chan][RAW] = (float)(rmt[chan].readPulseWidth(true));
             sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
             if ((sw[chan] != sw[chan-2]) && !_radiolost) {
                 _sw_event[chan] = true; // So a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
@@ -1373,10 +1382,10 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
         }
     }
-    float us_to_pc(int axis, int _us, bool deadbands=false) {
+    float us_to_pc(int axis, float _us, bool deadbands=false) {
         if (deadbands) {
-            if (_us >= us[axis][DBTOP]) return map((float)_us, (float)us[axis][DBTOP], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-            if (_us <= us[axis][DBBOT]) return map((float)_us, (float)us[axis][DBBOT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
+            if (_us >= us[axis][DBTOP]) return map(_us, us[axis][DBTOP], us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
+            if (_us <= us[axis][DBBOT]) return map(_us, us[axis][DBBOT], us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
             return pc[axis][CENT];
         }
         if (_us >= us[axis][CENT]) return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
@@ -1388,9 +1397,9 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             // ezread.squintf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
         }
         else for (int axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
-            us[axis][RAW] = (int)(rmt[axis].readPulseWidth(true));
-            int us_spike = spike_filter(axis, us[axis][RAW]);
-            ema_filt(us_spike, &us[axis][FILT], ema_alpha);
+            us[axis][RAW] = (float)(rmt[axis].readPulseWidth(true));
+            float us_spike = spike_filter(axis, us[axis][RAW]);
+            us[axis][FILT] = ema_filt(us_spike, us[axis][FILT], ema_alpha);
             pc[axis][RAW] = us_to_pc(axis, us[axis][RAW], false);
             pc[axis][FILT] = us_to_pc(axis, us[axis][FILT], true);
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
@@ -1408,7 +1417,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
     }
     // Spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
     // interpolated from before and after the spike. Also smoothes out abrupt value changes that don't recover later
-    int spike_filter (int axis, int new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
+    float spike_filter (int axis, float new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
         previndex = (depth + index[axis] - 1) % depth;  // previndex is where the incoming new value will be stored
         this_delta = new_val - filt_history[axis][previndex];  // Value change since last reading
         if (std::abs(this_delta) > spike_cliff[axis]) {  // If new value is a cliff edge (start or end of a spike)
@@ -1429,13 +1438,13 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             inject_interpolations (axis, previndex, filt_history[axis][previndex]);  // Smoothly grade the whole buffer
             prespike_index[axis] = -1;  // Cancel the current spike
         }
-        int returnval = filt_history[axis][index[axis]];  // Save the incumbent value at current index (oldest value) into buffer
+        float returnval = filt_history[axis][index[axis]];  // Save the incumbent value at current index (oldest value) into buffer
         filt_history[axis][index[axis]] = new_val;
         raw_history[axis][index[axis]] = new_val;
         ++(index[axis]) %= depth;  // Update index for next time
         return returnval;  // Return the saved old value
     }
-    void inject_interpolations(int axis, int endspike_index, int endspike_val) {  // Replaces values between indexes with linear interpolated values
+    void inject_interpolations(int axis, int endspike_index, float endspike_val) {  // Replaces values between indexes with linear interpolated values
         spike_length = ((depth + endspike_index - prespike_index[axis]) % depth) - 1;  // Equal to the spiking values count plus one
         if (!spike_length) return;  // Two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
         interpolated_slope = (endspike_val - filt_history[axis][prespike_index[axis]]) / spike_length;
