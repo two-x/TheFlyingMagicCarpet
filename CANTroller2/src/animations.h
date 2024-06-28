@@ -469,7 +469,10 @@ class EraserSaver {  // draws colorful patterns to exercise
             mindot = constrain(mindot + rn(4) - 2, 1, 8);
             adddot = constrain(adddot + rn(4) - 2, 2, 11 - mindot);
         }
-        int r, myshape = (season + precession) % 3;
+        int r, myshape = rn(season + precession);
+        if (myshape < 2) myshape = 0;
+        else if (myshape < 6) myshape = 1;
+        else myshape = 2; 
         // int squarechance = constrain(precession - 2, 0, 5);
         // if (squarechance == 5) squarechance = 1;
         // else if (squarechance) squarechance = (int)(rn(squarechance) > 1);
