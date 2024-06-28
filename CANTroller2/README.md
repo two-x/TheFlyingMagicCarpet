@@ -39,8 +39,10 @@
 
 1. Once code is running, if web server is enabled then the board will act as an access point and web server. To access, scan for wifi networks on any nearby computer or phone, ssid = artcarpet, passwd = checkmate. Then browse to 192.168.1.69/ .
 
-## Connected Hardware
+## Hardware
 
+1. [Flying Carpet Information Dumpster](<https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit#heading=h.uaks6l1vfqun>)
+1. [Schematics, board layout, and wiring diagrams](<https://drive.google.com/drive/u/0/folders/1AAUnWQhdA940hJz0VnBCmHV5c0VyWric>)
 1. Display
 1. Touchscreen
 1. SD Card
@@ -63,6 +65,7 @@ SD interface (not yet implemented) is integrated with touchscreen module. We hop
 
 ## Links
 
+1. [bug list](<https://docs.google.com/spreadsheets/d/1_FchfMjr4O9Q0fOcC0f2aJvmvfMjqayLLSsnorOU5c0/edit?gid=0#gid=0>)
 1. [free images](<http://iconarchive.com/>) 1. resize to pixels needed, jpg w/ black backgd  2. convert to rgb565 color
 1. [image to rgb565 color converter](<https://www.youtube.com/redirect?event=video_description&redir_token=QUFFLUhqbkYtMGJvMS1VVWV0ZUpIb1Y4U2U2QzRLM3BKZ3xBQ3Jtc0tudG5MS1hVdmlLajdrNHFMWWtWUkFGTFNadUhaWkVob2ExNV8ya29kLXFmcDh1SEVINDFEeWtSX3A0SW40UlNTcy1CYVlSTTV5cXJKM25VcGxoWjdxSk9kZVFadURVWHhJcU9hMVRUWENyVGVjRkw4aw&q=http%3A%2F%2Fwww.rinkydinkelectronics.com%2Ft_imageconverter565.php&v=U4jOFLFNZBI>)
 1. [rgb565 color picker](<http://www.barth-dev.de/online/rgb565>)
