@@ -246,13 +246,13 @@ class CollisionsSaver {
     }
     void meandering_gravity() {
         if (gravtimer.expired()) {
-            float radius = 25.0, cosinc = 0.985, sininc = 0.174; // precomputed trig values  // angleinc = 10.0 * M_PI / 180.0; // Increment in radians
+            float radius = 10.0, cosinc = 0.985, sininc = 0.174; // precomputed trig values  // angleinc = 10.0 * M_PI / 180.0; // Increment in radians
             static float x = 0, y = radius, mag = 0.5;
             mag = constrain((float)(mag + 0.01 * (float)(rn(70) - 35)), 0.0f, 1.0f);
             x = x * cosinc - y * sininc; // apply rotation and get new coordinates
             y = x * sininc + y * cosinc;
-            ball_gravity_x = (int)(x * mag);  // ball_gravity_x = constrain((ball_gravity_x + rn(6) - 3), -18, 28);
-            ball_gravity_y = (int)(y * mag);  // ball_gravity_y = constrain((ball_gravity_y + rn(6) - 3), -18, 28);
+            ball_gravity_x = (int)(x * radius * mag);  // ball_gravity_x = constrain((ball_gravity_x + rn(6) - 3), -18, 28);
+            ball_gravity_y = (int)(y * radius * mag);  // ball_gravity_y = constrain((ball_gravity_y + rn(6) - 3), -18, 28);
             gravtimer.set(500000 * (3 + rn(3)));
         }
     }

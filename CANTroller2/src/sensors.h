@@ -342,6 +342,13 @@ class Transducer : public Device {
     bool set_pc(float arg_val_pc) { 
         return set_si(from_pc(arg_val_pc));
     }
+    bool sim_si(float arg_val_si) {
+        if (!(_source == src::SIM || _source == src::POT)) return false;
+        if (!_si.set(arg_val_si)) return false;
+        _si_raw = _si.val();
+        _native.set(to_native(_si.val()));
+        return true;
+    }
     // bool add_native(float arg_add) {  // this scales the given add amount to a consistent rate of change 
     //     float delta = arg_add * tuning_rate_pcps * loop_avg_us * (_opmax_native - _opmin_native) / (100.0 * 1000000.0);  // this acceleration logic doesn't belong here
     //     return set_native(constrain(_native.val() + delta, _opmin_native, _opmax_native));
@@ -435,7 +442,7 @@ class Sensor : public Transducer {
         else set_si(ema_filt(_si_raw, _si.val(), _ema_alpha));
     }
     virtual void set_val_from_sim() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
-        set_si(sim_val);                  // wtf is this supposed to do?
+        // sim_si(sim_val);                  // wtf is this supposed to do?
         // set_si(_si.val + touch.fdelta);  // i would think this should look something like this (needs some coding on the other side to support)
     }
     virtual float read_sensor() {
