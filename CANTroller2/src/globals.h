@@ -230,12 +230,12 @@ float ema_filt(float _raw, float _filt, float _alpha) {
     _alpha = constrain(_alpha, 0.0, 1.0);
     return (_alpha * _raw) + ((1.0 - _alpha) * _filt);
 }
-template<typename RAW_T, typename FILT_T>
-void ema_filt(RAW_T _raw, FILT_T* _filt, float _alpha) {
-    float _raw_f = static_cast<float>(_raw);
-    float _filt_f = static_cast<float>(*_filt);
-    *_filt = static_cast<FILT_T>(ema_filt(_raw_f, _filt_f, _alpha));
-}
+// template<typename RAW_T, typename FILT_T>
+// void ema_filt(RAW_T _raw, FILT_T* _filt, float _alpha) {
+//     float _raw_f = static_cast<float>(_raw);
+//     float _filt_f = static_cast<float>(*_filt);
+//     *_filt = static_cast<FILT_T>(ema_filt(_raw_f, _filt_f, _alpha));
+// }
 // significant_place() is used by tune() functions below
 int significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
     int place = 1;
