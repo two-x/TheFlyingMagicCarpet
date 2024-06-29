@@ -407,39 +407,26 @@ class Touchscreen {
             else if (tunctrl == EDIT) idelta = -id;  // If in edit mode, decrease the value
         }
         else if (tbox == 0x04 && longpress()) sim.toggle();  // Pressed the simulation mode toggle. Needs long-press
+        else if (tbox == 0x20 && menusafe && longpress()) calmode_request = true;
         else if (tbox == 0x21) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize));
         else if (tbox == 0x22 && onrepeat()) ezread.lookback(ezread.offset + 1);
         else if (tbox == 0x23 && onrepeat()) ezread.lookback(ezread.offset - 1);
         else if (tbox == 0x24) ezread.lookback(tune(ezread.offset, -id, 0, ezread.bufferSize));
-        else if (tbox == 0x20 && menusafe && longpress()) calmode_request = true;
         else if (tbox == 0x30 && menusafe && longpress()) fuelpump.request(REQ_TOG);
-        else if (tbox == 0x40 && menusafe && longpress()) ignition.request(REQ_TOG);
-        else if (tbox == 0x50 && menusafe && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
-        // else if (tbox == 0x30 && sim.simulating(sens::basicsw) && longpress()) basicmode_request = true;
         else if (tbox == 0x31) pressure.sim_si(tune(pressure.val(), id, pressure.opmin(), pressure.opmax()));  // Pressed the increase brake pressure button
-        else if (tbox == 0x32) pressure.set_si(tune(pressure.val(), -id, pressure.opmin(), pressure.opmax()));
+        else if (tbox == 0x32) pressure.sim_si(tune(pressure.val(), -id, pressure.opmin(), pressure.opmax()));
         else if (tbox == 0x33) brkpos.sim_si(tune(brkpos.val(), id, brkpos.opmin(), brkpos.opmax()));
         else if (tbox == 0x34) brkpos.sim_si(tune(brkpos.val(), -id, brkpos.opmin(), brkpos.opmax()));
+        else if (tbox == 0x40 && menusafe && longpress()) ignition.request(REQ_TOG);
         else if (tbox == 0x41) tach.sim_si(tune(tach.val(), id, tach.opmin(), tach.opmax()));
         else if (tbox == 0x42) tach.sim_si(tune(tach.val(), -id, tach.opmin(), tach.opmax()));
         else if (tbox == 0x43 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
         else if (tbox == 0x44 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], -id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+        else if (tbox == 0x50 && menusafe && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
         else if (tbox == 0x51) speedo.sim_si(tune(speedo.val(), id, speedo.opmin(), speedo.opmax()));
         else if (tbox == 0x52) speedo.sim_si(tune(speedo.val(), -id, speedo.opmin(), speedo.opmax()));
         else if (tbox == 0x53 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
         else if (tbox == 0x54 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], -id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-        // else if (tbox == 0x31 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.set_si(tune(pressure.val(), id, pressure.opmin(), pressure.opmax()));  // Pressed the increase brake pressure button
-        // else if (tbox == 0x32 && sim.simulating(sens::pressure) && pressure.source() == src::TOUCH) pressure.set_si(tune(pressure.val(), -id, pressure.opmin(), pressure.opmax()));
-        // else if (tbox == 0x33 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.set_si(tune(brkpos.val(), id, brkpos.opmin(), brkpos.opmax()));
-        // else if (tbox == 0x34 && sim.simulating(sens::brkpos) && brkpos.source() == src::TOUCH) brkpos.set_si(tune(brkpos.val(), -id, brkpos.opmin(), brkpos.opmax()));
-        // else if (tbox == 0x41 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.set_si(tune(tach.val(), id, tach.opmin(), tach.opmax()));
-        // else if (tbox == 0x42 && sim.simulating(sens::tach) && tach.source() == src::TOUCH) tach.set_si(tune(tach.val(), -id, tach.opmin(), tach.opmax()));
-        // else if (tbox == 0x43 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        // else if (tbox == 0x44 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], -id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        // else if (tbox == 0x51 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.set_si(tune(speedo.val(), id, speedo.opmin(), speedo.opmax()));
-        // else if (tbox == 0x52 && sim.simulating(sens::speedo) && speedo.source() == src::TOUCH) speedo.set_si(tune(speedo.val(), -id, speedo.opmin(), speedo.opmax()));
-        // else if (tbox == 0x53 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-        // else if (tbox == 0x54 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], -id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
     }
     void enableTouchPrint(bool enable) {
         touchPrintEnabled = enable;
