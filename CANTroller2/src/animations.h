@@ -40,23 +40,10 @@ volatile int screen_refresh_time;
 LGFX lcd;
 static constexpr int num_bufs = 2;
 LGFX_Sprite framebuf[num_bufs];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
-struct viewport {
-    int x;
-    int y;
-    int w;
-    int h;
-};
+struct viewport { int x; int y; int w; int h; };
 class CollisionsSaver {
   public:
-    struct ball_info_t {
-        int x;
-        int y;
-        int dx;
-        int dy;
-        int r;
-        int m;
-        uint8_t color;
-    };
+    struct ball_info_t { int x; int y; int dx; int dy; int r; int m; uint8_t color; };
     bool touchnow = false, touchlast;
     bool touchball_invisible = true;
     viewport* vp;
@@ -457,12 +444,24 @@ class EraserSaver {  // draws colorful patterns to exercise
         for (int edge = -1; edge <= 1; edge += 2)
             sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler + edge, c2);
     }
+    void drawdot_helper(int myshape, int r) {
+        uint8_t c, sat = (30 * season) + rn(256 - 30 * season);        
+        float rt3over3 = 0.6;
+        int p[2] = { rn(vp->w) + vp->x, rn(vp->h) + vp->y };
+        c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
+        if (myshape == 0) sprite->fillCircle(p[0], p[1], r, c);
+        else if (myshape == 1) sprite->fillRect(p[0] - r/2, p[1] - r/2, r * 2, r * 2, c);
+        else {
+            int pt2[2] = { p[0] - (int)(rt3over3 * (float)r), p[1] - int(0.33 * (float)r) };
+            int pt3[2] = { p[0] + (int)(rt3over3 * (float)r), pt2[1] };                    
+            sprite->fillTriangle(p[0], p[1] - r, pt2[0], pt2[1], pt3[0], pt3[1], c);
+        }
+    }
     void run_dots() {
         static int punches_left;
         static bool punchdelay;
         static bool was_eraser;
         spotrate = (int)(rn(900));
-        uint8_t c, sat = (30 * season) + rn(256 - 30 * season);
         static bool oldproc;
         if (precession < oldproc) {  // on leap year we slam them with a few bigger punches
             was_eraser = has_eraser;
@@ -479,43 +478,18 @@ class EraserSaver {  // draws colorful patterns to exercise
         int r, myshape = rn(season + precession);
         if (myshape < 2) myshape = 0;
         else if (myshape < 6) myshape = 1;
-        else myshape = 2; 
-        // int squarechance = constrain(precession - 2, 0, 5);
-        // if (squarechance == 5) squarechance = 1;
-        // else if (squarechance) squarechance = (int)(rn(squarechance) > 1);
-        // for upright equilateral triangle with origin at 0,0 and peak at 0,1 the bottom right corner is at sqrt(3)/3,-1/3
-        float rt3over3 = 0.6;
+        else myshape = 2;
         int stars = 13 - (adddot / 2) - (mindot + adddot > 8) ? 3 : 0;
         if (punches_left > 0) {
             if (extraeffectstimer.expired()) {
                 extraeffectstimer.set(30000 * (9 - punches_left--));
                 r = scaler * (25 + rn(15));
-                int p[2] = { rn(vp->w) + vp->x, rn(vp->h) + vp->y };
-                c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
-                if (myshape == 0) sprite->fillCircle(p[0], p[1], r, c);  // hue_to_rgb16(rn(255)), BLK);
-                else if (myshape == 1) sprite->fillRect(p[0] - r/2, p[1] - r/2, r * 2, r * 2, c); 
-                else {
-                    int pt2[2] = { p[0] - (int)(rt3over3 * (float)r), p[1] - int(0.33 * (float)r) };
-                    int pt3[2] = { p[0] + (int)(rt3over3 * (float)r), pt2[1] };                    
-                    sprite->fillTriangle(p[0], p[1] - r, pt2[0], pt2[1], pt3[0], pt3[1], c);
-                }
-                if (punches_left <= 0) {
-                    has_eraser = was_eraser;
-                    punchdelay = false;
-                }
+                drawdot_helper(myshape, r);
             }
         }
         else for (int star = 0; star < stars; star++) {
             r = scaler * (mindot + rn(adddot));
-            int p[2] = { rn(vp->w) + vp->x, rn(vp->h) + vp->y };
-            c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
-            if (myshape == 0) sprite->fillCircle(p[0], p[1], r, c);
-            else if (myshape == 1) sprite->fillRect(p[0] - r/2, p[1] - r/2, r * 2, r * 2, c);
-            else {
-                int pt2[2] = { p[0] - (int)(rt3over3 * (float)r), p[1] - int(0.33 * (float)r) };
-                int pt3[2] = { p[0] + (int)(rt3over3 * (float)r), pt2[1] };                    
-                sprite->fillTriangle(p[0], p[1] - r, pt2[0], pt2[1], pt3[0], pt3[1], c);
-            }
+            drawdot_helper(myshape, r);
         }
     }
     void run_boxes() {
@@ -579,8 +553,8 @@ class EraserSaver {  // draws colorful patterns to exercise
             sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue > 32767) + rn(56)));
             sprite->drawString(letter.c_str(), final[HORZ], final[VERT]);
         }
-        sprite->setTextColor(BLK);  // allows subliminal messaging
-        sprite->setFont(&fonts::Font0);
+        // sprite->setTextColor(BLK);  // allows subliminal messaging
+        // sprite->setFont(&fonts::Font0);
     }
     void run_worm() {
         int point[2];
@@ -595,8 +569,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (extraeffectstimer.expired()) {
             wormstripe = !wormstripe;
             extraeffectstimer.set(300000 * ((!wormstripe) ? 4 : 1));
-        }
-        // if (precession > 6) wormstripe = 0;
+        }  // if (precession > 6) wormstripe = 0;
         int wormposmax[2] = {(vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2};
         if (wormmovetimer.expireset()) {
             for (int axis = HORZ; axis <= VERT; axis++) {
@@ -608,14 +581,11 @@ class EraserSaver {  // draws colorful patterns to exercise
                 }
             }
         }
-        for (int axis = HORZ; axis <= VERT; axis++) {
+        for (int axis = HORZ; axis <= VERT; axis++)
             if (!(bool)rn(3)) wormd[axis] = constrain(wormd[axis] + rn(3) - 1, wormdmin, wormdmax);
-        }
-        if (wormtimer.expireset()) {
-            for (int axis = HORZ; axis <= VERT; axis++) {
+        if (wormtimer.expireset())
+            for (int axis = HORZ; axis <= VERT; axis++)
                 wormvel[axis] = constrain(wormvel[axis] + rn(255) - 127, 0, wormvelmax);
-            }
-        }
         for (int xo1 = -1; xo1 <= 1; xo1 += 2) {
             point[HORZ] = (vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x + xo1;
             point[VERT] = (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y + xo1;
@@ -650,8 +620,8 @@ class EraserSaver {  // draws colorful patterns to exercise
             sprite->setFont(&fonts::Font4);
             sprite->setTextColor(BLK);
             sprite->drawString("\x64\x6f\x20\x64\x72\x75\x67\x73", vp->w / 2 + vp->x, vp->h / 2 + vp->y);
-            sprite->setFont(&fonts::Font0);
-            sprite->setTextDatum(textdatum_t::top_left);
+            // sprite->setFont(&fonts::Font0);
+            // sprite->setTextDatum(textdatum_t::top_left);
         }
     }
     void drawsprite() {
@@ -671,7 +641,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         for (int axis = HORZ; axis <= VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
     }
 };
-class EZReadDrawer {  // never has any terminal solution been easier on the eyes
+class EZReadDrawer {  // never has any terminal application been easier on the eyes
   public:
     bool dirty = true;
     std::string drawnow; // Ring buffer array

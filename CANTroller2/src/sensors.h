@@ -21,7 +21,7 @@ int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
   protected:
-    float _ema_alpha = 0.3;
+    float _ema_alpha = 0.2;
     float _opmin = 0.0, _opmax = 100.0 ;  // in percent
     float _opmin_native = 380; // TUNED 230603 - Used only in determining theconversion factor
     float _opmax_native = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
@@ -1400,6 +1400,7 @@ class Hotrc {  // All things Hotrc, in a convenient, easily-digestible format th
             us[axis][RAW] = (float)(rmt[axis].readPulseWidth(true));
             float us_spike = spike_filter(axis, us[axis][RAW]);
             us[axis][FILT] = ema_filt(us_spike, us[axis][FILT], ema_alpha);
+            if (std::abs(us[axis][FILT] < 0.001)) us[axis][FILT] = 0.0; 
             pc[axis][RAW] = us_to_pc(axis, us[axis][RAW], false);
             pc[axis][FILT] = us_to_pc(axis, us[axis][FILT], true);
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
