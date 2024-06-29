@@ -21,13 +21,13 @@ int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
   protected:
-    float _ema_alpha = 0.99;
+    float _ema_alpha = 0.3;
     float _opmin = 0.0, _opmax = 100.0 ;  // in percent
     float _opmin_native = 380; // TUNED 230603 - Used only in determining theconversion factor
     float _opmax_native = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
     float _absmin_native = 0.0, _absmax_native = static_cast<float>(adcrange_adc);
     float _absmin = 0.0, _absmax = 100.0;
-    float _margin_pc = 10.0;
+    float _margin_pc = 5.0;
     int _pin;
     float _pc = 50.0, _raw, _native, _activity_ref;  // values in filtered percent, raw percent, raw adc
     Timer pot_timer{100000};  // adc cannot read too fast w/o errors, so give some time between readings
@@ -47,6 +47,7 @@ class Potentiometer {
             _raw = map(_native, _opmin_native, _opmax_native, _opmin, _opmax);
             _pc = ema_filt(_raw, _pc, _ema_alpha);
             _pc = constrain(_pc, _absmin, _absmax); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
+            // Serial.printf("r: %.6lf f: %.6lf\n", _raw, _pc);
             if (std::abs(_pc - _activity_ref) > _margin_pc) {
                 // ezread.squintf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
                 kick_inactivity_timer(HUPot);  // evidence of user activity
@@ -327,25 +328,25 @@ class Transducer : public Device {
             set_oplim(from_native(_opmin_native), from_native(_opmax_native), false);  // then convert the new values and ensure si and native stay equivalent
         }
     }
-    bool set_native(float arg_val_native) {
+    bool set_native(float arg_val_native, bool also_set_raw=true) {
         if (!_native.set(arg_val_native)) return false;
         _si.set(from_native(_native.val()));
-        _si_raw = _si.val();
+        if (also_set_raw) _si_raw = _si.val();
         return true;
     }
-    bool set_si(float arg_val_si) {
+    bool set_si(float arg_val_si, bool also_set_raw=true) {
         if (!_si.set(arg_val_si)) return false;
-        _si_raw = _si.val();
+        if (also_set_raw) _si_raw = _si.val();
         _native.set(to_native(_si.val()));
         return true;
     }
-    bool set_pc(float arg_val_pc) { 
-        return set_si(from_pc(arg_val_pc));
+    bool set_pc(float arg_val_pc, bool also_set_raw=true) { 
+        return set_si(from_pc(arg_val_pc), also_set_raw);
     }
-    bool sim_si(float arg_val_si) {
+    bool sim_si(float arg_val_si, bool also_set_raw=true) {
         if (!(_source == src::SIM || _source == src::POT)) return false;
         if (!_si.set(arg_val_si)) return false;
-        _si_raw = _si.val();
+        if (also_set_raw) _si_raw = _si.val();
         _native.set(to_native(_si.val()));
         return true;
     }
@@ -441,9 +442,9 @@ class Sensor : public Transducer {
             Serial.printf("x");
             return;
         }
-        Serial.printf("+ (%.4lf)", _si_raw);
+        // Serial.printf("+ (%.4lf)", _si_raw);
         
-        set_si(ema_filt(_si_raw, _si.val(), _ema_alpha));
+        set_si(ema_filt(_si_raw, _si.val(), _ema_alpha), false);
     }
     virtual void set_val_from_sim() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
         // sim_si(sim_val);                  // wtf is this supposed to do?
@@ -635,10 +636,9 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
   protected:
     Timer read_timer{25000};  // adc cannot read too fast w/o errors, so give some time between readings
     void set_val_from_pin() {
-        if (read_timer.expireset()) {
-            set_native(static_cast<float>(analogRead(_pin)));  // Soren: can this be done without two casts?
-            calculate_ema(); // filtered values are kept in si format
-        }
+        if (!_native.set(static_cast<float>(analogRead(_pin)))) return;
+        _si_raw = from_native(_native.val());
+        calculate_ema(); // filtered values are kept in si format
     }
   public:
     AnalogSensor(int arg_pin) : Sensor(arg_pin) {
@@ -676,11 +676,11 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
         print_config();
     }
     void set_val_from_sim() { set_si(12.0); }  // what exactly is going on here? maybe an attempt to prevent always showing battery errors on dev boards?
-    void update() {
-        Serial.printf("\n\n%.4lf", val());
-        Device::update();
-        Serial.printf(" -> %.4lf\n\n", val());
-    }
+    // void update() {
+        // Serial.printf("\n\n%.4lf", val());
+        // Device::update();
+        // Serial.printf(" -> %.4lf\n\n", val());
+    // }
 };
 // PressureSensor represents a brake fluid pressure sensor.
 // It extends AnalogSensor to handle reading an analog pin

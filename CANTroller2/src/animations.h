@@ -273,7 +273,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     int wormpos[2] = {0, 0}, wormvel[2] = {0, 0}, wormsign[2] = {1, 1}, wormd[2] = {20, 20};
     int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128, boxsize[2], mindot = 4, adddot = 4;
     int sprsize[2], rotate = -1, scaler = 1, season = rn(4), last_season = 0, precession = rn(10), last_precession = 3, numseasons = 4;
-    int point[2], plast[2], er[2], erpos_max[2], wormstripe = 2;
+    int point[2], plast[2], er[2], erpos_max[2];
     int eraser_rad = 14, eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7, touch_w_last = 2;
     int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, now = 0;
     int eraser_velo[2] = {rn(eraser_velo_max), rn(eraser_velo_max)}, shapes_per_run = 5, shapes_done = 0;
@@ -285,7 +285,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     static constexpr int saver_cycletime_us = 35000000;
     Timer saverCycleTimer, pentimer{70000}, lucktimer, seasontimer, spottimer{2000000};
     Timer wormmovetimer{20000}, wormtimer{1000000}, extraeffectstimer{2850000};
-    bool saver_lotto = false, has_eraser = true;
+    bool saver_lotto = false, has_eraser = true, wormstripe = 0;
  public:
     EraserSaver() {}
     void setup(LGFX_Sprite* _nowspr, viewport* _vp) {
@@ -581,12 +581,15 @@ class EraserSaver {  // draws colorful patterns to exercise
         lucktimer.reset();
         uint8_t sat;
         if (season == 0 || season == 2) sat = pensat;
-        else sat = 105 + (int)(150.0 * (float)(((precession > 5) ? 10 - precession : precession)) / 5.0); 
-        uint8_t c = (!wormstripe) ? BLK : hsv_to_rgb<uint8_t>(penhue, sat, 200 + rn(56));;
+        else sat = 105 + (int)(150.0 * (float)(((precession > 5) ? 10 - precession : precession)) / 5.0);
+        static int brightmod = rn(66);
+        brightmod = constrain(brightmod + rn(5) - 2, 0, 65);
+        uint8_t c = (wormstripe) ? BLK : hsv_to_rgb<uint8_t>(penhue, sat, 190 + brightmod);;
         if (extraeffectstimer.expired()) {
-            ++wormstripe %= 2;
-            extraeffectstimer.set(300000 * ((!wormstripe) ? 1 : 4));
+            wormstripe = !wormstripe;
+            extraeffectstimer.set(300000 * ((!wormstripe) ? 4 : 1));
         }
+        // if (precession > 6) wormstripe = 0;
         int wormposmax[2] = {(vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2};
         if (wormmovetimer.expireset()) {
             for (int axis = HORZ; axis <= VERT; axis++) {
