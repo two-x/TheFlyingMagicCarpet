@@ -253,7 +253,7 @@ class CollisionsSaver {
             y = x * sininc + y * cosinc;
             ball_gravity_x = (int)(x * radius * mag);  // ball_gravity_x = constrain((ball_gravity_x + rn(6) - 3), -18, 28);
             ball_gravity_y = (int)(y * radius * mag);  // ball_gravity_y = constrain((ball_gravity_y + rn(6) - 3), -18, 28);
-            gravtimer.set(500000 * (3 + rn(3)));
+            gravtimer.set(200000 * (3 + rn(3)));
         }
     }
     int update(LGFX_Sprite* _nowspr, viewport* _vp) {
@@ -380,6 +380,13 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (season == 1) {
             wctip = hsv_to_rgb<uint8_t>(hue, 0, brt);
             wcball = hsv_to_rgb<uint8_t>(hue, 64, brt);
+        }
+        else if (season == 2) {
+            static uint16_t myhue[2] = { 0, 32767 };
+            for (int i=0; i<2; i++) myhue[i] += rn(361) - 180;
+            bool flipper = (bool)rn(2);
+            wcball = hsv_to_rgb<uint8_t>((flipper) ? myhue[0] : myhue[1], pensat, 200 + rn(56));
+            wctip = hsv_to_rgb<uint8_t>((flipper) ? myhue[1] : myhue[0], pensat, 200 + rn(56));
         }
         else if (season == 3) {
             wctip = hsv_to_rgb<uint8_t>(hue, rn(256), brt);
