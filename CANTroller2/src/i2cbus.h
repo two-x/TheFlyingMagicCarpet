@@ -30,7 +30,7 @@ class I2C {
         Serial.printf("I2C bus"); delay(1);  // Attempt to force print to happen before init
         scanTimer.reset();
         if (disabled) return 0;
-        Wire.begin(_sda_pin, _scl_pin);  // I2c bus needed for airflow sensor
+        Wire.begin(_sda_pin, _scl_pin, i2c_frequency);  // I2c bus needed for airflow sensor
         byte error, address;
         Serial.printf(" scan..");
         _devicecount = 0;
@@ -58,6 +58,7 @@ class I2C {
     }
     void pass_i2c_baton() {
         // Serial.printf("%d->", i2cbaton);
+        if (!use_i2c_baton) return;
         if (i2cbaton == i2c_airvelo || i2cbaton == i2c_map) i2cbaton = (captouch) ? i2c_touch : i2c_lightbox; 
         else if (i2cbaton == i2c_touch) i2cbaton = i2c_lightbox;
         else if (i2cbaton == i2c_lightbox) {

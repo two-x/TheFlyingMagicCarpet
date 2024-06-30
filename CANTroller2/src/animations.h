@@ -30,7 +30,6 @@ std::string simgrid[4][3] = {
 };  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
 
 volatile bool _is_running;
-volatile int _loop_count;
 static constexpr int SHIFTSIZE = 8;
 volatile bool flip = 0;
 volatile int refresh_limit = 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
@@ -45,28 +44,20 @@ class CollisionsSaver {
   public:
     struct ball_info_t { int x; int y; int dx; int dy; int r; int m; uint8_t color; };
     bool touchnow = false, touchlast;
-    bool touchball_invisible = true;
     viewport* vp;
-    uint8_t sqrme, slices = 8;
     ball_info_t* balls;
     ball_info_t* a;
+    static constexpr bool touchball_invisible = true;
     static constexpr int touchball_r = 15;
-    ball_info_t touchball = { 100, 100, 0, 0, touchball_r << SHIFTSIZE, 10, GRN };
-    LGFX_Sprite* sprite;
     static constexpr int BALL_MAX = 35;  // 256
-    ball_info_t _balls[2][BALL_MAX];
-    int _ball_count = 0, _myfps = 0;
-    int ball_thismax, ball_count = 0;
-    int _width, _height, touchx, touchy, lastx, lasty;
-    int sec, psec, ball_create_rate = 3200;
-    int myfps = 0, frame_count = 0;
+    LGFX_Sprite* sprite;
+    ball_info_t _balls[2][BALL_MAX], touchball = { 100, 100, 0, 0, touchball_r << SHIFTSIZE, 10, GRN };
+    int _ball_count = 0, _myfps = 0, ball_thismax, ball_count = 0, myfps = 0, frame_count = 0;
+    int _width, _height, touchx, touchy, lastx, lasty, sec, psec, ball_create_rate = 3200, _loop_count = 0;
     float ball_radius_base = 4.5 / 235.0;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
     float ball_radius_modifier = 2.6 / 235.0;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
     uint8_t ball_redoubler_rate = 0x18;  // originally 0x07
-    int8_t ball_gravity_x = 0, ball_gravity_y = 16;  // ball_gravity = 16;  // originally 0 with suggestion of 4
-    volatile bool _is_running;
-    volatile int _loop_count = 0;
-    Timer gravtimer;
+    int8_t sqrme, slices = 8, ball_gravity_x = 0, ball_gravity_y = 16;  // ball_gravity = 16;  // originally 0 with suggestion of 4
     CollisionsSaver() {}
   private:
     void drawfunc() {
@@ -232,6 +223,7 @@ class CollisionsSaver {
         _is_running = true;
     }
     void meandering_gravity() {
+        static Timer gravtimer;
         if (gravtimer.expired()) {
             float radius = 10.0, cosinc = 0.985, sininc = 0.174; // precomputed trig values  // angleinc = 10.0 * M_PI / 180.0; // Increment in radians
             static float x = 0, y = radius, mag = 0.5;
@@ -388,7 +380,8 @@ class EraserSaver {  // draws colorful patterns to exercise
     }
     void run_ellipses() {
         int d[2] = {10 + rn(30), 10 + rn(30)};  //  this crashes after 10 seconds:  int d[2] = { 5 + rn(20 * (int)(season / 2)), 5 + rn(20 * (int(season / 2))) };  // 
-        uint16_t mult = rn(2000), hue = spothue + rn(3000);
+        uint16_t mult = rn(2000);
+        hue = spothue + rn(3000);
         spotrate = (int)((season * 200) + rn(200));
         sat = 100 + rn(156);
         brt = 120 + rn(136);
@@ -439,14 +432,15 @@ class EraserSaver {  // draws colorful patterns to exercise
             sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler + edge, c2);
     }
     void drawdot_helper(int myshape, int r, int px, int py) {
-        uint8_t c, sat = (30 * season) + rn(256 - 30 * season);        
+        sat = (30 * season) + rn(256 - 30 * season);        
         c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
         if (myshape == 0) sprite->fillCircle(px, py, r, c);
         else if (myshape == 1) sprite->fillRect(px - r, py - r, r * 2, r * 2, c);
         else {
-            int pt2[2] = { px - (int)(1.6 * (float)r), py + int(1.33 * (float)r) };
+            int pt2[2] = { px - (int)(1.6 * (float)r), py + int(1.4 * (float)r) };
             int pt3[2] = { px + (int)(1.6 * (float)r), pt2[1] };                    
-            sprite->fillTriangle(px, py - r - (r >> 1), pt2[0], pt2[1], pt3[0], pt3[1], c);
+            py -= (int)(1.4 * (float)r);
+            sprite->fillTriangle(px, py, pt2[0], pt2[1], pt3[0], pt3[1], c);
         }
     }
     void run_dots() {
@@ -644,8 +638,7 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
     bool dirty = true;
     std::string drawnow; // Ring buffer array
   private:
-    int _main_x, scrollbar_width = 3, pix_margin = 2;
-    int font_height = 6, linelength;
+    int _main_x, pix_margin = 2, font_height = 6, linelength, scrollbar_width = 3;
     LGFX* mylcd;
     // LGFX_Sprite* spr;
     LGFX_Sprite* nowspr_ptr;
@@ -731,7 +724,6 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
 class PanelAppManager {
   private:
     enum saverchoices : int { Eraser, Collisions, NumSaverMenu, Blank };
-    int nowsaver = Eraser, still_running = 0;
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
     viewport vp;
@@ -740,14 +732,11 @@ class PanelAppManager {
     Simulator* sim;
     Touchscreen* touch;
     EZReadDrawer* ezdraw;
-    int touchp[2], dispfps;
-    int corner[2], sprsize[2];
+    int nowsaver = Eraser, still_running = 0, touchp[2], dispfps, corner[2], oldfps = 0, ui_context_last = MuleChassisUI;
     Timer fps_timer, fps_timer2{250000};
     float myfps = 0.0;
-    int oldfps = 0;
     int64_t fps_mark;
     bool simulating_last = false, mule_drawn = false, dirty = true;
-    int ui_context_last = MuleChassisUI;
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint8_t color) {
         if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32x32x8, BLK);
         else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32x32x8, BLK);
