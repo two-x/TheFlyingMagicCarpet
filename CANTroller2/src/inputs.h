@@ -14,9 +14,10 @@ class MomentaryButton {
     bool now = false;  // Remember whether switch is being pressed
     MomentaryButton() {}
     MomentaryButton(int pin, bool _act_keepalive=true) : _sw_pin(pin), activity_timer_keepalive(_act_keepalive) {}
-    void set_pin(int pin) {
-        _sw_pin = pin;
-    }
+    bool pressed() { return now; }
+    void set_pin(int pin) { _sw_pin = pin; }
+    void press_reset() { _sw_action = swNONE; }
+    void setLongPressTimer(int t) { _longPressTimer.set(t); }
     void update() {
         // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
         // Encoder handler routines should act whenever encoder_sw_action is swSHORT or swLONG, setting it back to
@@ -49,16 +50,10 @@ class MomentaryButton {
             _suppress_click = false;  // End click suppression
         }
     }
-    bool pressed() {
-        return now;
-    }
     int press_event(bool autoreset = true) {
         int ret = _sw_action;
         if (autoreset) _sw_action = swNONE;
         return ret;
-    }
-    void press_reset() {
-        _sw_action = swNONE;
     }
     bool longpress(bool autoreset=true) {  // code may call this to check for long press and if so act upon it. Resets the long press if asserted
         bool ret = (_sw_action == swLONG);
@@ -67,6 +62,7 @@ class MomentaryButton {
     }
     bool shortpress(bool autoreset=true) {  // code may call this to check for short press and if so act upon it. Resets the long press if asserted
         bool ret = (_sw_action == swSHORT);
+        if (ret) Serial.printf("buttonpress ");
         if (ret && autoreset) _sw_action = swNONE;
         return ret;
     }
@@ -74,26 +70,13 @@ class MomentaryButton {
         if (pin != -1) _sw_pin = pin;
         pinMode(_sw_pin, INPUT_PULLUP);
     }
-    void setLongPressTimer(int t){
-        _longPressTimer.set(t);
-    }
 };
 class Encoder {
   private:
-    enum _inputs { ENC_A, ENC_B };
-
-    // class vars
-    //  ---- tunable ----
-    // TODO: these are all currently private const, if we ever actually want to tune them live we would need to change this
+    enum _inputs { ENC_A=0, ENC_B=1 };
     // using panasonic-type encoder (16 detents/spin, 1 transition per detent)
-    // 800us : The fastest humanly-possible spin (that soren could do anyway)
-    // 15000us : Sustainably turning uncomfortably fast
-    // 40000us : Regular speed twist
-    // 800000us : Eeeextra slow
+    // 800us: soren's best, maybe glitched, 15000us: uncomfortably fast, 40000us: regular twist, 800000us: eeeextra slow
     int _spintime_min_us = 6000;  // Will reject spins faster than this as an attempt to debounce behavior.
-    // int _accel_thresh_us = 25000;  // Spins faster than this will be accelerated
-
-    // instance vars
     volatile int _spintime_isr_us = 100000;  // Time elapsed between last two detents
     volatile int isr_time_now;
     volatile int isr_time_last;
@@ -103,7 +86,6 @@ class Encoder {
     int _a_pin, _b_pin, _sw_pin;
     int _state = 0;
     int _spintime_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-    //  ---- tunable ----
 
     // Encoder isr. note you gotta set the define EncoderPanasonicType to match your encoder type
     // If true, supports one type of cheap amazon black-pcb. 2024 one of these is mounted in the vehicle control enclosure
@@ -209,10 +191,12 @@ class Encoder {
         enc_a = !digitalRead(_a_pin);
         enc_b = !digitalRead(_b_pin);
         if (run.mode == LOWPOWER && !syspower) {
-            if (button.shortpress(false)) sleep_request = REQ_OFF;
+            if (button.shortpress()) {
+                sleep_request = REQ_OFF;
+            }
         }
         else if (run.mode == STANDBY) {
-            if (button.shortpress(false)) autosaver_request = REQ_OFF;
+            if (button.shortpress()) autosaver_request = REQ_OFF;
         }
         update_spinrate();
     }
