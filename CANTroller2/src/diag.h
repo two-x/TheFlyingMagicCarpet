@@ -109,6 +109,7 @@ class DiagRuntime {
             return;
         }
         runmode = _runmode;
+        if (runmode == LOWPOWER) return;
         if (errTimer.expireset()) {
             // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
             // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
@@ -517,7 +518,7 @@ class LoopTimer {
         if (loop_avg_us > 1) loopfreq_hz = 1000000/loop_avg_us;
         loop_peak_us = 0;
         for (int i=0; i<loop_history; i++) if (loop_peak_us < loop_periods_us[i]) loop_peak_us = loop_periods_us[i]; 
-        if (looptime_print) {
+        if (looptime_print) {  // note: convert cout to ezread.squintf
             loop_cout_mark_us = esp_timer_get_time();
             std::cout << std::fixed << std::setprecision(0);
             std::cout << "\r" << (int)loop_sum_s << "s #" << loopno;  //  << " av:" << std::setw(5) << (int)(loop_avg_us);  //  << " av:" << std::setw(3) << loop_avg_ms 
@@ -539,33 +540,57 @@ class LoopTimer {
 };
 class BootMonitor {
   private:
-    int timeout_sec = 10;
+    int timeout_sec = 10, runmode_now, wrote_runmode = 500, wrote_status = 500, crashcount = 0, bootcount;     // variable to track total number of boots of this code build
+    int runmode_postmortem, codestatus_postmortem, ign_postmortem, panic_postmortem;
     uint32_t uptime_recorded = -1, uptime_rounding = 5;
     Preferences* myprefs;
     LoopTimer* myloop;
-    int codestatus_last = 50000, crashcount = 0;
-    uint32_t bootcount;     // variable to track total number of boots of this code build
-    uint32_t codestatus_postmortem;
-    std::string codestatuscard[NumCodeStatuses] = { "confused", "booting", "parked", "stopped", "driving" };
+    std::string codestatuscard[NumCodeStatuses] = { "confused", "asleep", "booting", "parked", "stopped", "panicking", "in basicmode", "driving" };
     Timer highWaterTimer{30000000};
     TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4; TaskHandle_t* task5;
     UBaseType_t highWaterBytes;
-    bool was_panicked = false;
+    bool wrote_panic, wrote_ign, was_panicked = false;
+    void flash_codestatus(int _stat) {
+        codestatus = _stat;
+        if (wrote_status != codestatus) myprefs->putUInt("codestatus", (uint32_t)_stat);
+        wrote_status = _stat;
+    }
+    void flash_runmode(int _mode) {
+        runmode_now = _mode;
+        if (wrote_runmode != runmode_now) myprefs->putUInt("runmode", (uint32_t)runmode_now);
+        wrote_runmode = runmode_now;
+    }
+    void flash_panicstop() {
+        if (wrote_panic != panicstop) myprefs->putUInt("panicstop", (uint32_t)panicstop);
+        wrote_panic = panicstop;
+    }
+    void flash_ignition() {
+        if (wrote_ign != ignition.signal) myprefs->putUInt("ignition", (uint32_t)ignition.signal);
+        wrote_ign = ignition.signal;
+    }
   public:
     int boot_to_runmode = STANDBY;
     BootMonitor(Preferences* _prefs, LoopTimer* _loop) : myprefs(_prefs), myloop(_loop) {}
-    void set_codestatus(int _mode) {
-        codestatus = _mode;
-        if (codestatus_last != codestatus) myprefs->putUInt("codestatus", codestatus);
-        codestatus_last = codestatus;
+    void set_codestatus(int runmode) {
+        flash_runmode(runmode);
+        flash_panicstop();
+        flash_ignition();
+        int dowrite = Confused;
+        if (panicstop) dowrite = Panicking;
+        if (runmode == BASIC) dowrite = InBasic;
+        else if (runmode == LOWPOWER) dowrite = Asleep;
+        else if (runmode == FLY || runmode == CRUISE) dowrite = Driving;
+        else if (runmode == HOLD || runmode == STALL) dowrite = Stopped;
+        else if (runmode == STANDBY) dowrite = Parked;
+        flash_codestatus(dowrite);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
     }
     void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, TaskHandle_t* t5, int sec = -1) {
         task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;  task5 = t5;
         if (sec >= 0) timeout_sec = sec;
         psram_setup();
         myprefs->begin("FlyByWire", false);
-        bootcounter();
-        set_codestatus(Booting);
+        read_bootstatus();
+        flash_codestatus(Booting);
         print_postmortem();
         recover_status();
         print_partition_table();
@@ -589,28 +614,30 @@ class BootMonitor {
         print_high_water(task1, task2, task3, task4, task5);
     }
   private:
-    void bootcounter() {
-        bootcount = myprefs->getUInt("bootcount", 0) + 1;
-        myprefs->putUInt("bootcount", bootcount);
-        codestatus_postmortem = myprefs->getUInt("codestatus", Confused);
-        crashcount = myprefs->getUInt("crashcount", 0);
+    void read_bootstatus() {
+        bootcount = (int)myprefs->getUInt("bootcount", 0) + 1;
+        myprefs->putUInt("bootcount", (uint32_t)bootcount);
+        codestatus_postmortem = (int)myprefs->getUInt("codestatus", Confused);
+        ign_postmortem = (int)myprefs->getUInt("ignition", (uint32_t)HIGH);
+        panic_postmortem = (int)myprefs->getUInt("panicstop", (uint32_t)HIGH);
+        runmode_postmortem = (int)myprefs->getUInt("runmode", (uint32_t)FLY);
+        crashcount = (int)myprefs->getUInt("crashcount", 0);
         if (codestatus_postmortem != Parked) crashcount++;
-        myprefs->putUInt("crashcount", crashcount);
-        was_panicked = (bool)myprefs->getUInt("panicstop", false);
+        myprefs->putUInt("crashcount", (uint32_t)crashcount);
+        wrote_panic = (codestatus_postmortem == Panicking);
     }
     void write_uptime() {
         float get_uptime = myloop->uptime();
-        uint32_t myround = std::min((uint32_t)get_uptime, uptime_rounding);
-        uint32_t uptime_new = (uint32_t)(get_uptime / (float)myround) * myround;
+        float myround = std::min(get_uptime, (float)uptime_rounding);
+        int uptime_new = (int)(get_uptime / myround) * (int)myround;
         if (uptime_new == uptime_recorded) return;
-        myprefs->putUInt("uptime", uptime_new);
+        myprefs->putUInt("uptime", (uint32_t)uptime_new);
         uptime_recorded = uptime_new;
     }
     void print_postmortem() {
-        ezread.squintf("Boot count: %d (%d/%d). Last lost power:\n  while %s", bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str());
-        if (was_panicked) ezread.squintf(" and panicking,");
-        ezread.squintf(" after ");
-        uint32_t last_uptime = myprefs->getUInt("uptime", 0);
+        ezread.squintf("Bootcount: %d (%d/%d). Last lost power\n  while %s%s in %s mode,\n  after ", 
+            bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str(), panic_postmortem ? "and panicking" : "", modecard[runmode_postmortem].c_str());
+        int last_uptime = (int)myprefs->getUInt("uptime", 0);
         if (last_uptime > 0) {
             ezread.squintf("just over %d min uptime\n", last_uptime);
             write_uptime();
@@ -639,19 +666,18 @@ class BootMonitor {
             ignition.panic_request(REQ_ON);
             return;
         }
-        ezread.squintf("  Resuming %s status..\n", codestatuscard[codestatus_postmortem]);
-        boot_to_runmode = (codestatus_postmortem == Driving) ? FLY : HOLD;
-        ignition.request(REQ_ON);
+        ezread.squintf("  Resuming %s run mode w/ ignition %s..\n", modecard[runmode_postmortem], ign_postmortem ? "on" : "off");
+        boot_to_runmode = runmode_postmortem;  // (codestatus_postmortem == Driving) ? FLY : HOLD;
+        ignition.request(ign_postmortem ? REQ_ON : REQ_OFF);
         // gas.(brake.pc[STOP]);  // brake.pid_targ_pc(brake.pc[STOP]);
     }
     void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-on-esp32-with-psram#
-        ezread.squintf("PSRAM..");
+        ezread.squintf("PSRAM.. ");
         #ifndef BOARD_HAS_PSRAM
-        ezread.squintf(" support is currently disabled\n");
+        ezread.squintf("support is currently disabled\n");
         return;
         #endif
-        if (psramInit()) ezread.squintf(" is correctly initialized, ");
-        else ezread.squintf(" is not available, ");
+        ezread.squintf("is %s, size %d B\n", psramInit() ? "correctly initialized" : "not available", ESP.getFreePsram());
         // int available_PSRAM_size = ESP.getFreePsram();
         // Serial.println((String)"  PSRAM Size available (bytes): " + available_PSRAM_size);
         // int *array_int = (int *) ps_malloc(1000 * sizeof(int)); // Create an integer array of 1000
@@ -662,9 +688,8 @@ class BootMonitor {
         // int array_size = available_PSRAM_size - available_PSRAM_size_after;
         // Serial.println((String)"Array size in PSRAM in bytes: " + array_size);
         // // free(array_int); //The allocated memory is freed.
-        Serial.println((String)"size (B): " +ESP.getFreePsram());
     }
-    void print_partition_table() {
+    void print_partition_table() {  // warning: this could hang/crash if no "coredump" labeled partition is found
         if (!running_on_devboard) return;
         ezread.squintf("\nPartition Typ SubT  Address SizeByte   kB\n");
         esp_partition_iterator_t iterator = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
