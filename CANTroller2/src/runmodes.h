@@ -26,6 +26,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         we_just_switched_modes = (mode != oldmode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) {
             if (mode != LOWPOWER) autosaver_request = REQ_OFF;
+            watchdog.set_codestatus(mode);
             cleanup_state_variables();
         }
         oldmode = mode;        
@@ -61,7 +62,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(ParkMotor);
             steer.setmode(OpenLoop);
             powering_up = false;  // basicmode_request =  to cover unlikely edge case where basic mode switch is enabled during wakeup from lowpower mode
-            watchdog.set_codestatus(Parked);
         }
         if (hotrc.sw_event(CH4) && !ignition.signal) mode = LOWPOWER;
         if (!in_basicmode && !tach.stopped()) mode = speedo.stopped() ? HOLD : FLY;  // basicsw.val()  If we turned off the basic mode switch with engine running, change modes. If engine is not running, we'll end up in Stall Mode automatically
@@ -74,6 +74,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(Halt);
             steer.setmode(Halt);
             set_syspower(LOW);     // Power down devices to save battery
+            autosaver_request = REQ_ON;  // actually this should be REQ_OFF, plus request screen backlight is shut off or at least black out screen
         }
         if (hotrc.sw_event(CH4) || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // start powering up
             set_syspower(HIGH);    // switch on control system devices
@@ -103,7 +104,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else {  // if standby is complete
             steer.setmode(Halt);  // disable steering, in case it was left on while we were panic stopping
             brake.setmode(Halt);
-            watchdog.set_codestatus(Parked);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
             if (hotrc.sw_event(CH4) || (user_inactivity_timer.elapsed() > lowpower_delay) || sleep_request == REQ_TOG || sleep_request == REQ_ON) mode = LOWPOWER;
             if (calmode_request) mode = CAL;  // if fully shut down and cal mode requested, go to cal mode
             // if (basicmode_request) mode = BASIC;  // if fully shut down and basic mode requested, go to basic mode
@@ -125,7 +125,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_holdMode(bool recovering=false) {
         if (we_just_switched_modes) {
             joy_centered = recovering;  // Fly mode will be locked until the joystick first is put at or below center
-            watchdog.set_codestatus(Stopped);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
+            // watchdog.set_codestatus(Stopped);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
             gas.setmode(throttle_ctrl_mode);
             brake.setmode(AutoHold);
             steer.setmode(OpenLoop);
@@ -146,7 +146,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
         }
         else {
-            watchdog.set_codestatus(Driving);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
+            // watchdog.set_codestatus(Driving);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
             if (speedo.stopped() && hotrc.joydir() != JOY_UP) mode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
         }
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) mode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt

@@ -439,7 +439,7 @@ class Sensor : public Transducer {
         if (_first_filter_run) {
             set_si(_si_raw);
             _first_filter_run = false;
-            Serial.printf("x");
+            // Serial.printf("x");
             return;
         }
         // Serial.printf("+ (%.4lf)", _si_raw);
