@@ -529,6 +529,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 hue = (vp->w * (int)(season == 0 || season == 2)) - point[HORZ] * 65535 / vp->w;
                 sat = point[VERT] * -255 / vp->h;
             }
+            sat = map(sat, 0, 255, 20, 255);
             for (int axis=HORZ; axis <= VERT; axis++) offset[axis] += (float)rn(100) / 100;
             final[HORZ] = (point[HORZ] + ((season < 3) ? (int)(offset[HORZ]) : 0)) % vp->w + vp->x;
             final[VERT] = (point[VERT] + ((season > 0) ? (int)(offset[VERT]) : 0)) % vp->h + vp->y;
@@ -566,6 +567,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 if ((wormpos[axis] * wormsign[axis]) >> shifter >= wormposmax[axis] + 2) {
                     wormpos[axis] = (wormsign[axis] * wormposmax[axis]) << shifter;
                     wormsign[axis] *= -1;
+                    wormvel[1-axis] = rn(wormvelmax);
                     if (wormvel[1-axis] < (1 << 6)) wormvel[1-axis] = wormvel[1-axis] << 1;
                 }
             }
