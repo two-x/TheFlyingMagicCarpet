@@ -300,13 +300,13 @@ class EraserSaver {  // draws colorful patterns to exercise
             cycletimer.set((cycletime / ((cycle == 2) ? 5 : 1)) << (shape == Worm));
             Serial.printf("[c%d] ", cycle);             
         }
-        if (seasontimer.expireset()) {
+        if (seasontimer.expired()) {
             last_season = season;
             ++season %= numseasons;
-            seasontimer.set(3200000 * (2 + rn(5)));
             last_precession = precession;
             precession = (precession + 9 - season - rn(2)) % 10;
-            Serial.printf("(p%d s%d) ", precession, season);
+            Serial.printf("(p%d s%d %ldms) ", precession, season, (int)seasontimer.elapsed()/1000);
+            seasontimer.set(3200000 * (2 + rn(5)));
         }
         drawsprite();
         return shapes_done;
@@ -322,7 +322,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             else if (newpat == -2) while (last_pat == shape) shape = rn(Rotate);
             if (rn(25) == 13) shape = Rotate;
         }
-        Serial.printf("\ns%d: ", shape);
+        Serial.printf("\ns%d %ldms: ", shape, (int)cycletimer.elapsed()/1000);
     }
   private:
     void update_pen() {
@@ -437,18 +437,18 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (myshape == 0) sprite->fillCircle(px, py, r, c);
         else if (myshape == 1) sprite->fillRect(px - r, py - r, r * 2, r * 2, c);
         else {
-            int pt2[2] = { px - (int)(1.6 * (float)r), py + int(1.4 * (float)r) };
-            int pt3[2] = { px + (int)(1.6 * (float)r), pt2[1] };                    
-            py -= (int)(1.4 * (float)r);
+            int pt2[2] = { px - (int)(1.4 * (float)r), py + int(1.05 * (float)r) };
+            int pt3[2] = { px + (int)(1.4 * (float)r), pt2[1] };                    
+            py -= (int)(1.35 * (float)r);
             sprite->fillTriangle(px, py, pt2[0], pt2[1], pt3[0], pt3[1], c);
         }
     }
     void run_dots() {
-        int total_punches = 8;
+        int total_punches = 12;
         static int punches_left, oldseason, oldproc, mindot = 4, adddot = 4;
         static bool punchdelay, was_eraser;
         spotrate = (int)(rn(900));
-        if (precession < oldproc) {  // on leap year we slam them with a few bigger punches
+        if (precession > oldproc) {  // on leap year we slam them with a few bigger punches
             was_eraser = has_eraser;
             has_eraser = false;
             punchdelay = true;
@@ -456,8 +456,8 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         else if (!punchdelay) punches_left = 0;
         if (season != oldseason) {
-            mindot = constrain(mindot + rn(4) - 2, 1, 6);
-            adddot = constrain(adddot + rn(4) - 2, 2, 4);
+            mindot = constrain(mindot + rn(3) - 1, 1 + (cycle >> 1), 2 + cycle);
+            adddot = constrain(adddot + rn(3) - 1, 1, 3 + (cycle >> 1));
         }
         oldproc = precession;
         oldseason = season;
@@ -471,7 +471,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                 int p[2] = { (vp->w >> 1) + vp->x, (vp->h >> 1) + vp->y };
                 r = scaler * (int)((float)vp->h * 0.45 * (1.0 - ((float)punches_left / (float)total_punches)));
                 drawdot_helper(myshape, r, p[0], p[1]);
-                extratimer.set(45000 * (9 - punches_left--));
+                extratimer.set(((total_punches - punches_left < 3) ? 65000 : 20000) * (total_punches + 1 - punches_left--));
             }
         }
         else for (int star = 0; star < stars; star++) {
@@ -481,7 +481,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
     }
     void run_boxes() {
-        static int boxsize[2], boxrad, boxminsize, boxmaxarea = 200;
+        static int boxsize[2], boxrad, boxminsize;
         uint8_t boxcolor;
         boxrad = rn(1 + rn(2) * season);  // note this will crash us!  ->  boxrad = rn(5 * season);
         boxminsize = 2 * boxrad + 5;
@@ -586,8 +586,8 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
     }
     void the_eraser() {
-        static int er[2], erpos_max[2], erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, eraser_rad = 14;
-        static int eraser_rad_min = 22, eraser_rad_max = 40, eraser_velo_min = 3, eraser_velo_max = 7;
+        int eraser_velo_min = 3, eraser_velo_max = 7;
+        static int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, eraser_rad = 14;
         static int eraser_velo[2] = {rn(eraser_velo_max), rn(eraser_velo_max)};
         if ((cycle != 0) && has_eraser) {
             int erpos_max[2] = {(vp->w - eraser_rad) / 2, (vp->h - eraser_rad) / 2};
@@ -598,7 +598,7 @@ class EraserSaver {  // draws colorful patterns to exercise
                     eraser_velo[axis] = eraser_velo_min + rn(eraser_velo_max - eraser_velo_min);
                     eraser_velo[!axis] = eraser_velo_min + rn(eraser_velo_max - eraser_velo_min);
                     eraser_velo_sign[axis] *= -1;
-                    eraser_rad = constrain((int)(eraser_rad + rn(5) - 2), eraser_rad_min, eraser_rad_max);
+                    eraser_rad = constrain((int)(eraser_rad + rn(5) - 2), 22, 40);
                 }
             }
             sprite->fillCircle((vp->w / 2) + erpos[HORZ] + vp->x, (vp->h / 2) + erpos[VERT] + vp->y, eraser_rad * scaler, BLK);
@@ -612,8 +612,6 @@ class EraserSaver {  // draws colorful patterns to exercise
             sprite->setFont(&fonts::Font4);
             sprite->setTextColor(BLK);
             sprite->drawString("\x64\x6f\x20\x64\x72\x75\x67\x73", vp->w / 2 + vp->x, vp->h / 2 + vp->y);
-            // sprite->setFont(&fonts::Font0);
-            // sprite->setTextDatum(textdatum_t::top_left);
         }
     }
     void drawsprite() {
@@ -640,7 +638,6 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
   private:
     int _main_x, pix_margin = 2, font_height = 6, linelength, scrollbar_width = 3;
     LGFX* mylcd;
-    // LGFX_Sprite* spr;
     LGFX_Sprite* nowspr_ptr;
     viewport* vp;
     EZReadConsole* ez;
@@ -675,7 +672,7 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
         draw_scrollbar(spr, LGRY);
         int botline = (ez->current_index - ez->offset - (int)ez->textlines[ez->current_index].empty() + ez->bufferSize) % ez->bufferSize;
         spr->fillSprite(BLK);
-        spr->setTextWrap(false);        // 右端到達時のカーソル折り返しを禁止
+        spr->setTextWrap(false);
         // int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
         spr->setFont(&fonts::Font0);  // spr->setFont(&fonts::Org_01);
         spr->setTextDatum(textdatum_t::top_left);
@@ -896,8 +893,6 @@ class PanelAppManager {
             if (!mule_drawn) {
                 spr->fillSprite(BLK);
                 float w = 145.0, h = 74.0;
-                // spr->pushImageRotateZoom(vp.x, vp.y, w / 2, h / 2, 0, vp.w / w, vp.h / h, w, h, mulechassis_145x74x8, BLK);
-                // spr->pushImageRotateZoom(vp.x + (vp.w - 145) / 2, vp.y + (vp.h - 74) / 2, 82, 37, 0, vp.w / 145, vp.h / 74, 145, 74, mulechassis_145x74x8, BLK);
                 spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, w / 2, h / 2, 0, 1, 1, w, h, mulechassis_145x74x8, BLK);
                 mule_drawn = true;
             }
