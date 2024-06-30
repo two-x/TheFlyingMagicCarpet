@@ -49,18 +49,18 @@ class LGFX : public lgfx::LGFX_Device {
     LGFX(void) {}  // Create a constructor and configure various settings here.  If you change the class name, please specify the same name for the constructor.
     void init() {
         {  // Configure bus control settings.
-            auto cfg = _bus_instance.config(); // Get the structure for bus settings.
-            cfg.spi_host = SPI2_HOST;          // VSPI_HOST is deprecated, use SPI2_HOST.  HSPI_HOST = SPI1_HOST or SPI3_HOST (?)
-            cfg.spi_mode = 0;                  // Set SPI communication mode (0 ~ 3)
-            cfg.freq_write = ((int)captouch + 1) * 20000000;  // 20000000 or 40000000; SPI clock when transmitting (maximum 80MHz, rounded to 80MHz divided by an integer)
-            cfg.freq_read  = 16000000;         // SPI clock when receiving
-            cfg.spi_3wire  = true;             // Set true if receiving is done using the MOSI pin.
-            cfg.use_lock   = true;             // Set true to use transaction locking
-            cfg.dma_channel = SPI_DMA_CH_AUTO; // Set the DMA channel (0=No DMA / 1=1ch / 2=ch / SPI_DMA_CH_AUTO=automatic setting)  // Due to the ESP-IDF version upgrade, SPI_DMA_CH_AUTO is recommended for the DMA channel. 1ch or 2ch is not recommended.
-            cfg.pin_sclk = spi_sclk_pin;        // SCLK pin number
-            cfg.pin_mosi = spi_mosi_pin;        // MOSI pin number
-            cfg.pin_miso = spi_miso_pin;        // MISO pin number
-            cfg.pin_dc   = tft_dc_pin;                  // Set SPI D/C pin number (-1 = disable)
+            auto cfg = _bus_instance.config();  // Get the structure for bus settings.
+            cfg.spi_host    = SPI2_HOST;           // VSPI_HOST is deprecated, use SPI2_HOST.  HSPI_HOST = SPI1_HOST or SPI3_HOST (?)
+            cfg.spi_mode    = 0;                   // Set SPI communication mode (0 ~ 3)
+            cfg.freq_write  = ((int)captouch + 1) * 20000000;  // 20000000 or 40000000; SPI clock when transmitting (in Hz) (max 80MHz, rounded to 80MHz divided by an integer)
+            cfg.freq_read   = 16000000;          // SPI clock when receiving (in Hz)
+            cfg.spi_3wire   = true;              // Set true if receiving is done using the MOSI pin.
+            cfg.use_lock    = true;              // Set true to use transaction locking
+            cfg.dma_channel = SPI_DMA_CH_AUTO;  // Set the DMA channel (0=No DMA / 1=1ch / 2=ch / SPI_DMA_CH_AUTO=automatic setting)  // Due to the ESP-IDF version upgrade, SPI_DMA_CH_AUTO is recommended for the DMA channel. 1ch or 2ch is not recommended.
+            cfg.pin_sclk    = spi_sclk_pin;        // SCLK pin number
+            cfg.pin_mosi    = spi_mosi_pin;        // MOSI pin number
+            cfg.pin_miso    = spi_miso_pin;        // MISO pin number
+            cfg.pin_dc      = tft_dc_pin;          // Set SPI D/C pin number (-1 = disable)
             // // I2C bus settings
             // cfg.i2c_port    = 0;       // Select I2C port to use (0 or 1)
             // cfg.freq_write  = 400000;  // Clock when transmitting
@@ -68,26 +68,26 @@ class LGFX : public lgfx::LGFX_Device {
             // cfg.pin_sda     = 8;       // SDA pin number
             // cfg.pin_scl     = 9;       // SCL pin number
             // cfg.i2c_addr    = 0x38;    // I2C device address
-            _bus_instance.config(cfg);         // Reflects the setting value on the bus.
+            _bus_instance.config(cfg);              // Reflects the setting value on the bus.
             _panel_instance.setBus(&_bus_instance); // Place the bus on the panel.
         }
         {  // Configure display panel control settings.
-            auto cfg = _panel_instance.config();    // Gets the structure for display panel settings.
-            cfg.pin_cs   = tft_cs_pin;        //   CS pin number  (-1 = disable)
-            cfg.pin_rst      = tft_rst_pin;  // RST pin number  (-1 = disable)
-            cfg.pin_busy         =    -1;  // BUSY pin number (-1 = disable)
-            cfg.panel_width      =   (int)disp_height_pix;  // Actual displayable width, default = 240
-            cfg.panel_height     =   (int)disp_width_pix;  // Actual display height, default = 320
-            cfg.offset_rotation  =     8;  // Offset of value in rotation direction 0~7 (4~7 are upside down), default = 1
-            cfg.rgb_order        = false;  // Set to true if the red and blue colors of the panel are swapped, default = false
-            cfg.offset_x         =     0;  // Panel X direction offset amount
-            cfg.offset_y         =     0;  // Panel Y direction offset amount
-            cfg.dummy_read_pixel =     8;  // Number of dummy read bits before pixel readout
-            cfg.dummy_read_bits  =     1;  // Number of bits for dummy read before reading data other than pixels
-            cfg.readable         =  true;  // Set to true if data reading is possible            
-            cfg.invert           = captouch;  // Set to true if the brightness and darkness of the panel is reversed.
-            cfg.dlen_16bit       =  false;  // Set to true for panels that transmit data length in 16-bit units using 16-bit parallel or SPI.
-            cfg.bus_shared       =  true;  // Set to true when sharing the bus with the SD card (control the bus using drawJpgFile, etc.)
+            auto cfg = _panel_instance.config(); // Gets the structure for display panel settings.
+            cfg.pin_cs           = tft_cs_pin;   // CS pin number  (-1 = disable)
+            cfg.pin_rst          = tft_rst_pin;  // RST pin number  (-1 = disable)
+            cfg.pin_busy         = -1;           // BUSY pin number (-1 = disable)
+            cfg.panel_width      = (int)disp_height_pix; // Actual displayable width, default = 240
+            cfg.panel_height     = (int)disp_width_pix;  // Actual display height, default = 320
+            cfg.offset_rotation  = 8;        // Offset of value in rotation direction 0~7 (4~7 are upside down), default = 1
+            cfg.rgb_order        = false;    // Set to true if the red and blue colors of the panel are swapped, default = false
+            cfg.offset_x         = 0;        // Panel X direction offset amount
+            cfg.offset_y         = 0;        // Panel Y direction offset amount
+            cfg.dummy_read_pixel = 8;        // Number of dummy read bits before pixel readout
+            cfg.dummy_read_bits  = 1;        // Number of bits for dummy read before reading data other than pixels
+            cfg.readable         = true;     // Set to true if data reading is possible            
+            cfg.invert           = captouch; // || !running_on_devboard);  // Set to true if the brightness and darkness of the panel is reversed.
+            cfg.dlen_16bit       = false;    // Set to true for panels that transmit data length in 16-bit units using 16-bit parallel or SPI.
+            cfg.bus_shared       = true;     // Set to true when sharing the bus with the SD card (control the bus using drawJpgFile, etc.)
             // Please set the following only if the display is misaligned with a variable pixel number driver such as ST7735 or ILI9163.
             // cfg.memory_width  =   disp_height_pix;  // Maximum width supported by driver IC
             // cfg.memory_height =   disp_width_pix;  // Maximum height supported by driver IC
@@ -95,36 +95,35 @@ class LGFX : public lgfx::LGFX_Device {
         }
         if (captouch) {  // Configure touch screen control settings. (Delete if unnecessary)
             auto cfg = _cap_touch_instance.config();
-            cfg.x_min      = 0;       // Minimum X value obtained from touch screen (raw value)
-            cfg.x_max      = (int)(disp_width_pix-1);     // Maximum X value obtained from touch screen (raw value)
-            cfg.y_min      = 0;       // Minimum Y value obtained from touch screen (raw value)
-            cfg.y_max      = (int)(disp_height_pix-1);     // Maximum Y value obtained from touch screen (raw value)
-            // cfg.pin_int    = touch_irq_pin;      // INT pin number  (-1 = disable)
-            cfg.offset_rotation = 2;  // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-            cfg.bus_shared = true;   // Set true if using the same bus as the screen
-            cfg.i2c_port   = 0;       // Select I2C to use (0 or 1)
-            cfg.i2c_addr   = 0x38;    // I2C device address number
-            cfg.pin_sda    = i2c_sda_pin;       // SDA pin number
-            cfg.pin_scl    = i2c_scl_pin;       // SCL pin number
-            cfg.freq       = 400000;  // Set I2C clock
+            cfg.x_max = (int)(disp_width_pix-1);  // Maximum X value obtained from touch screen (raw value)
+            cfg.y_max = (int)(disp_height_pix-1); // Maximum Y value obtained from touch screen (raw value)
+            cfg.x_min           = 0;              // Minimum X value obtained from touch screen (raw value)
+            cfg.y_min           = 0;              // Minimum Y value obtained from touch screen (raw value)
+            cfg.offset_rotation = 2;              // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
+            cfg.bus_shared      = false;          // Set true if using the same bus as the screen
+            cfg.i2c_port        = 0;              // Select I2C to use (0 or 1)
+            cfg.i2c_addr        = 0x38;           // I2C device address number
+            cfg.pin_sda         = i2c_sda_pin;    // SDA pin number
+            cfg.pin_scl         = i2c_scl_pin;    // SCL pin number
+            cfg.freq            = i2c_frequency;         // Set I2C clock (in Hz) (was set to 400000) trying 100000 to see if we get less i2c errors
             _cap_touch_instance.config(cfg);
             _panel_instance.setTouch(&_cap_touch_instance);  // Place the touch screen on the panel
         }
         else {  // resistive touch instead
             auto cfg = _res_touch_instance.config();
-            cfg.x_min      = 0;       // Minimum X value obtained from touch screen (raw value)
-            cfg.x_max      = (int)(disp_height_pix-1);     // Maximum X value obtained from touch screen (raw value)
-            cfg.y_min      = 0;       // Minimum Y value obtained from touch screen (raw value)
-            cfg.y_max      = (int)(disp_width_pix-1);     // Maximum Y value obtained from touch screen (raw value)
-            cfg.pin_int  = touch_irq_pin;      // INT pin number
-            cfg.offset_rotation = 2;  // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-            cfg.bus_shared = true;    // Set true if using the same bus as the screen
-            cfg.spi_host = SPI2_HOST; // VSPI_HOST (doesn't recognize?) Select the SPI to use (HSPI_HOST or VSPI_HOST)
-            cfg.freq = 1000000;       // Set SPI clock
-            cfg.pin_sclk = spi_sclk_pin;        // SCLK pin number
-            cfg.pin_mosi = spi_mosi_pin;        // MOSI pin number
-            cfg.pin_miso = spi_miso_pin;        // MISO pin number
-            cfg.pin_cs   = tp_cs_fuel_pin;        //   CS pin number
+            cfg.x_max = (int)(disp_height_pix-1); // Maximum X value obtained from touch screen (raw value)
+            cfg.y_max = (int)(disp_width_pix-1);  // Maximum Y value obtained from touch screen (raw value)
+            cfg.x_min           = 0;              // Minimum X value obtained from touch screen (raw value)
+            cfg.y_min           = 0;              // Minimum Y value obtained from touch screen (raw value)
+            cfg.pin_int         = touch_irq_pin;  // INT pin number
+            cfg.offset_rotation = 2;              // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
+            cfg.bus_shared      = true;           // Set true if using the same bus as the screen
+            cfg.spi_host        = SPI2_HOST;      // VSPI_HOST (doesn't recognize?) Select the SPI to use (HSPI_HOST or VSPI_HOST)
+            cfg.freq            = 1000000;        // Set SPI clock
+            cfg.pin_sclk        = spi_sclk_pin;   // SCLK pin number
+            cfg.pin_mosi        = spi_mosi_pin;   // MOSI pin number
+            cfg.pin_miso        = spi_miso_pin;   // MISO pin number
+            cfg.pin_cs          = tp_cs_fuel_pin; // CS pin number
             _res_touch_instance.config(cfg);
             _panel_instance.setTouch(&_res_touch_instance);  // Place the touch screen on the panel.
         }
@@ -141,7 +140,26 @@ class LGFX : public lgfx::LGFX_Device {
     }
 };
 
-// i stuck these images in here because they're tangentially apropos, and we gotta keep down the file count
+// i stuck these in here because they're tangentially apropos, and we gotta keep down the file count
+const uint16_t rgb332to565lookup[0x100] = {
+0x0000, 0x000a, 0x0015, 0x001f, 0x0120, 0x012a, 0x0135, 0x013f, 0x0240, 0x024a, 0x0255, 0x025f, 0x0360, 0x036a, 0x0375, 0x037f, // 0x00 - 0x0f (0 - 15)
+0x0480, 0x048a, 0x0495, 0x049f, 0x05a0, 0x05aa, 0x05b5, 0x05bf, 0x06c0, 0x06ca, 0x06d5, 0x06df, 0x07e0, 0x07ea, 0x07f5, 0x07ff, // 0x10 - 0x1f (16 - 31)
+0x2000, 0x200a, 0x2015, 0x201f, 0x2120, 0x212a, 0x2135, 0x213f, 0x2240, 0x224a, 0x2255, 0x225f, 0x2360, 0x236a, 0x2375, 0x237f, // 0x20 - 0x2f (32 - 47)
+0x2480, 0x248a, 0x2495, 0x249f, 0x25a0, 0x25aa, 0x25b5, 0x25bf, 0x26c0, 0x26ca, 0x26d5, 0x26df, 0x27e0, 0x27ea, 0x27f5, 0x27ff, // 0x30 - 0x3f (48 - 63)
+0x4800, 0x480a, 0x4815, 0x481f, 0x4920, 0x492a, 0x4935, 0x493f, 0x4a40, 0x4a4a, 0x4a55, 0x4a5f, 0x4b60, 0x4b6a, 0x4b75, 0x4b7f, // 0x40 - 0x4f (64 - 79)
+0x4c80, 0x4c8a, 0x4c95, 0x4c9f, 0x4da0, 0x4daa, 0x4db5, 0x4dbf, 0x4ec0, 0x4eca, 0x4ed5, 0x4edf, 0x4fe0, 0x4fea, 0x4ff5, 0x4fff, // 0x50 - 0x5f (80 - 95)
+0x6800, 0x680a, 0x6815, 0x681f, 0x6920, 0x692a, 0x6935, 0x693f, 0x6a40, 0x6a4a, 0x6a55, 0x6a5f, 0x6b60, 0x6b6a, 0x6b75, 0x6b7f, // 0x60 - 0x6f (96 - 111)
+0x6c80, 0x6c8a, 0x6c95, 0x6c9f, 0x6da0, 0x6daa, 0x6db5, 0x6dbf, 0x6ec0, 0x6eca, 0x6ed5, 0x6edf, 0x6fe0, 0x6fea, 0x6ff5, 0x6fff, // 0x70 - 0x7f (112 - 127)
+0x9000, 0x900a, 0x9015, 0x901f, 0x9120, 0x912a, 0x9135, 0x913f, 0x9240, 0x924a, 0x9255, 0x925f, 0x9360, 0x936a, 0x9375, 0x937f, // 0x80 - 0x8f (128 - 143)
+0x9480, 0x948a, 0x9495, 0x949f, 0x95a0, 0x95aa, 0x95b5, 0x95bf, 0x96c0, 0x96ca, 0x96d5, 0x96df, 0x97e0, 0x97ea, 0x97f5, 0x97ff, // 0x90 - 0x9f (144 - 159)
+0xb000, 0xb00a, 0xb015, 0xb01f, 0xb120, 0xb12a, 0xb135, 0xb13f, 0xb240, 0xb24a, 0xb255, 0xb25f, 0xb360, 0xb36a, 0xb375, 0xb37f, // 0xa0 - 0xaf (160 - 175)
+0xb480, 0xb48a, 0xb495, 0xb49f, 0xb5a0, 0xb5aa, 0xb5b5, 0xb5bf, 0xb6c0, 0xb6ca, 0xb6d5, 0xb6df, 0xb7e0, 0xb7ea, 0xb7f5, 0xb7ff, // 0xb0 - 0xbf (176 - 191)
+0xd800, 0xd80a, 0xd815, 0xd81f, 0xd920, 0xd92a, 0xd935, 0xd93f, 0xda40, 0xda4a, 0xda55, 0xda5f, 0xdb60, 0xdb6a, 0xdb75, 0xdb7f, // 0xc0 - 0xcf (192 - 207)
+0xdc80, 0xdc8a, 0xdc95, 0xdc9f, 0xdda0, 0xddaa, 0xddb5, 0xddbf, 0xdec0, 0xdeca, 0xded5, 0xdedf, 0xdfe0, 0xdfea, 0xdff5, 0xdfff, // 0xd0 - 0xdf (208 - 223)
+0xf800, 0xf80a, 0xf815, 0xf81f, 0xf920, 0xf92a, 0xf935, 0xf93f, 0xfa40, 0xfa4a, 0xfa55, 0xfa5f, 0xfb60, 0xfb6a, 0xfb75, 0xfb7f, // 0xe0 - 0xef (224 - 239)
+0xfc80, 0xfc8a, 0xfc95, 0xfc9f, 0xfda0, 0xfdaa, 0xfdb5, 0xfdbf, 0xfec0, 0xfeca, 0xfed5, 0xfedf, 0xffe0, 0xffea, 0xfff5, 0xffff, // 0xf0 - 0xff (240 - 255)
+};
+
 #define PROGMEM
 const uint8_t blue_up_32x32x8[10730] PROGMEM={
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xbb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,   // pixel# 32

@@ -154,6 +154,7 @@ float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change va
 bool flashdemo = false;
 float neobright = 20.0;   // default for us dim/brighten the neopixels in percent
 float neosat = 90.0;  // default saturation of neopixels in percent
+int i2c_frequency = 400000;  // in kHz. standard freqs are: 100k, 400k, 1M, 3.4M, 5M
 
 // non-tunable values. probably these belong with their related code
 std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
