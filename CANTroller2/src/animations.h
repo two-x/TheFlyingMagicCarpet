@@ -356,6 +356,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         brt = 156 + rn(100);
         static uint8_t wclast;
         if (season == 1) {
+            brt = 156 + rn(100);
             wctip = hsv_to_rgb<uint8_t>(hue, 0, brt);
             wcball = hsv_to_rgb<uint8_t>(hue, 64, brt);
         }
@@ -364,8 +365,8 @@ class EraserSaver {  // draws colorful patterns to exercise
             wctip = hsv_to_rgb<uint8_t>((flipper) ? myhue[1] : myhue[0], pensat, 200 + rn(56));
         }
         else if (season == 3) {
-            wctip = hsv_to_rgb<uint8_t>((flipper) ? myhue[0] : myhue[1], rn(256), brt);
-            wcball = hsv_to_rgb<uint8_t>((flipper) ? myhue[1] : myhue[0], 64, rn(64));
+            wctip = hsv_to_rgb<uint8_t>((flipper) ? myhue[0] : myhue[1], rn(256), 156 + rn(100));
+            wcball = hsv_to_rgb<uint8_t>((flipper) ? myhue[1] : myhue[0], 88, 32 + rn(64));
         }
         else {
             wcball = hsv_to_rgb<uint8_t>(hue, 127 + (spothue >> (season + 5)), 200 + rn(56));
