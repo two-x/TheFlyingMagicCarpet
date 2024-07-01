@@ -191,13 +191,11 @@ class Encoder {
         enc_a = !digitalRead(_a_pin);
         enc_b = !digitalRead(_b_pin);
         if (run.mode == LOWPOWER && !syspower) {
-            if (button.shortpress()) {
-                sleep_request = REQ_OFF;
-            }
+            if (button.shortpress(), false) sleep_request = REQ_OFF;
         }
-        else if (run.mode == STANDBY) {
-            if (button.shortpress()) autosaver_request = REQ_OFF;
-        }
+        // else if (run.mode == STANDBY) {
+        //     if (button.shortpress(), false) autosaver_request = REQ_OFF;
+        // }
         update_spinrate();
     }
     int rotation(bool accel=true) {  // Returns detents spun since last call, accelerated by spin rate or not
@@ -357,7 +355,7 @@ class Touchscreen {
         }
         _i2c->pass_i2c_baton();
         lasttouch = nowtouch;
-    }
+    }  // Serial.printf("%s", nowtouch ? "+" : "-");
     void process_ui(int runmode) {
         if (!nowtouch) return;
         bool menusafe = (runmode != FLY && runmode != HOLD && runmode != CRUISE);

@@ -298,14 +298,12 @@ class EraserSaver {  // draws colorful patterns to exercise
             ++cycle %= num_cycles;
             if (cycle == 0) change_pattern(-1);
             cycletimer.set((cycletime / ((cycle == 2) ? 5 : 1)) << (shape == Worm));
-            Serial.printf("[c%d] ", cycle);             
-        }
+        }  // Serial.printf("[c%d] ", cycle);
         if (seasontimer.expired()) {
             last_season = season;
             ++season %= numseasons;
             last_precession = precession;
-            precession = (precession + 9 - season - rn(2)) % 10;
-            Serial.printf("(p%d s%d %ldms) ", precession, season, (int)seasontimer.elapsed()/1000);
+            precession = (precession + 9 - season - rn(2)) % 10;  // Serial.printf("(p%d s%d %ldms) ", precession, season, (int)seasontimer.elapsed()/1000);
             seasontimer.set(3200000 * (2 + rn(5)));
         }
         drawsprite();
@@ -321,8 +319,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             if (newpat == -3) shape = (shape - 1 + Rotate) % Rotate;
             else if (newpat == -2) while (last_pat == shape) shape = rn(Rotate);
             if (rn(25) == 13) shape = Rotate;
-        }
-        Serial.printf("\ns%d %ldms: ", shape, (int)cycletimer.elapsed()/1000);
+        }  // Serial.printf("\ns%d %ldms: ", shape, (int)cycletimer.elapsed()/1000);
     }
   private:
     void update_pen() {
@@ -353,7 +350,6 @@ class EraserSaver {  // draws colorful patterns to exercise
         static uint16_t myhue[2] = { 0, 32767 };
         for (int i=0; i<2; i++) myhue[i] += rn(511) - 255;
         bool flipper = (bool)rn(2);
-        brt = 156 + rn(100);
         static uint8_t wclast;
         if (season == 1) {
             brt = 156 + rn(100);
@@ -384,7 +380,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         uint16_t mult = rn(2000);
         hue = spothue + rn(3000);
         spotrate = (int)((season * 200) + rn(200));
-        sat = 100 + rn(156);
+        sat = 100 + rn(15 + season * 41);
         brt = 120 + rn(136);
         for (int i = 0; i < 6 + rn(20); i++) {
             uint8_t c = hsv_to_rgb<uint8_t>(hue + mult * i, sat, brt);
@@ -432,53 +428,45 @@ class EraserSaver {  // draws colorful patterns to exercise
         for (int edge = -1; edge <= 1; edge += 2)
             sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler + edge, c2);
     }
-    void drawdot_helper(int myshape, int r, int px, int py) {
-        sat = (30 * season) + rn(256 - 30 * season);        
-        c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
-        if (myshape == 0) sprite->fillCircle(px, py, r, c);
-        else if (myshape == 1) sprite->fillRect(px - r, py - r, r * 2, r * 2, c);
-        else {
-            int pt2[2] = { px - (int)(1.4 * (float)r), py + int(1.05 * (float)r) };
-            int pt3[2] = { px + (int)(1.4 * (float)r), pt2[1] };                    
-            py -= (int)(1.35 * (float)r);
-            sprite->fillTriangle(px, py, pt2[0], pt2[1], pt3[0], pt3[1], c);
-        }
-    }
     void run_dots() {
         int total_punches = 12;
         static int punches_left, oldseason, oldproc, mindot = 4, adddot = 4;
-        static bool punchdelay, was_eraser;
+        static bool was_eraser; 
         spotrate = (int)(rn(900));
-        if (precession > oldproc) {  // on leap year we slam them with a few bigger punches
+        if ((precession > oldproc) && !rn(2)) {  // sometimes on leap year we slam them with a few bigger punches
             was_eraser = has_eraser;
             has_eraser = false;
-            punchdelay = true;
             punches_left = total_punches;
         }
-        else if (!punchdelay) punches_left = 0;
+        oldproc = precession;
+        int r, myshape = rn(season + precession);
         if (season != oldseason) {
             mindot = constrain(mindot + rn(3) - 1, 1 + (cycle >> 1), 2 + cycle);
             adddot = constrain(adddot + rn(3) - 1, 1, 3 + (cycle >> 1));
         }
-        oldproc = precession;
         oldseason = season;
-        int r, myshape = rn(season + precession);
         if (myshape < 2) myshape = 0;
         else if (myshape < 6) myshape = 1;
         else myshape = 2;
-        int stars = 13 - (adddot / 2) - (mindot + adddot > 8) ? 3 : 0;
-        if (punches_left > 0) {
-            if (extratimer.expired()) {
-                int p[2] = { (vp->w >> 1) + vp->x, (vp->h >> 1) + vp->y };
-                r = scaler * (int)((float)vp->h * 0.45 * (1.0 - ((float)punches_left / (float)total_punches)));
-                drawdot_helper(myshape, r, p[0], p[1]);
-                extratimer.set(((total_punches - punches_left < 3) ? 65000 : 20000) * (total_punches + 1 - punches_left--));
+        int p[2], stars = 0;
+        if (!punches_left) stars = 13 - (adddot / 2) - (mindot + adddot > 8) ? 3 : 0;
+        else if (extratimer.expired()) stars = 1;
+        for (int star = 0; star < stars; star++) {
+            p[0] = vp-> x + (punches_left) ? (vp->w >> 1) : rn(vp->w);
+            p[1] = vp->y + (punches_left) ? (vp->h >> 1) : rn(vp->h);
+            if (!punches_left) r = scaler * (mindot + rn(adddot));
+            else r = scaler * (int)((float)vp->h * 0.45 * (1.0 - ((float)punches_left / (float)total_punches)));
+            sat = (30 * season) + rn(256 - 30 * season);        
+            c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
+            if (myshape == 0) sprite->fillCircle(p[0], p[1], r, c);
+            else if (myshape == 1) sprite->fillRect(p[0] - r, p[1] - r, r * 2, r * 2, c);
+            else {
+                int pt2[2] = { p[0] - (int)(1.4 * (float)r), p[1] + int(1.05 * (float)r) };
+                int pt3[2] = { p[0] + (int)(1.4 * (float)r), pt2[1] };                    
+                p[1] -= (int)(1.35 * (float)r);
+                sprite->fillTriangle(p[0], p[1], pt2[0], pt2[1], pt3[0], pt3[1], c);
             }
-        }
-        else for (int star = 0; star < stars; star++) {
-            int p[2] = { rn(vp->w) + vp->x, rn(vp->h) + vp->y };
-            r = scaler * (mindot + rn(adddot));
-            drawdot_helper(myshape, r, p[0], p[1]);
+            if (punches_left) extratimer.set(((punches_left < 3) ? 60000 : 9000) * (total_punches + 1 - punches_left--));
         }
     }
     void run_boxes() {
@@ -546,7 +534,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         // sprite->setFont(&fonts::Font0);
     }
     void run_worm() {
-        static int wormpos[2] = {0, 0}, wormvel[2] = {0, 0}, wormsign[2] = {1, 1}, wormd[2] = {20, 20};
+        static int wormpos[2] = { 0, 0 }, wormvel[2] = { 0, 0 }, wormsign[2] = { 1, 1 }, wormd[2] = { 20, 20 };
         static int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128;
         static Timer movetimer{20000}, wormtimer{1000000};
         static bool wormstripe = 0;
@@ -561,7 +549,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             wormstripe = !wormstripe;
             extratimer.set(300000 * ((!wormstripe) ? 4 : 1));
         }  // if (precession > 6) wormstripe = 0;
-        int wormposmax[2] = {(vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2};
+        int wormposmax[2] = { (vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2 };
         if (movetimer.expireset()) {
             for (int axis = HORZ; axis <= VERT; axis++) {
                 wormpos[axis] += (wormvel[axis] >> 6) * wormsign[axis];
@@ -590,8 +578,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     }
     void the_eraser() {
         int eraser_velo_min = 3, eraser_velo_max = 7;
-        static int erpos[2] = {0, 0}, eraser_velo_sign[2] = {1, 1}, eraser_rad = 14;
-        static int eraser_velo[2] = {rn(eraser_velo_max), rn(eraser_velo_max)};
+        static int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, eraser_rad = 14, eraser_velo[2] = { rn(eraser_velo_max), rn(eraser_velo_max) }; std::string sub = "\x64\x6f\x20\x64\x72\x75\x67\x73";
         if ((cycle != 0) && has_eraser) {
             int erpos_max[2] = {(vp->w - eraser_rad) / 2, (vp->h - eraser_rad) / 2};
             for (int axis = HORZ; axis <= VERT; axis++) {
@@ -608,13 +595,13 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (lucktimer.expired())  {
             saver_lotto = !saver_lotto;
-            lucktimer.set(1900000 + !saver_lotto * (200 + 3 * rn(255)) * 4000000);
+            lucktimer.set(1900000 + (int)(!saver_lotto) * (200 + 3 * rn(255)) * 4000000);
         } 
         if (saver_lotto) {
             sprite->setTextDatum(textdatum_t::middle_center);
             sprite->setFont(&fonts::Font4);
             sprite->setTextColor(BLK);
-            sprite->drawString("\x64\x6f\x20\x64\x72\x75\x67\x73", vp->w / 2 + vp->x, vp->h / 2 + vp->y);
+            sprite->drawString(sub.c_str(), vp->w / 2 + vp->x, vp->h / 2 + vp->y);
         }
     }
     void drawsprite() {
