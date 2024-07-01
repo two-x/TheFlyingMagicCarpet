@@ -139,24 +139,11 @@ class Display {
     int runmode_last = -1;
   public:
     std::string disp_values[disp_lines];  // Holds previously drawn value strings for each line
-    volatile bool disp_bool_values[6];
-    int disp_datapage_last;
-    volatile bool disp_bargraphs[disp_lines];
-    volatile bool disp_polarities[disp_lines];  // Holds sign of previously drawn values
-    volatile int disp_needles[disp_lines];
-    volatile int disp_targets[disp_lines];
-    volatile int disp_age_quanta[disp_lines];
-    volatile uint8_t disp_val_colors[disp_lines];
-    volatile bool disp_selection_dirty;
-    volatile bool disp_datapage_dirty;
-    volatile bool disp_values_dirty;
-    volatile bool disp_data_dirty[disp_lines];
-    volatile bool disp_menutoggles_dirty;
-    volatile bool disp_menus_dirty;
-    volatile bool disp_runmode_dirty;
-    volatile bool disp_simbuttons_dirty;
-    volatile bool disp_idiots_dirty;
-    volatile bool disp_units_dirty;
+    uint8_t disp_val_colors[disp_lines];
+    bool disp_bool_values[6], disp_bargraphs[disp_lines], disp_polarities[disp_lines];  // Holds sign of previously drawn values
+    int disp_datapage_last, disp_needles[disp_lines], disp_targets[disp_lines], disp_age_quanta[disp_lines];
+    bool disp_selection_dirty, disp_datapage_dirty, disp_values_dirty, disp_data_dirty[disp_lines], disp_menutoggles_dirty;
+    bool disp_menus_dirty, disp_runmode_dirty, disp_simbuttons_dirty,disp_idiots_dirty, disp_units_dirty;
     Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
       : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
     void init_framebuffers(int _sprwidth, int _sprheight) {
@@ -760,7 +747,7 @@ class Display {
             draw_ascii(17, brakefeedbackcard[brake.feedback]);
             draw_ascii(18, openloopmodecard[brake.openloop_mode]);
             draw_truth(19, brake.enforce_positional_limits, 1);
-            drawval(20, brake.max_out_change_rate_pcps, 0.0, 1000.0);
+            drawval(20, brake.max_out_change_rate_pcps);
             draw_truth(21, gas.pid_enabled, 1);
             draw_truth(22, gas.cruise_pid_enabled, 1);
             draw_ascii(23, cruiseschemecard[gas.cruise_adjust_scheme]);
