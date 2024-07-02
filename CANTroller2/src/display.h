@@ -1,6 +1,4 @@
 #pragma once
-#include "animations.h"
-#include "neopixel.h"
 
 #define disp_runmode_text_x 12
 #define disp_lines 24  // Max lines of text displayable at line height = disp_line_height_pix
@@ -368,7 +366,7 @@ class Display {
             if (color == NON) color = (outofrange) ? 0xf8 : 0x3c;
             int y_pos = lineno*disp_line_height_pix;
             if (polarity != disp_polarities[lineno]) draw_hyphen(x_base, y_pos, (!polarity) ? color : BLK);
-            draw_string(x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK, force || (color != disp_val_colors[lineno])); // +6*(arraysize(modecard[run.mode])+4-namelen)/2
+            draw_string(x_base+disp_font_width, y_pos, disp_string, disp_values[lineno], color, BLK, force || (color != disp_val_colors[lineno])); // +6*(arraysize(modecard[runmode])+4-namelen)/2
             disp_values[lineno] = disp_string;
             disp_polarities[lineno] = polarity;
             disp_val_colors[lineno] = color;
@@ -620,7 +618,7 @@ class Display {
         disp_idiots_dirty = false;
     }
     void disp_menu_bools() {
-        draw_menu_toggle((run.mode == CAL), 2, disp_menutoggles_dirty);
+        draw_menu_toggle((runmode == CAL), 2, disp_menutoggles_dirty);
         draw_menu_toggle(fuelpump.status(), 3, disp_menutoggles_dirty);
         draw_menu_toggle(ignition.signal, 4, disp_menutoggles_dirty);
         draw_menu_toggle(syspower, 5, disp_menutoggles_dirty);
@@ -862,13 +860,13 @@ class Display {
             if (disp_datapage_dirty) draw_datapage(datapage, true);
             if (disp_menus_dirty) draw_menus(false);
             if (disp_selection_dirty) draw_selected_name(tunctrl, sel, sel_last, sel_last_last);
-            if (run.mode != runmode_last) disp_runmode_dirty = true;
+            if (runmode != runmode_last) disp_runmode_dirty = true;
             if (disp_values_dirty || disp_runmode_dirty || valuesRefreshTimer.expireset()) {
                 disp_menu_bools();
                 disp_datapage_values();
             }
             if (disp_units_dirty) draw_unitvals(datapage);
-            if (disp_runmode_dirty) draw_runmode(run.mode, NON);
+            if (disp_runmode_dirty) draw_runmode(runmode, NON);
         }
         if (sim->enabled() != sim_last) disp_simbuttons_dirty = true;
         sim_last = sim->enabled();
@@ -990,9 +988,9 @@ class Tuner {
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
     int id, id_encoder = 0;  // idelta is integer edit value accelerated, and is used for all tuning edits regardless if int float or bool
     int rdelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
-    void update(int rmode) {
+    void update() {
         process_inputs();
-        edit_values(rmode);
+        edit_values();
     }
   private:
     void process_inputs() {
@@ -1034,7 +1032,7 @@ class Tuner {
         }
         if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selection_dirty = true;
     }
-    void edit_values(int rmode) {
+    void edit_values() {
         if (tunctrl == EDIT && id) {  // Change tunable values when editing
             if (datapage == PG_RUN) {
                 if (sel == 13) { tune(&gas.governor, id, 0, 100); gas.derive(); }

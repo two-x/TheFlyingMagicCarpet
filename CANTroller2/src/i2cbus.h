@@ -236,7 +236,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         return true;
     }
     uint8_t get_addr() { return addr; }
-    void update(int runmode, float speed) {
+    void update(float speed) {
         bool sent = false;
         if (i2c->not_my_turn(i2c_lightbox)) return;
         // if (i2c->detected(i2c_lightbox) && send_timer.expireset()) {

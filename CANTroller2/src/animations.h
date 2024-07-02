@@ -1,9 +1,5 @@
 #pragma once
 #include <Arduino.h>
-#include "tftsetup.h"
-#include "inputs.h"
-static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-static MomentaryButton bootbutton(boot_sw_pin, false);
 
 // #define touch_simbutton 38
 #define disp_apppanel_x 150
@@ -380,7 +376,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         uint16_t mult = rn(2000);
         hue = spothue + rn(3000);
         spotrate = (int)((season * 200) + rn(200));
-        sat = 100 + rn(15 + season * 41);
+        sat = 95 + rn(20 + season * 47);
         brt = 120 + rn(136);
         for (int i = 0; i < 6 + rn(20); i++) {
             uint8_t c = hsv_to_rgb<uint8_t>(hue + mult * i, sat, brt);
@@ -429,7 +425,7 @@ class EraserSaver {  // draws colorful patterns to exercise
             sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler + edge, c2);
     }
     void run_dots() {
-        int total_punches = 12;
+        int total_punches = 12, p[2], stars = 0, r, myshape = rn(season + precession);
         static int punches_left, oldseason, oldproc, mindot = 4, adddot = 4;
         static bool was_eraser; 
         spotrate = (int)(rn(900));
@@ -439,7 +435,6 @@ class EraserSaver {  // draws colorful patterns to exercise
             punches_left = total_punches;
         }
         oldproc = precession;
-        int r, myshape = rn(season + precession);
         if (season != oldseason) {
             mindot = constrain(mindot + rn(3) - 1, 1 + (cycle >> 1), 2 + cycle);
             adddot = constrain(adddot + rn(3) - 1, 1, 3 + (cycle >> 1));
@@ -448,7 +443,6 @@ class EraserSaver {  // draws colorful patterns to exercise
         if (myshape < 2) myshape = 0;
         else if (myshape < 6) myshape = 1;
         else myshape = 2;
-        int p[2], stars = 0;
         if (!punches_left) stars = 13 - (adddot / 2) - (mindot + adddot > 8) ? 3 : 0;
         else if (extratimer.expired()) stars = 1;
         for (int star = 0; star < stars; star++) {
@@ -471,10 +465,10 @@ class EraserSaver {  // draws colorful patterns to exercise
     }
     void run_boxes() {
         static int boxsize[2], boxrad, boxminsize;
+        int longer = rn(2), shells;
         uint8_t boxcolor;
         boxrad = rn(1 + rn(2) * season);  // note this will crash us!  ->  boxrad = rn(5 * season);
         boxminsize = 2 * boxrad + 5;
-        int longer = rn(2);
         boxsize[longer] = boxminsize + rn(vp->w - boxminsize);
         boxsize[!longer] = boxminsize + rn(boxsize[longer] >> 2);  // cheesy attempt to work around crazy-values bug
         point[HORZ] = rn(vp->w) - (boxsize[HORZ] >> 1);
@@ -487,8 +481,9 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
         if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
-        int shells = 1 + (!(bool)rn(5)) ? 1 + rn(4) : 0;
-        int steps[2] = { boxsize[HORZ] / (shells+1), boxsize[VERT] / (shells+1) };
+        if (precession > 5 && !rn(2)) shells = boxsize[!longer] >> 1;
+        else shells = (int)(rn(5) > 0);
+        int steps[2] = { boxsize[HORZ] / shells, boxsize[VERT] / shells };
         for (int mat=0; mat<shells; mat++) {
             if (season == 0) boxcolor = rando_color();
             else if (season == 1) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)rn(65535), rn(256), rn(256));
@@ -530,8 +525,6 @@ class EraserSaver {  // draws colorful patterns to exercise
             sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue > 32767) + rn(56)));
             sprite->drawString(letter.c_str(), final[HORZ], final[VERT]);
         }
-        // sprite->setTextColor(BLK);  // allows subliminal messaging
-        // sprite->setFont(&fonts::Font0);
     }
     void run_worm() {
         static int wormpos[2] = { 0, 0 }, wormvel[2] = { 0, 0 }, wormsign[2] = { 1, 1 }, wormd[2] = { 20, 20 };
@@ -578,7 +571,9 @@ class EraserSaver {  // draws colorful patterns to exercise
     }
     void the_eraser() {
         int eraser_velo_min = 3, eraser_velo_max = 7;
-        static int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, eraser_rad = 14, eraser_velo[2] = { rn(eraser_velo_max), rn(eraser_velo_max) }; std::string sub = "\x64\x6f\x20\x64\x72\x75\x67\x73";
+        std::string sub = "\x64\x6f\x20\x64\x72\x75\x67\x73";
+        static int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, eraser_rad = 14;
+        static int eraser_velo[2] = { rn(eraser_velo_max), rn(eraser_velo_max) };
         if ((cycle != 0) && has_eraser) {
             int erpos_max[2] = {(vp->w - eraser_rad) / 2, (vp->h - eraser_rad) / 2};
             for (int axis = HORZ; axis <= VERT; axis++) {

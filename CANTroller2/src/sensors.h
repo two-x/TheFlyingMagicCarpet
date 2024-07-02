@@ -16,7 +16,6 @@ enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, a
 enum class src : int { UNDEF=0, FIXED=1, PIN=2, SIM=3, POT=4, CALC=5 };
 
 int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF) };
-#include "i2cbus.h"
 
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
@@ -188,7 +187,7 @@ class Device {
         return false;
     }
     void update() {  // I changed case statement into if statements and now is 10 lines long instead of 28.  case sucks like that
-        if (!_enabled) return; // do nothing if the Device is disabled
+        if (runmode == LOWPOWER || !_enabled) return; // do nothing if in lowpower mode or this device is disabled
         if (_source == src::UNDEF) set_val_from_undef();
         else if (_source == src::FIXED) set_val_from_fixed();
         else if (_source == src::PIN) set_val_from_pin();

@@ -47,9 +47,8 @@ void setup() {
 }
 void loop() {                  // arduino-style loop() is like main() but with a builtin infinite while(1) loop
     watchdog.update();         // pet the watchdog regularly to prevent reset
-    ignition.update(run.mode); // manage panic stop condition and drive ignition signal as needed
+    ignition.update();         // manage panic stop condition and drive ignition signal as needed
     bootbutton.update();       // read the builtin button
-    bootbutton_actions();      // temporary (?) functionality added for development convenience
     starter.update();          // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();          // read encoder input signals  // 20 us per loop
     pot.update();              // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
@@ -64,11 +63,11 @@ void loop() {                  // arduino-style loop() is like main() but with a
     gas.update();              // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
     brake.update();            // drive motor output based on controller inputs, feedback, run mode, etc.
     steer.update();            // drive motor output based on controller inputs, run mode, etc.
-    touch.update(run.mode);            // read touchscreen input and do what it tells us to
-    tuner.update(run.mode);    // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
-    diag.update(run.mode);     // notice any screwy conditions or suspicious shenanigans - consistent 200us
-    neo.update(run.mode);          // update/send neopixel colors 
-    lightbox.update(run.mode, speedo.val());  // communicate any relevant data to the lighting controller
-    looptimer.update();                       // looptimer.mark("F");
-    vTaskDelay(pdMS_TO_TICKS(1));             // momentarily pause continuous execution for multitasking purposes. delays the loop but in a good way
+    touch.update();            // read touchscreen input and do what it tells us to
+    tuner.update();            // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
+    diag.update();             // notice any screwy conditions or suspicious shenanigans - consistent 200us
+    neo.update();              // update/send neopixel colors 
+    lightbox.update(speedo.val());  // communicate any relevant data to the lighting controller
+    looptimer.update();             // looptimer.mark("F");
+    vTaskDelay(pdMS_TO_TICKS(1));   // momentarily pause continuous execution for multitasking purposes. delays the loop but in a good way
 }

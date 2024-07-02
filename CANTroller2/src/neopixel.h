@@ -34,7 +34,7 @@ class NeopixelStrip {
     int neopixelsAvailable();
     void setBoolState(int _idiot, bool state);
     void setflash(int _idiot, int count, int pulseh=1, int pulsel=1, int onbrit=-1, uint32_t color=0);
-    void update(int runmode);
+    void update();
     void flashdemo_ena(bool ena);
     uint32_t idiot_neo_color(int _idiot);
     bool newIdiotLight(int _idiot, uint8_t color332, bool startboolstate = 0);
@@ -250,7 +250,7 @@ void NeopixelStrip::update_idiot(int _idiot) {
     cidiot[_idiot][cnow] = fset[_idiot][onoff] ? cidiot[_idiot][con] : cidiot[_idiot][coff];               // set color to con or coff depending on state of idiotlight
     if (fset[_idiot][fcount]) if (fevpop(_idiot, nowepoch)) cidiot[_idiot][cnow] = cidiot[_idiot][cflash]; // if flashing, override with the flash color
 }
-void NeopixelStrip::update(int runmode) {
+void NeopixelStrip::update() {
     static int runmode_last;
     if (runmode != runmode_last) sleepmode_ena(runmode == LOWPOWER);
     runmode_last = runmode;
@@ -356,7 +356,7 @@ class IdiotLights {
         &diag.err_sens_alarm[LOST], &diag.err_sens_alarm[RANGE], &diag.err_sens[RANGE][_TempEng], &diag.err_sens[RANGE][_TempWheel], hotrc.radiolost_ptr(), &panicstop,
         &standby_incomplete, &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting, &car_hasnt_moved, 
         &starter.motor, fuelpump.status_inverse_ptr(), &brake.posn_pid_active, &brake.no_feedback, speedo.pin_inactive_ptr(), tach.pin_inactive_ptr(),
-        &bootbutton.now, &nowtouch, &encoder.enc_a, sim.enabled_ptr(), &running_on_devboard, &not_syspower,  // 
+        bootbutton.ptr(), &nowtouch, &encoder.enc_a, sim.enabled_ptr(), &running_on_devboard, &not_syspower,  // 
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
         &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],  // &sensidiots[_MuleBatt]
     };  // , &encoder.enc_b, &starter.req_active, &web_disabled, &powering_up
