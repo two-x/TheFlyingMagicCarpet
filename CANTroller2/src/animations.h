@@ -427,7 +427,8 @@ class EraserSaver {  // draws colorful patterns to exercise
     void run_dots() {
         int total_punches = 12, p[2], stars = 0, r, myshape = rn(season + precession);
         static int punches_left, oldseason, oldproc, mindot = 4, adddot = 4;
-        static bool was_eraser; 
+        static bool was_eraser, flipper; 
+        static uint16_t myhue[2] = { 0, 32767 };
         spotrate = (int)(rn(900));
         if ((precession > oldproc) && !rn(2)) {  // sometimes on leap year we slam them with a few bigger punches
             was_eraser = has_eraser;
@@ -445,13 +446,19 @@ class EraserSaver {  // draws colorful patterns to exercise
         else myshape = 2;
         if (!punches_left) stars = 13 - (adddot / 2) - (mindot + adddot > 8) ? 3 : 0;
         else if (extratimer.expired()) stars = 1;
+        for (int i=0; i<2; i++) myhue[i] += rn(511) - 255;
         for (int star = 0; star < stars; star++) {
             p[0] = vp-> x + (punches_left) ? (vp->w >> 1) : rn(vp->w);
             p[1] = vp->y + (punches_left) ? (vp->h >> 1) : rn(vp->h);
             if (!punches_left) r = scaler * (mindot + rn(adddot));
             else r = scaler * (int)((float)vp->h * 0.45 * (1.0 - ((float)punches_left / (float)total_punches)));
-            sat = (30 * season) + rn(256 - 30 * season);        
-            c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
+            sat = (20 * season) + rn(256 - 30 * season);
+            if (precession < 6) {
+                if (flipper) c = hsv_to_rgb<uint8_t>((flipper) ? myhue[0] : myhue[1], pensat, 200 + rn(56));
+                else c = hsv_to_rgb<uint8_t>((flipper) ? myhue[1] : myhue[0], pensat, 200 + rn(56));
+                flipper = !flipper;
+            }
+            else 
             if (myshape == 0) sprite->fillCircle(p[0], p[1], r, c);
             else if (myshape == 1) sprite->fillRect(p[0] - r, p[1] - r, r * 2, r * 2, c);
             else {
