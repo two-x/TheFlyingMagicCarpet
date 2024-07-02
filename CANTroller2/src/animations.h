@@ -472,7 +472,7 @@ class EraserSaver {  // draws colorful patterns to exercise
     }
     void run_boxes() {
         static int boxsize[2], boxrad, boxminsize;
-        int longer = rn(2), shells;
+        int longer = rn(2);
         uint8_t boxcolor;
         boxrad = rn(1 + rn(2) * season);  // note this will crash us!  ->  boxrad = rn(5 * season);
         boxminsize = 2 * boxrad + 5;
@@ -488,9 +488,13 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
         if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
-        if (precession > 5 && !rn(2)) shells = boxsize[!longer] >> 1;
-        else shells = (int)(rn(5) > 0);
-        int steps[2] = { boxsize[HORZ] / shells, boxsize[VERT] / shells };
+        
+        int shells = 1 + (!(bool)rn(5)) ? 1 + rn(4) : 0;
+        int steps[2] = { boxsize[HORZ] / (shells+1), boxsize[VERT] / (shells+1) };
+        // if (precession > 5 && !rn(2)) shells = boxsize[!longer] >> 1;
+        // else shells = (int)(rn(5) > 0);
+        // int steps[2] = { boxsize[HORZ] / shells, boxsize[VERT] / shells };
+        
         for (int mat=0; mat<shells; mat++) {
             if (season == 0) boxcolor = rando_color();
             else if (season == 1) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)rn(65535), rn(256), rn(256));
