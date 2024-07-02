@@ -1,7 +1,6 @@
 // motors.h : centralized wrapper classes for all braking, throttle, and steering activity, as holistic coordination between sensors, actuator, and intent is critical
 #pragma once
 #include <ESP32Servo.h>  // Eventually move Servos into new ServoPWM objects then remove this
-#include "temperature.h"
 #include <cmath>
 
 // I stole this library and modified it heavily to our purposes - Soren

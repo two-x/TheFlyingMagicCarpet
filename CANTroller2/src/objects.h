@@ -13,13 +13,15 @@ int rn(int values=256) {  // Generate a random number between 0 and values-1
 }
 
 // Instantiate objects
-#include "sensors.h"  // includes uictrl.h, i2cbus.h
+#include "i2cbus.h"
+#include "sensors.h"
 static Preferences prefs;  // Persistent config storage
 static Potentiometer pot(pot_pin);
 static Simulator sim(pot, &prefs);
 static Hotrc hotrc(&sim, &pot);
 
-#include "motors.h"  // includes qpid.h, temperature.h
+#include "temperature.h"
+#include "motors.h"
 static TemperatureSensorManager tempsens(onewire_pin);
 static CarBattery mulebatt(mulebatt_pin);
 static PressureSensor pressure(pressure_pin);
@@ -157,7 +159,6 @@ class ToggleSwitch {
         if (last != val) kick_inactivity_timer(HUTogSw);
     }
 };
-
 // the basic mode switch puts either a pullup or pulldown onto the serial tx pin. so to read it we must turn off the serial console, read the pin, then turn the console back on
 // to limit interruptions in the console, we only read every few seconds, and only when not in a driving mode
 class BasicModeSwitch : public ToggleSwitch {
@@ -170,7 +171,7 @@ class BasicModeSwitch : public ToggleSwitch {
         // readswpin();
         if (last != val) kick_inactivity_timer(HUTogSw);
     }
-    void reread(int runmode) {
+    void reread() {
         if (sim.simulating(attached_sensor)) return;
         if (runmode == FLY || runmode == HOLD || runmode == CRUISE) return;
         if (console_enabled) {
@@ -196,7 +197,7 @@ void initialize_pins_and_console() {                        // set up those stra
     Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
     delay(1200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
     ezread.squintf("** Setup begin..\nSerial console started..\n");
-    ezread.squintf("Syspower is %s, basicsw read: %s\n", syspower ? "on" : "off", basicsw.val ? "high" : "low");    
+    ezread.squintf("Syspower is %s, basicsw read: %s\n", syspower ? "on" : "off", in_basicmode ? "high" : "low");    
 }
 
 class Ignition {
@@ -220,7 +221,7 @@ class Ignition {
     }
     void request(int req) { ign_req = req; }
     void panic_request(int req) { panic_req = req; }
-    void update(int runmode) {  // Run once each main loop
+    void update() {  // Run once each main loop
         if (panic_req == REQ_TOG) panic_req = !panicstop;
         if (ign_req == REQ_TOG) ign_req = !signal;
         // else if (request == signal) request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
@@ -396,8 +397,39 @@ static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &
 
 #include "runmodes.h"
 static RunModeManager run;
+#include "tftsetup.h"
+#include "inputs.h"
 
-#include "display.h"  // includes neopixel.h, touch.h
+static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
+
+class BootButton : public MomentarySwitch {
+  protected:
+    void actions() {  // temporary (?) functionality added for development convenience
+        if (longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
+        if (shortpress()) {
+            if (!auto_saver_enabled) {
+                sim.toggle();
+                pressure.print_config(true);
+                brkpos.print_config(true);
+                speedo.print_config(true);
+                tach.print_config(true);
+                mulebatt.print_config(true);
+                // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
+            }
+        }
+    }
+  public:
+    BootButton(int apin) : MomentarySwitch(apin, false) {}
+    void update() {
+        MomentarySwitch::update();
+        actions();
+    }
+};
+static BootButton bootbutton(boot_sw_pin);
+
+#include "animations.h"
+#include "neopixel.h"
+#include "display.h"
 
 void stop_console() {
     ezread.squintf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
@@ -409,7 +441,6 @@ void stop_console() {
     ezread.printf(DCYN, "magic carpet is booted\n");
     // ezread.printf("welcome to EZ-Read Console");
 }
-
 void bootbutton_actions() {  // temporary (?) functionality added for development convenience
     Timer printtimer;
     if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);

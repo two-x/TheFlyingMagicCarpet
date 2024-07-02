@@ -102,13 +102,12 @@ class DiagRuntime {
         // register_bool_device(_Starter, starter->signal_ptr());
         // register_bool_device(_FuelPump, fuelpump->signal_ptr());
     }
-    void update(int _runmode) {
+    void update() {
         if (first_boot) {  // don't run too soon before sensors get initialized etc.
             first_boot = false;
             errTimer.reset();
             return;
         }
-        runmode = _runmode;
         if (runmode == LOWPOWER) return;
         if (errTimer.expireset()) {
             // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
@@ -555,8 +554,8 @@ class BootMonitor {
         if (wrote_status != codestatus) myprefs->putUInt("codestatus", (uint32_t)_stat);
         wrote_status = _stat;
     }
-    void flash_runmode(int _mode) {
-        runmode_now = _mode;
+    void flash_runmode() {
+        runmode_now = runmode;
         if (wrote_runmode != runmode_now) myprefs->putUInt("runmode", (uint32_t)runmode_now);
         wrote_runmode = runmode_now;
     }
@@ -571,8 +570,8 @@ class BootMonitor {
   public:
     int boot_to_runmode = STANDBY;
     BootMonitor(Preferences* _prefs, LoopTimer* _loop) : myprefs(_prefs), myloop(_loop) {}
-    void set_codestatus(int runmode) {
-        flash_runmode(runmode);
+    void set_codestatus() {
+        flash_runmode();
         flash_panicstop();
         flash_ignition();
         int dowrite = Confused;
@@ -609,7 +608,7 @@ class BootMonitor {
     }
     void update() {
         pet();
-        if (codestatus == Booting) set_codestatus(Confused);  // we are not booting any more
+        if (codestatus == Booting) set_codestatus();  // we are not booting any more
         write_uptime();
         print_high_water(task1, task2, task3, task4, task5);
     }

@@ -161,6 +161,7 @@ std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Ho
 float permanan = NAN;
 float* nanptr = &permanan;
 uint32_t codestatus = Booting;
+int runmode = STANDBY;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool fun_flag = false;                  // since now using temp sensor address to detect vehicle, our tx resistor can be used for who knows what else!
 bool standby_incomplete = true;        // minor state variable for standby mode - standby mode has not completed its work and can't yet stop activity

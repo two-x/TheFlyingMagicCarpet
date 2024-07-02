@@ -1,34 +1,29 @@
 #pragma once
 #include "FunctionalInterrupt.h"
-class MomentaryButton {
+class MomentarySwitch {
   private:
     int _sw_action = swNONE;  // Flag for encoder handler to know an encoder switch action needs to be handled
     bool _timer_active = false;  // Flag to prevent re-handling long presses if the sw is just kept down
     bool _suppress_click = false;  // Flag to prevent a short click on switch release after successful long press
     bool activity_timer_keepalive = true;  // will activity on this switch be considered that the user is active?
-    Timer _spinspeedTimer;  // Used to figure out how fast we're spinning the knob.  OK to not be volatile?
-    //  ---- tunable ----
     Timer _longPressTimer{300000};  // Used to time long button presses
   public:
-    int _sw_pin = -1;
-    bool now = false;  // Remember whether switch is being pressed
-    MomentaryButton() {}
-    MomentaryButton(int pin, bool _act_keepalive=true) : _sw_pin(pin), activity_timer_keepalive(_act_keepalive) {}
-    bool pressed() { return now; }
-    void set_pin(int pin) { _sw_pin = pin; }
-    void press_reset() { _sw_action = swNONE; }
-    void setLongPressTimer(int t) { _longPressTimer.set(t); }
+    int _pin = -1;
+    bool _val = false;  // Remember whether switch is being pressed
+    MomentarySwitch() {}
+    MomentarySwitch(int pin, bool _act_keepalive=true) : _pin(pin), activity_timer_keepalive(_act_keepalive) {}
+    void set_pin(int pin) { _pin = pin; }
     void update() {
         // Read and interpret encoder switch activity. Encoder rotation is handled in interrupt routine
         // Encoder handler routines should act whenever encoder_sw_action is swSHORT or swLONG, setting it back to
         // swNONE once handled. When handling press, if encoder_long_clicked is nonzero then press is a long press
-        bool myread = now;
+        bool myread = _val;
         do {
-            myread = digitalRead(_sw_pin);   // !value because electrical signal is active low
-        } while (myread != digitalRead(_sw_pin)); // some pins have a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+            myread = digitalRead(_pin);   // !value because electrical signal is active low
+        } while (myread != digitalRead(_pin)); // some pins have a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
 
         if (!myread) {  // if encoder sw is being pressed (switch is active low)
-            if (!now) {  // if the press just occurred
+            if (!_val) {  // if the press just occurred
                 if (activity_timer_keepalive) kick_inactivity_timer(HUMomDown);  // evidence of user activity
                 _longPressTimer.reset();  // start a press timer
                 _timer_active = true;  // flag to indicate timing for a possible long press
@@ -38,15 +33,15 @@ class MomentaryButton {
                 _timer_active = false;  // Keeps us from entering this logic again until after next sw release (to prevent repeated long presses)
                 _suppress_click = true;  // Prevents the switch release after a long press from causing a short press
             }
-            now = true;  // Remember a press is in effect
+            _val = true;  // Remember a press is in effect
         }
         else {  // if encoder sw is not being pressed
-            if (now) {
+            if (_val) {
                 if (activity_timer_keepalive) kick_inactivity_timer(HUMomUp);  // evidence of user activity
                 if(!_suppress_click) _sw_action = swSHORT;  // if the switch was just released, a short press occurred, which must be handled
             }
             _timer_active = false;  // Allows detection of next long press event
-            now = false;  // Remember press is not in effect
+            _val = false;  // Remember press is not in effect
             _suppress_click = false;  // End click suppression
         }
     }
@@ -62,14 +57,17 @@ class MomentaryButton {
     }
     bool shortpress(bool autoreset=true) {  // code may call this to check for short press and if so act upon it. Resets the long press if asserted
         bool ret = (_sw_action == swSHORT);
-        if (ret) Serial.printf("buttonpress ");
         if (ret && autoreset) _sw_action = swNONE;
         return ret;
     }
-    void setup(int pin = -1) {
-        if (pin != -1) _sw_pin = pin;
-        pinMode(_sw_pin, INPUT_PULLUP);
+    void setup(int pin=-1) {
+        if (pin != -1) _pin = pin;
+        pinMode(_pin, INPUT_PULLUP);
     }
+    void press_reset() { _sw_action = swNONE; }
+    bool val() { return _val; }
+    bool* ptr() { return &_val; }
+    void setLongPressTimer(int t) { _longPressTimer.set(t); }
 };
 class Encoder {
   private:
@@ -132,7 +130,7 @@ class Encoder {
     float _spinrate, _spinrate_max;  // , spinrate_accel_thresh;  // in Hz
     int _accel_factor = 1;
   public:
-    MomentaryButton button;
+    MomentarySwitch button;
     bool enc_a, val_a_isr = LOW;  // if initializing HIGH sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
     bool enc_b, val_b_isr = HIGH;
     float _accel_max = 25.0;  // Maximum acceleration factor    
@@ -190,10 +188,10 @@ class Encoder {
         button.update();
         enc_a = !digitalRead(_a_pin);
         enc_b = !digitalRead(_b_pin);
-        if (run.mode == LOWPOWER && !syspower) {
+        if (runmode == LOWPOWER && !syspower) {
             if (button.shortpress(), false) sleep_request = REQ_OFF;
         }
-        // else if (run.mode == STANDBY) {
+        // else if (runmode == STANDBY) {
         //     if (button.shortpress(), false) autosaver_request = REQ_OFF;
         // }
         update_spinrate();
@@ -316,7 +314,7 @@ class Touchscreen {
         idelta = 0;
         return ret;
     }
-    void update(int runmode) {
+    void update() {
         if (captouch && _i2c->not_my_turn(i2c_touch)) return;
         if (touchSenseTimer.expireset()) {
             get_touch_debounced();
@@ -338,7 +336,7 @@ class Touchscreen {
                     }
                     fd = (float)(1 << fd_exponent); // update the touch acceleration value
                     id = (int)fd;
-                    process_ui(runmode);
+                    process_ui();
                     fd = 0.0;
                 }
             }
@@ -356,7 +354,7 @@ class Touchscreen {
         _i2c->pass_i2c_baton();
         lasttouch = nowtouch;
     }  // Serial.printf("%s", nowtouch ? "+" : "-");
-    void process_ui(int runmode) {
+    void process_ui() {
         if (!nowtouch) return;
         bool menusafe = (runmode != FLY && runmode != HOLD && runmode != CRUISE);
         
