@@ -541,18 +541,32 @@ class EraserSaver {  // draws colorful patterns to exercise
         static int wormpos[2] = { 0, 0 }, wormvel[2] = { 0, 0 }, wormsign[2] = { 1, 1 }, wormd[2] = { 20, 20 };
         static int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128;
         static Timer movetimer{20000}, wormtimer{1000000};
-        static bool wormstripe = 0;
+        static bool wormstripe = false, fading = false;
+        int colorslices = 12, stripeslices = 2, fadeslices = 1, slicetime = 75000;
         has_eraser = saver_lotto = false;
         lucktimer.reset();
         if (season == 0 || season == 2) sat = pensat;
         else sat = 105 + (int)(150.0 * (float)(((precession > 5) ? 10 - precession : precession)) / 5.0);
         static int brightmod = rn(66);
         brightmod = constrain(brightmod + rn(5) - 2, 0, 65);
-        uint8_t c = (wormstripe) ? BLK : hsv_to_rgb<uint8_t>(penhue, sat, 190 + brightmod);;
         if (extratimer.expired()) {
-            wormstripe = !wormstripe;
-            extratimer.set(300000 * ((!wormstripe) ? 4 : 1));
+            if (fading) {  // at end of fadeup or fadeout
+                fading = false;
+                wormstripe = !wormstripe;  // wormstripe changes at the end of fade, in either direction
+                extratimer.set(slicetime * wormstripe ? stripeslices : colorslices);
+            }
+            else {  // at beginning of fadeup or fadeout
+                fading = true;
+                extratimer.set(slicetime * fadeslices);
+            }
         }  // if (precession > 6) wormstripe = 0;
+        brt = 190 + brightmod;
+        if (fading) {
+            if (wormstripe) brt = brt * (int)extratimer.elapsed() / (slicetime * fadeslices);
+            else brt -= brt * (int)extratimer.elapsed() / (slicetime * fadeslices);
+        }
+        else if (!wormstripe) brt = 0;
+        uint8_t c = hsv_to_rgb<uint8_t>(penhue, sat, brt);
         int wormposmax[2] = { (vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2 };
         if (movetimer.expireset()) {
             for (int axis = HORZ; axis <= VERT; axis++) {
