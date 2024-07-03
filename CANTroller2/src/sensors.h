@@ -132,12 +132,16 @@ class Param {
     }
     // return value indicates if the value actually changed or not
     bool set(float arg_val) {
-        if (std::abs(arg_val) < float_zero) arg_val = 0.0;  // avoid stupidly low near-zero values that happens sometimes
-        if (std::abs(_val - arg_val) < float_zero) return false;
+        bool ret = true;
         _last = _val;
+        if (std::isnan(arg_val) && std::isnan(_last)) ret = false;
+        else {
+            if (std::abs(arg_val) < float_zero) arg_val = 0.0;  // avoid stupidly low near-zero values that happens sometimes
+            if (std::abs(_val - arg_val) < float_zero) ret = false;
+        }
         _val = arg_val;
-        constrain_value();
-        return true;
+        if (!std::isnan(_val)) constrain_value();
+        return ret;
     }
     // bool add(float arg_add) { return set(_val + arg_add); }
     float val() { return _val; }
@@ -328,16 +332,20 @@ class Transducer : public Device {
         }
     }
     bool set_native(float arg_val_native, bool also_set_raw=true) {
-        if (!_native.set(arg_val_native)) return false;
-        _si.set(from_native(_native.val()));
+        bool ret = true;
+        if (!_native.set(arg_val_native)) ret = false;
+        if (std::isnan(arg_val_native)) _si.set(NAN);
+        else _si.set(from_native(_native.val()));
         if (also_set_raw) _si_raw = _si.val();
-        return true;
+        return ret;
     }
     bool set_si(float arg_val_si, bool also_set_raw=true) {
-        if (!_si.set(arg_val_si)) return false;
+        bool ret = true;
+        if (!_si.set(arg_val_si)) ret = false;
         if (also_set_raw) _si_raw = _si.val();
-        _native.set(to_native(_si.val()));
-        return true;
+        if (std::isnan(arg_val_si)) _native.set(NAN);
+        else _native.set(to_native(_si.val()));
+        return ret;
     }
     bool set_pc(float arg_val_pc, bool also_set_raw=true) { 
         return set_si(from_pc(arg_val_pc), also_set_raw);
@@ -432,7 +440,7 @@ class Transducer : public Device {
 class Sensor : public Transducer {
   protected:
     float _ema_alpha = 0.1;
-    bool _first_filter_run = false;
+    bool _first_filter_run = false, _detected = false, _responding = false;
 
     void calculate_ema() { // Exponential Moving Average
         if (_first_filter_run) {
@@ -444,6 +452,9 @@ class Sensor : public Transducer {
         // Serial.printf("+ (%.4lf)", _si_raw);
         
         set_si(ema_filt(_si_raw, _si.val(), _ema_alpha), false);
+    }
+    virtual void set_val_from_undef() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
+        set_si(NAN);
     }
     virtual void set_val_from_sim() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
         // sim_si(sim_val);                  // wtf is this supposed to do?
@@ -469,6 +480,7 @@ class Sensor : public Transducer {
     }  
     virtual void setup() {
         _transtype = SensorType;
+        if (!_detected) set_source(src::UNDEF);
         Transducer::setup();
     }
     void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
@@ -482,7 +494,6 @@ class Sensor : public Transducer {
 //       I2CSensor a child of -> Device, ExponentialMovingAverage and not a Sensor at all.
 class I2CSensor : public Sensor {
   protected:
-    bool _detected = false;
     I2C* _i2c;
     // implement in child classes using the appropriate i2c sensor
     // virtual void set_val_from_pot() {
@@ -494,6 +505,26 @@ class I2CSensor : public Sensor {
     //     _native.set_limits(_si.min_shptr(), _si.max_shptr());  // Our two i2c sensors (airvelo & MAP) don't reveal low-level readings, so we only get si units
     //     _val_filt.set_limits(_si.min_shptr(), _si.max_shptr());
     // }
+    void print_on_boot(bool detected, bool responding) {
+        // if (header) Transducer::print_config(true, false);
+        ezread.squintf("  %s sensor %sdetected", _short_name.c_str(), _detected ? "" : "not ");
+        if (detected) {
+            if (responding) {
+                // ezread.squintf(", responding properly\n");
+                float readval = read_sensor();  // _sensor.readPressure(ATM);
+                ezread.squintf(" and reading %.4f %s\n", readval, _si_units.c_str());
+                set_source(src::PIN); // sensor working
+            }
+            else {
+                ezread.squintf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
+                set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
+            }
+        }
+        else {
+            ezread.squintf("\n");
+            set_source(src::UNDEF); // don't even have a device at all..
+        }
+    }
   public:
     uint8_t addr;
     I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor(-1), _i2c(i2c_arg), addr(i2c_address_arg) {
@@ -504,7 +535,10 @@ class I2CSensor : public Sensor {
     I2CSensor() = delete;
     virtual void setup() {
         Sensor::setup();
+        set_can_source(src::POT, true);
         _detected = _i2c->detected_by_addr(addr);
+        if (!_detected || !_responding) _enabled = false;
+        print_on_boot(_detected, _responding);
     }
 };
 class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
@@ -537,32 +571,15 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
         if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
     }
     void setup() {  // ezread.squintf("%s..", _long_name.c_str());
-        I2CSensor::setup();
         set_conversions(1.0, 0.0);
         set_si(0.0);  // initialize value
         set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
-        set_can_source(src::POT, true);
         airveloTimer.set(airvelo_read_period_us);
-        print_config(true, false);
-        ezread.squintf("  airvelo sensor %sdetected", _detected ? "" : "not ");
-        if (_detected) {
-            if (!_sensor.begin()) {
-                ezread.squintf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
-                set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
-            }
-            else {
-                _sensor.setRange(AIRFLOW_RANGE_15_MPS);
-                ezread.squintf(", responding properly\n");
-                set_source(src::PIN); // sensor working
-            }
-        }
-        else {
-            ezread.squintf("\n");
-            set_source(src::UNDEF); // don't even have a device at all...
-        }
-        if (_detected) print_config(false, true);
+        _responding = !_sensor.begin();
+        if (_responding) _sensor.setRange(AIRFLOW_RANGE_15_MPS);
+        I2CSensor::setup();
     }
 };
 class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
@@ -602,33 +619,14 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
         if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
     }
     void setup() {
-        // ezread.squintf("%s..", _long_name.c_str());
-        I2CSensor::setup();
         set_conversions(1.0, 0.0);
         set_si(1.0);  // initialize value
         set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68, 1.02);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
-        set_can_source(src::POT, true);
         mapreadTimer.set(mapread_timeout);
-        print_config(true, false);
-        ezread.squintf("  map sensor %sdetected", _detected ? "" : "not ");
-        if (_detected) {
-            if (!_sensor.begin()) {
-                ezread.squintf(", not responding\n");  // Begin communication with air flow sensor) over I2C 
-                set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
-            }
-            else {
-                float readval = read_sensor();  // _sensor.readPressure(ATM);
-                ezread.squintf(" and reading %.4f atm\n", readval);
-                set_source(src::PIN); // sensor working
-            }
-        }
-        else {
-            ezread.squintf("\n");
-            set_source(src::UNDEF); // don't even have a device at all...
-        }
-        if (_detected) print_config(false, true);
+        _responding = !_sensor.begin();
+        I2CSensor::setup();
     }
 };
 class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
