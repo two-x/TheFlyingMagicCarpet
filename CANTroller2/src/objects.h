@@ -103,6 +103,7 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
     static float maf_map_last;
     static float maf_velo_last;
     float temp = _ambient;
+    // if (!airvelo.enabled() || !mapsens.enabled()) return NAN;
     float new_velo = airvelo.val();
     float new_map = mapsens.val();
     if (std::isnan(_ambient)) {
