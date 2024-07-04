@@ -12,7 +12,6 @@ int rn(int values=256) {  // Generate a random number between 0 and values-1
     return dis(gen);
 }
 
-// Instantiate objects
 #include "i2cbus.h"
 #include "sensors.h"
 static Preferences prefs;  // Persistent config storage
@@ -304,10 +303,8 @@ class Starter {
     }
     // src source() { return pin_outputting ? src::CALC : src::PIN; }
 };
-
 static Ignition ignition(ignition_pin);
 static Starter starter(starter_pin);
-
 
 class FuelPump {  // drives power to the fuel pump when the engine is turning
   public:
