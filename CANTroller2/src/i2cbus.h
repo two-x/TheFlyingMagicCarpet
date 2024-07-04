@@ -5,13 +5,11 @@ enum i2c_nodes : int { i2c_touch, i2c_lightbox, i2c_airvelo, i2c_map, num_i2c_sl
 class I2C {
   private:
     bool disabled = false;
-    int _devicecount = 0;
+    int _sda_pin, _scl_pin, _devicecount = 0;
     uint8_t _detaddrs[10];  // addresses detected, unordered
     uint8_t _devaddrs[num_i2c_slaves];  // addresses of known devices, ordered per enum
     bool _detected[num_i2c_slaves];  // detection status of known devices, ordered per enum
-    int _sda_pin, _scl_pin;
     Timer scanTimer;
-    int lastsens = i2c_map;
     void fill_det_array() {
         for (int sl = 0; sl<num_i2c_slaves; sl++) {
             _detected[sl] = false;
@@ -57,12 +55,17 @@ class I2C {
         return _detected[device];
     }
     void pass_i2c_baton() {
+        static int lastsens = i2c_map;
         // Serial.printf("%d->", i2cbaton);
         if (!use_i2c_baton) return;
-        if (i2cbaton == i2c_airvelo || i2cbaton == i2c_map) i2cbaton = (captouch) ? i2c_touch : i2c_lightbox; 
+        if (i2cbaton == i2c_airvelo || i2cbaton == i2c_map) {
+            if (captouch) i2cbaton = i2c_touch;
+            else i2cbaton = i2c_lightbox;
+        } 
         else if (i2cbaton == i2c_touch) i2cbaton = i2c_lightbox;
         else if (i2cbaton == i2c_lightbox) {
-            i2cbaton = (lastsens == i2c_airvelo) ? i2c_map : i2c_airvelo;
+            if (lastsens == i2c_airvelo) i2cbaton = i2c_map;
+            else i2cbaton = i2c_airvelo;
             lastsens = i2cbaton;
         }
         // Serial.printf("\r-%d-", i2cbaton);

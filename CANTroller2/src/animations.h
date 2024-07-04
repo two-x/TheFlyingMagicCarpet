@@ -308,7 +308,7 @@ class EraserSaver {  // draws colorful patterns to exercise
   private:
     void update_pen() {
         static int pensatdir = 1;
-        static Timer pentimer{70000};
+        static Timer pentimer{110000};
         if (cycle != 2) {
             if (pentimer.expireset()) {
                 if (season == 1 && season == 3) {
@@ -442,13 +442,14 @@ class EraserSaver {  // draws colorful patterns to exercise
             p[1] = vp->y + (punches_left) ? (vp->h >> 1) : rn(vp->h);
             if (!punches_left) r = scaler * (mindot + rn(adddot));
             else r = scaler * (int)((float)vp->h * 0.45 * (1.0 - ((float)punches_left / (float)total_punches)));
-            sat = (20 * season) + rn(256 - 30 * season);
             if (precess < 6) {
-                if (flipper) c = hsv_to_rgb<uint8_t>((flipper) ? myhue[0] : myhue[1], pensat, 200 + rn(56));
-                else c = hsv_to_rgb<uint8_t>((flipper) ? myhue[1] : myhue[0], pensat, 200 + rn(56));
+                c = hsv_to_rgb<uint8_t>(myhue[flipper], pensat, 200 + rn(56));
                 flipper = !flipper;
             }
-            else 
+            else {
+                sat = (20 * season) + rn(256 - 30 * season);
+                c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
+            }
             if (myshape == 0) sprite->fillCircle(p[0], p[1], r, c);
             else if (myshape == 1) sprite->fillRect(p[0] - r, p[1] - r, r * 2, r * 2, c);
             else {
@@ -532,7 +533,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         static int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128, brightmod = rn(66);
         static Timer movetimer{20000}, wormtimer{1000000};
         static bool wormstripe = false, fading = false;
-        int colorslices = 11, stripeslices = 1, fadeslices = 3, slicetime = 75000;
+        int colorslices = 11, stripeslices = 1, fadeslices = 4, slicetime = 75000;
         has_eraser = lotto = false;
         lucktimer.reset();
         if (season == 0 || season == 2) sat = pensat;
