@@ -532,7 +532,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         static int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128, brightmod = rn(66);
         static Timer movetimer{20000}, wormtimer{1000000};
         static bool wormstripe = false, fading = false;
-        int colorslices = 11, stripeslices = 2, fadeslices = 1, slicetime = 75000;
+        int colorslices = 11, stripeslices = 1, fadeslices = 3, slicetime = 75000;
         has_eraser = lotto = false;
         lucktimer.reset();
         if (season == 0 || season == 2) sat = pensat;

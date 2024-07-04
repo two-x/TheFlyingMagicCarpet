@@ -252,6 +252,7 @@ class Touchscreen {
         static Timer rejectiontimer;             // timer for required minimum duration of new presses, or removal of old presses
         uint8_t count = _tft->getTouch(&(touch_read[xx]), &(touch_read[yy]));
         bool touch_triggered = (count > 0);
+        // Serial.printf("n:%d t:%d\n", nowtouch, touch_triggered);
         if (nowtouch != touch_triggered) {       // if the hardware returned opposite our current filtered state, get triggered
             if (!rejectiontimer_active) {        // if we're not already waiting for validity
                 rejectiontimer.set(25000);       // reset the timer. the touch must stay triggered for this long (in us) for valid change in touch state
@@ -315,7 +316,8 @@ class Touchscreen {
         return ret;
     }
     void update() {
-        if (captouch && _i2c->not_my_turn(i2c_touch)) return;
+        bool myturn = !_i2c->not_my_turn(i2c_touch); // Serial.printf("c:%d m:%d n:%d\n", captouch, myturn, nowtouch);
+        if (captouch && !myturn) return;             // if (captouch && _i2c->not_my_turn(i2c_touch)) return;
         if (touchSenseTimer.expireset()) {
             get_touch_debounced();
             if (nowtouch) {
