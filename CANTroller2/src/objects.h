@@ -405,20 +405,7 @@ static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 
 class BootButton : public MomentarySwitch {
   protected:
-    void actions() {  // temporary (?) functionality added for development convenience
-        if (longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
-        if (shortpress()) {
-            if (!auto_saver_enabled) {
-                sim.toggle();
-                pressure.print_config(true);
-                brkpos.print_config(true);
-                speedo.print_config(true);
-                tach.print_config(true);
-                mulebatt.print_config(true);
-                // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
-            }
-        }
-    }
+    void actions();  // see definition below
   public:
     BootButton(int apin) : MomentarySwitch(apin, false) {}
     void update() {
@@ -432,6 +419,23 @@ static BootButton bootbutton(boot_sw_pin);
 #include "neopixel.h"
 #include "display.h"
 
+void BootButton::actions() {  // temporary (?) functionality added for development convenience
+    if (longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
+    if (shortpress()) {
+        if (auto_saver_enabled) panel.change_saver();
+        else {
+            sim.toggle();
+            Timer printtimer;
+            ezread.squintf("addr: batt:%08X touch:%08X\n", &sensidiots[_MuleBatt], touch.nowtouch_ptr());
+            for (int i=0; i<NumTelemetryFull; i++) {
+                ezread.squintf("%02d: %08X %s\n", i, &sensidiots[i], diag.err_sens_card[i].c_str());            
+            }
+            ezread.squintf("printed in: ");
+            ezread.squintf("%ld us\n", printtimer.elapsed());
+        }  // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
+    }
+}
+
 void stop_console() {
     ezread.squintf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
     if (!console_enabled) {
@@ -441,28 +445,4 @@ void stop_console() {
     // ezread.printf(DCYN, "welcome to EZ-Read console\n");
     ezread.printf(DCYN, "magic carpet is booted\n");
     // ezread.printf("welcome to EZ-Read Console");
-}
-void bootbutton_actions() {  // temporary (?) functionality added for development convenience
-    Timer printtimer;
-    if (bootbutton.longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
-    if (bootbutton.shortpress()) {
-        if (auto_saver_enabled) panel.change_saver();
-        // else sim.toggle();
-        else {
-            sim.toggle();
-            printtimer.reset();
-            pressure.print_config(true);
-            brkpos.print_config(true);
-            speedo.print_config(true);
-            tach.print_config(true);
-            mulebatt.print_config(true);
-            ezread.squintf("addr: batt:%08X touch:%08X\n", &sensidiots[_MuleBatt], touch.nowtouch_ptr());
-            for (int i=0; i<NumTelemetryFull; i++) {
-                ezread.squintf("%02d: %08X %s\n", i, &sensidiots[i], diag.err_sens_card[i].c_str());            
-            }
-            int elapsed = printtimer.elapsed();
-            ezread.squintf("printed in: %ld us\n", elapsed);
-            // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
-        }
-    }
 }
