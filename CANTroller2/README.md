@@ -13,10 +13,11 @@
 
 1. Download Visual Studio Code (VSCode) [here](<https://code.visualstudio.com/>)
 1. Open VSCode and install the extension "PlatformIO IDE" (Ctrl+Shift+X to add an extension on Mac) -OR- Run `brew install platformio`
-1. Save the json file [here](<https://github.com/platformio/platform-espressif32/blob/master/boards/esp32-s3-devkitc-1.json>) as `~/.platformio/boards/esp32-s3-devkitc-1.json`
-1. Clone the <https://github.com/two-x/TheFlyingMagicCarpet> github repo into your filesystem. You can do this from the command line or figure out how to do it from within vscode. Whatever you're into.
-1. Click the platformio alien head in VScode, and pick "Projects...", "Add Existing", and find the TheFlyingMagicCarpet/Cantroller2 directory. Once platformio reads the platformio.ini file, a bunch of libraries should automatically install themselves.
-1. Install clang-format linter. On MacOS you can do "brew install clang-format", otherwise use your package manager instead. Make sure clang-format is in your path. In VScode, In vscode, View-Extensions and install the Clang-format extension, then open the extension settings. Enter the full clang-format executable path into the "Executable" setting (eg "/opt/homebrew/bin/clang-format"). Enter ".clang-format" into the "Assume Filename" setting. Assuming you have the repo updated now you should be able to right-click and format code in the editor to make it all format consistently.
+1. (unsure) Save the json file [here](<https://github.com/platformio/platform-espressif32/blob/master/boards/esp32-s3-devkitc-1.json>) as `~/.platformio/boards/esp32-s3-devkitc-1.json`
+1. Also install the following extensions: C/C++, Clang-format, ESP-IDF, GitLens. Optional: Vim, Rainbow CSV.
+1. Clone the <https://github.com/two-x/TheFlyingMagicCarpet> github repo into your filesystem. You can do this from the command line or figure out how to do it from within vscode. Whatever you're into. I used these steps on mac: a. mkdir ~/Documents/TheFlyingMagicCarpet b. ssh-keygen -t rsa -b 4096 -C (git-user-email) c. mousecopy ~/.ssh/id_rsa.pub and paste into github settings d. from ~/Documents do git clone https://github.com/two-x/TheFlyingMagicCarpet
+1. (unsure) Click the platformio alien head in VScode, and pick "Projects...", "Add Existing", and find the TheFlyingMagicCarpet/Cantroller2 directory. Once platformio reads the platformio.ini file, a bunch of libraries should automatically install themselves.
+1. (unsure) Install clang-format linter. On MacOS you can do "brew install clang-format", otherwise use your package manager instead. Make sure clang-format is in your path. In VScode, In vscode, View-Extensions and install the Clang-format extension, then open the extension settings. Enter the full clang-format executable path into the "Executable" setting (eg "/opt/homebrew/bin/clang-format"). Enter ".clang-format" into the "Assume Filename" setting. Assuming you have the repo updated now you should be able to right-click and format code in the editor to make it all format consistently.
 
 ## Dev Env nice-to-haves
 
