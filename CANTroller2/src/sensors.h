@@ -251,6 +251,8 @@ class Transducer : public Device {
         _long_name = "Unknown transducer";
         _short_name = "xducer";
     }
+    operator float() { return _si.val(); }
+    
     Transducer() = delete;  // this ensures a pin is always provided
     int _transtype;
     virtual void setup() {
