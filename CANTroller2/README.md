@@ -9,15 +9,23 @@
 1. The board has two micro-USB ports labeled "UART" and "USB". Code can be uploaded to the board using either one of these. However, to see serial console output from the board you need to connect to the "UART" port (then open console output using the plug icon in bottom toolbar).
 1. Sometimes uploading files or code will fail using one or the other of the two ports, so if that happens switch the port and try again.  Note also the upload data goes at 1MBps so crappy-ass microusb cords can result in failures too.
 
-## Environment
+## Install environment
 
-1. Download Visual Studio Code (VSCode) [here](<https://code.visualstudio.com/>)
-1. Open VSCode and install the extension "PlatformIO IDE" (Ctrl+Shift+X to add an extension on Mac) -OR- Run `brew install platformio`
-1. (unsure) Save the json file [here](<https://github.com/platformio/platform-espressif32/blob/master/boards/esp32-s3-devkitc-1.json>) as `~/.platformio/boards/esp32-s3-devkitc-1.json`
-1. Also install the following extensions: C/C++, Clang-format, ESP-IDF, GitLens. Optional: Vim, Rainbow CSV.
-1. Clone the <https://github.com/two-x/TheFlyingMagicCarpet> github repo into your filesystem. You can do this from the command line or figure out how to do it from within vscode. Whatever you're into. I used these steps on mac: a. mkdir ~/Documents/TheFlyingMagicCarpet b. ssh-keygen -t rsa -b 4096 -C (git-user-email) c. mousecopy ~/.ssh/id_rsa.pub and paste into github settings d. from ~/Documents do git clone https://github.com/two-x/TheFlyingMagicCarpet
-1. (unsure) Click the platformio alien head in VScode, and pick "Projects...", "Add Existing", and find the TheFlyingMagicCarpet/Cantroller2 directory. Once platformio reads the platformio.ini file, a bunch of libraries should automatically install themselves.
-1. (unsure) Install clang-format linter. On MacOS you can do "brew install clang-format", otherwise use your package manager instead. Make sure clang-format is in your path. In VScode, In vscode, View-Extensions and install the Clang-format extension, then open the extension settings. Enter the full clang-format executable path into the "Executable" setting (eg "/opt/homebrew/bin/clang-format"). Enter ".clang-format" into the "Assume Filename" setting. Assuming you have the repo updated now you should be able to right-click and format code in the editor to make it all format consistently.
+1. [Download Visual Studio Code (VSCode)](<https://code.visualstudio.com/>)
+1. Install the following extensions: PlatformIO IDE, C/C++, Clang-format, ESP-IDF, GitLens. Optional: Vim, Rainbow CSV.
+1. Clone the github repo into your filesystem. See instructions below.
+1. Create a platformio project, using the board "ESP32-S3-DevkitC-xxxx" (I forgot what xxxx is but you'll find it). And point it to the CANTroller2 folder.
+
+## Cloning the repo
+
+1. Go to [the repo](<https://github.com/two-x/TheFlyingMagicCarpet>). I think you can clone the repo from within vscode, however here are instructions how to do it from the command line on mac:
+1. ssh-keygen -t rsa -b 4096 -C (git-user-email)
+1. use mouse to copy the contents of ~/.ssh/id_rsa.pub
+1. from github repo page click user avatar icon then settings then ssh keys, and paste it as a new ssh key. (might need to be user two-x the repo owner to do this)
+1. cd ~/Documents
+1. mkdir ~/Documents/TheFlyingMagicCarpet
+1. git clone https://github.com/two-x/TheFlyingMagicCarpet
+1. the control system files are under ~/Documents/TheFlyingMagicCarpet/CANTroller2
 
 ## Dev Env nice-to-haves
 
@@ -26,6 +34,14 @@
 1. [Oh My Zsh](<https://ohmyz.sh/#install>) makes iTerm prompt a lot more colorful / easy to read.  But most importantly it's compatible with a number of other cool plugins.
 1. Check out the in-terminal short cuts you're offered [here](<https://github.com/ohmyzsh/ohmyzsh/tree/master/plugins/macos#commands>)
 1. zsh autosuggestions.  In iTerm, suggestions for end of line come up in gray.  Click R arrow to select; tab to see more options.  Needs to be [installed](<https://github.com/zsh-users/zsh-autosuggestions>) in addition to being added to ~/.zshrc file. FWIW, in my ~/.zshrc file, I have `plugins=(git zsh-autosuggestions macos)`
+
+## Dubious related alternate instructions
+
+1. Open VSCode and install the extension "PlatformIO IDE" (Ctrl+Shift+X to add an extension on Mac) -OR- Run `brew install platformio`
+1. (unsure) Save the json file [here](<https://github.com/platformio/platform-espressif32/blob/master/boards/esp32-s3-devkitc-1.json>) as `~/.platformio/boards/esp32-s3-devkitc-1.json`
+1. (unsure) Click the platformio alien head in VScode, and pick "Projects...", "Add Existing", and find the TheFlyingMagicCarpet/Cantroller2 directory. Once platformio reads the platformio.ini file, a bunch of libraries should automatically install themselves.
+1. (unsure) Install clang-format linter. On MacOS you can do "brew install clang-format", otherwise use your package manager instead. Make sure clang-format is in your path. In VScode, In vscode, View-Extensions and install the Clang-format extension, then open the extension settings. Enter the full clang-format executable path into the "Executable" setting (eg "/opt/homebrew/bin/clang-format"). Enter ".clang-format" into the "Assume Filename" setting. Assuming you have the repo updated now you should be able to right-click and format code in the editor to make it all format consistently.
+
 
 ## Uploading
 
