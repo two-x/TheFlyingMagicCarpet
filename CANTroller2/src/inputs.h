@@ -72,6 +72,7 @@ class MomentarySwitch {
 class Encoder {
   private:
     enum _inputs { ENC_A=0, ENC_B=1 };
+    Timer activitytimer{300000};
     // using panasonic-type encoder (16 detents/spin, 1 transition per detent)
     // 800us: soren's best, maybe glitched, 15000us: uncomfortably fast, 40000us: regular twist, 800000us: eeeextra slow
     int _spintime_min_us = 6000;  // Will reject spins faster than this as an attempt to debounce behavior.
@@ -81,10 +82,8 @@ class Encoder {
     volatile int _bounce_lock = ENC_B;  // Which of the encoder A or B inputs is currently untrustworthy due to bouncing 
     static const int _bounce_expire_us = 10000;  // need to let bounce lock expire to reliably catch turn events in either direction on direction reversals
     volatile int _delta = 0;  // Keeps track of un-handled rotary clicks of the encoder.  Positive for CW clicks, Negative for CCW. 
-    int _a_pin, _b_pin, _sw_pin;
-    int _state = 0;
-    int _spintime_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
-
+    int _a_pin, _b_pin, _sw_pin, _state = 0, _spintime_us = 1000000;  // How many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
+    bool activity = false;
     // Encoder isr. note you gotta set the define EncoderPanasonicType to match your encoder type
     // If true, supports one type of cheap amazon black-pcb. 2024 one of these is mounted in the vehicle control enclosure
     //   * these guys hit a detent around each B transition, and A transitions in between detents
@@ -95,11 +94,11 @@ class Encoder {
     //   * the value of the B signal on the falling edge of the A signal is high if going CW, otherwise low
     //   * if your encoder is the wrong kind for this algorithm, it'll behave all sluggish, like usually ignoring every other detent, switch to the other algorithm
     #if EncoderPanasonicType                          // eg the vehicle control box encoder
-    void IRAM_ATTR _a_isr() {                         // A isr has been triggered by A signal rise or fall transition. A will now bounce for a while and can't be trusted
+    void IRAM_ATTR _a_isr() {                         // A isr has been triggered by A signal rise or fall transition. A will now be bouncing for a while and can't be trusted
         isr_time_now = esp_timer_get_time();          // put some flavor in your flav
         int elapsed = isr_time_now - isr_time_last;   // note time elapsed since last valid event on A isr. might be invalid for use by outside code if this is a bounce   
         if (_bounce_lock == Encoder::ENC_A) {         // if A isr is bounce locked, B isr hasn't yet triggered since our last trigger
-            if (elapsed <= _bounce_expire_us) return; // if bouncing is still a thing then bail
+            if (elapsed <= _bounce_expire_us) return; // if it's not yet been long enough since the initial transition we assume this is a bounce and just bail
             val_a_isr = digitalRead(_a_pin);          // otherwise since B isr hasn't triggered, we are reversing direction and must update our own value
         }
         else val_b_isr = digitalRead(_b_pin);         // get a stable reading of B signal, unless we know B hasn't changed then skip for speed
@@ -185,17 +184,22 @@ class Encoder {
         // Serial.printf("dt:%d sr:%lf af:%d\n", div_time, _spinrate, _accel_factor);
     }
     void update() {
+        static int delta_last;
         button.update();
         enc_a = !digitalRead(_a_pin);
         enc_b = !digitalRead(_b_pin);
         if (runmode == LOWPOWER && !syspower) {
             if (button.shortpress(), false) sleep_request = REQ_OFF;
         }
-        // else if (runmode == STANDBY) {
-        //     if (button.shortpress(), false) autosaver_request = REQ_OFF;
-        // }
+        else if (runmode == STANDBY) {
+            if (button.shortpress(), false) autosaver_request = REQ_OFF;
+        }
+        if (_delta != delta_last) activitytimer.reset();
+        activity = !activitytimer.expired();
+        delta_last = _delta;
         update_spinrate();
     }
+    bool* activity_ptr() { return &activity; }
     int rotation(bool accel=true) {  // Returns detents spun since last call, accelerated by spin rate or not
         int d = _delta;
         _delta = 0;  // our responsibility to reset this flag after handling events

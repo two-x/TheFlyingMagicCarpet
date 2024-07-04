@@ -139,6 +139,7 @@ bool screensaver_enabled = true;     // does fullscreen screensaver start automa
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
 bool use_tft_colors_for_neo = false;  // should neopixel colors be based on onscreen icon colors? (otherwise they'll split the full hue spectrum amongst themselves)
 bool print_error_changes = true;     // should diag print status changes and new error events to console?
+bool pot_controls_animation_timeout = true;  // when showing fullscreen animations, should the pot value control the next animation timeout?
 
 // global tunable variables
 float float_zero = 0.000069;         // if two floats being compared are closer than this, we consider them equal

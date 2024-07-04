@@ -1,7 +1,6 @@
 #pragma once
 #include <Arduino.h>
 
-// #define touch_simbutton 38
 #define disp_apppanel_x 150
 #define disp_apppanel_y 48
 #define disp_apppanel_w (disp_width_pix - disp_apppanel_x)  // 156
@@ -23,18 +22,16 @@ std::string simgrid[4][3] = {
     { "psi", "rpm", "mph" },
     { "pos", "joy", "joy" },
     { "pos", "joy", "joy" },
-};  // The greek mu character we used for microseconds no longer works after switching from Adafruit to tft_espi library. So I switched em to "us" :(
+};
 
 volatile bool _is_running;
 static constexpr int SHIFTSIZE = 8;
 volatile bool flip = 0;
 volatile int refresh_limit = 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
-// volatile bool auto_saver_enabled = false;
 volatile int screen_refresh_time;
-// Timer screenRefreshTimer = Timer((int64_t)refresh_limit);
 LGFX lcd;
 static constexpr int num_bufs = 2;
-LGFX_Sprite framebuf[num_bufs];  // , datapage_sp[2], bargraph_sp[2], idiots_sp[2];
+LGFX_Sprite framebuf[num_bufs];
 struct viewport { int x; int y; int w; int h; };
 class CollisionsSaver {
   public:
@@ -90,7 +87,7 @@ class CollisionsSaver {
     }
     bool mainfunc(void) {
         bool new_round = false;
-        static constexpr float e = 0.999;  // Coefficient of friction
+        static constexpr float e = 0.999;  // 0.999 coefficient of friction
         sec = lgfx::millis() / ball_create_rate;
         if (psec != sec) {
             psec = sec;
@@ -240,7 +237,7 @@ class CollisionsSaver {
         return !round_over;  // not done yet
     }
 };
-class EraserSaver {  // draws colorful patterns to exercise
+class EraserSaver {  // draws colorful patterns to exercise video buffering performance
  private:
     enum savershapes { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, Worm, Rotate, NumSaverShapes };
     LGFX_Sprite* sprite;
@@ -249,9 +246,9 @@ class EraserSaver {  // draws colorful patterns to exercise
     uint8_t pencolor = RED, sat = rn(256), brt = rn(256), c = rando_color();
     uint16_t spothue = 65535, penhue = rn(65535), hue = rn(65535);
     std::string sub = "\x64\x6f\x20\x64\x72\x75\x67\x73";
-    int season = rn(4), precess = rn(10), shape, shdone = 0;
-    int point[2], plast[2], spotrate = 300, cycle = 0, scaler = 1;
-    Timer extratimer{2850000}, lucktimer;
+    int season = rn(4), precess = rn(10), shape, shdone = 0, point[2], plast[2], spotrate = 300;
+    int cycle = 0, scaler = 1, cycletime = 50000000, seasontime = 3000000, cycle_season_ratio = 16;
+    Timer extratimer{2850000}, lucktimer, seasontimer, cycletimer;
     bool lotto = false, has_eraser = true;
  public:
     EraserSaver() {}
@@ -259,6 +256,8 @@ class EraserSaver {  // draws colorful patterns to exercise
         sprite = _nowspr;
         vp = _vp;
         lucktimer.set((2 + rn(5)) * 10000000);
+        cycletimer.set(cycletime);
+        seasontimer.set(seasontime);
         shape = rn(Rotate);
     }
     void reset(LGFX_Sprite* sp0, LGFX_Sprite* sp1, viewport* _vp) {
@@ -271,13 +270,25 @@ class EraserSaver {  // draws colorful patterns to exercise
         // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
         spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
     }
+    void pot_timing() {
+        if (!pot_controls_animation_timeout) return;
+        static int potval, lastpot;
+        int lasttime, maxcycletime = 1800000000, mincycletime = 3000000;
+        lastpot = potval;
+        potval = (int)(pot.val());
+        if (std::abs(potval - lastpot) > 1) {
+            cycletime = constrain(map(potval, 0, 100, maxcycletime, mincycletime), mincycletime, maxcycletime);
+            seasontime = cycletime / cycle_season_ratio;
+            cycletimer.set(cycletime);
+            seasontimer.set(seasontime);
+        }
+    }
     int update(LGFX_Sprite* _nowspr, viewport* _vp) {
         static int last_season = 0, last_precess = 3, num_cycles = 3;
-        static constexpr int cycletime = 50000000;
-        static Timer seasontimer{3000000}, cycletimer{cycletime};
         int numseasons = 4;
         sprite = _nowspr;
         vp = _vp;
+        // pot_timing();
         if (cycletimer.expired()) {
             ++cycle %= num_cycles;
             if (cycle == 0) change_pattern(-1);
@@ -366,10 +377,10 @@ class EraserSaver {  // draws colorful patterns to exercise
         uint16_t mult = rn(2000);
         hue = spothue + rn(3000);
         spotrate = (int)((season * 200) + rn(200));
-        sat = 95 + rn(20 + season * 47);
+        sat = 96 + precess * 7 + rn(20 + season * 32);
         brt = 120 + rn(136);
         for (int i = 0; i < 6 + rn(20); i++) {
-            uint8_t c = hsv_to_rgb<uint8_t>(hue + mult * i, sat, brt);
+            c = hsv_to_rgb<uint8_t>(hue + mult * i, sat, brt);
             sprite->drawEllipse(point[HORZ] + vp->x, point[VERT] + vp->y, scaler * d[0] - i, scaler * d[1] + i, c);
         }
     }
@@ -404,8 +415,7 @@ class EraserSaver {  // draws colorful patterns to exercise
         c = hsv_to_rgb<uint8_t>(hue, sat, brt);
         if (!(precess % 3)) c2 = c;  // hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
         else if (!(precess % 2)) c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
-        else c2 = BLK;  // 
-        // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
+        else c2 = BLK;  // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
         for (int xo = -1; xo <= 1; xo += 2) {
             sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler, c);
             sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y + xo, d * scaler, c);
@@ -479,13 +489,12 @@ class EraserSaver {  // draws colorful patterns to exercise
         }
         if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
         if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
-        
         int shells = 1 + (!(bool)rn(5)) ? 1 + rn(4) : 0;
         int steps[2] = { boxsize[HORZ] / (shells+1), boxsize[VERT] / (shells+1) };
+        // this crashes it
         // if (precess > 5 && !rn(2)) shells = boxsize[!longer] >> 1;
         // else shells = (int)(rn(5) > 0);
         // int steps[2] = { boxsize[HORZ] / shells, boxsize[VERT] / shells };
-        
         for (int mat=0; mat<shells; mat++) {
             if (season == 0) boxcolor = rando_color();
             else if (season == 1) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)rn(65535), rn(256), rn(256));
@@ -646,7 +655,7 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
         }
         return charcount;
     }
-    void draw_scrollbar(LGFX_Sprite* spr, uint8_t color) {
+    void draw_scrollbar(LGFX_Sprite* spr, uint8_t color) {  // this runs but is not finished and doesn't do anything
         int cent = (int)((float)vp->h * 0.125) - 6;
         for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
         cent = (int)((float)vp->h * 0.375) - 6;
