@@ -764,22 +764,6 @@ class PanelAppManager {
                     if (!sim->can_sim(sens::joy)) do_draw = false;
                 }
                 if (do_draw) {
-                    int cntr_x = touch_cell_h_pix*col + (touch_cell_h_pix>>1) + 2 + disp_simbuttons_x - 5 + 2;
-                    int cntr_y = touch_cell_v_pix*row + (touch_cell_v_pix>>1) + disp_simbuttons_y - 1;
-                    if (simgrid[row][col] != "    ") {
-                        draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], YEL);  // for 3d look
-                        draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
-                        // spr->fillRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, DGRY);
-                        // spr->drawRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, BLK);
-                        if ((row % 2) && (simgrid[row][col].find("joy") == std::string::npos)) {
-                            spr->setFont(&fonts::FreeSans9pt7b);
-                            spr->setTextColor(BLK);
-                            spr->drawString(simgrid[row][col].c_str(), cntr_x - 1, cntr_y - touch_cell_v_pix/2 + 5 - 1);
-                            spr->drawString(simgrid[row][col].c_str(), cntr_x + 1, cntr_y - touch_cell_v_pix/2 + 5 + 1);
-                            spr->setTextColor(LYEL);
-                            spr->drawString(simgrid[row][col].c_str(), cntr_x, cntr_y - touch_cell_v_pix/2 + 5);
-                        }
-                    }
                 }
             }     
         }

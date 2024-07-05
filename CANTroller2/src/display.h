@@ -4,14 +4,14 @@
 #define disp_lines 24  // Max lines of text displayable at line height = disp_line_height_pix
 #define disp_fixed_lines 8  // Lines of static variables/values always displayed
 #define disp_line_height_pix 10  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
-#define disp_bargraph_width 36
+#define disp_bargraph_width 38
 #define disp_bargraph_squeeze 1
 #define disp_maxlength 5  // How many characters is max data value
 #define disp_default_float_sig_dig 3  // Significant digits displayed for float values. Higher causes more screen draws
 #define disp_datapage_names_x 12
 #define disp_datapage_values_x 59
-#define disp_datapage_units_x 98  // 103        
-#define disp_bargraphs_x 113  // 122
+#define disp_datapage_units_x 96  // 103        
+#define disp_bargraphs_x 111  // 122
 #define disp_datapage_title_x 83
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
