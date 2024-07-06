@@ -458,7 +458,8 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
             }
             else {
                 sat = (20 * season) + rn(256 - 30 * season);
-                c = hsv_to_rgb<uint8_t>((uint16_t)(spothue + (spothue >> 2) * rn(3)), sat, 130 + rn(126));
+                hue = (myshape == 2) ? spothue : myhue[(bool)myshape];
+                c = hsv_to_rgb<uint8_t>(hue, sat, 130 + rn(126));
             }
             if (myshape == 0) sprite->fillCircle(p[0], p[1], r, c);
             else if (myshape == 1) sprite->fillRect(p[0] - r, p[1] - r, r * 2, r * 2, c);
@@ -745,7 +746,7 @@ class PanelAppManager {
         else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, BLK);
         else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, BLK);
     }
-    void draw_simbuttons (LGFX_Sprite* spr, bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
+    void draw_simbuttons(LGFX_Sprite* spr, bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         if (!create) {
             spr->fillSprite(BLK);
             return;
@@ -764,6 +765,22 @@ class PanelAppManager {
                     if (!sim->can_sim(sens::joy)) do_draw = false;
                 }
                 if (do_draw) {
+                    int cntr_x = touch_cell_h_pix * col + (touch_cell_h_pix >> 1) + 2 + disp_simbuttons_x - 5 + 2;
+                    int cntr_y = touch_cell_v_pix * row + (touch_cell_v_pix >> 1) + disp_simbuttons_y - 1;
+                    if (simgrid[row][col] != "    ") {
+                        draw_simbutton(spr, cntr_x + 2, cntr_y - 1, simgriddir[row][col], YEL);  // for 3d look
+                        draw_simbutton(spr, cntr_x, cntr_y, simgriddir[row][col], DGRY);
+                        // spr->fillRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, DGRY);
+                        // spr->drawRoundRect(cntr_x - 20, cntr_y - touch_cell_v_pix/2 - 10, 40, 20, 5, BLK);
+                        if ((row % 2) && (simgrid[row][col].find("joy") == std::string::npos)) {
+                            spr->setFont(&fonts::FreeSans9pt7b);
+                            spr->setTextColor(BLK);
+                            spr->drawString(simgrid[row][col].c_str(), cntr_x - 1, cntr_y - touch_cell_v_pix / 2 + 5 - 1);
+                            spr->drawString(simgrid[row][col].c_str(), cntr_x + 1, cntr_y - touch_cell_v_pix / 2 + 5 + 1);
+                            spr->setTextColor(LYEL);
+                            spr->drawString(simgrid[row][col].c_str(), cntr_x, cntr_y - touch_cell_v_pix / 2 + 5);
+                        }
+                    }
                 }
             }     
         }
