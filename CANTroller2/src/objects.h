@@ -439,7 +439,5 @@ void stop_console() {
         delay(200);  // give time for serial to print everything in its buffer
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
-    // ezread.printf(DCYN, "welcome to EZ-Read console\n");
     ezread.printf(DCYN, "magic carpet is booted\n");
-    // ezread.printf("welcome to EZ-Read Console");
 }
