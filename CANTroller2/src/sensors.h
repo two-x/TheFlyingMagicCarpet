@@ -1350,9 +1350,10 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         }
     }
     void update() {
-        toggles_update();
-        if (!(sim->simulating(sens::joy))) direction_update();
         radiolost_update();
+        toggles_update();
+        // if (runmode == LOWPOWER) return;  // causes rmt errors
+        if (!(sim->simulating(sens::joy))) direction_update();
     }
     void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
         for (int ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;

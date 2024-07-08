@@ -85,8 +85,8 @@ void set_syspower(bool setting) {
 // RTOS task that updates temp sensors in a separate task
 void tempsens_task(void *parameter) {
     while (true) {
-        if (!dont_take_temperatures)
-            tempsens.update_temperatures();
+        while (runmode == LOWPOWER) vTaskDelay(pdMS_TO_TICKS(1000));
+        if (!dont_take_temperatures) tempsens.update_temperatures();
         if (sim.potmapping(sens::engtemp)) {
             TemperatureSensor *engine_sensor = tempsens.get_sensor(loc::ENGINE);
             if (engine_sensor != nullptr) {
@@ -222,6 +222,7 @@ class Ignition {
     void request(int req) { ign_req = req; }
     void panic_request(int req) { panic_req = req; }
     void update() {  // Run once each main loop
+        if (runmode == LOWPOWER) return;
         if (panic_req == REQ_TOG) panic_req = !panicstop;
         if (ign_req == REQ_TOG) ign_req = !signal;
         // else if (request == signal) request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
@@ -265,6 +266,7 @@ class Starter {
     }
     void request(int req) { now_req = req; }  // squintf("r:%d n:%d\n", req, now_req);}
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
+        if (runmode == LOWPOWER) return;
         // if (now_req != NA) squintf("m:%d r:%d\n", motor, now_req);
         if (now_req == REQ_TOG) now_req = motor ? REQ_OFF : REQ_ON;  // translate a toggle request to a drive request opposite to the current drive state
         if ((brake.feedback == _None) && (now_req == REQ_ON)) now_req = REQ_NA;  // never run the starter if brake is in openloop mode
@@ -337,6 +339,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
   public:
     FuelPump(int _pin) : pin(_pin) {}
     void update() {
+        if (runmode == LOWPOWER) return;
         static bool autoreq, autoreq_last;  // true if engine conditions warrant fuel pump to turn on
         if (!fuelpump_supported || !captouch) return;
         float tachnow = tach.val();

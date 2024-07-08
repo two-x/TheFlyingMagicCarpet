@@ -567,6 +567,7 @@ class ThrottleControl : public ServoMotor {
         return (std::abs(out_pc_to_si(pc[OUT]) - si[PARKED]) < 1);
     }
     void update() {
+        if (runmode == LOWPOWER) return;
         if (pid_timer.expireset()) {
             update_idlespeed();                // Step 1 : do any idle speed management needed          
             update_ctrl_config();
@@ -914,6 +915,7 @@ class BrakeControl : public JagMotor {
         pid_ena_last = pid_enabled;
     }
     void update() {  // Brakes - Determine motor output and write it to motor
+        if (runmode == LOWPOWER) return;
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
             update_motorheat();                // Step 1 : Continuously estimate motor heat to prevent exceeding duty limitation requirement
@@ -953,6 +955,7 @@ class SteeringControl : public JagMotor {
         JagMotor::setup(_hotrc, _speedo, _batt);
     }
     void update() {
+        if (runmode == LOWPOWER) return;
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
             set_output();                     // Step 1 : Determine motor percent value

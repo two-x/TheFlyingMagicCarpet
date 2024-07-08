@@ -508,6 +508,7 @@ class LoopTimer {
         return (float)loop_recentsum/(float)loop_history;
     }
     void update() {  // Call once each loop at the very end
+        if (runmode == LOWPOWER) return;
         int thisloop = (int)loop_timer.elapsed();
         loop_avg_us = calc_avg(loop_now, thisloop);
         loop_periods_us[loop_now] = thisloop;  // us since beginning of this loop
@@ -592,6 +593,7 @@ class BootMonitor {
         flash_codestatus(Booting);
         print_postmortem();
         recover_status();
+        print_chip_info();
         print_partition_table();
         if (!watchdog_enabled) return;
         ezread.squintf("Boot manager.. \n");
@@ -701,6 +703,23 @@ class BootMonitor {
             iterator = esp_partition_next(iterator);
         }
         esp_partition_iterator_release(iterator);
+    }
+    void print_chip_info() {
+        esp_chip_info_t chip_info;
+        uint32_t flash_size;
+        esp_chip_info(&chip_info);
+        unsigned major_rev = chip_info.revision / 100;
+        unsigned minor_rev = chip_info.revision % 100;
+        ezread.squintf("  detected %s v%d.%d %d-core, ", CONFIG_IDF_TARGET, major_rev, minor_rev, chip_info.cores);
+        if(esp_flash_get_size(NULL, &flash_size) != ESP_OK) Serial.printf("(fail flash detect)\n");
+        else ezread.squintf("%" PRIu32 "MB %s flash\n", flash_size / (uint32_t)(1024 * 1024),
+            (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "emb." : "ext.");  // embedded or external
+        ezread.squintf("  w/ %s%s%s%s.", 
+            (chip_info.features & CHIP_FEATURE_WIFI_BGN) ? "WiFi/" : "",
+            (chip_info.features & CHIP_FEATURE_BT) ? "BT" : "",
+            (chip_info.features & CHIP_FEATURE_BLE) ? "BLE" : "",
+            (chip_info.features & CHIP_FEATURE_IEEE802154) ? ", 802.15.4 (Zigbee/Thread)" : "");
+        ezread.squintf(" heap: %" PRIu32 " B free (min)\n", esp_get_minimum_free_heap_size());
     }
 };
 #if RUN_TESTS
