@@ -524,7 +524,7 @@ class I2CSensor : public Sensor {
         }
         else {
             ezread.squintf("\n");
-            set_source(src::UNDEF); // don't even have a device at all..
+            set_source(src::FIXED); // don't even have a device at all..
         }
     }
   public:
@@ -625,7 +625,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
         set_si(1.0);  // initialize value
         set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68, 1.02);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
-        set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
+        set_ema_alpha(0.2);  // note: the default conversion constants for this sensor are actually correct
         mapreadTimer.set(mapread_timeout);
         _responding = !_sensor.begin();
         I2CSensor::setup();
@@ -670,7 +670,7 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
         set_abslim(0.0, 15.1);  // set abs range. dictated in this case by the max voltage a battery charger might output
         set_oplim(10.7, 13.9);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
         set_si(11.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
-        set_ema_alpha(0.005);  // note: all the conversion constants for this sensor are actually correct being the defaults 
+        set_ema_alpha(0.005);
         set_can_source(src::POT, true);
         print_config();
     }
