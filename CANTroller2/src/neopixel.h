@@ -96,8 +96,8 @@ neorgb_t NeopixelStrip::recolor(neorgb_t orig, float bright_pc=100.0, float sat_
     uint8_t newsat = (uint8_t)((float)(get_sat(orig)) * sat_pc / 100.0);
     return color_to_neo(hsv_to_rgb<uint32_t>(get_hue(orig), newsat, newbrite));
 }
-uint32_t NeopixelStrip::recolor(uint32_t orig_color, float bright_pc=100.0, float sat_pc=100.0) {
-    neorgb_t orig = color_to_neo(orig_color);
+uint32_t NeopixelStrip::recolor(uint32_t orig888, float bright_pc=100.0, float sat_pc=100.0) {
+    neorgb_t orig = color_to_neo(orig888);
     uint8_t newbrite = (uint8_t)((float)(get_brite(orig)) * bright_pc / 100.0);  // uint8_t newbrite = (uint8_t)(bright_pc / 100.0);
     uint8_t newsat = (uint8_t)((float)(get_sat(orig)) * sat_pc / 100.0);
     return hsv_to_rgb<uint32_t>(get_hue(orig), newsat, newbrite);
@@ -191,7 +191,8 @@ bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolst
     return true;
 }
 
-// setflash() : Call this to add a blink sequence to one of the idiot lights which will repeat indefinitely in [up to 6.4 sec] cycles
+// setflash() : Call this to add a blink sequence to one of the idiot lights which will repeat indefinitely in cycles
+//              Cycles are chopped into 128 definable segments of 50 ms each, for a total of 6.4 sec
 //   _idiot = which idiot light
 //   count  = number of blinks per cycle. Use 0 to cancel a previously applied blink pattern
 //   pulseh = high pulse width of each blink, in increments of 50 ms (of which there are max 128 per cycle)
@@ -275,12 +276,10 @@ void NeopixelStrip::sleepmode_ena(bool ena) {
 }
 void NeopixelStrip::knightrider() {
     static Timer knighttimer{150000};
-    static int posn = 0;
-    static int direction = 1;        // 1 for right, -1 for left
+    static int posn = 0, direction = 1;        // 1 for right, -1 for left
     const int trail = 4;             // Length of the fading trail
     const uint32_t knightcolor = 0xff0000;  // Red color
-    const float maxspeed = 20.0;     // Fastest speed (milliseconds per step)
-    const float minspeed = 100.0;    // Slowest speed (milliseconds per step)
+    const float maxspeed = 20.0, minspeed = 100.0;     // Fastest and slowest speed (milliseconds per step)
     float speed = maxspeed + (minspeed - maxspeed) * (float)posn / (striplength - 1);  // Calculate the speed based on the position (decelerates as it moves)
     if (knighttimer.expireset()) {   // if (knighttimer.elapsed((int)moveInterval)) {
         posn += direction;           // Move the bright point

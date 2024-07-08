@@ -39,7 +39,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", __________, __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
     { " Pot Raw", brAk"Posn", brAk"Posn", brAk"Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PG_SENS
-    { "TachPuls", "Tach Raw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpeedRaw", "   Speed", "   Speed", spEd"AMin", spEd"AMax", "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", spEd"Idle", },  // PG_PULS
+    { "TachPuls", "Tach Raw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpeedRaw", "   Speed", __________, __________, __________, "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", spEd"Idle", },  // PG_PULS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "    Idle", "    Idle", "    Idle", "FuelPump", __________, __________, __________, __________, "StartGas", "ColdIdle", "Hot Idle", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { "Brk Heat", "HybBrake", __________, __________, __________, __________, __________, "BkEnaPID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", "GasEnPID", "CrEnaPID", "CrAdjMod", },  // PG_MOTR    
@@ -54,7 +54,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "psi",  "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, ______, ______, ______, "%",    "%",    },  // PG_RUN
     { "us",   "us",   "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, "mph",  "atm",  "atm",  "us",   "us",   },  // PG_JOY
     { "adc",  "adc",  "in",   "%",    "adc",  "psi",  "%",    "adc",  "V",    ______, "psi",  "psi",  "in",   "in",   "in",   },  // PG_SENS
-    { "ms",   "Hz",   "rpm",  "ms",   "Hz",   "mph",  "mph",  "%",    "ms",   "ms",   "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
+    { "ms",   "Hz",   "rpm",  "ms",   "Hz",   "mph",  "%",    ______, ______, ______, "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    ______, ______, ______, ______, "%",    degree, degree, degreF, degreF, },  // PG_IDLE
     { degreF, "%",    ______, ______, ______, ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, },  // PG_MOTR
@@ -700,10 +700,8 @@ class Display {
             drawval(12, speedo.ms(), speedo.absmin_ms(), speedo.absmax_ms());
             drawval(13, speedo.native(), speedo.opmin_native(), speedo.opmax_native());
             drawval(14, speedo.raw(), speedo.opmin(), speedo.opmax());
-            drawval(15, speedo.val(), speedo.opmin(), speedo.opmax());
-            drawval(16, speedo.pc(), 0.0, 100.0);
-            drawval(17, speedo.absmin_ms());
-            drawval(18, speedo.absmax_ms());
+            drawval(15, speedo.pc(), 0.0, 100.0);
+            for (int line=16; line<=18; line++) draw_eraseval(line);
             drawval(19, tach.opmin(), tach.absmin(), tach.absmax());
             drawval(20, tach.opmax(), tach.absmin(), tach.absmax());
             drawval(11, speedo.opmin(), speedo.absmin(), speedo.absmax());

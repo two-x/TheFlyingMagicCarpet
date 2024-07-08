@@ -30,7 +30,7 @@ void setup() {
     lightbox.setup();
     fuelpump.setup();
     starter.setup();
-    for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // added for servos I think
+    for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // used for servos
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
     brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos, &gas, &tempsens);
     steer.setup(&hotrc, &speedo, &mulebatt);

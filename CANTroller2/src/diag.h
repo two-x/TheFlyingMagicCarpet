@@ -665,8 +665,10 @@ class BootMonitor {
             ignition.panic_request(REQ_ON);
             return;
         }
-        ezread.squintf("  Resuming %s run mode w/ ignition %s..\n", modecard[runmode_postmortem], ign_postmortem ? "on" : "off");
-        boot_to_runmode = runmode_postmortem;  // (codestatus_postmortem == Driving) ? FLY : HOLD;
+        boot_to_runmode = runmode_postmortem;
+        if (runmode_postmortem == CRUISE) boot_to_runmode = FLY;
+        else if (runmode_postmortem == CAL) boot_to_runmode = STANDBY;        
+        ezread.squintf("  Resuming %s run mode w/ ignition %s..\n", modecard[boot_to_runmode], ign_postmortem ? "on" : "off");
         ignition.request(ign_postmortem ? REQ_ON : REQ_OFF);
         // gas.(brake.pc[STOP]);  // brake.pid_targ_pc(brake.pc[STOP]);
     }
