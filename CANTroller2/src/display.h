@@ -987,6 +987,7 @@ class Tuner {
     int id, id_encoder = 0;  // idelta is integer edit value accelerated, and is used for all tuning edits regardless if int float or bool
     int rdelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
     void update() {
+        if (runmode == LOWPOWER) return;
         process_inputs();
         edit_values();
     }
@@ -1080,7 +1081,6 @@ class Tuner {
                 else if (sel == 12) gas.update_ctrl_config((int)tune(id));
                 else if (sel == 13) gas.update_cruise_ctrl_config((int)tune(id));
                 else if (sel == 14) gas.set_cruise_scheme(tune(gas.cruise_adjust_scheme, id, 0, NumCruiseSchemes-1, true));
-
             }
             else if (datapage == PG_BPID) {
                 if (sel == 11) brake.pid_dom->set_sampletime(tune(brake.pid_dom->sampletime(), id, 1000));
@@ -1093,7 +1093,6 @@ class Tuner {
                 else if (sel == 12) gas.pid.set_kp(tune(gas.pid.kp(), id, 0.0, NAN));
                 else if (sel == 13) gas.pid.set_ki(tune(gas.pid.ki(), id, 0.0, NAN));
                 else if (sel == 14) gas.pid.set_kd(tune(gas.pid.kd(), id, 0.0, NAN));
-
             }
             else if (datapage == PG_CPID) {
                 if (sel == 11) tune(&cruise_delta_max_pc_per_s, id, 1.0, 35.0);
@@ -1145,6 +1144,7 @@ bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickT
 }
 static void push_task(void *parameter) {
     while (true) {
+        while (runmode == LOWPOWER) vTaskDelay(pdMS_TO_TICKS(1000));
         if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
             screen.do_push();
             xSemaphoreGive(pushbuf_sem);
@@ -1155,6 +1155,7 @@ static void push_task(void *parameter) {
 }
 static void draw_task(void *parameter) {
     while (true) {
+        while (runmode == LOWPOWER) vTaskDelay(pdMS_TO_TICKS(1000));
         // if ((esp_timer_get_time() - screen_refresh_time > refresh_limit) || always_max_refresh || auto_saver_enabled) {
         if (xSemaphoreTake(drawbuf_sem, portMAX_DELAY) == pdTRUE) {
             screen_refresh_time = esp_timer_get_time();
