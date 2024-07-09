@@ -458,6 +458,9 @@ class Sensor : public Transducer {
     virtual void set_val_from_undef() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
         set_si(NAN);
     }
+    virtual void set_val_from_fixed() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
+        set_si(NAN);
+    }
     virtual void set_val_from_sim() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
         // sim_si(sim_val);                 // wtf is this supposed to do?
         // set_si(_si.val + touch.fdelta);  // I would think this should look something like this (needs some coding on the other side to support)
@@ -482,7 +485,7 @@ class Sensor : public Transducer {
     }  
     virtual void setup() {
         _transtype = SensorType;
-        if (!_detected) set_source(src::UNDEF);
+        if (!_detected) set_source(src::FIXED);
         Transducer::setup();
     }
     void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
@@ -536,11 +539,11 @@ class I2CSensor : public Sensor {
     }
     I2CSensor() = delete;
     virtual void setup() {
-        Sensor::setup();
         set_can_source(src::POT, true);
         _detected = _i2c->detected_by_addr(addr);
         if (!_detected || !_responding) _enabled = false;
         print_on_boot(_detected, _responding);
+        Sensor::setup();
     }
 };
 class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
