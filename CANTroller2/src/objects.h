@@ -188,15 +188,16 @@ class BasicModeSwitch : public ToggleSwitch {
 static BasicModeSwitch basicsw(tx_basic_pin);
 
 void test_console_throughput() {
-    int step = 0, chars = 0;
-    ezread.squintf(" Testing speed:  ");
+    int step = 0, bits = 0;
+    ezread.squintf("Speed test:  ");
     Timer testtimer{1000000};  //, chartimer{100000};
     while (!testtimer.expired()) {
         Serial.printf("\b \b \b \b \b%s", (step == 0) ? "-" : ((step == 1) ? "\\" : "/"));
+        std::fflush(stdout);  // ensure immediate output
         ++step %= 3;
-        chars += 10;
+        bits += 10 * 8;
     }
-    ezread.squintf("\b%ld baud\n", chars * 8);
+    ezread.squintf("\b%ld baud\n", bits);
 }
 void initialize_pins_and_console() {                        // set up those straggler pins which aren't taken care of inside class objects
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);                   // deasserting unused cs line ensures available spi bus
@@ -205,9 +206,10 @@ void initialize_pins_and_console() {                        // set up those stra
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
     basicsw.read();
-    Serial.begin(921600);       // 9600/19200/28800/57600/115200/230400/460800/921600;                   // open console serial port (will reassign tx pin as output)
-    delay(1200);                // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    ezread.squintf("** Setup begin..\nSerial console started. ");
+    Serial.begin(921600); // 9600/19200/28800/57600/115200/230400/460800/921600 // open console serial port (will reassign tx pin as output)
+    delay(800);          // 1200 use for 115200 baud // this is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    ezread.squintf(LPUR, "\n** Setup begin **\n");
+    ezread.squintf("  Serial console started. ");
     test_console_throughput();
     ezread.squintf("Syspower is %s, basicsw read: %s\n", syspower ? "on" : "off", in_basicmode ? "high" : "low");    
 }
@@ -215,7 +217,7 @@ class Ignition {
   private:
     int ign_req = REQ_NA, panic_req = REQ_NA, pin;
     bool paniclast, booted = false;
-    Timer panicTimer{15000000};  // How long should a panic stop last?  we can't stay mad forever
+    Timer panicTimer{15000000};  // how long should a panic stop last?  we can't stay mad forever
   public:
     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
     // bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
@@ -448,7 +450,9 @@ void BootButton::actions() {  // temporary (?) functionality added for developme
 }
 
 void stop_console() {
-    ezread.squintf("** Setup done%s\n", console_enabled ? "" : ". stopping console during runtime");
+    ezread.squintf("%s", console_enabled ? "" : "Stopping console during runtime\n");
+    ezread.squintf(LPUR, "** Setup done **\n");
+    std::fflush(stdout);  // ensure immediate output
     if (!console_enabled) {
         delay(200);  // give time for serial to print everything in its buffer
         Serial.end();  // close serial console to prevent crashes due to error printing
