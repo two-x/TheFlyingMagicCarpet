@@ -180,13 +180,24 @@ class BasicModeSwitch : public ToggleSwitch {
         }
         read();
         if (console_enabled) {
-            Serial.begin(115200);  // (230400) (115200);  // restart serial console to prevent crashes due to error printing
+            Serial.begin(460800);  // 9600/19200/28800/57600/115200/230400/460800/921600;  // restart serial console to prevent crashes due to error printing
             // delay(1500);  // note we will miss console messages for a bit surrounding a read, unless we add back these delays
         }
     }
 };
 static BasicModeSwitch basicsw(tx_basic_pin);
 
+void test_console_throughput() {
+    int step = 0, chars = 0;
+    ezread.squintf(" Testing speed:  ");
+    Timer testtimer{1000000};  //, chartimer{100000};
+    while (!testtimer.expired()) {
+        Serial.printf("\b \b \b \b \b%s", (step == 0) ? "-" : ((step == 1) ? "\\" : "/"));
+        ++step %= 3;
+        chars += 10;
+    }
+    ezread.squintf("\b%ld baud\n", chars * 8);
+}
 void initialize_pins_and_console() {                        // set up those straggler pins which aren't taken care of inside class objects
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);                   // deasserting unused cs line ensures available spi bus
     set_pin(syspower_pin, OUTPUT, syspower);
@@ -194,12 +205,12 @@ void initialize_pins_and_console() {                        // set up those stra
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
     basicsw.read();
-    Serial.begin(115200);                     // open console serial port (will reassign tx pin as output)
-    delay(1200);                              // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    ezread.squintf("** Setup begin..\nSerial console started..\n");
+    Serial.begin(921600);       // 9600/19200/28800/57600/115200/230400/460800/921600;                   // open console serial port (will reassign tx pin as output)
+    delay(1200);                // This is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    ezread.squintf("** Setup begin..\nSerial console started. ");
+    test_console_throughput();
     ezread.squintf("Syspower is %s, basicsw read: %s\n", syspower ? "on" : "off", in_basicmode ? "high" : "low");    
 }
-
 class Ignition {
   private:
     int ign_req = REQ_NA, panic_req = REQ_NA, pin;

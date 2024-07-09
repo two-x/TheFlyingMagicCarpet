@@ -27,7 +27,7 @@ std::string simgrid[4][3] = {
 volatile bool _is_running;
 static constexpr int SHIFTSIZE = 8;
 volatile bool flip = 0;
-volatile int refresh_limit = 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
+volatile int refresh_limit = 500000; // 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
 volatile int screen_refresh_time;
 LGFX lcd;
 static constexpr int num_bufs = 2;
@@ -448,8 +448,8 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         else if (extratimer.expired()) stars = 1;
         for (int i=0; i<2; i++) myhue[i] += rn(511) - 255;
         for (int star = 0; star < stars; star++) {
-            p[0] = vp-> x + (punches_left) ? (vp->w >> 1) : rn(vp->w);
-            p[1] = vp->y + (punches_left) ? (vp->h >> 1) : rn(vp->h);
+            p[0] = vp-> x + punches_left ? vp->w >> 1 : rn(vp->w);
+            p[1] = vp->y + punches_left ? vp->h >> 1 : rn(vp->h);
             if (!punches_left) r = scaler * (mindot + rn(adddot));
             else r = scaler * (int)((float)vp->h * 0.45 * (1.0 - ((float)punches_left / (float)total_punches)));
             if (precess < 6) {
@@ -476,6 +476,7 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         static int boxsize[2], boxrad, boxminsize;
         int longer = rn(2);
         uint8_t boxcolor;
+        has_eraser = false;
         boxrad = rn(1 + rn(2) * season);  // note this will crash us!  ->  boxrad = rn(5 * season);
         boxminsize = 2 * boxrad + 5;
         boxsize[longer] = boxminsize + rn(vp->w - boxminsize);
@@ -490,8 +491,8 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         }
         if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
         if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
-        int shells = 1 + (!(bool)rn(5)) ? 1 + rn(4) : 0;
-        int steps[2] = { boxsize[HORZ] / (shells+1), boxsize[VERT] / (shells+1) };
+        int shells = 1 + (rn(5) != 0) ? 1 + rn(4) : 0;
+        int steps[2] = { boxsize[HORZ] / (shells + 1), boxsize[VERT] / (shells + 1) };
         // this crashes it
         // if (precess > 5 && !rn(2)) shells = boxsize[!longer] >> 1;
         // else shells = (int)(rn(5) > 0);
@@ -543,7 +544,7 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         static int shifter = 2, wormdmin = 8, wormdmax = 38, wormvelmax = 400, wormsat = 128, brightmod = rn(66);
         static Timer movetimer{20000}, wormtimer{1000000};
         static bool wormstripe = false, fading = false;
-        int colorslices = 11, stripeslices = 1, fadeslices = 4, slicetime = 75000;
+        int colorslices = 11, stripeslices = 1, fadeslices = 5, slicetime = 75000;
         has_eraser = lotto = false;
         lucktimer.reset();
         if (season == 0 || season == 2) sat = pensat;
@@ -574,7 +575,7 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
             }
         }
         for (int axis = HORZ; axis <= VERT; axis++)
-            if (!(bool)rn(3)) wormd[axis] = constrain(wormd[axis] + rn(3) - 1, wormdmin, wormdmax);
+            if (rn(3) == 0) wormd[axis] = constrain(wormd[axis] + rn(3) - 1, wormdmin, wormdmax);
         if (wormtimer.expireset())
             for (int axis = HORZ; axis <= VERT; axis++)
                 wormvel[axis] = constrain(wormvel[axis] + rn(255) - 127, 0, wormvelmax);
