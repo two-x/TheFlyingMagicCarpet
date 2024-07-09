@@ -1184,7 +1184,8 @@ static void draw_task(void *parameter) {
             xSemaphoreGive(drawbuf_sem);
         }
         vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
-        if (!always_max_refresh && !auto_saver_enabled) vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit / 1000 - 1)));  //   || sim.enabled()
+        vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit / 1000 - 1)));  //   || sim.enabled()
+        // if (!always_max_refresh && !auto_saver_enabled) vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit / 1000 - 1)));  //   || sim.enabled()
         lastmode = runmode;
     }
 }
