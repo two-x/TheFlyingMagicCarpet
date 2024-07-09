@@ -637,7 +637,7 @@ class BootMonitor {
     }
     void print_postmortem() {
         ezread.squintf("Bootcount: %d (%d/%d). Last lost power\n  while %s%s in %s mode,\n  after ", 
-            bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str(), panic_postmortem ? "and panicking" : "", modecard[runmode_postmortem].c_str());
+          bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str(), panic_postmortem ? " and panicking" : "", modecard[runmode_postmortem].c_str());
         int last_uptime = (int)myprefs->getUInt("uptime", 0);
         if (last_uptime > 0) {
             ezread.squintf("just over %d min uptime\n", last_uptime);
@@ -713,12 +713,12 @@ class BootMonitor {
         ezread.squintf("  detected %s v%d.%d %d-core, ", CONFIG_IDF_TARGET, major_rev, minor_rev, chip_info.cores);
         if(esp_flash_get_size(NULL, &flash_size) != ESP_OK) Serial.printf("(fail flash detect)\n");
         else ezread.squintf("%" PRIu32 "MB %s flash\n", flash_size / (uint32_t)(1024 * 1024),
-            (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "emb." : "ext.");  // embedded or external
+          (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "emb." : "ext.");  // embedded or external
         ezread.squintf("  w/ %s%s%s%s.", 
-            (chip_info.features & CHIP_FEATURE_WIFI_BGN) ? "WiFi/" : "",
-            (chip_info.features & CHIP_FEATURE_BT) ? "BT" : "",
-            (chip_info.features & CHIP_FEATURE_BLE) ? "BLE" : "",
-            (chip_info.features & CHIP_FEATURE_IEEE802154) ? ", 802.15.4 (Zigbee/Thread)" : "");
+          (chip_info.features & CHIP_FEATURE_WIFI_BGN) ? "WiFi/" : "",
+          (chip_info.features & CHIP_FEATURE_BT) ? "BT" : "",
+          (chip_info.features & CHIP_FEATURE_BLE) ? "BLE" : "",
+          (chip_info.features & CHIP_FEATURE_IEEE802154) ? ", 802.15.4 (Zigbee/Thread)" : "");
         ezread.squintf(" heap: %" PRIu32 " B free (min)\n", esp_get_minimum_free_heap_size());
     }
 };

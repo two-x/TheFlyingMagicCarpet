@@ -5,7 +5,6 @@
 #define disp_fixed_lines 8  // Lines of static variables/values always displayed
 #define disp_line_height_pix 10  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
 #define disp_bargraph_width 38
-#define disp_bargraph_squeeze 1
 #define disp_maxlength 5  // How many characters is max data value
 #define disp_default_float_sig_dig 3  // Significant digits displayed for float values. Higher causes more screen draws
 #define disp_datapage_names_x 12
@@ -210,8 +209,8 @@ class Display {
         sprptr = &framebuf[flip];
         // ezread.squintf("  display initialized\n");
     }
-    void reset(LGFX_Sprite* spr) {
-        blackout(spr);
+    void reset() {
+        blackout();
         all_dirty();
         reset_request = false;
     }
@@ -230,8 +229,8 @@ class Display {
         disp_runmode_dirty = disp_simbuttons_dirty = disp_values_dirty = true;
         ui_context = ui_default;
     }
-    void blackout(LGFX_Sprite* spr) {
-        spr->fillSprite(BLK);
+    void blackout() {
+        sprptr->fillSprite(BLK);
         // std::uint32_t* s;
         // for (int f=0; f<2; f++) {
         //     s = (std::uint32_t*)(*spr).getBuffer();
@@ -283,9 +282,9 @@ class Display {
         }
     }
     void draw_bargraph_base(int corner_x, int corner_y, int width) {  // draws a horizontal bargraph scale.  124, y, 40
-        sprptr->drawFastHLine(corner_x + disp_bargraph_squeeze, corner_y, width - disp_bargraph_squeeze*2, MGRY);  // base line
+        sprptr->drawFastHLine(corner_x + 1, corner_y, width - 2, MGRY);  // base line
         sprptr->drawFastVLine(corner_x + width/2, corner_y-1, 2, WHT);  // centerpoint gradient line
-        for (int offset=0; offset<=2; offset+=2) sprptr->drawFastVLine((corner_x + disp_bargraph_squeeze) + offset * (width/2 - disp_bargraph_squeeze), corner_y-2, 3, WHT);  // endpoint gradient lines
+        for (int offset=0; offset<=2; offset+=2) sprptr->drawFastVLine((corner_x + 1) + offset * (width/2 - 1), corner_y-2, 3, WHT);  // endpoint gradient lines
     }
     void draw_needle_shape(int pos_x, int pos_y, uint8_t color) {  // draws a cute little pointy needle
         sprptr->drawFastVLine(pos_x-1, pos_y, 2, color);
@@ -388,18 +387,18 @@ class Display {
         int corner_x = disp_bargraphs_x;
         int corner_y = lineno*disp_line_height_pix;
         if (!std::isnan(lowlim) && !std::isnan(hilim)) {  // any value having a given range deserves a bargraph gauge with a needle
-            int n_pos = (int)(map(value, lowlim, hilim, (float)disp_bargraph_squeeze, (float)(disp_bargraph_width-disp_bargraph_squeeze)));
-            uint8_t ncolor = (n_pos > disp_bargraph_width-disp_bargraph_squeeze || n_pos < disp_bargraph_squeeze) ? RED : GRN;
-            n_pos = corner_x + constrain(n_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+            int n_pos = (int)(map(value, lowlim, hilim, 1.0f, (float)(disp_bargraph_width-1)));
+            uint8_t ncolor = (n_pos > disp_bargraph_width-1 || n_pos < 1) ? RED : GRN;
+            n_pos = corner_x + constrain(n_pos, 1, disp_bargraph_width-1);
             if (!disp_bargraphs[lineno]) draw_bargraph_base(corner_x, corner_y + 8, disp_bargraph_width);
             disp_bargraphs[lineno] = true;
             draw_target_shape(disp_targets[lineno], corner_y, BLK, NON);  // erase old target
             draw_bargraph_needle(n_pos, disp_needles[lineno], corner_y, ncolor);  // let's draw a needle
             disp_needles[lineno] = n_pos;  // remember position of needle
             if (!std::isnan(target)) {  // if target value is given, draw a target on the bargraph too
-                int t_pos = (int)(map(target, lowlim, hilim, (float)disp_bargraph_squeeze, (float)(disp_bargraph_width-disp_bargraph_squeeze)));
-                uint8_t tcolor = (t_pos > disp_bargraph_width-disp_bargraph_squeeze || t_pos < disp_bargraph_squeeze) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
-                t_pos = corner_x + constrain(t_pos, disp_bargraph_squeeze, disp_bargraph_width-disp_bargraph_squeeze);
+                int t_pos = (int)(map(target, lowlim, hilim, 1.0f, (float)(disp_bargraph_width-1)));
+                uint8_t tcolor = (t_pos > disp_bargraph_width-1 || t_pos < 1) ? RED : ( (t_pos != n_pos) ? YEL : GRN );
+                t_pos = corner_x + constrain(t_pos, 1, disp_bargraph_width-1);
                 draw_target_shape(t_pos, corner_y, tcolor, NON);  // draw the new target
                 disp_targets[lineno] = t_pos;  // remember position of target
             }
@@ -850,7 +849,7 @@ class Display {
   public:
     bool draw_all(LGFX_Sprite* spr) {
         if (!display_enabled) return false;
-        if (reset_request) reset(spr);
+        if (reset_request) reset();
         auto_saver();
         if (!auto_saver_enabled) {
             tiny_text();
@@ -1143,19 +1142,41 @@ bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickT
     return pdFALSE;
 }
 static void push_task(void *parameter) {
+    static int lastmode;
+    static bool lastpush = false;
     while (true) {
-        while (runmode == LOWPOWER) vTaskDelay(pdMS_TO_TICKS(1000));
-        if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
-            screen.do_push();
-            xSemaphoreGive(pushbuf_sem);
-            xSemaphoreGive(drawbuf_sem);
+        if (runmode == LOWPOWER) {
+            if (lastmode != LOWPOWER) {
+                vTaskDelay(portMAX_DELAY * 2);
+                lastpush = true;
+            }
+            else vTaskDelay(pdMS_TO_TICKS(1000));
+            lastmode = runmode;
         }
-        vTaskDelay(pdMS_TO_TICKS(2));  // vTaskDelete(NULL);
+        if ((runmode != LOWPOWER) || lastpush) {
+            if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
+                screen.do_push();
+                xSemaphoreGive(pushbuf_sem);
+                xSemaphoreGive(drawbuf_sem);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(1));  // vTaskDelete(NULL);
+        lastpush = false;
+        lastmode = runmode;
     }
 }
 static void draw_task(void *parameter) {
+    static int lastmode;
     while (true) {
-        while (runmode == LOWPOWER) vTaskDelay(pdMS_TO_TICKS(1000));
+        while (runmode == LOWPOWER) {
+            if (lastmode != LOWPOWER) {
+                screen.blackout();
+                reset_request = true;
+            }
+            else vTaskDelay(pdMS_TO_TICKS(1000));
+            lastmode = runmode;
+        }
+        // if (runmode != LOWPOWER && lastmode == LOWPOWER) screen.reset();
         // if ((esp_timer_get_time() - screen_refresh_time > refresh_limit) || always_max_refresh || auto_saver_enabled) {
         if (xSemaphoreTake(drawbuf_sem, portMAX_DELAY) == pdTRUE) {
             screen_refresh_time = esp_timer_get_time();
@@ -1164,6 +1185,7 @@ static void draw_task(void *parameter) {
         }
         vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
         if (!always_max_refresh && !auto_saver_enabled) vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit / 1000 - 1)));  //   || sim.enabled()
+        lastmode = runmode;
     }
 }
 // The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.

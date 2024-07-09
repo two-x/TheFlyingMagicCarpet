@@ -70,7 +70,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(Halt);
             steer.setmode(Halt);
             set_syspower(LOW);     // Power down devices to save battery
-            autosaver_request = REQ_ON;  // actually this should be REQ_OFF, plus request screen backlight is shut off or at least black out screen
+            autosaver_request = REQ_OFF;  // actually this should be REQ_OFF, plus request screen backlight is shut off or at least black out screen
         }
         if (hotrc.sw_event(CH4) || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // start powering up
             set_syspower(HIGH);    // switch on control system devices
