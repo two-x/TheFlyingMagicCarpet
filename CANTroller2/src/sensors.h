@@ -11,7 +11,7 @@
 
 // this enum class represent the components which can be simulated (sensor). It's int type under the covers, so it can be used as an index
 // typedef int opt_t;
-enum si_native_conversion_methods { LinearMath=0, AbsLimMap=1, OpLimMap=2 };
+enum si_native_convmethods { LinearMath=0, AbsLimMap=1, OpLimMap=2 };
 enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, airvelo=6, mapsens=7, engtemp=8, mulebatt=9, starter=10, basicsw=11, NUM_SENSORS=12 };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
 enum class src : int { UNDEF=0, FIXED=1, PIN=2, SIM=3, POT=4, CALC=5 };
 
@@ -34,7 +34,7 @@ class Potentiometer {
     // tune these by monitoring adc_raw and twist pot to each limit. set min at the highest value seen when turned full CCW, and vice versas for max, then trim each toward adc_midrange until you get full 0 to 100% range
     Potentiometer(int arg_pin) : _pin(arg_pin) {}
     Potentiometer() = delete; // must have a pin defined
-    sens senstype = sens::none;
+    sens _senstype = sens::none;
     void setup() {
         ezread.squintf("Pot setup..\n");
         set_pin(_pin, INPUT);
@@ -173,10 +173,9 @@ class Device {
   public:
     std::string _long_name = "Unknown device";
     std::string _short_name = "device";
-    std::string _native_units = "";
-    std::string _si_units = "";
+    std::string _native_units, _si_units;
     Timer timer;  // can be used for external purposes
-    sens senstype = sens::none;
+    sens _senstype = sens::none;
     Device() = delete; // should always be created with a pin
     // note: should we start in PIN mode?
     Device(int arg_pin) : _pin(arg_pin) {}
@@ -185,7 +184,7 @@ class Device {
         if (_can_source[static_cast<int>(arg_source)]) {
             _source = arg_source;
             update_source();
-            sources[static_cast<int>(senstype)] = static_cast<int>(arg_source);
+            sources[static_cast<int>(_senstype)] = static_cast<int>(arg_source);
             return true;
         } 
         return false;
@@ -229,7 +228,7 @@ std::string transdircard[(int)TransDir::NumTransDir] = { "rev", "fwd" };
 //     "si": (default) values kept in standard units of measure which humans prefer, such as mph, feet-per-second, etc.
 //     "native": values kept in whatever units are native to the specific device/driver, usually adc counts (for analog sensors) or microseconds (for pwm)... depends on the sensor type
 //     "pc": values scaled to a percentage of the operational range, where opmin = 0% and opmax = 100%
-//   Conversions:  set conversion_method to best suit the most reliable data you have for your sensor. this decides what math to do when converting between native and si unit values. Here are the choices:
+//   Conversions:  set _convmethod to best suit the most reliable data you have for your sensor. this decides what math to do when converting between native and si unit values. Here are the choices:
 //     AbsLimMap : runs map() function to scale value from one absolute range to the other. For this you must first have explicitly set abs ranges for both native and si
 //     OpLimMap : same as AbsLimMap but transpose across the operational ranges rather than the absolute ranges
 //     LinearMath : uses y = mx + b generic linear equation to convert. if using this then setting the abs or op range in one unit will auto calc the other. for this you need to set accurate values for the following:
@@ -240,51 +239,68 @@ std::string transdircard[(int)TransDir::NumTransDir] = { "rev", "fwd" };
 //     "opmin"/"opmax": defines the healthy operational range the transducer. Actuators should be constrained to this range, Sensors should be expected to read within this range or flag an error
 class Transducer : public Device {
   protected:
-    float _mfactor = 1.0, _boffset = 0.0, sim_val;
+    float _mfactor = 1.0, _boffset = 0.0, sim_val, _zeropoint, _si_raw;  // si_raw is only meaningful for sensors, not actuators. managed here because that's easier
     float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;
-    TransDir _dir = TransDir::FWD;
-    int conversion_method = LinearMath;  // the default method
+    int _transtype, _convmethod = LinearMath;  // the default method
     Param _si, _native;
-    float _zeropoint, _si_raw;  // si_raw is only meaningful for sensors, not actuators. managed here because that's easier
+    TransDir _dir = TransDir::FWD;
   public:
+    // operator float() { return _si.val(); }
     Transducer(int arg_pin) : Device(arg_pin) {
         _long_name = "Unknown transducer";
         _short_name = "xducer";
     }
-    // operator float() { return _si.val(); }
-
     Transducer() = delete;  // this ensures a pin is always provided
-    int _transtype;
     virtual void setup() {
         // print_config(true, false);  // print header
         // if (_pin < 255) ezread.squintf(" on pin %d\n", _pin);
     }   // ezread.squintf("%s..\n", _long_name.c_str()); }
+    // virtual void tedit(float tdelta) {  // for simulator editing of the value
+    //     sim_val = constrain(_si.val() + tdelta, _opmin, _opmax);
+    // }
+    virtual void print_config(bool header=true, bool ranges=true) {
+        if (header) {
+            Serial.printf("%s %s", _long_name.c_str(), transtypecard[_transtype].c_str());
+            ezread.printf("%s", _short_name.c_str()); 
+            if (_pin < 255 && _pin >= 0) {
+                Serial.printf(", pin %d", _pin);
+                ezread.printf(" (p%d)", _pin);
+            }
+            ezread.squintf(": %.2lf %s = %.2lf %s = %.2lf %%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
+        }
+        if (ranges) {
+            ezread.squintf("  op: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
+            ezread.squintf("  abs: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
+        }
+    }
     virtual float from_native(float arg_native) {  // these linear conversion functions change absolute native values to si and back - overwrite in child classes as needed
         float ret = NAN;
-        if (conversion_method == AbsLimMap) ret = map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
-        else if (conversion_method == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
-        else if (conversion_method == LinearMath) ret = _boffset + _mfactor * arg_native; // ezread.squintf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
+        if (_convmethod == AbsLimMap) ret = map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
+        else if (_convmethod == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
+        else if (_convmethod == LinearMath) ret = _boffset + _mfactor * arg_native; // ezread.squintf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
         else ezread.squintf("Err: %s from_native convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_native, _native.min(), _native.max());
-        if (std::abs(ret) < float_conversion_zero) return 0.0;  // reject any stupidly small near-zero values
+        if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // reject any stupidly small near-zero values
         return ret;
     }
     virtual float to_native(float arg_si) {  // convert an absolute si value to native units
         float ret = NAN;
-        if (conversion_method == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
-        else if (conversion_method == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
-        else if ((conversion_method == LinearMath) && (std::abs(_mfactor) > float_zero)) ret = (arg_si - _boffset) / _mfactor;
+        if (_convmethod == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
+        else if (_convmethod == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
+        else if ((_convmethod == LinearMath) && (std::abs(_mfactor) > float_zero)) ret = (arg_si - _boffset) / _mfactor;
         else ezread.squintf("Err: %s to_native can't convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_si, _si.min(), _si.max());
-        if (std::abs(ret) < float_conversion_zero) return 0.0;  // reject any stupidly small near-zero values
+        if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // reject any stupidly small near-zero values
         return ret;
     }
     virtual float to_pc(float arg_si) {  // convert an absolute si value to percent form.  note this honors the _dir setting
+        if (std::isnan(arg_si)) return NAN;
         float ret = map(arg_si, _opmin, _opmax, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD));
-        if (std::abs(ret) < float_conversion_zero) return 0.0;  // round off absurdly small values
+        if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // round off absurdly small values
         return ret;
     }
     virtual float from_pc(float arg_pc) {  // convert an absolute percent value to si unit form.  note this honors the _dir setting
+        if (std::isnan(arg_pc)) return NAN;
         float ret = map(arg_pc, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD), _opmin, _opmax);
-        if (std::abs(ret) < float_conversion_zero) return 0.0;  // round off absurdly small values
+        if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // round off absurdly small values
         return ret;
     }
     // to set limits, depends on your conversion method being used :
@@ -297,7 +313,7 @@ class Transducer : public Device {
         if (std::isnan(argmax)) argmax = _si.max();                               // use incumbent max value if none was passed in
         _si.set_limits(argmin, argmax);                                           // commit to the Param accordingly
         _si_raw = constrain(_si_raw, _si.min(), _si.max());                       // in case we have new limits, re-constrain the raw si value we also manage
-        if ((conversion_method == LinearMath) && autocalc) {                      // if we know our conversion formula, and not instructed to skip autocalculation...
+        if ((_convmethod == LinearMath) && autocalc) {                      // if we know our conversion formula, and not instructed to skip autocalculation...
             _native.set_limits(to_native(_si.min()), to_native(_si.max()));       // then convert the new values and ensure si and native stay equivalent
         }
         set_oplim(NAN, NAN, false);                                               // just to enforce any re-constraints if needed to keep op limits inside abs limits
@@ -306,7 +322,7 @@ class Transducer : public Device {
         if (std::isnan(argmin)) argmin = _native.min();                              // use incumbent min value if none was passed in
         if (std::isnan(argmax)) argmax = _native.max();                              // use incumbent max value if none was passed in
         _native.set_limits(argmin, argmax);                                          // commit to the Param accordingly
-        if ((conversion_method == LinearMath) && autocalc) {                         // if we know our conversion formula, and not instructed to skip autocalculation...
+        if ((_convmethod == LinearMath) && autocalc) {                         // if we know our conversion formula, and not instructed to skip autocalculation...
             _si.set_limits(from_native(_native.min()), from_native(_native.max()));  // then convert the new values and ensure si and native stay equivalent
         }
         set_oplim_native(NAN, NAN, false);                                           // just to enforce any re-constraints if needed to keep op limits inside abs limits
@@ -318,7 +334,7 @@ class Transducer : public Device {
         else if (std::isnan(_opmax)) _opmax = _si.max();                      // otherwise if opmax has no value then set it to absmax
         _opmin = constrain(_opmin, _si.min(), _opmax);                        // constrain to ensure absmin <= opmin <= opmax <= absmax
         _opmax = constrain(_opmax, _opmin, _si.max());                        // constrain to ensure absmin <= opmin <= opmax <= absmax
-        if ((conversion_method != OpLimMap) && autocalc) {                    // if we know our conversion formula, and not instructed to skip autocalculation...
+        if ((_convmethod != OpLimMap) && autocalc) {                    // if we know our conversion formula, and not instructed to skip autocalculation...
             set_oplim_native(to_native(_opmin), to_native(_opmax), false);    // then convert the new values and ensure si and native stay equivalent
         }
     }
@@ -329,7 +345,7 @@ class Transducer : public Device {
         else if (std::isnan(_opmax_native)) _opmax_native = _native.max();             // otherwise if opmax has no value then set it to absmax
         _opmin_native = constrain(_opmin_native, _native.min(), _opmax_native);        // constrain to ensure absmin <= opmin <= opmax <= absmax
         _opmax_native = constrain(_opmax_native, _opmin_native, _native.max());        // constrain to ensure absmin <= opmin <= opmax <= absmax
-        if ((conversion_method != OpLimMap) && autocalc) {                             // if we know our conversion formula, and not instructed to skip autocalculation...
+        if ((_convmethod != OpLimMap) && autocalc) {                             // if we know our conversion formula, and not instructed to skip autocalculation...
             set_oplim(from_native(_opmin_native), from_native(_opmax_native), false);  // then convert the new values and ensure si and native stay equivalent
         }
     }
@@ -359,19 +375,7 @@ class Transducer : public Device {
         _native.set(to_native(_si.val()));
         return true;
     }
-    // bool add_native(float arg_add) {  // this scales the given add amount to a consistent rate of change 
-    //     float delta = arg_add * tuning_rate_pcps * loop_avg_us * (_opmax_native - _opmin_native) / (100.0 * 1000000.0);  // this acceleration logic doesn't belong here
-    //     return set_native(constrain(_native.val() + delta, _opmin_native, _opmax_native));
-    // }
-    // bool add_pc(float arg_add) {  // this scales the given add amount to a consistent rate of change
-    //     return add_si(from_pc(arg_add));
-    // }
-    // bool add_si(float arg_add) {  // this scales the given add amount to a consistent rate of change
-    //     float delta = arg_add * tuning_rate_pcps * loop_avg_us * (_opmax - _opmin) / (100.0 * 1000000.0);  // this acceleration logic doesn't belong here
-    //     return set_si(constrain(_si.val() + delta, _opmin, _opmax));
-    // }
     void set_margin(float arg_marg) { _margin = arg_marg; }
-    
     void set_conversions(float arg_mfactor=NAN, float arg_boffset=NAN) {  // arguments passed in as NAN will not be used.  // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
         if (!std::isnan(arg_mfactor)) {
             if (std::abs(arg_mfactor) < float_zero) ezread.squintf("Err: can not support _mfactor of zero\n");
@@ -379,55 +383,34 @@ class Transducer : public Device {
         }
         if (!std::isnan(arg_mfactor)) _boffset = arg_boffset;
     }
-    virtual void tedit(float tdelta) {  // for simulator editing of the value
-        sim_val = constrain(_si.val() + tdelta, _opmin, _opmax);
-    }
-    virtual void print_config(bool header=true, bool ranges=true) {
-        if (header) {
-            Serial.printf("%s %s", _long_name.c_str(), transtypecard[_transtype].c_str());
-            ezread.printf("%s", _short_name.c_str()); 
-            if (_pin < 255 && _pin >= 0) {
-                Serial.printf(", pin %d", _pin);
-                ezread.printf(" (p%d)", _pin);
-            }
-            ezread.squintf(": %.2lf %s = %.2lf %s = %.2lf %%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
-            // ezread.printf(": %.2lf%s = %.2lf%s = %.2lf%%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
-        }
-        if (ranges) {
-            ezread.squintf("  op: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
-            ezread.squintf("  abs: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
-            // ezread.printf("  op: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
-            // ezread.printf("  abs: %.2lf-%.2lf%s (%.2lf-%.2lf%s)\n", _si.min(), _si.max(), _si_units.c_str(), _native.min(), _native.max(), _native_units.c_str());
-        }
-    }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)
-    float* ptr() { return _si.ptr(); }
+    float native() { return _native.val(); }  // This is a native unit value, constrained to abs range but otherwise unfiltered
+    float pc() { return to_pc(_si.val()); }  // get value as a percent of the operational range
+    float raw() { return _si_raw; }  // this is the si-unit raw value, constrained to abs range but otherwise unfiltered
+    float raw_pc() { return to_pc(_si_raw); }  // get raw value in percent
     float absmin() { return _si.min(); }
     float absmax() { return _si.max(); }
-    float* absmin_ptr() { return _si.min_ptr(); }
-    float* absmax_ptr() { return _si.max_ptr(); }
-    float opmin() { return _opmin; }
-    float opmax() { return _opmax; }
-    float* opmin_ptr() { return &_opmin; }
-    float* opmax_ptr() { return &_opmax; }
-    float margin() { return _margin; }
-    float* margin_ptr() { return &_margin; }
-    float raw() { return _si_raw; }  // this is the si-unit raw value, constrained to abs range but otherwise unfiltered
-    float native() { return _native.val(); }  // This is a native unit value, constrained to abs range but otherwise unfiltered
-    float* native_ptr() { return _native.ptr(); }
     float absmin_native() { return _native.min(); }
     float absmax_native() { return _native.max(); }
+    float opmin() { return _opmin; }
+    float opmax() { return _opmax; }
     float opmin_native() { return _opmin_native; }
     float opmax_native() { return _opmax_native; }
+    float margin() { return _margin; }
     float margin_native() { return to_native(_margin); }
-    float pc() { return to_pc(_si.val()); }  // get value as a percent of the operational range
-    float raw_pc() { return to_pc(_si_raw); }  // get raw value in percent
     float margin_pc() { return std::abs(to_pc(_margin)); }
     float zeropoint() { return _zeropoint; }  // zeropoint is the pressure at which we can consider the brake is released (if position is unavailable)
     float zeropoint_pc() { return to_pc(_zeropoint); }
-    float* zeropoint_ptr() { return &_zeropoint; }
     float mfactor() { return _mfactor; }
     float boffset() { return _boffset; }
+    float* ptr() { return _si.ptr(); }
+    float* native_ptr() { return _native.ptr(); }
+    float* absmin_ptr() { return _si.min_ptr(); }
+    float* absmax_ptr() { return _si.max_ptr(); }
+    float* opmin_ptr() { return &_opmin; }
+    float* opmax_ptr() { return &_opmax; }
+    float* margin_ptr() { return &_margin; }
+    float* zeropoint_ptr() { return &_zeropoint; }
 };
 
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
@@ -448,10 +431,8 @@ class Sensor : public Transducer {
         if (_first_filter_run) {
             set_si(_si_raw);
             _first_filter_run = false;
-            // Serial.printf("x");
-            return;
-        }
-        // Serial.printf("+ (%.4lf)", _si_raw);
+            return;  // Serial.printf("x");
+        }  // Serial.printf("+ (%.4lf)", _si_raw);
         
         set_si(ema_filt(_si_raw, _si.val(), _ema_alpha), false);
     }
@@ -563,7 +544,7 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
         return goodreading;
     }
     static constexpr uint8_t addr = 0x28;
-    sens senstype = sens::airvelo;
+    sens _senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
         _long_name = "Manifold Air Velocity";
         _short_name = "airvel";
@@ -612,7 +593,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
         return goodreading;
     }
     static constexpr uint8_t addr = 0x18;  // note: would all MAPSensors have the same address?  ANS: yes by default, or an alternate fixed addr can be hardware-selected by hooking a pin low or something
-    sens senstype = sens::mapsens;
+    sens _senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
         _long_name = "Manifold Air Pressure";
         _short_name = "map";
@@ -648,7 +629,7 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
         _short_name = "analog";
         _native_units = "adc";
     }
-    virtual void setup() {
+    virtual void setup() {  // child classes call this before setting limits
         Sensor::setup();
         set_pin(_pin, INPUT);
         set_can_source(src::PIN, true);
@@ -659,7 +640,7 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
 };
 class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level from the Mule battery
   public:
-    sens senstype = sens::mulebatt;
+    sens _senstype = sens::mulebatt;
     CarBattery(int arg_pin) : AnalogSensor(arg_pin) {
         _long_name = "Vehicle Battery Voltage";
         _short_name = "mulbat";
@@ -689,7 +670,7 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
 // and converting the ADC value to a pressure value in PSI.
 class PressureSensor : public AnalogSensor {
   public:
-    sens senstype = sens::pressure;
+    sens _senstype = sens::pressure;
     // int opmin_adc, opmax_adc, absmin_adc, absmax_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
     float hold_initial, hold_increment, panic_initial, panic_increment;  // , _margin_psi, _zeropoint_psi;
@@ -711,15 +692,14 @@ class PressureSensor : public AnalogSensor {
     //   psi = 0.2 * (adc - 621)  ->  psi = 0.2 * adc - 124  ->  adc = 5 * psi + 621
 
     // sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-    // ~208psi by this math - "maximum" braking  // older?  int max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
     // _absmin_adc = 0; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-    // _absmax_adc = adcrange_adc; // ~208psi by this math - "maximum" braking  // older?  int max_adc = 2080; // ~284psi by this math - Sensor measured maximum reading. (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
+    // _absmax_adc = adcrange_adc;  // ~208psi by this math - "maximum" braking  // older?  int max_adc = 2080; // (ADC count 0-4095). 230430 measured 2080 adc (1.89V) is as hard as [wimp] chris can push
     PressureSensor() = delete;
     void setup() {
         AnalogSensor::setup();
         // calibration procedure: (still working on this) hook to sensor and release brake, then pump and press as hard as you can. Get adc vals and set here as oplims_native. 
         
-        float min_adc = 684.0;  // temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
+        float min_adc = 678.0;  // reduced to be below zeropoint, was 684.0. temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
         float b = -1.0 * min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
@@ -750,7 +730,7 @@ class PressureSensor : public AnalogSensor {
 // extends AnalogSensor for handling analog pin reading and conversion.
 class BrakePositionSensor : public AnalogSensor {
   public:
-    sens senstype = sens::brkpos;
+    sens _senstype = sens::brkpos;
     BrakePositionSensor(int arg_pin) : AnalogSensor(arg_pin) {
         _long_name = "Brake Position";
         _short_name = "brkpos";
@@ -762,7 +742,7 @@ class BrakePositionSensor : public AnalogSensor {
         AnalogSensor::setup();
         // ezread.squintf("%s..\n", _long_name.c_str());
         _dir = TransDir::REV;  // causes percent conversions to use inverted scale 
-        conversion_method = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
+        _convmethod = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
         #if BrakeThomson
             set_abslim(0.335, 8.3, false);  // tuned 230602
             set_abslim_native(979, 3103, false);  // not tuned - these values stolen from LAE actuator below. needs tuning!
@@ -819,8 +799,7 @@ class PulseSensor : public Sensor {
         if (time_us >= _absmin_us_64) {  // ignore spurious triggers or bounces
             _isr_time_last_us = _isr_time_current_us;
             _us = time_us;
-            // _pin_level = !_pin_level;
-            _pin_level = read_pin(_pin);
+            _pin_level = read_pin(_pin);  // _pin_level = !_pin_level;
         }
     }
     void set_pin_inactive() {
@@ -842,12 +821,12 @@ class PulseSensor : public Sensor {
     }
     float us_to_hz(float arg_us) {
         if (std::abs(arg_us) > float_zero) return 1000000.0 / arg_us;
-        ezread.squintf("Err: us_to_hz() refusing to take reciprocal of zero\n");
+        ezread.squintf("Err: %s us_to_hz() reciprocal of zero\n", _short_name.c_str());
         return absmax();
     }
     float hz_to_us(float arg_hz) {
         if (std::abs(arg_hz) > float_zero) return 1000000.0 / arg_hz;  // math is actually the same in both directions us -> hz or hz -> us
-        ezread.squintf("Err: hz_to_us() refusing to take reciprocal of zero\n");
+        ezread.squintf("Err: %s hz_to_us() reciprocal of zero\n", _short_name.c_str());
         return _absmax_us;
     }
   public:
@@ -867,7 +846,7 @@ class PulseSensor : public Sensor {
     // overload the normal function so we can also include us calculations 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
         if ((!isnan(arg_min) && (std::abs(arg_min) <= float_zero)) || (!isnan(arg_max) && (std::abs(arg_max) <= float_zero))) {
-            ezread.squintf("Err: pulse sensor can not have limit of 0\n");
+            ezread.squintf("Err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
             return;  // we can't accept 0 Hz for opmin
         }
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
@@ -902,11 +881,10 @@ class PulseSensor : public Sensor {
 // it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
 class Tachometer : public PulseSensor {
   public:
-    sens senstype = sens::tach;
+    sens _senstype = sens::tach;
     Tachometer(int arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {
         _long_name = "Tachometer";
         _short_name = "tach";
-        _native_units = "Hz";
         _si_units = "rpm";
     }
     Tachometer() = delete;
@@ -937,11 +915,10 @@ class Tachometer : public PulseSensor {
 // it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to MPH
 class Speedometer : public PulseSensor {
   public:
-    sens senstype = sens::speedo;
+    sens _senstype = sens::speedo;
     Speedometer(int arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {
         _long_name = "Speedometer";
         _short_name = "speedo";
-        _native_units = "Hz";
         _si_units = "mph";
     }
     Speedometer() = delete;
@@ -1018,14 +995,15 @@ class ServoMotor2 : public Transducer {
     ServoMotor2(int pin, int freq) : Transducer(pin), _freq(freq) {
         set_pin(_pin, OUTPUT);   // needed?
         _transtype = ActuatorType;
-        motor.setPeriodHertz(_freq);
-        motor.attach(_pin, _native.min(), _native.max());  // servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
         _long_name = "Unknown PWM motor";
         _short_name = "pwmout";
         _native_units = "us";
     }
     ServoMotor2() = delete;
-    void setup() {}
+    void setup() {  // from child classes first set up limits, then run this
+        motor.setPeriodHertz(_freq);
+        motor.attach(_pin, _native.min(), _native.max());  // servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
+    }
     void write() {
         if (!std::isnan(_native.val())) motor.writeMicroseconds((int)(_native.val()));
         lastoutput = _native.val();    
@@ -1038,7 +1016,7 @@ class ServoMotor2 : public Transducer {
 class Jaguar : public ServoMotor2 {
   public:
     Jaguar(int pin, int freq) : ServoMotor2(pin, freq) {
-        conversion_method = OpLimMap;
+        _convmethod = OpLimMap;
         _long_name = "Unknown Jaguar controller";
         _short_name = "unkjag";
         _si_units = "V";
@@ -1068,6 +1046,7 @@ class ThrottleServo2 : public ServoMotor2 {
     }
     ThrottleServo2() = delete;
     void setup() {
+        _convmethod = AbsLimMap;
         set_abslim(0.0, 180.0, false);
         set_abslim_native(500.0, 2500.0, false);
         float m = (_si.max() - _si.min()) / (_native.max() / _native.min());  // (180 - 0) / (2500 - 500) = 0.09 deg/us
@@ -1075,6 +1054,7 @@ class ThrottleServo2 : public ServoMotor2 {
         governor_pc.set(95);
         idle_si.set_limits(43.0, 75.0);
         idle_si.set(58.0);
+        ServoMotor2::setup();
 
     }
     // set_oplim_native(1000.0, 2000.0, false);       
