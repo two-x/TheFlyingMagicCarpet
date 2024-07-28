@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "CANTroller2",
+			"path": "CANTroller2"
+		},
+		{
+			"name": "LightCode",
+			"path": "../PlatformIO/Projects/LightCode"
+		}
+	],
+    "settings": {}
+}
