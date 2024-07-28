@@ -27,7 +27,7 @@ std::string simgrid[4][3] = {
 volatile bool _is_running;
 static constexpr int SHIFTSIZE = 8;
 volatile bool flip = 0;
-volatile int refresh_limit = 500000; // 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
+volatile int refresh_limit = 1111; // 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
 volatile int screen_refresh_time;
 LGFX lcd;
 static constexpr int num_bufs = 2;
