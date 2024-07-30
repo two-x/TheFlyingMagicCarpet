@@ -1,8 +1,8 @@
 #pragma once
 class RunModeManager {  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in standby mode with no activity
   private:
-    int lowpower_delay = 900000000;  // Time of inactivity after entering standby mode before going to lowpower mode
-    int screensaver_delay = 300000000;  // Time of inactivity after entering standby mode before starting screensaver turns on
+    int lowpower_delay_sec = 1500;  // Time of inactivity after entering standby mode before going to lowpower mode.  900sec = 15min
+    int screensaver_delay_sec = 600;  // Time of inactivity after entering standby mode before starting screensaver turns on.  300sec = 5min
     Timer gestureFlyTimer{1250000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
     Timer pwrup_timer{3000000};  // Timeout when parking motors if they don't park for whatever reason (in us)
     Timer standby_timer{5000000};
@@ -84,12 +84,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_standbyMode() { // In standby mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
             shutting_down = !powering_up;   // if waking up from sleep standby is already complete
-            powering_up = calmode_request = autosaver_request = REQ_OFF;  // = basicmode_request 
+            powering_up = false;
+            calmode_request = autosaver_request = REQ_OFF;  // = basicmode_request 
             gas.setmode(ParkMotor);                 // carburetor parked 
             brake.setmode(AutoStop);                // if car is moving begin autostopping
             standby_timer.reset();
             sleep_request = REQ_NA;
-            user_inactivity_timer.set(lowpower_delay);
+            user_inactivity_timer.set(lowpower_delay_sec * 1000000);
         }
         else if (shutting_down) {  // first we need to stop the car and release brakes and gas before shutting down
             if (standby_timer.expired()) shutting_down = false;
@@ -103,7 +104,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(Halt);
             if (hotrc.sw_event(CH4) || user_inactivity_timer.expired() || sleep_request == REQ_TOG || sleep_request == REQ_ON) runmode = LOWPOWER;
             if (calmode_request) runmode = CAL;  // if fully shut down and cal mode requested, go to cal mode
-            if (user_inactivity_timer.elapsed() > screensaver_delay) autosaver_request = REQ_ON;
+            if (user_inactivity_timer.elapsed() > screensaver_delay_sec * 1000000) autosaver_request = REQ_ON;
         }
         if ((speedo.stopped() || allow_rolling_start) && ignition.signal && !panicstop && !tach.stopped()) runmode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
         sleep_request = REQ_NA;

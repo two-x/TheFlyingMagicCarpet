@@ -477,7 +477,7 @@ class ThrottleControl : public ServoMotor {
             cruise_adjust(joydir);
             return;
         }
-        if (joydir != JOY_CENT) return;  // if trigger is being pulled under any other conditions we do nothing. below assume trigger is released
+        if (joydir != JOY_CENT) return;  // if trigger is being pulled under any other conditions we do nothing. below can assume trigger is released
         cruise_adjusting = false;
         cruise_trigger_released = true;
         cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
@@ -855,7 +855,7 @@ class BrakeControl : public JagMotor {
     }
     void postprocessing() {  // keep within the operational range, or to full absolute range if calibrating (caution don't break anything!)
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
-        else if (enforce_positional_limits                                                 // IF we're not exceed actuator position limits
+        else if (enforce_positional_limits                                                 // IF we're not to exceed actuator position limits
           && ((pc[OUT] < pc[STOP] && brkpos->val() > brkpos->opmax() - brkpos->margin())   //   AND ( we're trying to extend while already at the extension limit
           || (pc[OUT] > pc[STOP] && brkpos->val() < brkpos->opmin() + brkpos->margin())))  //     OR trying to retract while already at the retraction limit )
             pc[OUT] = pc[STOP];                                                            // THEN stop the motor
