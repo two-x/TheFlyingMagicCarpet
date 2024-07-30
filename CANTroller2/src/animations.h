@@ -448,8 +448,8 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         else if (extratimer.expired()) stars = 1;
         for (int i=0; i<2; i++) myhue[i] += rn(511) - 255;
         for (int star = 0; star < stars; star++) {
-            p[0] = vp-> x + punches_left ? vp->w >> 1 : rn(vp->w);
-            p[1] = vp->y + punches_left ? vp->h >> 1 : rn(vp->h);
+            p[0] = vp->x + (punches_left > 0) ? vp->w >> 1 : rn(vp->w);
+            p[1] = vp->y + (punches_left > 0) ? vp->h >> 1 : rn(vp->h);
             if (!punches_left) r = scaler * (mindot + rn(adddot));
             else r = scaler * (int)((float)vp->h * 0.45 * (1.0 - ((float)punches_left / (float)total_punches)));
             if (precess < 6) {
