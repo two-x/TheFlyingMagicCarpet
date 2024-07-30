@@ -46,7 +46,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void cleanup_state_variables() {
         if (oldmode == BASIC);
         else if (oldmode == LOWPOWER);
-        else if (oldmode == STANDBY) standby_incomplete = false;
+        else if (oldmode == STANDBY) shutting_down = false;
         else if (oldmode == STALL);
         else if (oldmode == HOLD) joy_centered = false;  // starter.request(REQ_OFF);  // Stop any in-progress startings
         else if (oldmode == FLY) car_hasnt_moved = false;
@@ -83,7 +83,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_standbyMode() { // In standby mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         if (we_just_switched_modes) {              
-            standby_incomplete = !powering_up;   // if waking up from sleep standby is already complete
+            shutting_down = !powering_up;   // if waking up from sleep standby is already complete
             powering_up = calmode_request = autosaver_request = REQ_OFF;  // = basicmode_request 
             gas.setmode(ParkMotor);                 // carburetor parked 
             brake.setmode(AutoStop);                // if car is moving begin autostopping
@@ -91,10 +91,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             sleep_request = REQ_NA;
             user_inactivity_timer.set(lowpower_delay);
         }
-        else if (standby_incomplete) {  // first we need to stop the car and release brakes and gas before shutting down
-            if (standby_timer.expired()) standby_incomplete = false;
+        else if (shutting_down) {  // first we need to stop the car and release brakes and gas before shutting down
+            if (standby_timer.expired()) shutting_down = false;
             if (brake.motormode != AutoStop) {  // brake autostop mode will have dropped to Halt mode once complete, check for that
-                if (brake.parked()) standby_incomplete = false;
+                if (brake.parked()) shutting_down = false;
                 else brake.setmode(ParkMotor);
             }
         }
