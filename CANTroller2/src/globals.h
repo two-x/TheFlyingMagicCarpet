@@ -1,52 +1,53 @@
 // globals.h - not dependent on anything, so include this first
 #pragma once
 #include "Arduino.h"
-// pin assignments  ESP32-S3-DevkitC series   (note: "!" are free pins, "*" are pins we can reclaim if needed)
-#define     boot_sw_pin  0 // button0/strap1   // input, the esp "boot" button. if more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
-#define      tft_dc_pin  1 // adc1.0           // output, assert when sending data to display chip to indicate commands vs. screen data
-#define  tp_cs_fuel_pin  2 // adc1.1           // output, this controls touch panel chip select for resistive touchscreen (dev board) OR drives the vehicle's fuel pump (on car)
-#define   sdcard_cs_pin  3 // adc1.2/strapX  * // output, chip select for SD card controller on SPI bus. sdcard functionality is not implemented, we may not even need it
-#define    mulebatt_pin  4 // adc1.3           // analog input, mule battery voltage sense, full scale is 16V
-#define         pot_pin  5 // adc1.4           // analog in from 20k pot
-#define   brake_pos_pin  6 // adc1.5           // analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
-#define    pressure_pin  7 // adc1.6           // analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V.
-#define     i2c_sda_pin  8 // sda0/adc1.7      // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
-#define     i2c_scl_pin  9 // qhd0/scl0/adc1.8 // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
-#define      tft_cs_pin 10 // cs0/adc1.9     * // output, active low, chip select allows ILI9341 display chip use of the spi bus. pin can be reclaimed if tft is the only spi device (lose the sd card)
-#define    spi_mosi_pin 11 // mosi0/adc2.0     // used as spi interface data for tft screen, sd card and resistive touch panel
-#define    spi_sclk_pin 12 // sclk0/adc2.1     // used as spi interface clock for tft screen, sd card and resistive touch panel
-#define    spi_miso_pin 13 // miso0/adc2.2     // used as spi interface data from sd card, resistive touch panel, and possibly (?) tft screen
-#define hotrc_ch2_v_pin 14 // qwp0/pwm0/adc2.3 // hotrc ch2 bidirectional trigger input
-#define hotrc_ch1_h_pin 15 // pwm1/adc2.4      // hotrc ch1 thumb joystick input
-#define     gas_pwm_pin 16 // pwm1/adc2.5      // output, pwm signal duty cycle controls throttle target. on Due this is the pin labeled DAC1 (where A13 is on Mega)
-#define   brake_pwm_pin 17 // pwm0/adc2.6/tx1  // output, pwm signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% is stopped)
-#define   steer_pwm_pin 18 // pwm0/adc2.7/rx1  // output, pwm signal positive pulse width sets steering motor speed from full left to full speed right, (50% is stopped). jaguar asks for an added 150ohm series R when high is 3.3V
-#define steer_enc_a_pin 19 // usb-d-/adc2.8  ! // reserved for usb or a steering quadrature encoder.
-#define steer_enc_b_pin 20 // usb-d+/adc2.9  ! // reserved for usb or a steering quadrature encoder.
-#define     onewire_pin 21 // pwm0             // onewire bus for temperature sensor data. note: tested this does not work on higher-numbered pins (~35+)
-#define      speedo_pin 35 // spiram/octspi    // int input, active high, asserted when magnet south is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
-#define     starter_pin 36 // sram/ospi/glitch // input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
-#define        tach_pin 37 // spiram/octspi    // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
-#define  encoder_sw_pin 38 // spiram/octspi  * // input, Rotary encoder push switch, for the UI. active low (needs pullup). signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
-#define       extra_pin 39 // jtck/glitch    ! // input, unused.  note possible known glitch: 80ns low pulse when certain rtc devices power on (see errata 3.11)
-#define   hotrc_ch4_pin 40 // jtdo             // syspower, starter, and cruise mode toggle control. hotrc ch4 pwm toggle signal
-#define   hotrc_ch3_pin 41 // jtdi             // ignition control, hotrc Ch3 PWM toggle signal
-#define   encoder_a_pin 42 // jtms             // int input, the A (aka CLK) pin of the encoder. both A and B complete a negative pulse in between detents. if A pulse goes low first, turn is CCW. (needs pullup)
-#define    tx_basic_pin 43 // "TX"/tx0         // serial monitor data out. Also used to read basic mode switch using pullup/pulldown by temporarily interrupting the console to read
-#define          rx_pin 44 // "RX"/rx0         // serial monitor data in. maybe could repurpose during runtime since we only need outgoing console data?
-#define    ignition_pin 45 // strap0           // output to an nfet/pfet pair to control the car ignition
-#define    syspower_pin 46 // strap0           // output to an nfet/pfet pair to power all the tranducers.
-#define   encoder_b_pin 47 // NA               // int input, the B (aka DT) pin of the encoder. both A and B complete a negative pulse in between detents. if B pulse goes low first, turn is CW. (needs pullup)
-#define    neopixel_pin 48 // neopix           // data line to onboard neopixel WS281x (on all v1 devkit boards - pin 38 is used on v1.1 boards). Also used for onboard and external neopoxels - ! pin is also defined in neopixel.h
-// external components needed (pullup/pulldown resistors, capacitors, etc.): (note: "BB" = on dev breadboards only, "PCB" = on vehicle PCB only)
-// 1. onewire_pin, tach_pin, speedo_pin: Add 4.7k-ohm to 3.3V, needed for open collector sensor output to define logic-high voltage level.
-// 2. tx_basic_pin: (BB) connect the 22k-ohm to gnd to avoid always being in basic mode
-// 3. resistor dividers are needed for these inputs: starter_pin (16V->3.3V), mulebatt_pin (16V->3.3V), and pressure_pin (5V->3.3V).
-// 4. ignition_pin, syspower_pin, starter_pin: require pulldowns to gnd, this is provided by nfet gate pulldown.
-// 5. gas_pwm_pin: should have a series ~680-ohm R going to the servo.
-// 6. encoder_a_pin, encoder_b_pin, button_pin: should have 10nF to gnd, tho it should work w/o it. pullups to 3.3V (4.7k-ohm is good) are also necessary, but the encoder we're using includes these.
-// 7. neopixel_pin: (PCB) Add 330 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) same, but this one is likely optional, e.g. mine works w/o it.  for signal integrity over long wires. 
-// 6. mulebatt_pin, pressure_pin, brake_pos_pin, pot_wipe_pin: (ADC inputs) should have 100nF cap to gnd, to improve signal stability, tho it works w/o it.
+// pin assignments  ESP32-S3-DevkitC series   (note: "!" are free or free-ish pins, "*" are pins we can reclaim if needed, with some rework/rewrite necessary)
+#define     boot_sw_pin  0 // button0/strap1    // input, the esp "boot" button. if more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
+#define      tft_dc_pin  1 // adc1.0            // output, assert when sending data to display chip to indicate commands vs. screen data
+#define       choke_pin  2 // adc1.1          ! // reserved for driving a choke servo, if we discover it's needed. otherwise this pin is unused and available
+#define   sdcard_cs_pin  3 // adc1.2/strapX   ! // output, chip select for SD card controller on SPI bus. sdcard is not implemented, we may not even need it, so if pin is needed, disconnect from the sd slave chip and it's good to go
+#define    mulebatt_pin  4 // adc1.3            // analog input, mule battery voltage sense, full scale is 16V
+#define         pot_pin  5 // adc1.4            // analog in from 20k pot
+#define   brake_pos_pin  6 // adc1.5            // analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
+#define    pressure_pin  7 // adc1.6            // analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V
+#define     i2c_sda_pin  8 // sda0/adc1.7       // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
+#define     i2c_scl_pin  9 // qhd0/scl0/adc1.8  // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
+#define      tft_cs_pin 10 // cs0/adc1.9      * // output, active low, chip select allows ILI9341 display chip use of the spi bus. can reclaim pin if tft is the only spi device (no sd card or resist. touch), if so the tft CS pin must be grounded
+#define    spi_mosi_pin 11 // mosi0/adc2.0      // used as spi interface data for tft screen, sd card and resistive touch panel
+#define    spi_sclk_pin 12 // sclk0/adc2.1      // used as spi interface clock for tft screen, sd card and resistive touch panel
+#define    spi_miso_pin 13 // miso0/adc2.2    * // used as spi interface data from sd card and resistive touch panel. can reclaim this pin if only the tft is on the spi bus
+#define hotrc_ch2_v_pin 14 // qwp0/pwm0/adc2.3  // hotrc ch2 bidirectional trigger input
+#define hotrc_ch1_h_pin 15 // pwm1/adc2.4     * // hotrc ch1 thumb joystick input. can reclaim this and steer_pwm pins by connecting the hotrc horz chan straight to the steering jaguar 
+#define     gas_pwm_pin 16 // pwm1/adc2.5       // output, pwm signal duty cycle controls throttle target. on Due this is the pin labeled DAC1 (where A13 is on Mega)
+#define   brake_pwm_pin 17 // pwm0/adc2.6/tx1   // output, pwm signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% = stop)
+#define   steer_pwm_pin 18 // pwm0/adc2.7/rx1 * // output, pwm signal positive pulse width sets steering motor speed from full left to full speed right, (50% = stop). can reclaim this and hotrc_horz pins by connecting the hotrc horz chan straight to the steering jaguar 
+#define steer_enc_a_pin 19 // usb-d-/adc2.8   ! // reserved for usb or a steering quadrature encoder. since we don't have this encoder, if not using for jtag this pin may be used for whatever
+#define steer_enc_b_pin 20 // usb-d+/adc2.9   ! // reserved for usb or a steering quadrature encoder. since we don't have this encoder, if not using for jtag this pin may be used for whatever
+#define     onewire_pin 21 // pwm0              // onewire bus for temperature sensor data. note: tested this does not work on higher-numbered pins (~35+)
+#define      speedo_pin 35 // spiram/octspi     // int input, active high, asserted when magnet south is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
+#define     starter_pin 36 // sram/ospi/glitch  // input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
+#define        tach_pin 37 // spiram/octspi     // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
+#define  encoder_sw_pin 38 // spiram/octspi   * // input, rotary encoder push switch, for the UI. active low (needs pullup). signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
+#define  tp_cs_fuel_pin 39 // jtck/glitch     ! // output, controls touchpanel chip select for resistive types (dev board) OR optionally drives the mule's fuel pump.  note possible known glitch: 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define   hotrc_ch4_pin 40 // jtdo              // syspower, starter, and cruise mode toggle control. hotrc ch4 pwm toggle signal
+#define   hotrc_ch3_pin 41 // jtdi              // ignition control, hotrc Ch3 PWM toggle signal
+#define   encoder_a_pin 42 // jtms              // int input, the A (aka CLK) pin of the encoder. both A and B complete a negative pulse in between detents. if A pulse goes low first, turn is CCW. (needs pullup)
+#define    tx_basic_pin 43 // "TX"/tx0          // serial monitor data out. Also used to read basic mode switch using pullup/pulldown by temporarily interrupting the console to read
+#define          rx_pin 44 // "RX"/rx0          // serial monitor data in. maybe could repurpose during runtime since we only need outgoing console data?
+#define    ignition_pin 45 // strap0            // output to an nfet/pfet pair to control the car ignition
+#define    syspower_pin 46 // strap0            // output to an nfet/pfet pair to power all the tranducers.
+#define   encoder_b_pin 47 // NA                // int input, the B (aka DT) pin of the encoder. both A and B complete a negative pulse in between detents. if B pulse goes low first, turn is CW. (needs pullup)
+#define    neopixel_pin 48 // neopix            // data line to onboard neopixel WS281x (on all v1 devkit boards - pin 38 is used on v1.1 boards). also used for onboard and external neopoxels - ! pin is also defined in neopixel.h
+// external components used (pullup/pulldown resistors, capacitors, etc.): (note: "BB" = on dev breadboards only, "PCB" = on vehicle PCB only)
+// 1. onewire_pin, tach_pin, speedo_pin: Add 4.7k-ohm to 3.3V, needed for open collector sensor output to define logic-high voltage level
+// 2. tach_pin: also requires a 8x frequency divider, to slow down the pulse stream
+// 3. tx_basic_pin: (BB) connect a 22k-ohm from pin to gnd to avoid always being in basic mode
+// 4. resistor dividers are needed for these inputs: starter_pin (16V->3.3V), mulebatt_pin (16V->3.3V), and (possibly) pressure_pin (5V->3.3V)
+// 5. ignition_pin, syspower_pin, starter_pin: require pulldowns to gnd, this is provided by nfet gate pulldown
+// 6. gas_pwm_pin: should have a series ~680-ohm R going to the servo
+// 7. encoder_a_pin, encoder_b_pin, button_pin: should have 10nF to gnd, tho it should work w/o it. pullups to 3.3V (4.7k-ohm is good) are also necessary, but the encoder we're using includes these
+// 8. neopixel_pin: (PCB) Add 330 ohm in series (between pin and the DataIn pin of the 1st pixel). (BB) same, but this one is likely optional, e.g. mine works w/o it.  for signal integrity over long wires
+// 9. mulebatt_pin, pressure_pin, brake_pos_pin, pot_wipe_pin, tach_pin, speedo_pin: (ADC inputs) should have 100nF cap to gnd, to improve signal stability, tho it works w/o it
 
 // note onewire works on pins 19-21 but not on pins 39-42
 // if more pins become needed, encoder_sw may be moved to pin 0, freeing up pin 38 (pin 0 requires a pullup, which encoder_sw has)
@@ -94,6 +95,7 @@ enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5,
 // enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };      // possible sources of gas, brake, steering commands
 enum panel_apps { EZReadUI=0, MuleChassisUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel
 enum codestatus { Confused=0, Asleep=1, Booting=2, Parked=3, Stopped=4, Driving=5, InBasic=6, Panicking=7, NumCodeStatuses=8 };
+enum pcba_glow_modes { glowOff=0, glowHeartBot=1, glowHeartBoth=2, glowXFade=3, glowNumGlowModes=4 };
 enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
 enum telemetry_idiots {                              // list of transducers which have onscreen idiotlights showing status
     _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
@@ -189,6 +191,7 @@ bool syspower = HIGH, not_syspower = !syspower; // set by handler only. Reflects
 int sleep_request = REQ_NA;
 float maf_gps = 0;                              // manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
+bool pcba_neo_glow = false;
 bool nowtouch = false;
 bool nowtouch2 = false;
 bool captouch = true;

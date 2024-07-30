@@ -38,11 +38,13 @@ static LightingBox lightbox(&i2c);  // lightbox(&diag);
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
     ezread.squintf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
     if (running_on_devboard) return;      // override settings if running on the real car
-    looptime_print = false;      // Makes code write out timestamps throughout loop to serial port
+    pcba_neo_glow = true;
+    pcba_3v2 = true;
+    looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
     touch_reticles = false;
     // console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
     wifi_client_mode = false;       // Should wifi be in client or access point mode?
-    keep_system_powered = false; // Use true during development
+    keep_system_powered = false;    // Use true during development
     dont_take_temperatures = false;
     button_test_heartbeat_color = false;
     print_framebuffers = false;
@@ -192,7 +194,7 @@ void test_console_throughput() {
     ezread.squintf("Speed test:  ");
     Timer testtimer{1000000};  //, chartimer{100000};
     while (!testtimer.expired()) {
-        Serial.printf("\b \b \b \b \b%s", (step == 0) ? "-" : ((step == 1) ? "\\" : "/"));
+        Serial.printf("\b \b \b \b \b%s", (step == 0) ? "-" : ((step == 1) ? "\\" : "/"));  // ezread console can not yet support backspaces
         std::fflush(stdout);  // ensure immediate output
         ++step %= 3;
         bits += 10 * 8;
@@ -202,12 +204,12 @@ void test_console_throughput() {
 void initialize_pins_and_console() {                        // set up those straggler pins which aren't taken care of inside class objects
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);                   // deasserting unused cs line ensures available spi bus
     set_pin(syspower_pin, OUTPUT, syspower);
-    set_pin(extra_pin, INPUT_PULLUP);                       // avoid undefined inputs
+    set_pin(choke_pin, INPUT_PULLUP);                       // avoid undefined inputs
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
     basicsw.read();
     Serial.begin(921600); // 9600/19200/28800/57600/115200/230400/460800/921600 // open console serial port (will reassign tx pin as output)
-    delay(800);          // 1200 use for 115200 baud // this is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    delay(1200);          // 1200 use for 115200 baud // this is needed to allow the uart to initialize and the screen board enough time after a cold boot
     ezread.squintf(LPUR, "\n** Setup begin **\n");
     ezread.squintf("  Serial console started. ");
     test_console_throughput();
@@ -286,7 +288,7 @@ class Starter {
         req_active = (now_req != REQ_NA);                   // for display
         if (motor && ((now_req == REQ_OFF) || starterTimer.expired()))  {  // if we're driving the motor but need to stop or in the process of stopping
             motor = LOW;             // we will turn it off
-            write_pin (pin, motor);  // begin driving the pin low voltage
+            write_pin(pin, motor);  // begin driving the pin low voltage
             if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
             now_req = REQ_NA;
             return;                  // ditch out, leaving the motor-off request intact. we'll check on the timer next time
@@ -416,9 +418,11 @@ static RunModeManager run;
 
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
 
+// to avoid dependency conflicts, the BootButton class' actions() function is only prototyped 
+// here, then its content is fleshed out below, after including the code that uses the object 
 class BootButton : public MomentarySwitch {
   protected:
-    void actions();  // see definition below
+    void actions();  // function prototyhpe. see full definition below
   public:
     BootButton(int apin) : MomentarySwitch(apin, false) {}
     void update() {

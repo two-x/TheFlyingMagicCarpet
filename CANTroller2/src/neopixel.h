@@ -1,7 +1,7 @@
 #pragma once
 #include <NeoPixelBus.h>
 #define neorgb_t RgbColor  // RgbwColor
-#define striplength 8
+#define striplength 10
 NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(striplength, neopixel_pin);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method, 
 // Default for esp32 is dma via I2S bus 1 at 800kHz using RMT. Don't know the protocol difference between "Ws2812", "Ws2812x", and "Sk6812"
 // Run neos in a task example: https://github.com/Makuna/NeoPixelBus/wiki/ESP32-and-RTOS-Tasks
@@ -21,14 +21,18 @@ neorgb_t color_to_neo(uint16_t color565) { return neorgb_t((color565 & 0xf800) >
 neorgb_t color_to_neo(uint8_t color332) { return neorgb_t(color332 & 0xe0, (color332 & 0x1c) << 3, (color332 & 0x3) << 6); }  // , 0);
 
 class NeopixelStrip {
+  private:
+    enum brightness_presets : int { B_OFF, B_MIN, B_LO, B_MED, B_HI, B_EXT, B_MAX };
+    enum ledset : int { onoff, fcount, fpulseh, fpulsel, fonbrit, fnumset };  // just a bunch of int variables needed for each of the neo idiot lights
+    enum ledcolor : int { cnow, clast, cnormal, coff, con, cflash, cnumcolors };
+    enum brightness_contexts { NITE, DAY };  // Indoors = NITE
   public:
     bool sleepmode = false;
-    static const int idiotcount = 7;
+    static const int idiotcount = 8;
     NeopixelStrip(int argpin) : pin(argpin) {}
     void setup(bool viewcontext=NITE);
     void setbright(float bright_pc);
     void setsat(float sat_pc);
-    void heartbeat_ena(bool onoroff);
     void set_heartcolor(uint8_t newcolor);
     void heartcolor_override(uint8_t color);
     int neopixelsAvailable();
@@ -39,29 +43,26 @@ class NeopixelStrip {
     uint32_t idiot_neo_color(int _idiot);
     bool newIdiotLight(int _idiot, uint8_t color332, bool startboolstate = 0);
     void sleepmode_ena(bool ena);
+    void set_pcba_glow(int mode=glowHeartBot);
   private:
-    enum brightness_presets : int { B_OFF, B_MIN, B_LO, B_MED, B_HI, B_EXT, B_MAX };
-    enum ledset : int { onoff, fcount, fpulseh, fpulsel, fonbrit, fnumset };  // just a bunch of int variables needed for each of the neo idiot lights
-    enum ledcolor : int { cnow, clast, cnormal, coff, con, cflash, cnumcolors };
-    enum brightness_contexts { NITE, DAY };  // Indoors = NITE
-    static const int numpixels = 1 + idiotcount;  //  + extIdiotCount;  // 15 pixels = heartbeat RGB + 7 onboard RGB + 7 external RGBW
+    int numpixels = 1 + idiotcount;  //  + extIdiotCount;  // 15 pixels = heartbeat RGB + 7 onboard RGB + 7 external RGBW
     static const int neo_fade_timeout_us = 380000;
     static const uint fevresolution = 128;
     static const uint fevpages = 4;  // fevresolution / 32;  <- but if I use that math instead, seg fault
     uint8_t brightlev[2][7] = { { 0, 2,  6, 10, 17, 30,  50 },     // [NITE] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
                                 { 0, 3, 16, 30, 45, 65, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
     bool context = NITE, neo_heartbeat_variable_brightness = false;  // If false then brightness control only affect idiotlights
-    bool breadboard = false, neo_heartbeat = false, heartcolor_change = true;  // , heartcolor_overridden = false;
+    bool neo_heartbeat = false, heartcolor_change = true;  // , heartcolor_overridden = false;
     uint8_t lobright, hibright = 35, heartbright = 22, heartlobright = 2, heartbeat_brightness, heartbeat_brightness_last; // brightness during fadeouts
     uint8_t neo_master_brightness = 0xff, heartcolor16 = 0x00, csat[idiotcount];  // blackened heart
     uint32_t fcbase[idiotcount];
     float neobright_last, correction[3] = { 1.0, 0.9, 1.0 };  // Applied to brightness of rgb elements
     Timer neoFadeTimer{neo_fade_timeout_us}, neoHeartbeatTimer, flashtimer;
-    int pin = -1, heartbeat_state = 0, heartbeat_level = 0, fquantum_us = 50000;  // time resolution of flashes
+    int pcbaglow = glowHeartBot, pin = -1, heartbeat_state = 0, heartbeat_level = 0, fquantum_us = 50000;  // time resolution of flashes
     int heartbeat_ekg_us[4] = {250000, 240000, 620000, 2000000};
     int fset[idiotcount][fnumset], heartbeat_pulse = 255, lomultiplier = 3;  // lobright is hibright divided by this twice
     int fevents[idiotcount][fevpages], fevcurrpage = 0; int fevfilled = 0; int nowtime_us, nowepoch;  // , fevmask_master;
-    neorgb_t neostrip[numpixels], cidiot[idiotcount][cnumcolors], heartbeatColor, heartbeatNow;
+    neorgb_t neostrip[striplength], cidiot[idiotcount][cnumcolors], heartbeatColor, heartbeatNow, heartbeatTopNow;
     uint16_t chue[idiotcount];
     void recolor_idiots(int argidiot=-1);
     uint32_t recolor(uint32_t index, float bright_pc, float sat_pc);
@@ -70,19 +71,16 @@ class NeopixelStrip {
     bool fevpop(int _idiot, uint pop_off);
     void fevpush(int _idiot, uint push_off, bool push_val);
     void update_idiot(int _idiot);
+    void update_pcba_glow();
     uint16_t get_hue(RgbColor rgb); // Function to convert RGB888 to 16-bit hue value
     uint8_t get_sat(RgbColor rgb);
     uint8_t get_brite(RgbColor rgb);
     void refresh(bool force=false);
+    void heartbeat_ena(bool onoroff);
     void heartbeat_update();
     void knightrider();
 };
-// float NeopixelStrip::maxelement(float r, float g, float b) { return (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b); }  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
-// float NeopixelStrip::midelement(float r, float g, float b) { return (r >= g) ? ((g >= b) ? g : ((r >= b) ? b : r)) : ((r >= b) ? r : ((b >= g) ? g : b)); } // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
-// float NeopixelStrip::minelement(float r, float g, float b) { return (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b); } // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
-
 int NeopixelStrip::neopixelsAvailable() { return idiotcount; }
-void NeopixelStrip::heartbeat_ena(bool onoroff) { neo_heartbeat = onoroff; } // Start heart beating
 void NeopixelStrip::setBoolState(int _idiot, bool state) { fset[_idiot][onoff] = state; }
 void NeopixelStrip::setsat(float sat_pc) { neosat = sat_pc; recolor_idiots(-1); }
 uint32_t NeopixelStrip::idiot_neo_color(int _idiot) { return color_to_888(cidiot[_idiot][cnow]); }
@@ -103,30 +101,44 @@ uint32_t NeopixelStrip::recolor(uint32_t orig888, float bright_pc=100.0, float s
     return hsv_to_rgb<uint32_t>(get_hue(orig), newsat, newbrite);
 }
 void NeopixelStrip::recolor_idiots(int _idiot) {  // call w/ -1 to recolor all idiots
-    int start = (_idiot >= 0) ? _idiot : 0;
-    int end = (_idiot >= 0) ? _idiot + 1 : idiotcount;
+    int start = ((_idiot >= 0) ? _idiot : 0) + (int)pcba_3v2;
+    int end = ((_idiot >= 0) ? _idiot + 1 : idiotcount) + (int)pcba_3v2;
     for (int i = start; i < end; i++) {  // uint8_t sat = std::min((uint8_t)(csat[_idiot] * 256.0 / 100.0), (uint8_t)(neosat * 256.0 / 100.0));
         cidiot[i][con] = recolor(cidiot[i][cnormal], (float)hibright, neosat);
         cidiot[i][coff] = recolor(cidiot[i][cnormal], (float)lobright, neosat);
         if (fset[i][fcount]) set_fcolor(i);
     }
 }
+void NeopixelStrip::set_pcba_glow(int mode) {  // modes 0-3: glowOff, glowHeartBot, glowHeartBoth, glowXFade
+    if (mode > glowNumGlowModes) return;  // bail if the given mode is invalid
+    bool needheart = (mode == glowHeartBot) || (mode == glowHeartBoth);
+    heartbeat_ena(needheart);
+    if (!needheart) heartbeatNow = heartbeatTopNow = color_to_neo((uint32_t)0);    
+    pcbaglow = mode;
+}
 void NeopixelStrip::refresh(bool force) {
     int numledstowrite = (heartbeatNow != neostrip[0]);
-    neostrip[0] = heartbeatNow;
-    neoobj.SetPixelColor(0, heartbeatNow);
+    int firstheart = (int)(((pcbaglow == glowOff) || !neo_heartbeat) + (int)pcba_3v2);
+    int lastheart = (int)((pcbaglow == glowHeartBoth) || (pcbaglow == glowXFade));
+    for (int i=firstheart; i<=lastheart; i++) {
+        if (heartbeatNow != neostrip[i]) numledstowrite = i + 1;
+        neostrip[i] = heartbeatNow;
+        neoobj.SetPixelColor(i, heartbeatNow);
+    }
+    int index;
     for (int i=0; i<idiotcount; i++) {
-        if (cidiot[i][cnow] != neostrip[i+1] || force) {
-            neoobj.SetPixelColor (1+i, cidiot[i][cnow]);
-            neostrip[i + 1] = cidiot[i][cnow];  // color_to_neo(cidiot[i][cnow]);
-            numledstowrite = 2 + i;  // + idiotCount;
+        index = i + 1 + (int)pcba_3v2;
+        if (cidiot[i][cnow] != neostrip[index] || force) {
+            neoobj.SetPixelColor (index), cidiot[i][cnow]);
+            neostrip[index] = cidiot[i][cnow];  // color_to_neo(cidiot[i][cnow]);
+            numledstowrite++;  // + idiotCount;
         }
     }
     if (numledstowrite) neoobj.Show(numledstowrite);  // This ability to exclude pixels at the end of the strip that haven't changed from the data write is an advantage of neopixelbus over adafruit
 }
 void NeopixelStrip::setup(bool viewcontext) {
     ezread.squintf("Neopixels.. ");
-    breadboard = running_on_devboard;
+    numpixels = 1 + idiotcount + (int)pcba_neo_glow;  // potentially update number of pixels to include extra neo on the v3.2 pcba (topside)
     context = viewcontext;
     neoobj.Begin();
     heartbeat_brightness = brightlev[context][B_LO];
@@ -147,6 +159,10 @@ void NeopixelStrip::setbright(float bright_pc) {  // a way to specify brightness
         heartlobright = lobright;
     }
     recolor_idiots(-1);
+}
+void NeopixelStrip::heartbeat_ena(bool onoroff) {  // Start heart beating
+    neo_heartbeat = onoroff;
+    if (!neo_heartbeat) set_heartcolor(BLK);
 }
 void NeopixelStrip::set_heartcolor(uint8_t _newcolor) {
     uint8_t newcolor = _newcolor;
@@ -251,6 +267,19 @@ void NeopixelStrip::update_idiot(int _idiot) {
     cidiot[_idiot][cnow] = fset[_idiot][onoff] ? cidiot[_idiot][con] : cidiot[_idiot][coff];               // set color to con or coff depending on state of idiotlight
     if (fset[_idiot][fcount]) if (fevpop(_idiot, nowepoch)) cidiot[_idiot][cnow] = cidiot[_idiot][cflash]; // if flashing, override with the flash color
 }
+void NeopixelStrip::update_pcba_glow() {
+    if (pcbaglow == glowOff) ]
+    }
+    if (!(pcbaglow == glowXFade || pcbaglow == glowOff)) {
+        set_heartcolor(colorcard[runmode]);
+        heartbeat_update();  // Update our beating heart
+    }
+    if (pcbaglow == glowXFade) {
+
+    }
+
+    // glowOff=0, glowHeartBot=1, glowHeartBoth=2, glowXFade=3, glowNumGlowModes=4 };
+}
 void NeopixelStrip::update() {
     static int runmode_last;
     if (runmode != runmode_last) sleepmode_ena(runmode == LOWPOWER);
@@ -259,8 +288,7 @@ void NeopixelStrip::update() {
         knightrider();
         return;
     }
-    set_heartcolor(colorcard[runmode]);
-    heartbeat_update();  // Update our beating heart
+    update_pcba_glow();
     nowtime_us = (int)flashtimer.elapsed();
     nowepoch = nowtime_us / fquantum_us;
     for (int i=0; i<idiotcount; i++) {
@@ -344,6 +372,10 @@ void NeopixelStrip::knightrider() {
 //     }
 //     neoobj.Show(); // Show the updated strip
 // }
+//
+// float NeopixelStrip::maxelement(float r, float g, float b) { return (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b); }  // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
+// float NeopixelStrip::midelement(float r, float g, float b) { return (r >= g) ? ((g >= b) ? g : ((r >= b) ? b : r)) : ((r >= b) ? r : ((b >= g) ? g : b)); } // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
+// float NeopixelStrip::minelement(float r, float g, float b) { return (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b); } // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
 
 class IdiotLights {
 //   private: bool fixed_one = true, fixed_zero = false; bool* _one = &fixed_one; bool* _zero = &fixed_zero;
