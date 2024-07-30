@@ -17,7 +17,7 @@
 #define    spi_sclk_pin 12 // sclk0/adc2.1      // used as spi interface clock for tft screen, sd card and resistive touch panel
 #define    spi_miso_pin 13 // miso0/adc2.2    * // used as spi interface data from sd card and resistive touch panel. can reclaim this pin if only the tft is on the spi bus
 #define hotrc_ch2_v_pin 14 // qwp0/pwm0/adc2.3  // hotrc ch2 bidirectional trigger input
-#define hotrc_ch1_h_pin 15 // pwm1/adc2.4     * // hotrc ch1 thumb joystick input. can reclaim this and steer_pwm pins by connecting the hotrc horz chan straight to the steering jaguar 
+#define hotrc_ch1_h_pin 15 // pwm1/adc2.4     * // hotrc ch1 thumb joystick input. can reclaim this pin and the steer_pwm pin by connecting the hotrc horz chan straight to the steering jaguar 
 #define     gas_pwm_pin 16 // pwm1/adc2.5       // output, pwm signal duty cycle controls throttle target. on Due this is the pin labeled DAC1 (where A13 is on Mega)
 #define   brake_pwm_pin 17 // pwm0/adc2.6/tx1   // output, pwm signal duty cycle sets speed of brake actuator from full speed extend to full speed retract, (50% = stop)
 #define   steer_pwm_pin 18 // pwm0/adc2.7/rx1 * // output, pwm signal positive pulse width sets steering motor speed from full left to full speed right, (50% = stop). can reclaim this and hotrc_horz pins by connecting the hotrc horz chan straight to the steering jaguar 
@@ -25,7 +25,7 @@
 #define steer_enc_b_pin 20 // usb-d+/adc2.9   ! // reserved for usb or a steering quadrature encoder. since we don't have this encoder, if not using for jtag this pin may be used for whatever
 #define     onewire_pin 21 // pwm0              // onewire bus for temperature sensor data. note: tested this does not work on higher-numbered pins (~35+)
 #define      speedo_pin 35 // spiram/octspi     // int input, active high, asserted when magnet south is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
-#define     starter_pin 36 // sram/ospi/glitch  // input/Output (both active high), output when starter is being driven, otherwise input senses external starter activation
+#define     starter_pin 36 // sram/ospi/glitch  // input/Output (both active high), output when starter is being driven.  ability to sense externally-driven start signal is disabled in hardware
 #define        tach_pin 37 // spiram/octspi     // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
 #define  encoder_sw_pin 38 // spiram/octspi   * // input, rotary encoder push switch, for the UI. active low (needs pullup). signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
 #define  tp_cs_fuel_pin 39 // jtck/glitch     ! // output, controls touchpanel chip select for resistive types (dev board) OR optionally drives the mule's fuel pump.  note possible known glitch: 80ns low pulse when certain rtc devices power on (see errata 3.11)
@@ -70,16 +70,9 @@
 #define adcrange_adc 4095     // = 2^adcbits-1
 #define adcmidscale_adc 2047  // = 2^(adcbits-1)-1
 
-// these global enums are super convenient, just don't change any values without checking that everywhere it's used won't get broken
-enum hotrc_axis { HORZ=0, VERT=1, CH3=2, CH4=3 };
-enum hotrc_val { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
-enum motor_val { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, NUM_MOTORVALS=8 }; // IDLE=8, NUM_MOTORVALS=9 };
-enum stop_val { STOP=1 };
-enum steer_val { SAFE=1 };
-enum diag_val { DiagVal=0, DiagMin=1, DiagMax=2, DiagMargin=3, NumDiagVals=4 };
-enum temp_val { ALARM=3 };
-enum size_enums { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
-enum joydirs { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
+// global enums. these can be super convenient but are also quite prone to errors, some more than others (see comments)
+//
+// this group has enums which are relatively straightforward, i.e. each used in only one context 
 enum runmode { BASIC=0, LOWPOWER=1, STANDBY=2, STALL=3, HOLD=4, FLY=5, CRUISE=6, CAL=7, NUM_RUNMODES=8 };
 enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes=3 };
@@ -87,16 +80,31 @@ enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
 enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, NumMotorModes=13 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
 enum openloopmodes { MedianPoint=0, AutoRelease=1, AutoRelHoldable=2, NumOpenLoopModes=3 };
-enum brakeextra { NumBrakeSens=2 };
-enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
-enum boolean_states { ON=1 };
-enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9, PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
-// enum temp_categories { AMBIENT=0, ENGINE=1, WHEEL=2, BRAKE=3, NUM_TEMP_CATEGORIES=4 };  // 
-// enum temp_lims { DISP_MIN=1, WARNING=3, ALARM=4, DISP_MAX=5 };      // possible sources of gas, brake, steering commands
+enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9,PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
+enum diag_val { DiagVal=0, DiagMin=1, DiagMax=2, DiagMargin=3, NumDiagVals=4 };
+enum joydirs { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
 enum panel_apps { EZReadUI=0, MuleChassisUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel
 enum codestatus { Confused=0, Asleep=1, Booting=2, Parked=3, Stopped=4, Driving=5, InBasic=6, Panicking=7, NumCodeStatuses=8 };
 enum pcba_glow_modes { glowOff=0, glowHeartBot=1, glowHeartBoth=2, glowXFade=3, glowNumGlowModes=4 };
 enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
+//
+// this group is used in multiple places in different ways, and is thus high-risk.
+// for example, arrays exist with indexes drawn from different compinations of multiple ones of these enums
+// search for all uses and understand them before changing anything
+enum hotrc_axis { HORZ=0, VERT=1, CH3=2, CH4=3 };
+enum hotrc_val { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
+enum motor_val { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, NUM_MOTORVALS=8 }; // IDLE=8, NUM_MOTORVALS=9 };
+enum stop_val { STOP=1 };
+enum steer_val { SAFE=1 };
+enum temp_val { ALARM=3 };
+enum size_enums { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
+//
+// the OFF and ON values in these two enums are used in multiple places I think
+enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
+enum boolean_states { ON=1 };
+//
+// these telemetry enums overlap in their use and so be cautious when making changes to check everything
+enum brakeextra { NumBrakeSens=2 };
 enum telemetry_idiots {                              // list of transducers which have onscreen idiotlights showing status
     _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
     _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are actuators, driven by us
@@ -124,12 +132,10 @@ bool always_max_refresh = true;      // set to true to enforce a cap on screen f
 bool brake_before_starting = true;   // if true, the starter motor pushes the brake pedal first, and won't turn on until it senses the pressure
 bool watchdog_enabled = false;       // enable the esp's built-in watchdog circuit, it will reset us if it doesn't get pet often enough (to prevent infinite hangs). disabled cuz it seems to mess with the hotrc (?)
 bool fuelpump_supported = true;      // do we drive power to vehicle fuel pump?  note if resistive touchscreen is present then fuelpump is automatically not supported regardless of this
-int throttle_ctrl_mode = OpenLoop;   // should gas servo use the rpm-sensing pid? values: ActivePID or OpenLoop
 bool print_task_stack_usage = false; // enable to have remaining heap size and free task memory printed to console every so often. for tuning memory allocation
 bool autosaver_display_fps = true;   // do you want to see the fps performance of the fullscreen saver in the corner?
 bool crash_driving_recovery = true;  // if code crashes while driving, should it continue driving after reboot?
 bool pot_tuner_acceleration = false; // when editing values, can we use the pot to control acceleration of value changes? (assuming we aren't pot mapping some sensor at the time)
-// dev-board-only options:  Note these are ignored and set false at boot by set_board_defaults() unless running on a breadboard with a 22k-ohm pullup to 3.3V the TX pin
 bool dont_take_temperatures = false; // disables temp sensors. in case debugging dallas sensors or causing problems
 bool console_enabled = true;         // completely disables the console serial output. idea being, it may be safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool keep_system_powered = false;    // equivalent to syspower always being high.
@@ -143,6 +149,7 @@ bool use_tft_colors_for_neo = false; // should neopixel colors be based on onscr
 bool print_error_changes = true;     // should diag print status changes and new error events to console?
 bool pot_controls_animation_timeout = true;  // when showing fullscreen animations, should the pot value control the next animation timeout?
 bool pcba_3v2 = true;                // turn to false if for some reason you are using the v3.1 pcba. note this does not automatically correct the pin 2 <-> pin 39 swap
+int throttle_ctrl_mode = OpenLoop;   // should gas servo use the rpm-sensing pid? values: ActivePID or OpenLoop
 
 // global tunable variables
 float float_zero = 0.000069;           // if two floats being compared are closer than this, we consider them equal
@@ -160,7 +167,7 @@ float neobright = 20.0;   // default for us dim/brighten the neopixels in percen
 float neosat = 90.0;  // default saturation of neopixels in percent
 int i2c_frequency = 400000;  // in kHz. standard freqs are: 100k, 400k, 1M, 3.4M, 5M
 
-// non-tunable values. probably these belong with their related code
+// non-tunable values. probably these belong with their related code, but are global to allow accessibility from everywhere
 std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 float permanan = NAN;
 float* nanptr = &permanan;
@@ -168,7 +175,7 @@ uint32_t codestatus = Booting;
 int runmode = STANDBY;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool fun_flag = false;                  // since now using temp sensor address to detect vehicle, our tx resistor can be used for who knows what else!
-bool standby_incomplete = true;        // minor state variable for standby mode - standby mode has not completed its work and can't yet stop activity
+bool shutting_down = true;              // minor state variable for standby mode - standby mode has not completed its work and can't yet stop activity
 bool parking = false;                   // indicates in process of parking the brake & gas motors so the pedals can be used manually without interference
 bool releasing = false;                 // indicates in process of releasing the brake to the zero brake point
 bool cruise_adjusting = false;
@@ -244,6 +251,9 @@ float ema_filt(float _raw, float _filt, float _alpha) {
 //     float _filt_f = static_cast<float>(*_filt);
 //     *_filt = static_cast<FILT_T>(ema_filt(_raw_f, _filt_f, _alpha));
 // }
+
+// value-editing-related functions. these are global to allow accessibility from multiple places
+//
 // significant_place() is used by tune() functions below
 int significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
     int place = 1;
@@ -322,6 +332,32 @@ void tune(bool* orig_ptr, int idelta) {  // overloaded to directly modify bool a
     *orig_ptr = tune(idelta);
 }
 
+// Timer objects are prolific in every corner of the code and thus this is global
+class Timer {  // !!! beware, this 54-bit microsecond timer overflows after every 571 years
+  protected:
+    volatile int64_t start, tout;
+  public:
+    Timer() { reset(); }
+    Timer(int arg_timeout) { set (arg_timeout); }
+    void set (int arg_timeout) {                                              // sets the timeout to the given number (in us) and zeroes the timer
+        tout = (int64_t)arg_timeout;
+        start = esp_timer_get_time();
+    }
+    void reset() { start = esp_timer_get_time(); }                            // zeroes the timer
+    int elapsed() { return esp_timer_get_time() - start; }                    // returns microseconds elapsed since last reset
+    bool elapsed(int check) { return esp_timer_get_time() - start >= check; } // returns whether the given amount of us have elapsed since last reset
+    int timeout() { return tout; }                                            // returns the currently set timeout value in us
+    bool expired() { return esp_timer_get_time() >= start + tout; }           // returns whether more than the previously-set timeout has elapsed since last reset
+    bool expireset() {                                                        // like expired() but automatically resets if expired
+        int64_t now = esp_timer_get_time();
+        if (now < start + tout) return false;
+        start = now;
+        return true;
+    }    
+};
+
+// color macros and color conversion functions. these are global to allow accessibility from multiple places
+//
 template <typename T>  // feed me hue/sat/bright values and get back an rgb color formatted as rgb332 (8b), rgb565 (16b), or rgb888 (32b)
 T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
     uint8_t rgb[3] = { 0, 0, 0 };  // [r,g,b];
@@ -352,30 +388,6 @@ T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
 uint8_t rando_color() {
     return ((uint8_t)random(0x7) << 5) | ((uint8_t)random(0x7) << 2) | (uint8_t)random(0x3); 
 }
-
-class Timer {  // !!! beware, this 54-bit microsecond timer overflows after every 571 years
-  protected:
-    volatile int64_t start, tout;
-  public:
-    Timer() { reset(); }
-    Timer(int arg_timeout) { set (arg_timeout); }
-    void set (int arg_timeout) {                                              // sets the timeout to the given number (in us) and zeroes the timer
-        tout = (int64_t)arg_timeout;
-        start = esp_timer_get_time();
-    }
-    void reset() { start = esp_timer_get_time(); }                            // zeroes the timer
-    int elapsed() { return esp_timer_get_time() - start; }                    // returns microseconds elapsed since last reset
-    bool elapsed(int check) { return esp_timer_get_time() - start >= check; } // returns whether the given amount of us have elapsed since last reset
-    int timeout() { return tout; }                                            // returns the currently set timeout value in us
-    bool expired() { return esp_timer_get_time() >= start + tout; }           // returns whether more than the previously-set timeout has elapsed since last reset
-    bool expireset() {                                                        // like expired() but automatically resets if expired
-        int64_t now = esp_timer_get_time();
-        if (now < start + tout) return false;
-        start = now;
-        return true;
-    }    
-};
-
 const uint8_t BLK  = 0x00;  // greyscale: full black (RGB elements off)
 const uint8_t DGRY = 0x49;  // pseudo-greyscale: very dark grey (blueish)
 const uint8_t MGRY = 0x6d;  // pseudo-greyscale: medium grey (yellowish)
@@ -468,12 +480,11 @@ void kick_inactivity_timer(int source=-1) {
 // EZRead is a text-logging console for display on a small low-res LCD in a window (or fullscreen if you feel like coding it).
 //   the output text is very efficient with use of space, except the most recent message at bottom, which is zoomed in enormously
 //   the user-obsessed legibility of EZRead is something you'll definitely want to write home to your parents about after every use
-//   printf();   writes formatted text to ezread. use the same arguments as printf, except add a uint8_t rgb332-format color as the 1st arg if you like that
-//   squintf();   like running ezprint() followed by Serial.printf() on the same arguments. will write to both.
-//                somewhere is documentation on why this is called squintf, but I wasn't able to read it
-//   arguments for the above: ([optional color], "printf-compatible format string", <other_printf_like_args>);
 //   lookback(int);   scrolls the given number of lines back in time to look at the past
-//
+//   printf();   writes formatted text to ezread. use the same arguments as printf, plus an optional rgb332 color as the 1st arg
+//   squintf();  like running ezprint() followed by Serial.printf() on the same arguments. will write to both.
+//                 somewhere is documentation on why this is called squintf, but I wasn't able to read it
+//   arguments for the above: ([optional uint8_t color], "printf-compatible format string", <other_printf_supported_args>);
 #include <iostream>
 #include <string>
 #include <sstream>
