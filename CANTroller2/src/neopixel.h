@@ -289,8 +289,6 @@ void NeopixelStrip::update_pcba_glow() {
     else if (pcbaglow == glowHeartBoth) {
 
     }
-
-    // glowOff=0, glowHeartBot=1, glowHeartBoth=2, glowXFade=3, glowNumGlowModes=4 };
 }
 void NeopixelStrip::update() {
     static int runmode_last;
