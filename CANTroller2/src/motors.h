@@ -235,14 +235,14 @@ class ServoMotor {
     Hotrc* hotrc;
     Speedometer* speedo;
     Servo motor;
-    static const int pid_timeout = 85000;
+    static const int pid_timeout = 30000;  // if too high, servo performance is choppy
     float lastoutput;
     Timer pid_timer{pid_timeout}, outchangetimer;
     int pin, freq;
   public:
     bool reverse = false;  // defaults. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { 0, NAN, 100, 0, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { 45.0, 43.0, 168.2, 45.0, NAN, 0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
+    float si[NUM_MOTORVALS] = { 69.0, 69.0, 168.0, 69.0, NAN, 0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
     float max_out_change_rate_pcps = 800.0;  // max rate of change of motor output as a percent of motor range per second. set to 0 to disable limitation
 

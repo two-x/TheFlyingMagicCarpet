@@ -949,7 +949,7 @@ class Display {
         }
         autosaver_request = REQ_NA;
     }
-    void printframebufs(int reduce = 2, bool ascii = false) {  // reduce is how many times to shrink the screen by half (0, 1, 2, 3, or 4). ascii=true gives ascii art output
+    void printframebufs(int reduce=2, bool ascii=false) {  // reduce is how many times to shrink the screen by half (0, 1, 2, 3, or 4). ascii=true gives ascii art output
         std::string brites[16] = {" ", ".", ",", ":", ";", "+", "=", ">", "%", "#", "*", "$", "@", "&", "M", "W"};
         int found;
         uint8_t* s;
