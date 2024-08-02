@@ -240,10 +240,10 @@ class ServoMotor {
     Timer pid_timer{pid_timeout}, outchangetimer;
     int pin, freq;
   public:
-    bool reverse = false;  // defaults. subclasses override as necessary
-    float pc[NUM_MOTORVALS] = { 0, NAN, 100, 0, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { 69.0, 69.0, 168.0, 69.0, NAN, 0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
-    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 500, 2500, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
+    bool reverse = false, use_ratelimiter = true;  // defaults. subclasses override as necessary
+    float pc[NUM_MOTORVALS] = { 0.0, NAN, 100.0, 0.0, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
+    float si[NUM_MOTORVALS] = { 45.0, 135.0, 90.0, NAN, 0, 180.0, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
+    float us[NUM_MOTORVALS] = { NAN, 1500.0, NAN, NAN, NAN, 500.0, 2500.0, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
     float max_out_change_rate_pcps = 800.0;  // max rate of change of motor output as a percent of motor range per second. set to 0 to disable limitation
 
     ServoMotor(int _pin, int _freq) { pin = _pin; freq = _freq; }
@@ -271,6 +271,7 @@ class ServoMotor {
     }
   protected:
     bool rate_limiter() {
+        if (!use_ratelimiter) return pc[OUT];
         if (std::abs(max_out_change_rate_pcps) < float_zero) return false;  // this feature is disabled by setting max rate to 0
         float max_out_change_pc = max_out_change_rate_pcps * outchangetimer.elapsed() / 1000000.0;
         outchangetimer.reset();
@@ -364,7 +365,8 @@ class ThrottleControl : public ServoMotor {
     // replace this: ...
     using ServoMotor::ServoMotor;
     float tach_last, throttle_target_pc, governor = 95;  //, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
-    float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    float si[NUM_MOTORVALS] = { 69.0, 69.0, 168.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
+    float idle_si[NUM_MOTORVALS] = { 69.0, NAN, 85.0, 75.0, NAN, 69.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
@@ -428,6 +430,7 @@ class ThrottleControl : public ServoMotor {
         ezread.squintf("  Cruise pid %s, using %s adj scheme\n", cruise_pid_enabled ? "enabled" : "disabled", cruiseschemecard[cruise_adjust_scheme].c_str());
         ServoMotor::setup(_hotrc, _speedo);
         throttleRateTimer.reset();
+        use_ratelimiter = false;
         set_changerate_deg(65.0);  // max_out_change_rate_pcps = 100.0 * 65.0 / 180.0;  // 65 degrees out of 180 max turn per sec. 
         derive();
         pid.init(tach->ptr(), &pc[OPMIN], &pc[OPMAX], gas_kp, gas_ki, gas_kd, QPID::pmod::onerr, 

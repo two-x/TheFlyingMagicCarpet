@@ -144,6 +144,7 @@ void NeopixelStrip::setup(bool viewcontext) {
     context = viewcontext;
     neoobj.Begin();
     for (int i=0; i<2; i++) heartbeat_brightness[i] = brightlev[context][B_LO];
+    if (!running_on_devboard) setbright(75.0);
     neoHeartbeatTimer.set(heartbeat_ekg_us[3]);
     neoFadeTimer.reset();
     ezread.squintf("refresh.. ");
