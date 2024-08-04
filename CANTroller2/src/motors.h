@@ -366,7 +366,7 @@ class ThrottleControl : public ServoMotor {
     using ServoMotor::ServoMotor;
     float tach_last, throttle_target_pc, governor = 95;  //, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     float si[NUM_MOTORVALS] = { 69.0, 69.0, 168.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
-    float idle_si[NUM_MOTORVALS] = { 69.0, NAN, 85.0, 75.0, NAN, 69.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    float idle_si[NUM_MOTORVALS] = { 69.0, NAN, 85.0, 75.0, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
@@ -385,12 +385,8 @@ class ThrottleControl : public ServoMotor {
     bool cruise_trigger_released = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;                  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float max_throttle_angular_velocity_degps;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
-    float pc_to_rpm(float _pc) {
-        return map(_pc, 0.0, 100.0, tach->idle(), tach->opmax());
-    }
-    float rpm_to_pc(float _rpm) {
-        return map(_rpm, tach->idle(), tach->opmax(), 0.0, 100.0);
-    }
+    float pc_to_rpm(float _pc) { return map(_pc, 0.0, 100.0, tach->idle(), tach->opmax()); }
+    float rpm_to_pc(float _rpm) { return map(_rpm, tach->idle(), tach->opmax(), 0.0, 100.0); }
     void derive() {  // calc derived limit values for all units based on tuned values for each motor
         pc[ABSMIN] = map(si[ABSMIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
         pc[ABSMAX] = map(si[ABSMAX], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
