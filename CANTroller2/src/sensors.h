@@ -877,7 +877,7 @@ class PulseSensor : public Sensor {
     float us() { return _us; }
     float ms() { return _us / 1000.0; }
 };
-// Tachometer represents a magnetic pulse measurement of the enginge rotation
+// Tachometer represents a magnetic pulse measurement of the engine rotation
 // it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
 class Tachometer : public PulseSensor {
   public:
@@ -972,8 +972,7 @@ class RCAnalog : public RCChannel {};
 
 // note: I implemented the gas servo, but it looks like it's all in native units. should it still be a transducer?
 // ServoMotor is a base class for our type of actuators, where by varying a pulse width (in us), motors move.
-//    e.g. the gas, brake and steering motors. The gas motor is an actual servo, the others are controlled with servo signaling via jaguars.
-// template<typename float, typename float>
+//   The gas motor is an actual rc servo, the brake and steering are 12v dc motors with voltage controlled based on servo-like pwm signals (feature of the jaguars)
 class ServoMotor2 : public Transducer {
   protected:
     Servo motor;
