@@ -1,6 +1,7 @@
 #pragma once
 #include <Wire.h>   // for i2c bus support
 enum i2c_nodes : int { i2c_touch, i2c_lightbox, i2c_airvelo, i2c_map, num_i2c_slaves };  // i2c_touch, 
+// enum i2c_nodes { i2c_touch=0, i2c_lightbox=1, i2c_airvelo=2, i2c_map=3, num_i2c_slaves=4 };  // i2c_touch, 
 
 class I2C {
   private:
@@ -36,10 +37,10 @@ class I2C {
             Wire.beginTransmission(address);
             error = Wire.endTransmission();
             if (error == 0) {
-                Serial.printf (" found addr: 0x%s%x", (address < 16) ? "0" : "", address);
+                Serial.printf(" found addr: 0x%s%x", (address < 16) ? "0" : "", address);
                 _detaddrs[_devicecount++] = address;
             }
-            else if (error==4) Serial.printf (" error addr: 0x%s%x", (address < 16) ? "0" : "", address);
+            else if (error==4) Serial.printf(" error addr: 0x%s%x", (address < 16) ? "0" : "", address);
         }
         if (scanTimer.elapsed() > 5000000) Serial.printf(" timeout & fail bus scan.");
         if (_devicecount == 0) Serial.printf(" no devices found.");
@@ -201,7 +202,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     static constexpr uint8_t addr = 0x69;
     LightingBox(I2C* _i2c) : i2c{_i2c} {}  // LightingBox(DiagRuntime* _diag) : diag(_diag) {}
     void setup() {
-        Serial.printf("Lighting box serial comm..\n");
+        Serial.printf("Lighting box serial comm..\n");  // ezread.squintf("Lighting box serial comm..\n");
     }
     bool sendstatus() {
         uint8_t byt = 0x00;  // command template for status update

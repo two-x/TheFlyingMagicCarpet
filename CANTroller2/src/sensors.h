@@ -778,12 +778,12 @@ class PulseSensor : public Sensor {
     // volatile int64_t timestamp_last_us;  // _stop_timeout_us = 1250000;  // time after last magnet pulse when we can assume the engine is stopped (in us)
     Timer _stop_timer;
     bool _low_pulse = true, _pin_level, _pin_inactive = false;
-    float _freqdiv = 1.0, _idle = 600.0, _idle_cold = 750.0, _idle_hot = 500.0;  // an external ripple counter divides pulse stream frequency by this, we need to compensate
+    float _us, _freqdiv = 1.0, _idle = 600.0, _idle_cold = 750.0, _idle_hot = 500.0;  // an external ripple counter divides pulse stream frequency by this, we need to compensate
     Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
     volatile int64_t _isr_us = 0;
     volatile int64_t _isr_time_last_us = 0;
     volatile int64_t _isr_time_current_us = 0;
-    volatile float _us;
+    // volatile float _isr_us;
     // we maintain our min and max pulse period, for each pulse sensor
     // absmax_us is the reciprocal of our native absmin value in MHz. once max_us has elapsed since the last pulse our si sets to zero
     // absmin_us is the reciprocal of our native absmax value in MHz. any pulse received within min_us of the previous pulse is ignored
@@ -796,11 +796,10 @@ class PulseSensor : public Sensor {
     void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
         _isr_time_current_us = esp_timer_get_time();
         int64_t time_us = _isr_time_current_us - _isr_time_last_us;
-        if (time_us >= _absmin_us_64) {  // ignore spurious triggers or bounces
-            _isr_time_last_us = _isr_time_current_us;
-            _us = time_us;
-            _pin_level = read_pin(_pin);  // _pin_level = !_pin_level;
-        }
+        if (time_us < _absmin_us_64) return;  // ignore spurious triggers or bounces
+        _stop_timer.reset();
+        _isr_time_last_us = _isr_time_current_us;
+        _isr_us = time_us;
     }
     void set_pin_inactive() {
         static bool pinlevel_last;
@@ -811,23 +810,36 @@ class PulseSensor : public Sensor {
         else if (pinactivitytimer.expired()) _pin_inactive = true;
         pinlevel_last = _pin_level;
     }
-    virtual float read_sensor() {
-        float _isr_buf_us = static_cast<float>(_us);  // copy delta value (in case another interrupt happens during handling)
+    void set_val_from_pin() {
         float new_native = _native.val();  // initialize our return value to the current native value
-        if (_isr_buf_us > _absmax_us) new_native = _native.min();  // if it's been too long since last pulse return zero
-        else if (_isr_buf_us >= _absmin_us) new_native = us_to_hz(_isr_buf_us);  // otherwise if the pulse isn't too soon after the last one (possible bounce) then convert as a valid reading
+        if (_stop_timer.expired()) {
+            _us = NAN;  // indicate out-of-range pulse period
+            new_native = 0.0;  // call this 0 Hz
+        }
+        else {
+            float _isr_buf_us = static_cast<float>(_isr_us);  // copy delta value (in case another interrupt happens during handling)
+            if (_isr_buf_us >= _absmin_us) {
+                _us = _isr_buf_us;
+                new_native = us_to_hz(_isr_buf_us);  // otherwise if the pulse isn't too soon after the last one (possible bounce) then convert as a valid reading
+            }
+        }
         set_pin_inactive();
-        return new_native;  // too-short pulse times are presumably bounces and are ignored, keeping the existing native value
+        set_native(new_native);  // too-short pulse times are presumably bounces and are ignored, keeping the existing native value
+        _si_raw = from_native(new_native);
+        calculate_ema(); // filtered values are kept in si format
+        _pin_level = read_pin(_pin);  // _pin_level = !_pin_level;
     }
     float us_to_hz(float arg_us) {
-        if (std::abs(arg_us) > float_zero) return 1000000.0 / arg_us;
-        ezread.squintf("Err: %s us_to_hz() reciprocal of zero\n", _short_name.c_str());
-        return absmax();
+        if ((std::abs(arg_us) <= float_zero) || std::isnan(arg_us)) return 0.0;  // zero is a special value meaning we timed out
+        return 1000000.0 / arg_us;
+        // ezread.squintf("Err: %s us_to_hz() reciprocal of zero\n", _short_name.c_str());
+        // return absmax();
     }
     float hz_to_us(float arg_hz) {
-        if (std::abs(arg_hz) > float_zero) return 1000000.0 / arg_hz;  // math is actually the same in both directions us -> hz or hz -> us
-        ezread.squintf("Err: %s hz_to_us() reciprocal of zero\n", _short_name.c_str());
-        return _absmax_us;
+        if ((std::abs(arg_hz) <= float_zero) || std::isnan(arg_hz)) return 0.0;  // zero is a special value meaning we timed out
+        return 1000000.0 / arg_hz;
+        // ezread.squintf("Err: %s hz_to_us() reciprocal of zero\n", _short_name.c_str());
+        // return _absmax_us;
     }
   public:
     std::string _uber_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
@@ -861,6 +873,7 @@ class PulseSensor : public Sensor {
         set_source(src::PIN);
         attachInterrupt(digitalPinToInterrupt(_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
         set_can_source(src::POT, true);
+        _stop_timer.set(_absmax_us);
     }
     // float last_read_time() { return _last_read_time_us; }
     // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
