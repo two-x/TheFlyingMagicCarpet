@@ -397,7 +397,7 @@ class IdiotLights {
     bool* vals[iconcount] = {  // 6 per line
         &diag.err_sens_alarm[LOST], &diag.err_sens_alarm[RANGE], &diag.err_sens[RANGE][_TempEng], &diag.err_sens[RANGE][_TempWheel], hotrc.radiolost_ptr(), &panicstop,
         &shutting_down, &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting, &car_hasnt_moved, 
-        &starter.motor, fuelpump.status_inverse_ptr(), &brake.posn_pid_active, &brake.no_feedback, speedo.pin_inactive_ptr(), tach.pin_inactive_ptr(),
+        &starter.motor, fuelpump.status_inverse_ptr(), &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(), // speedo.pin_inactive_ptr(), tach.pin_inactive_ptr(),
         bootbutton.ptr(), &nowtouch, encoder.activity_ptr(), sim.enabled_ptr(), &running_on_devboard, &not_syspower,  // &encoder.enc_a, 
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
         &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],  // &sensidiots[_MuleBatt]

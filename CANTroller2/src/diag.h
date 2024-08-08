@@ -529,7 +529,7 @@ class LoopTimer {
             if (loop_periods_us[loop_now]-loop_cout_us > looptime_linefeed_threshold || !looptime_linefeed_threshold) std::cout << std::endl;
             loop_cout_us = (int)(esp_timer_get_time() - loop_cout_mark_us);
             loopindex = 0;
-            mark ("top");
+            mark("top");
         }
         ++loop_now %= loop_history;
         loopno++;  // I like to count how many loops

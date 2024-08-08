@@ -89,7 +89,7 @@ enum pcba_glow_modes { glowOff=0, glowHeartBot=1, glowHeartBoth=2, glowXFade=3, 
 enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
 //
 // this group is used in multiple places in different ways, and is thus high-risk.
-// for example, arrays exist with indexes drawn from different compinations of multiple ones of these enums
+// for example, arrays exist with indexes drawn from different combinations of multiple ones of these enums
 // search for all uses and understand them before changing anything
 enum hotrc_axis { HORZ=0, VERT=1, CH3=2, CH4=3 };
 enum hotrc_val { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
@@ -280,9 +280,8 @@ int significant_place(int value) {  // Returns the length in digits of a positiv
     }
     return place;
 }
-// tune() : modifies a float/int/bool value according to idelta (a global int)  (this replaces adj_val() function)
-// feed in the original float or int value, get new edited accelerated and constrianed value modified by idelta
-// call w/o arguments to get a bool value determined by idelta.
+// tune() : modifies a float/int/bool value according to given delta value (nonzero integer).  this replaces adj_val() function
+// call w/ only idelta value to get a corresponding bool
 // alternately, give a pointer instead of a number to change the value directly instead of returning it (works w/ bools too)
 // note idelta must be already set to the desired integer edit value
 // numeric edits are scaled proportional to the magnitude of the current value. you can specify a minimum decimal place to scale to (keeps from being impossible to cross zero)
