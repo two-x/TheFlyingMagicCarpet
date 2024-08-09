@@ -259,11 +259,11 @@ class ServoMotor {
     float out_si_to_pc(float _si) {  // Eventually this should be linearized
         return map(_si, si[ABSMIN], si[ABSMAX], pc[ABSMIN], pc[ABSMAX]);
     }
-    float out_si_to_us(float _si) {  // works for motor with or without stop value
-        return map(_si, si[ABSMIN], si[ABSMAX], reverse ? us[ABSMAX] : us[ABSMIN], reverse ? us[ABSMIN] : us[ABSMAX]);
+    float out_si_to_us(float _si, bool rev=false) {  // works for motor with or without stop value
+        return map(_si, si[ABSMIN], si[ABSMAX], rev ? us[ABSMAX] : us[ABSMIN], rev ? us[ABSMIN] : us[ABSMAX]);
     }
-    float out_pc_to_us(float _pc) {  // works for motor with or without stop value
-        return map(_pc, pc[ABSMIN], pc[ABSMAX], reverse ? us[ABSMAX] : us[ABSMIN], reverse ? us[ABSMIN] : us[ABSMAX]);
+    float out_pc_to_us(float _pc, bool rev=false) {  // works for motor with or without stop value
+        return map(_pc, pc[ABSMIN], pc[ABSMAX], rev ? us[ABSMAX] : us[ABSMIN], rev ? us[ABSMIN] : us[ABSMAX]);
     }
     void write_motor() {
         if (!std::isnan(us[OUT])) motor.writeMicroseconds((int32_t)(us[OUT]));
@@ -317,14 +317,14 @@ class JagMotor : public ServoMotor {
         if (_si < si[STOP]) return map(_si, si[STOP], si[ABSMIN], pc[STOP], pc[ABSMIN]);
         return pc[STOP];
     }
-    float out_si_to_us(float _si) {  // works for motor with center stop value
-        if (_si > si[STOP]) return map(_si, si[STOP], si[ABSMAX], us[STOP], reverse ? us[ABSMIN] : us[ABSMAX]);
-        if (_si < si[STOP]) return map(_si, si[STOP], si[ABSMIN], us[STOP], reverse ? us[ABSMAX] : us[ABSMIN]);
+    float out_si_to_us(float _si, bool rev=false) {  // works for motor with center stop value
+        if (_si > si[STOP]) return map(_si, si[STOP], si[ABSMAX], us[STOP], rev ? us[ABSMIN] : us[ABSMAX]);
+        if (_si < si[STOP]) return map(_si, si[STOP], si[ABSMIN], us[STOP], rev ? us[ABSMAX] : us[ABSMIN]);
         return us[STOP];
     }
-    float out_pc_to_us(float _pc) {  // works for motor with center stop value
-        if (_pc > pc[STOP]) return map(_pc, pc[STOP], pc[ABSMAX], us[STOP], reverse ? us[ABSMIN] : us[ABSMAX]);
-        if (_pc < pc[STOP]) return map(_pc, pc[STOP], pc[ABSMIN], us[STOP], reverse ? us[ABSMAX] : us[ABSMIN]);
+    float out_pc_to_us(float _pc, bool rev=false) {  // works for motor with center stop value
+        if (_pc > pc[STOP]) return map(_pc, pc[STOP], pc[ABSMAX], us[STOP], rev ? us[ABSMIN] : us[ABSMAX]);
+        if (_pc < pc[STOP]) return map(_pc, pc[STOP], pc[ABSMIN], us[STOP], rev ? us[ABSMAX] : us[ABSMIN]);
         return us[STOP];
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
@@ -382,7 +382,7 @@ class ThrottleControl : public ServoMotor {
     bool pid_enabled = false, cruise_pid_enabled = false;
     int cruise_adjust_scheme = TriggerHold;  // edit these to be the defaults on boot
     int motormode = Idle;  // not tunable  // pid_status = OpenLoop, cruise_pid_status = OpenLoop,
-    bool cruise_trigger_released = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
+    bool cruise_trigger_released = false, reverse = true;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;                  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float max_throttle_angular_velocity_degps;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
     float pc_to_rpm(float _pc) { return map(_pc, 0.0, 100.0, tach->idle(), tach->opmax()); }
@@ -439,6 +439,7 @@ class ThrottleControl : public ServoMotor {
             cruisepid.init(speedo->ptr(), &pc[OPMIN], &pc[OPMAX], cruise_opengas_kp, cruise_opengas_ki,
               cruise_opengas_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
         }
+        Serial.printf("reverse=%d 0% = %lf us, 100% = %lf us\n", reverse, out_pc_to_us(0.0, reverse), out_pc_to_us(100.0, reverse));
     }
     void update_idlespeed() {
         // ezread.squintf("idle");
@@ -573,7 +574,7 @@ class ThrottleControl : public ServoMotor {
             update_ctrl_config();
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             postprocessing();                // Step 3 : fix output to ensure it's in range
-            us[OUT] = out_pc_to_us(pc[OUT]);   // Step 4 : convert motor value to pulsewidth time
+            us[OUT] = out_pc_to_us(pc[OUT], reverse);   // Step 4 : convert motor value to pulsewidth time
             deg[OUT] = out_pc_to_si(pc[OUT]);
             // ezread.squintf("out pc:%lf us:%lf\n", pc[OUT], us[OUT]);
             write_motor();                     // Step 5 : write to servo
@@ -922,7 +923,7 @@ class BrakeControl : public JagMotor {
             update_ctrl_config();              // Step 1.5 : Catch any change in configuration affecting motor mode
             set_output();                      // Step 2 : Determine motor percent value
             postprocessing();                // Step 3 : Fix motor pc value if it's out of range or threatening to exceed positional limits
-            us[OUT] = out_pc_to_us(pc[OUT]);   // Step 4 : Convert motor percent value to pulse width for motor, and to volts for display
+            us[OUT] = out_pc_to_us(pc[OUT], reverse);   // Step 4 : Convert motor percent value to pulse width for motor, and to volts for display
             volt[OUT] = out_pc_to_si(pc[OUT]);
             write_motor();  // Step 5 : Write to motor
         }
@@ -960,7 +961,7 @@ class SteeringControl : public JagMotor {
         if (pid_timer.expireset()) {
             set_output();                     // Step 1 : Determine motor percent value
             postprocessing();               // Step 2 : Fix motor pc value if it's out of range
-            us[OUT] = out_pc_to_us(pc[OUT]);  // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
+            us[OUT] = out_pc_to_us(pc[OUT], reverse);  // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
             volt[OUT] = out_pc_to_si(pc[OUT]);
             write_motor();  // Step 4 : Write to motor
         }
