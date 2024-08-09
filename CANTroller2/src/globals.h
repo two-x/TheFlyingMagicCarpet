@@ -137,7 +137,7 @@ bool autosaver_display_fps = true;   // do you want to see the fps performance o
 bool crash_driving_recovery = true;  // if code crashes while driving, should it continue driving after reboot?
 bool pot_tuner_acceleration = false; // when editing values, can we use the pot to control acceleration of value changes? (assuming we aren't pot mapping some sensor at the time)
 bool dont_take_temperatures = false; // disables temp sensors. in case debugging dallas sensors or causing problems
-bool console_enabled = true;         // completely disables the console serial output. idea being, it may be safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
+bool console_enabled = false;         // completely disables the console serial output. idea being, it may be safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool keep_system_powered = false;    // equivalent to syspower always being high.
 bool looptime_print = false;         // makes code write out timestamps throughout loop to serial port. for analyzing what parts of the code take the most time
 bool touch_reticles = true;          // draws tiny little plus reticles to aim at for doing touchscreen calibration
@@ -226,6 +226,7 @@ inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
+inline bool iszero(float num) { return (std::abs(num) < float_zero); }
 
 // pin operations
 void set_pin(int pin, int mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
