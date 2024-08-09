@@ -31,7 +31,7 @@ std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 #define maxadjrate "MaxAjR\x83t"
 #define horfailsaf "HFails\x83""f"
 #define rate_limit "R\x83tLimit"
-static std::string telemetry[disp_fixed_lines] = { "Handle V", "Handle H", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr", };  // Fixed rows
+static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr", };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 7, 11, 10, 11, 13, 4, 9 };  // first value in each dataset page that's editable. All values after this must also be editable

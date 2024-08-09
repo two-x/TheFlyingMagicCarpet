@@ -652,7 +652,7 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
         AnalogSensor::setup();
         set_conversions(0.004075, 0.0);  // 240627 calibrated against my best multimeter: m = 0.004075
         set_abslim(0.0, 15.1);  // set abs range. dictated in this case by the max voltage a battery charger might output
-        set_oplim(10.7, 13.9);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
+        set_oplim(10.7, 14.8);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
         set_si(11.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
         set_ema_alpha(0.005);
         set_can_source(src::POT, true);
@@ -699,20 +699,25 @@ class PressureSensor : public AnalogSensor {
         AnalogSensor::setup();
         // calibration procedure: (still working on this) hook to sensor and release brake, then pump and press as hard as you can. Get adc vals and set here as oplims_native. 
         
-        float min_adc = 620.0;  // reduced to be below zeropoint, was 684.0. temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
+        // pre bm24 calibrating:
+        // * released and point of pedal begins moving (chain slack already minimized):  posn = 4.13in, pres = 0 psi (615 adc)
+        // * point just before pressure begins to rise from 0 (zeropoint):  posn = 3.63 in, pres = 0 psi (618 adc)
+        // * max i can push w/ foot:  posn = 2.32 in (1352 adc), pres = 313 psi (2172 adc)
+
+        float min_adc = 610.0;  // reduced to be below zeropoint, was 684.0. temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
         float b = -1.0 * min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
         set_abslim_native(0.0, (float)adcrange_adc);  // set native abslims after m and b are set.  si abslims will autocalc
-        set_oplim_native(min_adc, 2350.0);            // set native oplims. si oplims will autocalc.  2350 adc is the adc when I push as hard as i can (soren 240609)
+        set_oplim_native(min_adc, 2172.0);            // set native oplims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
         set_oplim(0.0, NAN);  // now set just the si oplim to exactly zero. This will cause native oplims to autocalc such that any small errors don't cause our si oplim to be nonzero
         // set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
         // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
         set_ema_alpha(0.15);
         set_margin(2.5);       // max acceptible error when checking psi levels
-        hold_initial = 110.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
+        hold_initial = 135.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
         hold_increment = 3.0;  // incremental pressure added periodically when auto stopping (adc count 0-4095)
-        panic_initial = 125.0; // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
+        panic_initial = 175.0; // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
         panic_increment = 5.0; // incremental pressure added periodically when auto stopping (adc count 0-4095)
         _zeropoint = from_native(680);   // pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
         set_native(_opmin_native);
@@ -744,8 +749,8 @@ class BrakePositionSensor : public AnalogSensor {
         _dir = TransDir::REV;  // causes percent conversions to use inverted scale 
         _convmethod = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
         #if BrakeThomson
-            set_abslim(0.335, 8.3, false);  // tuned 230602
-            set_abslim_native(979, 3103, false);  // not tuned - these values stolen from LAE actuator below. needs tuning!
+            set_abslim(0.968, 8.875, false);  // tuned 240809 pre-bm24. measured from housing end to piston end. (pin hole is 0.343 back from the piston end)
+            set_abslim_native(1035, 3102, false);  // tuned 240809 pre-bm24
             set_oplim(0.506, 4.234)  // 4.624  //tuned 230602 - best position to park the actuator out of the way so we can use the pedal (in)
             _zeropoint = 3.17;  // tuned 230602 - brake position value corresponding to the point where fluid PSI hits zero (in)
         #else  // if LAE motor
@@ -757,8 +762,8 @@ class BrakePositionSensor : public AnalogSensor {
             //   then indicate op limits in native or si and the zeropoint in si
             set_abslim_native(979, 3103, false);  // tuned 240513 - don't remember if values read from screen or calculated.  need to redo
             set_abslim(0.95, 8.85, false);  // tuned 240513 - actuator inches measured
-            set_oplim(2.68, 4.5);  // 240609 determined opmin on vehicle, with LAE motor connected w/ quicklink + carabeener
-            _zeropoint = 3.65;  // 240609 3.65in, 1707 adc - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
+            set_oplim(2.32, 4.5);  // 240609 determined opmin on vehicle, with LAE motor connected w/ quicklink + carabeener
+            _zeropoint = 3.63;  // 240609 3.65in, 1707 adc - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
 
             // don't also set native oplims as they will autocalc from oplims setting
             // set_oplim_native(1445, 1923);  // 240609 1445 (2.68in) is full push, and 1923 (4.5in) is park position (with simple quicklink +carabeener linkage)
@@ -948,7 +953,7 @@ class Speedometer : public PulseSensor {
         set_oplim(0.0, 15.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(0.2);
-        set_si(50.0);
+        // set_si(50.0);
         _us = hz_to_us(_native.val());
         _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
         print_config();
