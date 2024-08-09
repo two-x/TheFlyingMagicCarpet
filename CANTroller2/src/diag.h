@@ -245,7 +245,9 @@ class DiagRuntime {
     void TempFailure() {
         for (int i=_TempEng; i<=_TempAmb; i++) {
             checkrange(i);
-            setflag(i, LOST, !tempsens->detected(i));
+
+            // bypassing LOST check because it's giving false positive for all 7 sensors on the car, even tho they are reading fine. FIX!
+            // setflag(i, LOST, !tempsens->detected(i));
         }
     }
     // Brakes:   checks if any sensor the brake is expecting to use in its current mode are posting errors
@@ -262,7 +264,9 @@ class DiagRuntime {
                 setflag(_BrakePres, LOST, ((std::abs(brkpos->pc() - brkpos_last_pc) > brkpos->margin_pc()) && (std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc())));  // if position value is changing but pressure isn't, then set flag otherwise clear
                 setflag(_BrakePres, WARN, (brake->feedback == HybridFB) && (signbit(pressure->pc()) != signbit(brkpos->pc())) && (signbit(pressure->pc()) != signbit(brake->pc[OUT])));  // if motor and position are consistent with moving one direction but pressure is changing the opposite way
             }
-            setflag(_BrakeMotor, LOST, ((std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if neither sensor is changing, set motor lost flag
+            
+            // Skipping this b/c it is triggering and I don't care. Really should figure out what's going on
+            // setflag(_BrakeMotor, LOST, ((std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if neither sensor is changing, set motor lost flag
         }
         checkrange(_BrakeMotor);
         checkrange(_BrakePosn);

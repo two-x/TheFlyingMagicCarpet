@@ -356,7 +356,11 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     void update() {
         if (runmode == LOWPOWER) return;
         static bool autoreq, autoreq_last;  // true if engine conditions warrant fuel pump to turn on
-        if (!fuelpump_supported || !captouch) return;
+        if (!fuelpump_supported || !captouch) {
+            _status = HIGH;  // to keep idiot light off when unused
+            _status_inverse = !_status;  // for idiot light
+            return;
+        }
         float tachnow = tach.val();
         pump_last = _status;
         if (now_req == REQ_TOG) now_req = _status ? REQ_NA : REQ_ON;

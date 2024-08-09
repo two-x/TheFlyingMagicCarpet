@@ -709,15 +709,15 @@ class Display {
             drawval(23, speedo.idle(), speedo.opmin(), speedo.opmax());
         }
         else if (datapage == PG_PWMS) {
-            drawval(9, gas.deg[OUT], gas.deg[OPMIN], gas.deg[OPMAX]);
+            drawval(9, gas.si[OUT], gas.si[OPMIN], gas.si[OPMAX]);
             drawval(10, gas.us[OUT], gas.us[ABSMIN], gas.us[ABSMAX]);
             drawval(11, brake.volt[OUT], brake.volt[OPMIN], brake.volt[OPMAX]);
             drawval(12, brake.us[OUT], brake.us[ABSMIN], brake.us[ABSMAX]);
             drawval(13, steer.volt[OUT], steer.volt[OPMIN], steer.volt[OPMAX]);
             drawval(14, steer.us[OUT], steer.us[ABSMIN], steer.us[ABSMAX]);
             for (int line=15; line<=19; line++) draw_eraseval(line);
-            drawval(20, gas.deg[OPMIN], gas.deg[ABSMIN], gas.deg[ABSMAX]);
-            drawval(21, gas.deg[OPMAX], gas.deg[ABSMIN], gas.deg[ABSMAX]);
+            drawval(20, gas.si[OPMIN], gas.si[ABSMIN], gas.si[ABSMAX]);
+            drawval(21, gas.si[OPMAX], gas.si[ABSMIN], gas.si[ABSMAX]);
             drawval(22, brake.us[STOP], brake.us[ABSMIN], brake.us[ABSMAX]);
             drawval(23, brake.duty_fwd_pc, 0.0f, 100.0f);
         }
