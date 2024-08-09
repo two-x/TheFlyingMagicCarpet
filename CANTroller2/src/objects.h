@@ -317,7 +317,7 @@ class Starter {
             return;  // we told the brake to hold down, leaving the request to turn the starter on intact, so we'll be back to check
         }  // at this point the brake has been told to hold but isn't holding yet
         if (starterTimer.expired()) {  // if we've waited long enough for the damn brake
-            ezread.printf("starter cancel - no brake\n");
+            ezread.printf("cancel - no brake\n");
             if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before, unless it's already been changed
             now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
         }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
