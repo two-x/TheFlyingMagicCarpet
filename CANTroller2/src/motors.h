@@ -175,7 +175,7 @@ class QPID {
     void set_output(float a_output) {
         float oldout = _output;
         a_output = constrain(a_output, *_outmin, *_outmax);
-        if (std::abs(_output) > float_zero) {
+        if (!iszero(_output)) {
             float ratio = a_output / _output;
             _output *= ratio;
             _outsum *= ratio;
@@ -240,7 +240,7 @@ class ServoMotor {
     Timer pid_timer{pid_timeout}, outchangetimer;
     int pin, freq;
   public:
-    bool reverse = false, use_ratelimiter = true;  // defaults. subclasses override as necessary
+    bool reverse = false;  // defaults. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { 0.0, NAN, 100.0, 0.0, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
     float si[NUM_MOTORVALS] = { 45.0, NAN, 90.0, NAN, 0, 180.0, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     float us[NUM_MOTORVALS] = { NAN, 1500.0, NAN, NAN, NAN, 500.0, 2500.0, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
@@ -271,13 +271,12 @@ class ServoMotor {
     }
   protected:
     bool rate_limiter() {
-        if (!use_ratelimiter) return pc[OUT];
-        if (std::abs(max_out_change_rate_pcps) < float_zero) return false;  // this feature is disabled by setting max rate to 0
+        if (iszero(max_out_change_rate_pcps)) return false;  // bypass rate limiter feature by setting max rate to 0
         float max_out_change_pc = max_out_change_rate_pcps * outchangetimer.elapsed() / 1000000.0;
         outchangetimer.reset();
         float old_out = pc[OUT];
         pc[OUT] = constrain(pc[OUT], lastoutput - max_out_change_pc, lastoutput + max_out_change_pc);
-        return (std::abs(old_out - pc[OUT]) > float_zero);
+        return (!iszero(old_out - pc[OUT]));
     }
 };
 class JagMotor : public ServoMotor {

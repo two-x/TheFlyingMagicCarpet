@@ -136,8 +136,8 @@ class Param {
         _last = _val;
         if (std::isnan(arg_val) && std::isnan(_last)) ret = false;
         else {
-            if (std::abs(arg_val) < float_zero) arg_val = 0.0;  // avoid stupidly low near-zero values that happens sometimes
-            if (std::abs(_val - arg_val) < float_zero) ret = false;
+            if (iszero(arg_val)) arg_val = 0.0;  // avoid stupidly low near-zero values that happens sometimes
+            if (iszero(_val - arg_val)) ret = false;
         }
         _val = arg_val;
         if (!std::isnan(_val)) constrain_value();
@@ -286,7 +286,7 @@ class Transducer : public Device {
         float ret = NAN;
         if (_convmethod == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
         else if (_convmethod == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
-        else if ((_convmethod == LinearMath) && (std::abs(_mfactor) > float_zero)) ret = (arg_si - _boffset) / _mfactor;
+        else if ((_convmethod == LinearMath) && !iszero(_mfactor)) ret = (arg_si - _boffset) / _mfactor;
         else ezread.squintf("Err: %s to_native can't convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_si, _si.min(), _si.max());
         if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // reject any stupidly small near-zero values
         return ret;
@@ -378,7 +378,7 @@ class Transducer : public Device {
     void set_margin(float arg_marg) { _margin = arg_marg; }
     void set_conversions(float arg_mfactor=NAN, float arg_boffset=NAN) {  // arguments passed in as NAN will not be used.  // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
         if (!std::isnan(arg_mfactor)) {
-            if (std::abs(arg_mfactor) < float_zero) ezread.squintf("Err: can not support _mfactor of zero\n");
+            if (iszero(arg_mfactor)) ezread.squintf("Err: can not support _mfactor of zero\n");
             else _mfactor = arg_mfactor;
         }
         if (!std::isnan(arg_mfactor)) _boffset = arg_boffset;
@@ -835,13 +835,13 @@ class PulseSensor : public Sensor {
         _pin_level = read_pin(_pin);  // _pin_level = !_pin_level;
     }
     float us_to_hz(float arg_us) {
-        if ((std::abs(arg_us) <= float_zero) || std::isnan(arg_us)) return 0.0;  // zero is a special value meaning we timed out
+        if (iszero(arg_us) || std::isnan(arg_us)) return 0.0;  // zero is a special value meaning we timed out
         return 1000000.0 / arg_us;
         // ezread.squintf("Err: %s us_to_hz() reciprocal of zero\n", _short_name.c_str());
         // return absmax();
     }
     float hz_to_us(float arg_hz) {
-        if ((std::abs(arg_hz) <= float_zero) || std::isnan(arg_hz)) return 0.0;  // zero is a special value meaning we timed out
+        if (iszero(arg_hz) || std::isnan(arg_hz)) return 0.0;  // zero is a special value meaning we timed out
         return 1000000.0 / arg_hz;
         // ezread.squintf("Err: %s hz_to_us() reciprocal of zero\n", _short_name.c_str());
         // return _absmax_us;
@@ -862,7 +862,7 @@ class PulseSensor : public Sensor {
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // overload the normal function so we can also include us calculations 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
-        if ((!isnan(arg_min) && (std::abs(arg_min) <= float_zero)) || (!isnan(arg_max) && (std::abs(arg_max) <= float_zero))) {
+        if ((!isnan(arg_min) && iszero(arg_min)) || (!isnan(arg_max) && iszero(arg_max)) {
             ezread.squintf("Err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
             return;  // we can't accept 0 Hz for opmin
         }
