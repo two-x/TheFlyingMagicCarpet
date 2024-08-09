@@ -7,10 +7,11 @@ enum temp_categories { CatUnknown=0, CatAmbient=1, CatEngine=2, CatWheel=3, CatB
 enum brakemotor_types { NIL=-1, Thomson=0, LAE=1 };
     
 float temp_lims_f[NumTempCategories][NUM_MOTORVALS] {
+    // changed opmin values all to 40 to avoid idiot lights. engine opmin was 125, wheel was 50, brake was 45
     {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatUnknown] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
     {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatAmbient] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
-    { 125.0, 178.0, 205.0, 218.0, NAN, -67.0, 257.0, 2.0 },  //  [CatEngine] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
-    {  50.0,  77.0, 135.0, 145.0, NAN, -67.0, 257.0, 2.0 },  //   [CatWheel] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN] (applies to all wheels)
+    {  40.0, 178.0, 205.0, 218.0, NAN, -67.0, 257.0, 2.0 },  //  [CatEngine] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
+    {  40.0,  77.0, 135.0, 145.0, NAN, -67.0, 257.0, 2.0 },  //   [CatWheel] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN] (applies to all wheels)
     {  45.0,  77.0, 125.0, 135.0, NAN, -67.0, 257.0, 2.0 },  //   [CatBrake] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
 };  // float* degf[(int)loc::NUM_LOCATIONS][NUM_MOTORVALS];
 

@@ -242,9 +242,9 @@ class ServoMotor {
   public:
     bool reverse = false, use_ratelimiter = true;  // defaults. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { 0.0, NAN, 100.0, 0.0, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { 45.0, 135.0, 90.0, NAN, 0, 180.0, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
+    float si[NUM_MOTORVALS] = { 45.0, NAN, 90.0, NAN, 0, 180.0, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     float us[NUM_MOTORVALS] = { NAN, 1500.0, NAN, NAN, NAN, 500.0, 2500.0, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
-    float max_out_change_rate_pcps = 800.0;  // max rate of change of motor output as a percent of motor range per second. set to 0 to disable limitation
+    float max_out_change_rate_pcps = 200.0;  // max rate of change of motor output as a percent of motor range per second. set to 0 to disable limitation
 
     ServoMotor(int _pin, int _freq) { pin = _pin; freq = _freq; }
     void setup(Hotrc* _hotrc, Speedometer* _speedo) {
@@ -365,8 +365,9 @@ class ThrottleControl : public ServoMotor {
     // replace this: ...
     using ServoMotor::ServoMotor;
     float tach_last, throttle_target_pc, governor = 95;  //, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
+    // float si[NUM_MOTORVALS] = { 88.8, NAN, 5.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     float si[NUM_MOTORVALS] = { 69.0, 69.0, 168.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
-    float idle_si[NUM_MOTORVALS] = { 69.0, NAN, 85.0, 75.0, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    float idle_si[NUM_MOTORVALS] = { 69.0, NAN, 85.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
@@ -382,7 +383,7 @@ class ThrottleControl : public ServoMotor {
     bool pid_enabled = false, cruise_pid_enabled = false;
     int cruise_adjust_scheme = TriggerHold;  // edit these to be the defaults on boot
     int motormode = Idle;  // not tunable  // pid_status = OpenLoop, cruise_pid_status = OpenLoop,
-    bool cruise_trigger_released = false, reverse = true;  // if servo higher pulsewidth turns ccw, then do reverse=true
+    bool cruise_trigger_released = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;                  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float max_throttle_angular_velocity_degps;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
     float pc_to_rpm(float _pc) { return map(_pc, 0.0, 100.0, tach->idle(), tach->opmax()); }
@@ -426,7 +427,7 @@ class ThrottleControl : public ServoMotor {
         ezread.squintf("  Cruise pid %s, using %s adj scheme\n", cruise_pid_enabled ? "enabled" : "disabled", cruiseschemecard[cruise_adjust_scheme].c_str());
         ServoMotor::setup(_hotrc, _speedo);
         throttleRateTimer.reset();
-        use_ratelimiter = false;
+        // use_ratelimiter = true;
         set_changerate_deg(65.0);  // max_out_change_rate_pcps = 100.0 * 65.0 / 180.0;  // 65 degrees out of 180 max turn per sec. 
         derive();
         pid.init(tach->ptr(), &pc[OPMIN], &pc[OPMAX], gas_kp, gas_ki, gas_kd, QPID::pmod::onerr, 
@@ -611,15 +612,15 @@ class BrakeControl : public JagMotor {
     ThrottleControl* throttle;
     TemperatureSensorManager* tempsens;
     float brakemotor_duty_spec_pc = 25.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
-    float press_kp = 0.142;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float press_ki = 0.04;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float press_kd = 0.000;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    float press_kp = 0.8;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float press_ki = 2.1;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float press_kd = 0.0;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     float posn_kp = 80.0;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float posn_ki = 35.5;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_kd = 0.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     static constexpr int pid_timeout = 40000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
-    int dominantsens_last = PositionFB, preforce_request;    // float posn_inflect, pres_inflect, pc_inflect;
+    int dominantsens_last = HybridFB, preforce_request;    // float posn_inflect, pres_inflect, pc_inflect;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
     Timer stopcar_timer{10000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000}, blindaction_timer{3000000};
     bool stopped_last = false;
@@ -638,7 +639,7 @@ class BrakeControl : public JagMotor {
   public:
     using JagMotor::JagMotor;
     bool pid_enabled = true, pid_ena_last = true, enforce_positional_limits = true, no_feedback = false;    // default for use of pid allowed
-    int feedback = PositionFB, feedback_last = HybridFB;  // this is the default for sensors to use as feedback
+    int feedback = HybridFB, feedback_last = HybridFB;  // this is the default for sensors to use as feedback
     int dominantsens, motormode = Halt, oldmode = Halt;  // not tunable
     int openloop_mode = AutoRelHoldable;  // if true, when in openloop the brakes release when trigger released. otherwise, control with thrigger using halfway point scheme
     bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == PositionFB);

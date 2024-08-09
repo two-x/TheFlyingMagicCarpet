@@ -72,7 +72,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             set_syspower(LOW);     // Power down devices to save battery
             autosaver_request = REQ_OFF;  // actually this should be REQ_OFF, plus request screen backlight is shut off or at least black out screen
         }
-        if (hotrc.sw_event(CH4) || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // start powering up
+        if ((!hotrc.radiolost() && hotrc.sw_event(CH4)) || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // start powering up
             set_syspower(HIGH);    // switch on control system devices
             pwrup_timer.reset();   // stay in lowpower mode for a delay to allow devices to power up
             powering_up = true;
