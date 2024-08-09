@@ -757,9 +757,9 @@ class BrakeControl : public JagMotor {
     //     return pc[OPMIN] + pc[OPMAX] * err / (pc[OPMAX]);
     // }
     float calc_loop_out() {  // returns motor output percent calculated based on current target_pc or target[] values, in a way consistent w/ current config
-        if (motormode == PropLoop) return calc_prop_loop_out();
-        else if (motormode == ActivePID) return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // combine pid outputs weighted by the multiplier
-        else return pc[STOP];  // this should not happen, maybe print an error message
+        if (motormode == PropLoop) return calc_prop_loop_out();  // || motormode == AutoHold  may make sense, to allow honoring of which loop type during autoholding
+        else return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // if (motormode == ActivePID) combine pid outputs weighted by the multiplier
+        // else return pc[STOP];  // this should not happen, maybe print an error message
     }
     float calc_open_out() {
         if (openloop_mode == AutoRelHoldable) {  // AutoRelHoldable: releases brake whenever trigger is released, and presses brake when trigger pulled to max. anywhere in between stops brake movement
@@ -790,8 +790,9 @@ class BrakeControl : public JagMotor {
             return;
         }
         autostopping = !stopped_now && !stopcar_timer.expired();
+        // ezread.squintf("as:%d st:%d ex:%d\n", autostopping, stopped_now, stopcar_timer.expired());
         if (!autostopping) return;
-        else if (interval_timer.expireset()) set_target(std::min(100.0f, target_pc + panic ? pressure->panic_increment_pc() : pressure->hold_increment_pc()));
+        if (interval_timer.expireset()) set_target(std::min(100.0f, target_pc + panic ? pressure->panic_increment_pc() : pressure->hold_increment_pc()));
         else set_target(std::max(target_pc, panic ? pressure->panic_initial_pc() : pressure->hold_initial_pc()));
         pc[OUT] = calc_loop_out();
     }

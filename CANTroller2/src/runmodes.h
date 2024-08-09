@@ -85,6 +85,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (we_just_switched_modes) {              
             shutting_down = !powering_up;   // if waking up from sleep standby is already complete
             powering_up = false;
+            ignition.request(REQ_OFF);
             calmode_request = autosaver_request = REQ_OFF;  // = basicmode_request 
             gas.setmode(ParkMotor);                 // carburetor parked 
             brake.setmode(AutoStop);                // if car is moving begin autostopping
