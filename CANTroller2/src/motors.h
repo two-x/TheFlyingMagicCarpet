@@ -365,8 +365,16 @@ class ThrottleControl : public ServoMotor {
     using ServoMotor::ServoMotor;
     float tach_last, throttle_target_pc, governor = 95;  //, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     // float si[NUM_MOTORVALS] = { 88.8, NAN, 5.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
-    float si[NUM_MOTORVALS] = { 69.0, 69.0, 168.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
-    float idle_si[NUM_MOTORVALS] = { 69.0, NAN, 85.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    
+    // us[OPMIN] = 1365.0;
+    // us[PARKED] = 1340.0;
+    // us[OPMAX] = 2475.0;
+    // us[MARGIN] = 30.0;
+    
+    // float us[NUM_MOTORVALS] = { 1365.0, 1340.0, 2475.0, NAN, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
+ 
+    float si[NUM_MOTORVALS] = { 58.0, 57.0, 158.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
+    float idle_si[NUM_MOTORVALS] = { 58.0, NAN, 65.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
@@ -820,7 +828,7 @@ class BrakeControl : public JagMotor {
 
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             carstop(false);
-            autoholding = !autostopping && (pressure->val() >= pressure->hold_initial - pressure->margin());  // this needs to be tested  // if (!speedo->stopped()) {            
+            autoholding = !autostopping && (pressure->pc() >= pressure->hold_initial_pc() - pressure->margin_pc());  // this needs to be tested  // if (!speedo->stopped()) {            
             // ezread.squintf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->val(), pressure->hold_initial_psi, pressure->margin_psi);
             if (autoholding) pc[OUT] = pc[STOP];
             else if (!autostopping) {
