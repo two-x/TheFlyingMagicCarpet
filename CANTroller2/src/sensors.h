@@ -673,7 +673,7 @@ class PressureSensor : public AnalogSensor {
     sens _senstype = sens::pressure;
     // int opmin_adc, opmax_adc, absmin_adc, absmax_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-    float hold_initial, hold_increment, hold_starter, panic_initial, panic_increment;  // , _margin_psi, _zeropoint_psi;
+    float hold_initial, hold_increment, panic_initial, panic_increment;  // , _margin_psi, _zeropoint_psi;
     PressureSensor(int arg_pin) : AnalogSensor(arg_pin) {
         _long_name = "Brake Pressure";
         _short_name = "presur";
@@ -715,8 +715,7 @@ class PressureSensor : public AnalogSensor {
         // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
         set_ema_alpha(0.15);
         set_margin(2.5);       // max acceptible error when checking psi levels
-        hold_initial = 150.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
-        hold_starter = 135.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
+        hold_initial = 135.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
         hold_increment = 3.0;  // incremental pressure added periodically when auto stopping (adc count 0-4095)
         panic_initial = 175.0; // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
         panic_increment = 5.0; // incremental pressure added periodically when auto stopping (adc count 0-4095)
@@ -725,7 +724,6 @@ class PressureSensor : public AnalogSensor {
         print_config();
     }
     float hold_initial_pc() { return to_pc(hold_initial); }  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
-    float hold_starter_pc() { return to_pc(hold_starter); }  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
     float hold_increment_pc() { return to_pc(hold_increment); }  // incremental pressure added periodically when auto stopping (adc count 0-4095)
     float panic_initial_pc() { return to_pc(panic_initial); }  // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
     float panic_increment_pc() { return to_pc(panic_increment); }  // incremental pressure added periodically when auto stopping (adc count 0-4095)
