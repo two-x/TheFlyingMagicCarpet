@@ -265,7 +265,7 @@ class Ignition {
 
 class Starter {
   private:
-    int pushbrake_timeout = 6000000;
+    int pushbrake_timeout = 4000000;
     int run_timeout = 5000000;
     int turnoff_timeout = 100000;
     Timer starterTimer;  // If remotely-started starting event is left on for this long, end it automatically
@@ -280,6 +280,15 @@ class Starter {
         set_pin(pin, OUTPUT);  // set pin as output
     }
     void request(int req) { now_req = req; }  // squintf("r:%d n:%d\n", req, now_req);}
+    void turnon() {
+        ezread.printf("starter turnon.. ");  // ezread.squintf("starter turn on motor\n");
+        lastgasmode = gas.motormode;      // remember incumbent gas setting
+        gas.setmode(Starting);            // give it some gas
+        starterTimer.set((int64_t)run_timeout);  // if left on the starter will turn off automatically after X seconds
+        motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
+        write_pin(pin, motor);           // and start the motor
+        now_req = REQ_NA;                 // we have serviced starter-on request, so cancel it
+    }
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         if (runmode == LOWPOWER) return;
         // if (now_req != NA) squintf("m:%d r:%d\n", motor, now_req);
@@ -300,13 +309,7 @@ class Starter {
             return;                    // and ditch
         }  // from here on, we can assume the starter is off and we are supposed to turn it on
         if (brake.autoholding || !brake_before_starting) {  // if the brake is being held down, or if we don't care whether it is
-            ezread.printf("starter turnon.. ");  // ezread.squintf("starter turn on motor\n");
-            lastgasmode = gas.motormode;      // remember incumbent gas setting
-            gas.setmode(Starting);            // give it some gas
-            starterTimer.set((int64_t)run_timeout);  // if left on the starter will turn off automatically after X seconds
-            motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
-            write_pin(pin, motor);           // and start the motor
-            now_req = REQ_NA;                 // we have serviced starter-on request, so cancel it
+            turnon();
             return;                           // if the brake was right we have started driving the starter
         }  // from here on, we can assume the brake isn't being held on, which is in the way of our task to begin driving the starter
         if (brake.motormode != AutoHold) {   // if we haven't yet told the brake to hold down
@@ -317,6 +320,10 @@ class Starter {
             return;  // we told the brake to hold down, leaving the request to turn the starter on intact, so we'll be back to check
         }  // at this point the brake has been told to hold but isn't holding yet
         if (starterTimer.expired()) {  // if we've waited long enough for the damn brake
+            if (!check_brake_before_starting) {
+                turnon();
+                return;
+            }
             ezread.printf("cancel - no brake\n");
             if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before, unless it's already been changed
             now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
