@@ -1381,7 +1381,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
                 _sw_event[chan] = true;          // so a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
                 kick_inactivity_timer(HURCTog);  // evidence of user activity
             }
-            sw[chan-2] = sw[chan];  // chan-2 index being used to store previous values of index chan
+            sw[chan-2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
         }
     }
     float us_to_pc(int axis, float _us, bool deadbands=false) {

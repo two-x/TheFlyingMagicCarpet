@@ -77,7 +77,7 @@ enum runmode { BASIC=0, LOWPOWER=1, STANDBY=2, STALL=3, HOLD=4, FLY=5, CRUISE=6,
 enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes=3 };
 enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
-enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, NumMotorModes=13 };
+enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, Linearized=13, NumMotorModes=14 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
 enum openloopmodes { MedianPoint=0, AutoRelease=1, AutoRelHoldable=2, NumOpenLoopModes=3 };
 enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9,PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
@@ -150,7 +150,7 @@ bool use_tft_colors_for_neo = false; // should neopixel colors be based on onscr
 bool print_error_changes = true;     // should diag print status changes and new error events to console?
 bool pot_controls_animation_timeout = true;  // when showing fullscreen animations, should the pot value control the next animation timeout?
 bool pcba_3v2 = true;                // turn to false if for some reason you are using the v3.1 pcba. note this does not automatically correct the pin 2 <-> pin 39 swap
-int throttle_ctrl_mode = OpenLoop;   // should gas servo use the rpm-sensing pid? values: ActivePID or OpenLoop
+int throttle_ctrl_mode = Linearized;   // should gas servo use the rpm-sensing pid? values: ActivePID, OpenLoop, or Linearized
 
 // global tunable variables
 float float_zero = 0.000069;           // if two floats being compared are closer than this, we consider them equal
@@ -212,7 +212,7 @@ int ui_default = EZReadUI;
 bool panicstop = false;
 
 // fast macros
-#define arraysize(x) ((int)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays
+#define arraysize(x) ((int)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays 
 #undef constrain
 inline float constrain(float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline int constrain(int amt, int low, int high) { return (amt < low) ? low : ((amt > high) ? high : amt); }

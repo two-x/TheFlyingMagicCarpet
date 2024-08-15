@@ -112,7 +112,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
         if (we_just_switched_modes) {
-            gas.setmode(OpenLoop);     // throttle always runs open loop in stall mode, b/c there's no rpm for the pid to measure anyway
+            gas.setmode(Linearized);     // throttle always runs open loop in stall mode, b/c there's no rpm for the pid to measure anyway
             brake.setmode(ActivePID);
             steer.setmode(OpenLoop);
         }
