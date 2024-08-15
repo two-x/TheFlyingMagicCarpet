@@ -223,7 +223,7 @@ class QPID {
     float* target_ptr() { return &_target; }
 };
 
-static std::string motormodecard[NumMotorModes] = { "NA", "Halt", "Idle", "Releas", "OpLoop", "PropLp", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start" };
+static std::string motormodecard[NumMotorModes] = { "NA", "Halt", "Idle", "Releas", "OpLoop", "PropLp", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start", "Linear" };
 static std::string cruiseschemecard[NumCruiseSchemes] = { "FlyPID", "TrPull", "TrHold" };
 static std::string brakefeedbackcard[NumBrakeFB] = { "BkPosn", "BkPres", "Hybrid", "None" };
 static std::string openloopmodecard[NumOpenLoopModes] = { "Median", "AutRel", "ARHold" };
@@ -239,6 +239,8 @@ class ServoMotor {
     float lastoutput;
     Timer pid_timer{pid_timeout}, outchangetimer;
     int pin, freq;
+    float linearlookup[21] =  // default array for linearizing actuator values
+        { 0.0,  5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
   public:
     bool reverse = false;  // defaults. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { 0.0, NAN, 100.0, 0.0, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
@@ -277,6 +279,11 @@ class ServoMotor {
         float old_out = pc[OUT];
         pc[OUT] = constrain(pc[OUT], lastoutput - max_out_change_pc, lastoutput + max_out_change_pc);
         return (!iszero(old_out - pc[OUT]));
+    }
+    float linearizer(float inval_pc) {
+        float res = 100.0 / arraysize(linearlookup);
+        int lookup = (int)(inval_pc / res);
+        return map(inval_pc - (float)lookup * res, 0.0, res, linearlookup[lookup], linearlookup[lookup+1]);
     }
 };
 class JagMotor : public ServoMotor {
@@ -333,7 +340,6 @@ class JagMotor : public ServoMotor {
         pc[OUT] = out_si_to_pc(si[OUT]);
         us[OUT] = out_si_to_us(si[OUT]);
     }
-    void write_motor() { if (!std::isnan(us[OUT])) motor.writeMicroseconds((int32_t)(us[OUT])); }
 };
 // pid_config : (configurable default)
 //    OpenLoop : Servo angle is simply proportional to trigger pull. This is our tested default
@@ -360,9 +366,15 @@ class ThrottleControl : public ServoMotor {
     float cruise_ctrl_extent_pc, adjustpoint, ctrlratio;  // During cruise adjustments, saves farthest trigger position read
     Timer cruiseDeltaTimer, throttleRateTimer;
     bool pid_ena_last = false, cruise_pid_ena_last = false;
+    float linearlookup[21] =  // default array for linearizing actuator values in Linearize mode. using normal pc value as index, produce a replacement pc value
+        { 0.0, 14.0, 28.0, 32.0, 35.0, 38.0, 41.0, 44.0, 47.0, 51.0, 55.0, 58.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
+     // { 0.0,  5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
+
   public:
     // replace this: ...
     using ServoMotor::ServoMotor;
+    // ThrottleControl(int _pin, int _freq) { pin = _pin; freq = _freq; };
+
     float tach_last, throttle_target_pc, governor = 95;  //, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     // float si[NUM_MOTORVALS] = { 88.8, NAN, 5.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     
@@ -373,6 +385,17 @@ class ThrottleControl : public ServoMotor {
     
     // float us[NUM_MOTORVALS] = { 1365.0, 1340.0, 2475.0, NAN, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
  
+    // * with servo at center position (1500 us pulsewidth) mount the servo horn inline with center of the servo body's long dimension. this is 90 deg. CW from here are higher angles and CCW are lower angles
+    // * for best linearity, adjust the servo-carb linkage length so the carb throttle is at halfway point when the servo is at the 90 degree center position
+    // * calibration:
+    //   1. mount hardware as described above, go to cal mode and enable the pot gas control. view the PWMs datapage
+    //   2. turn servo using the pot to find the us pulsewidth values for opmin (closed), opmax (open), and parked angles
+    //   3. use these values to initialize the us[OPMIN], us[OPMAX], and us[PARKED] values
+    //   4. if increasing pulsewidths moves servo CCW then set reverse = true
+    //   5. note also the reported angular value to see how accurate they are. if not, fix the conversions (currently a map statement)
+
+
+    // * set operational angular range (OPMIN/OPMAX), margin (MARGIN) and parking angle (PARKED) here.
     float si[NUM_MOTORVALS] = { 58.0, 57.0, 158.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     float idle_si[NUM_MOTORVALS] = { 58.0, NAN, 65.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
@@ -502,7 +525,7 @@ class ThrottleControl : public ServoMotor {
         else if (motormode == Starting) throttle_target_pc = starting_pc;
         else if (motormode == Cruise) cruise_logic();  // cruise mode just got too big to be nested in this if-else clause
         else if (motormode == ParkMotor) throttle_target_pc = pc[PARKED];
-        else if (motormode == OpenLoop || motormode == ActivePID) {
+        else if (motormode == OpenLoop || motormode == ActivePID || motormode == Linearized) {
             if (hotrc->joydir() != JOY_UP) throttle_target_pc = idle_pc;  // If in deadband or being pushed down, we want idle
             else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], idle_pc, pc[GOVERN]);  // actuators still respond even w/ engine turned off
         }
@@ -519,6 +542,7 @@ class ThrottleControl : public ServoMotor {
         }
         else new_out = throttle_target_pc;  // ezread.squintf(" ela:%ld pcps:%lf", throttleRateTimer.elapsed(), max_throttle_angular_velocity_pcps);
         pc[OUT] = new_out;
+        if (motormode == Linearized) pc[OUT] = linearizer(pc[OUT]);
         rate_limiter();  // pc[OUT] = rate_limiter(new_out);  max_out_change_rate_pcps
     }
     void postprocessing() {
