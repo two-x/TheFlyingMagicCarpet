@@ -280,11 +280,6 @@ class ServoMotor {
         pc[OUT] = constrain(pc[OUT], lastoutput - max_out_change_pc, lastoutput + max_out_change_pc);
         return (!iszero(old_out - pc[OUT]));
     }
-    float linearizer(float inval_pc) {
-        float res = 100.0 / arraysize(linearlookup);
-        int lookup = (int)(inval_pc / res);
-        return map(inval_pc - (float)lookup * res, 0.0, res, linearlookup[lookup], linearlookup[lookup+1]);
-    }
 };
 class JagMotor : public ServoMotor {
   protected:
@@ -366,15 +361,10 @@ class ThrottleControl : public ServoMotor {
     float cruise_ctrl_extent_pc, adjustpoint, ctrlratio;  // During cruise adjustments, saves farthest trigger position read
     Timer cruiseDeltaTimer, throttleRateTimer;
     bool pid_ena_last = false, cruise_pid_ena_last = false;
-    float linearlookup[21] =  // default array for linearizing actuator values in Linearize mode. using normal pc value as index, produce a replacement pc value
-        { 0.0, 14.0, 28.0, 32.0, 35.0, 38.0, 41.0, 44.0, 47.0, 51.0, 55.0, 58.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
-     // { 0.0,  5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
-
   public:
     // replace this: ...
     using ServoMotor::ServoMotor;
     // ThrottleControl(int _pin, int _freq) { pin = _pin; freq = _freq; };
-
     float tach_last, throttle_target_pc, governor = 95;  //, max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     // float si[NUM_MOTORVALS] = { 88.8, NAN, 5.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     
@@ -394,9 +384,8 @@ class ThrottleControl : public ServoMotor {
     //   4. if increasing pulsewidths moves servo CCW then set reverse = true
     //   5. note also the reported angular value to see how accurate they are. if not, fix the conversions (currently a map statement)
 
-
     // * set operational angular range (OPMIN/OPMAX), margin (MARGIN) and parking angle (PARKED) here.
-    float si[NUM_MOTORVALS] = { 58.0, 57.0, 158.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
+    float si[NUM_MOTORVALS] = { 58.0, 57.0, 158.0, 69.0, NAN, 0.0, 180.0, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     float idle_si[NUM_MOTORVALS] = { 58.0, NAN, 65.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
@@ -431,26 +420,6 @@ class ThrottleControl : public ServoMotor {
         max_throttle_angular_velocity_degps = _degps;
         max_out_change_rate_pcps = 100.0 * max_throttle_angular_velocity_degps / (si[OPMAX] - si[OPMIN]);
     }
-    void linearize_throttle() {  // todo : compensate for at least 3 known sources of non-linearity in the throttle
-        // 1. The coin-shaped butterfly valve blocks the cylindrical carb intake passage. The engine power is a function
-        // of the airflow which is proportional to the elliptical cross-section of the valve as it rotates. That math:
-        // d = throttle intake / valve diameter (about 1 inch)
-        // g = angle of valve, with 90 deg = full closed and 0 deg = full open
-        // Open Area:  A = pi/4 * d^2 - pi * d^2 * cos(g)    // in squared units of d
-        // Open Ratio: R = 1 - 4 * cos(g)                    // as a ratio to full-open (range 0-1)
-        //
-        // 2. Due to the mount and pull angles, the servo opens the throttle more degrees per degree of its own rotation 
-        // when the throttle is closed vs. when it's open. Need to do the math for this, but I imagine it'll be another 
-        // curve from 1 to 0, perhaps another cosine, to multiply by depending on current servo angle. Note it's possible
-        // to mechanically nullify this pull angle non-linearity by having a rotational linkage instead of servo horns,
-        // for example like a belt, or maybe pulleys on both servo and valve with a cord wrapped around them.
-        //
-        // 3. The engine will characteristically produce power as a nonlinear function of carb airflow. Data for this would
-        // be nice. [Research into typical curves] < [Specific performance data for this engine] < [Do empirical testing].
-        //
-        // It's a bit too complex (I'm too ignorant) to predict which of the above might serve to cancel/exacerbate the 
-        // others. None of this matters if we use the throttle PID, only if we run open loop
-    }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
         ezread.squintf("Throttle servo.. pid %s\n", pid_enabled ? "enabled" : "disabled");
@@ -483,6 +452,35 @@ class ThrottleControl : public ServoMotor {
         // ezread.squintf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);
     }
   private:
+    // linear control:
+    // linearization using a lookup table, for use when not on pid.  here are some other ideas:
+    //
+    // 1. The coin-shaped butterfly valve blocks the cylindrical carb intake passage. The engine power is a function
+    // of the airflow which is proportional to the elliptical cross-section of the valve as it rotates. That math:
+    // d = throttle intake / valve diameter (about 1 inch)
+    // g = angle of valve, with 90 deg = full closed and 0 deg = full open
+    // Open Area:  A = pi/4 * d^2 - pi * d^2 * cos(g)    // in squared units of d
+    // Open Ratio: R = 1 - 4 * cos(g)                    // as a ratio to full-open (range 0-1)
+    //
+    // 2. Due to the mount and pull angles, the servo opens the throttle more degrees per degree of its own rotation 
+    // when the throttle is closed vs. when it's open. Need to do the math for this, but I imagine it'll be another 
+    // curve from 1 to 0, perhaps another cosine, to multiply by depending on current servo angle. Note it's possible
+    // to mechanically nullify this pull angle non-linearity by having a rotational linkage instead of servo horns,
+    // for example like a belt, or maybe pulleys on both servo and valve with a cord wrapped around them.
+    //
+    // 3. The engine will characteristically produce power as a nonlinear function of carb airflow. Data for this would
+    // be nice. [Research into typical curves] < [Specific performance data for this engine] < [Do empirical testing].
+    //
+    // It's a bit too complex (I'm too ignorant) to predict which of the above might serve to cancel/exacerbate the 
+    // others. None of this matters if we use the throttle PID, only if we run open loop
+    float linearizer(float inval_pc) {  // compensate for at least 3 known sources of non-linearity in the throttle
+        static float linearlookup[21] =  // lookup table for linearizing actuator values in Linearize mode. using normal pc value as index, produce a replacement pc value
+            { 0.0, 14.0, 28.0, 32.0, 35.0, 38.0, 41.0, 44.0, 47.0, 51.0, 55.0, 58.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
+         // { 0.0,  5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
+        float res = 100.0 / (arraysize(linearlookup) - 1);
+        int lookup = (int)(inval_pc / res);
+        return map(inval_pc - (float)lookup * res, 0.0, res, linearlookup[lookup], linearlookup[lookup+1]);
+    }
     void cruise_adjust(int joydir) {
         if (joydir == JOY_UP) ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
         else ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBBOT]) / (hotrc->pc[VERT][OPMIN] - hotrc->pc[VERT][DBBOT]);
