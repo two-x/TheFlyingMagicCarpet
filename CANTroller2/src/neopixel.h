@@ -315,23 +315,23 @@ void NeopixelStrip::sleepmode_ena(bool ena) {
 }
 void NeopixelStrip::knightrider() {
     static Timer knighttimer{150000};
-    static int posn = 0, direction = 1;        // 1 for right, -1 for left
+    static int posn = 2, direction = 1, first = 2;        // 1 for right, -1 for left
     const int trail = 4;             // Length of the fading trail
     const uint32_t knightcolor = 0xff0000;  // Red color
     const float maxspeed = 20.0, minspeed = 100.0;     // Fastest and slowest speed (milliseconds per step)
     float speed = maxspeed + (minspeed - maxspeed) * (float)posn / (striplength - 1);  // Calculate the speed based on the position (decelerates as it moves)
     if (knighttimer.expireset()) {   // if (knighttimer.elapsed((int)moveInterval)) {
         posn += direction;           // Move the bright point
-        if (posn <= 0 || posn >= striplength - 1) {
+        if (posn <= first || posn >= striplength - 1) {
             direction = -direction;  // Reverse direction at the ends
-            posn = max(0, min(striplength - 1, posn));  // Clamp position within bounds
+            posn = max(first, min(striplength - 1, posn));  // Clamp position within bounds
         }
     }
-    for (int i = 0; i < striplength; i++)  neoobj.SetPixelColor(i, color_to_neo((uint32_t)0));   // Clear the strip   
+    for (int i = first; i < striplength; i++)  neoobj.SetPixelColor(i, color_to_neo((uint32_t)0));   // Clear the strip   
     neoobj.SetPixelColor(posn, color_to_neo(recolor(knightcolor, neobright)));  // Set the bright point
-    for (int i = 1; i <= trail; i++) {  // Set the trailing effect
+    for (int i = first+1; i <= trail; i++) {  // Set the trailing effect
         int trailposn = posn - i * direction;
-        if (trailposn >= 0 && trailposn < striplength) {
+        if (trailposn >= first && trailposn < striplength) {
             float trailBrightness = 100.0 * (trail - i) / trail;
             neoobj.SetPixelColor(trailposn, color_to_neo(recolor(knightcolor, neobright * trailBrightness / 100.0)));
         }
