@@ -21,16 +21,18 @@
 #include <FastLED.h>
 #endif
 
+#include <NeoPixelBus.h>
+
 #include "CRGBW.h"
 #include "LedController.h"
 #include "AudioBoard.h"
 #include "ArmDmx.h"
 
 // Controller constants
-#define POT_ANALOG_PIN 3
-#define BUTTON_PIN 3
-#define ENCODER_A_PIN 5
-#define ENCODER_B_PIN 4
+#define POT_ANALOG_PIN 5
+#define BUTTON_PIN 38
+#define ENCODER_A_PIN 42
+#define ENCODER_B_PIN 47
 
 // DMX constants
 #define NUM_MEGABAR_LEDS 10
@@ -63,15 +65,15 @@
 #define NEO6_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 3 ) // large
 #define NEO7_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 4 ) // small
 // The pin order for the port bank we are using is: 25,26,27,28,14,15,29,11
-#define NEO_PORT_BANK ( WS2811_PORTD )
-#define NEO_PIN0 25
-#define NEO_PIN1 26
-#define NEO_PIN2 27
-#define NEO_PIN3 28
-#define NEO_PIN4 14
-#define NEO_PIN5 15
-#define NEO_PIN6 29
-#define NEO_PIN7 11
+// #define NEO_PORT_BANK ( WS2811_PORTD )
+#define NEO_PIN0 36
+#define NEO_PIN1 35
+#define NEO_PIN2 6
+#define NEO_PIN3 46
+#define NEO_PIN4 39
+#define NEO_PIN5 37
+#define NEO_PIN6 7
+#define NEO_PIN7 19
 
 /* Positional Constants
  *
@@ -98,6 +100,11 @@
 #define SEVEN_THIRTY BACK_LEFT
 #define NINE LEFT
 #define TEN_THIRTY FRONT_LEFT
+
+   uint16_t n = 16;
+   NeoPixelBus<NeoGrbwFeature, NeoSk6812Method> strip0(n, NEO_PIN0);
+   NeoPixelBus<NeoGrbwFeature, NeoSk6812Method> strip1(n, NEO_PIN1);
+   NeoPixelBus<NeoGrbFeature, NeoSk6812Method> boardlight(1, 48);
 
 class MagicCarpet {
  private:
@@ -141,11 +148,26 @@ class MagicCarpet {
       dmx_init( TOTAL_DMX_SIZE );
 
       // add eight channels of rope leds
-      FastLED.addLeds<NEO_PORT_BANK,NUM_NEOPIXEL_STRIPS>( ropeShowLeds,
-                                                          NUM_NEO_LEDS_PER_STRIP );
+      // FastLED.addLeds<NEO_PORT_BANK,NUM_NEOPIXEL_STRIPS>( ropeShowLeds,
+      //                                                     NUM_NEO_LEDS_PER_STRIP );
+      
+      uint8_t index = 0;
+      FastLED.addLeds<NEOPIXEL, NEO_PIN0>(ropeShowLeds /*+ (index++ * NUM_NEO_LEDS_PER_STRIP)*/, NUM_NEO_LEDS_PER_STRIP);
+      FastLED.addLeds<NEOPIXEL, NEO_PIN1>(ropeShowLeds + (index++ * NUM_NEO_LEDS_PER_STRIP), NUM_NEO_LEDS_PER_STRIP);
+      FastLED.addLeds<NEOPIXEL, NEO_PIN2>(ropeShowLeds + (index++ * NUM_NEO_LEDS_PER_STRIP), NUM_NEO_LEDS_PER_STRIP);
+      FastLED.addLeds<NEOPIXEL, NEO_PIN3>(ropeShowLeds + (index++ * NUM_NEO_LEDS_PER_STRIP), NUM_NEO_LEDS_PER_STRIP);
+      FastLED.addLeds<NEOPIXEL, NEO_PIN4>(ropeShowLeds + (index++ * NUM_NEO_LEDS_PER_STRIP), NUM_NEO_LEDS_PER_STRIP);
+      FastLED.addLeds<NEOPIXEL, NEO_PIN5>(ropeShowLeds + (index++ * NUM_NEO_LEDS_PER_STRIP), NUM_NEO_LEDS_PER_STRIP);
+      FastLED.addLeds<NEOPIXEL, NEO_PIN6>(ropeShowLeds + (index++ * NUM_NEO_LEDS_PER_STRIP), NUM_NEO_LEDS_PER_STRIP);
+      FastLED.addLeds<NEOPIXEL, NEO_PIN7>(ropeShowLeds + (index++ * NUM_NEO_LEDS_PER_STRIP), NUM_NEO_LEDS_PER_STRIP);
 
       clear(); // there might be stale values left in the leds, start from scratch
 
+      strip0.Begin();
+      strip1.Begin();
+      boardlight.Begin();
+      boardlight.SetPixelColor(0, RgbColor(0,255,0));
+      boardlight.Show();
       show();
    }
 
@@ -157,6 +179,18 @@ class MagicCarpet {
        * TODO: if we start running too slow we can look at ways to get around this
        *       reversal
        */
+      // strip.ClearTo(RgbwColor(0,0,255,0));
+      RgbwColor clr(255, 0, 0, 0);
+      strip0.SetPixelColor(0,clr);
+      clr.R = 0;
+      clr.G = 255;
+      strip1.SetPixelColor(0,clr);
+      strip0.Show();
+      strip1.Show();
+      boardlight.SetPixelColor(0, RgbColor(0,0,255));
+      boardlight.Show();
+      delay(1000);
+      // LedUtil::fill(ropeLeds, CRGBW::Blue, NUM_NEO_LEDS * sizeof(CRGBW));
       LedUtil::reverse( ropeLeds + NEO0_OFFSET, SIZEOF_SMALL_NEO );
       LedUtil::reverse( ropeLeds + NEO2_OFFSET, SIZEOF_LARGE_NEO );
       LedUtil::reverse( ropeLeds + NEO4_OFFSET, SIZEOF_SMALL_NEO );
@@ -194,7 +228,7 @@ class MagicCarpet {
       // both arrays as a single big array, since they're contiguous in memory.
       dmx_send( ( uint8_t * ) megabarLeds );
 
-      FastLED.show();
+      // FastLED.show();
    }
 
    void clearMegabars() {

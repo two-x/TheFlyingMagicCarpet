@@ -92,7 +92,7 @@ DEFINE_GRADIENT_PALETTE( topColors_t ) {
    //244, 0, 169, 9,
    //248, 74, 245, 83,
    //252, 133, 99, 247,
-   256, 248, 182, 124
+   255, 248, 182, 124
 };
 
 DEFINE_GRADIENT_PALETTE( bottomColors_t ) {
@@ -159,7 +159,7 @@ DEFINE_GRADIENT_PALETTE( bottomColors_t ) {
  // 244, 0, 246, 13,
  // 248, 59, 194, 66,
  // 252, 79, 51, 170,
- 256, 248, 247, 50
+ 255, 248, 247, 50
 };
 
 static CRGBPalette256 topColors = topColors_t;

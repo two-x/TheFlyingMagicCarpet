@@ -9,15 +9,12 @@
 #ifndef __ARM_DMX_H
 #define __ARM_DMX_H
 
-#ifndef __SAM_H
-#define __SAM_H
-#include "sam.h"
-#endif
-
 #ifndef __FASTLED_H
 #define __FASTLED_H
 #include <FastLED.h>
 #endif
+
+#include <esp_dmx.h>
 
 // Units are in timer ticks. 
 #define DMX_BRKTIME       (100)       // Time to hold serial in break before mark
@@ -32,6 +29,9 @@ bool dmx_inited = false;    // To prevent double-init
 uint8_t *_dmx_buf;          // Private buffer the DMA to serial
 size_t dmx_buflen;          // Buffer length
 
+const dmx_port_t dmx_num = DMX_NUM_1;
+const uint8_t dmx_pin = 17;
+
 /* Init and start the DMX system */
 void dmx_init(size_t buflen) {
    // Don't double-init
@@ -43,8 +43,23 @@ void dmx_init(size_t buflen) {
    _dmx_buf = (uint8_t *)malloc(buflen+1);
    memset(_dmx_buf, 0, buflen+1);
 
-   // Init serial port
-   DMX_SERIAL.begin(DMX_BAUDRATE, DMX_FRAMING);
+  // First, use the default DMX configuration...
+  dmx_config_t config = DMX_CONFIG_DEFAULT;
+
+  // ...declare the driver's DMX personalities...
+  const int personality_count = 1;
+  dmx_personality_t personalities[] = {
+    {1, "Default Personality"}
+  };
+
+  // ...install the DMX driver...
+  dmx_driver_install(dmx_num, &config, personalities, personality_count);
+
+  // ...and then set the communication pins!
+  const int tx_pin = 17;
+  // const int rx_pin = 16;
+  // const int rts_pin = 21;
+  dmx_set_pin(dmx_num, tx_pin, DMX_PIN_NO_CHANGE, DMX_PIN_NO_CHANGE);
 }
 
 void dmx_send(uint8_t *buf) {
@@ -54,11 +69,18 @@ void dmx_send(uint8_t *buf) {
   timeSinceLastSend = millis();
   _dmx_buf[0] = 0;
   memcpy(_dmx_buf+1, buf, dmx_buflen);
-  DMX_UART->US_CR |= US_CR_STTBRK;   // Start break
-  delayMicroseconds(DMX_BRKTIME);
-  DMX_UART->US_CR |= US_CR_STPBRK;  // Stop break signal
-  delayMicroseconds(DMX_MARKTIME);
-  DMX_SERIAL.write(_dmx_buf, dmx_buflen);
+
+  // what is this break all about?
+  // DMX_UART->US_CR |= US_CR_STTBRK;   // Start break
+  // delayMicroseconds(DMX_BRKTIME);
+  // DMX_UART->US_CR |= US_CR_STPBRK;  // Stop break signal
+  // delayMicroseconds(DMX_MARKTIME);
+
+  // Write to the packet and send it.
+  dmx_write(dmx_num, _dmx_buf, dmx_buflen);
+  dmx_send(dmx_num);
+  // Block until the packet is finished sending.
+  dmx_wait_sent(dmx_num, DMX_TIMEOUT_TICK);
   return;
 }
 
