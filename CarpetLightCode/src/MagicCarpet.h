@@ -42,9 +42,12 @@
 
 // Neopixel constants
 // TODO: convert the user-facing values to constexpr global vars
-#define SIZEOF_SMALL_NEO 108
-#define SIZEOF_LARGE_NEO 145
-#define NUM_NEOPIXEL_STRIPS 8
+#define SIZEOF_SMALL_NEO 156 // the strips on the front and back of the carpet
+#define SIZEOF_LARGE_NEO 352 // the C-shape long strips on the carpet wings
+#define SIZEOF_HALF_SMALL_NEO SIZEOF_SMALL_NEO / 2
+#define SIZEOF_HALF_LARGE_NEO SIZEOF_LARGE_NEO / 2
+#define SIZEOF_SHORT_CORNER 30 // the short section on the front/back of the carpet wings
+#define NUM_NEOPIXEL_STRIPS 4
 #define NUM_NEO_SMALL_LEDS ( NUM_NEOPIXEL_STRIPS / 2 )
 #define NUM_NEO_LARGE_LEDS NUM_NEO_SMALL_LEDS
 #define NUM_NEO_LEDS ( ( SIZEOF_SMALL_NEO * NUM_NEO_SMALL_LEDS ) + \
@@ -54,41 +57,45 @@
 #define SIZEOF_NEO_STRIP ( NUM_NEO_LEDS_PER_STRIP * sizeof( CRGB ) )
 #define SIZEOF_NEO_LEDS ( NUM_NEO_LEDS * sizeof( CRGBW ) )
 #define SIZEOF_NEO_SHOW_LEDS ( NUM_NEOPIXEL_STRIPS * SIZEOF_NEO_STRIP )
-#define NEO0_OFFSET 0 // small
-#define NEO1_OFFSET SIZEOF_SMALL_NEO // large
-#define NEO2_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO ) // large
-#define NEO3_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO * 2 ) // small
-#define NEO4_OFFSET ( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO * 2 ) // small
-#define NEO5_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 2 ) // large
-#define NEO6_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 3 ) // large
-#define NEO7_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 4 ) // small
+
+#define NEO_START 0
+#define NEO_END NUM_NEO_LEDS
+#define NEO_FRONT_OFFSET NEO_START // small
+#define NEO_RIGHT_OFFSET SIZEOF_SMALL_NEO // large
+#define NEO_BACK_OFFSET ( NEO_RIGHT_OFFSET + SIZEOF_LARGE_NEO ) // small
+#define NEO_LEFT_OFFSET ( NEO_BACK_OFFSET + SIZEOF_SMALL_NEO ) // large
+
+#define SIZEOF_END SIZEOF_SMALL_NEO + ( SIZEOF_SHORT_CORNER * 2 )
+#define SIZEOF_SIDE SIZEOF_LARGE_NEO - ( SIZEOF_SHORT_CORNER * 2 )
+#define SIZEOF_FRONT SIZEOF_END
+#define SIZEOF_RIGHT SIZEOF_SIDE
+#define SIZEOF_BACK SIZEOF_END
+#define SIZEOF_LEFT SIZEOF_SIDE
+
 // The pin order for the port bank we are using is: 25,26,27,28,14,15,29,11
+// TODO: pins?
 #define NEO_PORT_BANK ( WS2811_PORTD )
-#define NEO_PIN0 25
-#define NEO_PIN1 26
-#define NEO_PIN2 27
-#define NEO_PIN3 28
-#define NEO_PIN4 14
-#define NEO_PIN5 15
-#define NEO_PIN6 29
-#define NEO_PIN7 11
+#define NEO_FRONT_PIN 25
+#define NEO_RIGHT_PIN 26
+#define NEO_BACK_PIN 14
+#define NEO_LEFT_PIN 15
 
 /* Positional Constants
  *
- * These are aliases for the index values of the carpet's led arrays. Their are two
+ * These are aliases for the index values of the carpet's led arrays. There are two
  * different types defined: directional and temporal. Both led array start from the
  * midpoint of the front of the carpet (FRONT or TWELVE). So far these are defined
  * only for the rope light arrays, but we can do this for the dmx leds too if we
  * feel the need.
  */
-#define FRONT NEO0_OFFSET
-#define FRONT_RIGHT NEO1_OFFSET
-#define RIGHT NEO2_OFFSET
-#define BACK_RIGHT NEO3_OFFSET
-#define BACK NEO4_OFFSET
-#define BACK_LEFT NEO5_OFFSET
-#define LEFT NEO6_OFFSET
-#define FRONT_LEFT NEO7_OFFSET
+#define FRONT NEO_FRONT_OFFSET + ( SIZEOF_SMALL_NEO / 2 ) // halfway down the front strip
+#define FRONT_RIGHT NEO_RIGHT_OFFSET + SIZEOF_SHORT_CORNER
+#define RIGHT NEO_RIGHT_OFFSET + SIZEOF_HALF_LARGE_NEO // halfway down the right strip
+#define BACK_RIGHT NEO_BACK_OFFSET - SIZEOF_SHORT_CORNER
+#define BACK NEO_BACK_OFFSET + SIZEOF_HALF_SMALL_NEO // halfway down the back strip
+#define BACK_LEFT NEO_LEFT_OFFSET + SIZEOF_SHORT_CORNER
+#define LEFT NEO_LEFT_OFFSET + SIZEOF_HALF_LARGE_NEO // halfway down the left strip
+#define FRONT_LEFT NEO_FRONT_OFFSET - SIZEOF_SHORT_CORNER
 
 #define TWELVE FRONT
 #define ONE_THIRTY FRONT_RIGHT
@@ -157,38 +164,24 @@ class MagicCarpet {
        * TODO: if we start running too slow we can look at ways to get around this
        *       reversal
        */
-      LedUtil::reverse( ropeLeds + NEO0_OFFSET, SIZEOF_SMALL_NEO );
-      LedUtil::reverse( ropeLeds + NEO2_OFFSET, SIZEOF_LARGE_NEO );
-      LedUtil::reverse( ropeLeds + NEO4_OFFSET, SIZEOF_SMALL_NEO );
-      LedUtil::reverse( ropeLeds + NEO6_OFFSET, SIZEOF_LARGE_NEO );
+      LedUtil::reverse( ropeLeds + NEO_FRONT_OFFSET, SIZEOF_SMALL_NEO );
+      LedUtil::reverse( ropeLeds + NEO_BACK_OFFSET, SIZEOF_SMALL_NEO );
 
-      LedUtil::convertNeoArray( ropeLeds + NEO0_OFFSET, ropeShowLeds,
+      LedUtil::convertNeoArray( ropeLeds + NEO_FRONT_OFFSET, ropeShowLeds,
                                 SIZEOF_SMALL_NEO );
-      LedUtil::convertNeoArray( ropeLeds + NEO1_OFFSET,
+      LedUtil::convertNeoArray( ropeLeds + NEO_RIGHT_OFFSET,
                                 ropeShowLeds + NUM_NEO_LEDS_PER_STRIP,
                                 SIZEOF_LARGE_NEO );
-      LedUtil::convertNeoArray( ropeLeds + NEO2_OFFSET,
+      LedUtil::convertNeoArray( ropeLeds + NEO_BACK_OFFSET,
                                 ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 2,
                                 SIZEOF_LARGE_NEO );
-      LedUtil::convertNeoArray( ropeLeds + NEO3_OFFSET,
+      LedUtil::convertNeoArray( ropeLeds + NEO_LEFT_OFFSET,
                                 ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 3,
-                                SIZEOF_SMALL_NEO );
-      LedUtil::convertNeoArray( ropeLeds + NEO4_OFFSET,
-                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 4,
-                                SIZEOF_SMALL_NEO );
-      LedUtil::convertNeoArray( ropeLeds + NEO5_OFFSET,
-                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 5,
-                                SIZEOF_LARGE_NEO );
-      LedUtil::convertNeoArray( ropeLeds + NEO6_OFFSET,
-                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 6,
-                                SIZEOF_LARGE_NEO );
-      LedUtil::convertNeoArray( ropeLeds + NEO7_OFFSET,
-                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 7,
                                 SIZEOF_SMALL_NEO );
 
       // make sure to reverse the values so the user has a consistent view
-      LedUtil::reverse( ropeLeds + NEO0_OFFSET, SIZEOF_SMALL_NEO );
-      LedUtil::reverse( ropeLeds + NEO6_OFFSET, SIZEOF_LARGE_NEO );
+      LedUtil::reverse( ropeLeds + NEO_FRONT_OFFSET, SIZEOF_SMALL_NEO );
+      LedUtil::reverse( ropeLeds + NEO_BACK_OFFSET, SIZEOF_LARGE_NEO );
 
       // we don't have to pass the china light array separately. Instead, we treat
       // both arrays as a single big array, since they're contiguous in memory.

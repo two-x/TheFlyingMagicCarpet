@@ -28,6 +28,7 @@
 #include "MagicCarpet.h"
 #include "AudioBoard.h"
 
+/*
 DEFINE_GRADIENT_PALETTE( topColors_t ) {
    0, 0, 255, 127, // summer day
    // 4, 252, 25, 166,
@@ -165,23 +166,25 @@ DEFINE_GRADIENT_PALETTE( bottomColors_t ) {
 static CRGBPalette256 topColors = topColors_t;
 static CRGBPalette256 bottomColors = bottomColors_t;
 
+*/
+
 class LightShow {
  protected:
    MagicCarpet * carpet;
  public:
-   static CRGB getColor( uint8_t paletteIndex, uint8_t colorIndex ) {
-      CRGB clr1 = ColorFromPalette( topColors, paletteIndex );
-      CRGB clr2 = ColorFromPalette( bottomColors, paletteIndex );
-      // Serial.println( "CRGB1" );
-      // Serial.println( clr1.r );
-      // Serial.println( clr1.g );
-      // Serial.println( clr1.b );
-      // Serial.println( "CRGB2" );
-      // Serial.println( clr2.r );
-      // Serial.println( clr2.g );
-      // Serial.println( clr2.b );
-      return blend( clr1, clr2, colorIndex );
-   }
+   // static CRGB getColor( uint8_t paletteIndex, uint8_t colorIndex ) {
+   //    // CRGB clr1 = ColorFromPalette( topColors, paletteIndex );
+   //    // CRGB clr2 = ColorFromPalette( bottomColors, paletteIndex );
+   //    // Serial.println( "CRGB1" );
+   //    // Serial.println( clr1.r );
+   //    // Serial.println( clr1.g );
+   //    // Serial.println( clr1.b );
+   //    // Serial.println( "CRGB2" );
+   //    // Serial.println( clr2.r );
+   //    // Serial.println( clr2.g );
+   //    // Serial.println( clr2.b );
+   //    return blend( clr1, clr2, colorIndex );
+   // }
 
    LightShow( MagicCarpet * carpetArg ) : carpet( carpetArg ) {}
    virtual void start() = 0;
