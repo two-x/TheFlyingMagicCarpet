@@ -15,10 +15,9 @@
 #define NOISE_FLOOR_HIGH 75
 
 //Declare Spectrum Shield pin connections
-#define STROBE 20
-#define RESET 21
-#define DC_One 4
-
+#define STROBE 7
+#define RESET 6
+#define DC_One A0
 #define LOW_OUTPUT 9
 #define MID_OUTPUT 10
 #define HIGH_OUTPUT 11
