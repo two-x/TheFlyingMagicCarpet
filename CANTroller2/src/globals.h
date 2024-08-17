@@ -257,8 +257,9 @@ float ema_filt(float _raw, float _filt, float _alpha) {
 // value-editing-related functions. these are global to allow accessibility from multiple places
 //
 // significant_place() is used by tune() functions below
-int significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
+int significant_place(float value) {  // Returns the decimal place of the most significant digit of a float value, without relying on logarithm math
     int place = 1;
+    value = std::abs(value);
     if (value >= 1) { // int vallog = std::log10(value);  // Can be sped up
         while (value >= 10) {
             value /= 10.0;
@@ -320,11 +321,10 @@ int tune(int orig_val, int idelta, int min_val=-1, int max_val=-1, bool dropdown
     return constrain(ret, min_val, max_val);
 }
 bool tune(int idelta) {  // overloaded to return bool value. idelta == 0 or -1 return false and 1+ returns true.
-    bool ret = (idelta > 0);
-    return ret;
+    return (idelta > 0);
 }
-void tune(float* orig_ptr, int idelta, float min_val=NAN, float max_val=NAN, int sig_digits=-1) {  // overloaded to directly modify float at given address
-    *orig_ptr = tune(*orig_ptr, idelta, min_val, max_val, sig_digits);
+void tune(float* orig_ptr, int idelta, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-3) {  // overloaded to directly modify float at given address
+    *orig_ptr = tune(*orig_ptr, idelta, min_val, max_val, min_sig_edit_place);
 }
 void tune(int* orig_ptr, int idelta, int min_val=-1, int max_val=-1, bool dropdown=false) {  // overloaded to directly modify int at given address
     *orig_ptr = tune(*orig_ptr, idelta, min_val, max_val, dropdown);

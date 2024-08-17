@@ -442,7 +442,7 @@ class Display {
     void draw_ascii(int lineno, std::string name) {
         drawval_core(lineno, name, 1, NAN, NAN, NAN, CYN);
     }
-    void draw_truth(int lineno, bool truthy, int styl=2) {  // 0:on/off, 1:yes/no, 2:true/false .
+    void draw_truth(int lineno, bool truthy, int styl=2) {  // 0:on/off, 1:yes/no, 2:true/false
         drawval_core(lineno, (truthy) ? ((styl==0) ? "on" : ((styl==1) ? "yes" : "true")) : ((styl==0) ? "off" : ((styl==1) ? "no" : "false")), 1, NAN, NAN, NAN, (truthy) ? LPUR : ORCD);
     }    
     std::string num2string(int value, int maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
@@ -601,10 +601,10 @@ class Display {
         else if (idiots->icon[i][0] != 0x88) draw_idiotbitmap(i, x, y);  // 0x88 in the first byte will skip a space
         idiots->last[i] = idiots->val(i);
     }
-    void update_idiots(bool force = false) {
+    void update_idiots(bool force=false) {
         for (int i = 0; i < idiots->iconcount; i++) {
-            if (i <= neo->neopixelsAvailable()) {
-                if (idiots->val(i) != idiots->last[i]) neo->setBoolState(i, idiots->val(i));
+            if (i <= neo->numidiots()) {
+                if (idiots->val(i) != idiots->last[i]) neo->setstate(i, idiots->val(i));
             }
             if (i == LOST || i == RANGE) {
                 if (!diag.errorcount(i)) neo->setflash(i, 0);
