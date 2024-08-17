@@ -15,15 +15,16 @@
 // TODO: these are useful, move them somewhere common
 inline void digitalWriteDirect( int pin, bool val ) {
    if ( val ) {
-      g_APinDescription[ pin ].pPort->PIO_SODR = g_APinDescription[ pin ].ulPin;
+      //g_APinDescription[ pin ].pPort->PIO_SODR = g_APinDescription[ pin ].ulPin;
    } else {
-      g_APinDescription[ pin ].pPort->PIO_CODR = g_APinDescription[ pin ].ulPin;
+      //g_APinDescription[ pin ].pPort->PIO_CODR = g_APinDescription[ pin ].ulPin;
    }
 }
 
 inline int digitalReadDirect( int pin ) {
-   return !!( g_APinDescription[ pin ].pPort->PIO_PDSR &
-              g_APinDescription[ pin ].ulPin );
+   // return !!( g_APinDescription[ pin ].pPort->PIO_PDSR &
+   //            g_APinDescription[ pin ].ulPin );
+   return 0;
 }
 
 namespace LedControl {
