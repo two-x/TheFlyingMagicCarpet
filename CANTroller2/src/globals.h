@@ -122,35 +122,35 @@ enum telemetry_full {                                                           
 };
 
 // global configuration settings
+int throttle_ctrl_mode = Linearized; // should gas servo use the rpm-sensing pid? values: ActivePID, OpenLoop, or Linearized
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
 bool allow_rolling_start = true;     // are we lenient that it's ok to go to fly mode if the car is already moving? may be a smart prerequisite, may be us putting obstacles in our way
-bool flip_the_screen = false;        // did you mount your screen upside-down?
-bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
-bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
-bool use_i2c_baton = false;          // use soren's custom homemade semaphores to prevent i2c bus collisions?
-bool always_max_refresh = true;      // set to true to enforce a cap on screen frame draws (90 Hz I think it is), otherwise craw as fast as we can. fullscreen screensaver ignores this
 bool brake_before_starting = true;   // if true, the starter motor attempts to apply the brake pedal before turning on the starter motor
 bool check_brake_before_starting = false;  // if true, the starter motor won't turn on until or unless it senses the brake pressure is enough. otherwise then after a timeout it will start anyway
-bool watchdog_enabled = false;       // enable the esp's built-in watchdog circuit, it will reset us if it doesn't get pet often enough (to prevent infinite hangs). disabled cuz it seems to mess with the hotrc (?)
-bool fuelpump_supported = false;     // do we drive power to vehicle fuel pump?  note if resistive touchscreen is present then fuelpump is automatically not supported regardless of this
-bool print_task_stack_usage = false; // enable to have remaining heap size and free task memory printed to console every so often. for tuning memory allocation
-bool autosaver_display_fps = true;   // do you want to see the fps performance of the fullscreen saver in the corner?
+bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool crash_driving_recovery = true;  // if code crashes while driving, should it continue driving after reboot?
+bool fuelpump_supported = false;     // do we drive power to vehicle fuel pump?  note if resistive touchscreen is present then fuelpump is automatically not supported regardless of this
 bool pot_tuner_acceleration = false; // when editing values, can we use the pot to control acceleration of value changes? (assuming we aren't pot mapping some sensor at the time)
 bool dont_take_temperatures = false; // disables temp sensors. in case debugging dallas sensors or causing problems
-bool console_enabled = false;         // completely disables the console serial output. idea being, it may be safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool keep_system_powered = false;    // equivalent to syspower always being high.
-bool looptime_print = false;         // makes code write out timestamps throughout loop to serial port. for analyzing what parts of the code take the most time
+bool watchdog_enabled = false;       // enable the esp's built-in watchdog circuit, it will reset us if it doesn't get pet often enough (to prevent infinite hangs). disabled cuz it seems to mess with the hotrc (?)
+bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
+bool flip_the_screen = false;        // did you mount your screen upside-down?
+bool always_max_refresh = true;      // set to true to enforce a cap on screen frame draws (90 Hz I think it is), otherwise craw as fast as we can. fullscreen screensaver ignores this
+bool use_i2c_baton = false;          // use soren's custom homemade semaphores to prevent i2c bus collisions?
+bool autosaver_display_fps = true;   // do you want to see the fps performance of the fullscreen saver in the corner?
+bool screensaver_enabled = true;     // does fullscreen screensaver start automatically when in powerdown, after a delay?
+bool use_tft_colors_for_neo = false; // should neopixel colors be based on onscreen icon colors? (otherwise they'll split the full hue spectrum amongst themselves)
+bool pot_controls_animation_timeout = true;  // when showing fullscreen animations, should the pot value control the next animation timeout?
 bool touch_reticles = true;          // draws tiny little plus reticles to aim at for doing touchscreen calibration
 bool button_test_heartbeat_color = false; // makes boot button short press change heartbeat color. useful for testing code on bare esp
 bool wifi_client_mode = false;       // should wifi be in client or access point mode?
-bool screensaver_enabled = true;     // does fullscreen screensaver start automatically when in powerdown, after a delay?
-bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
-bool use_tft_colors_for_neo = false; // should neopixel colors be based on onscreen icon colors? (otherwise they'll split the full hue spectrum amongst themselves)
-bool print_error_changes = true;     // should diag print status changes and new error events to console?
-bool pot_controls_animation_timeout = true;  // when showing fullscreen animations, should the pot value control the next animation timeout?
 bool pcba_3v2 = true;                // turn to false if for some reason you are using the v3.1 pcba. note this does not automatically correct the pin 2 <-> pin 39 swap
-int throttle_ctrl_mode = Linearized;   // should gas servo use the rpm-sensing pid? values: ActivePID, OpenLoop, or Linearized
+bool console_enabled = false;        // completely disables the console serial output. idea being, it may be safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
+bool print_error_changes = true;     // should diag print status changes and new error events to console?
+bool print_task_stack_usage = false; // enable to have remaining heap size and free task memory printed to console every so often. for tuning memory allocation
+bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
+bool looptime_print = false;         // makes code write out timestamps throughout loop to serial port. for analyzing what parts of the code take the most time
 
 // global tunable variables
 float float_zero = 0.000069;           // if two floats being compared are closer than this, we consider them equal
@@ -158,14 +158,13 @@ float float_conversion_zero = 0.001;   //
 int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. Set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 0.3;  // Margin of error for determining hard brake value for dropping out of cruise mode
-int cruise_delta_max_pc_per_s = 4;    // (in TriggerHold mode) What's the fastest rate cruise adjustment can change pulse width (in us per second)
+int cruise_delta_max_pc_per_s = 4;     // (in TriggerHold mode) What's the fastest rate cruise adjustment can change pulse width (in % per sec)
 float cruise_angle_attenuator = 0.016; // (in TriggerPull mode) Limits the change of each adjust trigger pull to this fraction of what's possible
 float maf_min_gps = 0.0;
 float maf_max_gps = 50.0;      // i just made this number up as i have no idea what's normal for MAF
 float tuning_rate_pcps = 7.5;  // values being edited by touch buttons change value at this percent of their overall range per second
-bool flashdemo = false;
-float neobright = 20.0;   // default for us dim/brighten the neopixels in percent
-float neosat = 90.0;  // default saturation of neopixels in percent
+float neobright = 20.0;      // default for us dim/brighten the neopixels in percent
+float neosat = 90.0;         // default saturation of neopixels in percent
 int i2c_frequency = 400000;  // in kHz. standard freqs are: 100k, 400k, 1M, 3.4M, 5M
 
 // non-tunable values. probably these belong with their related code, but are global to allow accessibility from everywhere
@@ -173,6 +172,7 @@ std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Ho
 float permanan = NAN;
 float* nanptr = &permanan;
 uint32_t codestatus = Booting;
+bool flashdemo = false;
 int runmode = STANDBY;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool fun_flag = false;                  // since now using temp sensor address to detect vehicle, our tx resistor can be used for who knows what else!
@@ -212,7 +212,11 @@ int ui_default = EZReadUI;
 bool panicstop = false;
 
 // fast macros
-#define arraysize(x) ((int)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays 
+#define arraysize(x) ((int)(sizeof(x) / sizeof((x)[0])))  // a macro function giving the number of elements in an array
+inline bool iszero(float num) { 
+    if (std::isnan(num)) return false;
+    return (std::abs(num) <= float_zero);
+}
 #undef constrain
 inline float constrain(float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline int constrain(int amt, int low, int high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
@@ -220,14 +224,14 @@ inline uint constrain(uint amt, uint low, uint high) { return (amt < low) ? low 
 inline long constrain(long amt, long low, long high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
-    if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
-    return out_max;  // instead of dividing by zero, return the highest valid result
+    if (std::isnan(x) || std::isnan(in_min) || std::isnan(in_max) || std::isnan(out_min) || std::isnan(out_max)) return NAN;
+    if (iszero(in_max - in_min)) return out_max;  // instead of dividing by zero, return the highest (closest to infinity) valid result
+    return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
 }
 inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
-    if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
-    return out_max;  // instead of dividing by zero, return the highest valid result
+    if ((in_max - in_min) == 0) return out_max;  // instead of dividing by zero, return the highest (closest to infinity) valid result
+    return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);    
 }
-inline bool iszero(float num) { return (std::abs(num) < float_zero); }
 
 // pin operations
 void set_pin(int pin, int mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }

@@ -183,10 +183,9 @@ void NeopixelStrip::heartbeat_update(int led) {
     if (!neo_heartbeat) return;
     for (int i=0; i<2; i++) {
         if (neoHeartbeatTimer[led].expired()) {  // 
-            // heartbeat_pulse = !heartbeat_pulse;
             ++heartbeat_state[led] %= arraysize(heartbeat_ekg_us);
             neoHeartbeatTimer[led].set(heartbeat_ekg_us[heartbeat_state[led]]);
-            if (heartbeat_state[led] == 1) heartbeat_brightness[1] = heartbright[i];  // main led (1) goes hot
+            if (heartbeat_state[led] == 1) heartbeat_brightness[1] = heartbright[i];  // led goes hot
             else if (heartbeat_state[led] == 2) neoFadeTimer[1].reset();  // start fading main led
             else return;  // skip third and fourth steps for 2-led operation
         }
@@ -203,7 +202,6 @@ void NeopixelStrip::heartbeat_update(int led) {
             heartcolor_change = false;
             neobright_last[i] = (float)heartbeat_brightness[i];
         }
-    }
     }
 }
 void NeopixelStrip::heart_double_beat() {
