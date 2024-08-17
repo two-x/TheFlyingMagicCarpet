@@ -189,7 +189,7 @@ class LightShow {
    LightShow( MagicCarpet * carpetArg ) : carpet( carpetArg ) {}
    virtual void start() = 0;
    virtual void update( uint32_t timestamp ) = 0;
- // TODO: delete all the default functions
+   virtual ~LightShow() {}
 };
 
 #endif

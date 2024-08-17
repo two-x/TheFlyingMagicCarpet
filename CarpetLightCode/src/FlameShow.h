@@ -54,7 +54,7 @@ class FlameShow : public LightShow {
       // pick color
       if ( carpet->button->isDown() ) {
          if ( !isHeld ) {
-            mode = ++mode % numModes;
+            ++mode %= numModes;
             isHeld = true;
          }
       } else {
