@@ -112,18 +112,17 @@ class FlameShow : public LightShow {
       } else {
          // assign color
          for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-            // CRGB newclr, oldclr;
-            // if ( mode ) {
-            //    newclr = ColorFromPalette( flames, currTemperature[ i ] );
-            //    oldclr = ColorFromPalette( flames, prevTemperature[ i ] );
-            // } else {
-            //    newclr = ColorFromPalette( waterflames, currTemperature[ i ] );
-            //    oldclr = ColorFromPalette( waterflames, prevTemperature[ i ] );
-            // }
-            // int val = scaleTo255( time - timestamp, rate, 0 );
-            // // Serial.println( val );
-            // carpet->ropeLeds[ i ] = blend( val, newclr, oldclr );
-            carpet->ropeLeds[i] = ColorFromPalette(flames, currTemperature[i]);
+            CRGB newclr, oldclr;
+            if ( mode ) {
+               newclr = ColorFromPalette( flames, currTemperature[ i ] );
+               oldclr = ColorFromPalette( flames, prevTemperature[ i ] );
+            } else {
+               newclr = ColorFromPalette( waterflames, currTemperature[ i ] );
+               oldclr = ColorFromPalette( waterflames, prevTemperature[ i ] );
+            }
+            int val = scaleTo255( time - timestamp, rate, 0 );
+            // Serial.println( val );
+            carpet->ropeLeds[ i ] = blend( val, newclr, oldclr );
          }
       }
 
