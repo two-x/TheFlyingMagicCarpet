@@ -43,14 +43,14 @@ class NightriderShow : public LightShow {
    void update( uint32_t time ) {
       static uint32_t timestamp = time;
       static const uint32_t rate = 300; // move the lights at most every 300ms
-      static const uint32_t endRate = rate;
-      static const uint32_t sideRate = ( endRate * SIZEOF_LARGE_NEO ) / SIZEOF_SMALL_NEO;
+      // static const uint32_t endRate = rate;
+      // static const uint32_t sideRate = ( endRate * SIZEOF_LARGE_NEO ) / SIZEOF_SMALL_NEO;
       
       // start in the middle of the section
-      static uint8_t frontPos = FRONT;
-      static uint8_t backPos = BACK;
-      static uint8_t rightPos = RIGHT;
-      static uint8_t leftPos = LEFT;
+      static uint16_t frontPos = FRONT;
+      static uint16_t backPos = BACK;
+      static uint16_t rightPos = RIGHT;
+      static uint16_t leftPos = LEFT;
       static uint8_t frontPosDir = 1;
       static uint8_t backPosDir = 1;
       static uint8_t rightPosDir = 1;
@@ -81,10 +81,10 @@ class NightriderShow : public LightShow {
             leftPosDir = 1;
          }
 
-         frontPos = ++frontPos ? frontPosDir : --frontPos;
-         backPos = ++backPos ? backPosDir : --backPos;
-         rightPos = ++rightPos ? rightPosDir : --rightPos;
-         leftPos = ++leftPos ? leftPosDir : --leftPos;
+         frontPos = frontPos + 1 ? frontPosDir : frontPos - 1;
+         backPos = backPos + 1 ? backPosDir : backPos - 1;
+         rightPos = rightPos + 1 ? rightPosDir : rightPos - 1;
+         leftPos = leftPos + 1 ? leftPosDir : leftPos - 1;
       }
 
       const uint8_t val1 = carpet->pot->read() / 4;
@@ -105,7 +105,7 @@ class NightriderShow : public LightShow {
       // Serial.println( clr2.g );
       // Serial.println( clr2.b );
       // Serial.println( clr2.w );
-      int diffIndex = scaleTo255( diff, rate, 0 );
+      // int diffIndex = scaleTo255( diff, rate, 0 );
 
       for ( int i = FRONT; i < FRONT_RIGHT; ++i ) {
          int val = scaleTo255( abs( i - frontPos ), FRONT_RIGHT, FRONT );

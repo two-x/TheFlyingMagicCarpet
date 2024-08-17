@@ -42,10 +42,10 @@
 
 // Neopixel constants
 // TODO: convert the user-facing values to constexpr global vars
-#define SIZEOF_SMALL_NEO 156 // the strips on the front and back of the carpet
+#define SIZEOF_SMALL_NEO 156 // the strips on the ends (front/back) of the carpet
 #define SIZEOF_LARGE_NEO 352 // the C-shape long strips on the carpet wings
-#define SIZEOF_HALF_SMALL_NEO SIZEOF_SMALL_NEO / 2
-#define SIZEOF_HALF_LARGE_NEO SIZEOF_LARGE_NEO / 2
+#define SIZEOF_HALF_SMALL_NEO 78 // half the length of the end strips
+#define SIZEOF_HALF_LARGE_NEO 176 // half the length of the side strips
 #define SIZEOF_SHORT_CORNER 30 // the short section on the front/back of the carpet wings
 #define NUM_NEOPIXEL_STRIPS 4
 #define NUM_NEO_SMALL_LEDS ( NUM_NEOPIXEL_STRIPS / 2 )
@@ -65,8 +65,8 @@
 #define NEO_BACK_OFFSET ( NEO_RIGHT_OFFSET + SIZEOF_LARGE_NEO ) // small
 #define NEO_LEFT_OFFSET ( NEO_BACK_OFFSET + SIZEOF_SMALL_NEO ) // large
 
-#define SIZEOF_END SIZEOF_SMALL_NEO + ( SIZEOF_SHORT_CORNER * 2 )
-#define SIZEOF_SIDE SIZEOF_LARGE_NEO - ( SIZEOF_SHORT_CORNER * 2 )
+#define SIZEOF_END ( SIZEOF_SMALL_NEO + ( SIZEOF_SHORT_CORNER * 2 ) )
+#define SIZEOF_SIDE ( SIZEOF_LARGE_NEO - ( SIZEOF_SHORT_CORNER * 2 ) )
 #define SIZEOF_FRONT SIZEOF_END
 #define SIZEOF_RIGHT SIZEOF_SIDE
 #define SIZEOF_BACK SIZEOF_END
@@ -88,14 +88,14 @@
  * only for the rope light arrays, but we can do this for the dmx leds too if we
  * feel the need.
  */
-#define FRONT NEO_FRONT_OFFSET + ( SIZEOF_SMALL_NEO / 2 ) // halfway down the front strip
-#define FRONT_RIGHT NEO_RIGHT_OFFSET + SIZEOF_SHORT_CORNER
-#define RIGHT NEO_RIGHT_OFFSET + SIZEOF_HALF_LARGE_NEO // halfway down the right strip
-#define BACK_RIGHT NEO_BACK_OFFSET - SIZEOF_SHORT_CORNER
-#define BACK NEO_BACK_OFFSET + SIZEOF_HALF_SMALL_NEO // halfway down the back strip
-#define BACK_LEFT NEO_LEFT_OFFSET + SIZEOF_SHORT_CORNER
-#define LEFT NEO_LEFT_OFFSET + SIZEOF_HALF_LARGE_NEO // halfway down the left strip
-#define FRONT_LEFT NEO_FRONT_OFFSET - SIZEOF_SHORT_CORNER
+#define FRONT ( NEO_FRONT_OFFSET + ( SIZEOF_SMALL_NEO / 2 ) ) // halfway down the front strip
+#define FRONT_RIGHT ( NEO_RIGHT_OFFSET + SIZEOF_SHORT_CORNER )
+#define RIGHT ( NEO_RIGHT_OFFSET + SIZEOF_HALF_LARGE_NEO )// halfway down the right strip
+#define BACK_RIGHT ( NEO_BACK_OFFSET - SIZEOF_SHORT_CORNER )
+#define BACK ( NEO_BACK_OFFSET + SIZEOF_HALF_SMALL_NEO ) // halfway down the back strip
+#define BACK_LEFT ( NEO_LEFT_OFFSET + SIZEOF_SHORT_CORNER )
+#define LEFT ( NEO_LEFT_OFFSET + SIZEOF_HALF_LARGE_NEO ) // halfway down the left strip
+#define FRONT_LEFT ( NEO_FRONT_OFFSET - SIZEOF_SHORT_CORNER )
 
 #define TWELVE FRONT
 #define ONE_THIRTY FRONT_RIGHT
