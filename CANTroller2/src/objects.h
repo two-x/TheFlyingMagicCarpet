@@ -159,8 +159,8 @@ class ToggleSwitch {
         if (last != val) kick_inactivity_timer(HUTogSw);
     }
 };
-// the basic mode switch puts either a pullup or pulldown onto the serial tx pin. so to read it we must turn off the serial console, read the pin, then turn the console back on
-// to limit interruptions in the console, we only read every few seconds, and only when not in a driving mode
+// the basic mode switch puts either a pullup or pulldown onto the serial tx pin. so to read it we would need to turn off the serial console, read the pin, then turn the console back on
+// atm we just read it once on boot, so if we want basic mode then turn nthe switch on and then reset the cpu
 class BasicModeSwitch : public ToggleSwitch {
   public:
     BasicModeSwitch(int _pin) : ToggleSwitch(_pin, sens::basicsw) {}
@@ -249,7 +249,7 @@ class Ignition {
 };
 class Starter {
   private:
-    int pushbrake_timeout = 6000000;
+    int pushbrake_timeout = 3000000;
     int run_timeout = 5000000;
     int turnoff_timeout = 100000;
     Timer starterTimer;  // If remotely-started starting event is left on for this long, end it automatically
