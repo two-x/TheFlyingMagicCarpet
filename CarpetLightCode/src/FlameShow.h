@@ -81,7 +81,7 @@ class FlameShow : public LightShow {
          // disperse heat
          for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
             uint16_t lw = i > 0 ? i - 1 : NUM_NEO_LEDS - 1;
-            uint16_t hi = i < NUM_NEO_LEDS - 1 ? i + 1 : 0;
+            uint16_t hi = i < NUM_NEO_LEDS - 1 ? i + i : 0;
             currTemperature[ i ] = ( prevTemperature[ lw ] +
                                      prevTemperature[ hi ] +
                                      prevTemperature[ i ] ) / 3;
@@ -122,7 +122,7 @@ class FlameShow : public LightShow {
             }
             int val = scaleTo255( time - timestamp, rate, 0 );
             // Serial.println( val );
-            carpet->ropeLeds[ i ] = blend( newclr, oldclr, val );
+            carpet->ropeLeds[ i ] = blend( val, newclr, oldclr );
          }
       }
 
