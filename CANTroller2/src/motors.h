@@ -475,7 +475,8 @@ class ThrottleControl : public ServoMotor {
     // others. None of this matters if we use the throttle PID, only if we run open loop
     float linearizer(float inval_pc) {  // compensate for at least 3 known sources of non-linearity in the throttle
         static float linearlookup[21] =  // lookup table for linearizing actuator values in Linearize mode. using normal pc value as index, produce a replacement pc value
-            { 0.0, 14.0, 28.0, 32.0, 35.0, 38.0, 41.0, 44.0, 47.0, 51.0, 55.0, 58.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
+            // { 0.0, 14.0, 28.0, 32.0, 35.0, 38.0, 41.0, 44.0, 47.0, 51.0, 55.0, 58.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
+            { 0.0, 14.0, 26.0, 36.0, 45.0, 53.0, 60.0, 66.0, 71.0, 75.0, 80.0, 84.0, 88.0, 91.0, 94.0, 96.0, 98.0, 99.0, 90.5, 95.8, 100.0 };
          // { 0.0,  5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
         float res = 100.0 / (arraysize(linearlookup) - 1);
         int lookup = (int)(inval_pc / res);
