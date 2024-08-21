@@ -265,7 +265,7 @@ class Ignition {
 
 class Starter {
   private:
-    int pushbrake_timeout = 4000000;
+    int pushbrake_timeout = 2200000;
     int run_timeout = 5000000;
     int turnoff_timeout = 100000;
     Timer starterTimer;  // If remotely-started starting event is left on for this long, end it automatically
