@@ -2,3 +2,6 @@
 CANTroller2/.vscode/settings.json
 CANTroller2/CANTroller2.code-workspace
 CANTroller2/src/wificred.h
+CarpetLightCode/.vscode/*
+CarpetLightCode/.pio/*
+CarpetLightCode/.pio/build/project.checksum
