@@ -122,7 +122,7 @@ class FlameShow : public LightShow {
             }
             int val = scaleTo255( time - timestamp, rate, 0 );
             // Serial.println( val );
-            carpet->ropeLeds[ i ] = blend( val, newclr, oldclr );
+            carpet->ropeLeds[ i ] = blend( newclr, oldclr, val );
          }
       }
 
