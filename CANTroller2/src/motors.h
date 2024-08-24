@@ -388,7 +388,7 @@ class ThrottleControl : public ServoMotor {
     float si[NUM_MOTORVALS] = { 58.0, 57.0, 158.0, 69.0, NAN, 0.0, 180.0, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     float idle_si[NUM_MOTORVALS] = { 58.0, NAN, 65.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
+    float idle_pc = 0.0; // 11.3;                              // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
     // ... with:
     // ThrottleServo servo;
@@ -476,7 +476,7 @@ class ThrottleControl : public ServoMotor {
     float linearizer(float inval_pc) {  // compensate for at least 3 known sources of non-linearity in the throttle
         static float linearlookup[21] =  // lookup table for linearizing actuator values in Linearize mode. using normal pc value as index, produce a replacement pc value
             { 0.0, 10.0, 19.0, 28.0, 36.0, 42.0, 49.0, 56.0, 62.0, 68.0, 72.0, 77.0, 81.0, 85.0, 88.0, 91.0, 94.0, 96.0, 98.0, 99.0, 100.0 };
-            { 0.0, 14.0, 28.0, 32.0, 35.0, 38.0, 41.0, 44.0, 47.0, 51.0, 55.0, 58.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
+         // { 0.0, 14.0, 28.0, 32.0, 35.0, 38.0, 41.0, 44.0, 47.0, 51.0, 55.0, 58.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
          // { 0.0,  5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
         float res = 100.0 / (arraysize(linearlookup) - 1);
         int lookup = (int)(inval_pc / res);
@@ -602,7 +602,7 @@ class ThrottleControl : public ServoMotor {
     void update() {
         if (runmode == LOWPOWER) return;
         if (pid_timer.expireset()) {
-            update_idlespeed();                // Step 1 : do any idle speed management needed          
+            // update_idlespeed();                // Step 1 : do any idle speed management needed          
             update_ctrl_config();
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             postprocessing();                // Step 3 : fix output to ensure it's in range
