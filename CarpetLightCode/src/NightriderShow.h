@@ -101,12 +101,12 @@ class NightriderShow : public LightShow {
          int val = scaleTo255( abs( i - littlePos ), SIZEOF_SMALL_NEO, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
       }
-      for ( int i = NEO1_OFFSET; i < NEO2_OFFSET; ++i ) {
+      for ( int i = NEO1_OFFSET; i < NEO4_OFFSET; ++i ) {
          int val = scaleTo255( abs( i - NEO1_OFFSET - bigPos ), NEO2_OFFSET - NEO1_OFFSET, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
       }
-      for ( int i = NEO2_OFFSET; i < NEO3_OFFSET; ++i ) {
-         int val = 255 - scaleTo255( abs( i - NEO2_OFFSET - bigPos ), NEO3_OFFSET - NEO2_OFFSET, 0 );
+      for ( int i = NEO4_OFFSET; i < NEO5_OFFSET; ++i ) {
+         int val = 255 - scaleTo255( abs( i - NEO4_OFFSET - bigPos ), NEO5_OFFSET - NEO4_OFFSET, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
       }
       for ( int i = NEO3_OFFSET; i < NEO4_OFFSET; ++i ) {
