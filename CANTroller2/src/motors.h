@@ -706,7 +706,7 @@ class BrakeControl : public JagMotor {
     QPID* pid_dom = &(pids[PositionFB]);  // AnalogSensor sensed[2];
     float brake_pid_trans_threshold_lo = 0.25;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
     float brake_pid_trans_threshold_hi = 0.50;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
-    bool autostopping = false, autoholding = false, reverse = false;
+    bool autostopping = false, autoholding = false;
     float target_si[NumBrakeSens];  // this value is the posn and pressure (and hybrid combined) target settings, or fed into pid to calculate setting if pid enabled, in si units appropriate to each sensor
     float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, target_pc, pid_err_pc;
     float combined_read_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
@@ -986,9 +986,9 @@ class BrakeControl : public JagMotor {
             postprocessing();                // Step 3 : Fix motor pc value if it's out of range or threatening to exceed positional limits
             us[OUT] = out_pc_to_us(pc[OUT], reverse);   // Step 4 : Convert motor percent value to pulse width for motor, and to volts for display
             volt[OUT] = out_pc_to_si(pc[OUT]);
-            static int count;
-            // if (++count == 5)  ezread.squintf("to motor: %lf, %lf\n", pc[OUT], us[OUT]);
-            count %= 5;
+            // static int count;
+            // if (++count == 50)  ezread.squintf("to brake motor: %lf, %lf\n", pc[OUT], us[OUT]);
+            // count %= 50;
             write_motor();  // Step 5 : Write to motor
         }
     }
@@ -1013,7 +1013,6 @@ class SteeringControl : public JagMotor {
     using JagMotor::JagMotor;
     int motormode = Halt, oldmode = Halt;
     float steer_safe_pc = 72.0;  // this percent is taken off full steering power when driving full speed (linearly applied)
-    bool reverse = false;
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         max_out_change_rate_pcps = 350.0;
         ezread.squintf("Steering motor..\n");
@@ -1027,9 +1026,9 @@ class SteeringControl : public JagMotor {
             postprocessing();               // Step 2 : Fix motor pc value if it's out of range
             us[OUT] = out_pc_to_us(pc[OUT], reverse);  // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
             volt[OUT] = out_pc_to_si(pc[OUT]);
-            static int count;
-            if (++count == 5)  ezread.squintf("to motor: %lf, %lf\n", pc[OUT], us[OUT]);
-            count %= 5;
+            // static int count;
+            // if (++count == 50)  ezread.squintf("to steering motor: %lf, %lf\n", pc[OUT], us[OUT]);
+            // count %= 50;
             write_motor();  // Step 4 : Write to motor
         }
     }
