@@ -290,14 +290,27 @@ class JagMotor : public ServoMotor {
     using ServoMotor::ServoMotor;
     float duty_fwd_pc = 100;  // default. subclasses override as necessary
     float duty_rev_pc = 100;  // default. subclasses override as necessary
-    float pc[NUM_MOTORVALS] = { NAN, 0, NAN, 0, NAN, -100, 100, 2 };  // percent values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
-    float si[NUM_MOTORVALS] = { NAN, 0, NAN, 0, NAN, NAN, NAN, NAN };  // standard si-unit values [OPMIN/STOP/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    float us[NUM_MOTORVALS] = { NAN, 1500, NAN, NAN, NAN, 670, 2330, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
     float (&volt)[arraysize(si)] = si;  // our standard si value is volts. Create reference so si and volt are interchangeable
     #if !BrakeThomson
     // set opmin to avoid driving motor with under 8%
     #endif
-    // JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {}
+    JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {
+        pc[OPMIN] = NAN;
+        pc[STOP] = 0;
+        pc[OPMAX] = NAN;
+        pc[OUT] = 0;
+        pc[ABSMIN] = -100;
+        pc[ABSMAX] = 100;
+        pc[MARGIN] = 2;
+        si[OPMIN] = NAN;
+        si[STOP] = 0;
+        si[OPMAX] = NAN;
+        si[OUT] = 0;
+        us[CENT] = 1500;
+        us[OUT] = NAN;
+        us[ABSMIN] = 670;
+        us[ABSMAX] = 2330;
+    }
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
         si[ABSMAX] = running_on_devboard ? car_batt_fake_v : mulebatt->val();
         si[ABSMIN] = -(si[ABSMAX]);
@@ -329,6 +342,21 @@ class JagMotor : public ServoMotor {
         return us[STOP];
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
+        pc[OPMIN] = NAN;
+        pc[STOP] = 0;
+        pc[OPMAX] = NAN;
+        pc[OUT] = 0;
+        pc[ABSMIN] = -100;
+        pc[ABSMAX] = 100;
+        pc[MARGIN] = 2;
+        si[OPMIN] = NAN;
+        si[STOP] = 0;
+        si[OPMAX] = NAN;
+        si[OUT] = 0;
+        us[CENT] = 1500;
+        us[OUT] = NAN;
+        us[ABSMIN] = 670;
+        us[ABSMAX] = 2330;
         ServoMotor::setup(_hotrc, _speedo);
         mulebatt = _batt;
         derive();
