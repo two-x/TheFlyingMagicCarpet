@@ -28,9 +28,9 @@ void setup() {
    carpet->setup();
 
    // TODO: i don't think i like this, lets use a static class instead.
-   // currLightShow = new DemoShow( carpet );
+   currLightShow = new DemoShow( carpet );
    // currLightShow = new FlameShow( carpet );
-   currLightShow = new NightriderShow( carpet );
+   // currLightShow = new NightriderShow( carpet );
    currLightShow->start();
    Serial.begin(9600);
 }

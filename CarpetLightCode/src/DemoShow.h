@@ -9,11 +9,23 @@ class DemoShow : public LightShow {
          carpet->megabarLeds[ i ] = CRGB::Blue;
          carpet->chinaLeds[ i ] = CRGB::Green;
       }
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-        carpet->ropeLeds[i] = CRGB::Red;
+      while (true) {
+         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+           carpet->ropeLeds[i] = CRGB::Red;
+         }
+         carpet->show();
+         FastLED.delay( 1000 );
+         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+           carpet->ropeLeds[i] = CRGB::Blue;
+         }
+         carpet->show();
+         FastLED.delay( 1000 );
+         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+           carpet->ropeLeds[i] = CRGB::Green;
+         }
+         carpet->show();
+         FastLED.delay( 1000 );
       }
-      carpet->show();
-      FastLED.delay( 1000 );
    }
 
    void update( uint32_t timestamp ) {

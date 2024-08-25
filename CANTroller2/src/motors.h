@@ -958,6 +958,9 @@ class BrakeControl : public JagMotor {
             postprocessing();                // Step 3 : Fix motor pc value if it's out of range or threatening to exceed positional limits
             us[OUT] = out_pc_to_us(pc[OUT], reverse);   // Step 4 : Convert motor percent value to pulse width for motor, and to volts for display
             volt[OUT] = out_pc_to_si(pc[OUT]);
+            static int count;
+            // if (++count == 5)  ezread.squintf("to motor: %lf, %lf\n", pc[OUT], us[OUT]);
+            count %= 5;
             write_motor();  // Step 5 : Write to motor
         }
     }
@@ -996,6 +999,9 @@ class SteeringControl : public JagMotor {
             postprocessing();               // Step 2 : Fix motor pc value if it's out of range
             us[OUT] = out_pc_to_us(pc[OUT], reverse);  // Step 3 : Convert motor percent value to pulse width for motor, and to volts for display
             volt[OUT] = out_pc_to_si(pc[OUT]);
+            static int count;
+            if (++count == 5)  ezread.squintf("to motor: %lf, %lf\n", pc[OUT], us[OUT]);
+            count %= 5;
             write_motor();  // Step 4 : Write to motor
         }
     }
