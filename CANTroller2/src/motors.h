@@ -570,7 +570,7 @@ class ThrottleControl : public ServoMotor {
         }
         else new_out = throttle_target_pc;  // ezread.squintf(" ela:%ld pcps:%lf", throttleRateTimer.elapsed(), max_throttle_angular_velocity_pcps);
         pc[OUT] = new_out;
-        if (motormode == Linearized) pc[OUT] = linearizer(pc[OUT]);
+        // if (motormode == Linearized) pc[OUT] = linearizer(pc[OUT]);
         rate_limiter();  // pc[OUT] = rate_limiter(new_out);  max_out_change_rate_pcps
     }
     void postprocessing() {
