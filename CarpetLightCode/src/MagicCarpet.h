@@ -44,11 +44,15 @@
 // TODO: convert the user-facing values to constexpr global vars
 #define SIZEOF_SMALL_NEO 156 // 108
 #define SIZEOF_LARGE_NEO 352 // 145
+#define SIZEOF_SMALL_NEO_HALF 78
+#define SIZEOF_LARGE_NEO_HALF 176
+#define SIZEOF_LARGE_NEO_CORNER 33
 #define NUM_NEOPIXEL_STRIPS 8
 #define NUM_NEO_SMALL_LEDS ( NUM_NEOPIXEL_STRIPS / 2 )
 #define NUM_NEO_LARGE_LEDS NUM_NEO_SMALL_LEDS
 #define NUM_NEO_LEDS ( ( SIZEOF_SMALL_NEO * NUM_NEO_SMALL_LEDS ) + \
                        ( SIZEOF_LARGE_NEO * NUM_NEO_LARGE_LEDS ) )
+#define NUM_NEO_LEDS_ACTUAL ((SIZEOF_SMALL_NEO * 2) + (SIZEOF_LARGE_NEO * 2))
 #define NUM_NEO_LEDS_PER_STRIP LedUtil::resizeCRGBW( SIZEOF_LARGE_NEO )
 #define NUM_NEO_SHOW_LEDS ( NUM_NEO_LEDS_PER_STRIP * NUM_NEOPIXEL_STRIPS )
 #define SIZEOF_NEO_STRIP ( NUM_NEO_LEDS_PER_STRIP * sizeof( CRGB ) )
@@ -81,14 +85,14 @@
  * only for the rope light arrays, but we can do this for the dmx leds too if we
  * feel the need.
  */
-#define FRONT NEO0_OFFSET
-#define FRONT_RIGHT NEO1_OFFSET
-#define RIGHT NEO2_OFFSET
-#define BACK_RIGHT NEO3_OFFSET
-#define BACK NEO4_OFFSET
-#define BACK_LEFT NEO5_OFFSET
-#define LEFT NEO6_OFFSET
-#define FRONT_LEFT NEO7_OFFSET
+#define FRONT (SIZEOF_SMALL_NEO_HALF)
+#define FRONT_RIGHT (SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO_CORNER)
+#define RIGHT (SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO_HALF)
+#define BACK_RIGHT (SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO - SIZEOF_LARGE_NEO_CORNER)
+#define BACK (SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO + SIZEOF_SMALL_NEO_HALF)
+#define BACK_LEFT ((SIZEOF_SMALL_NEO * 2) + SIZEOF_LARGE_NEO_CORNER)
+#define LEFT ((SIZEOF_SMALL_NEO * 2) + SIZEOF_LARGE_NEO + SIZEOF_LARGE_NEO_HALF)
+#define FRONT_LEFT (NUM_NEO_LEDS_ACTUAL - SIZEOF_LARGE_NEO_CORNER)
 
 #define TWELVE FRONT
 #define ONE_THIRTY FRONT_RIGHT
@@ -117,7 +121,7 @@ class MagicCarpet {
    CRGBWUA chinaLeds[ NUM_CHINA_LEDS ];
 
    // neopixel leds
-   CRGBW ropeLeds[ NUM_NEO_LEDS ];
+   CRGBW ropeLeds[ NUM_NEO_LEDS_ACTUAL ];
 
    // controls
    LedControl::Potentiometer * pot;
@@ -157,14 +161,14 @@ class MagicCarpet {
        * TODO: if we start running too slow we can look at ways to get around this
        *       reversal
        */
-      LedUtil::reverse( ropeLeds + NEO0_OFFSET, SIZEOF_SMALL_NEO );
+      LedUtil::reverse( ropeLeds, SIZEOF_SMALL_NEO );
       // LedUtil::reverse( ropeLeds + NEO2_OFFSET, SIZEOF_LARGE_NEO );
-      LedUtil::reverse( ropeLeds + NEO4_OFFSET, SIZEOF_SMALL_NEO );
+      LedUtil::reverse( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO, SIZEOF_SMALL_NEO );
       // LedUtil::reverse( ropeLeds + NEO6_OFFSET, SIZEOF_LARGE_NEO );
 
-      LedUtil::convertNeoArray( ropeLeds + NEO0_OFFSET, ropeShowLeds,
+      LedUtil::convertNeoArray( ropeLeds, ropeShowLeds,
                                 SIZEOF_SMALL_NEO );
-      LedUtil::convertNeoArray( ropeLeds + NEO1_OFFSET,
+      LedUtil::convertNeoArray( ropeLeds + SIZEOF_SMALL_NEO,
                                 ropeShowLeds + NUM_NEO_LEDS_PER_STRIP,
                                 SIZEOF_LARGE_NEO );
       // LedUtil::convertNeoArray( ropeLeds + NEO2_OFFSET,
@@ -173,10 +177,10 @@ class MagicCarpet {
       // LedUtil::convertNeoArray( ropeLeds + NEO3_OFFSET,
       //                           ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 3,
       //                           SIZEOF_SMALL_NEO );
-      LedUtil::convertNeoArray( ropeLeds + NEO4_OFFSET,
+      LedUtil::convertNeoArray( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO,
                                 ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 4,
                                 SIZEOF_SMALL_NEO );
-      LedUtil::convertNeoArray( ropeLeds + NEO5_OFFSET,
+      LedUtil::convertNeoArray( ropeLeds + (SIZEOF_SMALL_NEO * 2) + SIZEOF_LARGE_NEO,
                                 ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 5,
                                 SIZEOF_LARGE_NEO );
       // LedUtil::convertNeoArray( ropeLeds + NEO6_OFFSET,
@@ -187,8 +191,8 @@ class MagicCarpet {
       //                           SIZEOF_SMALL_NEO );
 
       // make sure to reverse the values so the user has a consistent view
-      LedUtil::reverse( ropeLeds + NEO0_OFFSET, SIZEOF_SMALL_NEO );
-      LedUtil::reverse( ropeLeds + NEO4_OFFSET, SIZEOF_SMALL_NEO );
+      LedUtil::reverse( ropeLeds, SIZEOF_SMALL_NEO );
+      LedUtil::reverse( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO, SIZEOF_SMALL_NEO );
 
       // we don't have to pass the china light array separately. Instead, we treat
       // both arrays as a single big array, since they're contiguous in memory.

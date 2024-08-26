@@ -55,12 +55,12 @@ class NightriderShow : public LightShow {
       if ( true || diff > rate ) {
          timestamp = time;
          diff = 0;
-         if ( bigPos == SIZEOF_LARGE_NEO - 1 ) {
+         if ( bigPos == SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER - 1 ) {
             bigPosDir = 0;
          } else if ( bigPos == 0 && bigPosDir == 0 ) {
             bigPosDir = 1;
          }
-         if ( littlePos == SIZEOF_SMALL_NEO - 1 ) {
+         if ( littlePos == SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER - 1 ) {
             littlePosDir = 0;
          } else if ( littlePos == 0 && littlePosDir == 0 ) {
             littlePosDir = 1;
@@ -97,41 +97,41 @@ class NightriderShow : public LightShow {
       // Serial.println( clr2.w );
       // int diffIndex = scaleTo255( diff, rate, 0 );
 
-      for ( int i = NEO0_OFFSET; i < NEO1_OFFSET; ++i ) {
-         int val = scaleTo255( abs( i - littlePos ), SIZEOF_SMALL_NEO, 0 );
+      for ( int i = FRONT; i < FRONT_RIGHT; ++i ) {
+        int val = scaleTo255( abs( (i - FRONT) - littlePos ), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
       }
-      for ( int i = NEO1_OFFSET; i < NEO4_OFFSET; ++i ) {
-         int val = scaleTo255( abs( i - NEO1_OFFSET - bigPos ), NEO2_OFFSET - NEO1_OFFSET, 0 );
+      for ( int i = FRONT_RIGHT; i < RIGHT; ++i ) {
+         int val = scaleTo255( abs( bigPos - (i - FRONT_RIGHT) ), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
       }
-      for ( int i = NEO4_OFFSET; i < NEO5_OFFSET; ++i ) {
-         int val = 255 - scaleTo255( abs( i - NEO4_OFFSET - bigPos ), NEO5_OFFSET - NEO4_OFFSET, 0 );
+      for ( int i = RIGHT; i < BACK_RIGHT; ++i ) {
+         int val = scaleTo255( abs( (i - RIGHT) - bigPos), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
       }
-      for ( int i = NEO3_OFFSET; i < NEO4_OFFSET; ++i ) {
-         int val = scaleTo255( abs( i - NEO3_OFFSET - littlePos ), NEO4_OFFSET - NEO3_OFFSET, 0 );
+      for ( int i = BACK_RIGHT; i < BACK; ++i ) {
+        int val = scaleTo255( abs( littlePos - (i - BACK_RIGHT)), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
       }
-      for ( int i = NEO4_OFFSET; i < NEO5_OFFSET; ++i ) {
-         int val = scaleTo255( abs( i - NEO4_OFFSET - littlePos ), NEO5_OFFSET - NEO4_OFFSET, 0 );
+      for ( int i = BACK; i < BACK_LEFT; ++i ) {
+        int val = scaleTo255( abs( (i - BACK) - littlePos ), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
       }
-      for ( int i = NEO5_OFFSET; i < NEO6_OFFSET; ++i ) {
-         int val = 255 - scaleTo255( abs( i - NEO5_OFFSET - bigPos ), NEO6_OFFSET - NEO5_OFFSET, 0 );
+      for ( int i = BACK_LEFT; i < LEFT; ++i ) {
+         int val = scaleTo255( abs( bigPos - (i - BACK_LEFT) ), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
       }
-      for ( int i = NEO6_OFFSET; i < NEO7_OFFSET; ++i ) {
-         int val = scaleTo255( abs( i - NEO6_OFFSET - bigPos ), NEO7_OFFSET - NEO6_OFFSET, 0 );
+      for ( int i = LEFT; i < BACK_LEFT; ++i ) {
+         int val = scaleTo255( abs( (i - LEFT) - bigPos), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
       }
-      for ( int i = NEO7_OFFSET; i < NEO7_OFFSET + SIZEOF_SMALL_NEO; ++i ) {
-         int val = scaleTo255( abs( i - NEO7_OFFSET - littlePos ), SIZEOF_SMALL_NEO, 0 );
+      for ( int i = FRONT_LEFT; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
+        int val = scaleTo255( abs( littlePos - (i - FRONT_LEFT)), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
       }
 
-      LedUtil::reverse( carpet->ropeLeds + NEO0_OFFSET, SIZEOF_SMALL_NEO );
-      LedUtil::reverse( carpet->ropeLeds + NEO4_OFFSET, SIZEOF_SMALL_NEO );
+      // LedUtil::reverse( carpet->ropeLeds + NEO0_OFFSET, SIZEOF_SMALL_NEO );
+      // LedUtil::reverse( carpet->ropeLeds + NEO4_OFFSET, SIZEOF_SMALL_NEO );
 
       int dmxval = AudioBoard::getLow();
       CRGB dmxclr = blend( clr1, clr2, dmxval );
@@ -149,7 +149,7 @@ class NightriderShow : public LightShow {
             --white;
          }
       }
-      for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+      for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          carpet->ropeLeds[ i ].w = white;
       }
    }
