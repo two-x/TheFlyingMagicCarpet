@@ -53,7 +53,7 @@ class NeopixelStrip {
                                 { 0, 3, 16, 30, 45, 65, 100 }, };  // [DAY] [B_OFF/B_MIN/B_LOW/B_MED/B_HIGH/B_EXT/B_MAX]
     bool context = NITE, neo_heartbeat_variable_brightness = false;  // If false then brightness control only affect idiotlights
     bool neo_heartbeat = false, heartcolor_change = true;  // , heartcolor_overridden = false;
-    uint8_t lobright, hibright = 35;
+    uint8_t lobright = 5, hibright = 35;
     uint8_t heartbright[2] = { 22, 85 }, heartlobright[2] = { 2, 18 }, heartbeat_brightness[2], heartbeat_brightness_last[2]; // brightness during fadeouts
     uint8_t neo_master_brightness = 0xff, heartcolor16 = 0x00, csat[idiotcount];  // blackened heart
     uint32_t fcbase[idiotcount];
@@ -118,24 +118,36 @@ void NeopixelStrip::set_pcba_glow(int mode) {  // modes 0-3: glowOff, glowHeartB
     pcbaglow = mode;
 }
 void NeopixelStrip::refresh(bool force) {
-    int numledstowrite = (heartbeatNow[0] != neostrip[0]);
-    int firstheart = (int)((pcbaglow == glowOff) || !neo_heartbeat);
-    int lastheart = (int)((pcbaglow == glowHeartBoth) || (pcbaglow == glowXFade)) + (int)pcba_3v2;
-    for (int i=firstheart; i<=lastheart; i++) {
-        if (heartbeatNow[i] != neostrip[i]) numledstowrite = i + 1;
-        neostrip[i] = heartbeatNow[i];
-        neoobj.SetPixelColor(i, heartbeatNow[i]);
-    }
+    // int numledstowrite = (heartbeatNow[0] != neostrip[0]);
+    // int firstheart = (int)((pcbaglow == glowOff) || !neo_heartbeat);
+    // int lastheart = (int)((pcbaglow == glowHeartBoth) || (pcbaglow == glowXFade)) + (int)pcba_3v2;
+    // for (int i=firstheart; i<=lastheart; i++) {
+    //     if (heartbeatNow[i] != neostrip[i]) numledstowrite = i + 1;
+    //     neostrip[i] = heartbeatNow[i];
+    //     neoobj.SetPixelColor(i, heartbeatNow[i]);
+    // }
+    neoobj.SetPixelColor(0, heartbeatColor);
+    neoobj.SetPixelColor(1, heartbeatColor);
+    neoobj.SetPixelColor(2, heartbeatColor);
     int index;
-    for (int i=0; i<idiotcount; i++) {
-        index = i + 1 + (int)pcba_3v2;
-        if (cidiot[i][cnow] != neostrip[index] || force) {
-            neoobj.SetPixelColor (index, cidiot[i][cnow]);
-            neostrip[index] = cidiot[i][cnow];  // color_to_neo(cidiot[i][cnow]);
-            numledstowrite++;  // + idiotCount;
+    for (int i=0; i<idiotcount - 1; i++) {
+        // index = i + 1 + (int)pcba_3v2;
+        index = i + 3;
+        if (fset[i][onoff]) {
+            // neoobj.SetPixelColor(index, cidiot[i][cnormal]);
+            neoobj.SetPixelColor(index, recolor(cidiot[i][cnormal], (float)hibright, neosat));
+        } else {
+            neoobj.SetPixelColor(index, recolor(cidiot[i][cnormal], (float)lobright, neosat));
+            // neoobj.SetPixelColor(index, cidiot[i][coff]);
         }
+        // if (cidiot[i][cnow] != neostrip[index] || force) {
+        //     // neoobj.SetPixelColor(index, cidiot[i][cnow]);
+        //     neoobj.SetPixelColor(index, neorgb_t(255,0,0));
+        //     neostrip[index] = cidiot[i][cnow];  // color_to_neo(cidiot[i][cnow]);
+        // }
     }
-    if (numledstowrite) neoobj.Show(numledstowrite);  // This ability to exclude pixels at the end of the strip that haven't changed from the data write is an advantage of neopixelbus over adafruit
+    // if (numledstowrite) neoobj.Show(numledstowrite);  // This ability to exclude pixels at the end of the strip that haven't changed from the data write is an advantage of neopixelbus over adafruit
+    neoobj.Show();  // This ability to exclude pixels at the end of the strip that haven't changed from the data write is an advantage of neopixelbus over adafruit
 }
 void NeopixelStrip::setup(bool viewcontext) {
     ezread.squintf("Neopixels.. ");
@@ -303,8 +315,9 @@ void NeopixelStrip::update() {
     nowtime_us = (int)flashtimer.elapsed();
     nowepoch = nowtime_us / fquantum_us;
     for (int i=0; i<idiotcount; i++) {
-        if (!syspower) cidiot[i][cnow] = neorgb_t(0);
-        else update_idiot(i);
+        // if (!syspower) cidiot[i][cnow] = neorgb_t(0);
+        // else update_idiot(i);
+        update_idiot(i);
     }
     refresh();
     flashtimer.expireset();
