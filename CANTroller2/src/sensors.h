@@ -760,10 +760,11 @@ class BrakePositionSensor : public AnalogSensor {
             
             // calibration: since we use AbsLimMap, set all four abslims, using false argument, to set up conversion
             //   then indicate op limits in native or si and the zeropoint in si
-            set_abslim_native(979, 3103, false);  // tuned 240513 - don't remember if values read from screen or calculated.  need to redo
-            set_abslim(0.95, 8.85, false);  // tuned 240513 - actuator inches measured
-            set_oplim(2.32, 4.5);  // 240609 determined opmin on vehicle, with LAE motor connected w/ quicklink + carabeener
-            _zeropoint = 3.63;  // 240609 3.65in, 1707 adc - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
+            set_abslim_native(1885, 3100, false);  // tuned 240513 - don't remember if values read from screen or calculated.  need to redo
+            set_abslim(4.33, 8.84, false);  // tuned 240513 - actuator inches measured
+            set_oplim(4.52, 6.54); 
+             // 240609 determined opmin on vehicle, with LAE motor connected w/ quicklink + carabeener
+            _zeropoint = 5.75;  // 240609 3.65in, 1707 adc - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
 
             // don't also set native oplims as they will autocalc from oplims setting
             // set_oplim_native(1445, 1923);  // 240609 1445 (2.68in) is full push, and 1923 (4.5in) is park position (with simple quicklink +carabeener linkage)
