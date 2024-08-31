@@ -182,7 +182,7 @@ class BasicModeSwitch : public ToggleSwitch {
         }
         read();
         if (console_enabled) {
-            Serial.begin(460800);  // 9600/19200/28800/57600/115200/230400/460800/921600;  // restart serial console to prevent crashes due to error printing
+            Serial.begin(921600);  // 9600/19200/28800/57600/115200/230400/460800/921600;  // restart serial console to prevent crashes due to error printing
             // delay(1500);  // note we will miss console messages for a bit surrounding a read, unless we add back these delays
         }
     }

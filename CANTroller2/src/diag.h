@@ -249,6 +249,13 @@ class DiagRuntime {
             // bypassing LOST check because it's giving false positive for all 7 sensors on the car, even tho they are reading fine. FIX!
             // setflag(i, LOST, !tempsens->detected(i));
         }
+        int minwheel = 400, maxwheel = -400;
+        for (int i=_TempWhFL; i<=_TempWhRR; i++) {
+            if (*devices[i][DiagVal] < minwheel) minwheel = *devices[i][DiagVal];
+            if (*devices[i][DiagVal] > maxwheel) maxwheel = *devices[i][DiagVal];
+        }
+        wheeltemperr = (( maxwheel - minwheel) > wheeldifferr);
+
     }
     // Brakes:   checks if any sensor the brake is expecting to use in its current mode are posting errors
     void BrakeFailure() {  // checks if posn is not changing while pressure is changing and motor is moving (assuming not near max brake)

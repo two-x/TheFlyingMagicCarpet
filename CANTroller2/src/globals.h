@@ -139,7 +139,7 @@ bool autosaver_display_fps = true;   // do you want to see the fps performance o
 bool crash_driving_recovery = false;  // if code crashes while driving, should it continue driving after reboot?
 bool pot_tuner_acceleration = false; // when editing values, can we use the pot to control acceleration of value changes? (assuming we aren't pot mapping some sensor at the time)
 bool dont_take_temperatures = false; // disables temp sensors. in case debugging dallas sensors or causing problems
-bool console_enabled = false;         // completely disables the console serial output. idea being, it may be safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
+bool console_enabled = true;         // completely disables the console serial output. idea being, it may be safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
 bool keep_system_powered = false;    // equivalent to syspower always being high.
 bool looptime_print = false;         // makes code write out timestamps throughout loop to serial port. for analyzing what parts of the code take the most time
 bool touch_reticles = true;          // draws tiny little plus reticles to aim at for doing touchscreen calibration
@@ -154,6 +154,7 @@ bool pcba_3v2 = true;                // turn to false if for some reason you are
 int throttle_ctrl_mode = Linearized;   // should gas servo use the rpm-sensing pid? values: ActivePID, OpenLoop, or Linearized
 
 // global tunable variables
+float wheeldifferr = 15.0;  // how much hotter the hottest wheel is allowed to exceed the coldest wheel befopre idiot light
 float float_zero = 0.000069;           // if two floats being compared are closer than this, we consider them equal
 float float_conversion_zero = 0.001;   // 
 int sprite_color_depth = 8;
@@ -172,6 +173,7 @@ int i2c_frequency = 400000;  // in kHz. standard freqs are: 100k, 400k, 1M, 3.4M
 // non-tunable values. probably these belong with their related code, but are global to allow accessibility from everywhere
 std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 float permanan = NAN;
+bool wheeltemperr;
 float* nanptr = &permanan;
 uint32_t codestatus = Booting;
 int runmode = STANDBY;
@@ -566,6 +568,7 @@ class EZReadConsole {
             char temp[100];
             vsnprintf(temp, sizeof(temp), format, args);
             Serial.printf("%s", temp);
+            Serial.flush();
         }
     }
     void squintf(uint8_t color, const char* format, ...) {  // prints string to both serial and ezread consoles, except you have to squint to see it
@@ -577,6 +580,7 @@ class EZReadConsole {
             char temp[100];
             vsnprintf(temp, sizeof(temp), format, args);
             Serial.printf("%s", temp);
+            Serial.flush();
         }
     }
     void lookback(int off) {
