@@ -98,40 +98,65 @@ class NightriderShow : public LightShow {
       // int diffIndex = scaleTo255( diff, rate, 0 );
 
       for ( int i = FRONT; i < FRONT_RIGHT; ++i ) {
-        int val = scaleTo255( abs( (i - FRONT) - littlePos ), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+         int i_adj = i - FRONT;
+        int val = scaleTo255( abs(littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Red;
       }
       for ( int i = FRONT_RIGHT; i < RIGHT; ++i ) {
-         int val = scaleTo255( abs( bigPos - (i - FRONT_RIGHT) ), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
+         int i_adj = i - FRONT_RIGHT;
+         int val = scaleTo255( abs( bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Green;
       }
       for ( int i = RIGHT; i < BACK_RIGHT; ++i ) {
-         int val = scaleTo255( abs( (i - RIGHT) - bigPos), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
+         int i_adj = i - RIGHT;
+         int val = scaleTo255( abs(bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Blue;
       }
       for ( int i = BACK_RIGHT; i < BACK; ++i ) {
-        int val = scaleTo255( abs( littlePos - (i - BACK_RIGHT)), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+         int i_adj = i - BACK_RIGHT;
+        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Yellow;
       }
       for ( int i = BACK; i < BACK_LEFT; ++i ) {
-        int val = scaleTo255( abs( (i - BACK) - littlePos ), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+         int i_adj = i - BACK;
+        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Orange;
       }
       for ( int i = BACK_LEFT; i < LEFT; ++i ) {
-         int val = scaleTo255( abs( bigPos - (i - BACK_LEFT) ), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
+         int i_adj = i - BACK_LEFT;
+         int val = scaleTo255( abs( bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Purple;
       }
-      for ( int i = LEFT; i < BACK_LEFT; ++i ) {
-         int val = scaleTo255( abs( (i - LEFT) - bigPos), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
+      for ( int i = LEFT; i < FRONT_LEFT; ++i ) {
+         int i_adj = i - LEFT;
+         int val = scaleTo255( abs(bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Pink;
       }
       for ( int i = FRONT_LEFT; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-        int val = scaleTo255( abs( littlePos - (i - FRONT_LEFT)), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+         int i_adj = i - FRONT_LEFT;
+        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Grey;
       }
+      for ( int i = 0; i < FRONT; ++i ) {
+         int i_adj = i + SIZEOF_LARGE_NEO_CORNER;
+        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Grey;
+      }
+      
 
-      // LedUtil::reverse( carpet->ropeLeds + NEO0_OFFSET, SIZEOF_SMALL_NEO );
-      // LedUtil::reverse( carpet->ropeLeds + NEO4_OFFSET, SIZEOF_SMALL_NEO );
+      LedUtil::reverse( carpet->ropeLeds + FRONT, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
+       LedUtil::reverse( carpet->ropeLeds + BACK, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
+      LedUtil::reverse( carpet->ropeLeds + RIGHT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
+      LedUtil::reverse( carpet->ropeLeds + LEFT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
 
       int dmxval = AudioBoard::getLow();
       CRGB dmxclr = blend( clr1, clr2, dmxval );

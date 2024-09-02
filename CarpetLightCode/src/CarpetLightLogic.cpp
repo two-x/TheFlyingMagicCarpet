@@ -21,6 +21,7 @@ MagicCarpet * carpet;
 LightShow * currLightShow;
 
 void setup() {
+   Serial.begin(9600);
    // AudioBoard::setup();
 
    // setup the carpet
@@ -28,17 +29,18 @@ void setup() {
    carpet->setup();
 
    // TODO: i don't think i like this, lets use a static class instead.
-   currLightShow = new DemoShow( carpet );
+   // currLightShow = new DemoShow( carpet );
+
    // currLightShow = new FlameShow( carpet );
-   // currLightShow = new NightriderShow( carpet );
+   currLightShow = new NightriderShow( carpet );
+
    currLightShow->start();
-   Serial.begin(9600);
 }
 
 void loop() {
    static uint32_t clock;
 
-   Serial.println( carpet->pot->read() );
+   //Serial.println( carpet->pot->read() );
 
    clock = millis();
 
