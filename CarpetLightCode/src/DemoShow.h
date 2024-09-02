@@ -10,17 +10,17 @@ class DemoShow : public LightShow {
          carpet->chinaLeds[ i ] = CRGB::Green;
       }
       while (true) {
-         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+         for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
            carpet->ropeLeds[i] = CRGB::Red;
          }
          carpet->show();
          FastLED.delay( 1000 );
-         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+         for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
            carpet->ropeLeds[i] = CRGB::Blue;
          }
          carpet->show();
          FastLED.delay( 1000 );
-         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+         for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
            carpet->ropeLeds[i] = CRGB::Green;
          }
          carpet->show();
