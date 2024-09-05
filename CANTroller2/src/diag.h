@@ -243,19 +243,19 @@ class DiagRuntime {
         // checkrange(_MuleBatt);
     }
     void TempFailure() {
-        for (int i=_TempEng; i<=_TempAmb; i++) {
-            checkrange(i);
-
+        for (int sen=_TempEng; sen<=_TempAmb; sen++) {
+            checkrange(sen);
             // bypassing LOST check because it's giving false positive for all 7 sensors on the car, even tho they are reading fine. FIX!
             // setflag(i, LOST, !tempsens->detected(i));
         }
+        bool wheelerr = false;
         int minwheel = 400, maxwheel = -400;
-        for (int i=_TempWhFL; i<=_TempWhRR; i++) {
-            if (*devices[i][DiagVal] < minwheel) minwheel = *devices[i][DiagVal];
-            if (*devices[i][DiagVal] > maxwheel) maxwheel = *devices[i][DiagVal];
+        for (int sen=_TempWhFL; sen<=_TempWhRR; sen++) {
+            if (*devices[sen][DiagVal] < minwheel) minwheel = *devices[sen][DiagVal];
+            if (*devices[sen][DiagVal] > maxwheel) maxwheel = *devices[sen][DiagVal];
+            for (int typ=0; typ<NUM_ERR_TYPES; typ++) if (err_sens[typ][sen]) wheelerr = true;
         }
-        wheeltemperr = (( maxwheel - minwheel) > wheeldifferr);
-
+        wheeltemperr = wheelerr || ((maxwheel - minwheel) > wheeldifferr);  // set global wheel temp idiot light to include all wheel temp errors
     }
     // Brakes:   checks if any sensor the brake is expecting to use in its current mode are posting errors
     void BrakeFailure() {  // checks if posn is not changing while pressure is changing and motor is moving (assuming not near max brake)
