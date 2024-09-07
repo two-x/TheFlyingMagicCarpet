@@ -151,6 +151,8 @@ bool use_tft_colors_for_neo = false; // should neopixel colors be based on onscr
 bool print_error_changes = true;     // should diag print status changes and new error events to console?
 bool pot_controls_animation_timeout = false;  // when showing fullscreen animations, should the pot value control the next animation timeout?
 bool pcba_3v2 = true;                // turn to false if for some reason you are using the v3.1 pcba. note this does not automatically correct the pin 2 <-> pin 39 swap
+bool cruise_brake = true;            // does brake work in cruise mode
+int drive_mode = CRUISE;             // enter cruise or fly mode initially?
 int throttle_ctrl_mode = Linearized; // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 
 // global tunable variables
@@ -159,7 +161,7 @@ float float_zero = 0.000069;           // if two floats being compared are close
 float float_conversion_zero = 0.001;
 int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. set to 0 linefeeds all prints
-float flycruise_vert_margin_pc = 0.3;  // margin of error for determining hard brake value for dropping out of cruise mode
+float flycruise_vert_margin_pc = 3.0;  // margin of error for determining hard brake value for dropping out of cruise mode
 int cruise_delta_max_pc_per_s = 4;     // (in TriggerHold mode) what's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.016; // (in TriggerPull mode) limits the change of each adjust trigger pull to this fraction of what's possible
 float maf_min_gps = 0.0;
