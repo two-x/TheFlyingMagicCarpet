@@ -80,7 +80,7 @@ enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
 enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, Linearized=13, NumMotorModes=14 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
 enum openloopmodes { MedianPoint=0, AutoRelease=1, AutoRelHoldable=2, NumOpenLoopModes=3 };
-enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9,PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
+enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9, PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
 enum diag_val { DiagVal=0, DiagMin=1, DiagMax=2, DiagMargin=3, NumDiagVals=4 };
 enum joydirs { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
 enum panel_apps { EZReadUI=0, MuleChassisUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel

@@ -4,7 +4,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     int lowpower_delay_sec = 1500;  // Time of inactivity after entering standby mode before going to lowpower mode.  900sec = 15min
     int screensaver_delay_sec = 600;  // Time of inactivity after entering standby mode before starting screensaver turns on.  300sec = 5min
     Timer gestureFlyTimer{500000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-    Timer pwrup_timer{1000000};  // Timeout to allow powerup of system devices during wakeup. delays entry to standby mode (in us)
+    Timer pwrup_timer{500000};  // Timeout to allow powerup of system devices during wakeup. delays entry to standby mode (in us)
     Timer standby_timer{5000000};
     int _joydir, oldmode = LOWPOWER;
     bool still_interactive = true;
@@ -147,13 +147,14 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (speedo.stopped() && hotrc.joydir() != JOY_UP) runmode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
         }
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
-        if (hotrc.sw_event(CH4)) runmode = CRUISE;                                     // enter fly mode by pressing hrc ch4 button
+        if (hotrc.sw_event(CH4)) runmode = CRUISE;                                     // enter cruise mode by pressing hrc ch4 button
     }
     void run_cruiseMode() {
         if (we_just_switched_modes) {  // upon first entering cruise mode, initialize things
             car_hasnt_moved = speedo.stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
             gas.setmode(Cruise);
             brake.setmode(cruise_brake ? ActivePID : Release);
+            steer.setmode(OpenLoop);
             gestureFlyTimer.reset();  // initialize brake-trigger timer
         }
         if (car_hasnt_moved) {
@@ -163,12 +164,12 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else {
             // watchdog.set_codestatus(Driving);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
             if (hotrc.joydir(VERT) == JOY_DN && !cruise_speed_lowerable) runmode = FLY;
-            if (hotrc.sw_event(CH4)) runmode = FLY;                  // go to fly mode if hotrc ch4 button pushed
             if (speedo.stopped() && hotrc.joydir() != JOY_UP) runmode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
         }
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
-        // if joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
+        if (hotrc.sw_event(CH4)) runmode = FLY;                  // go to fly mode if hotrc ch4 button pushed
         
+        // // if joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
         // if (hotrc.pc[VERT][FILT] > hotrc.pc[VERT][OPMIN] + flycruise_vert_margin_pc) gestureFlyTimer.reset();  // keep resetting timer if joystick not at bottom
         // else if (gestureFlyTimer.expired()) runmode = FLY;  // new gesture to drop to fly mode is hold the brake all the way down for more than X ms
         
