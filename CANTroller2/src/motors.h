@@ -413,7 +413,6 @@ class ThrottleControl : public ServoMotor {
     //   5. note also the reported angular value to see how accurate they are. if not, fix the conversions (currently a map statement)
 
     // * set operational angular range (OPMIN/OPMAX), margin (MARGIN) and parking angle (PARKED) here.
-    float si[NUM_MOTORVALS] = { 58.0, 57.0, 158.0, 69.0, NAN, 0.0, 180.0, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     float idle_si[NUM_MOTORVALS] = { 58.0, NAN, 65.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idle_pc = 0.0; // 11.3;                              // idle percent is derived from the si (degrees) value
@@ -452,6 +451,14 @@ class ThrottleControl : public ServoMotor {
         tach = _tach;  pot = _pot;  tempsens = _temp;
         ezread.squintf("Throttle servo.. pid %s\n", pid_enabled ? "enabled" : "disabled");
         ezread.squintf("  Cruise pid %s, using %s adj scheme\n", cruise_pid_enabled ? "enabled" : "disabled", cruiseschemecard[cruise_adjust_scheme].c_str());
+        si[OPMIN] = 58.0;
+        si[PARKED] = 57.0;
+        si[OPMAX] = 158.0;
+        si[OUT] = 69.0;
+        si[GOVERN] = NAN;
+        si[ABSMIN] = 0.0;
+        si[ABSMAX] = 180.0;
+        si[MARGIN] = 1.0;
         ServoMotor::setup(_hotrc, _speedo);
         throttleRateTimer.reset();
         // use_ratelimiter = true;
