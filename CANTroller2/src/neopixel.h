@@ -234,7 +234,7 @@ bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolst
 //   _idiot = which idiot light
 //   count  = number of blinks per cycle. Use 0 to cancel a previously applied blink pattern
 //   pulseh = high pulse width of each blink, in increments of 50 ms (of which there are max 128 per cycle)
-//   pulsel = low pulse width of each blink, in increments of 50 ms (of which there are max 128 per cycle)
+//   pulsel = low pulse width of each blink, here led will be its normal on or off color. also 50 ms each
 //   onbrit = percent brightness to apply during high pulses (use -1 to avoid)
 //   color  = alternate color to apply during high pulses (defaults to normal idiot light color)
 void NeopixelStrip::setflash(int _idiot, int count, int pulseh, int pulsel, int onbrit, uint32_t color) {
@@ -257,7 +257,7 @@ void NeopixelStrip::setflash(int _idiot, int count, int pulseh, int pulsel, int 
     filled = fevresolution;  // filled = fevresolution / reps;
     // }
 }
-void NeopixelStrip::set_fcolor(int _idiot) {  // flashing event : push a flash sequence bit into the data page
+void NeopixelStrip::set_fcolor(int _idiot) {  // flashing event : recolor idiotlight to flash pattern value
     int brite = (fset[_idiot][fonbrit] >= 0) ? fset[_idiot][fonbrit] : hibright;
     if (!fcbase[_idiot]) cidiot[_idiot][cflash] = cidiot[_idiot][cnormal];
     else cidiot[_idiot][cflash] = fcbase[_idiot];
