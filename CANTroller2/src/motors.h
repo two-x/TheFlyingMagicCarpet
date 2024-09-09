@@ -429,7 +429,7 @@ class ThrottleControl : public ServoMotor {
     bool pid_enabled = false, cruise_pid_enabled = false;
     int cruise_adjust_scheme = TriggerHold;  // edit these to be the defaults on boot
     int motormode = Idle;  // not tunable  // pid_status = OpenLoop, cruise_pid_status = OpenLoop,
-    bool cruise_trigger_released = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
+    bool cruise_trigger_released = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;                  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float max_throttle_angular_velocity_degps;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
     float pc_to_rpm(float _pc) { return map(_pc, 0.0, 100.0, tach->idle(), tach->opmax()); }
@@ -459,6 +459,7 @@ class ThrottleControl : public ServoMotor {
         si[ABSMIN] = 0.0;
         si[ABSMAX] = 180.0;
         si[MARGIN] = 1.0;
+        reverse = false;
         ServoMotor::setup(_hotrc, _speedo);
         throttleRateTimer.reset();
         // use_ratelimiter = true;
