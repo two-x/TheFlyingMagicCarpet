@@ -155,7 +155,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             gas.setmode(Cruise);
             brake.setmode(cruise_brake ? ActivePID : Release);
             steer.setmode(OpenLoop);
-            gestureFlyTimer.reset();  // initialize brake-trigger timer
+            // gestureFlyTimer.reset();  // initialize brake-trigger timer
         }
         if (car_hasnt_moved) {
             if (hotrc.joydir(VERT) != JOY_UP) runmode = HOLD;            // must keep pulling trigger until car moves, or it drops back to hold mode
@@ -163,7 +163,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         else {
             // watchdog.set_codestatus(Driving);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
-            if (hotrc.joydir(VERT) == JOY_DN && !cruise_speed_lowerable) runmode = FLY;
+            // if (hotrc.joydir(VERT) == JOY_DN && !cruise_speed_lowerable) runmode = FLY;
             if (speedo.stopped() && hotrc.joydir() != JOY_UP) runmode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
         }
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
