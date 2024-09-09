@@ -15,20 +15,24 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void setup() { runmode = watchdog.boot_to_runmode; }  // we don't really need to set up anything, unless we need to recover to a specific runmode after crash
     int mode_logic() {
         if (runmode != LOWPOWER && runmode != CAL) {
-            if (in_basicmode) runmode = BASIC;  // basicsw.val() if basicmode switch on --> Basic Mode
+            if (in_basicmode) runmode = BASIC;  // basicsw.val() if basicmode switch was on at boot time --> Basic Mode
             else if (!ignition.signal) runmode = STANDBY;
             else if (tach.stopped()) runmode = STALL;  // otherwise if engine not running --> Stall Mode
         }
-        if (runmode == HOLD && (brake.feedback == _None)) runmode = FLY;  // we can not autohold the brake when running brake open loop, so go directly to fly mode
+        if ((runmode == HOLD) && (brake.feedback == _None)) {  // we can not autohold the brake when running brake open loop
+            if (oldmode == STALL || oldmode == STANDBY) runmode = drive_mode;  // skip hold mode when starting up
+            else if (oldmode == BASIC || oldmode == CAL || oldmode == LOWPOWER) runmode = STANDBY;  // just to cover all possibilities
+            else runmode = oldmode;  // don't drop to hold mode from other (driving) modes
+        }
         we_just_switched_modes = (runmode != oldmode);  // currentMode should not be changed after this point in loop
+        oldmode = runmode;        
         if (we_just_switched_modes) {
             if (runmode != LOWPOWER) autosaver_request = REQ_OFF;
             watchdog.set_codestatus();
             cleanup_state_variables();
         }
-        oldmode = runmode;        
         // common to almost all the modes, so i put it here
-        if (runmode != LOWPOWER) {
+        if (runmode != LOWPOWER) {  // use separate if statement below to check hotrc.sw_event because it will reset any event
             if (hotrc.sw_event(CH3)) ignition.request(REQ_TOG);  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         }
         if (runmode == BASIC) run_basicMode(); // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
@@ -50,7 +54,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (oldmode == STALL);
         else if (oldmode == HOLD) joy_centered = false;  // starter.request(REQ_OFF);  // Stop any in-progress startings
         else if (oldmode == FLY) car_hasnt_moved = false;
-        else if (oldmode == CRUISE) cruise_adjusting = false;
+        else if (oldmode == CRUISE) cruise_adjusting = car_hasnt_moved = false;
         else if (oldmode == CAL) cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;
     }
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
@@ -122,7 +126,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_holdMode(bool recovering=false) {
         if (we_just_switched_modes) {
             joy_centered = recovering;  // Fly mode will be locked until the joystick first is put at or below center
-            // watchdog.set_codestatus(Stopped);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
+            watchdog.set_codestatus();  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
             gas.setmode(throttle_ctrl_mode);
             brake.setmode(AutoHold);
             steer.setmode(OpenLoop);
@@ -143,7 +147,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
         }
         else {
-            // watchdog.set_codestatus(Driving);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
+            watchdog.set_codestatus();  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
             if (speedo.stopped() && hotrc.joydir() != JOY_UP) runmode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
         }
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
@@ -162,9 +166,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
         }
         else {
-            // watchdog.set_codestatus(Driving);  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
-            // if (hotrc.joydir(VERT) == JOY_DN && !cruise_speed_lowerable) runmode = FLY;
+            watchdog.set_codestatus();  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
             if (speedo.stopped() && hotrc.joydir() != JOY_UP) runmode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
+            // if (hotrc.joydir(VERT) == JOY_DN && !cruise_speed_lowerable) runmode = FLY;
         }
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
         if (hotrc.sw_event(CH4)) runmode = FLY;                  // go to fly mode if hotrc ch4 button pushed
