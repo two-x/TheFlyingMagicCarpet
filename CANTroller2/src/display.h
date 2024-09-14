@@ -937,15 +937,15 @@ class Display {
     }
     void auto_saver() {
         static int last_context;
-        if (autosaver_request == REQ_NA) return;
         if (autosaver_request == REQ_TOG) autosaver_request = auto_saver_enabled ? REQ_OFF : REQ_ON;  // (int)(!auto_saver_enabled);
-        if (autosaver_request == (int)(auto_saver_enabled)) {
-            autosaver_request = REQ_NA;
-            return;
+        if (runmode == FLY || runmode == CRUISE) {
+            if (autosaver_request == REQ_ON) autosaver_request = REQ_NA;
+            if (auto_saver_enabled) autosaver_request = REQ_OFF;
         }
+        if (autosaver_request == (int)(auto_saver_enabled)) autosaver_request = REQ_NA;
+        if (autosaver_request == REQ_NA) return;
         static bool was_simulating;
         if (autosaver_request == REQ_ON) {
-            if (runmode == FLY || runmode == CRUISE) return;
             was_simulating = sim->enabled();
             sim->disable();
             panel.set_vp(0, 0, disp_width_pix, disp_height_pix);
