@@ -7,7 +7,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     Timer pwrup_timer{500000};  // Timeout to allow powerup of system devices during wakeup. delays entry to standby mode (in us)
     Timer standby_timer{5000000};
     int _joydir, oldmode = LOWPOWER;
-    bool still_interactive = true;
   public:
     bool joy_centered = false, we_just_switched_modes = true;  // For mode logic to set things up upon first entry into mode
     bool display_reset_requested = false;  // set these for the display to poll and take action, since we don't have access to that object, but it has access to us
@@ -174,9 +173,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (hotrc.sw_event(CH4)) runmode = FLY;                  // go to fly mode if hotrc ch4 button pushed
         
         // // if joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
-        // if (hotrc.pc[VERT][FILT] > hotrc.pc[VERT][OPMIN] + flycruise_vert_margin_pc) gestureFlyTimer.reset();  // keep resetting timer if joystick not at bottom
-        // else if (gestureFlyTimer.expired()) runmode = FLY;  // new gesture to drop to fly mode is hold the brake all the way down for more than X ms
-        
+        if (!cruise_brake) {  // no need for this feature if cruise includes braking
+            if (hotrc.pc[VERT][FILT] > hotrc.pc[VERT][OPMIN] + flycruise_vert_margin_pc) gestureFlyTimer.reset();  // keep resetting timer if joystick not at bottom
+            else if (gestureFlyTimer.expired()) runmode = FLY;  // new gesture to drop to fly mode is hold the brake all the way down for more than X ms
+        }
         // removing requirement for car to be moving to stay in cruise mode 2024bm
         // if (speedo.stopped()) runmode = (hotrc.joydir(VERT) == JOY_UP) ? FLY : HOLD;  // in case we slam into camp Q woofer stack, get out of cruise mode.
     }

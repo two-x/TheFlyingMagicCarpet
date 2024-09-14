@@ -397,12 +397,12 @@ class Touchscreen {
         else if (tbox == 0x32) pressure.sim_si(tune(pressure.val(), -id, pressure.opmin(), pressure.opmax()));
         else if (tbox == 0x33) brkpos.sim_si(tune(brkpos.val(), id, brkpos.opmin(), brkpos.opmax()));
         else if (tbox == 0x34) brkpos.sim_si(tune(brkpos.val(), -id, brkpos.opmin(), brkpos.opmax()));
-        else if (tbox == 0x40 && menusafe && longpress()) ignition.request(REQ_TOG);
+        else if (tbox == 0x40 && menusafe && longpress()) hotrc.sim_ch4_press();  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
         else if (tbox == 0x41) tach.sim_si(tune(tach.val(), id, tach.opmin(), tach.opmax()));
         else if (tbox == 0x42) tach.sim_si(tune(tach.val(), -id, tach.opmin(), tach.opmax()));
         else if (tbox == 0x43 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
         else if (tbox == 0x44 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], -id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        else if (tbox == 0x50 && menusafe && longpress()) sleep_request = REQ_TOG;  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
+        else if (tbox == 0x50 && menusafe && longpress()) ignition.request(REQ_TOG);
         else if (tbox == 0x51) speedo.sim_si(tune(speedo.val(), id, speedo.opmin(), speedo.opmax()));
         else if (tbox == 0x52) speedo.sim_si(tune(speedo.val(), -id, speedo.opmin(), speedo.opmax()));
         else if (tbox == 0x53 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
