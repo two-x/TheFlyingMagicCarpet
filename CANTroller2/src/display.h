@@ -14,7 +14,7 @@
 #define disp_datapage_title_x 83
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
-std::string top_menu_buttons[4]  = { "CAL", "FUEL", "CH4", "IGN" };
+std::string top_menu_buttons[4]  = { "CAL", "NA", "CH4", "IGN" };
 std::string ch4_menu_buttons[NUM_RUNMODES] = { "CH4", "WAKE", "SLEEP", "START", "START", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
@@ -536,7 +536,8 @@ class Display {
     void draw_menu_toggle(bool value, int col, bool force=false) {  // Draws values of boolean data
         if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
             std::string drawme = top_menu_buttons[col-2];
-            if (drawme == "CH4") drawme = ch4_menu_buttons[runmode];
+            if (drawme == "CAL" && !(runmode == STANDBY || runmode == CAL)) drawme = "NA";
+            else if (drawme == "CH4") drawme = ch4_menu_buttons[runmode];
             int x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - drawme.length()*(disp_font_width>>1) + 1;
             sprptr->setTextDatum(textdatum_t::top_left);
             sprptr->setFont(&fonts::Font0);
@@ -621,7 +622,7 @@ class Display {
     }
     void disp_menu_bools() {
         draw_menu_toggle((runmode == CAL), 2, disp_menutoggles_dirty);
-        draw_menu_toggle(fuelpump.status(), 3, disp_menutoggles_dirty);
+        draw_menu_toggle(false, 3, disp_menutoggles_dirty);  // fuelpump.status()
         draw_menu_toggle(starter.motor, 4, disp_menutoggles_dirty);
         draw_menu_toggle(ignition.signal, 5, disp_menutoggles_dirty);
         disp_menutoggles_dirty = false;
