@@ -537,11 +537,11 @@ class Display {
         if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
             std::string drawme = top_menu_buttons[col-2];
             if (drawme == "CH4") drawme = ch4_menu_buttons[runmode];
-            int x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - top_menu_buttons[col-2].length()*(disp_font_width>>1) + 1;
+            int x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - drawme.length()*(disp_font_width>>1) + 1;
             sprptr->setTextDatum(textdatum_t::top_left);
             sprptr->setFont(&fonts::Font0);
             sprptr->setTextColor((value) ? YEL : LGRY);  
-            sprptr->drawString(top_menu_buttons[col-2].c_str(), x_mod, 0);
+            sprptr->drawString(drawme.c_str(), x_mod, 0);
             disp_bool_values[col-2] = value;
         }
     }
@@ -854,6 +854,7 @@ class Display {
     }
   public:
     bool draw_all(LGFX_Sprite* spr) {
+        static bool starter_last = false;
         if (!display_enabled) return false;
         if (reset_request) reset();
         auto_saver();
@@ -865,9 +866,12 @@ class Display {
             if (disp_selection_dirty) draw_selected_name(tunctrl, sel, sel_last, sel_last_last);
             if (runmode != runmode_last) disp_runmode_dirty = true;
             if (disp_values_dirty || disp_runmode_dirty || valuesRefreshTimer.expireset()) {
-                disp_menu_bools();
                 disp_datapage_values();
+                disp_menutoggles_dirty = true;
             }
+            if (starter.motor != starter_last) disp_menutoggles_dirty = true;
+            starter_last = starter.motor;
+            if (disp_menutoggles_dirty) disp_menu_bools();
             if (disp_units_dirty) draw_unitvals(datapage);
             if (disp_runmode_dirty) draw_runmode(runmode, NON);
         }
