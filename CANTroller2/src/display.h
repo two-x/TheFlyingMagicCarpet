@@ -14,7 +14,8 @@
 #define disp_datapage_title_x 83
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "SIM" };  // Pad shorter names with spaces on the right
-std::string top_menu_buttons[4]  = { "CAL", "FUEL", "IGN", "POWER" };
+std::string top_menu_buttons[4]  = { "CAL", "FUEL", "CH4", "IGN" };
+// std::string ch4_menu_buttons[NUM_RUNMODES] = { "", "WAKE", "SLEEP", "START", "START", "CRUIS", "FLY", "" } // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 #define stEr "St\x88r"     // These defines are just a convenience to keep the below datapage strings
@@ -30,7 +31,7 @@ std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 #define neo_bright "NeoBr\x8dgt"
 #define maxadjrate "MaxAjR\x83t"
 #define horfailsaf "HFails\x83""f"
-static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr", };  // Fixed rows
+static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
 static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 5, 11, 11, 11, 12, 4, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
@@ -56,7 +57,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "ms",   "Hz",   "rpm",  "ms",   "Hz",   "mph",  "%",    ______, ______, ______, "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    degree, "rpm",  "V",    ______, ______, ______, ______, "%",    degree, degree, degreF, degreF, },  // PG_IDLE
-    { degreF, "%",    ______, ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, b1nary, scroll },  // PG_MOTR
+    { degreF, "%",    ______, ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, b1nary, scroll, },  // PG_MOTR
     { scroll, "%",    "psi",  "%",    "in",   "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, ______, ______, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
@@ -619,8 +620,8 @@ class Display {
     void disp_menu_bools() {
         draw_menu_toggle((runmode == CAL), 2, disp_menutoggles_dirty);
         draw_menu_toggle(fuelpump.status(), 3, disp_menutoggles_dirty);
-        draw_menu_toggle(ignition.signal, 4, disp_menutoggles_dirty);
-        draw_menu_toggle(syspower, 5, disp_menutoggles_dirty);
+        draw_menu_toggle(starter.motor, 4, disp_menutoggles_dirty);
+        draw_menu_toggle(ignition.signal, 5, disp_menutoggles_dirty);
         disp_menutoggles_dirty = false;
     }
     // value rendering options:  for [optional] arguments use -1 (for int) or NAN (for float) to get the default, same as not including. Default sig_places for floats is 3
