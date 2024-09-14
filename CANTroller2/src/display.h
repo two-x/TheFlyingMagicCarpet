@@ -551,15 +551,17 @@ class Display {
         int namelen = 0;
         sprptr->setTextColor(LGRY);
         for (int row = 0; row < arraysize(side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
+            std::string drawme = side_menu_buttons[row];
+            if (drawme == "ANI" && (runmode == FLY || runmode == CRUISE)) drawme = "NA";
             sprptr->fillRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
             sprptr->drawRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LGRY);
             namelen = 0;
-            for (int x = 0 ; x < side_menu_buttons[row].length() ; x++ ) {
-                if (side_menu_buttons[row][x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
+            for (int x = 0 ; x < drawme.length() ; x++ ) {
+                if (drawme[x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
             }
             for (int letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
                 sprptr->setCursor(1, (touch_cell_v_pix*row) + (touch_cell_v_pix/2) + (disp_font_height + 1) * (letter - (namelen >> 1)) - 3); // adjusts vertical offset depending how many letters in the button name and which letter we're on
-                sprptr->print(side_menu_buttons[row][letter]);  // Writes each letter such that the whole name is centered vertically on the button
+                sprptr->print(drawme[letter]);  // Writes each letter such that the whole name is centered vertically on the button
             }
         }
         if (!side_only) {
@@ -943,7 +945,7 @@ class Display {
         }
         static bool was_simulating;
         if (autosaver_request == REQ_ON) {
-            // if (runmode == HOLD || runmode == FLY || runmode == CRUISE || runmode == CAL) return;
+            if (runmode == FLY || runmode == CRUISE) return;
             was_simulating = sim->enabled();
             sim->disable();
             panel.set_vp(0, 0, disp_width_pix, disp_height_pix);
