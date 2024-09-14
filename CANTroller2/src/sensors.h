@@ -1362,8 +1362,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     bool radiolost() { return _radiolost; }
     bool* radiolost_ptr() { return &_radiolost; }
     bool sw_event(int ch) {  // returns if there's an event on the given channel then resets that channel
-        bool retval = false;    
-        if (!_radiolost) retval = _sw_event[ch];
+        bool retval = _sw_event[ch];
         _sw_event[ch] = false;
         return retval;        
     }
