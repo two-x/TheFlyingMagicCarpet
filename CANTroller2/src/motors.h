@@ -932,7 +932,7 @@ class BrakeControl : public JagMotor {
             pc[OUT] = pc[STOP];                                                            // THEN stop the motor
         else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);                     // constrain motor value to operational range
         rate_limiter();  // changerate_limiter();
-        if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;                                 // prevent stupidly small values which i was seeing
+        cleanzero(&pc[OUT], 0.01);  // if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;                                 // prevent stupidly small values which i was seeing
         for (int p = PositionFB; p <= PressureFB; p++) if (feedback_enabled[p]) pids[p].set_output(pc[OUT]);  // feed the final value back into the pids
     }
   public:

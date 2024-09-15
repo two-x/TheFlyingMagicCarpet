@@ -232,7 +232,6 @@ inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
-inline bool iszero(float num) { return (std::abs(num) < float_zero); }
 
 // pin operations
 void set_pin(int pin, int mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
@@ -593,3 +592,13 @@ class EZReadConsole {
     }
 };
 static EZReadConsole ezread;
+
+inline bool iszero(float num, float margin=NAN) {
+    if (std::isnan(num)) {
+        ezread.squintf("err: iszero(NAN) was called\n");
+        return false;
+    }
+    if (std::isnan(margin)) margin = float_zero;
+    return (std::abs(num) <= margin);
+}
+inline void cleanzero(float* num, float margin=NAN) { if (iszero(*num, margin)) *num = 0.0; }
