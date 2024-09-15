@@ -182,12 +182,12 @@ class Encoder {
         button.update();
         enc_a = !digitalRead(_a_pin);
         enc_b = !digitalRead(_b_pin);
-        if (runmode == LOWPOWER || runmode == STANDBY) {
-            if (button.shortpress(false)) {
-                sleep_request = REQ_OFF;
-                autosaver_request = REQ_OFF;
-            }
-        }
+        // if (runmode == LOWPOWER || runmode == STANDBY) {
+        //     if (button.shortpress(false)) {
+        //         sleep_request = REQ_OFF;
+        //         autosaver_request = REQ_OFF;
+        //     }
+        // }
         if (_delta != delta_last) activitytimer.reset();
         activity = !activitytimer.expired();
         delta_last = _delta;

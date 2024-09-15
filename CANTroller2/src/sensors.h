@@ -704,7 +704,7 @@ class PressureSensor : public AnalogSensor {
         // * point just before pressure begins to rise from 0 (zeropoint):  posn = 3.63 in, pres = 0 psi (618 adc)
         // * max i can push w/ foot:  posn = 2.32 in (1352 adc), pres = 313 psi (2172 adc)
 
-        float min_adc = 610.0;  // reduced to be below zeropoint, was 684.0. temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
+        float min_adc = 670.0;  // reduced to be below zeropoint, was 684.0. temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
         float b = -1.0 * min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
@@ -717,7 +717,7 @@ class PressureSensor : public AnalogSensor {
         set_margin(2.5);       // max acceptible error when checking psi levels
         hold_initial = 135.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
         hold_increment = 3.0;  // incremental pressure added periodically when auto stopping (adc count 0-4095)
-        panic_initial = 175.0; // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
+        panic_initial = 185.0; // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
         panic_increment = 5.0; // incremental pressure added periodically when auto stopping (adc count 0-4095)
         _zeropoint = from_native(680);   // pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
         set_native(_opmin_native);
@@ -762,15 +762,15 @@ class BrakePositionSensor : public AnalogSensor {
             //   then indicate op limits in native or si and the zeropoint in si
             set_abslim_native(1885, 3100, false);  // tuned 240513 - don't remember if values read from screen or calculated.  need to redo
             set_abslim(4.33, 8.84, false);  // tuned 240513 - actuator inches measured
-            set_oplim(4.52, 6.54); 
+            set_oplim(4.52, 6.00); 
              // 240609 determined opmin on vehicle, with LAE motor connected w/ quicklink + carabeener
-            _zeropoint = 5.75;  // 240609 3.65in, 1707 adc - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
+            _zeropoint = 5.87;  // 240609 3.65in, 1707 adc - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
 
             // don't also set native oplims as they will autocalc from oplims setting
             // set_oplim_native(1445, 1923);  // 240609 1445 (2.68in) is full push, and 1923 (4.5in) is park position (with simple quicklink +carabeener linkage)
         #endif
         set_ema_alpha(0.35);
-        set_margin(0.2);  // TODO: add description
+        set_margin(0.35);  // TODO: add description
         // _mfactor = (_absmax - _absmin) / (float)(_absmax_adc - _absmin_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
         // _boffset = -2.69;  //  979 adc * 0.00372 in/adc - 0.95 in = -2.69 in
         print_config();

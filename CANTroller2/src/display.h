@@ -534,16 +534,17 @@ class Display {
         disp_selection_dirty = false;    
     }
     void draw_menu_toggle(bool value, int col, bool force=false) {  // Draws values of boolean data
-        if ((disp_bool_values[col-2] != value) || force) {  // If value differs, Erase old value and write new
+        if ((disp_bool_values[col - 2] != value) || force) {  // If value differs, Erase old value and write new
             std::string drawme = top_menu_buttons[col-2];
             if (drawme == "CAL" && !(runmode == STANDBY || runmode == CAL)) drawme = "NA";
             else if (drawme == "CH4") drawme = ch4_menu_buttons[runmode];
-            int x_mod = touch_margin_h_pix + touch_cell_h_pix*(col) + (touch_cell_h_pix>>1) - drawme.length()*(disp_font_width>>1) + 1;
+            int x_mod = touch_margin_h_pix + touch_cell_h_pix * (col) + (touch_cell_h_pix >> 1);
+            sprptr->fillRect(x_mod - 5 * (disp_font_width >> 1) + 1, 0, 5 * disp_font_width, disp_font_height, DGRY);
             sprptr->setTextDatum(textdatum_t::top_left);
             sprptr->setFont(&fonts::Font0);
             sprptr->setTextColor((value) ? YEL : LGRY);  
-            sprptr->drawString(drawme.c_str(), x_mod, 0);
-            disp_bool_values[col-2] = value;
+            sprptr->drawString(drawme.c_str(), x_mod - drawme.length() * (disp_font_width >> 1) + 1, 0);
+            disp_bool_values[col - 2] = value;
         }
     }
     void draw_menus(bool side_only = false) {  // draws edge buttons with names in 'em. If replace_names, just updates names
@@ -552,15 +553,15 @@ class Display {
         sprptr->setTextColor(LGRY);
         for (int row = 0; row < arraysize(side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
             std::string drawme = side_menu_buttons[row];
-            if (drawme == "ANI" && (runmode == FLY || runmode == CRUISE)) drawme = "NA";
-            sprptr->fillRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, DGRY);
-            sprptr->drawRoundRect(-9, touch_cell_v_pix*row+3, 18, touch_cell_v_pix-6, 8, LGRY);
+            if (drawme == "ANI" && runmode != STANDBY) drawme = "NA";
+            sprptr->fillRoundRect(-9, touch_cell_v_pix * row + 3, 18, touch_cell_v_pix - 6, 8, DGRY);
+            sprptr->drawRoundRect(-9, touch_cell_v_pix * row + 3, 18, touch_cell_v_pix - 6, 8, LGRY);
             namelen = 0;
             for (int x = 0 ; x < drawme.length() ; x++ ) {
                 if (drawme[x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
             }
             for (int letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
-                sprptr->setCursor(1, (touch_cell_v_pix*row) + (touch_cell_v_pix/2) + (disp_font_height + 1) * (letter - (namelen >> 1)) - 3); // adjusts vertical offset depending how many letters in the button name and which letter we're on
+                sprptr->setCursor(1, (touch_cell_v_pix * row) + (touch_cell_v_pix / 2) + (disp_font_height + 1) * (letter - (namelen >> 1)) - 3); // adjusts vertical offset depending how many letters in the button name and which letter we're on
                 sprptr->print(drawme[letter]);  // Writes each letter such that the whole name is centered vertically on the button
             }
         }
@@ -938,7 +939,7 @@ class Display {
     void auto_saver() {
         static int last_context;
         if (autosaver_request == REQ_TOG) autosaver_request = auto_saver_enabled ? REQ_OFF : REQ_ON;  // (int)(!auto_saver_enabled);
-        if (runmode == FLY || runmode == CRUISE) {
+        if (runmode != STANDBY) {
             if (autosaver_request == REQ_ON) autosaver_request = REQ_NA;
             if (auto_saver_enabled) autosaver_request = REQ_OFF;
         }

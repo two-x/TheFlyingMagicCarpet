@@ -437,12 +437,12 @@ static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &
 
 #include "web.h"
 
-#include "runmodes.h"
-static RunModeManager run;
 #include "tftsetup.h"
 #include "inputs.h"
-
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
+
+#include "runmodes.h"
+static RunModeManager run;
 
 // to avoid dependency conflicts, the BootButton class' actions() function is only prototyped 
 // here, then its content is fleshed out below, after including the code that uses the object 

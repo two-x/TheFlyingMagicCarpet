@@ -75,6 +75,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             set_syspower(LOW);     // Power down devices to save battery
             autosaver_request = REQ_OFF;  // actually this should be REQ_OFF, plus request screen backlight is shut off or at least black out screen
         }
+        if (encoder.button.shortpress()) sleep_request = REQ_OFF;
         if ((!hotrc.radiolost() && hotrc.sw_event(CH4)) || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // start powering up
             set_syspower(HIGH);    // switch on control system devices
             pwrup_timer.reset();   // stay in lowpower mode for a delay to allow devices to power up
@@ -108,6 +109,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(Halt);
             if (hotrc.sw_event(CH4) || user_inactivity_timer.expired() || sleep_request == REQ_TOG || sleep_request == REQ_ON) runmode = LOWPOWER;
             if (calmode_request) runmode = CAL;  // if fully shut down and cal mode requested, go to cal mode
+            if (auto_saver_enabled) if (encoder.button.shortpress()) autosaver_request = REQ_OFF;
             if (user_inactivity_timer.elapsed() > screensaver_delay_sec * 1000000) autosaver_request = REQ_ON;
         }
         if ((speedo.stopped() || allow_rolling_start) && ignition.signal && !panicstop && !tach.stopped()) runmode = HOLD;  // If we started the car, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
