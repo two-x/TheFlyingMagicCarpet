@@ -3,3 +3,8 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+../CarpetLightCode/.pio
+../CarpetLightCode/.vscode/.browse.c_cpp.db*
+../CarpetLightCode/.vscode/c_cpp_properties.json
+../CarpetLightCode/.vscode/launch.json
+../CarpetLightCode/.vscode/ipch
