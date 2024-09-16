@@ -239,6 +239,7 @@ class CollisionsSaver {
 };
 class EraserSaver {  // draws colorful patterns to exercise video buffering performance
  private:
+    bool touchpen = false;  // true allows drawing on screen with touch, false allows adjusting parameters
     enum savershapes { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, Worm, Rotate, NumSaverShapes };
     LGFX_Sprite* sprite;
     viewport* vp;
@@ -268,7 +269,11 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
     }
     void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
         // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
-        spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
+        if (touchpen) spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
+        else {
+            season = map(y, 0, disp_height_pix, 0, 3);
+            precess = map(x, 0, disp_width_pix, 0, 9);
+        }
     }
     void pot_timing() {
         if (!pot_controls_animation_timeout) return;

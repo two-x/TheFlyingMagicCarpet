@@ -381,7 +381,7 @@ class Transducer : public Device {
             if (iszero(arg_mfactor)) ezread.squintf("Err: can not support _mfactor of zero\n");
             else _mfactor = arg_mfactor;
         }
-        if (!std::isnan(arg_mfactor)) _boffset = arg_boffset;
+        if (!std::isnan(arg_boffset)) _boffset = arg_boffset;
     }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)
     float native() { return _native.val(); }  // This is a native unit value, constrained to abs range but otherwise unfiltered
@@ -608,8 +608,8 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
         set_conversions(1.0, 0.0);
         set_si(1.0);  // initialize value
         set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
-        set_oplim(0.68, 1.02);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
-        set_ema_alpha(0.2);  // note: the default conversion constants for this sensor are actually correct
+        set_oplim(0.68, 1.02);  // set in atm empirically
+        set_ema_alpha(0.2);
         mapreadTimer.set(mapread_timeout);
         _responding = !_sensor.begin();
         I2CSensor::setup();
@@ -1306,7 +1306,6 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     float margin_us = 13;    // all [MARGIN] values above are derived from this by calling derive()
     float failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     float failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
-    float failsafe_pad_us = 10;
   private:
     Simulator* sim;
     Potentiometer* pot;
@@ -1354,7 +1353,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         radiolost_update();
         toggles_update();
         // if (runmode == LOWPOWER) return;  // causes rmt errors
-        if (!(sim->simulating(sens::joy))) direction_update();
+        direction_update();
     }
     void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
         for (int ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
@@ -1373,7 +1372,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         if (axis == VERT) return ((pc[axis][FILT] > pc[axis][DBTOP]) ? JOY_UP : ((pc[axis][FILT] < pc[axis][DBBOT]) ? JOY_DN : JOY_CENT));
         return ((pc[axis][FILT] > pc[axis][DBTOP]) ? JOY_RT : ((pc[axis][FILT] < pc[axis][DBBOT]) ? JOY_LT : JOY_CENT));
     }  // return (pc[axis][FILT] > pc[axis][DBTOP]) ? ((axis == VERT) ? JOY_UP : JOY_RT) : (pc[axis][FILT] < pc[axis][DBBOT]) ? ((axis == VERT) ? JOY_DN : JOY_LT) : JOY_CENT;
-    void sim_ch4_press() { _sw_event[CH4] = true; }
+    void sim_button_press(int chan) { _sw_event[chan] = true; }
   private:
     void toggles_update() {  //
         for (int chan = CH3; chan <= CH4; chan++) {
@@ -1395,12 +1394,17 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         if (_us >= us[axis][CENT]) return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
         return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);    
     }
+    void constrain_directions() {
+        for (int axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
+    }
     void direction_update() {
         if (sim->simulating(sens::joy)) {
             if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
             // ezread.squintf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
+            constrain_directions();
+            return;
         }
-        else for (int axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
+        for (int axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
             us[axis][RAW] = (float)(rmt[axis].readPulseWidth(true));
             float us_spike = spike_filter(axis, us[axis][RAW]);
             us[axis][FILT] = ema_filt(us_spike, us[axis][FILT], ema_alpha);
@@ -1410,7 +1414,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
             else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(HURCTrig);  // indicate evidence of user activity
         }
-        for (int axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
+        constrain_directions();
     }
     bool radiolost_update() {
         if (us[VERT][FILT] > failsafe_us + failsafe_margin_us) {

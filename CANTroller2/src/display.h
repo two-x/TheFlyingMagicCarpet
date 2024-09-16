@@ -944,7 +944,6 @@ class Display {
             if (auto_saver_enabled) autosaver_request = REQ_OFF;
         }
         if (autosaver_request == (int)(auto_saver_enabled)) autosaver_request = REQ_NA;
-        if (autosaver_request == REQ_NA) return;
         static bool was_simulating;
         if (autosaver_request == REQ_ON) {
             was_simulating = sim->enabled();

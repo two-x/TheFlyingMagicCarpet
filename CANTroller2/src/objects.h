@@ -353,7 +353,7 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
     void request(int req) { now_req = req; }  // squintf("r:%d n:%d\n", req, now_req);}
   private:
     bool variable_speed_output = false;  // this interferes with the gas servo pwm when enabled
-    bool use_software_pwm = true;  // avoids using hardware resources for variable output, we can fake it with a timer
+    bool use_software_pwm = false;  // avoids using hardware resources for variable output, we can fake it with a timer
     Timer fuelTimer;
     int timeout = 25000, pin, ledc_channel, pwm_frequency = 42, pwm_resolution = 8;  // for if hardware pwm is used. timeout is not tunable
     void writepin() {

@@ -325,11 +325,9 @@ class Touchscreen {
                     tft_touch[axis] = map(touch_read[axis], corners[captouch][axis][tsmin], corners[captouch][axis][tsmax], 0, disp_size[axis]);
                     tft_touch[axis] = constrain(tft_touch[axis], 0, disp_size[axis] - 1);
                     if (flip_the_screen) tft_touch[axis] = disp_size[axis] - tft_touch[axis];
-                    if (!landed_coordinates_valid) {
-                        landed[axis] = tft_touch[axis];
-                        if (axis) landed_coordinates_valid = true;  // on 2nd time thru set this true
-                    }
+                    if (!landed_coordinates_valid) landed[axis] = tft_touch[axis];
                 }
+                landed_coordinates_valid = true;
                 if (ui_context != ScreensaverUI) {
                     if (touchHoldTimer.elapsed() > (fd_exponent + 1) * touchAccelTimer.timeout()) {
                         fd_exponent = constrain(fd_exponent+1, 0, fd_exponent_max);
@@ -355,9 +353,7 @@ class Touchscreen {
         lasttouch = nowtouch;
     }  // Serial.printf("%s", nowtouch ? "+" : "-");
     void process_ui() {
-        if (!nowtouch) return;
-        bool menusafe = (runmode != FLY && runmode != HOLD && runmode != CRUISE);
-        
+        if (!nowtouch) return;        
         // tbox : section screen into 6x5 cells, with touched cell encoded as a hex byte with 1st nibble = col and 2nd nibble = row
         uint16_t tbox = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5) << 4) | constrain((landed[yy] + touch_fudge) / touch_cell_v_pix, 0, 4);
         
@@ -387,7 +383,7 @@ class Touchscreen {
             else if (tunctrl == EDIT) idelta = -id;  // if in edit mode, decrease the value
         }
         else if (tbox == 0x04 && longpress()) autosaver_request = REQ_ON;  // start fullscreen screensaver.  This button may be hijacked for a more useful function
-        else if (tbox == 0x20 && menusafe && longpress()) calmode_request = true;
+        else if (tbox == 0x20 && longpress()) calmode_request = true;
         else if (tbox == 0x21) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize));
         else if (tbox == 0x22 && onrepeat()) ezread.lookback(ezread.offset + 1);
         else if (tbox == 0x23 && onrepeat()) ezread.lookback(ezread.offset - 1);
@@ -397,12 +393,12 @@ class Touchscreen {
         else if (tbox == 0x32) pressure.sim_si(tune(pressure.val(), -id, pressure.opmin(), pressure.opmax()));
         else if (tbox == 0x33) brkpos.sim_si(tune(brkpos.val(), id, brkpos.opmin(), brkpos.opmax()));
         else if (tbox == 0x34) brkpos.sim_si(tune(brkpos.val(), -id, brkpos.opmin(), brkpos.opmax()));
-        else if (tbox == 0x40 && menusafe && longpress()) hotrc.sim_ch4_press();  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
+        else if (tbox == 0x40 && longpress()) hotrc.sim_button_press(CH4);  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
         else if (tbox == 0x41) tach.sim_si(tune(tach.val(), id, tach.opmin(), tach.opmax()));
         else if (tbox == 0x42) tach.sim_si(tune(tach.val(), -id, tach.opmin(), tach.opmax()));
         else if (tbox == 0x43 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
         else if (tbox == 0x44 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], -id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        else if (tbox == 0x50 && menusafe && longpress()) ignition.request(REQ_TOG);
+        else if (tbox == 0x50 && longpress()) ignition.request(REQ_TOG);
         else if (tbox == 0x51) speedo.sim_si(tune(speedo.val(), id, speedo.opmin(), speedo.opmax()));
         else if (tbox == 0x52) speedo.sim_si(tune(speedo.val(), -id, speedo.opmin(), speedo.opmax()));
         else if (tbox == 0x53 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
