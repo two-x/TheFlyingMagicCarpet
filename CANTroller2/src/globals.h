@@ -602,3 +602,11 @@ inline bool iszero(float num, float margin=NAN) {
     return (std::abs(num) <= margin);
 }
 inline void cleanzero(float* num, float margin=NAN) { if (iszero(*num, margin)) *num = 0.0; }
+
+#include <random>
+std::random_device rd;
+std::mt19937 gen(rd());  // randomizer
+int rn(int values=256) {  // Generate a random number between 0 and values-1
+    std::uniform_int_distribution<> dis(0, values - 1);
+    return dis(gen);
+}
