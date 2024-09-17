@@ -1,24 +1,12 @@
 // objects.h : contains instantiations of major system components, and global functions
 #pragma once
-#include "freertos/FreeRTOS.h"  // for semaphores
-#include "freertos/semphr.h"  // for semaphores
 #include "globals.h"
-
-#include <random>
-std::random_device rd;
-std::mt19937 gen(rd());  // randomizer
-int rn(int values=256) {  // Generate a random number between 0 and values-1
-    std::uniform_int_distribution<> dis(0, values - 1);
-    return dis(gen);
-}
-
 #include "i2cbus.h"
 #include "sensors.h"
 static Preferences prefs;  // Persistent config storage
 static Potentiometer pot(pot_pin);
 static Simulator sim(pot, &prefs);
 static Hotrc hotrc(&sim, &pot);
-
 #include "temperature.h"
 #include "motors.h"
 static TemperatureSensorManager tempsens(onewire_pin);
@@ -50,7 +38,6 @@ void set_board_defaults() {          // true for dev boards, false for printed b
     print_framebuffers = false;
     print_task_stack_usage = false;
 }
-
 void sim_setup() {
     sim.register_device(sens::pressure, pressure, pressure.source());
     sim.register_device(sens::brkpos, brkpos, brkpos.source());
@@ -77,13 +64,11 @@ void sim_setup() {
     // for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
     // sim.set_potmap(sens::none);        
 }
-
 void set_syspower(bool setting) {
     syspower = setting | keep_system_powered;
     not_syspower = !syspower;
     write_pin(syspower_pin, syspower);
 }
-
 // RTOS task that updates temp sensors in a separate task
 void tempsens_task(void *parameter) {
     while (true) {
@@ -125,7 +110,6 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
     // ezread.squintf("maf: %.3lf\n", maf);
     return maf;
 }
-
 // RTOS task that updates map and airflow sensors, and mass airflow calculation
 void maf_task(void *parameter) {
     while (true) {
@@ -215,6 +199,16 @@ void initialize_pins_and_console() {                        // set up those stra
     test_console_throughput();
     ezread.squintf("Syspower is %s, basicsw read: %s\n", syspower ? "on" : "off", in_basicmode ? "high" : "low");    
 }
+void stop_console() {
+    ezread.squintf("%s", console_enabled ? "" : "Stopping console during runtime\n");
+    ezread.squintf(LPUR, "** Setup done **\n");
+    std::fflush(stdout);  // ensure immediate output
+    if (!console_enabled) {
+        delay(200);  // give time for serial to print everything in its buffer
+        Serial.end();  // close serial console to prevent crashes due to error printing
+    }
+    ezread.printf(DCYN, "magic carpet is booted\n");
+}
 class Ignition {
   private:
     int ign_req = REQ_NA, panic_req = REQ_NA, pin;
@@ -262,7 +256,6 @@ class Ignition {
         panic_req = ign_req = REQ_NA;  // cancel outstanding requests
     }
 };
-
 class Starter {
   private:
     int pushbrake_timeout = 4000000;
@@ -429,18 +422,14 @@ class FuelPump {  // drives power to the fuel pump when the engine is turning
 };
 
 static FuelPump fuelpump(tp_cs_fuel_pin);
-
 #include "diag.h"
 static LoopTimer looptimer;
 static BootMonitor watchdog(&prefs, &looptimer);
 static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition);
-
 #include "web.h"
-
 #include "tftsetup.h"
 #include "inputs.h"
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
-
 #include "runmodes.h"
 static RunModeManager run;
 
@@ -457,7 +446,6 @@ class BootButton : public MomentarySwitch {
     }
 };
 static BootButton bootbutton(boot_sw_pin);
-
 #include "animations.h"
 #include "neopixel.h"
 #include "display.h"
@@ -477,15 +465,4 @@ void BootButton::actions() {  // temporary (?) functionality added for developme
             ezread.squintf("%ld us\n", printtimer.elapsed());
         }  // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
     }
-}
-
-void stop_console() {
-    ezread.squintf("%s", console_enabled ? "" : "Stopping console during runtime\n");
-    ezread.squintf(LPUR, "** Setup done **\n");
-    std::fflush(stdout);  // ensure immediate output
-    if (!console_enabled) {
-        delay(200);  // give time for serial to print everything in its buffer
-        Serial.end();  // close serial console to prevent crashes due to error printing
-    }
-    ezread.printf(DCYN, "magic carpet is booted\n");
 }
