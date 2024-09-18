@@ -86,7 +86,8 @@ enum joydirs { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3,
 enum panel_apps { EZReadUI=0, MuleChassisUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel
 enum codestatus { Confused=0, Asleep=1, Booting=2, Parked=3, Stopped=4, Driving=5, InBasic=6, Panicking=7, NumCodeStatuses=8 };
 enum pcba_glow_modes { glowOff=0, glowHeartBot=1, glowHeartBoth=2, glowXFade=3, glowNumGlowModes=4 };
-enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6, 
+enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6
+enum directional { DirNone=0, DirDown=1, DirUp=2, DirLeft=3, DirRight=4, NumDirs=5 };
 //
 // this group is used in multiple places in different ways, and is thus high-risk.
 // for example, arrays exist with indexes drawn from different combinations of multiple ones of these enums

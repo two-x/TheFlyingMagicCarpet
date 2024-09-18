@@ -225,17 +225,18 @@ class Touchscreen {
     LGFX* _tft;
     int corners[2][2][2] = { { { -25, -3549 }, { 185, 3839 } },  // [restouch][xx/yy][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
                              { { -100, 319 },  { 0, 174 } } };   // [captouch][xx/yy][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
-    bool longpress_valid = true, recent_tap = false, doubletap_possible = false, tapped = false, doubletapped = false, longpressed = false;
-    bool landed_coordinates_valid = false, lasttouch = false, printEnabled = true;  // , nowtouch = false, nowtouch2 = false;
+    bool longpress_possible = true, recent_tap = false, doubletap_possible = false, tapped = false, doubletapped = false, longpressed = false;
+    bool landed_coordinates_valid = false, lasttouch = false, printEnabled = true, swipe_possible = true;  // , nowtouch = false, nowtouch2 = false;
     int fd_exponent = 0, fd_exponent_max = 6, tlast_x, tlast_y;
     float fd = (float)(1 << fd_exponent);  // float delta
-    Timer holdTimer{550000};          // hold down this long to count as a long press
-    Timer senseTimer{15000};          // touch chip can't respond faster than some time period
-    Timer accelTimer{400000};         // how long between each increase of edit acceleration level
-    Timer tapStaleTimer{1000000};     // taps and doubletaps will expire if not queried within this timeframe after occurrence
-    Timer doubletapTimer{180000};     // two tap events within this much time is a double tap
-    Timer keyRepeatTimer{250000};     // for editing parameters with only a few values, auto repeat is this slow
-    Timer noiseRejectionTimer{25000}; // touch or untouch events lasting less than this long are ignored. needed for using through plastic box lid
+    // timer requirements: 1) senseTimer < filterTimer << (doubletapTimer & keyRepeatTimer & accelTimer). 2) doubleTapTimer < holdTimer << tapStaleTimer  
+    Timer senseTimer{15000};       // touch chip can't respond faster than some time period.
+    Timer filterTimer{25000};      // touch or untouch events lasting less than this long are ignored. needed for using through plastic box lid
+    Timer doubletapTimer{180000};  // two tap events within this much time is a double tap
+    Timer keyRepeatTimer{250000};  // for editing parameters with only a few values, auto repeat is this slow
+    Timer accelTimer{400000};      // how long between each increase of edit acceleration level
+    Timer holdTimer{550000};       // hold down this long to count as a long press
+    Timer tapStaleTimer{1000000};  // taps and doubletaps will expire if not queried within this timeframe after occurrence
     unsigned long lastPrintTime = 0;
     const unsigned long printInterval = 500; // Adjust this interval as needed (in milliseconds)
     enum touch_axis : int { xx, yy, zz };
@@ -244,28 +245,29 @@ class Touchscreen {
     // uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     // lcd.setTouch(touch_cal_data);
     void get_touch_debounced() {  // this rejects short spurious touch or un-touch blips
-        static bool rejectiontimer_active;
+        static bool filtertimer_active;
         uint8_t count = _tft->getTouch(&(raw[xx]), &(raw[yy]));
         bool triggered = (count > 0);
         // Serial.printf("n:%d t:%d\n", nowtouch, touch_triggered);
         if (nowtouch != triggered) {            // if the hardware returned opposite our current filtered state, get triggered
-            if (!rejectiontimer_active) {       // if we're not already waiting for validity
-                noiseRejectionTimer.reset();    // reset the timer. the touch must stay triggered for this long (in us) for valid change in touch state
-                rejectiontimer_active = true;   // remember we are now triggered and waiting for validity
+            if (!filtertimer_active) {       // if we're not already waiting for validity
+                filterTimer.reset();    // reset the timer. the touch must stay triggered for this long (in us) for valid change in touch state
+                filtertimer_active = true;   // remember we are now triggered and waiting for validity
             }
-            else if (noiseRejectionTimer.expired()) { // levels have held through entire validity wait timeout
-                rejectiontimer_active = false;   // remember we're no longer triggered nor waiting for validity
+            else if (filterTimer.expired()) { // levels have held through entire validity wait timeout
+                filtertimer_active = false;   // remember we're no longer triggered nor waiting for validity
                 nowtouch = triggered;            // we can now consider the change in touch state valid
             }
         }
-        else rejectiontimer_active = false;      // cancel our trigger, and be ready to retrigger
+        else filtertimer_active = false;      // cancel our trigger, and be ready to retrigger
     }
     bool ontouch() { return nowtouch && !lasttouch; }  // returns true only if touch is new for this update cycle. only reliable if called internally, otherwise use tap()
     // void edit_up() { id = (int)fd; }
     // void edit_dn() { id = -(int)fd; }
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
-    int drag_dist_min = 5;  // if a press changes location more than this many pixels, it is considered a drag not a tap
+    int drag_dist_min = 5;  // if a press changes location more than this many pixels, it is considered a drag not a press
+    int swipe_min = 50;     // minimum travel in pixels to count as a swipe
     int idelta, id;         // id is edit amount as integer for locally made edits. idelta is edit amount as integer for passing off to tuner object.
     bool increment_datapage = false, increment_sel = false;
     Touchscreen() {}
@@ -302,24 +304,36 @@ class Touchscreen {
         else press_in_effect = ret = false;  // on loss of touch send false;
         return ret;
     }
-    bool longpress() {  // returns true if a touch is held down longer than a timeout without any significant amount of drag
-        bool retval = longpressed;
-        if (retval) longpressed = longpress_valid = false;
-        return retval;
-    }
-    int get_delta() {  // returns edit value based on length of press and acceleration
+    int get_delta() {  // returns edit value (for tuning) based on length of press and acceleration factor
         int ret = idelta;
         idelta = 0;
         return ret;
     }
     int drag_axis(int axis) {  // returns pixels dragged along a given axis since start of current drag event. result is vertically flipped so up is positive
+        if (!nowtouch) return 0;  // return 0 if not being touched. indistinguishable from fixed press
         int ret = tft_touch[axis] - landed[axis];
         if (axis == VERT) ret *= -1;  //  if (axis == (flip_the_screen ? HORZ : VERT)) ret *= -1;
         return ret;
     }
     int drag_dist() {  // returns diagonal distance dragged (in pixels) since start of current touch event
+        if (!nowtouch) return 0;  // return 0 if not being touched. indistinguishable from fixed press
         float _dragged[2] = { (float)drag_axis(xx), (float)drag_axis(yy) };
         return (int)(std::sqrt(_dragged[xx] * _dragged[xx] + _dragged[yy] * _dragged[yy]));  // pythagorean theorem
+    }
+    int swipe(bool reset=true) {  // returns direction of a valid swipe, otherwise 0 for no swipe
+        if (tapStaleTimer.expired() || !swipe_possible) return DirNone;
+        int _dragged[2] = { drag_axis(HORZ), drag_axis(VERT) };
+        if (std::abs(_dragged[HORZ] > swipe_min)) {
+            if (reset) swipe_possible = false;
+            if (_dragged[HORZ] > 0) return DirRight;
+            return DirLeft;
+        }
+        if (std::abs(_dragged[VERT] > swipe_min)) {
+            if (reset) swipe_possible = false;
+            if (_dragged[VERT] > 0) return DirUp;
+            return DirDown;
+        }
+        return DirNone;
     }
     bool tap(bool reset=true) {
         bool ret = tapped;
@@ -330,6 +344,14 @@ class Touchscreen {
         bool ret = doubletapped;
         if (reset) doubletapped = false;
         return ret;
+    }
+    bool longpress(bool reset=true) {  // returns true if a touch is held down longer than a timeout without any significant amount of drag
+        bool retval = longpressed;
+        if (reset) {
+            longpressed = false;
+            if (retval) longpress_possible = false;
+        }
+        return retval;
     }
     bool* tap_ptr() { return &tapped; }  // for idiot light
     bool* doubletap_ptr() { return &doubletapped; }  // for idiot light
@@ -343,12 +365,12 @@ class Touchscreen {
             else process_untouched();
             if (tapStaleTimer.expired()) tapped = doubletapped = recent_tap = doubletap_possible = longpressed = false;
             id = (int)fd;
+            lasttouch = nowtouch;
         }
         _i2c->pass_i2c_baton();
-        lasttouch = nowtouch;
     }  // Serial.printf("%s", nowtouch ? "+" : "-");
   private:
-    void process_touched() {
+    void process_touched() {  // executes on update whenever screen is being touched (nowtouch == true)
         kick_inactivity_timer(HUTouch);  // register evidence of user activity to prevent going to sleep
         for (int axis=0; axis<=1; axis++) {
             // if (captouch) tft_touch[axis] = raw[axis];  // disp_width - 1 - raw[xx];
@@ -361,9 +383,13 @@ class Touchscreen {
         if (!lasttouch) {           // if touch only just now started
             holdTimer.reset();      // start timing for long press event
             tapStaleTimer.reset();  // begin timer for tap timeout
+            swipe_possible = true;
             if (recent_tap) doubletap_possible = true;  // if there was just a tap, flag the current touch might be a double tap
         }
-        else if (longpress_valid && holdTimer.expired() && (drag_dist() <= drag_dist_min)) longpressed = true; 
+        else if (longpress_possible && holdTimer.expired()) {
+            if (drag_dist() <= drag_dist_min) longpressed = true;
+            longpress_possible = false;  // prevent a later longpress event in case drag returns to the original spot
+        } 
         if (ui_context != ScreensaverUI) {
             if (holdTimer.elapsed() > (fd_exponent + 1) * accelTimer.timeout()) {
                 fd_exponent = constrain(fd_exponent+1, 0, fd_exponent_max);
@@ -374,7 +400,7 @@ class Touchscreen {
             fd = 0.0;
         }
     }
-    void process_untouched() {
+    void process_untouched() {  // executes on update whenever screen is not being touched (nowtouch == false)
         if (lasttouch) {                      // if touch was only just now removed
             landed_coordinates_valid = false; // indicate touch coordinates are stale
             fd_exponent = 0;                  // reset acceleration factor
@@ -392,11 +418,11 @@ class Touchscreen {
             recent_tap = doubletap_possible = false;
         }
         longpressed = false;
-        longpress_valid = true;  // allow for new longpress events
+        longpress_possible = true;  // allow for new longpress events
+        // for (int axis=HORZ; axis<=VERT; axis++) tft_touch[axis] = landed[axis] = -1;  // set coordinates to illegal value
     }
-    void process_ui() {
-        if (!nowtouch) return;        
-        // tbox : section screen into 6x5 cells, with touched cell encoded as a hex byte with 1st nibble = col and 2nd nibble = row
+    void process_ui() {  // takes actions when screen objects are manipulated by touch
+        // tbox : section screen into 6x5 cells, with touched cell encoded as a hex byte with 1st nibble = col and 2nd nibble = row, ie 0x32 means cell at 4th col and 3rd row
         uint16_t tbox = (constrain((landed[xx] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5) << 4) | constrain((landed[yy]) / touch_cell_v_pix, 0, 4);
         
         // ezread.squintf("n%dl%dv%d q%02x tx:%3d ty:%3d e%d x%d\r", nowtouch, lasttouch, landed_coordinates_valid, tbox, tft_touch[0], tft_touch[1], fd, (int)fd_exponent);
