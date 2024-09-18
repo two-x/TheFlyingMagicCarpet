@@ -237,6 +237,7 @@ class Touchscreen {
     Timer accelTimer{400000};      // how long between each increase of edit acceleration level
     Timer holdTimer{550000};       // hold down this long to count as a long press
     Timer tapStaleTimer{1000000};  // taps and doubletaps will expire if not queried within this timeframe after occurrence
+    int swipe_timeout = 300000;    // to count as a swipe, a drag must end before this long
     unsigned long lastPrintTime = 0;
     const unsigned long printInterval = 500; // Adjust this interval as needed (in milliseconds)
     enum touch_axis : int { xx, yy, zz };
@@ -353,9 +354,9 @@ class Touchscreen {
         }
         return retval;
     }
-    bool* tap_ptr() { return &tapped; }  // for idiot light
-    bool* doubletap_ptr() { return &doubletapped; }  // for idiot light
-    bool* longpress_ptr() { return &longpressed; }
+    // bool* tap_ptr() { return &tapped; }  // for idiot light
+    // bool* doubletap_ptr() { return &doubletapped; }  // for idiot light
+    // bool* longpress_ptr() { return &longpressed; }
     void update() {
         bool myturn = !_i2c->not_my_turn(i2c_touch); // Serial.printf("c:%d m:%d n:%d\n", captouch, myturn, nowtouch);
         if (captouch && !myturn) return;             // if (captouch && _i2c->not_my_turn(i2c_touch)) return;
@@ -386,10 +387,13 @@ class Touchscreen {
             swipe_possible = true;
             if (recent_tap) doubletap_possible = true;  // if there was just a tap, flag the current touch might be a double tap
         }
-        else if (longpress_possible && holdTimer.expired()) {
-            if (drag_dist() <= drag_dist_min) longpressed = true;
-            longpress_possible = false;  // prevent a later longpress event in case drag returns to the original spot
-        } 
+        else {
+            if (longpress_possible && holdTimer.expired()) {
+                if (drag_dist() <= drag_dist_min) longpressed = true;
+                longpress_possible = false;  // prevent a later longpress event in case drag returns to the original spot
+            }
+            if (holdTimer.elapsed() > swipe_timeout) swipe_possible = false;  // prevent meandering drags from being considered swipes
+        }
         if (ui_context != ScreensaverUI) {
             if (holdTimer.elapsed() > (fd_exponent + 1) * accelTimer.timeout()) {
                 fd_exponent = constrain(fd_exponent+1, 0, fd_exponent_max);
