@@ -411,7 +411,7 @@ class IdiotLights {
         &diag.err_sens_alarm[LOST], &diag.err_sens_alarm[RANGE], &diag.err_sens[RANGE][_TempEng], &wheeltemperr, hotrc.radiolost_ptr(), &panicstop, // &diag.err_sens[RANGE][_TempWheel]
         &shutting_down, &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting, &car_hasnt_moved, 
         &starter.motor, fuelpump.status_inverse_ptr(), &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(), // fuelpump.status_inverse_ptr(), speedo.pin_inactive_ptr(), tach.pin_inactive_ptr(),
-        &nowtouch, touch.tap_ptr(), touch.doubletap_ptr(), encoder.activity_ptr(), &running_on_devboard, &not_syspower,  // bootbutton.ptr(), sim.enabled_ptr(), &encoder.enc_a, 
+        &nowtouch, &tapped, &doubletapped, encoder.activity_ptr(), &running_on_devboard, &not_syspower,  //  touch.tap_ptr(), touch.doubletap_ptr(), bootbutton.ptr(), sim.enabled_ptr(), &encoder.enc_a, 
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
         &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],  // &sensidiots[_MuleBatt]
     };  // , &encoder.enc_b, &starter.req_active, &web_disabled, &powering_up
