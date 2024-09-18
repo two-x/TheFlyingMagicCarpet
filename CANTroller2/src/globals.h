@@ -207,7 +207,7 @@ float maf_gps = 0;                              // manifold mass airflow in gram
 uint16_t heartbeat_override_color = 0x0000;
 bool pcba_neo_glow = false;
 bool nowtouch = false;
-bool nowtouch2 = false;
+// bool nowtouch2 = false;
 bool captouch = true;
 float loop_avg_us;
 bool sensidiots[11];
