@@ -457,7 +457,7 @@ void BootButton::actions() {  // temporary (?) functionality added for developme
         else {
             sim.toggle();
             Timer printtimer;
-            ezread.squintf("addr: batt:%08X touch:%08X\n", &sensidiots[_MuleBatt], touch.nowtouch_ptr());
+            ezread.squintf("addr: batt:%08X touch:%08X\n", &sensidiots[_MuleBatt], &nowtouch);
             for (int i=0; i<NumTelemetryFull; i++) {
                 ezread.squintf("%02d: %08X %s\n", i, &sensidiots[i], diag.err_sens_card[i].c_str());            
             }

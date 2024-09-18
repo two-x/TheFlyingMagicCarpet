@@ -225,7 +225,7 @@ class Touchscreen {
     LGFX* _tft;
     int corners[2][2][2] = { { { -25, -3549 }, { 185, 3839 } },  // [restouch][xx/yy][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
                              { { -100, 319 },  { 0, 174 } } };   // [captouch][xx/yy][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
-    bool longpress_possible = true, recent_tap = false, doubletap_possible = false, tapped = false, doubletapped = false, longpressed = false;
+    bool longpress_possible = true, recent_tap = false, doubletap_possible = false;  // tapped = false, doubletapped = false, longpressed = false;
     bool landed_coordinates_valid = false, lasttouch = false, printEnabled = true, swipe_possible = true;  // , nowtouch = false, nowtouch2 = false;
     int fd_exponent = 0, fd_exponent_max = 6, tlast_x, tlast_y;
     float fd = (float)(1 << fd_exponent);  // float delta

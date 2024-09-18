@@ -1219,7 +1219,7 @@ class Simulator {
                         bool _can_sim = std::get<0>(kv->second);
                         if (_can_sim) d->set_source(src::POT); // if we allow simulation for this componenent, then set its input source to the pot
                     }
-                    else ezread.squintf("invalid pot map selected: %wq23d/n", arg_sensor);
+                    else ezread.squintf("invalid pot map selected: %d/n", arg_sensor);
                 }
             }
             _potmap = arg_sensor;
