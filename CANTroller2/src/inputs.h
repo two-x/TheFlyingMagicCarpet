@@ -229,15 +229,17 @@ class Touchscreen {
     bool landed_coordinates_valid = false, lasttouch = false, printEnabled = true, swipe_possible = true;  // , nowtouch = false, nowtouch2 = false;
     int fd_exponent = 0, fd_exponent_max = 6, tlast_x, tlast_y;
     float fd = (float)(1 << fd_exponent);  // float delta
-    // timer requirements: 1) senseTimer < filterTimer << (doubletapTimer & keyRepeatTimer & accelTimer). 2) doubleTapTimer < holdTimer << tapStaleTimer  
-    Timer senseTimer{15000};       // touch chip can't respond faster than some time period.
-    Timer filterTimer{25000};      // touch or untouch events lasting less than this long are ignored. needed for using through plastic box lid
-    Timer doubletapTimer{180000};  // two tap events within this much time is a double tap
-    Timer keyRepeatTimer{250000};  // for editing parameters with only a few values, auto repeat is this slow
-    Timer accelTimer{400000};      // how long between each increase of edit acceleration level
-    Timer holdTimer{550000};       // hold down this long to count as a long press
-    Timer tapStaleTimer{1000000};  // taps and doubletaps will expire if not queried within this timeframe after occurrence
-    int swipe_timeout = 300000;    // to count as a swipe, a drag must end before this long
+
+    // timer requirements: 1) sense < filter < (twotap & repeat & accel).  2) (twotap & swipe) < hold < stale. 
+    Timer senseTimer{15000};    // touch chip can't respond faster than some time period.
+    Timer filterTimer{25000};   // touch or untouch events lasting less than this long are ignored. needed for using through plastic box lid
+    Timer twotapTimer{180000};  // two tap events within this much time is a double tap
+    Timer repeatTimer{250000};  // for editing parameters with only a few values, auto repeat is this slow
+    int swipe_timeout = 300000; // to count as a swipe, a drag must end before this long
+    Timer accelTimer{400000};   // how long between each increase of edit acceleration level
+    Timer holdTimer{550000};    // hold down this long to count as a long press
+    Timer staleTimer{1000000};  // taps/presses/swipes will expire if not queried within this timeframe after occurrence
+    
     unsigned long lastPrintTime = 0;
     const unsigned long printInterval = 500; // Adjust this interval as needed (in milliseconds)
     enum touch_axis : int { xx, yy, zz };
@@ -292,13 +294,13 @@ class Touchscreen {
         bool ret = false;
         if (!nowtouch) press_in_effect = false;
         if (press_in_effect) {
-            if (keyRepeatTimer.expired()) {
-                keyRepeatTimer.reset();
+            if (repeatTimer.expired()) {
+                repeatTimer.reset();
                 ret = true;  // each time timer expires send true;
             }
         }
         else if (nowtouch) {
-            keyRepeatTimer.reset();
+            repeatTimer.reset();
             press_in_effect = true;
             ret = true;  // on first touch send true
         }
@@ -321,20 +323,13 @@ class Touchscreen {
         float _dragged[2] = { (float)drag_axis(xx), (float)drag_axis(yy) };
         return (int)(std::sqrt(_dragged[xx] * _dragged[xx] + _dragged[yy] * _dragged[yy]));  // pythagorean theorem
     }
-    int swipe(bool reset=true) {  // returns direction of a valid swipe, otherwise 0 for no swipe
-        if (tapStaleTimer.expired() || !swipe_possible) return DirNone;
+    int swipe(bool reset=true) {  // returns direction of a valid orthogonal swipe, otherwise 0 for no swipe
         int _dragged[2] = { drag_axis(HORZ), drag_axis(VERT) };
-        if (std::abs(_dragged[HORZ] > swipe_min)) {
-            if (reset) swipe_possible = false;
-            if (_dragged[HORZ] > 0) return DirRight;
-            return DirLeft;
-        }
-        if (std::abs(_dragged[VERT] > swipe_min)) {
-            if (reset) swipe_possible = false;
-            if (_dragged[VERT] > 0) return DirUp;
-            return DirDown;
-        }
-        return DirNone;
+        int _axis = (std::abs(_dragged[HORZ]) > std::abs(_dragged[VERT])) ? HORZ : VERT;  // was swipe mostly horizontal or mostly vertical
+        if (staleTimer.expired() || !swipe_possible || (std::abs(_dragged[_axis] < swipe_min))) return DirNone;  // bail if swipe doesn't qualify
+        if (reset) swipe_possible = false;        // prevent repeat trigger
+        if (_axis == HORZ) return (_dragged[HORZ] > 0) ? DirRight : DirLeft;
+        return (_dragged[VERT] > 0) ? DirUp : DirDown;
     }
     bool tap(bool reset=true) {
         bool ret = tapped;
@@ -348,10 +343,8 @@ class Touchscreen {
     }
     bool longpress(bool reset=true) {  // returns true if a touch is held down longer than a timeout without any significant amount of drag
         bool retval = longpressed;
-        if (reset) {
-            longpressed = false;
-            if (retval) longpress_possible = false;
-        }
+        if (reset) longpressed = false;
+        if (retval) longpress_possible = false;
         return retval;
     }
     // bool* tap_ptr() { return &tapped; }  // for idiot light
@@ -364,7 +357,7 @@ class Touchscreen {
             get_touch_debounced();
             if (nowtouch) process_touched();
             else process_untouched();
-            if (tapStaleTimer.expired()) tapped = doubletapped = recent_tap = doubletap_possible = longpressed = false;
+            if (staleTimer.expired()) tapped = doubletapped = recent_tap = doubletap_possible = longpressed = swiped = false;
             id = (int)fd;
             lasttouch = nowtouch;
         }
@@ -381,18 +374,18 @@ class Touchscreen {
             if (!landed_coordinates_valid) landed[axis] = tft_touch[axis];
         }
         landed_coordinates_valid = true;
-        if (!lasttouch) {           // if touch only just now started
-            holdTimer.reset();      // start timing for long press event
-            tapStaleTimer.reset();  // begin timer for tap timeout
-            swipe_possible = true;
-            if (recent_tap) doubletap_possible = true;  // if there was just a tap, flag the current touch might be a double tap
-        }
-        else {
+        if (lasttouch) {            // if this touch is continuing from previous loop(s)
             if (longpress_possible && holdTimer.expired()) {
                 if (drag_dist() <= drag_dist_min) longpressed = true;
                 longpress_possible = false;  // prevent a later longpress event in case drag returns to the original spot
             }
             if (holdTimer.elapsed() > swipe_timeout) swipe_possible = false;  // prevent meandering drags from being considered swipes
+        }
+        else {                      // if this touch only just now started
+            holdTimer.reset();      // start timing for long press event
+            staleTimer.reset();  // begin timer for taps/presses/swipes to time out if not queried externally within a reasonable time
+            swipe_possible = longpress_possible = true;
+            if (recent_tap) doubletap_possible = true;  // if there was just a tap, flag the current touch might be a double tap
         }
         if (ui_context != ScreensaverUI) {
             if (holdTimer.elapsed() > (fd_exponent + 1) * accelTimer.timeout()) {
@@ -413,16 +406,15 @@ class Touchscreen {
                 if (doubletap_possible) doubletapped = true;  // if there was a previous recent tap when pressed, we have a valid double tap
                 else {
                     recent_tap = true;        // otherwise we have a valid single tap
-                    doubletapTimer.reset();   // begin timeout to wait for a second tap
+                    twotapTimer.reset();   // begin timeout to wait for a second tap
                 }
             }
         }
-        if (doubletapTimer.expired()) {
+        if (twotapTimer.expired()) {
             if (recent_tap) tapped = true;  // if no double tap happened, then recent tap becomes valid single tap
             recent_tap = doubletap_possible = false;
         }
-        longpressed = false;
-        longpress_possible = true;  // allow for new longpress events
+        swipe_possible = longpressed = false;
         // for (int axis=HORZ; axis<=VERT; axis++) tft_touch[axis] = landed[axis] = -1;  // set coordinates to illegal value
     }
     void process_ui() {  // takes actions when screen objects are manipulated by touch
