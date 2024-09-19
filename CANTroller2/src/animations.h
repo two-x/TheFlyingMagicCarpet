@@ -247,11 +247,12 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
     uint8_t pencolor = RED, sat = rn(256), brt = rn(256), c = rando_color();
     uint16_t spothue = 65535, penhue = rn(65535), hue = rn(65535);
     std::string sub = "\x64\x6f\x20\x64\x72\x75\x67\x73";
-    int season = rn(4), precess = rn(10), shape, shdone = 0, point[2], plast[2], spotrate = 300;
+    int season = rn(4), precess = rn(10), shdone = 0, point[2], plast[2], spotrate = 300;
     int cycle = 0, scaler = 1, cycletime = 50000000, seasontime = 3000000, cycle_season_ratio = 16;
     Timer extratimer{2850000}, lucktimer, seasontimer, cycletimer;
     bool lotto = false, has_eraser = true;
  public:
+    int shape, num_shapes = NumSaverShapes;
     EraserSaver() {}
     void setup(LGFX_Sprite* _nowspr, viewport* _vp) {
         sprite = _nowspr;
@@ -309,7 +310,7 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         drawsprite();
         return shdone;
     }
-    void change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random, -3 for cycle backwards  // XX , -4 for autocycle (retains saver timeout)
+    int change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random, -3 for cycle backwards  // XX , -4 for autocycle (retains saver timeout)
         ++shdone %= 7;
         int last_pat = shape;
         has_eraser = !(bool)rn(3);
@@ -320,6 +321,7 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
             else if (newpat == -2) while (last_pat == shape) shape = rn(Rotate);
             if (rn(25) == 13) shape = Rotate;
         }  // Serial.printf("\ns%d %ldms: ", shape, (int)cycletimer.elapsed()/1000);
+        return shape;
     }
   private:
     void update_pen() {
@@ -838,6 +840,28 @@ class PanelAppManager {
         vp.w = _sprwidth;
         vp.h = _sprheight;
     }
+    void cycle_saver() {  // check for user input wanting to cycle the animation and cycle it accordingly
+        if (!auto_saver_enabled) return;
+        int changeit = encoder.rotdirection();
+        int swipe = touch->swipe();  // check for touchscreen swipe event
+        if (swipe == DirLeft) changeit--;  // swipe left for previous animation
+        else if (swipe == DirRight) changeit++;  // swipe right for next animation
+        if (bootbutton.shortpress()) changeit++;  // boot button also cycles, always forward
+        if (nowsaver == Eraser) {  // if on eraser saver
+            if (changeit > 0) {  //go forward one animation
+                if (eSaver.shape == eSaver.num_shapes - 1) change_saver();  // going past the last pattern changes to ball saver
+                else eSaver.change_pattern(-1);
+            }
+            else if (changeit < 0) {  // go back one animation
+                if (eSaver.shape == 0) change_saver();  // going to before the first pattern changes to ball saver
+                else eSaver.change_pattern(-3);  // still_running = 0;
+            }
+        }
+        else if (changeit != 0) {  // if on ball saver
+            change_saver();  // switch to eraser saver
+            eSaver.change_pattern((changeit > 0) ? 0 : eSaver.num_shapes - 1);  // go to first or last pattern
+        }        
+    }
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
@@ -879,24 +903,16 @@ class PanelAppManager {
             if (nowsaver == Eraser) {
                 still_running = eSaver.update(spr, &vp);
                 if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
-                if (auto_saver_enabled) {
-                    int changeit = encoder.rotdirection();
-                    if (changeit > 0) eSaver.change_pattern(-1);
-                    else if (changeit < 0) eSaver.change_pattern(-3);  // still_running = 0;
-                }
+                cycle_saver();
                 display_fps(spr);
             }
             else if (nowsaver == Collisions) {
                 if (touched()) cSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
-                if (auto_saver_enabled) {
-                    int changeit = encoder.rotdirection();
-                    if (changeit != 0) still_running = 0;
-                }
+                cycle_saver();
                 if ((bool)still_running) still_running = cSaver.update(spr, &vp);
                 display_fps(spr);
             }
             if (!(bool)still_running) change_saver();
-            if (bootbutton.shortpress()) change_saver();
         }
         else if (ui_context == EZReadUI) ezdraw->update(spr);
         else if (ui_context == MuleChassisUI) {
