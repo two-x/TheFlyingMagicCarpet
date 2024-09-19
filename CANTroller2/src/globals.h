@@ -207,7 +207,8 @@ int sleep_request = REQ_NA;
 float maf_gps = 0;                              // manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
 bool pcba_neo_glow = false;
-bool nowtouch = false, tapped = false, doubletapped = false, longpressed = false, swiped = false;  // touchscreen globals
+bool nowtouch = false, ts_tapped = false, ts_doubletapped = false, ts_longpressed = false, ts_swiped = false;  // touchscreen globals
+int ts_swipedir = DirNone;  // touchscreen
 // bool nowtouch2 = false;
 bool captouch = true;
 float loop_avg_us;
