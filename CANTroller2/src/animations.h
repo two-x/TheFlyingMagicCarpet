@@ -830,6 +830,22 @@ class PanelAppManager {
         return false;
     }
     int touch_pt(int axis) { return touchp[axis]; }
+    void draw_mule(LGFX_Sprite* spr) {
+        if (mule_drawn) return;
+        spr->fillSprite(BLK);
+        float w = 145.0, h = 74.0;
+        spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, w / 2, h / 2, 0, 1, 1, w, h, mulechassis_145x74x8, BLK);
+        mule_drawn = true;
+    }
+    int check_ui() {  // check for user input wanting to cycle the animation (in fullscreen animation mode)
+        if (!auto_saver_enabled) return 0;
+        int changeit = encoder.rotdirection();
+        int swipe = touch->swipe();  // check for touchscreen swipe event
+        if (swipe == DirLeft) changeit--;  // swipe left for previous animation
+        else if (swipe == DirRight) changeit++;  // swipe right for next animation
+        if (bootbutton.shortpress()) changeit++;  // boot button also cycles, always forward
+        return changeit;
+    }
   public:
     int sec, psec, _width, _height, _myfps = 0, frame_count = 0;
     bool anim_reset_request = false;
@@ -840,27 +856,20 @@ class PanelAppManager {
         vp.w = _sprwidth;
         vp.h = _sprheight;
     }
-    void cycle_saver() {  // check for user input wanting to cycle the animation and cycle it accordingly
-        if (!auto_saver_enabled) return;
-        int changeit = encoder.rotdirection();
-        int swipe = touch->swipe();  // check for touchscreen swipe event
-        if (swipe == DirLeft) changeit--;  // swipe left for previous animation
-        else if (swipe == DirRight) changeit++;  // swipe right for next animation
-        if (bootbutton.shortpress()) changeit++;  // boot button also cycles, always forward
-        if (nowsaver == Eraser) {  // if on eraser saver
-            if (changeit > 0) {  //go forward one animation
-                if (eSaver.shape == eSaver.num_shapes - 1) change_saver();  // going past the last pattern changes to ball saver
-                else eSaver.change_pattern(-1);
-            }
-            else if (changeit < 0) {  // go back one animation
-                if (eSaver.shape == 0) change_saver();  // going to before the first pattern changes to ball saver
-                else eSaver.change_pattern(-3);  // still_running = 0;
-            }
-        }
-        else if (changeit != 0) {  // if on ball saver
+    void cycle_saver(int changeit) {  // cycle the animation
+        if (changeit == 0) return;    // do nothing
+        if (nowsaver == Collisions) {  // if on ball saver
             change_saver();  // switch to eraser saver
             eSaver.change_pattern((changeit > 0) ? 0 : eSaver.num_shapes - 1);  // go to first or last pattern
-        }        
+            return;
+        }
+        if (changeit > 0) {  //go forward one animation
+            if (eSaver.shape == eSaver.num_shapes - 1) change_saver();  // going past the last pattern changes to ball saver
+            else eSaver.change_pattern(-1);
+            return;
+        }  // else go back one animation (below)
+        if (eSaver.shape == 0) change_saver();  // going to before the first pattern changes to ball saver
+        else eSaver.change_pattern(-3);  // still_running = 0;
     }
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
         ++nowsaver %= NumSaverMenu;
@@ -898,30 +907,23 @@ class PanelAppManager {
             mule_drawn = false;
             ezdraw->dirty = true;
         }
-        if (ui_context == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
+        if (ui_context == EZReadUI) ezdraw->update(spr);
+        else if (ui_context == MuleChassisUI) draw_mule(spr);
+        else if (ui_context == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             // mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
             if (nowsaver == Eraser) {
                 still_running = eSaver.update(spr, &vp);
                 if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
-                cycle_saver();
+                cycle_saver(check_ui());
                 display_fps(spr);
             }
             else if (nowsaver == Collisions) {
                 if (touched()) cSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
-                cycle_saver();
+                cycle_saver(check_ui());
                 if ((bool)still_running) still_running = cSaver.update(spr, &vp);
                 display_fps(spr);
             }
             if (!(bool)still_running) change_saver();
-        }
-        else if (ui_context == EZReadUI) ezdraw->update(spr);
-        else if (ui_context == MuleChassisUI) {
-            if (!mule_drawn) {
-                spr->fillSprite(BLK);
-                float w = 145.0, h = 74.0;
-                spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, w / 2, h / 2, 0, 1, 1, w, h, mulechassis_145x74x8, BLK);
-                mule_drawn = true;
-            }
         }
         spr->clearClipRect();
         if (sim->enabled()) draw_simbuttons(spr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them

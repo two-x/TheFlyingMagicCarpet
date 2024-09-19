@@ -127,7 +127,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_holdMode(bool recovering=false) {
         if (we_just_switched_modes) {
             joy_centered = recovering;  // Fly mode will be locked until the joystick first is put at or below center
-            watchdog.set_codestatus();  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
             gas.setmode(throttle_ctrl_mode);
             brake.setmode(AutoHold);
             steer.setmode(OpenLoop);
@@ -147,10 +146,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (hotrc.joydir(VERT) != JOY_UP) runmode = HOLD;            // must keep pulling trigger until car moves, or it drops back to hold mode
             else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
         }
-        else {
-            watchdog.set_codestatus();  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
-            if (speedo.stopped() && hotrc.joydir() != JOY_UP) runmode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
-        }
+        else if (speedo.stopped() && hotrc.joydir() != JOY_UP) runmode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
         if (hotrc.sw_event(CH4)) runmode = CRUISE;                                     // enter cruise mode by pressing hrc ch4 button
     }
@@ -161,26 +157,22 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             gas.setmode(Cruise);
             brake.setmode(cruise_brake ? ActivePID : Release);
             steer.setmode(OpenLoop);
-            // gestureFlyTimer.reset();  // initialize brake-trigger timer
+            gestureFlyTimer.reset();  // initialize brake-trigger timer
         }
         if (car_hasnt_moved) {
             if (hotrc.joydir(VERT) != JOY_UP) runmode = HOLD;            // must keep pulling trigger until car moves, or it drops back to hold mode
             else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
         }
-        else {
-            watchdog.set_codestatus();  // write to flash we are NOT in an appropriate place to lose power, so we can detect crashes on boot
-            if (speedo.stopped()) {
-                if (hotrc.joydir() == JOY_DN) runmode = HOLD;  // go to Hold Mode if we have slowed to a stop after previously moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
-                else if (hotrc.joydir() != JOY_UP) {  // unless attempting to increase cruise speed, when stopped drop to hold after a short timeout
-                    if (!stoppedholdtimer_active) {
-                        stoppedholdtimer.reset();
-                        stoppedholdtimer_active = true;
-                    }
-                    else if (stoppedholdtimer.expired()) runmode = HOLD;
+        else if (speedo.stopped()) {
+            if (hotrc.joydir() == JOY_DN) runmode = HOLD;  // go to Hold Mode if we have slowed to a stop after previously moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
+            else if (hotrc.joydir() != JOY_UP) {  // unless attempting to increase cruise speed, when stopped drop to hold after a short timeout
+                if (!stoppedholdtimer_active) {
+                    stoppedholdtimer.reset();
+                    stoppedholdtimer_active = true;
                 }
+                else if (stoppedholdtimer.expired()) runmode = HOLD;
             }
-            // if (hotrc.joydir(VERT) == JOY_DN && !cruise_speed_lowerable) runmode = FLY;
-        }
+        }  // if (hotrc.joydir(VERT) == JOY_DN && !cruise_speed_lowerable) runmode = FLY;
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
         if (hotrc.sw_event(CH4)) runmode = FLY;                  // go to fly mode if hotrc ch4 button pushed
         
