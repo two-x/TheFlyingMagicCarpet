@@ -75,10 +75,10 @@ class CollisionsSaver {
     }
     void new_ball(int ballno) {
         auto a = &_balls[_loop_count & 1][ballno];
-        a->color = lgfx::color332(100 + (rand() % 155), 100 + (rand() % 155), 100 + (rand() % 155));
+        a->color = lgfx::color332(100 + (std::rand() % 155), 100 + (std::rand() % 155), 100 + (std::rand() % 155));
         a->x = _width * rn(2);
-        a->dx = (rand() & (5 << SHIFTSIZE)) + 1;
-        a->dy = (rand() & (5 << SHIFTSIZE)) + 1;
+        a->dx = (std::rand() & (5 << SHIFTSIZE)) + 1;
+        a->dy = (std::rand() & (5 << SHIFTSIZE)) + 1;
         sqrme = (uint8_t)(ball_radius_base * (float)(vp->w + vp->h));
         sqrme += rn((int)(ball_radius_modifier * (float)(vp->w + vp->h)));
         for (int i=0; i<2; i++) if (!(bool)rn(ball_redoubler_rate)) sqrme *=2;
@@ -136,10 +136,10 @@ class CollisionsSaver {
                 b = (j == ball_count) ? &touchball : &balls[j];
                 rr = a->r + b->r;
                 vx = a->x - b->x;
-                if (abs(vx) > rr) continue;
+                if (std::abs(vx) > rr) continue;
                 vy = a->y - b->y;
-                if (abs(vy) > rr) continue;
-                len = sqrt(vx * vx + vy * vy);
+                if (std::abs(vy) > rr) continue;
+                len = std::sqrt(vx * vx + vy * vy);
                 if (len >= rr) continue;
                 if (len == 0.0) continue;
                 distance = (rr - len) >> 1;
@@ -168,11 +168,11 @@ class CollisionsSaver {
                 float bdx = -e * (bmx - amx) + adx;
                 float ady = (a->m * amy + b->m * bmy + bmy * e * b->m - amy * e * b->m) / (a->m + b->m);
                 float bdy = -e * (bmy - amy) + ady;
-                a->dx = roundf(adx + arx);
-                a->dy = roundf(ady + ary);
+                a->dx = std::roundf(adx + arx);
+                a->dy = std::roundf(ady + ary);
                 if (j < ball_count) {
-                    b->dx = roundf(bdx + brx);
-                    b->dy = roundf(bdy + bry);
+                    b->dx = std::roundf(bdx + brx);
+                    b->dy = std::roundf(bdy + bry);
                 }
             }
         }
@@ -239,6 +239,7 @@ class CollisionsSaver {
 };
 class EraserSaver {  // draws colorful patterns to exercise video buffering performance
  private:
+    bool touchpen = false;  // true allows drawing on screen with touch, false allows adjusting parameters
     enum savershapes { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, Worm, Rotate, NumSaverShapes };
     LGFX_Sprite* sprite;
     viewport* vp;
@@ -268,7 +269,11 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
     }
     void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
         // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
-        spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
+        if (touchpen) spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
+        else {
+            season = map(y, 0, disp_height_pix, 0, 3);
+            precess = map(x, 0, disp_width_pix, 0, 9);
+        }
     }
     void pot_timing() {
         if (!pot_controls_animation_timeout) return;

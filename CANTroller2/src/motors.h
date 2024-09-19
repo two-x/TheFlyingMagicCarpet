@@ -235,12 +235,10 @@ class ServoMotor {
     Hotrc* hotrc;
     Speedometer* speedo;
     Servo motor;
-    static const int pid_timeout = 30000;  // if too high, servo performance is choppy
+    int pid_timeout = 30000;  // if too high, servo performance is choppy
     float lastoutput;
-    Timer pid_timer{pid_timeout}, outchangetimer;
+    Timer pid_timer, outchangetimer;
     int pin, freq;
-    float linearlookup[21] =  // default array for linearizing actuator values
-        { 0.0,  5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
   public:
     bool reverse = false;  // defaults. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { 0.0, NAN, 100.0, 0.0, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
@@ -253,6 +251,7 @@ class ServoMotor {
         hotrc = _hotrc;
         speedo = _speedo;
         motor.setPeriodHertz(freq);
+        pid_timer.set(pid_timeout);
         motor.attach(pin, us[ABSMIN], us[ABSMAX]);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     }
     float out_pc_to_si(float _pc) {  // Eventually this should be linearized
@@ -413,7 +412,6 @@ class ThrottleControl : public ServoMotor {
     //   5. note also the reported angular value to see how accurate they are. if not, fix the conversions (currently a map statement)
 
     // * set operational angular range (OPMIN/OPMAX), margin (MARGIN) and parking angle (PARKED) here.
-    float si[NUM_MOTORVALS] = { 58.0, 57.0, 158.0, 69.0, NAN, 0.0, 180.0, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     float idle_si[NUM_MOTORVALS] = { 58.0, NAN, 65.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
     float idle_pc = 0.0; // 11.3;                              // idle percent is derived from the si (degrees) value
@@ -430,7 +428,7 @@ class ThrottleControl : public ServoMotor {
     bool pid_enabled = false, cruise_pid_enabled = false;
     int cruise_adjust_scheme = TriggerHold;  // edit these to be the defaults on boot
     int motormode = Idle;  // not tunable  // pid_status = OpenLoop, cruise_pid_status = OpenLoop,
-    bool cruise_trigger_released = false, reverse = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
+    bool cruise_trigger_released = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     float (&deg)[arraysize(si)] = si;                  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float max_throttle_angular_velocity_degps;  // deg/sec How quickly can the throttle change angle?  too low is unresponsive, too high can cause engine hesitations (going up) or stalls (going down)
     float pc_to_rpm(float _pc) { return map(_pc, 0.0, 100.0, tach->idle(), tach->opmax()); }
@@ -452,6 +450,15 @@ class ThrottleControl : public ServoMotor {
         tach = _tach;  pot = _pot;  tempsens = _temp;
         ezread.squintf("Throttle servo.. pid %s\n", pid_enabled ? "enabled" : "disabled");
         ezread.squintf("  Cruise pid %s, using %s adj scheme\n", cruise_pid_enabled ? "enabled" : "disabled", cruiseschemecard[cruise_adjust_scheme].c_str());
+        si[OPMIN] = 58.0;
+        si[PARKED] = 57.0;
+        si[OPMAX] = 158.0;
+        si[OUT] = 69.0;
+        si[GOVERN] = NAN;
+        si[ABSMIN] = 0.0;
+        si[ABSMAX] = 180.0;
+        si[MARGIN] = 1.0;
+        reverse = false;
         ServoMotor::setup(_hotrc, _speedo);
         throttleRateTimer.reset();
         // use_ratelimiter = true;
@@ -679,7 +686,6 @@ class BrakeControl : public JagMotor {
     float posn_kp = 80.0;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float posn_ki = 35.5;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_kd = 0.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    static constexpr int pid_timeout = 40000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     int dominantsens_last = HybridFB, preforce_request;    // float posn_inflect, pres_inflect, pc_inflect;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
@@ -728,6 +734,7 @@ class BrakeControl : public JagMotor {
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, ThrottleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         ezread.squintf("Brake pid %s, feedback: %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
+        pid_timeout = 40000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
         JagMotor::setup(_hotrc, _speedo, _batt);
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         // duty_fwd_pc = brakemotor_duty_spec_pc;
@@ -925,7 +932,7 @@ class BrakeControl : public JagMotor {
             pc[OUT] = pc[STOP];                                                            // THEN stop the motor
         else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);                     // constrain motor value to operational range
         rate_limiter();  // changerate_limiter();
-        if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;                                 // prevent stupidly small values which i was seeing
+        cleanzero(&pc[OUT], 0.01);  // if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;                                 // prevent stupidly small values which i was seeing
         for (int p = PositionFB; p <= PressureFB; p++) if (feedback_enabled[p]) pids[p].set_output(pc[OUT]);  // feed the final value back into the pids
     }
   public:

@@ -80,7 +80,7 @@ enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
 enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, Linearized=13, NumMotorModes=14 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
 enum openloopmodes { MedianPoint=0, AutoRelease=1, AutoRelHoldable=2, NumOpenLoopModes=3 };
-enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9,PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
+enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9, PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
 enum diag_val { DiagVal=0, DiagMin=1, DiagMax=2, DiagMargin=3, NumDiagVals=4 };
 enum joydirs { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
 enum panel_apps { EZReadUI=0, MuleChassisUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel
@@ -151,6 +151,8 @@ bool use_tft_colors_for_neo = false; // should neopixel colors be based on onscr
 bool print_error_changes = true;     // should diag print status changes and new error events to console?
 bool pot_controls_animation_timeout = false;  // when showing fullscreen animations, should the pot value control the next animation timeout?
 bool pcba_3v2 = true;                // turn to false if for some reason you are using the v3.1 pcba. note this does not automatically correct the pin 2 <-> pin 39 swap
+bool cruise_brake = true;            // does brake work in cruise mode
+int drive_mode = CRUISE;             // enter cruise or fly mode initially?
 int throttle_ctrl_mode = Linearized; // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 
 // global tunable variables
@@ -159,7 +161,7 @@ float float_zero = 0.000069;           // if two floats being compared are close
 float float_conversion_zero = 0.001;
 int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. set to 0 linefeeds all prints
-float flycruise_vert_margin_pc = 0.3;  // margin of error for determining hard brake value for dropping out of cruise mode
+float flycruise_vert_margin_pc = 3.0;  // margin of error for determining hard brake value for dropping out of cruise mode
 int cruise_delta_max_pc_per_s = 4;     // (in TriggerHold mode) what's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.016; // (in TriggerPull mode) limits the change of each adjust trigger pull to this fraction of what's possible
 float maf_min_gps = 0.0;
@@ -230,7 +232,6 @@ inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
-inline bool iszero(float num) { return (std::abs(num) < float_zero); }
 
 // pin operations
 void set_pin(int pin, int mode) { if (pin >= 0 && pin != 255) pinMode (pin, mode); }
@@ -591,3 +592,13 @@ class EZReadConsole {
     }
 };
 static EZReadConsole ezread;
+
+inline bool iszero(float num, float margin=NAN) {
+    if (std::isnan(num)) {
+        ezread.squintf("err: iszero(NAN) was called\n");
+        return false;
+    }
+    if (std::isnan(margin)) margin = float_zero;
+    return (std::abs(num) <= margin);
+}
+inline void cleanzero(float* num, float margin=NAN) { if (iszero(*num, margin)) *num = 0.0; }
