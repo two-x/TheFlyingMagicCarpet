@@ -843,6 +843,10 @@ class PanelAppManager {
         int swipe = touch->swipe();  // check for touchscreen swipe event
         if (swipe == DirLeft) changeit--;  // swipe left for previous animation
         else if (swipe == DirRight) changeit++;  // swipe right for next animation
+
+        // temporary alternate touch method since swiping is broken
+        if (touch->doubletap()) changeit++;
+
         if (bootbutton.shortpress()) changeit++;  // boot button also cycles, always forward
         return changeit;
     }
