@@ -270,6 +270,10 @@ class ServoMotor {
         if (!std::isnan(us[OUT])) motor.writeMicroseconds((int32_t)(us[OUT]));
         lastoutput = pc[OUT];    
     }
+    void set(float* member, float val) {  // generic setter for any member floats. basically makes sure to rerun derive() after
+        *member = val;
+        derive();
+    }
   protected:
     bool rate_limiter() {
         if (iszero(max_out_change_rate_pcps)) return false;  // bypass rate limiter feature by setting max rate to 0
@@ -279,6 +283,7 @@ class ServoMotor {
         pc[OUT] = constrain(pc[OUT], lastoutput - max_out_change_pc, lastoutput + max_out_change_pc);
         return (!iszero(old_out - pc[OUT]));
     }
+    void derive() {};  // child overload this
 };
 class JagMotor : public ServoMotor {
   protected:

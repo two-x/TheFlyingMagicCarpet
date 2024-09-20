@@ -1047,15 +1047,15 @@ class Tuner {
     void edit_values() {  // Change tunable values when editing
         if (tunctrl != EDIT || !id) return;
         if (datapage == PG_RUN) {
-            if (sel == 13) { tune(&gas.governor, id, 0, 100); gas.derive(); }
-            else if (sel == 14) tune(&steer.steer_safe_pc, id, 0, 100);
+            if (sel == 13) gas.set(&gas.governor, tune(gas.governor, id, 0.0f, 100.0f));
+            else if (sel == 14) tune(&steer.steer_safe_pc, id, 0.0f, 100.0f);
         }
         else if (datapage == PG_JOY) {
             if (sel == 10) airvelo.set_oplim(NAN, tune(airvelo.opmax(), id, airvelo.opmin(), airvelo.absmax()));
             else if (sel == 11) mapsens.set_oplim(tune(mapsens.opmin(), id, mapsens.absmin(), mapsens.opmax()), NAN);
             else if (sel == 12) mapsens.set_oplim(NAN, tune(mapsens.opmax(), id, mapsens.opmin(), mapsens.absmax()));
-            else if (sel == 13) tune(&hotrc.failsafe_us, id, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
-            else if (sel == 14) { tune(&hotrc.deadband_us, id, 0, 100); hotrc.derive(); }
+            else if (sel == 13) hotrc.set(&hotrc.failsafe_us, tune(hotrc.failsafe_us, id, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]));
+            else if (sel == 14) hotrc.set(&hotrc.deadband_us, tune(hotrc.deadband_us, id, 0.0f, 100.0f));  // use hotrc.set function to force derive
         }
         else if (datapage == PG_SENS) {
             if (sel == 10) pressure.set_oplim(tune(pressure.opmin(), id, pressure.absmin(), pressure.opmax()), NAN);
@@ -1073,10 +1073,10 @@ class Tuner {
             else if (sel == 14) tune(speedo.idle_ptr(), id, speedo.opmin(), speedo.opmax());
         }                
         else if (datapage == PG_PWMS) {
-            if (sel == 11) { tune(&gas.si[OPMIN], id, gas.si[ABSMIN], gas.si[OPMAX]); gas.derive(); }
-            else if (sel == 12) { tune(&gas.si[OPMAX], id, gas.si[OPMIN], gas.si[ABSMAX]); gas.derive(); }
-            else if (sel == 13) { tune(&brake.us[STOP], id, brake.us[OPMIN], brake.us[OPMAX]); brake.derive(); }
-            else if (sel == 14) { tune(&brake.duty_fwd_pc, id, 0.0f, 100.0f); brake.derive(); }
+            if (sel == 11) gas.set(&gas.si[OPMIN], tune(gas.si[OPMIN], id, gas.si[ABSMIN], gas.si[OPMAX]));
+            else if (sel == 12) gas.set(&gas.si[OPMAX], tune(gas.si[OPMAX], id, gas.si[OPMIN], gas.si[ABSMAX]));
+            else if (sel == 13) brake.set(&brake.us[STOP], tune(brake.us[STOP], id, brake.us[OPMIN], brake.us[OPMAX]));
+            else if (sel == 14) brake.set(&brake.duty_fwd_pc, tune(brake.duty_fwd_pc, id, 0.0f, 100.0f));
         }
         else if (datapage == PG_IDLE) {
             if (sel == 10) tune(&gas.starting_pc, id, gas.pc[OPMIN], gas.pc[OPMAX]);
@@ -1090,7 +1090,7 @@ class Tuner {
             else if (sel == 6) brake.update_ctrl_config(-1, tune(brake.feedback, id, 0, NumBrakeFB-1, true));
             else if (sel == 7) brake.update_ctrl_config(-1, -1, tune(brake.openloop_mode, id, 0, NumOpenLoopModes-1, true));
             else if (sel == 8) brake.enforce_positional_limits = tune(id);
-            else if (sel == 9) tune(&brake.max_out_change_rate_pcps, id, 0.0, 1000.0);
+            else if (sel == 9) tune(&brake.max_out_change_rate_pcps, id, 0.0f, 1000.0f);
             else if (sel == 10) gas.update_ctrl_config((int)tune(id));
             else if (sel == 11) gas.update_cruise_ctrl_config((int)tune(id));
             else if (sel == 12) gas.set_cruise_scheme(tune(gas.cruise_adjust_scheme, id, 0, NumCruiseSchemes-1, true));
@@ -1099,21 +1099,21 @@ class Tuner {
         }
         else if (datapage == PG_BPID) {
             if (sel == 11) brake.pid_dom->set_sampletime(tune(brake.pid_dom->sampletime(), id, 1000));
-            else if (sel == 12) brake.pid_dom->set_kp(tune(brake.pid_dom->kp(), id, 0.0, NAN));
-            else if (sel == 13) brake.pid_dom->set_ki(tune(brake.pid_dom->ki(), id, 0.0, NAN));
-            else if (sel == 14) brake.pid_dom->set_kd(tune(brake.pid_dom->kd(), id, 0.0, NAN));
+            else if (sel == 12) brake.pid_dom->set_kp(tune(brake.pid_dom->kp(), id, 0.0f, NAN));
+            else if (sel == 13) brake.pid_dom->set_ki(tune(brake.pid_dom->ki(), id, 0.0f, NAN));
+            else if (sel == 14) brake.pid_dom->set_kd(tune(brake.pid_dom->kd(), id, 0.0f, NAN));
         }
         else if (datapage == PG_GPID) {
             if (sel == 11) gas.set_changerate_deg(tune(gas.max_throttle_angular_velocity_degps, id, 0.0f, 180.0f));
-            else if (sel == 12) gas.pid.set_kp(tune(gas.pid.kp(), id, 0.0, NAN));
-            else if (sel == 13) gas.pid.set_ki(tune(gas.pid.ki(), id, 0.0, NAN));
-            else if (sel == 14) gas.pid.set_kd(tune(gas.pid.kd(), id, 0.0, NAN));
+            else if (sel == 12) gas.pid.set_kp(tune(gas.pid.kp(), id, 0.0f, NAN));
+            else if (sel == 13) gas.pid.set_ki(tune(gas.pid.ki(), id, 0.0f, NAN));
+            else if (sel == 14) gas.pid.set_kd(tune(gas.pid.kd(), id, 0.0f, NAN));
         }
         else if (datapage == PG_CPID) {
             if (sel == 11) tune(&cruise_delta_max_pc_per_s, id, 1.0, 35.0);
-            else if (sel == 12) gas.cruisepid.set_kp(tune(gas.cruisepid.kp(), id, 0.0, NAN));
-            else if (sel == 13) gas.cruisepid.set_ki(tune(gas.cruisepid.ki(), id, 0.0, NAN));
-            else if (sel == 14) gas.cruisepid.set_kd(tune(gas.cruisepid.kd(), id, 0.0, NAN));
+            else if (sel == 12) gas.cruisepid.set_kp(tune(gas.cruisepid.kp(), id, 0.0f, NAN));
+            else if (sel == 13) gas.cruisepid.set_ki(tune(gas.cruisepid.ki(), id, 0.0f, NAN));
+            else if (sel == 14) gas.cruisepid.set_kd(tune(gas.cruisepid.kd(), id, 0.0f, NAN));
         }
         else if (datapage == PG_TEMP) {
             if (sel == 12) tune(&wheeldifferr, id);
@@ -1138,8 +1138,8 @@ class Tuner {
             if (sel == 9) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize)); 
             else if (sel == 10) neo->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 11) neo->sleepmode_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
-            else if (sel == 12) neo->setbright(tune(neobright, id, 0.0, 100.0));  //  neo->setbright(neobright); }
-            else if (sel == 13) neo->setsat(tune(neosat, id, 0.0, 100.0));  //  neo->setbright(neobright); }
+            else if (sel == 12) neo->setbright(tune(neobright, id, 0.0f, 100.0f));  //  neo->setbright(neobright); }
+            else if (sel == 13) neo->setsat(tune(neosat, id, 0.0f, 100.0f));  //  neo->setbright(neobright); }
             else if (sel == 14) tune(&ui_context, id, 0, NumContextsUI-1, true);
         }
         id = 0;

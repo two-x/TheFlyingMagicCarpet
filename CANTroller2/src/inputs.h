@@ -268,7 +268,7 @@ class Touchscreen {
     void update_swipe() {  // determines if there's a valid swipe, saved to variable
         int _dragged[2] = { drag_axis(HORZ), drag_axis(VERT) };
         int _axis = (std::abs(_dragged[HORZ]) > std::abs(_dragged[VERT])) ? HORZ : VERT;  // was swipe mostly horizontal or mostly vertical
-        if (staleTimer.expired() || !swipe_possible || (std::abs(_dragged[_axis] < swipe_min))) ts_swipedir = DirNone;  // catch if swipe doesn't qualify
+        if (!swipe_possible || (std::abs(_dragged[_axis] < swipe_min))) ts_swipedir = DirNone;  // catch if swipe doesn't qualify
         else if (_axis == HORZ) ts_swipedir = (_dragged[HORZ] > 0) ? DirRight : DirLeft;
         else ts_swipedir = (_dragged[VERT] > 0) ? DirUp : DirDown;
         ts_swiped = (ts_swipedir != DirNone);  // for idiot light
@@ -386,7 +386,7 @@ class Touchscreen {
             holdTimer.reset();      // start timing for long press event
             staleTimer.reset();  // begin timer for taps/presses/swipes to time out if not queried externally within a reasonable time
             swipe_possible = longpress_possible = true;
-            if (recent_tap) doubletap_possible = true;  // if there was just a tap, flag the current touch might be a double tap
+            doubletap_possible = recent_tap;  // if there was just a tap, flag the current touch might be a double tap
         }
         else {            // if this touch is continuing from previous loop(s)
             if (longpress_possible && holdTimer.expired()) {
@@ -413,7 +413,7 @@ class Touchscreen {
                 if (doubletap_possible) ts_doubletapped = true;  // if there was a previous recent tap when pressed, we have a valid double tap
                 else {
                     recent_tap = true;        // otherwise we have a valid single tap
-                    twotapTimer.reset();   // begin timeout to wait for a second tap
+                    twotapTimer.reset();      // begin timeout to wait for a second tap
                 }
                 update_swipe();
                 swipe_possible = false;
