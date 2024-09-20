@@ -238,7 +238,7 @@ class Touchscreen {
     int swipe_timeout = 300000; // to count as a swipe, a drag must end before this long
     Timer accelTimer{400000};   // how long between each increase of edit acceleration level
     Timer holdTimer{550000};    // hold down this long to count as a long press
-    Timer staleTimer{2000000};  // taps/presses/swipes will expire if not queried within this timeframe after occurrence
+    Timer staleTimer{750000};  // taps/presses/swipes will expire if not queried within this timeframe after occurrence
 
     unsigned long lastPrintTime = 0;
     const unsigned long printInterval = 500; // Adjust this interval as needed (in milliseconds)
