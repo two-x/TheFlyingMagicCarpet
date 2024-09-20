@@ -231,14 +231,14 @@ class Touchscreen {
     float fd = (float)(1 << fd_exponent);  // float delta
 
     // timer requirements: 1) sense < filter < (twotap & repeat & accel).  2) (twotap & swipe) < hold < stale. 
-    Timer senseTimer{15000};    // touch chip can't respond faster than some time period.
-    Timer filterTimer{25000};   // touch or untouch events lasting less than this long are ignored. needed for using through plastic box lid
+    Timer senseTimer{12000};    // touch chip can't respond faster than some time period.
+    Timer filterTimer{18000};   // touch or untouch events lasting less than this long are ignored. needed for using through plastic box lid
     Timer twotapTimer{180000};  // two tap events within this much time is a double tap
     Timer repeatTimer{250000};  // for editing parameters with only a few values, auto repeat is this slow
     int swipe_timeout = 300000; // to count as a swipe, a drag must end before this long
     Timer accelTimer{400000};   // how long between each increase of edit acceleration level
     Timer holdTimer{550000};    // hold down this long to count as a long press
-    Timer staleTimer{1000000};  // taps/presses/swipes will expire if not queried within this timeframe after occurrence
+    Timer staleTimer{2000000};  // taps/presses/swipes will expire if not queried within this timeframe after occurrence
 
     unsigned long lastPrintTime = 0;
     const unsigned long printInterval = 500; // Adjust this interval as needed (in milliseconds)
@@ -275,7 +275,7 @@ class Touchscreen {
     }
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
-    int drag_dist_min = 5;  // if a press changes location more than this many pixels, it is considered a drag not a press
+    int drag_dist_min = 10;  // if a press changes location more than this many pixels, it is considered a drag not a press
     int swipe_min = 50;     // minimum travel in pixels to count as a swipe
     int idelta, id;         // id is edit amount as integer for locally made edits. idelta is edit amount as integer for passing off to tuner object.
     bool increment_datapage = false, increment_sel = false;
@@ -368,7 +368,7 @@ class Touchscreen {
             }
             id = (int)fd;
             lasttouch = nowtouch;
-            printTouchInfo();  // for debug
+            // printTouchInfo();  // for debug
         }
         _i2c->pass_i2c_baton();
     }  // Serial.printf("%s", nowtouch ? "+" : "-");
@@ -481,9 +481,22 @@ class Touchscreen {
         printEnabled = enable;
     }
     void printTouchInfo() {
-        if (nowtouch) ezread.squintf("ts: 1=%d 2=%d lp=%d sw=%d l=%3d,%3d t=%3d,%3d\n", 
-            ts_tapped, ts_doubletapped, ts_longpressed, ts_swipedir, landed[xx], landed[yy], tft_touch[xx], tft_touch[yy]);
-
+        static bool last1tap, last2tap, lastlongtap;
+        static int lastswipe, lastx, lasty, lastdragx, lastdragy;
+        if (!last1tap && ts_tapped) ezread.squintf("ts: single-tap\n");
+        if (!last2tap && ts_doubletapped) ezread.squintf("ts: double-tap\n");
+        if (!lastlongtap && ts_longpressed) ezread.squintf("ts: longpress\n");
+        if (lastswipe != ts_swipedir) ezread.squintf("ts: swipe=%d\n", ts_swipedir);
+        // if (lastx != tft_touch[xx] || lasty != tft_touch[yy]) ezread.squintf("ts: %3d,%3d -> %3d,%3d\n", landed[xx], landed[yy], tft_touch[xx], tft_touch[yy]);
+        if (lastdragx != drag_axis(xx) || lastdragy != drag_axis(yy)) ezread.squintf("ts: drag %+3d,%+3d d:%+3d\n", drag_axis(xx), drag_axis(yy), drag_dist());
+        last1tap = ts_tapped;
+        last2tap = ts_doubletapped;
+        lastlongtap = ts_longpressed;
+        lastswipe = ts_swipedir;
+        lastx = tft_touch[xx];
+        lasty = tft_touch[yy];
+        lastdragx = drag_axis(xx);
+        lastdragy = drag_axis(yy);
         // if (printEnabled && touched()) {
         //     unsigned long currentTime = millis();
         //     if (currentTime - lastPrintTime >= printInterval) {}  // ezread.squintf("Touch %sdetected", (read_touch()) ? "" : "not ");
