@@ -335,26 +335,22 @@ class Touchscreen {
             ts_swipedir = DirNone;
             ts_swiped = false;
         }
-        if (ret != DirNone) ezread.squintf("touch: swipe = %d\n", ts_swipedir);
         return ret;
     }
     bool tap(bool reset=true) {  // returns if a single-tap has occurred
         bool ret = ts_tapped;
         if (reset) ts_tapped = false;
-        if (ret) ezread.squintf("touch: single-tap\n");
         return ret;
     }
     bool doubletap(bool reset=true) {  // returns if a double-tap has occurred
         bool ret = ts_doubletapped;
         if (reset) ts_doubletapped = false;
-        if (ret) ezread.squintf("touch: double-tap\n");
         return ret;
     }
     bool longpress(bool reset=true) {  // returns true if a touch is held down longer than a timeout without any significant amount of drag
         bool ret = ts_longpressed;
         if (reset) ts_longpressed = false;
         if (ret) longpress_possible = false;
-        if (ret) ezread.squintf("touch: longpress\n");
         return ret;
     }
     // bool* tap_ptr() { return &ts_tapped; }  // for idiot light
@@ -372,6 +368,7 @@ class Touchscreen {
             }
             id = (int)fd;
             lasttouch = nowtouch;
+            printTouchInfo();  // for debug
         }
         _i2c->pass_i2c_baton();
     }  // Serial.printf("%s", nowtouch ? "+" : "-");
@@ -484,12 +481,15 @@ class Touchscreen {
         printEnabled = enable;
     }
     void printTouchInfo() {
-        if (printEnabled && touched()) {
-            unsigned long currentTime = millis();
-            if (currentTime - lastPrintTime >= printInterval) {}  // ezread.squintf("Touch %sdetected", (read_touch()) ? "" : "not ");
-            if (nowtouch) ezread.squintf(" x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
-            else ezread.squintf("\n");  // if available, you can print touch pressure as well (for capacitive touch)
-            lastPrintTime = currentTime;
-        }
+        if (nowtouch) ezread.squintf("ts: 1=%d 2=%d lp=%d sw=%d l=%3d,%3d t=%3d,%3d\n", 
+            ts_tapped, ts_doubletapped, ts_longpressed, ts_swipedir, landed[xx], landed[yy], tft_touch[xx], tft_touch[yy]);
+
+        // if (printEnabled && touched()) {
+        //     unsigned long currentTime = millis();
+        //     if (currentTime - lastPrintTime >= printInterval) {}  // ezread.squintf("Touch %sdetected", (read_touch()) ? "" : "not ");
+        //     if (nowtouch) ezread.squintf(" x:%d y:%d\n", tft_touch[xx], tft_touch[yy]);
+        //     else ezread.squintf("\n");  // if available, you can print touch pressure as well (for capacitive touch)
+        //     lastPrintTime = currentTime;
+        // }
     }
 };
