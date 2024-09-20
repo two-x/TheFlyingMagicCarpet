@@ -1,6 +1,5 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
-
 TaskHandle_t temptask = NULL, webtask = NULL, maftask = NULL, pushtask = NULL, drawtask = NULL;
 
 void setup() {

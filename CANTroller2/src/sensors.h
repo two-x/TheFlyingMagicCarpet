@@ -279,7 +279,7 @@ class Transducer : public Device {
         else if (_convmethod == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
         else if (_convmethod == LinearMath) ret = _boffset + _mfactor * arg_native; // ezread.squintf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
         else ezread.squintf("Err: %s from_native convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_native, _native.min(), _native.max());
-        if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // reject any stupidly small near-zero values
+        cleanzero(&ret, float_conversion_zero);   // if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // reject any stupidly small near-zero values
         return ret;
     }
     virtual float to_native(float arg_si) {  // convert an absolute si value to native units
@@ -288,19 +288,19 @@ class Transducer : public Device {
         else if (_convmethod == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
         else if ((_convmethod == LinearMath) && !iszero(_mfactor)) ret = (arg_si - _boffset) / _mfactor;
         else ezread.squintf("Err: %s to_native can't convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_si, _si.min(), _si.max());
-        if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // reject any stupidly small near-zero values
+        cleanzero(&ret, float_conversion_zero);
         return ret;
     }
     virtual float to_pc(float arg_si) {  // convert an absolute si value to percent form.  note this honors the _dir setting
         if (std::isnan(arg_si)) return NAN;
         float ret = map(arg_si, _opmin, _opmax, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD));
-        if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // round off absurdly small values
+        cleanzero(&ret, float_conversion_zero);
         return ret;
     }
     virtual float from_pc(float arg_pc) {  // convert an absolute percent value to si unit form.  note this honors the _dir setting
         if (std::isnan(arg_pc)) return NAN;
         float ret = map(arg_pc, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD), _opmin, _opmax);
-        if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // round off absurdly small values
+        cleanzero(&ret, float_conversion_zero);
         return ret;
     }
     // to set limits, depends on your conversion method being used :
@@ -369,7 +369,7 @@ class Transducer : public Device {
         return set_si(from_pc(arg_val_pc), also_set_raw);
     }
     bool sim_si(float arg_val_si, bool also_set_raw=true) {
-        if (!(_source == src::SIM || _source == src::POT)) return false;
+        if (_source != src::SIM && _source != src::POT) return false;
         if (!_si.set(arg_val_si)) return false;
         if (also_set_raw) _si_raw = _si.val();
         _native.set(to_native(_si.val()));
@@ -1364,6 +1364,14 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         bool retval = _sw_event[ch];
         _sw_event[ch] = false;
         return retval;        
+    }
+    void set(float* member, float val) {  // generic setter for any member floats. basically makes sure to rerun derive() after
+        *member = val;
+        derive();
+    }
+    void set(float* member, int val) {  // generic setter that takes integer value term
+        *member = (float)val;
+        derive();
     }
     void set_pc(int axis, int param, float val) { pc[axis][param] = val; }
     void set_us(int axis, int param, float val) { us[axis][param] = val; }
