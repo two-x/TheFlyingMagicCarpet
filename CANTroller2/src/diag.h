@@ -76,7 +76,7 @@ class DiagRuntime {
                 err_sens[i][j] = err_last[i][j] = false; // Initialize sensor error flags to false
             }
         for (int j=0; j<NumTelemetryFull; j++) registered[j] = false;
-        register_device(_Throttle, &gas->si[OUT], &gas->si[OPMIN], &gas->si[OPMAX], &gas->si[MARGIN]);
+        register_device(_Throttle, &gas->si[OUT], &gas->si[PARKED], &gas->si[OPMAX], &gas->si[MARGIN]);
         register_device(_BrakeMotor, &brake->si[OUT], &brake->si[OPMIN], &brake->si[OPMAX], &brake->si[MARGIN]);
         register_device(_SteerMotor, &steer->si[OUT], &steer->si[OPMIN], &steer->si[OPMAX], &steer->si[MARGIN]);
         register_device(_Speedo, speedo->ptr(), speedo->opmin_ptr(), speedo->opmax_ptr(), speedo->margin_ptr());
