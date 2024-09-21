@@ -181,7 +181,7 @@ class CollisionsSaver {
         return new_round;
     }
   public:
-    void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
+    void touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
         // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
         lastx = touchball.x;
         lasty = touchball.y;
@@ -239,7 +239,6 @@ class CollisionsSaver {
 };
 class EraserSaver {  // draws colorful patterns to exercise video buffering performance
  private:
-    bool touchpen = false;  // true allows drawing on screen with touch, false allows adjusting parameters
     enum savershapes { Wedges, Dots, Rings, Ellipses, Boxes, Ascii, Worm, Rotate, NumSaverShapes };
     LGFX_Sprite* sprite;
     viewport* vp;
@@ -268,13 +267,13 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         scaler = std::max(1, (vp->w + vp->h)/200);
         _is_running = true;
     }
-    void saver_touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
+    void touchwrite(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
         // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
-        if (touchpen) spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
-        else {
-            season = map(y, 0, disp_height_pix, 0, 3);
-            precess = map(x, 0, disp_width_pix, 0, 9);
-        }
+        spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
+    }
+    void touchadjust(int x, int y) {  // you can draw colorful lines on the screensaver
+        season = map(y, 0, disp_height_pix, 0, 3);
+        precess = map(x, 0, disp_width_pix, 0, 9);
     }
     void pot_timing() {
         if (!pot_controls_animation_timeout) return;
@@ -433,16 +432,15 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
     }
     void run_dots() {
         int total_punches = 12, p[2], stars = 0, r, myshape = rn(season + precess);
-        static int punches_left, oldseason, oldproc, mindot = 4, adddot = 4;
-        static bool was_eraser, flipper; 
+        static int punches_left, oldseason, oldprec, mindot = 4, adddot = 4;
+        static bool was_eraser = has_eraser, flipper; 
         static uint16_t myhue[2] = { 0, 32767 };
         spotrate = (int)(rn(900));
-        if ((precess > oldproc) && !rn(2)) {  // sometimes on leap year we slam them with a few bigger punches
-            was_eraser = has_eraser;
+        if ((precess > oldprec) && !rn(2)) {  // sometimes on leap year we slam them with a few bigger punches
             has_eraser = false;
             punches_left = total_punches;
         }
-        oldproc = precess;
+        oldprec = precess;
         if (season != oldseason) {
             mindot = constrain(mindot + rn(3) - 1, 1 + (cycle >> 1), 2 + cycle);
             adddot = constrain(adddot + rn(3) - 1, 1, 3 + (cycle >> 1));
@@ -451,7 +449,10 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         if (myshape < 2) myshape = 0;
         else if (myshape < 6) myshape = 1;
         else myshape = 2;
-        if (!punches_left) stars = 13 - (adddot / 2) - (mindot + adddot > 8) ? 3 : 0;
+        if (!punches_left) {
+            stars = 13 - (adddot / 2) - (mindot + adddot > 8) ? 3 : 0;
+            has_eraser = was_eraser;
+        }
         else if (extratimer.expired()) stars = 1;
         for (int i=0; i<2; i++) myhue[i] += rn(511) - 255;
         for (int star = 0; star < stars; star++) {
@@ -821,15 +822,6 @@ class PanelAppManager {
             oldfps = dispfps;
         }
     }
-    bool touched() {
-        if (touch->touched()) {
-            touchp[HORZ] = touch->touch_pt(HORZ) - vp.x;
-            touchp[VERT] = touch->touch_pt(VERT) - vp.y;
-            return true;
-        }
-        return false;
-    }
-    int touch_pt(int axis) { return touchp[axis]; }
     void draw_mule(LGFX_Sprite* spr) {
         if (mule_drawn) return;
         spr->fillSprite(BLK);
@@ -837,8 +829,8 @@ class PanelAppManager {
         spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, w / 2, h / 2, 0, 1, 1, w, h, mulechassis_145x74x8, BLK);
         mule_drawn = true;
     }
-    int check_ui() {  // check for user input wanting to cycle the animation (in fullscreen animation mode)
-        if (!auto_saver_enabled) return 0;
+    int check_cycle_req() {  // check for user input wanting to cycle the animation (in fullscreen animation mode)
+        if (!auto_saver_enabled) return DirNone;
         int changeit = encoder.rotdirection();
         int swipe = touch->swipe();  // check for touchscreen swipe event
         if (swipe == DirLeft) changeit--;  // swipe left for previous animation
@@ -860,14 +852,15 @@ class PanelAppManager {
         vp.w = _sprwidth;
         vp.h = _sprheight;
     }
-    void cycle_saver(int changeit) {  // cycle the animation
-        if (changeit == 0) return;    // do nothing
+    void cycle_anim(int changeit=DirFwd) {  // cycle the animation
+        if (changeit == DirNone) return;    // do nothing
+        changeit = constrain(changeit, DirRev, DirFwd);
         if (nowsaver == Collisions) {  // if on ball saver
             change_saver();  // switch to eraser saver
-            eSaver.change_pattern((changeit > 0) ? 0 : eSaver.num_shapes - 1);  // go to first or last pattern
+            eSaver.change_pattern((changeit == DirFwd) ? 0 : eSaver.num_shapes - 1);  // go to first or last pattern
             return;
         }
-        if (changeit > 0) {  //go forward one animation
+        if (changeit == DirFwd) {  //go forward one animation
             if (eSaver.shape == eSaver.num_shapes - 1) change_saver();  // going past the last pattern changes to ball saver
             else eSaver.change_pattern(-1);
             return;
@@ -900,7 +893,7 @@ class PanelAppManager {
         anim_reset_request = false;
     }
     float update(LGFX_Sprite* spr, bool argdirty=false) {
-        if ((ui_context_last != ScreensaverUI) && (ui_context == ScreensaverUI)) change_saver();  // ptrsaver->reset();
+        if ((ui_context_last != ScreensaverUI) && (ui_context == ScreensaverUI)) cycle_anim(DirFwd);  // next saver.  ptrsaver->reset();
         if (ui_context_last != ui_context) dirty = true;
         if (argdirty) dirty = true;
         ui_context_last = ui_context;
@@ -917,17 +910,16 @@ class PanelAppManager {
             // mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
             if (nowsaver == Eraser) {
                 still_running = eSaver.update(spr, &vp);
-                if (touched()) eSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
-                cycle_saver(check_ui());
-                display_fps(spr);
+                if (touch->tap()) eSaver.touchadjust(touch->touch_pt(HORZ), touch->touch_pt(VERT));
+                else if (touch->held()) eSaver.touchwrite(spr, touch->touch_pt(HORZ), touch->touch_pt(VERT));
             }
             else if (nowsaver == Collisions) {
-                if (touched()) cSaver.saver_touch(spr, touch_pt(HORZ), touch_pt(VERT));
-                cycle_saver(check_ui());
-                if ((bool)still_running) still_running = cSaver.update(spr, &vp);
-                display_fps(spr);
+                still_running = cSaver.update(spr, &vp);  // if ((bool)still_running) 
+                if (touch->held()) cSaver.touch(spr, touch->touch_pt(HORZ), touch->touch_pt(VERT));
             }
-            if (!(bool)still_running) change_saver();
+            if (!still_running) change_saver();
+            else cycle_anim(check_cycle_req());
+            display_fps(spr);
         }
         spr->clearClipRect();
         if (sim->enabled()) draw_simbuttons(spr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
