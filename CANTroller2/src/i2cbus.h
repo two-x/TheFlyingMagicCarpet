@@ -209,7 +209,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         uint8_t warning = 0;  // (diag->worst_sensor(3) != _None);
         uint8_t alarm = 0;  // (diag->worst_sensor(4) != _None);
         byt |= (uint8_t)syspower | (uint8_t)(panicstop << 1) | (uint8_t)(warning << 2) | (alarm << 3);  // insert status bits nibble
-        if (byt == status_nibble_last) return false;
+        if (byt == status_nibble_last) return false;  // bail if no change to status occured
         Wire.beginTransmission(addr);
         Wire.write(byt);
         Wire.endTransmission(addr);
@@ -218,7 +218,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     }
     bool sendrunmode(int runmode) {
         uint8_t byt = 0x10;  // command template for runmode update
-        if (runmode == runmode_last) return false;
+        if (runmode == runmode_last) return false;  // bail if no change to runmode occured
         byt |= (uint8_t)(runmode & 0x0f);  // insert runmode in 2nd nibble
         Wire.beginTransmission(addr);
         Wire.write(byt);
@@ -229,7 +229,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     bool sendspeed(float _speed) {
         uint8_t byt = 0x20;  // command template for speed update
         uint16_t speed = (uint16_t)(_speed * 100);
-        if (speed == speed_last) return false;
+        if (speed == speed_last) return false;  // bail if speed has not changed
         byt |= ((speed >> 8) & 0x0f);
         Wire.beginTransmission(addr);
         Wire.write(byt);
@@ -245,9 +245,9 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         if (i2c->not_my_turn(i2c_lightbox)) return;
         // if (i2c->detected(i2c_lightbox) && send_timer.expireset()) {
         if (send_timer.expireset()) {  // enable for now to test
-            sent = sendstatus();
-            sent |= sendrunmode(runmode);
-            if (!sent) sent = sendspeed(speed);
+            sent = sendstatus();  // send status if it changed since last time
+            sent |= sendrunmode(runmode);  // send runmode if it changed since last time
+            if (!sent) sent = sendspeed(speed);  // if neither of above was sent, then send speed (to prevent long bus use)
         }
         i2c->pass_i2c_baton();
     }
