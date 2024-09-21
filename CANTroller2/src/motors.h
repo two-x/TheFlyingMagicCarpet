@@ -493,10 +493,8 @@ class ThrottleControl : public ServoMotor {
         // ezread.squintf("idle");
         idle_temp_f = tempsens->val(loc::ENGINE);
         if (std::isnan(idle_temp_f)) idle_boost_pc = 0.0;  // without valid temp reading do not boost
-        else {
-            idle_boost_pc = map(idle_temp_f, idle_temp_lim_f[LOW], idle_temp_lim_f[HIGH], idle_max_boost_pc, 0.0);
-            idle_boost_pc = constrain(idle_boost_pc, 0.0f, idle_max_boost_pc);
-        }
+        else idle_boost_pc = map(idle_temp_f, idle_temp_lim_f[LOW], idle_temp_lim_f[HIGH], idle_max_boost_pc, 0.0);
+        idle_boost_pc = constrain(idle_boost_pc, 0.0f, idle_max_boost_pc);
         tach->set_idle(map(idle_boost_pc, 0.0, idle_max_boost_pc, tach->idle_hot(), tach->idle_cold()));
         _idle_pc = pc[OPMIN] + idle_boost_pc;
         // ezread.squintf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);

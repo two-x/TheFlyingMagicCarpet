@@ -473,6 +473,16 @@ class Sensor : public Transducer {
     float ema_alpha() { return _ema_alpha; }
     bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
 };
+// trying to begin to make temp sensors conform to this class structure so i can simulate them. may be throwaway?
+// class TempSensor : public Sensor {
+//   protected:
+//     TemperatureSensorManager* _tempsens;
+//   public:
+//     void setup() {
+//         set_can_source(src::POT, true);
+//     }
+// };
+
 
 // Base class for sensors which communicate using i2c.
 // note: this is a strange type of Sensor, it's not really a Transducer but it does do filtering. maybe we should rethink the hierarchy a little?
@@ -960,6 +970,9 @@ class Speedometer : public PulseSensor {
         print_config();
     }
 };
+
+// below are beginnings of making hotrc and motors also conform to this class structure. unfinished and unused
+//
 // RCChannel is a class for the channels of the hotrc
 // it contains the association with the RMT channels and probably filtering
 // I imagine it might make sense to have two child classes, one for the two toggle channels, and one for the two analog channels
@@ -1234,6 +1247,8 @@ class Simulator {
     bool enabled() { return _enabled; }
     bool* enabled_ptr() { return &_enabled; }
 };
+
+// rmtinput is used by hotrc class below
 class RMTInput {
   public:
     RMTInput(rmt_channel_t channel, gpio_num_t gpio) {
@@ -1386,11 +1401,11 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         for (int chan = CH3; chan <= CH4; chan++) {
             us[chan][RAW] = (float)(rmt[chan].readPulseWidth(true));
             sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
-            if ((sw[chan] != sw[chan-2]) && !_radiolost) {
+            if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
                 _sw_event[chan] = true;          // so a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
                 kick_inactivity_timer(HURCTog);  // evidence of user activity
             }
-            sw[chan-2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
+            sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
         }
     }
     float us_to_pc(int axis, float _us, bool deadbands=false) {
@@ -1402,17 +1417,12 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         if (_us >= us[axis][CENT]) return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
         return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);    
     }
-    void constrain_directions() {
-        for (int axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
-    }
     void direction_update() {
         if (sim->simulating(sens::joy)) {
             if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
             // ezread.squintf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
-            constrain_directions();
-            return;
         }
-        for (int axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
+        else for (int axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
             us[axis][RAW] = (float)(rmt[axis].readPulseWidth(true));
             float us_spike = spike_filter(axis, us[axis][RAW]);
             us[axis][FILT] = ema_filt(us_spike, us[axis][FILT], ema_alpha);
@@ -1422,7 +1432,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
             else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(HURCTrig);  // indicate evidence of user activity
         }
-        constrain_directions();
+        for (int axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
     }
     bool radiolost_update() {
         if (us[VERT][FILT] > failsafe_us + failsafe_margin_us) {
