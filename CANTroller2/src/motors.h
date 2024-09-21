@@ -417,10 +417,14 @@ class ThrottleControl : public ServoMotor {
     //   5. note also the reported angular value to see how accurate they are. if not, fix the conversions (currently a map statement)
 
     // * set operational angular range (OPMIN/OPMAX), margin (MARGIN) and parking angle (PARKED) here.
-    float idle_si[NUM_MOTORVALS] = { 58.0, NAN, 65.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    float idle_pc = 0.0; // 11.3;                              // idle percent is derived from the si (degrees) value
+
+    float idle_max_boost_pc = 15.0;  // max amount (in percent) to boost idle if the engine is too cold
+    float idle_temp_lim_f[2] = { 60.0, 80.0 };  // [LOW]/HIGH] temperature range (in F) over which to apply idle boost. max boost at temp=LOW or less, and no boost at temp=HIGH or more 
+    // float idle_si[NUM_MOTORVALS] = { 58.0, NAN, 65.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    // float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    float _idle_pc = 0.0, idle_boost_pc = 0.0; // 11.3;                // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
+    float idle_temp_f = NAN;  // temperature determined for purpose of calculating boost. will prefer engine temp sensor but has fallback options 
     // ... with:
     // ThrottleServo servo;
     // ThrottleControl(int pin, int freq) {
@@ -481,17 +485,23 @@ class ThrottleControl : public ServoMotor {
         }
         Serial.printf("reverse=%d 0% = %lf us, 100% = %lf us\n", reverse, out_pc_to_us(0.0, reverse), out_pc_to_us(100.0, reverse));
     }
-    void update_idlespeed() {
+    float idle_pc() { return _idle_pc; }
+    float idle_si() { return out_pc_to_si(_idle_pc); }
+    float idle_us() { return out_pc_to_us(_idle_pc); }    
+  private:
+    void update_idle() {  // updates idle_pc based on temperature, ranging from si[OPMIN] (when warm) to full boost% applied (when cold)
         // ezread.squintf("idle");
-        if (!std::isnan(tempsens->val(loc::ENGINE))) idletemp_f[OUT] = tempsens->val(loc::ENGINE);
-        if (std::isnan(idletemp_f[OUT])) return;
-        idle_si[OUT] = map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], idle_si[OPMAX], idle_si[OPMIN]);
-        idle_si[OUT] = constrain(idle_si[OUT], idle_si[OPMIN], idle_si[OPMAX]);
-        idle_pc = out_si_to_pc(idle_si[OUT]);
-        tach->set_idle(map(idletemp_f[OUT], idletemp_f[OPMIN], idletemp_f[OPMAX], tach->idle_cold(), tach->idle_hot()));
+        float temp_clipped = NAN;
+        idle_temp_f = tempsens->val(loc::ENGINE);
+        if (std::isnan(idle_temp_f)) idle_boost_pc = 0.0;  // without valid temp reading do not boost
+        else {
+            temp_clipped = constrain(idle_temp_f, idle_temp_lim_f[LOW], idle_temp_lim_f[HIGH]);
+            idle_boost_pc = map(idle_temp_f, idle_temp_lim_f[LOW], idle_temp_lim_f[HIGH], idle_max_boost_pc, 0.0);
+        }
+        tach->set_idle(map(idle_boost_pc, 0.0, idle_max_boost_pc, tach->idle_hot(), tach->idle_cold()));
+        _idle_pc = pc[OPMIN] + idle_boost_pc;
         // ezread.squintf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);
     }
-  private:
     // linear control:
     // linearization using a lookup table, for use when not on pid.  here are some other ideas:
     //
@@ -539,7 +549,7 @@ class ThrottleControl : public ServoMotor {
         }
         else if (cruise_adjust_scheme == SuspendFly) {
             if (!cruise_adjusting) adjustpoint = (cruise_pid_enabled) ? rpm_to_pc(tach->val()) : pc[OUT];
-            throttle_target_pc = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[GOVERN] : idle_pc) - adjustpoint);
+            throttle_target_pc = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[GOVERN] : _idle_pc) - adjustpoint);
         }
         if (cruise_pid_enabled) cruisepid.set_target(speedo->val());  // while adjusting, constantly update cruise pid target to whatever the current speed is
         cruise_adjusting = true;
@@ -563,19 +573,19 @@ class ThrottleControl : public ServoMotor {
     // }
     void set_output() {
         // ezread.squintf("mode");
-        if (motormode == Idle) throttle_target_pc = idle_pc;
+        if (motormode == Idle) throttle_target_pc = _idle_pc;
         else if (motormode == Starting) throttle_target_pc = starting_pc;
         else if (motormode == Cruise) cruise_logic();  // cruise mode just got too big to be nested in this if-else clause
         else if (motormode == ParkMotor) throttle_target_pc = pc[PARKED];
         else if (motormode == OpenLoop || motormode == ActivePID || motormode == Linearized) {
-            if (hotrc->joydir() != JOY_UP) throttle_target_pc = idle_pc;  // If in deadband or being pushed down, we want idle
-            else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], idle_pc, pc[GOVERN]);  // actuators still respond even w/ engine turned off
+            if (hotrc->joydir() != JOY_UP) throttle_target_pc = _idle_pc;  // If in deadband or being pushed down, we want idle
+            else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], _idle_pc, pc[GOVERN]);  // actuators still respond even w/ engine turned off
         }
         else if (motormode == Calibrate) {
             cal_gasmode = true;
             pc[OUT] = out_si_to_pc(map(pot->val(), pot->opmin(), pot->opmax(), si[ABSMIN], si[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
             return;  // cal mode sets the output directly, skipping the post processing below
-        }  // ezread.squintf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], idle_pc);
+        }  // ezread.squintf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], _idle_pc);
         float new_out;
         throttle_target_pc = constrain(throttle_target_pc, pc[PARKED], pc[OPMAX]);
         if (motormode == ActivePID) {
@@ -590,7 +600,7 @@ class ThrottleControl : public ServoMotor {
     void postprocessing() {
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
         else if (motormode == ParkMotor || motormode == Halt) pc[OUT] = constrain(pc[OUT], pc[PARKED], pc[GOVERN]);
-        else pc[OUT] = constrain(pc[OUT], idle_pc, pc[GOVERN]);
+        else pc[OUT] = constrain(pc[OUT], _idle_pc, pc[GOVERN]);
         if (motormode == ActivePID) pid.set_output(pc[OUT]);  // feed possibly-modified output value back into pid
         // if ((motormode == Cruise) && cruise_pid_enabled) cruisepid.set_output(throttle_target_pc);  // feed possibly-modified output value back into pid
     }
@@ -644,8 +654,8 @@ class ThrottleControl : public ServoMotor {
     void update() {
         if (runmode == LOWPOWER) return;
         if (pid_timer.expireset()) {
-            // update_idlespeed();                // Step 1 : do any idle speed management needed          
             update_ctrl_config();
+            update_idle();                // Step 1 : do any idle speed management needed          
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             postprocessing();                // Step 3 : fix output to ensure it's in range
             us[OUT] = out_pc_to_us(pc[OUT], reverse);   // Step 4 : convert motor value to pulsewidth time
@@ -654,24 +664,6 @@ class ThrottleControl : public ServoMotor {
             write_motor();                     // Step 5 : write to servo
         }
     }
-    float idlehot() {
-        if (pid_enabled) return tach->idle_hot();
-        else return idle_si[OPMIN];
-    }
-    float idlecold() {
-        if (pid_enabled) return tach->idle_cold();
-        else return idle_si[OPMAX];
-    }
-    void set_idlehot(float newidlehot) {
-        if (pid_enabled) tach->set_idlehot(constrain(newidlehot, tach->opmin(), tach->idle_cold() - 1.0));
-        else idle_si[OPMIN] = constrain(newidlehot, idle_si[ABSMIN], idle_si[OPMAX] - 1.0);
-    }
-    void set_idlecold(float newidlecold) {
-        if (pid_enabled) tach->set_idlecold(constrain(newidlecold, tach->idle_hot() + 1.0, tach->opmax()));
-        else idle_si[OPMAX] = constrain(newidlecold, idle_si[OPMIN] + 1.0, idle_si[ABSMAX]);
-    }
-    void set_temphot(float newtemphot) { idletemp_f[OPMAX] = constrain(newtemphot, idletemp_f[OPMIN] + 1.0, idletemp_f[ABSMAX]); }
-    void set_tempcold(float newtempcold) { idletemp_f[OPMIN] = constrain(newtempcold, idletemp_f[ABSMIN], idletemp_f[OPMAX] - 1.0); }
 };
 class ChokeControl : public ServoMotor {
   private:
@@ -822,7 +814,7 @@ class BrakeControl : public JagMotor {
     float calc_prop_loop_out() {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
         float err = (combined_read_pc - target_pc);
         if (std::abs(err) < thresh_loop_hysteresis_pc) return pc[STOP];
-        if (err > 0.0) return thresh_loop_attenuation_pc * pc[OPMIN];
+        if (err > 0.0) return thresh_loop_attenuation_pc * throttle->idle_pc();
         return thresh_loop_attenuation_pc * pc[OPMAX];
     }
     // float calc_prop_loop_out() {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
