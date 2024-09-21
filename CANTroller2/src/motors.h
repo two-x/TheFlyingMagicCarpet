@@ -489,14 +489,13 @@ class ThrottleControl : public ServoMotor {
     float idle_si() { return out_pc_to_si(_idle_pc); }
     float idle_us() { return out_pc_to_us(_idle_pc); }    
   private:
-    void update_idle() {  // updates idle_pc based on temperature, ranging from si[OPMIN] (when warm) to full boost% applied (when cold)
+    void update_idle() {  // updates _idle_pc based on temperature, ranging from pc[OPMIN] (when warm) to full boost% applied (when cold)
         // ezread.squintf("idle");
-        float temp_clipped = NAN;
         idle_temp_f = tempsens->val(loc::ENGINE);
         if (std::isnan(idle_temp_f)) idle_boost_pc = 0.0;  // without valid temp reading do not boost
         else {
-            temp_clipped = constrain(idle_temp_f, idle_temp_lim_f[LOW], idle_temp_lim_f[HIGH]);
             idle_boost_pc = map(idle_temp_f, idle_temp_lim_f[LOW], idle_temp_lim_f[HIGH], idle_max_boost_pc, 0.0);
+            idle_boost_pc = constrain(idle_boost_pc, 0.0f, idle_max_boost_pc);
         }
         tach->set_idle(map(idle_boost_pc, 0.0, idle_max_boost_pc, tach->idle_hot(), tach->idle_cold()));
         _idle_pc = pc[OPMIN] + idle_boost_pc;
