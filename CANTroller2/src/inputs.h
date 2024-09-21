@@ -289,7 +289,6 @@ class Touchscreen {
         captouch = (i2c->detected(i2c_touch));
         Serial.printf("Touchscreen.. %s panel\n", (captouch) ? "detected captouch" : "using resistive");
     }
-    bool touched() { return nowtouch; }  // returns whether a touch is currently in progress
     // bool* touched_ptr() { return &nowtouch; }
     int touch_x() { return tft_touch[xx]; }
     int touch_y() { return tft_touch[yy]; }
@@ -312,6 +311,10 @@ class Touchscreen {
         }
         else press_in_effect = ret = false;  // on loss of touch send false;
         return ret;
+    }
+    bool touched() { return nowtouch; }  // returns whether a touch is currently in progress
+    bool held() {  // true if in-progress touch has lasted long enough that taps/doubletaps aren't possible, without detecting one
+        return (nowtouch && twotapTimer.expired() && !ts_tapped && !recent_tap && !ts_doubletapped);
     }
     int get_delta() {  // returns edit value (for tuning) based on length of press and acceleration factor
         int ret = idelta;

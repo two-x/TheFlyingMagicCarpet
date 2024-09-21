@@ -27,7 +27,9 @@ class NeopixelStrip {
     enum ledcolor : int { cnow, clast, cnormal, coff, con, cflash, cnumcolors };
     enum brightness_contexts { NITE, DAY };  // Indoors = NITE
   public:
+    std::string pcbaglowcard[glowNumGlowModes] = { "Off", "Heart1", "Heart2", "Xfade" };
     bool sleepmode = false;
+    int pcbaglow = glowHeart1;
     static const int idiotcount = 8;
     NeopixelStrip(int argpin) : pin(argpin) {}
     void setup(bool viewcontext=NITE);
@@ -43,7 +45,7 @@ class NeopixelStrip {
     uint32_t idiot_neo_color(int _idiot);
     bool newIdiotLight(int _idiot, uint8_t color332, bool startboolstate = 0);
     void sleepmode_ena(bool ena);
-    void set_pcba_glow(int mode=glowHeartBot);
+    void set_pcba_glow(int mode=glowHeart1);
   private:
     int numpixels = 1 + idiotcount;  //  + extIdiotCount;  // 15 pixels = heartbeat RGB + 7 onboard RGB + 7 external RGBW
     static const int neo_fade_timeout_us = 380000;
@@ -59,7 +61,7 @@ class NeopixelStrip {
     uint32_t fcbase[idiotcount];
     float neobright_last[2], correction[3] = { 1.0, 0.9, 1.0 };  // Applied to brightness of rgb elements
     Timer neoFadeTimer{neo_fade_timeout_us}, neoHeartbeatTimer, flashtimer;
-    int pcbaglow = glowHeartBot, pin = -1, heartbeat_state = 0, heartbeat_level = 0, fquantum_us = 50000;  // time resolution of flashes
+    int pin = -1, heartbeat_state = 0, heartbeat_level = 0, fquantum_us = 50000;  // time resolution of flashes
     int heartbeat_ekg_us[4] = {250000, 240000, 620000, 2000000};
     int fset[idiotcount][fnumset], heartbeat_pulse = 255, lomultiplier = 3;  // lobright is hibright divided by this twice
     int fevents[idiotcount][fevpages], fevcurrpage = 0; int fevfilled = 0; int nowtime_us, nowepoch;  // , fevmask_master;
@@ -110,9 +112,9 @@ void NeopixelStrip::recolor_idiots(int _idiot) {  // call w/ -1 to recolor all i
         if (fset[i][fcount]) set_fcolor(i);
     }
 }
-void NeopixelStrip::set_pcba_glow(int mode) {  // modes 0-3: glowOff, glowHeartBot, glowHeartBoth, glowXFade
+void NeopixelStrip::set_pcba_glow(int mode) {  // modes 0-3: glowOff, glowHeart1, glowHeart2, glowXFade
     if (mode > glowNumGlowModes) return;  // bail if the given mode is invalid
-    bool needheart = (mode == glowHeartBot) || (mode == glowHeartBoth);
+    bool needheart = (mode == glowHeart1) || (mode == glowHeart2);
     heartbeat_ena(needheart);
     if (!needheart) heartbeatNow[0] = heartbeatNow[1] = color_to_neo((uint32_t)0);    
     pcbaglow = mode;
@@ -120,7 +122,7 @@ void NeopixelStrip::set_pcba_glow(int mode) {  // modes 0-3: glowOff, glowHeartB
 void NeopixelStrip::refresh(bool force) {
     // int numledstowrite = (heartbeatNow[0] != neostrip[0]);
     // int firstheart = (int)((pcbaglow == glowOff) || !neo_heartbeat);
-    // int lastheart = (int)((pcbaglow == glowHeartBoth) || (pcbaglow == glowXFade)) + (int)pcba_3v2;
+    // int lastheart = (int)((pcbaglow == glowHeart2) || (pcbaglow == glowXFade)) + (int)pcba_3v2;
     // for (int i=firstheart; i<=lastheart; i++) {
     //     if (heartbeatNow[i] != neostrip[i]) numledstowrite = i + 1;
     //     neostrip[i] = heartbeatNow[i];
@@ -152,7 +154,7 @@ void NeopixelStrip::refresh(bool force) {
 void NeopixelStrip::setup(bool viewcontext) {
     ezread.squintf("Neopixels.. ");
     numpixels = 1 + idiotcount + (int)pcba_neo_glow;  // potentially update number of pixels to include extra neo on the v3.2 pcba (topside)
-    set_pcba_glow(glowHeartBoth);      // heartbeat_ena(true);
+    set_pcba_glow(glowHeart2);      // heartbeat_ena(true);
     context = viewcontext;
     neoobj.Begin();
     for (int i=0; i<2; i++) heartbeat_brightness[i] = brightlev[context][B_LO];
@@ -299,7 +301,7 @@ void NeopixelStrip::update_pcba_glow() {
     if (pcbaglow == glowXFade) {
 
     }
-    else if (pcbaglow == glowHeartBoth) {
+    else if (pcbaglow == glowHeart2) {
 
     }
 }
