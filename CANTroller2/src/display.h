@@ -1136,7 +1136,7 @@ class Tuner {
         }
         else if (datapage == PG_UI) {
             if (sel == 8) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize));
-            else if (sel == 9) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, glowNumGlowModes - 1, true));
+            else if (sel == 9) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, GlowNumModes - 1, true));
             else if (sel == 10) neo->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 11) neo->sleepmode_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 12) neo->setbright(tune(neobright, id, 0.0f, 100.0f));  //  neo->setbright(neobright); }
