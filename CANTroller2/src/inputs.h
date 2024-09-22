@@ -226,8 +226,8 @@ class Touchscreen {
     float fd = (float)(1 << fd_exponent);  // float delta
 
     // timing requirements: 1) sense < filter < (twotap & repeat & accel).  2) (twotap & swipe) < longpress < press. 
-    Timer senseTimer{12000};        // touch chip can't respond faster than some time period.
-    Timer filterTimer{18000};       // touch or untouch events lasting less than this long are ignored. needed for using through plastic box lid
+    Timer senseTimer{6500};        // touch chip can't respond faster than some time period.
+    Timer filterTimer{10000};       // touch or untouch events lasting less than this long are ignored. needed for using through plastic box lid
     Timer twotapTimer{180000};      // two tap events within this much time is a double tap
     Timer pressTimer{750000};       // taps/presses/swipes will expire if not queried within this timeframe after occurrence
     // below are all based on pressTimer

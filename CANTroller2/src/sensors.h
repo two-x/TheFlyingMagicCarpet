@@ -1388,8 +1388,6 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         *member = (float)val;
         derive();
     }
-    void set_pc(int axis, int param, float val) { pc[axis][param] = val; }
-    void set_us(int axis, int param, float val) { us[axis][param] = val; }
     int next_unfilt_rawval (int axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
     int joydir(int axis = VERT) {
         if (axis == VERT) return ((pc[axis][FILT] > pc[axis][DBTOP]) ? JOY_UP : ((pc[axis][FILT] < pc[axis][DBBOT]) ? JOY_DN : JOY_CENT));
