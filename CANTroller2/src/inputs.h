@@ -214,6 +214,12 @@ class Encoder {
 #define touch_margin_h_pix 1     // (disp_width_pix - (touch_cell_h_pix * touch_cells_h)) / 2  // 1 // on horizontal axis, we need an extra margin along both sides button sizes to fill the screen
 #define touch_reticle_offset 50  // distance of center of each reticle to nearest screen edge
 #define disp_tuning_lines 15     // lines of dynamic variables/values in dataset pages
+
+// touchscreen driver:
+// * panels supported: i2c capacitive or spi resistive touchscreen, autodetected based on i2c address of captouch panel
+// * filtering: rejection of short spurious false touches or losses of touch (needed for use through plastic box lid)  
+// * touch events supported: tap, double-tap, orthogonal swipe, long-press, drag
+// * editing features: single (on press) or periodically repeated action (while held), also temporal acceleration of numerical edits
 class Touchscreen {
   private:
     I2C* _i2c;
@@ -240,7 +246,7 @@ class Touchscreen {
     int trow, tcol, disp_size[2], raw[3], tft_touch[2], landed[2];  // landed are the initial coordinates of a touch event, unaffected by subsequent dragging
     // uint16_t touch_cal_data[5] = { 404, 3503, 460, 3313, 1 };  // got from running TFT_eSPI/examples/Generic/Touch_calibrate/Touch_calibrate.ino
     // lcd.setTouch(touch_cal_data);
-    void get_touch_debounced() {  // this rejects short spurious touch or un-touch blips
+    void get_touch_debounced() {  // this updates nowtouch, rejecting any spurious touch or un-touch blips shorter than filterTimer timeout
         static bool filtertimer_active;
         uint8_t count = _tft->getTouch(&(raw[HORZ]), &(raw[VERT]));
         bool triggered = (count > 0);
@@ -281,15 +287,10 @@ class Touchscreen {
         disp_size[VERT] = disp_height_pix;
         captouch = (i2c->detected(i2c_touch));
         Serial.printf("Touchscreen.. %s panel", (captouch) ? "detected captouch" : "using resistive");
-        if (   (senseTimer.timeout() >= filterTimer.timeout())
-            || (filterTimer.timeout() >= twotapTimer.timeout())
-            || (filterTimer.timeout() >= repeat_timeout)
-            || (filterTimer.timeout() >= accel_timeout)
-            || (twotapTimer.timeout() >= longpress_timeout)
-            || (swipe_timeout >= longpress_timeout)
-            || (longpress_timeout >= pressTimer.timeout())  ) {
-            Serial.printf(" ERR in timing setup!");
-        }
+        if (   (senseTimer.timeout() >= filterTimer.timeout()) || (filterTimer.timeout() >= twotapTimer.timeout())
+            || (filterTimer.timeout() >= repeat_timeout)       || (filterTimer.timeout() >= accel_timeout)
+            || (twotapTimer.timeout() >= longpress_timeout)    || (swipe_timeout >= longpress_timeout)
+            || (longpress_timeout >= pressTimer.timeout()) )   Serial.printf(" ERR in timing setup!");
         Serial.printf("\n");
     }
     // bool* touched_ptr() { return &nowtouch; }
@@ -356,7 +357,7 @@ class Touchscreen {
             if (nowtouch) process_touched();
             else process_untouched();
             if (pressTimer.expired()) {
-                ts_tapped = ts_doubletapped = recent_tap = doubletap_possible = ts_longpressed = ts_swiped = false;
+                ts_tapped = ts_doubletapped = recent_tap = doubletap_possible = ts_longpressed = ts_swiped = longpress_possible = false;
                 ts_swipedir = DirNone;
             }
             id = (int)fd;
@@ -405,10 +406,10 @@ class Touchscreen {
                 if (doubletap_possible) ts_doubletapped = true;  // if there was a previous recent tap when pressed, we have a valid double tap
                 else {
                     recent_tap = true;        // otherwise we have a valid single tap
-                    twotapTimer.reset();      // begin timeout to wait for a second tap
+                    twotapTimer.reset();      // begin timeout again to wait for a second tap
                 }
                 update_swipe();
-                swipe_possible = false;
+                swipe_possible = doubletap_possible = false;
             }
             ts_longpressed = false;
             keyrepeats = 0;
@@ -450,10 +451,10 @@ class Touchscreen {
         }
         else if (tbox == 0x04 && longpress()) autosaver_request = REQ_ON;  // start fullscreen screensaver.  This button may be hijacked for a more useful function
         else if (tbox == 0x20 && longpress()) calmode_request = true;
-        else if (tbox == 0x21) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize));
-        else if (tbox == 0x22 && onrepeat()) ezread.lookback(ezread.offset + 1);
-        else if (tbox == 0x23 && onrepeat()) ezread.lookback(ezread.offset - 1);
-        else if (tbox == 0x24) ezread.lookback(tune(ezread.offset, -id, 0, ezread.bufferSize));
+        else if (tbox == 0x21) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize));  // fast scroll
+        else if (tbox == 0x22 && onrepeat()) ezread.lookback(ezread.offset + 1);  // step scroll
+        else if (tbox == 0x23 && onrepeat()) ezread.lookback(ezread.offset - 1);  // step scroll
+        else if (tbox == 0x24) ezread.lookback(tune(ezread.offset, -id, 0, ezread.bufferSize));  // fast scroll
         else if (tbox == 0x30 && longpress()) sim.toggle();  // pressed the simulation mode toggle. Needs long-press  // fuelpump.request(REQ_TOG);
         else if (tbox == 0x31) pressure.sim_si(tune(pressure.val(), id, pressure.opmin(), pressure.opmax()));  // pressed the increase brake pressure button
         else if (tbox == 0x32) pressure.sim_si(tune(pressure.val(), -id, pressure.opmin(), pressure.opmax()));
