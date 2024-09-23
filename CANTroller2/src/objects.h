@@ -26,8 +26,6 @@ static LightingBox lightbox(&i2c);  // lightbox(&diag);
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
     ezread.squintf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
     if (running_on_devboard) return;      // override settings if running on the real car
-    pcba_neo_glow = true;
-    pcba_3v2 = true;
     looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
     touch_reticles = false;
     // console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
