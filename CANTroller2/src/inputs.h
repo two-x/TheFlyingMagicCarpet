@@ -217,9 +217,22 @@ class Encoder {
 
 // touchscreen driver:
 // * panels supported: i2c capacitive or spi resistive touchscreen, autodetected based on i2c address of captouch panel
-// * filtering: rejection of short spurious false touches or losses of touch (needed for use through plastic box lid)  
-// * touch events supported: tap, double-tap, orthogonal swipe, long-press, drag
-// * editing features: single (on press) or periodically repeated action (while held), also temporal acceleration of numerical edits
+// * calibration: values of corners[][][] array must be edited for optimized location accuracy (for cap and res types)
+// * filtering: rejects short spurious false touches or losses of touch (needed for use through plastic box lid)
+// * methods supported:
+//    touched()     : returns true if a touch is in progress, otherwise false
+//    touch_pt(xy)  : returns coordinate of the point currently or most recently touched, along the given axis.  doesn't reset until the next touch event begins
+//    landed_pt(xy) : returns coordinate of the initial touch point of the current or most recent touch event, along the given axis.  doesn't reset until the next touch event begins
+//    tap()         : returns true if a touch is removed quickly enough without significant drag, and then not immediately re-touched.  querying or stale timeout resets to false
+//    doubletap()   : returns true if a tap is immediately followed by another tap.  querying or stale timeout resets to false
+//    swipe()       : returns the dominant orthogonal direction of any valid swipe event, otherwise DirNone.  a valid swipe is if a touch is dragged far enough then released quickly enough.  querying or stale timeout resets to DirNone 
+//    held()        : returns true if an in-progress touch persists until taps and swipes are no longer possible, without experiencing any.  resets to false upon release
+//    longpress()   : returns true if a touch lasts long enough without significant drag.  resets to false upon release
+//    drag_axis(xy) : returns orthogonal distance dragged in pixels along the given axis, of the current or most recent touch event.  doesn't reset until the next touch event begins
+//    drag_dist()   : returns diagonal distance dragged in pixels, of the current or most recent touch event.  doesn't reset until the next touch event begins
+//    get_delta()   : (for editing)  returns a value which starts at 0 upon touch then constantly increments over time until release. the rate of increase is periodically doubled on fixed intervals up to a maximum 
+//    onrepeat()    : (for editing)  returns true periodically on fixed intervals while a touch event persists.  resets to false on release, or when queried (until the next interval)
+
 class Touchscreen {
   private:
     I2C* _i2c;
@@ -341,12 +354,7 @@ class Touchscreen {
         if (reset) ts_doubletapped = false;
         return ret;
     }
-    bool longpress(bool reset=true) {  // returns true if a touch is held down longer than a timeout without any significant amount of drag
-        bool ret = ts_longpressed;
-        if (reset) ts_longpressed = false;
-        if (ret) longpress_possible = false;
-        return ret;
-    }
+    bool longpress() { return ts_longpressed; }  // returns true if a touch is held down longer than a timeout without any significant amount of drag
     // bool* tap_ptr() { return &ts_tapped; }  // for idiot light
     // bool* doubletap_ptr() { return &ts_doubletapped; }  // for idiot light
     // bool* longpress_ptr() { return &ts_longpressed; }
@@ -357,7 +365,7 @@ class Touchscreen {
             if (nowtouch) process_touched();
             else process_untouched();
             if (pressTimer.expired()) {
-                ts_tapped = ts_doubletapped = recent_tap = doubletap_possible = ts_longpressed = ts_swiped = longpress_possible = false;
+                ts_tapped = ts_doubletapped = recent_tap = doubletap_possible = ts_swiped = false;
                 ts_swipedir = DirNone;
             }
             id = (int)fd;
@@ -411,7 +419,7 @@ class Touchscreen {
                 update_swipe();
                 swipe_possible = doubletap_possible = false;
             }
-            ts_longpressed = false;
+            ts_longpressed = longpress_possible = false;
             keyrepeats = 0;
         }
         if (twotapTimer.expired()) {
