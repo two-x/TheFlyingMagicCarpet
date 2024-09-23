@@ -227,10 +227,10 @@ class Encoder {
 //    doubletap()   : returns true if a tap is immediately followed by another tap.  querying or stale timeout resets to false
 //    swipe()       : returns the dominant orthogonal direction of any valid swipe event, otherwise DirNone.  a valid swipe is if a touch is dragged far enough then released quickly enough.  querying or stale timeout resets to DirNone 
 //    held()        : returns true if an in-progress touch persists until taps and swipes are no longer possible, without experiencing any.  resets to false upon release
-//    longpress()   : returns true if a touch lasts long enough without significant drag.  resets to false upon release
+//    longpress()   : returns true if a touch is detected which persists long enough without significant drag.  resets to false upon release or query
 //    drag_axis(xy) : returns orthogonal distance dragged in pixels along the given axis, of the current or most recent touch event.  doesn't reset until the next touch event begins
 //    drag_dist()   : returns diagonal distance dragged in pixels, of the current or most recent touch event.  doesn't reset until the next touch event begins
-//    get_delta()   : (for editing)  returns a value which starts at 0 upon touch then constantly increments over time until release. the rate of increase is periodically doubled on fixed intervals up to a maximum 
+//    get_delta()   : (for editing)  returns a value which goes 0 -> 1 upon touch, and as touch persists it continues to increment at an exponentially increasing rate (up to a max). value becomes 0 on release or after query (query preserves acceleration)
 //    onrepeat()    : (for editing)  returns true periodically on fixed intervals while a touch event persists.  resets to false on release, or when queried (until the next interval)
 
 class Touchscreen {
@@ -354,7 +354,12 @@ class Touchscreen {
         if (reset) ts_doubletapped = false;
         return ret;
     }
-    bool longpress() { return ts_longpressed; }  // returns true if a touch is held down longer than a timeout without any significant amount of drag
+    bool longpress(bool reset=true) {  // returns true if a touch is held down longer than a timeout without any significant amount of drag
+        bool ret = ts_longpressed;
+        if (reset) ts_longpressed = false;
+        if (ret) longpress_possible = false;
+        return ret;    
+    }    
     // bool* tap_ptr() { return &ts_tapped; }  // for idiot light
     // bool* doubletap_ptr() { return &ts_doubletapped; }  // for idiot light
     // bool* longpress_ptr() { return &ts_longpressed; }
