@@ -152,7 +152,6 @@ bool print_framebuffers = false;     // dumps out ascii representations of scree
 bool use_tft_colors_for_neo = false; // should neopixel colors be based on onscreen icon colors? (otherwise they'll split the full hue spectrum amongst themselves)
 bool print_error_changes = false;    // !!! temporarily suppressed !!! should diag print status changes and new error events to console?
 bool pot_controls_animation_timeout = false;  // when showing fullscreen animations, should the pot value control the next animation timeout?
-bool pcba_3v2 = true;                // turn to false if for some reason you are using the v3.1 pcba. note this does not automatically correct the pin 2 <-> pin 39 swap
 bool cruise_brake = true;            // does brake work in cruise mode
 int drive_mode = CRUISE;             // enter cruise or fly mode initially?
 int throttle_ctrl_mode = Linearized; // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
@@ -207,7 +206,6 @@ bool syspower = HIGH, not_syspower = !syspower; // set by handler only. Reflects
 int sleep_request = REQ_NA;
 float maf_gps = 0;                              // manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
-bool pcba_neo_glow = false;
 bool nowtouch = false, ts_tapped = false, ts_doubletapped = false, ts_longpressed = false, ts_swiped = false;  // touchscreen globals
 int ts_swipedir = DirNone;  // touchscreen
 // bool nowtouch2 = false;
