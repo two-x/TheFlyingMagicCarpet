@@ -221,16 +221,16 @@ class Encoder {
 // * filtering: rejects short spurious false touches or losses of touch (needed for use through plastic box lid)
 // * methods supported:
 //    touched()     : returns true if a touch is in progress, otherwise false
-//    touch_pt(xy)  : returns coordinate of the point currently or most recently touched, along the given axis.  doesn't reset until the next touch event begins
-//    landed_pt(xy) : returns coordinate of the initial touch point of the current or most recent touch event, along the given axis.  doesn't reset until the next touch event begins
-//    tap()         : returns true if a touch is removed quickly enough without significant drag, and then not immediately re-touched.  querying or stale timeout resets to false
-//    doubletap()   : returns true if a tap is immediately followed by another tap.  querying or stale timeout resets to false
-//    swipe()       : returns the dominant orthogonal direction of any valid swipe event, otherwise DirNone.  a valid swipe is if a touch is dragged far enough then released quickly enough.  querying or stale timeout resets to DirNone 
-//    held()        : returns true if an in-progress touch persists until taps and swipes are no longer possible, without experiencing any.  resets to false upon release
-//    longpress()   : returns true if a touch is detected which persists long enough without significant drag.  resets to false upon release or query
+//    touch_pt(xy)  : returns coordinate of the point currently or most recently touched, along the given axis.  value is held until the next touch event begins
+//    landed_pt(xy) : returns coordinate of the initial touch point of the current or most recent touch event, along the given axis.  value is held until the next touch event begins
+//    tap()         : returns true if a touch is removed quickly without significant drag, and then not quickly re-touched.  querying or staleness timeout resets to false
+//    doubletap()   : returns true if a touch is removed quickly, then quickly re-touched and again removed quickly, without significant drag.  querying or staleness timeout resets to false
+//    swipe()       : returns the dominant orthogonal direction of any valid swipe event detected, or otherwise DirNone.  a valid swipe is a touch that's dragged far enough then released soon enough.  querying or staleness timeout resets to DirNone 
+//    held()        : returns true if an in-progress touch persists until valid taps and swipes are no longer possible, without experiencing any.  resets to false upon release
+//    longpress()   : returns true if an in-progress touch persists long enough without significant drag.  resets to false upon release or query, and won't retrigger during the same touch event
 //    drag_axis(xy) : returns orthogonal distance dragged in pixels along the given axis, of the current or most recent touch event.  doesn't reset until the next touch event begins
 //    drag_dist()   : returns diagonal distance dragged in pixels, of the current or most recent touch event.  doesn't reset until the next touch event begins
-//    get_delta()   : (for editing)  returns a value which goes 0 -> 1 upon touch, and as touch persists it continues to increment at an exponentially increasing rate (up to a max). value becomes 0 on release or after query (query preserves acceleration)
+//    get_delta()   : (for editing)  returns a value which goes 0 -> 1 upon touch, and continues to increment at an exponentially increasing rate (up to a max) as long as the touch persists. value becomes 0 on release or after query (query preserves acceleration)
 //    onrepeat()    : (for editing)  returns true periodically on fixed intervals while a touch event persists.  resets to false on release, or when queried (until the next interval)
 
 class Touchscreen {
@@ -287,7 +287,7 @@ class Touchscreen {
     }
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
-    int drag_dist_min = 10;  // if a press changes location more than this many pixels, it is considered a drag not a press
+    int drag_dist_min = 20;  // if a press changes location more than this many pixels, it is considered a drag not a press
     int swipe_min = 50;     // minimum travel in pixels to count as a swipe
     int idelta, id;         // id is edit amount as integer for locally made edits. idelta is edit amount as integer for passing off to tuner object.
     bool increment_datapage = false, increment_sel = false;
@@ -314,15 +314,13 @@ class Touchscreen {
     bool touched() { return nowtouch; }  // returns whether a touch is currently in progress
     bool held() { return (nowtouch && twotapTimer.expired() && !ts_tapped && !ts_doubletapped); } // true if press is held longer than the double-tap validity timeout
     bool onrepeat() {  // if touch is held down, this will return true periodically on consistent key repeat intervals like a pc keyboard
-        if (nowtouch && (pressTimer.elapsed() / repeat_timeout > keyrepeats)) {
-            keyrepeats++;
-            return true;
-        }
-        return false;
+        if (!nowtouch || (pressTimer.elapsed() / repeat_timeout <= keyrepeats)) return false;
+        keyrepeats++;
+        return true;
     }
-    int get_delta() {  // returns edit value (for tuning) based on length of press and acceleration factor
+    int get_delta(bool reset=true) {  // returns edit value (for tuning) based on length of press and acceleration factor
         int ret = idelta;
-        idelta = 0;
+        if (reset) idelta = 0;
         return ret;
     }
     int drag_axis(int axis) {  // returns pixels dragged along a given axis since start of current drag event. result is vertically flipped so up is positive
@@ -357,7 +355,6 @@ class Touchscreen {
     bool longpress(bool reset=true) {  // returns true if a touch is held down longer than a timeout without any significant amount of drag
         bool ret = ts_longpressed;
         if (reset) ts_longpressed = false;
-        if (ret) longpress_possible = false;
         return ret;    
     }    
     // bool* tap_ptr() { return &ts_tapped; }  // for idiot light
@@ -428,7 +425,7 @@ class Touchscreen {
             keyrepeats = 0;
         }
         if (twotapTimer.expired()) {
-            if (recent_tap) ts_tapped = true;  // if no double tap happened, then recent tap becomes valid single tap
+            ts_tapped = recent_tap;  // if no double tap happened, then recent tap becomes valid single tap
             recent_tap = doubletap_possible = false;
         }
         // for (int axis=HORZ; axis<=VERT; axis++) tft_touch[axis] = landed[axis] = -1;  // set coordinates to illegal value
