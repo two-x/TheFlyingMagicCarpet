@@ -45,6 +45,7 @@ class NeopixelStrip {
     bool newIdiotLight(int _idiot, uint8_t color332, bool startboolstate = 0);
     void sleepmode_ena(bool ena);
     void set_pcba_glow(int mode=GlowHeart);
+    int num_neo_idiots();
   private:
     int numpixels = numhearts + idiotcount;  //  + extIdiotCount;  // 15 pixels = heartbeat RGB + 7 onboard RGB + 7 external RGBW
     // static const int neo_fade_timeout_us = 380000;
@@ -116,7 +117,7 @@ void NeopixelStrip::refresh(bool force) {
 }
 void NeopixelStrip::setup() {    // (bool viewcontext) {
     ezread.squintf("Neopixels.. ");
-    set_pcba_glow(GlowSine);      // heartbeat_ena(true);
+    set_pcba_glow(GlowSimple);      // heartbeat_ena(true);
     neoobj.Begin();
     // for (int i=0; i<numhearts; i++) heartbeat_brightness[i] = brightlev[context][B_LO];
     if (!running_on_devboard) setbright(100.0);
@@ -254,6 +255,7 @@ void NeopixelStrip::flashdemo_ena(bool ena) {
         setflash(6, 0);
     }
 }
+int NeopixelStrip::num_neo_idiots() { return idiotcount; }
 void NeopixelStrip::update_idiot(int _idiot) {
     cidiot[_idiot][clast] = cidiot[_idiot][cnow];                                                          // remember previous color
     cidiot[_idiot][cnow] = fset[_idiot][onoff] ? cidiot[_idiot][con] : cidiot[_idiot][coff];               // set color to con or coff depending on state of idiotlight
@@ -467,6 +469,7 @@ class IdiotLights {
         for (int i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[ON][i], val(i));
         ezread.squintf("Idiot lights set up %d icons & %d neopix hazards\n", iconcount, myneo->idiotcount);
     }
+    int num_idiots() { return iconcount; }
     bool val(int index) { return *(vals[index]); }
     bool* ptr(int index) { return vals[index]; }
   private:
