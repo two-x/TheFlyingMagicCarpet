@@ -1,7 +1,6 @@
 // motors.h : centralized wrapper classes for all braking, throttle, and steering activity, as holistic coordination between sensors, actuator, and intent is critical
 #pragma once
 #include <ESP32Servo.h>  // Eventually move Servos into new ServoPWM objects then remove this
-#include <cmath>
 
 // I stole this library and modified it heavily to our purposes - Soren
 // QPID Library for Arduino - Version 3.1.9 by dlloydev https://github.com/Dlloydev/QPID
@@ -165,13 +164,6 @@ class QPID {
         lastin = 0; _outsum = 0;
         _pterm = 0; _iterm = 0; _dterm = 0;
     }
-    void set_kp(float a_kp) { set_tunings(std::max(0.0f, a_kp), dispki, dispkd, _pmode, _dmode, _awmode); }
-    void set_ki(float a_ki) { set_tunings(dispkp, std::max(0.0f, a_ki), dispkd, _pmode, _dmode, _awmode); }
-    void set_kd(float a_kd) { set_tunings(dispkp, dispki, std::max(0.0f, a_kd), _pmode, _dmode, _awmode); }
-    void set_centmode(centmod a_centmode) { _centmode = a_centmode; }
-    void set_centmode(int a_centmode) { _centmode = (centmod)a_centmode; }
-    void set_cent(float a_cent) { if (*_outmin <= a_cent && *_outmax >= a_cent) _cent = a_cent; }
-    void set_target(float a_target) { _target = a_target; }
     void set_output(float a_output) {
         float oldout = _output;
         a_output = constrain(a_output, *_outmin, *_outmax);
@@ -183,6 +175,19 @@ class QPID {
         else _output = _outsum = a_output;
         if (std::abs(oldout - _output) > _dterm) pause_diff = true;  // will skip differential effect on net compute cycle if output changed significantly
     }
+    void set_limits(float* a_min, float* a_max) {
+        _outmin = a_min;
+        _outmax = a_max;
+        _output = constrain(_output, *_outmin, *_outmax);
+        _outsum = constrain(_outsum, *_outmin, *_outmax);
+    }
+    void set_kp(float a_kp) { set_tunings(std::max(0.0f, a_kp), dispki, dispkd, _pmode, _dmode, _awmode); }
+    void set_ki(float a_ki) { set_tunings(dispkp, std::max(0.0f, a_ki), dispkd, _pmode, _dmode, _awmode); }
+    void set_kd(float a_kd) { set_tunings(dispkp, dispki, std::max(0.0f, a_kd), _pmode, _dmode, _awmode); }
+    void set_centmode(centmod a_centmode) { _centmode = a_centmode; }
+    void set_centmode(int a_centmode) { _centmode = (centmod)a_centmode; }
+    void set_cent(float a_cent) { if (*_outmin <= a_cent && *_outmax >= a_cent) _cent = a_cent; }
+    void set_target(float a_target) { _target = a_target; }
     void set_iaw_cond_thresh(float thresh) { _iaw_cond_thresh = std::max(0.0f, thresh); }  // place the integral windup limit to be this fraction of the output range 
     void set_dir(cdir a_dir) { _dir = a_dir; }
     void set_dir(int a_dir) { _dir = (cdir)a_dir; }
@@ -193,17 +198,17 @@ class QPID {
     void set_awmode(awmod a_awmode) { _awmode = a_awmode; }
     void set_awmode(int a_awmode) { _awmode = (awmod)a_awmode; }
     void set_outsum(float a_outsum) { _outsum = a_outsum; }  // sets the value of the integral
-    void set_limits(float* a_min, float* a_max) {
-        _outmin = a_min;
-        _outmax = a_max;
-        _output = constrain(_output, *_outmin, *_outmax);
-        _outsum = constrain(_outsum, *_outmin, *_outmax);
-    }
+    int sampletime() { return _sampletime; }  // provides sampletime in ms
+    int mode() { return static_cast<int>(_mode); }
+    int dir() { return static_cast<int>(_dir); }
+    int pmode() { return static_cast<int>(_pmode); }
+    int dmode() { return static_cast<int>(_dmode); }
+    int awmode() { return static_cast<int>(_awmode); }
+    int centmode() { return static_cast<int>(_centmode); }
     float err() { return _err; }
     float kp() { return dispkp; }
     float ki() { return dispki; }
     float kd() { return dispkd; }
-    int sampletime() { return _sampletime; }  // provides sampletime in ms
     float pterm() { return _pterm; }
     float iterm() { return _iterm; }
     float dterm() { return _dterm; }
@@ -214,12 +219,6 @@ class QPID {
     float cent() { return _cent; }
     float target() { return _target; }
     float output() { return _output; }
-    int mode() { return static_cast<int>(_mode); }
-    int dir() { return static_cast<int>(_dir); }
-    int pmode() { return static_cast<int>(_pmode); }
-    int dmode() { return static_cast<int>(_dmode); }
-    int awmode() { return static_cast<int>(_awmode); }
-    int centmode() { return static_cast<int>(_centmode); }
     float* target_ptr() { return &_target; }
 };
 
@@ -299,21 +298,21 @@ class JagMotor : public ServoMotor {
     // set opmin to avoid driving motor with under 8%
     #endif
     JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {
-        pc[OPMIN] = NAN;
-        pc[STOP] = 0;
-        pc[OPMAX] = NAN;
-        pc[OUT] = 0;
-        pc[ABSMIN] = -100;
-        pc[ABSMAX] = 100;
-        pc[MARGIN] = 2;
-        si[OPMIN] = NAN;
-        si[STOP] = 0;
-        si[OPMAX] = NAN;
-        si[OUT] = 0;
-        us[CENT] = 1500;
-        us[OUT] = NAN;
-        us[ABSMIN] = 670;
-        us[ABSMAX] = 2330;
+        // pc[OPMIN] = NAN;
+        // pc[STOP] = 0;
+        // pc[OPMAX] = NAN;
+        // pc[OUT] = 0;
+        // pc[ABSMIN] = -100;
+        // pc[ABSMAX] = 100;
+        // pc[MARGIN] = 2;
+        // si[OPMIN] = NAN;
+        // si[STOP] = 0;
+        // si[OPMAX] = NAN;
+        // si[OUT] = 0;
+        // us[CENT] = 1500;
+        // us[OUT] = NAN;
+        // us[ABSMIN] = 670;
+        // us[ABSMAX] = 2330;
     }
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
         si[ABSMAX] = running_on_devboard ? car_batt_fake_v : mulebatt->val();
@@ -728,13 +727,11 @@ class BrakeControl : public JagMotor {
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, ThrottleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         ezread.squintf("Brake pid %s, feedback: %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
+        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         pid_timeout = 40000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
         JagMotor::setup(_hotrc, _speedo, _batt);
-        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
-        // duty_fwd_pc = brakemotor_duty_spec_pc;
         pres_last = pressure->val();
         posn_last = brkpos->val();
-        // set_dominant_sensor(brake_default_pid);
         detect_tempsens();
         if (!std::isnan(tempsens->val(loc::AMBIENT))) motor_heat_min = tempsens->val(loc::AMBIENT);
         derive();

@@ -613,10 +613,12 @@ class Display {
         for (int i = 0; i < idiots->num_idiots(); i++) {
             bool* ptr = idiots->ptr(i);
             if (i < neo->num_neo_idiots()) {  // the first group of displayed idiot lights are also represented by neopixels
-                if (*ptr != idiots->last[i]) neo->setBoolState(i, *ptr);
-                if (*ptr && (ptr == &panicstop || ptr == &diag.err_sens[RANGE][_TempEng] || ptr == &wheeltemperr)) neo->setflash(i, 3, 1, 2, 100, 0xffffff);  // add a brilliant flash to the more critical idiot lights
-                else if (*ptr && (ptr == &diag.err_sens_alarm[LOST])) neo->setflash(i, diag.errorcount(LOST), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
-                else if (*ptr && (ptr == &diag.err_sens_alarm[RANGE])) neo->setflash(i, diag.errorcount(RANGE), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
+                if (*ptr != idiots->last[i]) neo->setlogic(i, *ptr);
+                if (*ptr) {
+                    if (*ptr && (ptr == &panicstop || ptr == &diag.err_sens[RANGE][_TempEng] || ptr == &wheeltemperr)) neo->setflash(i, 3, 1, 2, 100, 0xffffff);  // add a brilliant flash to the more critical idiot lights
+                    else if (*ptr && (ptr == &diag.err_sens_alarm[LOST])) neo->setflash(i, diag.errorcount(LOST), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
+                    else if (*ptr && (ptr == &diag.err_sens_alarm[RANGE])) neo->setflash(i, diag.errorcount(RANGE), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
+                }
                 else neo->setflash(i, 0);
             }
             if (force || (*ptr != idiots->last[i])) {
