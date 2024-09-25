@@ -25,7 +25,6 @@ class NeopixelStrip {
     enum ledset : int { onoff, fcount, fpulseh, fpulsel, fonbrit, fnumset };  // just a bunch of int variables needed for each of the neo idiot lights
     enum ledcolor : int { cnow, clast, cnormal, coff, con, cflash, cnumcolors };
   public:
-    std::string pcbaglowcard[GlowNumModes] = { "Off", "Simple", "Hbeat", "Xfade", "Sine" };
     bool sleepmode = false;
     int pcbaglow = GlowSimple;
     static const int numhearts = 2;  // number of heartbeat leds in the strip before the idiotlights
@@ -113,7 +112,7 @@ void NeopixelStrip::refresh(bool force) {
 }
 void NeopixelStrip::setup() {    // (bool viewcontext) {
     ezread.squintf("Neopixels.. ");
-    set_pcba_glow(-1);      // heartbeat_ena(true);
+    set_pcba_glow(GlowSine);      // heartbeat_ena(true);
     neoobj.Begin();
     if (!running_on_devboard) setbright(100.0);
     ezread.squintf("refresh.. ");
@@ -146,7 +145,8 @@ void NeopixelStrip::set_heartcolor(uint8_t _newcolor) {
 }
 void NeopixelStrip::set_pcba_glow(int mode) {  // call with -1 argument to set glow mode to flashed value
     int newmode = mode;
-    if (newmode == -1) newmode = watchdog.flash_read("glowmode");
+    if (newmode == -1) newmode = watchdog.flash_read("glowmode", GlowSimple);
+    if (newmode == -1) newmode = GlowSimple;
     if (newmode == pcbaglow) return;
     pcbaglow = mode;
     if (mode != -1) watchdog.flash_forcewrite("glowmode", pcbaglow);
@@ -181,7 +181,7 @@ void NeopixelStrip::heartbeat_update() {
 void NeopixelStrip::heartxfade_update() {}
 void NeopixelStrip::heartsine_update() {
     static const float min_brightness = 50.0f;  // in percent
-    float phase = M_PI * 2.0f * (float)heartbeatTimer.elapsed() / 1500000.0f;  // denominator here is the period of the pulse in us, adjustable
+    float phase = M_PI * 2.0f * (float)heartbeatTimer.elapsed() / 3250000.0f;  // denominator here is the period of the pulse in us, adjustable
     heartbeatNow[0] = recolor(heartbeatColor, min_brightness + (100.0f - min_brightness) * (1.0f + (float)std::sin(phase)) / 2.0f);
     heartbeatNow[1] = recolor(heartbeatColor, min_brightness + (100.0f - min_brightness) * (1.0f + (float)std::cos(phase)) / 2.0f);
 }
