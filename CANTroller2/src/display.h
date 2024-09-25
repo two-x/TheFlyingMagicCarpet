@@ -18,6 +18,7 @@ std::string top_menu_buttons[4]  = { "CAL", "SIM", "CH4", "IGN" };
 std::string ch4_menu_buttons[NUM_RUNMODES] = { "CH4", "WAKE", "SLEEP", "START", "START", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
+std::string pcbaglowcard[GlowNumModes] = { "Off", "Simple", "Hbeat", "Xfade", "Sine" };
 #define stEr "St\x88r"     // These defines are just a convenience to keep the below datapage strings
 #define brAk "Br\x83k"     //   array initializations aligned in neat rows & cols for legibility
 #define spEd "Sp\x88""d"
@@ -849,7 +850,7 @@ class Display {
             drawval(15, encoder.spinrate(), 0.0, encoder.spinrate_max());
             drawval(16, encoder.accel_factor(), 1, encoder.accel_max());
             drawval(17, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
-            draw_ascii(18, neo->pcbaglowcard[neo->pcbaglow]);
+            draw_ascii(18, pcbaglowcard[neo->pcbaglow]);
             draw_truth(19, flashdemo, 0);
             draw_truth(20, neo->sleepmode, 0);
             drawval(21, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
