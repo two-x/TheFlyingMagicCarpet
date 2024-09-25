@@ -627,6 +627,14 @@ class BootMonitor {
         write_uptime();
         print_high_water(task1, task2, task3, task4, task5);
     }
+    void flash_forcewrite(const char* flashid, uint32_t val) {  // force writes a uint value to indicated flashed value. external code must be responsible here to not write unnecessarily!
+        myprefs->putUInt(flashid, val);
+    }
+    int flash_read(std::string flashid) {  // reads a uint value at the indicated flash slot. returns -1 on error
+        int ret = (int)myprefs->getUInt(flashid.c_str(), -1);
+        if (ret == -1) ezread.squintf("Err: no flash id \"%s\"\n", flashid.c_str());
+        return ret;
+    }
   private:
     void read_bootstatus() {
         bootcount = (int)myprefs->getUInt("bootcount", 0) + 1;

@@ -521,13 +521,13 @@ class ThrottleControl : public ServoMotor {
     // It's a bit too complex (I'm too ignorant) to predict which of the above might serve to cancel/exacerbate the 
     // others. None of this matters if we use the throttle PID, only if we run open loop
     float linearizer(float inval_pc) {  // compensate for at least 3 known sources of non-linearity in the throttle
-        static float linearlookup[21] =  // lookup table for linearizing actuator values in Linearize mode. using normal pc value as index, produce a replacement pc value
+        static const float linearlookup[21] =  // lookup table for linearizing actuator values in Linearize mode. using normal pc value as index, produce a replacement pc value
             { 0.0, 2.0, 3.0, 5.0, 7.0, 9.0, 11.0, 14.0, 17.0, 21.0, 24.0, 28.0, 32.0, 31.0, 36.0, 43.0, 51.0, 61.0, 72.0, 85.0, 100.0 };
          // { 0.0, 3.0, 6.0, 9.0, 12.0, 16.0, 20.0, 25.0, 30.0, 35.0, 40.0, 46.0, 52.0, 58.0, 65.0, 73.0, 81.0, 90.0, 99.0, 99.5, 100.0 };
          // { 0.0, 10.0, 19.0, 28.0, 36.0, 42.0, 49.0, 56.0, 62.0, 68.0, 72.0, 77.0, 81.0, 85.0, 88.0, 91.0, 94.0, 96.0, 98.0, 99.0, 100.0 };
          // { 0.0, 14.0, 28.0, 32.0, 35.0, 38.0, 41.0, 44.0, 47.0, 51.0, 55.0, 58.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
-        //  { 0.0,  5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
-        float res = 100.0 / (arraysize(linearlookup) - 1);
+         // { 0.0,  5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0 };
+        static const float res = 100.0 / (arraysize(linearlookup) - 1);
         int lookup = (int)(inval_pc / res);
         if (lookup == arraysize(linearlookup) - 1) return linearlookup[arraysize(linearlookup) - 1];
         return map(inval_pc - (float)lookup * res, 0.0, res, linearlookup[lookup], linearlookup[lookup+1]);

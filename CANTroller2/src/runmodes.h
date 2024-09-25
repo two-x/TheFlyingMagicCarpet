@@ -153,7 +153,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_cruiseMode() {
         static Timer stoppedholdtimer{4000000};  // how long after coming to a stop should we drop to hold mode?
         if (we_just_switched_modes) {  // upon first entering cruise mode, initialize things
-            car_hasnt_moved = speedo.stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
+            car_hasnt_moved = speedo.stopped();  // note whether car is moving going into the mode, this turns true once it has initially got moving
             gas.setmode(Cruise);
             brake.setmode(cruise_brake ? ActivePID : Release);
             steer.setmode(OpenLoop);
@@ -161,7 +161,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         if (car_hasnt_moved) {
             if (hotrc.joydir(VERT) != JOY_UP) runmode = HOLD;            // must keep pulling trigger until car moves, or it drops back to hold mode
-            else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
+            else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of the mode
         }
         else if (speedo.stopped()) {
             if (hotrc.joydir() == JOY_DN) runmode = HOLD;  // go to Hold Mode if we have slowed to a stop after previously moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
