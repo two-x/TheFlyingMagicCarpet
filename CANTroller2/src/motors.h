@@ -297,23 +297,7 @@ class JagMotor : public ServoMotor {
     #if !BrakeThomson
     // set opmin to avoid driving motor with under 8%
     #endif
-    JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {
-        // pc[OPMIN] = NAN;
-        // pc[STOP] = 0;
-        // pc[OPMAX] = NAN;
-        // pc[OUT] = 0;
-        // pc[ABSMIN] = -100;
-        // pc[ABSMAX] = 100;
-        // pc[MARGIN] = 2;
-        // si[OPMIN] = NAN;
-        // si[STOP] = 0;
-        // si[OPMAX] = NAN;
-        // si[OUT] = 0;
-        // us[CENT] = 1500;
-        // us[OUT] = NAN;
-        // us[ABSMIN] = 670;
-        // us[ABSMAX] = 2330;
-    }
+    JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {}
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
         si[ABSMAX] = running_on_devboard ? car_batt_fake_v : mulebatt->val();
         si[ABSMIN] = -(si[ABSMAX]);
@@ -321,8 +305,7 @@ class JagMotor : public ServoMotor {
         pc[OPMAX] = pc[ABSMAX] * duty_fwd_pc / 100.0;
         si[OPMIN] = map(pc[OPMIN], pc[STOP], pc[ABSMIN], si[STOP], si[ABSMIN]);
         si[OPMAX] = map(pc[OPMAX], pc[STOP], pc[ABSMAX], si[STOP], si[ABSMAX]);
-        si[MARGIN] = map(pc[MARGIN], pc[ABSMIN], pc[ABSMAX], si[ABSMIN], si[ABSMAX]);
-        // us[MARGIN] = map(pc[MARGIN], pc[ABSMIN], pc[ABSMAX], us[ABSMIN], us[ABSMAX]);
+        si[MARGIN] = map(pc[MARGIN], pc[ABSMIN], pc[ABSMAX], si[ABSMIN], si[ABSMAX]);  // us[MARGIN] = map(pc[MARGIN], pc[ABSMIN], pc[ABSMAX], us[ABSMIN], us[ABSMAX]);
     }
     float out_pc_to_si(float _pc) {  // Eventually this should be linearized
         if (_pc > pc[STOP]) return map(_pc, pc[STOP], pc[ABSMAX], si[STOP], si[ABSMAX]);
