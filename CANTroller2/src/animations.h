@@ -328,7 +328,7 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         static Timer pentimer{110000};
         if (cycle != 2) {
             if (pentimer.expireset()) {
-                if (season == 1 && season == 3) {
+                if (season == 1 || season == 3) {
                     pensat += (float)pensatdir * 1.5;
                     if (pensat > 255.0) {
                         pensat = 255;
@@ -742,7 +742,7 @@ class PanelAppManager {
     Simulator* sim;
     Touchscreen* touch;
     EZReadDrawer* ezdraw;
-    int nowsaver = Eraser, still_running = 0, touchp[2], dispfps, corner[2], oldfps = 0, ui_context_last = MuleChassisUI;
+    int nowsaver = Eraser, still_running = 0, touchp[2], dispfps, corner[2], oldfps = 0, ui_app_last = MuleChassisUI;
     Timer fps_timer, fps_timer2{250000};
     float myfps = 0.0;
     int64_t fps_mark;
@@ -755,11 +755,7 @@ class PanelAppManager {
         else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, BLK);
         else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, BLK);
     }
-    void draw_simbuttons(LGFX_Sprite* spr, bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
-        if (!create) {
-            spr->fillSprite(BLK);
-            return;
-        }
+    void draw_simbuttons(LGFX_Sprite* spr) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         spr->setTextDatum(textdatum_t::middle_center);
         bool do_draw;
         for (int row = 0; row < arraysize(simgrid); row++) {
@@ -868,7 +864,7 @@ class PanelAppManager {
         if (eSaver.shape == 0) change_saver();  // going to before the first pattern changes to ball saver
         else eSaver.change_pattern(-3);  // still_running = 0;
     }
-    void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
+    void change_saver() {  // switch back and forth between ball saver / eraser saver
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
         still_running = 1;
@@ -893,20 +889,21 @@ class PanelAppManager {
         anim_reset_request = false;
     }
     float update(LGFX_Sprite* spr, bool argdirty=false) {
-        if ((ui_context_last != ScreensaverUI) && (ui_context == ScreensaverUI)) cycle_anim(DirFwd);  // next saver.  ptrsaver->reset();
-        if (ui_context_last != ui_context) dirty = true;
+        if ((ui_app_last != ScreensaverUI) && (ui_app == ScreensaverUI)) cycle_anim(DirFwd);  // next saver.  ptrsaver->reset();
+        if (ui_app_last != ui_app) dirty = true;
         if (argdirty) dirty = true;
-        ui_context_last = ui_context;
+        ui_app_last = ui_app;
         if (anim_reset_request) reset();
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
+        if (!sim->enabled() && simulating_last) dirty = true;  // if we just left the simulator erase everything to get rid of the simulator buttons
         if (dirty) {
             spr->fillSprite(BLK);
             mule_drawn = false;
             ezdraw->dirty = true;
         }
-        if (ui_context == EZReadUI) ezdraw->update(spr);
-        else if (ui_context == MuleChassisUI) draw_mule(spr);
-        else if (ui_context == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
+        if (ui_app == EZReadUI) ezdraw->update(spr);
+        else if (ui_app == MuleChassisUI) draw_mule(spr);
+        else if (ui_app == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             // mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
             if (nowsaver == Eraser) {
                 still_running = eSaver.update(spr, &vp);
@@ -921,13 +918,8 @@ class PanelAppManager {
             else cycle_anim(check_cycle_req());
             display_fps(spr);
         }
-        spr->clearClipRect();
-        if (sim->enabled()) draw_simbuttons(spr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-        else if (simulating_last) {
-            spr->fillRect(vp.x, vp.y, vp.w, vp.h, BLK);
-            dirty = true;
-            mule_drawn = false;
-        }
+        spr->clearClipRect();        
+        if (sim->enabled()) draw_simbuttons(spr);  // if simulating draw the buttons over the bg content
         simulating_last = sim->enabled();
         dirty = false;
         calc_fps();

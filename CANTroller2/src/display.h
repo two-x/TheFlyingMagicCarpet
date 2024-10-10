@@ -229,7 +229,7 @@ class Display {
         }
         disp_menutoggles_dirty = disp_selection_dirty = disp_datapage_dirty = disp_menus_dirty = true;
         disp_runmode_dirty = disp_simbuttons_dirty = disp_values_dirty = true;
-        ui_context = ui_default;
+        ui_app = ui_app_default;
     }
     void blackout() {
         sprptr->fillSprite(BLK);
@@ -857,7 +857,7 @@ class Display {
             draw_truth(20, neo->sleepmode, 0);
             drawval(21, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
             drawval(22, neosat, 1.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
-            draw_ascii(23, uicontextcard[ui_context]);
+            draw_ascii(23, uicontextcard[ui_app]);
         }
         disp_values_dirty = false;
     }
@@ -942,7 +942,7 @@ class Display {
         lcd.endWrite();   // lcd->display();
     }
     void auto_saver() {
-        static int last_context;
+        static int ui_app_last;
         if (autosaver_request == REQ_TOG) autosaver_request = auto_saver_enabled ? REQ_OFF : REQ_ON;  // (int)(!auto_saver_enabled);
         if (runmode != STANDBY) {
             if (autosaver_request == REQ_ON) autosaver_request = REQ_NA;
@@ -955,13 +955,13 @@ class Display {
             sim->disable();
             panel.set_vp(0, 0, disp_width_pix, disp_height_pix);
             auto_saver_enabled = true;
-            last_context = ui_context;
-            ui_context = ScreensaverUI;
+            ui_app_last = ui_app;
+            ui_app = ScreensaverUI;
             panel.anim_reset_request = true;
         }
         else if (autosaver_request == REQ_OFF) {
             auto_saver_enabled = false;
-            ui_context = last_context;
+            ui_app = ui_app_last;
             panel.set_vp(disp_apppanel_x, disp_apppanel_y, disp_apppanel_w, disp_apppanel_h);
             reset_request = true;
             if (was_simulating) sim->enable();
@@ -1145,7 +1145,7 @@ class Tuner {
             else if (sel == 11) neo->sleepmode_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 12) neo->setbright(tune(neobright, id, 0.0f, 100.0f));  //  neo->setbright(neobright); }
             else if (sel == 13) neo->setsat(tune(neosat, id, 0.0f, 100.0f));  //  neo->setbright(neobright); }
-            else if (sel == 14) tune(&ui_context, id, 0, NumContextsUI-1, true);
+            else if (sel == 14) tune(&ui_app, id, 0, NumContextsUI-1, true);
         }
         id = 0;
     }

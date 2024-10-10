@@ -230,9 +230,9 @@ void NeopixelStrip::setflash(int _idiot, int count, int pulseh, int pulsel, int 
     filled = fevresolution;  // filled = fevresolution / reps; }
 }
 void NeopixelStrip::set_fcolor(int _idiot) {  // flashing event : recolor idiotlight to flash pattern value
-    int brite = (fset[_idiot][fonbrit] >= 0) ? fset[_idiot][fonbrit] : hibright_idiot;
-    if (!fcbase[_idiot]) cidiot[_idiot][cflash] = cidiot[_idiot][cnormal];
-    else cidiot[_idiot][cflash] = fcbase[_idiot];
+    int brite = (fset[_idiot][fonbrit] >= 0) ? fset[_idiot][fonbrit] : hibright_idiot;  // 
+    if (!fcbase[_idiot]) cidiot[_idiot][cflash] = cidiot[_idiot][cnormal];  // set the flash color to the normal base color if the flash base color is black,
+    else cidiot[_idiot][cflash] = fcbase[_idiot];                           // otherwise set it to the flash base color
     cidiot[_idiot][cflash] = recolor(cidiot[_idiot][cflash], (float)brite, neosat);
 }
 bool NeopixelStrip::fevpop(int _idiot, uint pop_off) {  // flashing event : pop a flash sequence bit out from the data page
@@ -246,17 +246,16 @@ void NeopixelStrip::fevpush(int _idiot, uint push_off, bool push_val) {  // flas
 void NeopixelStrip::flashdemo_ena(bool ena) {
     flashdemo = ena;
     if (flashdemo) {
-        setflash(4, 8, 8, 8, 20);  // brightness toggle in a continuous squarewave
-        setflash(5, 3, 1, 2, 100, 0xffffff);      // three super-quick bright white flashes
-        setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
+        setflash(4, 8, 8, 8, 20);            // brightness toggle in a continuous squarewave
+        setflash(5, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
+        setflash(6, 2, 5, 5, 0, 0);          // two short black pulses
     }
-    else {
+    else {                                   // cancel any current blink programs on these leds
         setflash(4, 0);
         setflash(5, 0);
         setflash(6, 0);
     }
 }
-int NeopixelStrip::num_neo_idiots() { return idiotcount; }
 void NeopixelStrip::update_idiot(int _idiot) {
     cidiot[_idiot][clast] = cidiot[_idiot][cnow];                                                          // remember previous color
     cidiot[_idiot][cnow] = fset[_idiot][onoff] ? cidiot[_idiot][con] : cidiot[_idiot][coff];               // set color to con or coff depending on state of idiotlight
@@ -285,40 +284,44 @@ void NeopixelStrip::update() {
     refresh();
     flashTimer.expireset();
 }
+int NeopixelStrip::num_neo_idiots() { return idiotcount; }
 void NeopixelStrip::sleepmode_ena(bool ena) {
     if (!ena && sleepmode) refresh(true);
     sleepmode = ena;
 }
 void NeopixelStrip::knightrider() {
     static Timer knighttimer{150000};
-    static int posn = 2, direction = 1, first = heartcount;        // 1 for right, -1 for left
-    const int trail = 4;             // Length of the fading trail
-    const uint32_t knightcolor = 0xff0000;  // Red color
-    const float maxspeed = 20.0, minspeed = 100.0;     // Fastest and slowest speed (milliseconds per step)
-    float speed = maxspeed + (minspeed - maxspeed) * (float)posn / (striplength - 1);  // Calculate the speed based on the position (decelerates as it moves)
-    if (knighttimer.expireset()) {   // if (knighttimer.elapsed((int)moveInterval)) {
-        posn += direction;           // Move the bright point
-        if (posn <= first || posn >= striplength - 1) {
-            direction = -direction;  // Reverse direction at the ends
-            posn = max(first, min(striplength - 1, posn));  // Clamp position within bounds
-        }
+    static int tail = 4, posn = heartcount - 1, first = heartcount - 1, dir = 1; // dir=1 for right, dir=-1 for left
+    static const float maxspeed = 20.0, minspeed = 100.0;  // fastest and slowest speed (milliseconds per step)
+    static const uint32_t color = 0xff0000;                // red color
+    float speed = maxspeed + (minspeed - maxspeed) * (float)posn / (striplength - 1); // Calculate the speed based on the position (decelerates as it moves)
+    if (knighttimer.expireset()) {      // if (knighttimer.elapsed((int)moveInterval)) {
+        posn += dir;                    // move the bright point
+        if (posn <= first || posn >= striplength - 1) dir = -dir;   // reverse direction at the ends
+        posn = constrain(posn, first, striplength - 1);             // clamp position within bounds
     }
-    for (int i = first; i < striplength; i++)  neoobj.SetPixelColor(i, color_to_neo((uint32_t)0));   // Clear the strip   
-    neoobj.SetPixelColor(posn, color_to_neo(recolor(knightcolor, neobright)));  // Set the bright point
-    for (int i = first+1; i <= trail; i++) {  // Set the trailing effect
-        int trailposn = posn - i * direction;
-        if (trailposn >= first && trailposn < striplength) {
-            float trailBrightness = 100.0 * (trail - i) / trail;
-            neoobj.SetPixelColor(trailposn, color_to_neo(recolor(knightcolor, neobright * trailBrightness / 100.0)));
-        }
+    for (int i=first; i<striplength; i++) neoobj.SetPixelColor(i, color_to_neo(BLK));  // clear the strip   
+    neoobj.SetPixelColor(posn, color_to_neo(recolor(color, neobright)));         // set the bright point
+    for (int i=1; i<=tail; i++) {   // set the trailing effect
+        int tailpos = posn - i * dir;
+        if (tailpos >= first && tailpos < striplength)
+            neoobj.SetPixelColor(tailpos, color_to_neo(recolor(color, neobright * (100.0 * (tail - i) / tail) / 100.0)));
     }
     neoobj.Show(); // Show the updated strip
 }
+
+//     for (int i = 1; i <= tail; i++) {  // Set the tailing effect
+//         int tailposn = posn - i * direction;
+//         if (tailposn >= 0 && tailposn < striplength) {
+//             neoobj.SetPixelColor(tailposn, color_to_neo(recolor(basecolor, neobright * (tail - i) / trail)));
+//         }
+//     }
+
 // void NeopixelStrip::knightrider() {
 //     static Timer knighttimer{15000};
 //     static float posn = 0.0f;
 //     static int direction = 1;        // 1 for right, -1 for left
-//     const int trail = 4;             // Length of the fading trail
+//     const int tail = 4;             // Length of the fading tail
 //     const uint32_t basecolor = 0xff0000;  // Red color
 //     const float maxspeed = 20.0;     // Fastest speed (ms per step)
 //     const float minspeed = 100.0;    // Slowest speed (ms per step)
@@ -351,10 +354,10 @@ void NeopixelStrip::knightrider() {
 //     if (iposn + direction >= 0 && iposn + direction < striplength) {
 //         neoobj.SetPixelColor(iposn + direction, color_to_neo(dimcolor));
 //     }
-//     for (int i = 1; i <= trail; i++) {  // Set the trailing effect
-//         int trailposn = posn - i * direction;
-//         if (trailposn >= 0 && trailposn < striplength) {
-//             neoobj.SetPixelColor(trailposn, color_to_neo(recolor(basecolor, neobright * (trail - i) / trail)));
+//     for (int i = 1; i <= tail; i++) {  // Set the tailing effect
+//         int tailposn = posn - i * direction;
+//         if (tailposn >= 0 && tailposn < striplength) {
+//             neoobj.SetPixelColor(tailposn, color_to_neo(recolor(basecolor, neobright * (tail - i) / trail)));
 //         }
 //     }
 //     neoobj.Show(); // Show the updated strip

@@ -213,8 +213,7 @@ bool captouch = true;
 float loop_avg_us;
 bool sensidiots[11];
 bool web_disabled = false;
-int ui_context = EZReadUI;
-int ui_default = EZReadUI;
+int ui_app = EZReadUI, ui_app_default = EZReadUI;
 bool panicstop = false;
 
 // fast macros
