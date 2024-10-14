@@ -412,14 +412,14 @@ class Display {
         }
         disp_data_dirty[lineno] = false;
     }
-    void drawval(int lineno, int value, int lowlim=-1, int hilim=-1, int target=-1) {
+    void drawval(int lineno, int value, int lowlim=skip_int, int hilim=skip_int, int target=skip_int) {
         std::string val_string = num2string(value, (int)disp_maxlength);
         float lo, hi, targ;
-        if (lowlim == -1) lo = NAN;
+        if (lowlim == skip_int) lo = NAN;
         else lo = (float)lowlim;
-        if (hilim == -1) hi = NAN;
+        if (hilim == skip_int) hi = NAN;
         else hi = (float)hilim;
-        if (target == -1) targ = NAN;
+        if (target == skip_int) targ = NAN;
         else targ = (float)target;        
         drawval_core(lineno, val_string, (float)value, lo, hi, targ);
     }
@@ -456,8 +456,8 @@ class Display {
         std::string result(buffer);  // copy buffer to result
         return result.substr(0, result.find('e') + 1) + std::to_string(place);
     }
-    std::string num2string(float value, int maxlength, int sig_places=-1, bool chop_zeroes=true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
-        if (sig_places == -1) sig_places = disp_default_float_sig_dig;
+    std::string num2string(float value, int maxlength, int sig_places=skip_int, bool chop_zeroes=true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
+        if (sig_places == skip_int) sig_places = disp_default_float_sig_dig;
         value = abs(value);  // This function disregards sign
         int place = significant_place(value);  // Learn decimal place of the most significant digit in value
         if (place >= sig_places && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
@@ -491,7 +491,7 @@ class Display {
         else if (result.find("e-") != std::string::npos) result.replace(result.find("e-"), 2, "\x88");  // For ridiculously small values
         return result;
     }
-    void draw_runmode(int _nowmode, uint8_t color_override=NON) {  // color_override = -1 uses default color
+    void draw_runmode(int _nowmode, uint8_t color_override=NON) {  // color_override = NON uses default color
         sprptr->setTextDatum(textdatum_t::top_left);
         sprptr->fillRect(disp_runmode_text_x, 0, (modecard[runmode_last].length() + 5) * disp_font_width, disp_font_height, BLK);
         sprptr->setTextColor((color_override == NON) ? colorcard[_nowmode] : color_override);  
@@ -634,7 +634,7 @@ class Display {
         draw_menu_toggle(ignition.signal, 5, disp_menutoggles_dirty);
         disp_menutoggles_dirty = false;
     }
-    // value rendering options:  for [optional] arguments use -1 (for int) or NAN (for float) to get the default, same as not including. Default sig_places for floats is 3
+    // value rendering options:  for [optional] arguments use skip_int (for int) or NAN (for float) to get the default, same as not including. Default sig_places for floats is 3
     // * drawval (int_line, float_value)  // for floats
     // * drawval (int_line, float_value, [int_sig_places])  // for floats. sig_places is how many digits after decimal (if they fit) 
     // * drawval (int_line, float_value, [float_min], [float_max], [float_targ], [int_sig_places])  // for floats. if min & max are given it draws a bargraph of that range is drawn. If targ value is given then bargraph will include a target pointer. sig_places is how many digits after decimal (if they fit) 
@@ -855,8 +855,8 @@ class Display {
             draw_ascii(18, pcbaglowcard[neo->pcbaglow]);
             draw_truth(19, flashdemo, 0);
             draw_truth(20, neo->sleepmode, 0);
-            drawval(21, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
-            drawval(22, neosat, 1.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, -1, 3);
+            drawval(21, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, skip_int, 3);
+            drawval(22, neosat, 1.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, skip_int, 3);
             draw_ascii(23, uicontextcard[ui_app]);
         }
         disp_values_dirty = false;
