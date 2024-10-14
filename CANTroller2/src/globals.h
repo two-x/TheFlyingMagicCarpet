@@ -160,6 +160,7 @@ int throttle_ctrl_mode = Linearized; // default throttle control mode. values: A
 float wheeldifferr = 35.0;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel befopre idiot light
 float float_zero = 0.000069;           // if two floats being compared are closer than this, we consider them equal
 float float_conversion_zero = 0.001;
+int skip_int = -92935762;              // random ass value for detecting unintended arguments
 int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 3.0;  // margin of error for determining hard brake value for dropping out of cruise mode
@@ -286,13 +287,12 @@ int significant_place(int value) {  // Returns the length in digits of a positiv
     }
     return place;
 }
-// tune() : modifies a float/int/bool value according to given delta value (nonzero integer).  this replaces adj_val() function
-// call w/ only idelta value to get a corresponding bool
-// alternately, give a pointer instead of a number to change the value directly instead of returning it (works w/ bools too)
-// note idelta must be already set to the desired integer edit value
-// numeric edits are scaled proportional to the magnitude of the current value. you can specify a minimum decimal place to scale to (keeps from being impossible to cross zero)
-// edit acceleration can be removed for ints if dropdown is set to true (for selection lists, etc.)
-#define disp_default_float_sig_dig 3  // Significant digits displayed for float values. Higher causes more screen draws
+// tune() : returns a modified float/int/bool value according to given [nonzero int] delta value. respects temporal acceleration used by touchscreen and encoder classes.  replaces adj_val() function
+// alternately, give a pointer instead of a number to change the [float|int|bool] value directly instead of returning it.  call w/ only idelta value to get a corresponding bool (<=0 values give false)
+// numeric edits are scaled proportional to the magnitude of the current value. or you can specify a minimum decimal place to scale to, presumably b/c otherwise this makes it impossible to cross zero
+// optional min/max values may be supplied for int|float edits and if so are respected.  in case these are not needed but subsequent optional args are, set to NAN (float) or skip_int (int) to ignore
+// for integer values, there is an optional "dropdown" argument, which if set true will disable any temporal acceleration (constrains edit to w/i -1,1).  useful for when selecting options from lists
+#define disp_default_float_sig_dig 3  // significant digits displayed for float values. Higher causes more screen draws
 float tune(float orig_val, int idelta, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-3) {  // feed in float value, get new constrianed float val, modified by idelta scaled to the magnitude of the value
     int sig_digits = disp_default_float_sig_dig;
     int sig_place = std::max(significant_place(orig_val), min_sig_edit_place + sig_digits);
@@ -310,7 +310,7 @@ float tune(float orig_val, int idelta, float min_val=NAN, float max_val=NAN, int
     if (std::isnan(max_val)) max_val = ret;
     return constrain(ret, min_val, max_val);  // Serial.printf("o:%lf id:%d sc:%lf, min:%lf, max:%lf ret:%lf\n", orig_val, idelta, scale, min_val, max_val, ret);
 }
-int tune(int orig_val, int idelta, int min_val=-1, int max_val=-1, bool dropdown=false) {  // feed in int value, get new constrianed int val, modified by idelta scaled to the magnitude of the value
+int tune(int orig_val, int idelta, int min_val=skip_int, int max_val=skip_int, bool dropdown=false) {  // feed in int value, get new constrianed int val, modified by idelta scaled to the magnitude of the value
     int sig_place = significant_place(orig_val);
     int scale = 1;
     if (dropdown) idelta = constrain(idelta, -1, 1);
@@ -319,8 +319,8 @@ int tune(int orig_val, int idelta, int min_val=-1, int max_val=-1, bool dropdown
         sig_place--;
     }
     int ret = orig_val + idelta * scale;
-    if (max_val <= min_val) max_val = ret;
-    if (min_val == -1) min_val = ret;
+    if ((max_val <= min_val) || (max_val == skip_int)) max_val = ret;
+    if (min_val == skip_int) min_val = ret;
     return constrain(ret, min_val, max_val);
 }
 bool tune(int idelta) {  // overloaded to return bool value. idelta == 0 or -1 return false and 1+ returns true.
