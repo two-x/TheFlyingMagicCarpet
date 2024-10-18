@@ -473,6 +473,7 @@ class ThrottleControl : public ServoMotor {
   private:
     void update_idle() {  // updates _idle_pc based on temperature, ranging from pc[OPMIN] (when warm) to full boost% applied (when cold)
         // ezread.squintf("idle");
+        if (!use_idle_boost) return;
         idle_temp_f = tempsens->val(loc::ENGINE);
         if (std::isnan(idle_temp_f)) idle_boost_pc = 0.0;  // without valid temp reading do not boost
         else idle_boost_pc = map(idle_temp_f, idle_temp_lim_f[LOW], idle_temp_lim_f[HIGH], idle_max_boost_pc, 0.0);
@@ -716,7 +717,7 @@ class BrakeControl : public JagMotor {
         pres_last = pressure->val();
         posn_last = brkpos->val();
         detect_tempsens();
-        if (!std::isnan(tempsens->val(loc::AMBIENT))) motor_heat_min = tempsens->val(loc::AMBIENT);
+        if (!std::isnan(tempsens->val(loc::AMBIENT))) motor_heat_min = tempsens->val(loc::AMBIENT) - 2;
         derive();
         update_ctrl_config();
         pids[PressureFB].init(pressure->ptr(), &(pc[OPMIN]), &(pc[OPMAX]), press_kp, press_ki, press_kd, QPID::pmod::onerr,
@@ -728,8 +729,9 @@ class BrakeControl : public JagMotor {
         max_out_change_rate_pcps = 1500.0;  // LAE actuator stutters and stalls when changing direction suddenly, when power is low
     }
   private:
-    void update_motorheat() {  // i am probably going to scrap all this nonsense and just put another temp sensor on the motor
+    bool update_motorheat() {  // i am probably going to scrap all this nonsense and just put another temp sensor on the motor
         float added_heat, nowtemp, out_ratio;
+        static bool printed_error = false;
         if (motorheat_timer.expireset()) {
             out_ratio = pc[OUT] / 100.0;
             if (brake_tempsens_exists) motor_heat = tempsens->val(loc::BRAKE);
@@ -747,8 +749,18 @@ class BrakeControl : public JagMotor {
                     motor_heat += added_heat;
                 }
             }
-            motor_heat = constrain(motor_heat, motor_heat_min, motor_heat_max);
+            motor_heat = constrain(motor_heat, tempsens->absmin(loc::BRAKE), tempsens->absmax(loc::BRAKE));
+            if (overtemp_shutoff_brake) {  // here the brakemotor is shut off if overtemp. also in diag class the engine is stopped
+                if (motor_heat > tempsens->opmax(loc::BRAKE)) {
+                    pc[OUT] = pc[STOP];
+                    if (!printed_error) ezread.squintf(RED, "err: brake motor overheating. stop motor\n");
+                    printed_error = true;
+                    return false;
+                }
+                else printed_error = false;
+            }
         }  // that's great to have some idea whether the motor is hot. but we need to take some actions in response
+        return true;
     }
     // the brake can be controlled by a pid or open loop. either way it will use all enabled sensors as     // the influence on the final output from the pressure and position pids is weighted based on the pressure reading
     // as the brakes are pressurized beyond X psi, use pressure reading, otherwise use position as feedback, because
@@ -963,15 +975,11 @@ class BrakeControl : public JagMotor {
         if (runmode == LOWPOWER) return;
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
-            update_motorheat();                // Step 1 : Continuously estimate motor heat to prevent exceeding duty limitation requirement
-            update_ctrl_config();              // Step 1.5 : Catch any change in configuration affecting motor mode
-            set_output();                      // Step 2 : Determine motor percent value
-            postprocessing();                // Step 3 : Fix motor pc value if it's out of range or threatening to exceed positional limits
+            update_ctrl_config();        // step 1 : catch any change in configuration affecting motor mode
+            if (update_motorheat()) set_output();   // step 2 : check measured/estimated motor heat and if ok then determine motor percent value
+            postprocessing();        // step 3 : fix motor pc value if it's out of range or threatening to exceed positional limits
             us[OUT] = out_pc_to_us(pc[OUT], reverse);   // Step 4 : Convert motor percent value to pulse width for motor, and to volts for display
             volt[OUT] = out_pc_to_si(pc[OUT]);
-            // static int count;
-            // if (++count == 50)  ezread.squintf("to brake motor: %lf, %lf\n", pc[OUT], us[OUT]);
-            // count %= 50;
             write_motor();  // Step 5 : Write to motor
         }
     }

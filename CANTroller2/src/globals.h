@@ -153,6 +153,10 @@ bool use_tft_colors_for_neo = true; // should neopixel colors be based on onscre
 bool print_error_changes = false;    // !!! temporarily suppressed !!! should diag print status changes and new error events to console?
 bool pot_controls_animation_timeout = false;  // when showing fullscreen animations, should the pot value control the next animation timeout?
 bool cruise_brake = true;            // does brake work in cruise mode
+bool use_idle_boost = false;         // should we try to manage a dynamic idle speed?
+bool overtemp_shutoff_brake = true;  // should a brake temp beyond opmax cause a brake motor and engine shutoff?
+bool overtemp_shutoff_engine = true; // should a engine temp beyond opmax cause engine shutoff and possible panic?
+bool overtemp_shutoff_wheel = true;  // should a wheel temp beyond opmax cause engine shutoff?
 int drive_mode = CRUISE;             // enter cruise or fly mode initially?
 int throttle_ctrl_mode = Linearized; // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 

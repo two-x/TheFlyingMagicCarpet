@@ -243,19 +243,48 @@ class DiagRuntime {
         // checkrange(_MuleBatt);
     }
     void TempFailure() {
+        static bool printed_error_wheel = false, printed_error_eng = false, printed_error_brake = false;
         for (int sen=_TempEng; sen<=_TempAmb; sen++) {
             checkrange(sen);
             // bypassing LOST check because it's giving false positive for all 7 sensors on the car, even tho they are reading fine. FIX!
             // setflag(i, LOST, !tempsens->detected(i));
         }
-        bool wheelerr = false;
+        bool wheel_err_range = false, wheel_err_other = false;
         int minwheel = 400, maxwheel = -400;
         for (int sen=_TempWhFL; sen<=_TempWhRR; sen++) {
             if (*devices[sen][DiagVal] < minwheel) minwheel = *devices[sen][DiagVal];
             if (*devices[sen][DiagVal] > maxwheel) maxwheel = *devices[sen][DiagVal];
-            for (int typ=0; typ<NUM_ERR_TYPES; typ++) if (err_sens[typ][sen]) wheelerr = true;
+            if (err_sens[RANGE][sen]) wheel_err_range = true;
+            for (int typ=0; typ<NUM_ERR_TYPES; typ++)
+                if ((typ != RANGE) && err_sens[typ][sen]) wheel_err_other = true;
+            
         }
-        wheeltemperr = wheelerr || ((maxwheel - minwheel) > wheeldifferr);  // set global wheel temp idiot light to include all wheel temp errors
+        wheeltemperr = wheel_err_range || wheel_err_other || ((maxwheel - minwheel) > wheeldifferr);  // set global wheel temp idiot light to include all wheel temp errors
+        if (overtemp_shutoff_wheel) {
+            if (wheel_err_range) {
+                ignition->request(REQ_OFF);
+                ignition->panic_request(REQ_OFF);
+                if (!printed_error_wheel) ezread.squintf(RED, "err: wheel temp out of range. stop engine\n");
+                printed_error_wheel = true;
+            }
+            else printed_error_wheel = false;
+        }
+        if (overtemp_shutoff_engine) {
+            if (err_sens[RANGE][_TempEng]) {
+                ignition->request(REQ_OFF);
+                if (!printed_error_eng) ezread.squintf(RED, "err: engine temp out of range. stop engine\n");
+                printed_error_eng = true;
+            }
+            else printed_error_eng = false;
+        }
+        if (overtemp_shutoff_brake) {  // here the engine is shut off. also in brake motor class the brake motor is stopped
+            if (err_sens[RANGE][_TempBrake]) {
+                ignition->request(REQ_OFF);
+                if (!printed_error_brake) ezread.squintf(RED, "err: brakemotor temp out of range. stop engine\n");
+                printed_error_brake = true;
+            }
+            else printed_error_brake = false;
+        }
     }
     // Brakes:   checks if any sensor the brake is expecting to use in its current mode are posting errors
     void BrakeFailure() {  // checks if posn is not changing while pressure is changing and motor is moving (assuming not near max brake)

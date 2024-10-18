@@ -257,7 +257,6 @@ class Ignition {
 class Starter {
   private:
     int pushbrake_timeout = 4000000;
-    int run_timeout = 2000000;
     int turnoff_timeout = 100000;
     Timer starterTimer, twoclicktimer{2000000};  // If remotely-started starting event is left on for this long, end it automatically
     int lastbrakemode, lastgasmode, pin;
@@ -266,6 +265,7 @@ class Starter {
     bool motor = LOW;             // set by handler only. Reflects current state of starter signal (does not indicate source)
     int now_req = REQ_NA, last_req = REQ_NA;
     bool req_active = false, commit = false;
+    float run_timeout = 3.5, run_lolimit = 1.0, run_hilimit = 10.0;  // in seconds
     void setup() {
         ezread.squintf("Starter.. output-only supported\n");
         set_pin(pin, OUTPUT);  // set pin as output
@@ -275,11 +275,12 @@ class Starter {
         ezread.printf("starter turnon.. ");  // ezread.squintf("starter turn on motor\n");
         lastgasmode = gas.motormode;      // remember incumbent gas setting
         gas.setmode(Starting);            // give it some gas
-        starterTimer.set((int64_t)run_timeout);  // if left on the starter will turn off automatically after X seconds
+        starterTimer.set((int64_t)(run_timeout * 1000000.0));  // if left on the starter will turn off automatically after X seconds
         motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
         write_pin(pin, motor);           // and start the motor
         now_req = REQ_NA;                 // we have serviced starter-on request, so cancel it
     }
+    void set_runtimeout(float newtime) { if (newtime <= run_hilimit && newtime >= run_lolimit) run_timeout = newtime; }
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         if (runmode == LOWPOWER) return;
         // if (now_req != NA) squintf("m:%d r:%d\n", motor, now_req);

@@ -35,14 +35,14 @@ std::string pcbaglowcard[GlowNumModes] = { "Off", "Simple", "Hbeat", "Xfade", "S
 static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 11, 5, 11, 11, 11, 12, 4, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 5, 11, 11, 11, 12, 4, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
     { " Pot Raw", brAk"Posn", brAk"Posn", brAk"Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PG_SENS
     { "TachPuls", "Tach Raw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpeedRaw", "   Speed", __________, __________, __________, "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", spEd"Idle", },  // PG_PULS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
-    { "Gas Mode", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", "FuelPump", __________, __________, __________, __________, "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PG_IDLE
+    { "Gas Mode", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", "FuelPump", __________, __________, __________, "StartGas", "StTimOut", "MaxBoost", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { "Brk Heat", "HybBrake", __________, __________, __________, "BkEnaPID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", "GasEnPID", "CrEnaPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PG_MOTR    
     { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "MotrMode", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, __________, __________, __________, "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
@@ -57,7 +57,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "adc",  "adc",  "in",   "%",    "adc",  "psi",  "%",    "adc",  "V",    ______, "psi",  "psi",  "in",   "in",   "in",   },  // PG_SENS
     { "ms",   "Hz",   "rpm",  "ms",   "Hz",   "mph",  "%",    ______, ______, ______, "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
-    { scroll, "rpm",  "%",    "%",    degree, "rpm",  "V",    ______, ______, ______, ______, "%",    "%",    degreF, degreF, },  // PG_IDLE
+    { scroll, "rpm",  "%",    "%",    degree, "rpm",  "V",    ______, ______, ______, "%",    "sec",  "%",    degreF, degreF, },  // PG_IDLE
     { degreF, "%",    ______, ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, b1nary, scroll, },  // PG_MOTR
     { scroll, "%",    "psi",  "%",    "in",   "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, ______, ______, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
@@ -740,7 +740,8 @@ class Display {
             drawval(13, gas.idle_si(), gas.si[OPMIN], gas.si[OPMAX]);
             drawval(14, tach.idle(), tach.opmin(), tach.opmax());
             drawval(15, fuelpump.volts(), fuelpump.off_v, fuelpump.on_max_v);
-            for (int line=16; line<=19; line++) draw_eraseval(line);
+            for (int line=16; line<=18; line++) draw_eraseval(line);
+            drawval(19, starter.run_timeout, starter.run_lolimit, starter.run_hilimit);
             drawval(20, gas.starting_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
             drawval(21, gas.idle_max_boost_pc);
             drawval(22, gas.idle_temp_lim_f[LOW], tempsens.opmin(loc::ENGINE), tempsens.opmax(loc::ENGINE));
@@ -1084,7 +1085,8 @@ class Tuner {
             else if (sel == 14) brake.set(&brake.duty_fwd_pc, tune(brake.duty_fwd_pc, id, 0.0f, 100.0f));
         }
         else if (datapage == PG_IDLE) {
-            if (sel == 11) tune(&gas.starting_pc, id, gas.pc[OPMIN], gas.pc[OPMAX]);
+            if (sel == 10) tune(&gas.starting_pc, id, gas.pc[OPMIN], gas.pc[OPMAX]);
+            else if (sel == 11) starter.set_runtimeout(tune(starter.run_timeout, id, starter.run_lolimit, starter.run_hilimit));
             else if (sel == 12) tune(&gas.idle_max_boost_pc, 0.0f, 100.0f);
             else if (sel == 13) tune(&gas.idle_temp_lim_f[LOW], id, tempsens.opmin(loc::ENGINE), gas.idle_temp_lim_f[HIGH]);
             else if (sel == 14) tune(&gas.idle_temp_lim_f[HIGH], id, gas.idle_temp_lim_f[LOW], tempsens.opmax(loc::ENGINE));
