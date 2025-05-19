@@ -1087,7 +1087,7 @@ class Tuner {
         else if (datapage == PG_IDLE) {
             if (sel == 10) tune(&gas.starting_pc, id, gas.pc[OPMIN], gas.pc[OPMAX]);
             else if (sel == 11) starter.set_runtimeout(tune(starter.run_timeout, id, starter.run_lolimit, starter.run_hilimit));
-            else if (sel == 12) tune(&gas.idle_max_boost_pc, 0.0f, 100.0f);
+            else if (sel == 12) tune(&gas.idle_max_boost_pc, id, 0.0f, 100.0f);
             else if (sel == 13) tune(&gas.idle_temp_lim_f[LOW], id, tempsens.opmin(loc::ENGINE), gas.idle_temp_lim_f[HIGH]);
             else if (sel == 14) tune(&gas.idle_temp_lim_f[HIGH], id, gas.idle_temp_lim_f[LOW], tempsens.opmax(loc::ENGINE));
         }
