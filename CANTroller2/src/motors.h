@@ -3,7 +3,7 @@
 #include <ESP32Servo.h>  // Eventually move Servos into new ServoPWM objects then remove this
 
 // I stole this library and modified it heavily to our purposes - Soren
-// QPID Library for Arduino - Version 3.1.9 by dlloydev https://github.com/Dlloydev/QPID
+// QuickPID Library for Arduino - Version 3.1.9 by dlloydev https://github.com/Dlloydev/QuickPID
 // Based on the Arduino PID_v1 Library. Licensed under the MIT License.
 // some general pid information:
 // https://www.youtube.com/watch?v=6OH-wOsVVjg&ab_channel=SiieeFPV
@@ -89,11 +89,11 @@ class QPID {
         float pmterm = _kp * din;
         if (_pmode == pmod::onerr) pmterm = 0;
         else if (_pmode == pmod::onmeas) peterm = 0;
-        else { //onerrmeas
+        else { // onerrmeas
             peterm *= 0.5f;
             pmterm *= 0.5f;
         }
-        _pterm = peterm - pmterm;
+        _pterm = peterm - pmterm;  // used by getter function
         _iterm = _ki * _err;
         if (_dmode == dmod::onerr) _dterm = _kd * derr;
         else _dterm = -_kd * din; // onmeas
@@ -762,9 +762,11 @@ class BrakeControl : public JagMotor {
         }  // that's great to have some idea whether the motor is hot. but we need to take some actions in response
         return true;
     }
-    // the brake can be controlled by a pid or open loop. either way it will use all enabled sensors as     // the influence on the final output from the pressure and position pids is weighted based on the pressure reading
-    // as the brakes are pressurized beyond X psi, use pressure reading, otherwise use position as feedback, because
-    // near either extreme only one of the two sensors is accurate. So at lower psi, control is 100% position-based, fade to 100% pressure-based at mid/high pressures
+    // the brake can be controlled by a pid or open loop. either way it will use all enabled sensors. The influence on
+    // the final output from the pressure and position pids is weighted based on the pressure reading as the brakes
+    // are pressurized beyond X psi, use pressure reading, and otherwise use position as feedback. This is because 
+    // near either pressure extreme only one of the two sensors is accurate. So at lower psi, control is 100% 
+    // position-based, fade to 100% pressure-based at mid/high pressures.
     // "dominant" PID means the PID loop (pressure or position) that has the majority influence over the motor
     float calc_hybrid_ratio(float pressure_val) {  // returns pressure influence as a ratio (from 0.0 to 1.0) for a given pressure level in percent 
         if (feedback == NoneFB) return NAN;             // this should not happen, maybe print an error message
