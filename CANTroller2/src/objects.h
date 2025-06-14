@@ -263,9 +263,7 @@ class Starter {
     Starter(int _pin) : pin(_pin) {}
     bool motor = LOW;             // set by handler only. Reflects current state of starter signal (does not indicate source)
     int now_req = REQ_NA;
-    // int last_req = REQ_NA;  // left from anders' playa 2click code
     bool req_active = false, one_click_done = false;
-    // bool commit = false;  // left from anders' playa 2click code
     float run_timeout = 3.5, run_lolimit = 1.0, run_hilimit = 10.0;  // in seconds
     void setup() {
         ezread.squintf("Starter.. output-only supported\n");
@@ -320,14 +318,14 @@ class Starter {
                 brake.setmode(AutoHold);         // tell the brake to hold
                 brakeTimer.reset();              // start a timer to time box the application of brake
             }
-            if (brake.autoholding) {  // if brake is successfully holding
-                turnon();             // start the car
-                return;               // and ditch
-            }
         }
         else if (!check_brake_before_starting) {  // if we don't need to apply the brake nor even check for it
             turnon();    // start the car
             return;      // and ditch
+        }
+        if (brake.autoholding) {  // if brake is successfully holding
+            turnon();             // start the car
+            return;               // and ditch
         }
         if (brakeTimer.expired()) {  // waited long enough for the brake to push
             if (!check_brake_before_starting) turnon();  // if no need to check whether brake succeeded, then start the car
