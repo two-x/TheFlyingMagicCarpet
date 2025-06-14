@@ -307,13 +307,17 @@ class Starter {
             now_req = REQ_NA;          // cancel any requests
             return;                    // and ditch
         }  // from here on, we can assume the starter is off and we are supposed to turn it on
+        if (brake.autoholding) {  // if brake is successfully holding
+            turnon();             // start the car
+            return;               // and ditch
+        }
         if (brake_before_starting) {     // if we must apply brakes before starting
             if (brake.feedback == _None) {  // check if brake is running in openloop mode (we can't control an autohold)
                 ezread.printf("starter can't use openloop brake");
                 now_req = REQ_NA;           // cancel turn on request
                 return;                     // and ditch
             }
-            else if (!brake.autoholding && brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
+            else if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
                 ezread.printf("autobrake.. ");
                 lastbrakemode = brake.motormode; // remember incumbent brake setting
                 brake.setmode(AutoHold);         // tell the brake to hold
@@ -325,10 +329,6 @@ class Starter {
         else if (!check_brake_before_starting) {  // if we don't need to apply the brake nor even check for it
             turnon();    // start the car
             return;      // and ditch
-        }
-        if (brake.autoholding) {  // if brake is successfully holding
-            turnon();             // start the car
-            return;               // and ditch
         }
         if (brakeTimer.expired()) {  // waited long enough for the brake to push
             if (!check_brake_before_starting) turnon();  // if no need to check whether brake succeeded, then start the car
