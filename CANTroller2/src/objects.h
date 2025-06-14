@@ -286,98 +286,57 @@ class Starter {
         if (runmode == LOWPOWER) return;
         // if (now_req != NA) squintf("m:%d r:%d\n", motor, now_req);
         if (now_req == REQ_TOG) now_req = motor ? REQ_OFF : REQ_ON;  // translate a toggle request to a drive request opposite to the current drive state
-
-        // this is anders' playa 2click code
-        //
-        // if (two_click_starter && now_req == REQ_ON && !commit) {
-        //     if (last_req != REQ_ON || twoclicktimer.expired()) { // if this is a new request, or if the previous request expired, start a new two click timer
-        //         twoclicktimer.reset();
-        //         last_req = now_req;
-        //         now_req = REQ_NA;
-        //         if (brake.motormode != AutoHold) {   // if we haven't yet told the brake to hold down
-        //             ezread.printf("autobrake.. ");
-        //             lastbrakemode = brake.motormode; // remember incumbent brake setting
-        //             brake.setmode(AutoHold);         // tell the brake to hold
-        //             starterTimer.set((int64_t)pushbrake_timeout);   // start a timer to time box that action
-        //         }
-        //     } else {
-        //         commit = true;
-        //         last_req = REQ_NA;
-        //     }
-        // }
-
-        // this is soren's replacement 2click code
         if (two_click_starter) {           // if 2 clicks are required
             if (now_req == REQ_ON) {       // if we got a click
-                if (!one_click_done) {     // if this is 1nd click, mark next click will be the 1st click. leave turnon request active
-                    twoclicktimer.reset(); // start timer for window to accept 2nd click
+                if (!one_click_done) {     // if this is 2nd click, mark next click will be the 1st click, leaving turnon request active
+                    twoclicktimer.reset(); // start timer for opportunity to accept 2nd click
                     now_req = REQ_NA;      // cancel the turnon request
                 }                          // otherwise the turnon request remains active
-                one_click_done = !one_click_done; // set whether the next click will be 1st or 2nd click
+                one_click_done = !one_click_done; // toggle next click will be the 1st or 2nd click
             }
             if (twoclicktimer.expired()) one_click_done = false; // cancel 2click sequence if too much time since last click
         }
-
         req_active = (now_req != REQ_NA);                   // for display
-        if (motor && ((now_req == REQ_OFF) || starterTimer.expired()))  {  // if we're driving the motor but need to stop or in the process of stopping
+        if (motor && ((now_req == REQ_OFF) || starterTimer.expired()))  {  // if we're driving the motor but need to stop
             ezread.printf("turnoff\n");
             motor = LOW;             // we will turn it off
             write_pin(pin, motor);  // begin driving the pin low voltage
             if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
-            now_req = REQ_NA;
+            now_req = REQ_NA;  // cancel current request
         }
         // if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
         if (motor || now_req != REQ_ON) {  // if starter is already being driven, or we aren't being tasked to drive it
             now_req = REQ_NA;          // cancel any requests
             return;                    // and ditch
         }  // from here on, we can assume the starter is off and we are supposed to turn it on
-        if (brake_before_starting) {   // if we haven't yet told the brake to hold down
-            if (brake.feedback == _None) {
+        if (brake_before_starting) {     // if we must apply brakes before starting
+            if (brake.feedback == _None) {  // check if brake is running in openloop mode (we can't control an autohold)
                 ezread.printf("starter can't use openloop brake");
-                now_req = REQ_NA;  // never run the starter if brake is in openloop mode
+                now_req = REQ_NA;           // cancel turn on request
             }
-            else if (brake.motormode != AutoHold) {
+            else if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
                 ezread.printf("autobrake.. ");
                 lastbrakemode = brake.motormode; // remember incumbent brake setting
                 brake.setmode(AutoHold);         // tell the brake to hold
-                brakeTimer.reset();   // start a timer to time box that action
+                brakeTimer.reset();              // start a timer to time box the application of brake
             }
-            if (brake.autoholding) {
-                turnon();
-                return;
+            if (brake.autoholding) {  // if brake is successfully holding
+                turnon();             // start the car
+                return;               // and ditch
             }
         }
-        else if (!check_brake_before_starting) {
-            turnon();
-            return;
+        else if (!check_brake_before_starting) {  // if we don't need to apply the brake nor even check for it
+            turnon();    // start the car
+            return;      // and ditch
         }
-        if (brakeTimer.expired()) {  // waited long enough for the brake action
-            if (!check_brake_before_starting) turnon();  // i
-            else {
+        if (brakeTimer.expired()) {  // waited long enough for the brake to push
+            if (!check_brake_before_starting) turnon();  // if no need to check whether brake succeeded, then start the car
+            else {  // if we were supposed to apply the brakes and also check they got pushed
                 ezread.printf("cancel - no brake\n");
                 now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
-                // commit = false;  // left from anders' playa 2click code
             }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
             if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before, unless it's already been changed
         }
-        // if (!check_brake_before_starting) {
-        //     turnon();
-        //     // commit = false;  // left from anders' playa 2click code
-        //     return;
-        // }
-        
-        // if (brake.autoholding || !brake_before_starting) {  // if the brake is being held down, or if we don't care whether it is
-        //     turnon();
-        //     // commit = false;  // left from anders' playa 2click code
-        //     return;                           // if the brake was right we have started driving the starter
-        // }  // from here on, we can assume the brake isn't being held on, which is in the way of our task to begin driving the starter
-        
-        // if (starterTimer.expired()) {  // if we've waited long enough for the damn brake
-        //     ezread.printf("cancel - no brake\n");
-        //     if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before, unless it's already been changed
-        //     now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
-        //     // commit = false;  // left from anders' playa 2click code
-        // }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
     }
     // src source() { return pin_outputting ? src::CALC : src::PIN; }
 };
