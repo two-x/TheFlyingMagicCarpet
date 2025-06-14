@@ -130,10 +130,10 @@ bool flip_the_screen = false;        // did you mount your screen upside-down?
 bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool use_i2c_baton = false;          // use soren's custom homemade semaphores to prevent i2c bus collisions?
-bool always_max_refresh = true;      // set to true to enforce a cap on screen frame draws (90 Hz I think it is), otherwise craw as fast as we can. fullscreen screensaver ignores this
+bool always_max_refresh = true;      // set to true to enforce a cap on screen frame draws (90 Hz I think it is), otherwise draw as fast as we can. fullscreen screensaver ignores this, always balls-out
 bool brake_before_starting = true;   // if true, the starter motor attempts to apply the brake pedal before turning on the starter motor
 bool check_brake_before_starting = false;  // if true, the starter motor won't turn on until or unless it senses the brake pressure is enough. otherwise then after a timeout it will start anyway
-bool two_click_starter = false;       // to start the starter requires two requests within a timeframe
+bool two_click_starter = false;      // to start the starter requires two requests within a timeframe
 bool watchdog_enabled = false;       // enable the esp's built-in watchdog circuit, it will reset us if it doesn't get pet often enough (to prevent infinite hangs). disabled cuz it seems to mess with the hotrc (?)
 bool fuelpump_supported = false;     // do we drive power to vehicle fuel pump?  note if resistive touchscreen is present then fuelpump is automatically not supported regardless of this
 bool print_task_stack_usage = false; // enable to have remaining heap size and free task memory printed to console every so often. for tuning memory allocation
@@ -141,36 +141,36 @@ bool autosaver_display_fps = true;   // do you want to see the fps performance o
 bool crash_driving_recovery = false; // if code crashes while driving, should it continue driving after reboot?
 bool pot_tuner_acceleration = false; // when editing values, can we use the pot to control acceleration of value changes? (assuming we aren't pot mapping some sensor at the time)
 bool dont_take_temperatures = false; // disables temp sensors. in case debugging dallas sensors or causing problems
-bool console_enabled = true;         // completely disables the console serial output. idea being, it may be safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
-bool keep_system_powered = false;    // equivalent to syspower always being high.
+bool console_enabled = true;         // completely disables the console serial output. it can be safer disabled b/c serial printing itself can easily cause new problems, and libraries might do it whenever
+bool keep_system_powered = false;    // ensures syspower is always high.
 bool looptime_print = false;         // makes code write out timestamps throughout loop to serial port. for analyzing what parts of the code take the most time
 bool touch_reticles = true;          // draws tiny little plus reticles to aim at for doing touchscreen calibration
 bool button_test_heartbeat_color = false;  // makes boot button short press change heartbeat color. useful for testing code on bare esp
 bool wifi_client_mode = false;       // should wifi be in client or access point mode?
 bool screensaver_enabled = true;     // does fullscreen screensaver start automatically (after a delay) when in standby mode?
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
-bool use_tft_colors_for_neo = true; // should neopixel colors be based on onscreen icon colors? (otherwise they'll split the full hue spectrum amongst themselves)
+bool use_tft_colors_for_neo = true;  // should neopixel colors be based on onscreen icon colors? (otherwise they'll split the full hue spectrum amongst themselves)
 bool print_error_changes = false;    // !!! temporarily suppressed !!! should diag print status changes and new error events to console?
 bool pot_controls_animation_timeout = false;  // when showing fullscreen animations, should the pot value control the next animation timeout?
 bool cruise_brake = true;            // does brake work in cruise mode
 bool use_idle_boost = false;         // should we try to manage a dynamic idle speed?
 bool overtemp_shutoff_brake = true;  // should a brake temp beyond opmax cause a brake motor and engine shutoff?
-bool overtemp_shutoff_engine = true; // should a engine temp beyond opmax cause engine shutoff and possible panic?
+bool overtemp_shutoff_engine = true; // should an engine temp beyond opmax cause engine shutoff and possible panic?
 bool overtemp_shutoff_wheel = true;  // should a wheel temp beyond opmax cause engine shutoff?
 int drive_mode = CRUISE;             // enter cruise or fly mode initially?
 int throttle_ctrl_mode = Linearized; // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 
 // global tunable variables
-float wheeldifferr = 35.0;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel befopre idiot light
+float wheeldifferr = 35.0;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel before idiot light
 float float_zero = 0.000069;           // if two floats being compared are closer than this, we consider them equal
 float float_conversion_zero = 0.001;
 int skip_int = -92935762;              // random ass value for detecting unintended arguments
 int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. set to 0 linefeeds all prints
-float flycruise_vert_margin_pc = 3.0;  // margin of error for determining hard brake value for dropping out of cruise mode
+float flycruise_vert_margin_pc = 3.0;  // margin of error (in percent) for determining hard brake value for dropping out of cruise mode
 int cruise_delta_max_pc_per_s = 4;     // (in TriggerHold mode) what's the fastest rate cruise adjustment can change pulse width (in us per second)
 float cruise_angle_attenuator = 0.016; // (in TriggerPull mode) limits the change of each adjust trigger pull to this fraction of what's possible
-float maf_min_gps = 0.0;
+float maf_min_gps = 0.0;               // in grams per second
 float maf_max_gps = 50.0;              // i just made this number up as i have no idea what's normal for MAF
 float tuning_rate_pcps = 7.5;          // values being edited by touch buttons change value at this percent of their overall range per second
 float neobright = 20.0;                // default for us dim/brighten the neopixels in percent
@@ -251,7 +251,7 @@ float convert_units(float from_units, float convert_factor, bool invert, float i
     return -1;
 }
 // Exponential Moving Average filter : smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
-// pass in a fresh raw value, address of filtered value, and alpha factor, filtered value will get updated
+// pass in a fresh raw value, current filtered value, and alpha factor, new filtered value is returned
 float ema_filt(float _raw, float _filt, float _alpha) {
     _alpha = constrain(_alpha, 0.0, 1.0);
     return (_alpha * _raw) + ((1.0 - _alpha) * _filt);
@@ -296,7 +296,7 @@ int significant_place(int value) {  // Returns the length in digits of a positiv
 // numeric edits are scaled proportional to the magnitude of the current value. or you can specify a minimum decimal place to scale to, presumably b/c otherwise this makes it impossible to cross zero
 // optional min/max values may be supplied for int|float edits and if so are respected.  in case these are not needed but subsequent optional args are, set to NAN (float) or skip_int (int) to ignore
 // for integer values, there is an optional "dropdown" argument, which if set true will disable any temporal acceleration (constrains edit to w/i -1,1).  useful for when selecting options from lists
-#define disp_default_float_sig_dig 3  // significant digits displayed for float values. Higher causes more screen draws
+#define disp_default_float_sig_dig 3  // significant digits displayed for float values. Higher causes more screen draws. !! If changed then also must change scale in tune() function!
 float tune(float orig_val, int idelta, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-3) {  // feed in float value, get new constrianed float val, modified by idelta scaled to the magnitude of the value
     int sig_digits = disp_default_float_sig_dig;
     int sig_place = std::max(significant_place(orig_val), min_sig_edit_place + sig_digits);
@@ -348,21 +348,21 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
   public:
     Timer() { reset(); }
     Timer(int arg_timeout) { set (arg_timeout); }
-    void set (int arg_timeout) {                                              // sets the timeout to the given number (in us) and zeroes the timer
+    void set(int arg_timeout) {                                               // sets the timeout to the given number (in us) and zeroes the timer
         tout = (int64_t)arg_timeout;
         start = esp_timer_get_time();
     }
     void reset() { start = esp_timer_get_time(); }                            // zeroes the timer
     int elapsed() { return esp_timer_get_time() - start; }                    // returns microseconds elapsed since last reset
     bool elapsed(int check) { return esp_timer_get_time() - start >= check; } // returns whether the given amount of us have elapsed since last reset
-    int timeout() { return tout; }                                            // returns the currently set timeout value in us
+    int timeout() { return tout; }                                            // getter function returns the currently set timeout value in us
     bool expired() { return esp_timer_get_time() >= start + tout; }           // returns whether more than the previously-set timeout has elapsed since last reset
     bool expireset() {                                                        // like expired() but automatically resets if expired
         int64_t now = esp_timer_get_time();
         if (now < start + tout) return false;
         start = now;
         return true;
-    }    
+    }
 };
 
 // color macros and color conversion functions. these are global to allow accessibility from multiple places
@@ -597,8 +597,8 @@ class EZReadConsole {
 };
 static EZReadConsole ezread;
 
-inline bool iszero(float num, float margin=NAN) {
-    if (std::isnan(num)) {
+inline bool iszero(float num, float margin=NAN) {  // checks if a float value is "effectively" zero (avoid hyperprecision errors)
+    if (std::isnan(num)) {  // calling w/ nan as argument is invalid, but we print this error to console rather than let the math crash us
         ezread.squintf("err: iszero(NAN) was called\n");
         return false;
     }

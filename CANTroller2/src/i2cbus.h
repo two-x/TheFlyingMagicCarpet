@@ -230,7 +230,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         uint8_t byt = 0x20;  // command template for speed update
         uint16_t speed = (uint16_t)(_speed * 100);
         if (speed == speed_last) return false;  // bail if speed has not changed
-        byt |= ((speed >> 8) & 0x0f);
+        byt |= ((uint8_t)(speed >> 8) & 0x0f);
         Wire.beginTransmission(addr);
         Wire.write(byt);
         byt = (uint8_t)(speed & 0xff);
@@ -250,5 +250,6 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
             if (!sent) sent = sendspeed(speed);  // if neither of above was sent, then send speed (to prevent long bus use)
         }
         i2c->pass_i2c_baton();
+        return;
     }
 };

@@ -682,7 +682,7 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
         // for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
     }
     void draw(LGFX_Sprite* spr) {
-        draw_scrollbar(spr, LGRY);
+        draw_scrollbar(spr, LGRY);  // !! i just noticed this is before sprite blackout below, probably should be moved to after that
         int botline = (ez->current_index - ez->offset - (int)ez->textlines[ez->current_index].empty() + ez->bufferSize) % ez->bufferSize;
         spr->fillSprite(BLK);
         spr->setTextWrap(false);

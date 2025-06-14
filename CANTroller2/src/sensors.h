@@ -1314,7 +1314,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         { 1081, 1577, 2085, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         { 1202, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         { 1304, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-    float ema_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]
+    // float ema_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]   // deprecated
     float absmin_us = 880;
     float absmax_us = 2091;
     float deadband_us = 15;  // all [DBBOT] and [DBTOP] values above are derived from this by calling derive()
@@ -1427,7 +1427,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             if (std::abs(us[axis][FILT] < 0.001)) us[axis][FILT] = 0.0; 
             pc[axis][RAW] = us_to_pc(axis, us[axis][RAW], false);
             pc[axis][FILT] = us_to_pc(axis, us[axis][FILT], true);
-            if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set joy_axis_filt to CENTer value
+            if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set pc value to CENTer value (for sane controls), but not us value (for debugging/error detection)
             else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(HURCTrig);  // indicate evidence of user activity
         }
         for (int axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
@@ -1442,7 +1442,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     }
     // spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
     // interpolated from before and after the spike. also smoothes out abrupt value changes that don't recover later
-    float spike_filter (int axis, float new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
+    float spike_filter(int axis, float new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
         previndex = (depth + index[axis] - 1) % depth;         // previndex is where the incoming new value will be stored
         this_delta = new_val - filt_history[axis][previndex];  // value change since last reading
         if (std::abs(this_delta) > spike_cliff[axis]) {  // if new value is a cliff edge (start or end of a spike)
@@ -1460,7 +1460,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             }
         }
         else if (prespike_index[axis] == index[axis]) {  // if a current spike lasted thru our whole buffer
-            inject_interpolations (axis, previndex, filt_history[axis][previndex]);  // smoothly grade the whole buffer
+            inject_interpolations(axis, previndex, filt_history[axis][previndex]);  // smoothly grade the whole buffer
             prespike_index[axis] = -1;  // cancel the current spike
         }
         float returnval = filt_history[axis][index[axis]];  // save the incumbent value at current index (oldest value) into buffer
