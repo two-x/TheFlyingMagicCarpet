@@ -280,7 +280,7 @@ class Starter {
         waiting_for_brake = false;       // clear flag so 2click start routine can trigger again
     }
     void turnoff() {
-        ezread.printf("turnoff\n");
+        ezread.printf("starter turnoff\n");
         motor = LOW;             // we will turn it off
         write_pin(pin, motor);  // begin driving the pin low voltage
         if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
@@ -320,7 +320,7 @@ class Starter {
                 return;                     // and ditch
             }
             else if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
-                ezread.printf("autobrake.. ");
+                ezread.printf("starter autobrake.. ");
                 lastbrakemode = brake.motormode; // remember incumbent brake setting
                 brake.setmode(AutoHold);         // tell the brake to hold
                 brakeTimer.reset();              // start a timer to time box the application of brake
@@ -332,15 +332,15 @@ class Starter {
             turnon();    // start the car
             return;      // and ditch
         }
-        if (brakeTimer.expired()) {  // waited long enough for the brake to push
+        if (waiting_for_brake && brakeTimer.expired()) {  // waited long enough for the brake to push
             if (!check_brake_before_starting) turnon();  // if no need to check whether brake succeeded, then start the car
             else {  // if we were supposed to apply the brakes and also check they got pushed
-                ezread.printf("cancel - no brake\n");
+                ezread.printf("starter cancel - no brake\n");
                 now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
                 waiting_for_brake = false;  // clear flag so 2click start routine can trigger again
-            }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
-            if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before, unless it's already been changed
-        }
+                if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before, unless it's already been changed
+            }
+        }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
     }
     // src source() { return pin_outputting ? src::CALC : src::PIN; }
 };
