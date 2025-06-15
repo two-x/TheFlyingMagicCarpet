@@ -376,11 +376,11 @@ class IdiotLights {
     bool* vals[iconcount] = {  // 6 per line
         &diag.err_sens_alarm[LOST], &diag.err_sens_alarm[RANGE], &diag.err_sens[RANGE][_TempEng], &wheeltemperr, hotrc.radiolost_ptr(), &panicstop, // &diag.err_sens[RANGE][_TempWheel]
         &shutting_down, &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting, &car_hasnt_moved, 
-        &starter.motor, speedo.pin_inactive_ptr(), &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(), // fuelpump.status_inverse_ptr(), tach.pin_inactive_ptr(),  // , fuelpump.status_inverse_ptr(), //fuelpump function removed
+        &starter.motor, speedo.pin_inactive_ptr(), &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(), // tach.pin_inactive_ptr()
         &nowtouch, &ts_tapped, &ts_doubletapped, encoder.activity_ptr(), &running_on_devboard, &not_syspower,  //  touch.tap_ptr(), touch.doubletap_ptr(), bootbutton.ptr(), sim.enabled_ptr(), &encoder.enc_a, 
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
         &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],  // &sensidiots[_MuleBatt]
-    };  // , &encoder.enc_b, &starter.req_active, &web_disabled, &powering_up
+    };  // , &encoder.enc_b, &starter.req_active, &powering_up
         // _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero,
     uint8_t icon[iconcount][11] = {
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // "S" w/ crossout symbol

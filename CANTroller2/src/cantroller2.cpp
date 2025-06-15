@@ -1,6 +1,6 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
-TaskHandle_t temptask = NULL, maftask = NULL, pushtask = NULL, drawtask = NULL;  // , webtask = NULL, // was 2nd arg in list  // web function removed
+TaskHandle_t temptask = NULL, maftask = NULL, pushtask = NULL, drawtask = NULL;
 
 void setup() {
     initialize_pins_and_console();
@@ -14,7 +14,7 @@ void setup() {
     xTaskCreatePinnedToCore(tempsens_task, "taskTemp", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 4096 works, 3072 failed,  priority is from 0 to 24=highest    
     set_board_defaults();       // set variables as appropriate if on a breadboard
     run_tests();
-    watchdog.setup(&temptask, &drawtask, &pushtask, &maftask);  // , &webtask,   // web function removed
+    watchdog.setup(&temptask, &drawtask, &pushtask, &maftask);
     bootbutton.setup();
     hotrc.setup();
     pot.setup();
@@ -28,7 +28,6 @@ void setup() {
     mapsens.setup();
     xTaskCreatePinnedToCore(maf_task, "taskMAF", 4096, NULL, 4, &maftask, CONFIG_ARDUINO_RUNNING_CORE);  // update mass airflow determination, including reading map and airvelo sensors
     lightbox.setup();
-    // fuelpump.setup();  // removed fuelpump function
     starter.setup();
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // used for servos
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
@@ -40,9 +39,6 @@ void setup() {
     diag.setup();              // initialize diagnostic engine
     ignition.setup();          // must be after diag setup
     run.setup();               // initialize runmode state machine. must be after diag setup
-    // removed web function
-    // web.setup();               // start up access point, web server, and json-enabled web socket for diagnostic phone interface
-    // xTaskCreatePinnedToCore(web_task, "taskWeb", 3166, NULL, 6, &webtask, CONFIG_ARDUINO_RUNNING_CORE);  // wifi/web task. with 4096 wifi runs but fails to connect (maybe unrelated?).  2048 is too low, it crashes when client connects  16384
     stop_console();
     looptimer.setup();
 }
@@ -53,7 +49,6 @@ void loop() {                  // arduino-style loop() is like main() but with a
     starter.update();          // read or drive starter motor  // total for all 3 digital signal handlers is 110 us
     encoder.update();          // read encoder input signals  // 20 us per loop
     pot.update();              // consistent 400 us per loop for analog read operation. we only see this for the pot (!?) changing pins is no help 
-    // fuelpump.update();      // removed fuelpump function   // drives power to the fuel pump when the engine is turning
     brkpos.update();           // brake position (consistent 120 us)
     pressure.update();         // brake pressure  // ~50 us
     tach.update();             // get pulse timing from hall effect tachometer on flywheel

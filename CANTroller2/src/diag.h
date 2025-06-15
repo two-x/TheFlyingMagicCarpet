@@ -39,12 +39,12 @@ class DiagRuntime {
         "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HotRC",
         "Temps", "Other", "GPIO", "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4", "Batery",
         "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR",
-        "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "TmpWhl",  // "FuelP", "TmpWhl",  // removed fuelpump function
+        "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "TmpWhl",
         "NA", "None", "Hybrid",
     };
     // "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HrcHrz", "HrcVrt", "HrcCh3",
     // "HrcCh4", "Batery", "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR",
-    // "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
+    // "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS",
     // "NA", "None", "Hybrid",
     std::string ascii_name(int sensor) {
         if (sensor == _NA) return err_sens_card[NumTelemetryFull];
@@ -100,7 +100,6 @@ class DiagRuntime {
         register_device(_TempWhRR, tempsens->ptr(loc::WHEEL_RR), tempsens->opmin_ptr(loc::WHEEL_RR), tempsens->opmax_ptr(loc::WHEEL_RR), tempsens->margin_ptr(loc::WHEEL_RR));
         // register_bool_device(_Ignition, ignition->signal_ptr());
         // register_bool_device(_Starter, starter->signal_ptr());
-        // register_bool_device(_FuelPump, fuelpump->signal_ptr());
     }
     void update() {
         if (first_boot) {  // don't run too soon before sensors get initialized etc.
@@ -168,7 +167,7 @@ class DiagRuntime {
     void set_sensorgroups() {
         for (int typ=0; typ<NUM_ERR_TYPES; typ++) {
             setflag(_HotRC, typ, err_sens[typ][_HotRCHorz] || err_sens[typ][_HotRCVert] || err_sens[typ][_HotRCCh3] || err_sens[typ][_HotRCCh4]);
-            setflag(_GPIO, typ, err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter]);  // || err_sens[typ][_FuelPump]);  // removed fuelpump function
+            setflag(_GPIO, typ, err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter]);
             setflag(_Other, typ, err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot]);  // || err_sens[typ][_MuleBatt]
             setflag(_TempWheel, typ, err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL] || err_sens[typ][_TempWhRR]);
             setflag(_Temps, typ, err_sens[typ][_TempEng] || err_sens[typ][_TempWheel] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb]);
@@ -589,7 +588,7 @@ class BootMonitor {
     LoopTimer* myloop;
     std::string codestatuscard[NumCodeStatuses] = { "confused", "asleep", "booting", "parked", "stopped", "panicking", "in basicmode", "driving" };
     Timer highWaterTimer{30000000};
-    TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4; // TaskHandle_t* task5;  // web function removed
+    TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4;
     UBaseType_t highWaterBytes;
     bool wrote_panic, wrote_ign, was_panicked = false;
     void flash_codestatus(int _stat) {
@@ -626,8 +625,8 @@ class BootMonitor {
         else if (runmode == STANDBY) dowrite = Parked;
         flash_codestatus(dowrite);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
     }
-    void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, int sec = -1) {  // , TaskHandle_t* t5, // web function removed
-        task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;  // task5 = t5;  // web function removed
+    void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, int sec = -1) {
+        task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;
         if (sec >= 0) timeout_sec = sec;
         psram_setup();
         myprefs->begin("FlyByWire", false);
@@ -654,7 +653,7 @@ class BootMonitor {
         pet();
         if (codestatus == Booting) set_codestatus();  // we are not booting any more
         write_uptime();
-        print_high_water(task1, task2, task3, task4);  // , task5); // web function removed
+        print_high_water(task1, task2, task3, task4);
     }
     void flash_forcewrite(const char* flashid, uint32_t val) {  // force writes a uint value to indicated flashed value. external code must be responsible here to not write unnecessarily!
         myprefs->putUInt(flashid, val);
@@ -698,19 +697,17 @@ class BootMonitor {
         }
         else ezread.squintf("under 1 min uptime\n");
     }
-    void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {   // }, xTaskHandle* t5) {
+    void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
         if (print_task_stack_usage && highWaterTimer.expireset()) {
             ezread.squintf("mem minfree(B): heap:%d", xPortGetMinimumEverFreeHeapSize());            
             highWaterBytes = uxTaskGetStackHighWaterMark(*t1) * sizeof(StackType_t);
             ezread.squintf(" temptask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t2) * sizeof(StackType_t);
             ezread.squintf(", drawtask:%d", highWaterBytes);
-            // ezread.squintf(", webtask:%d", highWaterBytes);  // web function removed
             highWaterBytes = uxTaskGetStackHighWaterMark(*t3) * sizeof(StackType_t);
             ezread.squintf(", pushtask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t4) * sizeof(StackType_t);
             ezread.squintf(", maftask:%d\n", highWaterBytes);
-            // highWaterBytes = uxTaskGetStackHighWaterMark(*t5) * sizeof(StackType_t);  // web function removed
         }
     }
     void recover_status() {
