@@ -2,9 +2,9 @@
 #pragma once
 #include "Arduino.h"
 // pin assignments  ESP32-S3-DevkitC series   (note: "!" are free or free-ish pins, "*" are pins we can reclaim if needed, with some rework/rewrite necessary)
-#define     boot_sw_pin  0 // button0/strap1    // input, the esp "boot" button. if more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
+#define     boot_sw_pin  0 // button0/strap1  * // input, the esp "boot" button. if more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
 #define      tft_dc_pin  1 // adc1.0            // output, assert when sending data to display chip to indicate commands vs. screen data
-#define       choke_pin  2 // adc1.1          ! // reserved for driving a choke servo, if we discover it's needed. otherwise this pin is unused and available
+#define        free_pin  2 // adc1.1          ! // full-capability pin just free to use! (was reserved for driving a choke servo)
 #define   sdcard_cs_pin  3 // adc1.2/strapX   ! // output, chip select for SD card controller on SPI bus. sdcard is not implemented, we may not even need it, so if pin is needed, disconnect from the sd slave chip and it's good to go
 #define    mulebatt_pin  4 // adc1.3            // analog input, mule battery voltage sense, full scale is 16V
 #define         pot_pin  5 // adc1.4            // analog in from 20k pot
@@ -26,9 +26,9 @@
 #define     onewire_pin 21 // pwm0              // onewire bus for temperature sensor data. note: tested this does not work on higher-numbered pins (~35+)
 #define      speedo_pin 35 // spiram/octspi     // int input, active high, asserted when magnet south is in range of sensor. 1 pulse per driven pulley rotation. (Open collector sensors need pullup)
 #define     starter_pin 36 // sram/ospi/glitch  // input/Output (both active high), output when starter is being driven.  ability to sense externally-driven start signal is disabled in hardware
-#define        tach_pin 37 // spiram/octspi     // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - note: placed on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
+#define        tach_pin 37 // spiram/octspi     // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - note: maybe better on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
 #define  encoder_sw_pin 38 // spiram/octspi   * // input, rotary encoder push switch, for the UI. active low (needs pullup). signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
-#define  tp_cs_fuel_pin 39 // jtck/glitch     ! // output, controls touchpanel chip select for resistive types (dev board) OR optionally drives the mule's fuel pump.  note possible known glitch: 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define       tp_cs_pin 39 // jtck/glitch     ! // output, controls touchpanel chip select for resistive types (dev board).  note possible known glitch: 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define   hotrc_ch4_pin 40 // jtdo              // syspower, starter, and cruise mode toggle control. hotrc ch4 pwm toggle signal
 #define   hotrc_ch3_pin 41 // jtdi              // ignition control, hotrc Ch3 PWM toggle signal
 #define   encoder_a_pin 42 // jtms              // int input, the A (aka CLK) pin of the encoder. both A and B complete a negative pulse in between detents. if A pulse goes low first, turn is CCW. (needs pullup)

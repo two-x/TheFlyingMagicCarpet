@@ -123,7 +123,7 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.pin_sclk        = spi_sclk_pin;   // SCLK pin number
             cfg.pin_mosi        = spi_mosi_pin;   // MOSI pin number
             cfg.pin_miso        = spi_miso_pin;   // MISO pin number
-            cfg.pin_cs          = tp_cs_fuel_pin; // CS pin number
+            cfg.pin_cs          = tp_cs_pin;      // CS pin number
             _res_touch_instance.config(cfg);
             _panel_instance.setTouch(&_res_touch_instance);  // Place the touch screen on the panel.
         }

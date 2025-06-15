@@ -466,7 +466,7 @@ class Touchscreen {
         else if (tbox == 0x22 && onrepeat()) ezread.lookback(ezread.offset + 1);  // step scroll
         else if (tbox == 0x23 && onrepeat()) ezread.lookback(ezread.offset - 1);  // step scroll
         else if (tbox == 0x24) ezread.lookback(tune(ezread.offset, -id, 0, ezread.bufferSize));  // fast scroll
-        else if (tbox == 0x30 && longpress()) sim.toggle();  // pressed the simulation mode toggle. Needs long-press  // fuelpump.request(REQ_TOG);
+        else if (tbox == 0x30 && longpress()) sim.toggle();  // pressed the simulation mode toggle. Needs long-press
         else if (tbox == 0x31) pressure.sim_si(tune(pressure.val(), id, pressure.opmin(), pressure.opmax()));  // pressed the increase brake pressure button
         else if (tbox == 0x32) pressure.sim_si(tune(pressure.val(), -id, pressure.opmin(), pressure.opmax()));
         else if (tbox == 0x33) brkpos.sim_si(tune(brkpos.val(), id, brkpos.opmin(), brkpos.opmax()));

@@ -645,9 +645,6 @@ class ThrottleControl : public ServoMotor {
         }
     }
 };
-class ChokeControl : public ServoMotor {
-  private:
-};
 // Brake uses two PID loops: one based on pressure (accurate for high brake pressures), and one based on position (accurate when pedal is more released)
 // Note as pedal is pressed down, position decreases as pressure increases. PID output is percent motor power.
 class BrakeControl : public JagMotor {

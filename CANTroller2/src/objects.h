@@ -186,7 +186,7 @@ void test_console_throughput() {
 void initialize_pins_and_console() {                        // set up those straggler pins which aren't taken care of inside class objects
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);                   // deasserting unused cs line ensures available spi bus
     set_pin(syspower_pin, OUTPUT, syspower);
-    set_pin(choke_pin, INPUT_PULLUP);                       // avoid undefined inputs
+    set_pin(free_pin, INPUT_PULLUP);                       // avoid undefined inputs
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
     basicsw.read();
