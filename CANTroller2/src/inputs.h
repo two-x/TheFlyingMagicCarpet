@@ -161,7 +161,7 @@ class Encoder {
         if (_spintime_isr_us != time_last) {
             div_time = _spintime_isr_us;
             #if EncoderPanasonicType  // these encoders have half the transitions/interrupts for the same amount of turn 
-            div_time >> 1;            // because it takes 2 detents to get 1 A interrupt w/ these encoders, each detent took half the time
+            div_time >> 1;            // because it takes 2 detents to get 1 A interrupt w/ these encoders, ie each detent took half the time
             #endif
             if (!twist_in_progress || (div_time < best_time_this_twist)) best_time_this_twist = div_time;
             twist_in_progress = true;
@@ -196,15 +196,15 @@ class Encoder {
     bool* activity_ptr() { return &activity; }
     int rotation(bool accel=true) {  // returns detents spun since last call, accelerated by spin rate or not
         int d = _delta;
-        _delta = 0;  // our responsibility to reset this flag after handling events
-        if (d) kick_inactivity_timer(HUEncTurn);  // evidence of user activity
+        _delta = 0;  // our responsibility to reset this flag after queries
+        if (d) kick_inactivity_timer(HUEncTurn);  // register evidence of user activity
         if (accel) d *= _accel_factor;
         return d;
     }
-    int rotdirection() {  // returns 0 if unspun, or -1 or 1 if spun, depending on which direction
+    int rotdirection() {  // returns 0 if unspun, -1 if spun CCW, or 1 if spun CW
         int d = _delta;
-        _delta = 0;       // our responsibility to reset this flag after handling events
-        if (d) kick_inactivity_timer(HUEncTurn);  // evidence of user activity
+        _delta = 0;       // our responsibility to reset this flag after queries
+        if (d) kick_inactivity_timer(HUEncTurn);  // register evidence of user activity
         return constrain(d, -1, 1);
     }
     // void rezero() { _delta = 0; }  // handling code needs to call to rezero after reading rotations
@@ -277,13 +277,14 @@ class Touchscreen {
         else filtertimer_active = false;      // cancel our trigger, and be ready to retrigger
     }
     bool ontouch() { return nowtouch && !lasttouch; }  // returns true only if touch is new for this update cycle. only reliable if called internally, otherwise use tap()
+    bool onrelease() { return !nowtouch && lasttouch; }  // returns true only if release is new for this update cycle. only reliable if called internally, otherwise use tap()
     void update_swipe() {  // determines if there's a valid swipe, saved to variable
         int _dragged[2] = { drag_axis(HORZ), drag_axis(VERT) };
         int _axis = (std::abs(_dragged[HORZ]) > std::abs(_dragged[VERT])) ? HORZ : VERT;  // was swipe mostly horizontal or mostly vertical
         if (!swipe_possible || (std::abs(_dragged[_axis] < swipe_min))) ts_swipedir = DirNone;  // catch if swipe doesn't qualify
         else if (_axis == HORZ) ts_swipedir = (_dragged[HORZ] > 0) ? DirRight : DirLeft;
         else ts_swipedir = (_dragged[VERT] > 0) ? DirUp : DirDown;
-        ts_swiped = (ts_swipedir != DirNone);  // for idiot light
+        ts_swiped = (ts_swipedir != DirNone);  // for debug idiot light
     }
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
@@ -300,7 +301,7 @@ class Touchscreen {
         disp_size[VERT] = disp_height_pix;
         captouch = (i2c->detected(i2c_touch));
         Serial.printf("Touchscreen.. %s panel", (captouch) ? "detected captouch" : "using resistive");
-        if (   (senseTimer.timeout() >= filterTimer.timeout()) || (filterTimer.timeout() >= twotapTimer.timeout())
+        if (   (senseTimer.timeout() >= filterTimer.timeout()) || (filterTimer.timeout() >= twotapTimer.timeout())  // checks all the timeouts are in length order
             || (filterTimer.timeout() >= repeat_timeout)       || (filterTimer.timeout() >= accel_timeout)
             || (twotapTimer.timeout() >= longpress_timeout)    || (swipe_timeout >= longpress_timeout)
             || (longpress_timeout >= pressTimer.timeout()) )   Serial.printf(" ERR in timing setup!");
@@ -415,7 +416,7 @@ class Touchscreen {
             if (pressTimer.elapsed() < longpress_timeout) {      // if press duration was in short-press range
                 if (doubletap_possible) ts_doubletapped = true;  // if there was a previous recent tap when pressed, we have a valid double tap
                 else {
-                    recent_tap = true;        // otherwise we have a valid single tap
+                    recent_tap = true;        // otherwise we have a potentially valid single tap
                     twotapTimer.reset();      // begin timeout again to wait for a second tap
                 }
                 update_swipe();
@@ -425,7 +426,7 @@ class Touchscreen {
             keyrepeats = 0;
         }
         if (twotapTimer.expired()) {
-            ts_tapped = recent_tap;  // if no double tap happened, then recent tap becomes valid single tap
+            ts_tapped = recent_tap;  // if no double tap happened in time, then recent short press becomes valid single tap
             recent_tap = doubletap_possible = false;
         }
         // for (int axis=HORZ; axis<=VERT; axis++) tft_touch[axis] = landed[axis] = -1;  // set coordinates to illegal value

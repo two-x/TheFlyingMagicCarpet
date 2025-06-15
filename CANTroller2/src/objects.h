@@ -345,90 +345,91 @@ class Starter {
 static Ignition ignition(ignition_pin);
 static Starter starter(starter_pin);
 
-class FuelPump {  // drives power to the fuel pump when the engine is turning
-  public:
-    float off_v = 0.0, on_min_v = 8.0, on_max_v = 12.0, _volts = 0.0, turnon_rpm = 50.0, duty, pwm_period = 25000;  // used for software pwm timing
-    int adc = 0, now_req = REQ_NA;
-    bool _status = LOW, _status_inverse = HIGH, pump_last = LOW, sw_pwm_out_now = LOW;
-    void request(int req) { now_req = req; }  // squintf("r:%d n:%d\n", req, now_req);}
-  private:
-    bool variable_speed_output = false;  // this interferes with the gas servo pwm when enabled
-    bool use_software_pwm = false;  // avoids using hardware resources for variable output, we can fake it with a timer
-    Timer fuelTimer;
-    int timeout = 25000, pin, ledc_channel, pwm_frequency = 42, pwm_resolution = 8;  // for if hardware pwm is used. timeout is not tunable
-    void writepin() {
-        if (variable_speed_output) {
-            if (use_software_pwm) {
-                if (duty > 99.5) write_pin(pin, HIGH);
-                else if (duty < 0.5) write_pin(pin, LOW);
-                else if (fuelTimer.expired()) {
-                    sw_pwm_out_now = !sw_pwm_out_now;
-                    timeout = (int)(duty * pwm_period / 100.0);
-                    if (!sw_pwm_out_now) timeout = (int)pwm_period - timeout;
-                    write_pin(pin, sw_pwm_out_now);
-                    fuelTimer.set(timeout);
-                }
-            }
-            else ledcWrite(ledc_channel, adc);
-        }
-        else write_pin(pin, _status);
-    }
-  public:
-    FuelPump(int _pin) : pin(_pin) {}
-    void update() {
-        if (runmode == LOWPOWER) return;
-        static bool autoreq, autoreq_last;  // true if engine conditions warrant fuel pump to turn on
-        if (!fuelpump_supported || !captouch) {
-            _status = HIGH;  // to keep idiot light off when unused
-            _status_inverse = !_status;  // for idiot light
-            return;
-        }
-        float tachnow = tach.val();
-        pump_last = _status;
-        if (now_req == REQ_TOG) now_req = _status ? REQ_NA : REQ_ON;
-        autoreq_last = autoreq;
-        autoreq = starter.motor || (ignition.signal && (tachnow >= turnon_rpm));
-        if (autoreq && !autoreq_last) now_req = REQ_NA;  // if engine needs on/off, previous manual requests are canceled
-        if (now_req == REQ_ON) _volts = on_max_v;  // if manually turned on
-        else if (autoreq) _volts = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], on_min_v, on_max_v);  // if engine needs fuel
-        else _volts = off_v;  // turn off fuel
-        _volts = constrain(_volts, off_v, on_max_v);
-        adc = map((int)_volts, 0, (int)on_max_v, 0, 255);
-        duty = 100.0 * _volts / on_max_v;
-        _status = (_volts >= on_min_v);
-        _status_inverse = !_status;  // for idiot light
-        writepin();
-    }
-    void setup() {
-        if (!fuelpump_supported || !captouch) return;  // if resistive touchscreen, then pin is needed for chip select
-        ezread.squintf("Fuel pump.. ");
-        if (variable_speed_output) {
-            if (use_software_pwm) {
-                set_pin(pin, OUTPUT);  // initialize_pin
-                fuelTimer.set(timeout);  // start the timer in case we are doing software pwm
-                ezread.squintf("using software pwm\n");
-            }
-            else {
-                int ledc_channel = analogGetChannel(pin);
-                if (ledcSetup(ledc_channel, pwm_frequency, pwm_resolution) == 0) ezread.squintf("failed to configure ");
-                else {
-                    ezread.squintf("using ");
-                    ledcAttachPin(pin, ledc_channel);
-                }
-                ezread.squintf("ledc ch %d, %d bit at %d Hz\n", ledc_channel, pwm_resolution, pwm_frequency);
-            }
-        }
-        else {
-            set_pin(pin, OUTPUT);  // initialize_pin
-            ezread.squintf("using digital drive\n");
-        }
-    }
-    bool status() { return _status; }
-    bool* status_inverse_ptr() { return &_status_inverse; }
-    float volts() { return _volts; }
-};
+// removed fuelpump function
+// class FuelPump {  // drives power to the fuel pump when the engine is turning
+//   public:
+//     float off_v = 0.0, on_min_v = 8.0, on_max_v = 12.0, _volts = 0.0, turnon_rpm = 50.0, duty, pwm_period = 25000;  // used for software pwm timing
+//     int adc = 0, now_req = REQ_NA;
+//     bool _status = LOW, _status_inverse = HIGH, pump_last = LOW, sw_pwm_out_now = LOW;
+//     void request(int req) { now_req = req; }  // squintf("r:%d n:%d\n", req, now_req);}
+//   private:
+//     bool variable_speed_output = false;  // this interferes with the gas servo pwm when enabled
+//     bool use_software_pwm = false;  // avoids using hardware resources for variable output, we can fake it with a timer
+//     Timer fuelTimer;
+//     int timeout = 25000, pin, ledc_channel, pwm_frequency = 42, pwm_resolution = 8;  // for if hardware pwm is used. timeout is not tunable
+//     void writepin() {
+//         if (variable_speed_output) {
+//             if (use_software_pwm) {
+//                 if (duty > 99.5) write_pin(pin, HIGH);
+//                 else if (duty < 0.5) write_pin(pin, LOW);
+//                 else if (fuelTimer.expired()) {
+//                     sw_pwm_out_now = !sw_pwm_out_now;
+//                     timeout = (int)(duty * pwm_period / 100.0);
+//                     if (!sw_pwm_out_now) timeout = (int)pwm_period - timeout;
+//                     write_pin(pin, sw_pwm_out_now);
+//                     fuelTimer.set(timeout);
+//                 }
+//             }
+//             else ledcWrite(ledc_channel, adc);
+//         }
+//         else write_pin(pin, _status);
+//     }
+//   public:
+//     FuelPump(int _pin) : pin(_pin) {}
+//     void update() {
+//         if (runmode == LOWPOWER) return;
+//         static bool autoreq, autoreq_last;  // true if engine conditions warrant fuel pump to turn on
+//         if (!fuelpump_supported || !captouch) {
+//             _status = HIGH;  // to keep idiot light off when unused
+//             _status_inverse = !_status;  // for idiot light
+//             return;
+//         }
+//         float tachnow = tach.val();
+//         pump_last = _status;
+//         if (now_req == REQ_TOG) now_req = _status ? REQ_NA : REQ_ON;
+//         autoreq_last = autoreq;
+//         autoreq = starter.motor || (ignition.signal && (tachnow >= turnon_rpm));
+//         if (autoreq && !autoreq_last) now_req = REQ_NA;  // if engine needs on/off, previous manual requests are canceled
+//         if (now_req == REQ_ON) _volts = on_max_v;  // if manually turned on
+//         else if (autoreq) _volts = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], on_min_v, on_max_v);  // if engine needs fuel
+//         else _volts = off_v;  // turn off fuel
+//         _volts = constrain(_volts, off_v, on_max_v);
+//         adc = map((int)_volts, 0, (int)on_max_v, 0, 255);
+//         duty = 100.0 * _volts / on_max_v;
+//         _status = (_volts >= on_min_v);
+//         _status_inverse = !_status;  // for idiot light
+//         writepin();
+//     }
+//     void setup() {
+//         if (!fuelpump_supported || !captouch) return;  // if resistive touchscreen, then pin is needed for chip select
+//         ezread.squintf("Fuel pump.. ");
+//         if (variable_speed_output) {
+//             if (use_software_pwm) {
+//                 set_pin(pin, OUTPUT);  // initialize_pin
+//                 fuelTimer.set(timeout);  // start the timer in case we are doing software pwm
+//                 ezread.squintf("using software pwm\n");
+//             }
+//             else {
+//                 int ledc_channel = analogGetChannel(pin);
+//                 if (ledcSetup(ledc_channel, pwm_frequency, pwm_resolution) == 0) ezread.squintf("failed to configure ");
+//                 else {
+//                     ezread.squintf("using ");
+//                     ledcAttachPin(pin, ledc_channel);
+//                 }
+//                 ezread.squintf("ledc ch %d, %d bit at %d Hz\n", ledc_channel, pwm_resolution, pwm_frequency);
+//             }
+//         }
+//         else {
+//             set_pin(pin, OUTPUT);  // initialize_pin
+//             ezread.squintf("using digital drive\n");
+//         }
+//     }
+//     bool status() { return _status; }
+//     bool* status_inverse_ptr() { return &_status_inverse; }
+//     float volts() { return _volts; }
+// };
 
-static FuelPump fuelpump(tp_cs_fuel_pin);
+// static FuelPump fuelpump(tp_cs_fuel_pin);  // removed fuelpump function
 #include "diag.h"
 static LoopTimer looptimer;
 static BootMonitor watchdog(&prefs, &looptimer);

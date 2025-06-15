@@ -118,9 +118,9 @@ enum telemetry_full {                                                           
     _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14,                                         // _HotRC sensor group
     _MuleBatt=15, _AirVelo=16, _MAP=17, _Pot=18,                                                      // _Other sensor group
     _TempEng=19, _TempWhFL=20, _TempWhFR=21, _TempWhRL=22, _TempWhRR=23, _TempBrake=24, _TempAmb=25,  // _Temps sensor group
-    _Ignition=26, _Starter=27, _BasicSw=28, _FuelPump=29,                                             // _GPIO signal group (with simple boolean values)
-    _TempWheel=30,                                                                                    // flag for any wheel temp out of range
-    NumTelemetryFull=31,                                                                              // size of both telemetry lists combined
+    _Ignition=26, _Starter=27, _BasicSw=28, // _FuelPump=29, //removed fuel pump function             // _GPIO signal group (with simple boolean values)
+    _TempWheel=29,                                                                                    // flag for any wheel temp out of range
+    NumTelemetryFull=30,                                                                              // size of both telemetry lists combined
 };
 
 // global configuration settings
@@ -135,7 +135,7 @@ bool brake_before_starting = true;   // if true, the starter motor attempts to a
 bool check_brake_before_starting = false;  // if true, the starter motor won't turn on until or unless it senses the brake pressure is enough. otherwise then after a timeout it will start anyway
 bool two_click_starter = false;      // to start the starter requires two requests within a timeframe
 bool watchdog_enabled = false;       // enable the esp's built-in watchdog circuit, it will reset us if it doesn't get pet often enough (to prevent infinite hangs). disabled cuz it seems to mess with the hotrc (?)
-bool fuelpump_supported = false;     // do we drive power to vehicle fuel pump?  note if resistive touchscreen is present then fuelpump is automatically not supported regardless of this
+// bool fuelpump_supported = false;     // do we drive power to vehicle fuel pump?  note if resistive touchscreen is present then fuelpump is automatically not supported regardless of this
 bool print_task_stack_usage = false; // enable to have remaining heap size and free task memory printed to console every so often. for tuning memory allocation
 bool autosaver_display_fps = true;   // do you want to see the fps performance of the fullscreen saver in the corner?
 bool crash_driving_recovery = false; // if code crashes while driving, should it continue driving after reboot?
