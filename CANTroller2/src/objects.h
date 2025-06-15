@@ -260,9 +260,8 @@ class Starter {
     Timer starterTimer, twoclicktimer{2000000}, brakeTimer{(int64_t)4000000};  // If remotely-started starting event is left on for this long, end it automatically
   public:
     Starter(int _pin) : pin(_pin) {}
-    bool motor = LOW;             // set by handler only. Reflects current state of starter signal (does not indicate source)
-    int now_req = REQ_NA;
-    bool req_active = false, one_click_done = false, waiting_for_brake = false;
+    int now_req = REQ_NA, last_req = REQ_NA;
+    bool req_active = false, one_click_done = false, motor = LOW;  // motor is the current state of starter voltage. set in this class only
     float run_timeout = 3.5, run_lolimit = 1.0, run_hilimit = 10.0;  // in seconds
     void setup() {
         ezread.squintf("Starter.. output-only supported\n");
@@ -277,7 +276,6 @@ class Starter {
         motor = HIGH;                    // ensure starter variable always reflects the starter status regardless who is driving it
         write_pin(pin, motor);           // and start the motor
         now_req = REQ_NA;                 // we have serviced starter-on request, so cancel it
-        waiting_for_brake = false;       // clear flag so 2click start routine can trigger again
     }
     void turnoff() {
         ezread.printf("starter turnoff\n");
@@ -292,15 +290,16 @@ class Starter {
         if (runmode == LOWPOWER) return;
         // if (now_req != NA) squintf("m:%d r:%d\n", motor, now_req);
         if (now_req == REQ_TOG) now_req = motor ? REQ_OFF : REQ_ON;  // translate a toggle request to a drive request opposite to the current drive state
-        if (two_click_starter && !waiting_for_brake) {  // if 2 clicks are required, and we're not looping due to brake requirements
-            if (now_req == REQ_ON) {       // if we got a click
+        if (two_click_starter) {  // if 2 clicks are required, and we're not looping due to brake requirements
+            if (now_req == REQ_ON && last_req != REQ_ON) {  // if we got a new on request
                 if (!one_click_done) {     // if this is the 1st click
                     twoclicktimer.reset(); // start timer for opportunity to accept 2nd click
                     now_req = REQ_NA;      // cancel the turnon request
-                }                          // otherwise the turnon request remains active
+                }                          // otherwise if 2nd click then the turnon request remains active
                 one_click_done = !one_click_done; // toggle next click will be the opposite of this one
             }
             if (twoclicktimer.expired()) one_click_done = false; // cancel 2click sequence if too much time elapsed since last click
+            last_req = now_req;       // allows us to detect when request first goes to on
         }
         req_active = (now_req != REQ_NA);   // for idiot light display
         if (motor && ((now_req == REQ_OFF) || starterTimer.expired())) turnoff();  // stop the motor if we're being asked to
@@ -324,7 +323,6 @@ class Starter {
                 lastbrakemode = brake.motormode; // remember incumbent brake setting
                 brake.setmode(AutoHold);         // tell the brake to hold
                 brakeTimer.reset();              // start a timer to time box the application of brake
-                waiting_for_brake = true;        // set flag to prevent 2click start routine from constantly activating
                 return;                          // ditch out and wait for brake to push, leaving on request active
             }
         }
@@ -332,12 +330,11 @@ class Starter {
             turnon();    // start the car
             return;      // and ditch
         }
-        if (waiting_for_brake && brakeTimer.expired()) {  // waited long enough for the brake to push
+        if (brakeTimer.expired()) {  // waited long enough for the brake to push
             if (!check_brake_before_starting) turnon();  // if no need to check whether brake succeeded, then start the car
             else {  // if we were supposed to apply the brakes and also check they got pushed
                 ezread.printf("starter cancel - no brake\n");
                 now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
-                waiting_for_brake = false;  // clear flag so 2click start routine can trigger again
                 if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before, unless it's already been changed
             }
         }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
