@@ -279,6 +279,14 @@ class Starter {
         now_req = REQ_NA;                 // we have serviced starter-on request, so cancel it
         waiting_for_brake = false;       // clear flag so 2click start routine can trigger again
     }
+    void turnoff() {
+        ezread.printf("turnoff\n");
+        motor = LOW;             // we will turn it off
+        write_pin(pin, motor);  // begin driving the pin low voltage
+        if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
+        if (brake.motormode == AutoHold && runmode != HOLD) brake.setmode(lastbrakemode);  // unless successfully into hold mode, put the brake back to doing whatever it was doing before
+        now_req = REQ_NA;  // cancel current request
+    }
     void set_runtimeout(float newtime) { if (newtime <= run_hilimit && newtime >= run_lolimit) run_timeout = newtime; }
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         if (runmode == LOWPOWER) return;
@@ -286,22 +294,16 @@ class Starter {
         if (now_req == REQ_TOG) now_req = motor ? REQ_OFF : REQ_ON;  // translate a toggle request to a drive request opposite to the current drive state
         if (two_click_starter && !waiting_for_brake) {  // if 2 clicks are required, and we're not looping due to brake requirements
             if (now_req == REQ_ON) {       // if we got a click
-                if (!one_click_done) {     // if this is 2nd click, mark next click will be the 1st click, leaving turnon request active
+                if (!one_click_done) {     // if this is the 1st click
                     twoclicktimer.reset(); // start timer for opportunity to accept 2nd click
                     now_req = REQ_NA;      // cancel the turnon request
                 }                          // otherwise the turnon request remains active
-                one_click_done = !one_click_done; // toggle next click will be the 1st or 2nd click
+                one_click_done = !one_click_done; // toggle next click will be the opposite of this one
             }
-            if (twoclicktimer.expired()) one_click_done = false; // cancel 2click sequence if too much time since last click
+            if (twoclicktimer.expired()) one_click_done = false; // cancel 2click sequence if too much time elapsed since last click
         }
         req_active = (now_req != REQ_NA);   // for idiot light display
-        if (motor && ((now_req == REQ_OFF) || starterTimer.expired()))  {  // if we're driving the motor but need to stop
-            ezread.printf("turnoff\n");
-            motor = LOW;             // we will turn it off
-            write_pin(pin, motor);  // begin driving the pin low voltage
-            if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
-            now_req = REQ_NA;  // cancel current request
-        }
+        if (motor && ((now_req == REQ_OFF) || starterTimer.expired())) turnoff();  // stop the motor if we're being asked to
         // if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
         if (motor || now_req != REQ_ON) {  // if starter is already being driven, or we aren't being tasked to drive it
             now_req = REQ_NA;          // cancel any requests
