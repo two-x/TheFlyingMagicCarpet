@@ -261,8 +261,7 @@ class DiagRuntime {
         wheeltemperr = wheel_err_range || wheel_err_other || ((maxwheel - minwheel) > wheeldifferr);  // set global wheel temp idiot light to include all wheel temp errors
         if (overtemp_shutoff_wheel) {
             if (wheel_err_range) {
-                ignition->request(REQ_OFF);
-                ignition->panic_request(REQ_OFF);
+                ignition->request(REQ_OFF);  // ignition->panic_request(REQ_OFF);  // not sure if this was intentional? commenting out
                 if (!printed_error_wheel) ezread.squintf(RED, "err: wheel temp out of range. stop engine\n");
                 printed_error_wheel = true;
             }
