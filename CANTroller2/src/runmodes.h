@@ -6,6 +6,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     Timer gestureFlyTimer{500000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
     Timer pwrup_timer{500000};  // Timeout to allow powerup of system devices during wakeup. delays entry to standby mode (in us)
     Timer standby_timer{5000000};
+    Timer stall_timer;
     int _joydir, oldmode = LOWPOWER;
   public:
     bool joy_centered = false, we_just_switched_modes = true, stoppedholdtimer_active = false;  // For mode logic to set things up upon first entry into mode
@@ -121,6 +122,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(ActivePID);
             steer.setmode(OpenLoop);
         }
+        if (stall_mode_timeout) {      // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
+        }
+
         if (hotrc.sw_event(CH4)) starter.request(REQ_TOG);  // ezread.squintf("stall: req=%d\n", REQ_TOG);
         if (starter.motor || !tach.stopped()) runmode = HOLD;  // If we started the car, enter hold mode once starter is released
     }

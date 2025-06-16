@@ -653,7 +653,7 @@ class BrakeControl : public JagMotor {
     PressureSensor* pressure;
     ThrottleControl* throttle;
     TemperatureSensorManager* tempsens;
-    float brakemotor_duty_spec_pc = 25.0;  // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
+    float brakemotor_duty_spec_pc = 10.0;  // = 25.0; // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
     float press_kp = 0.8;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float press_ki = 2.1;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_kd = 0.0;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
@@ -686,6 +686,7 @@ class BrakeControl : public JagMotor {
     bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == PositionFB);
     QPID pids[NumBrakeSens];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     QPID* pid_dom = &(pids[PositionFB]);  // AnalogSensor sensed[2];
+    float duty_pc = 0.0;  // our continuous estimate of current duty level of actuator (in pc)
     float brake_pid_trans_threshold_lo = 0.25;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
     float brake_pid_trans_threshold_hi = 0.50;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
     bool autostopping = false, autoholding = false;
@@ -726,7 +727,7 @@ class BrakeControl : public JagMotor {
         max_out_change_rate_pcps = 1500.0;  // LAE actuator stutters and stalls when changing direction suddenly, when power is low
     }
   private:
-    bool update_motorheat() {  // i am probably going to scrap all this nonsense and just put another temp sensor on the motor
+    void update_motorheat() {  // i am probably going to scrap all this nonsense and just put another temp sensor on the motor
         float added_heat, nowtemp, out_ratio;
         static bool printed_error = false;
         if (motorheat_timer.expireset()) {
@@ -746,18 +747,21 @@ class BrakeControl : public JagMotor {
                     motor_heat += added_heat;
                 }
             }
-            motor_heat = constrain(motor_heat, tempsens->absmin(loc::BRAKE), tempsens->absmax(loc::BRAKE));
+            motor_heat = constrain(motor_heat, tempsens->absmin(loc::BRAKE), tempsens->absmax(loc::BRAKE));            
+            
+            // duty_pc is intended for us to estimate the current duty of the actuator, as a percent. for now is proportional to temp reading
+            duty_pc = map(motor_heat, motor_heat_min, motor_heat_max, 0.0, 100.0);  // replace this w/ ongoing estimate
+            
             if (overtemp_shutoff_brake) {  // here the brakemotor is shut off if overtemp. also in diag class the engine is stopped
                 if (motor_heat > tempsens->opmax(loc::BRAKE)) {
-                    pc[OUT] = pc[STOP];
                     if (!printed_error) ezread.squintf(RED, "err: brake motor overheating. stop motor\n");
                     printed_error = true;
-                    return false;
+                    setmode(Halt);        // stop the brake motor // pc[OUT] = pc[STOP];  // setmode(ParkMotor);
+                    // ignition.request(REQ_OFF);  // request kill ignition  // commented this out b/c is already in diag brake check
                 }
                 else printed_error = false;
             }
         }  // that's great to have some idea whether the motor is hot. but we need to take some actions in response
-        return true;
     }
     // the brake can be controlled by a pid or open loop. either way it will use all enabled sensors. The influence on
     // the final output from the pressure and position pids is weighted based on the pressure reading as the brakes
@@ -970,16 +974,17 @@ class BrakeControl : public JagMotor {
         feedback_last = feedback;
         pid_ena_last = pid_enabled;
     }
-    void update() {  // Brakes - Determine motor output and write it to motor
+    void update() {                 // brakes - determine motor output and write it to motor
         if (runmode == LOWPOWER) return;
         if (volt_check_timer.expireset()) derive();
         if (pid_timer.expireset()) {
-            update_ctrl_config();        // step 1 : catch any change in configuration affecting motor mode
-            if (update_motorheat()) set_output();   // step 2 : check measured/estimated motor heat and if ok then determine motor percent value
-            postprocessing();        // step 3 : fix motor pc value if it's out of range or threatening to exceed positional limits
-            us[OUT] = out_pc_to_us(pc[OUT], reverse);   // Step 4 : Convert motor percent value to pulse width for motor, and to volts for display
-            volt[OUT] = out_pc_to_si(pc[OUT]);
-            write_motor();  // Step 5 : Write to motor
+            update_ctrl_config();   // catch any change in configuration affecting motor mode
+            update_motorheat();     // update motor heat management, will halt the motor and panic if overheated
+            set_output();           // determine motor percent value
+            postprocessing();       // fix motor pc value if it's out of range or threatening to exceed positional limits
+            us[OUT] = out_pc_to_us(pc[OUT], reverse); // convert motor percent value to pulse width for motor
+            volt[OUT] = out_pc_to_si(pc[OUT]);        // convert to volts for display
+            write_motor();                            // write to motor
         }
     }
     bool parked() {
@@ -993,7 +998,10 @@ class BrakeControl : public JagMotor {
         return false;  // really without sensors we have no idea if we're released. Print an error message
     }
     float sensmin() { return (dominantsens == PressureFB) ? pressure->opmin() : brkpos->opmin(); }
-    float sensmax() { return (dominantsens == PositionFB) ? pressure->opmax() : brkpos->opmax(); }
+    float sensmax() { return (dominantsens == PressureFB) ? pressure->opmax() : brkpos->opmax(); }
+    float duty() { return duty_pc; }
+    float dutymin() { return 0.0; }
+    float dutymax() { return brakemotor_duty_spec_pc; }
     float motorheat() { return motor_heat; }
     float motorheatmin() { return motor_heat_min; }
     float motorheatmax() { return motor_heat_max; }

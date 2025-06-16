@@ -278,7 +278,8 @@ class DiagRuntime {
         }
         if (overtemp_shutoff_brake) {  // here the engine is shut off. also in brake motor class the brake motor is stopped
             if (err_sens[RANGE][_TempBrake]) {
-                ignition->request(REQ_OFF);
+                // brake->setmode(Halt);        // stop the brake actuator  // commented b/c is done in brake class
+                ignition->request(REQ_OFF);  // kill the engine
                 if (!printed_error_brake) ezread.squintf(RED, "err: brakemotor temp out of range. stop engine\n");
                 printed_error_brake = true;
             }

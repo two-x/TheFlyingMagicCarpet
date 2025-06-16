@@ -156,6 +156,7 @@ bool use_idle_boost = false;         // should we try to manage a dynamic idle s
 bool overtemp_shutoff_brake = true;  // should a brake temp beyond opmax cause a brake motor and engine shutoff?
 bool overtemp_shutoff_engine = true; // should an engine temp beyond opmax cause engine shutoff and possible panic?
 bool overtemp_shutoff_wheel = true;  // should a wheel temp beyond opmax cause engine shutoff?
+bool stall_mode_timeout = true;      // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
 int drive_mode = CRUISE;             // enter cruise or fly mode initially?
 int throttle_ctrl_mode = Linearized; // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 

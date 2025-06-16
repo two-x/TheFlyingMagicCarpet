@@ -265,11 +265,11 @@ class Starter {
     float run_timeout = 3.5, run_lolimit = 1.0, run_hilimit = 10.0;  // in seconds
     void setup() {
         ezread.squintf("Starter.. output-only supported\n");
-        set_pin(pin, OUTPUT);                                        // set pin as output
+        set_pin(pin, OUTPUT);                                  // set pin as output
     }
     void request(int req) { now_req = req; }                   // squintf("r:%d n:%d\n", req, now_req);}
     void turnon() {                                            // function to start the motor
-        ezread.printf("starter turnon..\n");                   // maybe use ezread.squintf instead? (prints to both screen and console)
+        ezread.printf("starter turnon\n");                   // maybe use ezread.squintf instead? (prints to both screen and console)
         lastgasmode = gas.motormode;                           // remember incumbent gas setting
         gas.setmode(Starting);                                 // give it some gas
         starterTimer.set((int64_t)(run_timeout * 1000000.0));  // if left on the starter will turn off automatically after X seconds
@@ -300,7 +300,7 @@ class Starter {
             if (twoclicktimer.expired()) one_click_done = false;  // cancel 2click sequence if too much time elapsed since last click
             last_req = now_req;                                   // allows us to detect when request first goes to on
         }
-        req_active = (now_req != REQ_NA);                                          // for idiot light display
+        req_active = (now_req != REQ_NA);                         // for idiot light display
         if (motor && ((now_req == REQ_OFF) || starterTimer.expired())) turnoff();  // stop the motor if we're being asked to, or if it was left on too long
         if (motor || now_req != REQ_ON) {  // if starter is already being driven, or we aren't being tasked to drive it
             now_req = REQ_NA;              // cancel any requests
@@ -333,7 +333,7 @@ class Starter {
             else {                                       // if we were supposed to apply the brakes and also check they got pushed
                 ezread.printf("warn: starter cancel - no brake\n");
                 now_req = REQ_NA;                        // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
-                if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before, unless it's already been changed
+                if (brake.motormode == AutoHold && runmode != HOLD) brake.setmode(lastbrakemode); // restore prev brake mode, unless it's already been changed
             }
         }  // otherwise we're still waiting for the brake to push, meanwhile the starter turn-on request remains intact
     }
