@@ -414,6 +414,7 @@ class ThrottleControl : public ServoMotor {
     // * set operational angular range (OPMIN/OPMAX), margin (MARGIN) and parking angle (PARKED) here.
 
     float linearizer_exponent = 1.75;
+    float trigger_vert_pc = 0.0;
     float idle_max_boost_pc = 15.0;  // max amount (in percent) to boost idle if the engine is too cold
     float idle_temp_lim_f[2] = { 60.0, 80.0 };  // [LOW]/HIGH] temperature range (in F) over which to apply idle boost. max boost at temp=LOW or less, and no boost at temp=HIGH or more 
     // float idle_si[NUM_MOTORVALS] = { 58.0, NAN, 65.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
@@ -421,6 +422,7 @@ class ThrottleControl : public ServoMotor {
     float _idle_pc = 0.0, idle_boost_pc = 0.0; // 11.3;                // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
     float idle_temp_f = NAN;  // temperature determined for purpose of calculating boost. will prefer engine temp sensor but has fallback options 
+    bool linearize_trigger = false;  // in the future, remove Linearized as a motor mode instead use this simple flag
     // ... with:
     // ThrottleServo servo;
     // ThrottleControl(int pin, int freq) {
@@ -522,13 +524,7 @@ class ThrottleControl : public ServoMotor {
     // It's a bit too complex (I'm too ignorant) to predict which of the above might serve to cancel/exacerbate the 
     // others. None of this matters if we use the throttle PID, only if we run open loop
 
-
-    float linearizer(float in_pc) {  // compensate for at least 3 known sources of non-linearity in the throttle
-        // performs this math:   out = 100*((in/100)^A)^B , which would code as out = 100.0*powf(in, exp) , which is computationally inefficient.
-        //   so because of the identity x^a = e^(a*ln(x)) , our equation becomes out = 100.0f* e^( ln(in/100.0f)) * exp ) , with requirement for in > 0
-        if (iszero(in_pc) || in_pc < 0.0) return in_pc;  // avoid log(0) crash by regurgitating any input values not greater than 0
-        return 100.0f * expf(logf(in_pc / 100.0f) * linearizer_exponent);
-    }
+    // moved this to a general purpose global function
 
     // float linearizer(float inval_pc) {  // compensate for at least 3 known sources of non-linearity in the throttle
     //     static const float linearlookup[21] =  // lookup table for linearizing actuator values in Linearize mode. using normal pc value as index, produce a replacement pc value
@@ -540,16 +536,16 @@ class ThrottleControl : public ServoMotor {
     // }
 
     void cruise_adjust(int joydir) {
-        if (joydir == JOY_UP) ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
-        else ctrlratio = (hotrc->pc[VERT][FILT] - hotrc->pc[VERT][DBBOT]) / (hotrc->pc[VERT][OPMIN] - hotrc->pc[VERT][DBBOT]);
+        if (joydir == JOY_UP) ctrlratio = (trigger_vert_pc - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
+        else ctrlratio = (trigger_vert_pc - hotrc->pc[VERT][DBBOT]) / (hotrc->pc[VERT][OPMIN] - hotrc->pc[VERT][DBBOT]);
         if (cruise_adjust_scheme == TriggerHold) {
             if (cruise_adjusting) throttle_target_pc += joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
             cruiseDeltaTimer.reset(); 
         }
-        else if (cruise_adjust_scheme == TriggerPull && std::abs(hotrc->pc[VERT][FILT]) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
+        else if (cruise_adjust_scheme == TriggerPull && std::abs(trigger_vert_pc) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
             if (!cruise_adjusting) adjustpoint = throttle_target_pc;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
             throttle_target_pc = adjustpoint + ctrlratio * cruise_angle_attenuator * (((joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
-            cruise_ctrl_extent_pc = std::abs(hotrc->pc[VERT][FILT]);
+            cruise_ctrl_extent_pc = std::abs(trigger_vert_pc);
         }
         else if (cruise_adjust_scheme == SuspendFly) {
             if (!cruise_adjusting) adjustpoint = (cruise_pid_enabled) ? rpm_to_pc(tach->val()) : pc[OUT];
@@ -572,13 +568,17 @@ class ThrottleControl : public ServoMotor {
     }
     void set_output() {
         // ezread.squintf("mode");
+        trigger_vert_pc = hotrc->pc[VERT][FILT];  // copy current trigger value to internal value, in case we linearize it
+        if (motormode == Linearized) linearizer(&trigger_vert_pc, linearizer_exponent);  // we now linearize the trigger value not the output value
+        // if (linearize_trigger) linearizer(&trigger_vert_pc, linearizer_exponent);  // eventually use this instead of above (have a flag instead of a motor mode)
+        
         if (motormode == Idle) throttle_target_pc = _idle_pc;
         else if (motormode == Starting) throttle_target_pc = starting_pc;
         else if (motormode == Cruise) cruise_logic();  // cruise mode just got too big to be nested in this if-else clause
         else if (motormode == ParkMotor) throttle_target_pc = pc[PARKED];
         else if (motormode == OpenLoop || motormode == ActivePID || motormode == Linearized) {
             if (hotrc->joydir() != JOY_UP) throttle_target_pc = _idle_pc;  // If in deadband or being pushed down, we want idle
-            else throttle_target_pc = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], _idle_pc, pc[GOVERN]);  // actuators still respond even w/ engine turned off
+            else throttle_target_pc = map(trigger_vert_pc, hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], _idle_pc, pc[GOVERN]);  // actuators still respond even w/ engine turned off
         }
         else if (motormode == Calibrate) {
             cal_gasmode = true;
@@ -593,7 +593,7 @@ class ThrottleControl : public ServoMotor {
         }
         else new_out = throttle_target_pc;  // ezread.squintf(" ela:%ld pcps:%lf", throttleRateTimer.elapsed(), max_throttle_angular_velocity_pcps);
         pc[OUT] = new_out;
-        if (motormode == Linearized) pc[OUT] = linearizer(pc[OUT]);
+        // if (motormode == Linearized) linearizer(&pc[OUT], linearizer_exponent);  // we used to linearize the motor output, now instead linearizing the trigger input
         if (motormode != ActivePID) rate_limiter();  // the pid should already be set to limit rate if needed.   pc[OUT] = rate_limiter(new_out);  max_out_change_rate_pcps
     }
     void postprocessing() {

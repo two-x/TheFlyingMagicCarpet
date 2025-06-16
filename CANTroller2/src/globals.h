@@ -243,6 +243,17 @@ void write_pin(int pin, int val) {  if (pin >= 0 && pin != 255) digitalWrite (pi
 void set_pin(int pin, int mode, int val) { set_pin(pin, mode); write_pin(pin, val); }
 int read_pin(int pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
 
+inline bool iszero(float num, float margin=NAN) {  // checks if a float value is "effectively" zero (avoid hyperprecision errors)
+    if (std::isnan(num)) {  // calling w/ nan as argument is invalid, but we print this error to console rather than let the math crash us
+        Serial.printf("err: iszero(NAN) was called\n");
+        return false;
+    }
+    if (std::isnan(margin)) margin = float_zero;
+    return (std::abs(num) <= margin);
+}
+
+inline void cleanzero(float* num, float margin=NAN) { if (iszero(*num, margin)) *num = 0.0; }
+
 float convert_units(float from_units, float convert_factor, bool invert, float in_offset = 0.0, float out_offset = 0.0) {
     if (!invert) return out_offset + convert_factor * (from_units - in_offset);
     if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
@@ -261,6 +272,17 @@ float ema_filt(float _raw, float _filt, float _alpha) {
 //     float _filt_f = static_cast<float>(*_filt);
 //     *_filt = static_cast<FILT_T>(ema_filt(_raw_f, _filt_f, _alpha));
 // }
+
+// transforms value at given pointer (in percent) based on an exponential curve. value must be >0 and <=100.
+// exponent argument (must be >0) describes the formula curvature. eg: if 1.0, data is unchanged. if 3.0, applies severe curvature
+// returns true if transformation was performed, or false if inputs out of range
+// performs this math: out = 100*((in/100)^A)^B , which would code as out = 100.0*powf(in, exp) , which is computationally inefficient.
+//   so because of the identity x^a = e^(a*ln(x)) , our equation becomes out = 100.0f* e^( ln(in/100.0f)) * exp ) , with req for in > 0
+bool linearizer(float* in_pc_ptr, float exponent) {
+    if (iszero(*in_pc_ptr) || *in_pc_ptr < 0.0 || iszero(exponent) || exponent < 0.0) return false;  // avoid log(0) crash by regurgitating any input values not greater than 0
+    return 100.0f * expf(logf(*in_pc_ptr / 100.0f) * exponent);
+    return true;
+}
 
 // value-editing-related functions. these are global to allow accessibility from multiple places
 //
@@ -595,16 +617,6 @@ class EZReadConsole {
     }
 };
 static EZReadConsole ezread;
-
-inline bool iszero(float num, float margin=NAN) {  // checks if a float value is "effectively" zero (avoid hyperprecision errors)
-    if (std::isnan(num)) {  // calling w/ nan as argument is invalid, but we print this error to console rather than let the math crash us
-        ezread.squintf("err: iszero(NAN) was called\n");
-        return false;
-    }
-    if (std::isnan(margin)) margin = float_zero;
-    return (std::abs(num) <= margin);
-}
-inline void cleanzero(float* num, float margin=NAN) { if (iszero(*num, margin)) *num = 0.0; }
 
 #include <random>
 std::random_device rd;

@@ -269,7 +269,7 @@ class Starter {
     }
     void request(int req) { now_req = req; }                   // squintf("r:%d n:%d\n", req, now_req);}
     void turnon() {                                            // function to start the motor
-        ezread.printf("starter turnon\n");                   // maybe use ezread.squintf instead? (prints to both screen and console)
+        ezread.printf("starter turnon\n");                     // maybe use ezread.squintf instead? (prints to both screen and console)
         lastgasmode = gas.motormode;                           // remember incumbent gas setting
         gas.setmode(Starting);                                 // give it some gas
         starterTimer.set((int64_t)(run_timeout * 1000000.0));  // if left on the starter will turn off automatically after X seconds
