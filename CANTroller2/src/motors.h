@@ -938,7 +938,8 @@ class BrakeControl : public JagMotor {
         }
     }
     void postprocessing() {  // keep within the operational range, or to full absolute range if calibrating (caution don't break anything!)
-        if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
+        if (motormode == ActivePID) cleanzero(&pc[OUT], 0.01);            // don't mess with the output value that's being controlled internally to a pid. except for an artificial cleanzero unbeknownst to the pid
+        else if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
         else if (enforce_positional_limits                                // IF we're not to exceed actuator position limits
           && ((pc[OUT] < pc[STOP] && brkpos->val() > brkpos->opmax())     // AND ( trying to extend while at extension limit OR trying to retract while at retraction limit )
           || (pc[OUT] > pc[STOP] && brkpos->val() < brkpos->opmin())))                              //  - brkpos->margin() //  + brkpos->margin()
@@ -946,7 +947,7 @@ class BrakeControl : public JagMotor {
         else pc[OUT] = constrain(pc[OUT], pc[OPMIN], pc[OPMAX]);          // constrain motor value to operational range (in pid mode pids should manage this)
         rate_limiter();  // changerate_limiter();
         cleanzero(&pc[OUT], 0.01);  // if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;                                 // prevent stupidly small values which i was seeing
-        for (int p = PositionFB; p <= PressureFB; p++) if (feedback_enabled[p]) pids[p].set_output(pc[OUT]);  // feed the final value back into the pids
+        // for (int p = PositionFB; p <= PressureFB; p++) if (feedback_enabled[p]) pids[p].set_output(pc[OUT]);  // feed the final value back into the pids
     }
   public:
     void setmode(int _mode, bool external_request=true) {  // external_request set to false when calling from inside the class (to remember what the outside world wants the mode to be)   
