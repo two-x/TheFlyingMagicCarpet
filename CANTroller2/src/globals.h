@@ -123,7 +123,8 @@ enum telemetry_full {                                                           
     NumTelemetryFull=30,                                                                              // size of both telemetry lists combined
 };
 
-// global configuration settings
+// global configuration settings - these settings are initialized for devboard use. if actual vehicle is detected
+//                                  at boot, then are overwritten as appropriate in set_board_defaults() function
 bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
 bool allow_rolling_start = true;     // are we lenient that it's ok to go to fly mode if the car is already moving? may be a smart prerequisite, may be us putting obstacles in our way
 bool flip_the_screen = false;        // did you mount your screen upside-down?
@@ -158,13 +159,14 @@ bool overtemp_shutoff_brake = true;  // should a brake temp beyond opmax cause a
 bool overtemp_shutoff_engine = true; // should an engine temp beyond opmax cause engine shutoff and possible panic?
 bool overtemp_shutoff_wheel = true;  // should a wheel temp beyond opmax cause engine shutoff?
 bool stall_mode_timeout = true;      // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
+bool encoder_reverse = true;        // should clockwise encoder twists indicate decreases instead of an increases?
 int drive_mode = CRUISE;             // enter cruise or fly mode initially?
 int throttle_ctrl_mode = Linearized; // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 
 // global tunable variables
 float wheeldifferr = 35.0;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel before idiot light
-float float_zero = 0.000069;           // if two floats being compared are closer than this, we consider them equal
-float float_conversion_zero = 0.001;
+constexpr float float_zero = 0.000069f; // if two floats being compared are closer than this, we consider them equal
+constexpr float float_conversion_zero = 0.001;
 int skip_int = -92935762;              // random ass value for detecting unintended arguments
 int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;   // when looptime_print == 1, will linefeed after printing loops taking > this value. set to 0 linefeeds all prints
@@ -179,6 +181,11 @@ float neosat = 90.0;                   // default saturation of neopixels in per
 int i2c_frequency = 400000;            // in kHz. standard freqs are: 100k, 400k, 1M, 3.4M, 5M
 
 // non-tunable values. probably these belong with their related code, but are global to allow accessibility from everywhere
+#ifdef MonitorBaudrate
+int serial_monitor_baudrate = (int)MonitorBaudrate;
+#else
+int serial_monitor_baudrate = 921600;
+#endif
 std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 float permanan = NAN;
 bool wheeltemperr;
@@ -244,7 +251,7 @@ void write_pin(int pin, int val) {  if (pin >= 0 && pin != 255) digitalWrite (pi
 void set_pin(int pin, int mode, int val) { set_pin(pin, mode); write_pin(pin, val); }
 int read_pin(int pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
 
-inline bool iszero(float num, float margin=NAN) {  // checks if a float value is "effectively" zero (avoid hyperprecision errors)
+inline bool iszero(float num, float margin=NAN) noexcept {  // checks if a float value is "effectively" zero (avoid hyperprecision errors)
     if (std::isnan(num)) {  // calling w/ nan as argument is invalid, but we print this error to console rather than let the math crash us
         Serial.printf("err: iszero(NAN) was called\n");
         return false;
@@ -252,9 +259,9 @@ inline bool iszero(float num, float margin=NAN) {  // checks if a float value is
     if (std::isnan(margin)) margin = float_zero;
     return (std::abs(num) <= margin);
 }
-
-inline void cleanzero(float* num, float margin=NAN) { if (iszero(*num, margin)) *num = 0.0; }
-
+inline void cleanzero(float* num, float margin=NAN) noexcept {
+    if (iszero(*num, margin)) *num = 0.0f;
+}
 float convert_units(float from_units, float convert_factor, bool invert, float in_offset = 0.0, float out_offset = 0.0) {
     if (!invert) return out_offset + convert_factor * (from_units - in_offset);
     if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
@@ -274,16 +281,23 @@ float ema_filt(float _raw, float _filt, float _alpha) {
 //     *_filt = static_cast<FILT_T>(ema_filt(_raw_f, _filt_f, _alpha));
 // }
 
-// transforms value at given pointer (in percent) based on an exponential curve. value must be >0 and <=100.
-// exponent argument (must be >0) describes the formula curvature. eg: if 1.0, data is unchanged. if 3.0, applies severe curvature
-// returns true if transformation was performed, or false if inputs out of range
+// linearizer() : transforms value at given pointer (in percent) based on an exponential curve. value must be nonzero.
+// exponent argument (must be >=1) describes the formula curvature. eg: if 1.0, data is unchanged. if 3.0, applies severe curvature
+// returns true if transformation was performed, or false if inputs are invalid (w/ no changes made)
 // performs this math: out = 100*((in/100)^A)^B , which would code as out = 100.0*powf(in, exp) , which is computationally inefficient.
-//   so because of the identity x^a = e^(a*ln(x)) , our equation becomes out = 100.0f* e^( ln(in/100.0f)) * exp ) , with req for in > 0
+//   but b/c of the identity x^a = e^(a*ln(x)) , our equation becomes out = 100.0f* e^( ln(in/100.0f)) * exp ) , with req for in > 0
 bool linearizer(float* in_pc_ptr, float exponent) {
-    if (iszero(*in_pc_ptr) || *in_pc_ptr < 0.0 || iszero(exponent) || exponent < 0.0) return false;  // avoid log(0) crash by regurgitating any input values not greater than 0
-    return 100.0f * expf(logf(*in_pc_ptr / 100.0f) * exponent);
+    float inval = *in_pc_ptr;   // store input value so we can mess around with it
+    cleanzero(&inval);          // if value is obnoxiously close to zero, set it to zero (avoiding floating precision bugs)
+    if (iszero(inval) || exponent < 1.0f) return false; // avoid log(0) crash or potential sub-1.0 exponent crashes
+    float polarity = (float)(((int)(inval > 0.0f) << 1) - 1);  // remember polarity if input value (pos=1.0, neg=-1.0)
+    inval *= polarity;                                         // make the value positive, b/c math crashes on zero/subzero values
+    inval = 100.0f * expf(logf(inval / 100.0f) * exponent);    // math it up
+    *in_pc_ptr = inval * polarity;                             // set input pointer value, restoring its original polarity
     return true;
 }
+// static Timer printtimer{2000000};
+// if (printtimer.expireset()) ezread.squintf("joy: %f, exp:%f\n", *in_pc_ptr, exponent);
 
 // value-editing-related functions. these are global to allow accessibility from multiple places
 //

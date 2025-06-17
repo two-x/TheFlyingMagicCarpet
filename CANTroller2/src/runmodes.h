@@ -150,7 +150,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (hotrc.joydir(VERT) != JOY_UP) runmode = HOLD;            // must keep pulling trigger until car moves, or it drops back to hold mode
             else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
         }
-        else if (speedo.stopped() && hotrc.joydir() != JOY_UP) runmode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
+        else if (speedo.stopped() && hotrc.joydir() != JOY_UP) runmode = HOLD;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][CENT]
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = HOLD;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
         if (hotrc.sw_event(CH4)) runmode = CRUISE;                                     // enter cruise mode by pressing hrc ch4 button
     }
@@ -168,7 +168,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of the mode
         }
         else if (speedo.stopped()) {
-            if (hotrc.joydir() == JOY_DN) runmode = HOLD;  // go to Hold Mode if we have slowed to a stop after previously moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][DBBOT]
+            if (hotrc.joydir() == JOY_DN) runmode = HOLD;  // go to Hold Mode if we have slowed to a stop after previously moving  // && hotrc.pc[VERT][FILT] <= hotrc.pc[VERT][CENT]
             else if (hotrc.joydir() != JOY_UP) {  // unless attempting to increase cruise speed, when stopped drop to hold after a short timeout
                 if (!stoppedholdtimer_active) {
                     stoppedholdtimer.reset();

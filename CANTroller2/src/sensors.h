@@ -1314,10 +1314,11 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         { 1081, 1577, 2085, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         { 1202, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         { 1304, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-    // float ema_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]   // deprecated
+    float spike_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]  // added
+    float ema_us[NUM_AXES] = { 1500.0, 1500.0 };    // [HORZ/VERT]  // un-deprecated
     float absmin_us = 880;
     float absmax_us = 2091;
-    float deadband_us = 15;  // all [DBBOT] and [DBTOP] values above are derived from this by calling derive()
+    float deadband_us = 15.0f;  // all [DBBOT] and [DBTOP] values above are derived from this by calling derive()
     float margin_us = 13;    // all [MARGIN] values above are derived from this by calling derive()
     float failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     float failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
@@ -1390,9 +1391,9 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     }
     int next_unfilt_rawval (int axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
     int joydir(int axis = VERT) {
-        if (axis == VERT) return ((pc[axis][FILT] > pc[axis][DBTOP]) ? JOY_UP : ((pc[axis][FILT] < pc[axis][DBBOT]) ? JOY_DN : JOY_CENT));
-        return ((pc[axis][FILT] > pc[axis][DBTOP]) ? JOY_RT : ((pc[axis][FILT] < pc[axis][DBBOT]) ? JOY_LT : JOY_CENT));
-    }  // return (pc[axis][FILT] > pc[axis][DBTOP]) ? ((axis == VERT) ? JOY_UP : JOY_RT) : (pc[axis][FILT] < pc[axis][DBBOT]) ? ((axis == VERT) ? JOY_DN : JOY_LT) : JOY_CENT;
+        if (axis == VERT) return (pc[axis][FILT] > pc[axis][CENT]) ? JOY_UP : ((pc[axis][FILT] < pc[axis][FILT]) ? JOY_DN : JOY_CENT);
+        return ((pc[axis][FILT] > pc[axis][CENT]) ? JOY_RT : ((pc[axis][FILT] < pc[axis][CENT]) ? JOY_LT : JOY_CENT));
+    }  // return (pc[axis][FILT] > pc[axis][CENT]) ? ((axis == VERT) ? JOY_UP : JOY_RT) : (pc[axis][FILT] < pc[axis][CENT]) ? ((axis == VERT) ? JOY_DN : JOY_LT) : JOY_CENT;
     void sim_button_press(int chan) { _sw_event[chan] = true; }
   private:
     void toggles_update() {  //
@@ -1406,14 +1407,15 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
         }
     }
-    float us_to_pc(int axis, float _us, bool deadbands=false) {
-        if (deadbands) {
-            if (_us >= us[axis][DBTOP]) return map(_us, us[axis][DBTOP], us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-            if (_us <= us[axis][DBBOT]) return map(_us, us[axis][DBBOT], us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
-            return pc[axis][CENT];
-        }
+    float us_to_pc(int axis, float _us) {
         if (_us >= us[axis][CENT]) return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
         return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);    
+    }
+    float remove_deadbands_us(int axis, float _us) {
+        float retval = pc[axis][CENT];
+        if (_us > us[axis][DBTOP]) retval = map(_us, us[axis][DBTOP], us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
+        else if (_us < us[axis][DBBOT]) retval = map(_us, us[axis][DBBOT], us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
+        return retval;
     }
     void direction_update() {
         if (sim->simulating(sens::joy)) {
@@ -1422,11 +1424,11 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         }
         else for (int axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
             us[axis][RAW] = (float)(rmt[axis].readPulseWidth(true));
-            float us_spike = spike_filter(axis, us[axis][RAW]);
-            us[axis][FILT] = ema_filt(us_spike, us[axis][FILT], ema_alpha);
-            if (std::abs(us[axis][FILT] < 0.001)) us[axis][FILT] = 0.0; 
-            pc[axis][RAW] = us_to_pc(axis, us[axis][RAW], false);
-            pc[axis][FILT] = us_to_pc(axis, us[axis][FILT], true);
+            pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
+            spike_us[axis] = spike_filter(axis, us[axis][RAW]);            
+            ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha);
+            us[axis][FILT] = remove_deadbands_us(axis, ema_us[axis]);
+            pc[axis][FILT] = us_to_pc(axis, us[axis][FILT]);
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set pc value to CENTer value (for sane controls), but not us value (for debugging/error detection)
             else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(HURCTrig);  // indicate evidence of user activity
         }

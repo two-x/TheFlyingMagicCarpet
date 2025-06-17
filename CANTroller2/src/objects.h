@@ -27,6 +27,7 @@ void set_board_defaults() {          // true for dev boards, false for printed b
     ezread.squintf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
     if (running_on_devboard) return;      // override settings if running on the real car
     looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
+    encoder_reverse = true;
     touch_reticles = false;
     // console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
     wifi_client_mode = false;       // Should wifi be in client or access point mode?
@@ -164,7 +165,8 @@ class BasicModeSwitch : public ToggleSwitch {
         }
         read();
         if (console_enabled) {
-            Serial.begin(921600);  // 9600/19200/28800/57600/115200/230400/460800/921600;  // restart serial console to prevent crashes due to error printing
+            Serial.begin(serial_monitor_baudrate);  // 9600/19200/28800/57600/115200/230400/460800/921600;  // restart serial console to prevent crashes due to error printing
+            // Serial.begin(115200);  // restart serial console to prevent crashes due to error printing
             // delay(1500);  // note we will miss console messages for a bit surrounding a read, unless we add back these delays
         }
     }

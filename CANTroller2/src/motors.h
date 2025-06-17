@@ -422,7 +422,7 @@ class ThrottleControl : public ServoMotor {
     float _idle_pc = 0.0, idle_boost_pc = 0.0; // 11.3;                // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
     float idle_temp_f = NAN;  // temperature determined for purpose of calculating boost. will prefer engine temp sensor but has fallback options 
-    bool linearize_trigger = false;  // in the future, remove Linearized as a motor mode instead use this simple flag
+    bool linearize_trigger = true;  // in the future, remove Linearized as a motor mode instead use this simple flag
     // ... with:
     // ThrottleServo servo;
     // ThrottleControl(int pin, int freq) {
@@ -502,42 +502,9 @@ class ThrottleControl : public ServoMotor {
         _idle_pc = pc[OPMIN] + idle_boost_pc;
         // ezread.squintf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);
     }
-    // linear control:
-    // linearization using a lookup table, for use when not on pid.  here are some other ideas:
-    //
-    // 1. The coin-shaped butterfly valve blocks the cylindrical carb intake passage. The engine power is a function
-    // of the airflow which is proportional to the elliptical cross-section of the valve as it rotates. That math:
-    // d = throttle intake / valve diameter (about 1 inch)
-    // g = angle of valve, with 90 deg = full closed and 0 deg = full open
-    // Open Area:  A = pi/4 * d^2 - pi * d^2 * cos(g)    // in squared units of d
-    // Open Ratio: R = 1 - 4 * cos(g)                    // as a ratio to full-open (range 0-1)
-    //
-    // 2. Due to the mount and pull angles, the servo opens the throttle more degrees per degree of its own rotation 
-    // when the throttle is closed vs. when it's open. Need to do the math for this, but I imagine it'll be another 
-    // curve from 1 to 0, perhaps another cosine, to multiply by depending on current servo angle. Note it's possible
-    // to mechanically nullify this pull angle non-linearity by having a rotational linkage instead of servo horns,
-    // for example like a belt, or maybe pulleys on both servo and valve with a cord wrapped around them.
-    //
-    // 3. The engine will characteristically produce power as a nonlinear function of carb airflow. Data for this would
-    // be nice. [Research into typical curves] < [Specific performance data for this engine] < [Do empirical testing].
-    //
-    // It's a bit too complex (I'm too ignorant) to predict which of the above might serve to cancel/exacerbate the 
-    // others. None of this matters if we use the throttle PID, only if we run open loop
-
-    // moved this to a general purpose global function
-
-    // float linearizer(float inval_pc) {  // compensate for at least 3 known sources of non-linearity in the throttle
-    //     static const float linearlookup[21] =  // lookup table for linearizing actuator values in Linearize mode. using normal pc value as index, produce a replacement pc value
-    //         { 0.0, 2.0, 3.0, 5.0, 7.0, 9.0, 11.0, 14.0, 17.0, 21.0, 24.0, 28.0, 32.0, 31.0, 36.0, 43.0, 51.0, 61.0, 72.0, 85.0, 100.0 };
-    //     static const float res = 100.0 / (arraysize(linearlookup) - 1);
-    //     int lookup = (int)(inval_pc / res);
-    //     if (lookup == arraysize(linearlookup) - 1) return linearlookup[arraysize(linearlookup) - 1];
-    //     return map(inval_pc - (float)lookup * res, 0.0, res, linearlookup[lookup], linearlookup[lookup+1]);
-    // }
-
     void cruise_adjust(int joydir) {
-        if (joydir == JOY_UP) ctrlratio = (trigger_vert_pc - hotrc->pc[VERT][DBTOP]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][DBTOP]);
-        else ctrlratio = (trigger_vert_pc - hotrc->pc[VERT][DBBOT]) / (hotrc->pc[VERT][OPMIN] - hotrc->pc[VERT][DBBOT]);
+        if (joydir == JOY_UP) ctrlratio = (trigger_vert_pc - hotrc->pc[VERT][CENT]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][CENT]);
+        else ctrlratio = (hotrc->pc[VERT][CENT] - trigger_vert_pc) / (hotrc->pc[VERT][CENT] - hotrc->pc[VERT][OPMIN]);
         if (cruise_adjust_scheme == TriggerHold) {
             if (cruise_adjusting) throttle_target_pc += joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
             cruiseDeltaTimer.reset(); 
@@ -569,7 +536,7 @@ class ThrottleControl : public ServoMotor {
     void set_output() {
         // ezread.squintf("mode");
         trigger_vert_pc = hotrc->pc[VERT][FILT];  // copy current trigger value to internal value, in case we linearize it
-        if (motormode == Linearized) linearizer(&trigger_vert_pc, linearizer_exponent);  // we now linearize the trigger value not the output value
+        if (motormode == Linearized && linearize_trigger) linearizer(&trigger_vert_pc, linearizer_exponent);  // we now linearize the trigger value not the output value
         // if (linearize_trigger) linearizer(&trigger_vert_pc, linearizer_exponent);  // eventually use this instead of above (have a flag instead of a motor mode)
         
         if (motormode == Idle) throttle_target_pc = _idle_pc;
@@ -578,7 +545,7 @@ class ThrottleControl : public ServoMotor {
         else if (motormode == ParkMotor) throttle_target_pc = pc[PARKED];
         else if (motormode == OpenLoop || motormode == ActivePID || motormode == Linearized) {
             if (hotrc->joydir() != JOY_UP) throttle_target_pc = _idle_pc;  // If in deadband or being pushed down, we want idle
-            else throttle_target_pc = map(trigger_vert_pc, hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], _idle_pc, pc[GOVERN]);  // actuators still respond even w/ engine turned off
+            else throttle_target_pc = map(trigger_vert_pc, hotrc->pc[VERT][CENT], hotrc->pc[VERT][OPMAX], _idle_pc, pc[GOVERN]);  // actuators still respond even w/ engine turned off
         }
         else if (motormode == Calibrate) {
             cal_gasmode = true;
@@ -850,11 +817,11 @@ class BrakeControl : public JagMotor {
             else set_target(pc[OPMIN]);
         }
         else if (openloop_mode == AutoRelease) {  // AutoRelease: releases brake whenever trigger is released, and presses brake proportional to trigger push. must hold trigger steady to stop brakes where they are
-            if (hotrc->joydir() == JOY_DN) set_target(open_loop_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], pc[STOP], pc[OPMAX]) / 100.0);
+            if (hotrc->joydir() == JOY_DN) set_target(open_loop_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][CENT], hotrc->pc[VERT][OPMIN], pc[STOP], pc[OPMAX]) / 100.0);
             else set_target(pc[OPMIN]);
         }
         else {  // Median: holds brake when trigger is released, or if pulled to exactly halfway point. trigger pulls over or under halfway either proportionally apply or release the brake
-            if (hotrc->joydir() == JOY_DN) set_target(open_loop_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], pc[OPMIN], pc[OPMAX]) / 100.0);
+            if (hotrc->joydir() == JOY_DN) set_target(open_loop_attenuation_pc * map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][CENT], hotrc->pc[VERT][OPMIN], pc[OPMIN], pc[OPMAX]) / 100.0);
             else set_target(pc[STOP]);
         }
         return target_pc;  // this is openloop (blind trigger) control scheme
@@ -921,8 +888,8 @@ class BrakeControl : public JagMotor {
         else if (motormode == Calibrate) {
             cal_brakemode = true;  // for sunmode state machine
             int _joydir = hotrc->joydir(); 
-            if (_joydir == JOY_UP) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBTOP], hotrc->pc[VERT][OPMAX], pc[STOP], pc[OPMAX]);
-            else if (_joydir == JOY_DN) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][OPMIN], hotrc->pc[VERT][DBBOT], pc[OPMIN], pc[STOP]);
+            if (_joydir == JOY_UP) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][CENT], hotrc->pc[VERT][OPMAX], pc[STOP], pc[OPMAX]);
+            else if (_joydir == JOY_DN) pc[OUT] = map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][OPMIN], hotrc->pc[VERT][CENT], pc[OPMIN], pc[STOP]);
             else pc[OUT] = pc[STOP];
         }
         else if (motormode == Release) {
@@ -933,7 +900,7 @@ class BrakeControl : public JagMotor {
         }
         else if ((motormode == PropLoop) || (motormode == ActivePID)) {
             if (hotrc->joydir(VERT) != JOY_DN) set_target(pc[STOP]);  // let off the brake
-            else set_target(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][DBBOT], hotrc->pc[VERT][OPMIN], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
+            else set_target(map(hotrc->pc[VERT][FILT], hotrc->pc[VERT][CENT], hotrc->pc[VERT][OPMIN], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
             pc[OUT] = calc_loop_out();
         }
     }
@@ -1067,9 +1034,9 @@ class SteeringControl : public JagMotor {
         else if (motormode == OpenLoop) {
             int _joydir = hotrc->joydir(HORZ);
             if (_joydir == JOY_RT)
-                pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBTOP], hotrc->pc[HORZ][OPMAX], pc[STOP], steer_safe(pc[OPMAX]));  // if joy to the right of deadband
+                pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][CENT], hotrc->pc[HORZ][OPMAX], pc[STOP], steer_safe(pc[OPMAX]));  // if joy to the right of deadband
             else if (_joydir == JOY_LT)
-                pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][DBBOT], hotrc->pc[HORZ][OPMIN], pc[STOP], steer_safe(pc[OPMIN]));  // if joy to the left of deadband
+                pc[OUT] = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][CENT], hotrc->pc[HORZ][OPMIN], pc[STOP], steer_safe(pc[OPMIN]));  // if joy to the left of deadband
             else
                 pc[OUT] = pc[STOP];  // Stop the steering motor if inside the deadband
         }

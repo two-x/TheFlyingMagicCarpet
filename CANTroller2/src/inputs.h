@@ -83,6 +83,7 @@ class Encoder {
     volatile int _delta = 0;                     // keeps track of un-handled rotary clicks of the encoder. positive for CW clicks, Negative for CCW. 
     int _a_pin, _b_pin, _sw_pin, _state = 0, _spintime_us = 1000000;  // how many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
     bool activity = false;
+    int spin_cw_dir = DirFwd;                    // should cw spins correspond to value increases (DirFwd), or decreases (DirRev)?
     // encoder isr. note you gotta set the define EncoderPanasonicType to match your encoder type
     // if true, supports one type of cheap amazon black-pcb. 2024 one of these is mounted in the vehicle control enclosure
     //   * these guys hit a detent around each B transition, and A transitions in between detents
@@ -103,20 +104,20 @@ class Encoder {
         else val_b_isr = digitalRead(_b_pin);         // get a stable reading of B signal, unless we know B hasn't changed then skip for speed
         _spintime_isr_us = elapsed;                   // save elapsed time since last trigger, to calculate spin rate
         isr_time_last = isr_time_now;                 // reset spin rate timer for next time
-        _delta += (val_a_isr == val_b_isr) ? -1 : 1;  // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
+        _delta += (val_a_isr == val_b_isr) ? -spin_cw_dir : spin_cw_dir; // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
         _bounce_lock = Encoder::ENC_A;                // bounce lock this isr to avoid retriggering, and unlock the B isr
     }
-    #else                                                    // eg soren's dev board encoder
-    void IRAM_ATTR _a_isr() {                                // A isr has been triggered by A signal rise or fall transition. A will now bounce for a while and can't be trusted
-        if (_bounce_lock == Encoder::ENC_A) return;          // if A isr is bounce locked then bail
-        if (!val_a_isr) {                                    // if the A signal is now low (i.e. recent B isr read A pin as high)
-            isr_time_now = esp_timer_get_time();             // put some flavor in your flav
-            _spintime_isr_us = isr_time_now - isr_time_last; // save elapsed time since last trigger, to calculate spin rate
-            isr_time_last = isr_time_now;                    // reset spin rate timer for next time
-            val_b_isr = !digitalRead(_b_pin);                // Get a clean reading of the B signal
-            _delta += val_b_isr ? -1 : 1;                    // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
+    #else                                                     // eg soren's dev board encoder
+    void IRAM_ATTR _a_isr() {                                 // A isr has been triggered by A signal rise or fall transition. A will now bounce for a while and can't be trusted
+        if (_bounce_lock == Encoder::ENC_A) return;           // if A isr is bounce locked then bail
+        if (!val_a_isr) {                                     // if the A signal is now low (i.e. recent B isr read A pin as high)
+            isr_time_now = esp_timer_get_time();              // put some flavor in your flav
+            _spintime_isr_us = isr_time_now - isr_time_last;  // save elapsed time since last trigger, to calculate spin rate
+            isr_time_last = isr_time_now;                     // reset spin rate timer for next time
+            val_b_isr = !digitalRead(_b_pin);                 // Get a clean reading of the B signal
+            _delta += val_b_isr ? -spin_cw_dir : spin_cw_dir; // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
         }
-        _bounce_lock = Encoder::ENC_A;                       // bounce lock this isr to avoid retriggering, and unlock the B isr
+        _bounce_lock = Encoder::ENC_A;                        // bounce lock this isr to avoid retriggering, and unlock the B isr
     }
     #endif
     void IRAM_ATTR _b_isr() {                        // B isr has been triggered by B signal rise or fall transition. B will now bounce for a while and can't be trusted
@@ -131,15 +132,19 @@ class Encoder {
     MomentarySwitch button;
     bool enc_a, val_a_isr = LOW;  // initializing HIGH sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
     bool enc_b, val_b_isr = HIGH;
+    bool rev_spin_dir = false;
     float _accel_max = 25.0;      // maximum acceleration factor    
     Encoder(int a, int b, int sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) { button.setup(_sw_pin); }
     Encoder() = delete;           // must be instantiated with pins
-    
+    void set_reverse_encoder(bool do_reverse) {
+        rev_spin_dir = do_reverse;
+        spin_cw_dir = ((int)(!rev_spin_dir) << 1) - 1; }  // conv boolean option to integer multiplier 
     void setup() {
         ezread.squintf("Encoder setup..\n");
         set_pin(_a_pin, INPUT_PULLUP);
         set_pin(_b_pin, INPUT_PULLUP);
         button.setup();
+        set_reverse_encoder(encoder_reverse); // convert boolean configuration option to DirFwd/DirRev integer multiplier
         // set_pin(_sw_pin, INPUT_PULLUP);  // the esp32 pullup is too weak. Use resistor
         attachInterrupt(digitalPinToInterrupt(_a_pin), [this]{ _a_isr(); }, CHANGE); \
         attachInterrupt(digitalPinToInterrupt(_b_pin), [this]{ _b_isr(); }, CHANGE);
