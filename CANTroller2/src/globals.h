@@ -159,13 +159,12 @@ bool overtemp_shutoff_brake = true;  // should a brake temp beyond opmax cause a
 bool overtemp_shutoff_engine = true; // should an engine temp beyond opmax cause engine shutoff and possible panic?
 bool overtemp_shutoff_wheel = true;  // should a wheel temp beyond opmax cause engine shutoff?
 bool stall_mode_timeout = true;      // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
-bool encoder_reverse = true;        // should clockwise encoder twists indicate decreases instead of an increases?
+bool encoder_reverse = false;        // should clockwise encoder twists indicate decreases instead of an increases?
 int drive_mode = CRUISE;             // enter cruise or fly mode initially?
 int throttle_ctrl_mode = Linearized; // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 
 // global tunable variables
 float wheeldifferr = 35.0;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel before idiot light
-constexpr float float_zero = 0.000069f; // if two floats being compared are closer than this, we consider them equal
 constexpr float float_conversion_zero = 0.001;
 int skip_int = -92935762;              // random ass value for detecting unintended arguments
 int sprite_color_depth = 8;
@@ -251,6 +250,7 @@ void write_pin(int pin, int val) {  if (pin >= 0 && pin != 255) digitalWrite (pi
 void set_pin(int pin, int mode, int val) { set_pin(pin, mode); write_pin(pin, val); }
 int read_pin(int pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
 
+constexpr float float_zero = 0.000069f; // if two floats being compared are closer than this, we consider them equal
 inline bool iszero(float num, float margin=NAN) noexcept {  // checks if a float value is "effectively" zero (avoid hyperprecision errors)
     if (std::isnan(num)) {  // calling w/ nan as argument is invalid, but we print this error to console rather than let the math crash us
         Serial.printf("err: iszero(NAN) was called\n");
@@ -299,83 +299,10 @@ bool linearizer(float* in_pc_ptr, float exponent) {
 // static Timer printtimer{2000000};
 // if (printtimer.expireset()) ezread.squintf("joy: %f, exp:%f\n", *in_pc_ptr, exponent);
 
-// value-editing-related functions. these are global to allow accessibility from multiple places
-//
-// significant_place() is used by tune() functions below
-int significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
-    int place = 1;
-    if (value >= 1) { // int vallog = std::log10(value);  // Can be sped up
-        while (value >= 10) {
-            value /= 10.0;
-            place++;  // ex. 100.34 -> 3
-        }
-    }
-    else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
-        place = 0;
-        while (value < 1) {
-            value *= 10.0;
-            place--;  // ex. 0.00334 -> -3
-        }
-    }
-    return place;
-}
-int significant_place(int value) {  // Returns the length in digits of a positive integer value
-    int place = 1;
-    while (value >= 10) {
-        value /= 10;
-        place++;
-    }
-    return place;
-}
-// tune() : returns a modified float/int/bool value according to given [nonzero int] delta value. respects temporal acceleration used by touchscreen and encoder classes.  replaces adj_val() function
-// alternately, give a pointer instead of a number to change the [float|int|bool] value directly instead of returning it.  call w/ only idelta value to get a corresponding bool (<=0 values give false)
-// numeric edits are scaled proportional to the magnitude of the current value. or you can specify a minimum decimal place to scale to, presumably b/c otherwise this makes it impossible to cross zero
-// optional min/max values may be supplied for int|float edits and if so are respected.  in case these are not needed but subsequent optional args are, set to NAN (float) or skip_int (int) to ignore
-// for integer values, there is an optional "dropdown" argument, which if set true will disable any temporal acceleration (constrains edit to w/i -1,1).  useful for when selecting options from lists
-#define disp_default_float_sig_dig 3  // significant digits displayed for float values. Higher causes more screen draws. !! If changed then also must change scale in tune() function!
-float tune(float orig_val, int idelta, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-3) {  // feed in float value, get new constrianed float val, modified by idelta scaled to the magnitude of the value
-    int sig_digits = disp_default_float_sig_dig;
-    int sig_place = std::max(significant_place(orig_val), min_sig_edit_place + sig_digits);
-    float scale = 1.0;  // needs to change if disp_default_float_sig_dig is modified !!
-    while (sig_place > sig_digits) {  
-        scale *= 10.0;
-        sig_place--;
-    }
-    while (sig_place < sig_digits) {
-        scale /= 10.0;
-        sig_place++;
-    }
-    float ret = orig_val + (float)(idelta) * scale;
-    if (std::isnan(min_val)) min_val = ret;
-    if (std::isnan(max_val)) max_val = ret;
-    return constrain(ret, min_val, max_val);  // Serial.printf("o:%lf id:%d sc:%lf, min:%lf, max:%lf ret:%lf\n", orig_val, idelta, scale, min_val, max_val, ret);
-}
-int tune(int orig_val, int idelta, int min_val=skip_int, int max_val=skip_int, bool dropdown=false) {  // feed in int value, get new constrianed int val, modified by idelta scaled to the magnitude of the value
-    int sig_place = significant_place(orig_val);
-    int scale = 1;
-    if (dropdown) idelta = constrain(idelta, -1, 1);
-    else while (sig_place > 4) {
-        scale *= 10;
-        sig_place--;
-    }
-    int ret = orig_val + idelta * scale;
-    if ((max_val <= min_val) || (max_val == skip_int)) max_val = ret;
-    if (min_val == skip_int) min_val = ret;
-    return constrain(ret, min_val, max_val);
-}
-bool tune(int idelta) {  // overloaded to return bool value. idelta == 0 or -1 return false and 1+ returns true.
-    bool ret = (idelta > 0);
-    return ret;
-}
-void tune(float* orig_ptr, int idelta, float min_val=NAN, float max_val=NAN, int sig_digits=-1) {  // overloaded to directly modify float at given address
-    *orig_ptr = tune(*orig_ptr, idelta, min_val, max_val, sig_digits);
-}
-void tune(int* orig_ptr, int idelta, int min_val=-1, int max_val=-1, bool dropdown=false) {  // overloaded to directly modify int at given address
-    *orig_ptr = tune(*orig_ptr, idelta, min_val, max_val, dropdown);
-}
-void tune(bool* orig_ptr, int idelta) {  // overloaded to directly modify bool at given address
-    *orig_ptr = tune(idelta);
-}
+
+
+// TUNE!
+
 
 // Timer objects are prolific in every corner of the code and thus this is global
 class Timer {  // !!! beware, this 54-bit microsecond timer overflows after every 571 years
@@ -632,6 +559,157 @@ class EZReadConsole {
     }
 };
 static EZReadConsole ezread;
+
+// value-editing-related functions. these are global to allow accessibility from multiple places
+//
+// old_significant_place() is used display functions
+int old_significant_place(float value) {  // Returns the decimal place of the most significant digit of a positive float value, without relying on logarithm math
+    int place = 1;
+    if (value >= 1) { // int vallog = std::log10(value);  // Can be sped up
+        while (value >= 10) {
+            value /= 10.0;
+            place++;  // ex. 100.34 -> 3
+        }
+    }
+    else if (value) {  // checking (value) rather than (value != 0.0) can help avoid precision errors caused by digital representation of floating numbers
+        place = 0;
+        while (value < 1) {
+            value *= 10.0;
+            place--;  // ex. 0.00334 -> -3
+        }
+    }
+    return place;
+}
+int old_significant_place(int value) {  // Returns the length in digits of a positive integer value
+    int place = 1;
+    while (value >= 10) {
+        value /= 10;
+        place++;
+    }
+    return place;
+}
+template<typename T>  // note by default will return 1 if value is 0
+int most_significant_place(T value, int zeroplace=1) {
+    if constexpr (std::is_integral<T>::value) {   // if constexpr ( ... 
+        if (value == 0) return zeroplace;
+        value = std::abs(value);
+        int place = 1;
+        while (value >= 10) {
+            value /= 10;
+            place++;
+        }
+        return place;
+    } else {
+        if (value == 0.0f) return zeroplace;  // if (iszero(value)) return zeroplace; breaks tune crossing zero
+        value = std::fabs(value);
+        int place = 0;
+        while (value >= 10.0) {
+            value /= 10.0;
+            place++;
+        }
+        while (value < 1.0) {
+            value *= 10.0;
+            place--;
+        }
+        return place;
+    }
+}
+template<typename T>  // note by default will return 1 if value is 0
+int least_significant_place(T value, int zeroplace=1) {
+    if constexpr (std::is_integral<T>::value) {   // if constexpr ( ... 
+        if (value == 0) return zeroplace;
+        value = std::abs(value);
+        int place = 1;
+        while ((value % 10) == 0) {
+            value /= 10;
+            place++;
+        }
+        return place;
+    }
+    else {
+        if (value == 0.0f) return zeroplace;  // bad: if (iszero(value)) return zeroplace;
+        value = std::fabs(value);
+        int place = 0;
+        float test = static_cast<float>(value);
+        while (place > -10 && std::fabs(test - std::round(test)) > 1e-6f) {
+            test *= 10.0f;
+            place--;
+        }
+        return place;
+    }
+}
+
+// tune() : returns a modified float/int/bool value according to given [nonzero int] delta value. respects temporal acceleration used by touchscreen and encoder classes.  replaces adj_val() function
+// alternately, give a pointer instead of a number to change the [float|int|bool] value directly instead of returning it.  call w/ only idelta value to get a corresponding bool (<=0 values give false)
+// numeric edits are scaled proportional to the magnitude of the current value. or you can specify a minimum decimal place to scale to, presumably b/c otherwise this makes it impossible to cross zero
+// optional min/max values may be supplied for int|float edits and if so are respected.  in case these are not needed but subsequent optional args are, set to NAN (float) or skip_int (int) to ignore
+// for integer values, there is an optional "dropdown" argument, which if set true will disable any temporal acceleration (constrains edit to w/i -1,1).  useful for when selecting options from lists
+
+float tunetest = 1.234567f;  // just for debugging tune() zero crossing behavior
+
+// !! bug! code crashes when the tune() function crosses from positive to negative. i did test this somewhat when i wrote it...
+//         discovered when i noticed the touch simulated joystick values can't go negative using sim buttons
+//         band aid: adding a check for zero crossing which returns zero, to avoid crashing.
+// !! fix!
+#define disp_default_float_sig_dig 3  // significant digits displayed for float values. Higher causes more screen draws.  (?)If changed then also must change scale in tune() function!
+float tune(float orig_val, int idelta, float min_val=NAN, float max_val=NAN, int min_sig_edit_place=-5000) {  // feed in float value, get new constrianed float val, modified by idelta scaled to the magnitude of the value
+    int sig_digits = disp_default_float_sig_dig;
+    if (min_sig_edit_place = -5000) min_sig_edit_place = -1 * disp_default_float_sig_dig;
+    // ezread.printf("tune");
+    int sig_place = std::max(least_significant_place(orig_val), min_sig_edit_place + sig_digits);
+    float scale = 1.0;  // needs to change if disp_default_float_sig_dig is modified !!
+    // ezread.printf(" v:%.4f i:%d sp:%d?%d:%d", orig_val, idelta, least_significant_place(orig_val), min_sig_edit_place+sig_digits, sig_place);
+    while (sig_place > sig_digits) {
+        scale *= 10.0;
+        sig_place--;
+    }
+    while (sig_place < sig_digits) {
+        scale /= 10.0;
+        sig_place++;
+    }
+    // ezread.printf("->%d\n", sig_place);
+    float ret = orig_val + (float)(idelta) * scale;
+    // ezread.printf("  sc:%.4f ret:%.4f", scale, ret);
+
+    // attempt workaround to avoid crash crossing to negative, this should force the crossing to at least stop on 0
+    if (((orig_val > 0.0f) && (ret <= 0.0f)) || ((orig_val < 0.0f) && (ret >= 0.0f))) ret = 0.0f;
+    // ezread.printf(" ->%.4f", ret);
+    
+    if (std::isnan(min_val)) min_val = ret;
+    if (std::isnan(max_val)) max_val = ret;
+    ret = constrain(ret, min_val, max_val);  // Serial.printf("o:%lf id:%d sc:%lf, min:%lf, max:%lf ret:%lf\n", orig_val, idelta, scale, min_val, max_val, ret);
+    // ezread.printf(" ->%.4f\n", ret);
+    return ret;
+}
+int tune(int orig_val, int idelta, int min_val=skip_int, int max_val=skip_int, bool dropdown=false) {  // feed in int value, get new constrianed int val, modified by idelta scaled to the magnitude of the value
+    int sig_place = least_significant_place(orig_val);
+    int scale = 1;
+    if (dropdown) idelta = constrain(idelta, -1, 1);
+    else while (sig_place > 4) {
+        scale *= 10;
+        sig_place--;
+    }
+    int ret = orig_val + idelta * scale;
+    if ((max_val <= min_val) || (max_val == skip_int)) max_val = ret;
+    if (min_val == skip_int) min_val = ret;
+    return constrain(ret, min_val, max_val);
+}
+bool tune(int idelta) {  // overloaded to return bool value. idelta == 0 or -1 return false and 1+ returns true.
+    bool ret = (idelta > 0);
+    return ret;
+}
+void tune(float* orig_ptr, int idelta, float min_val=NAN, float max_val=NAN, int sig_digits=-1) {  // overloaded to directly modify float at given address
+    *orig_ptr = tune(*orig_ptr, idelta, min_val, max_val, sig_digits);
+}
+void tune(int* orig_ptr, int idelta, int min_val=-1, int max_val=-1, bool dropdown=false) {  // overloaded to directly modify int at given address
+    *orig_ptr = tune(*orig_ptr, idelta, min_val, max_val, dropdown);
+}
+void tune(bool* orig_ptr, int idelta) {  // overloaded to directly modify bool at given address
+    *orig_ptr = tune(idelta);
+}
+
+
+
 
 #include <random>
 std::random_device rd;

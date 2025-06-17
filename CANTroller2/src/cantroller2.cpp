@@ -39,7 +39,7 @@ void setup() {
     diag.setup();              // initialize diagnostic engine
     ignition.setup();          // must be after diag setup
     run.setup();               // initialize runmode state machine. must be after diag setup
-    stop_console();
+    finalize_boot();           // will stop the console if appropriate
     looptimer.setup();
 }
 void loop() {                  // arduino-style loop() is like main() but with a builtin infinite while(1) loop

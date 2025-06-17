@@ -192,14 +192,14 @@ void initialize_pins_and_console() {                        // set up those stra
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
     basicsw.read();
-    Serial.begin(921600); // 9600/19200/28800/57600/115200/230400/460800/921600 // open console serial port (will reassign tx pin as output)
+    Serial.begin(serial_monitor_baudrate); // 9600/19200/28800/57600/115200/230400/460800/921600 // open console serial port (will reassign tx pin as output)
     delay(1200);          // 1200 use for 115200 baud // this is needed to allow the uart to initialize and the screen board enough time after a cold boot
     ezread.squintf(LPUR, "\n** Setup begin **\n");
     ezread.squintf("  Serial console started. ");
     test_console_throughput();
     ezread.squintf("Syspower is %s, basicsw read: %s\n", syspower ? "on" : "off", in_basicmode ? "high" : "low");    
 }
-void stop_console() {
+void finalize_boot() {
     ezread.squintf("%s", console_enabled ? "" : "Stopping console during runtime\n");
     ezread.squintf(LPUR, "** Setup done **\n");
     std::fflush(stdout);  // ensure immediate output

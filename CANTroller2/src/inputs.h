@@ -133,7 +133,7 @@ class Encoder {
     bool enc_a, val_a_isr = LOW;  // initializing HIGH sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
     bool enc_b, val_b_isr = HIGH;
     bool rev_spin_dir = false;
-    float _accel_max = 25.0;      // maximum acceleration factor    
+    float _accel_max = 50.0;      // maximum acceleration factor      increased from 25, pls test
     Encoder(int a, int b, int sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) { button.setup(_sw_pin); }
     Encoder() = delete;           // must be instantiated with pins
     void set_reverse_encoder(bool do_reverse) {
@@ -481,13 +481,17 @@ class Touchscreen {
         else if (tbox == 0x40 && longpress()) hotrc.sim_button_press(CH4);  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
         else if (tbox == 0x41) tach.sim_si(tune(tach.val(), id, tach.opmin(), tach.opmax()));
         else if (tbox == 0x42) tach.sim_si(tune(tach.val(), -id, tach.opmin(), tach.opmax()));
-        else if (tbox == 0x43 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        else if (tbox == 0x44 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], -id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+
+        // else if (tbox == 0x43 && sim.simulating(sens::joy)) hotrc.pc[VERT][FILT] += 0.1;
+        // else if (tbox == 0x44 && sim.simulating(sens::joy)) hotrc.pc[VERT][FILT] -= 0.1;
+        else if (tbox == 0x43 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX], -2);
+        else if (tbox == 0x44 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], -id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX], -2);
+
         else if (tbox == 0x50 && longpress()) ignition.request(REQ_TOG);
         else if (tbox == 0x51) speedo.sim_si(tune(speedo.val(), id, speedo.opmin(), speedo.opmax()));
         else if (tbox == 0x52) speedo.sim_si(tune(speedo.val(), -id, speedo.opmin(), speedo.opmax()));
-        else if (tbox == 0x53 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-        else if (tbox == 0x54 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], -id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+        else if (tbox == 0x53 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX], -2);
+        else if (tbox == 0x54 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], -id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX], -2);
     }
     void printTouchInfo() {
         static bool last1tap, last2tap, lastlongtap;

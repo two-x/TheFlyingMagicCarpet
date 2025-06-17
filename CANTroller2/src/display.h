@@ -6,7 +6,6 @@
 #define disp_line_height_pix 10  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
 #define disp_bargraph_width 38
 #define disp_maxlength 5  // How many characters is max data value
-#define disp_default_float_sig_dig 3  // Significant digits displayed for float values. Higher causes more screen draws
 #define disp_datapage_names_x 12
 #define disp_datapage_values_x 59
 #define disp_datapage_units_x 96  // 103        
@@ -35,7 +34,7 @@ std::string pcbaglowcard[GlowNumModes] = { "Off", "Simple", "Hbeat", "Xfade", "S
 static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 5, 11, 9, 11, 13, 3, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 5, 11, 9, 11, 12, 3, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
@@ -47,7 +46,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, __________, __________, __________, __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
-    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, __________, "WhTmpDif", "No Temps", },  // PG_TEMP
+    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PG_TEMP
     { __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", "EZScroll", },  // PG_SIM
     { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", "EnRevers", "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", "PanelApp", },  // PG_UI
 };
@@ -449,7 +448,7 @@ class Display {
     }    
     std::string num2string(int value, int maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
         value = abs(value);  // This function disregards sign
-        int place = significant_place(value);  // check how slow is log() function? Compare performance vs. multiple divides ( see num2string() )
+        int place = most_significant_place(value);  // check how slow is log() function? Compare performance vs. multiple divides ( see num2string() )
         if (place <= maxlength) return std::to_string(value);  // If value is short enough, return it
         char buffer[maxlength+1];  // Allocate buffer with the maximum required size
         std::snprintf(buffer, sizeof(buffer), "%.*e", maxlength - 4 - (int)(place >= 10), (float)value);
@@ -459,7 +458,7 @@ class Display {
     std::string num2string(float value, int maxlength, int sig_places=skip_int, bool chop_zeroes=true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
         if (sig_places == skip_int) sig_places = disp_default_float_sig_dig;
         value = abs(value);  // This function disregards sign
-        int place = significant_place(value);  // Learn decimal place of the most significant digit in value
+        int place = most_significant_place(value);  // Learn decimal place of the most significant digit in value
         if (place >= sig_places && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
             std::string result(std::to_string((int)value));
             return result;
@@ -826,7 +825,8 @@ class Display {
             draw_temp(loc::WHEEL_RL, 13);
             draw_temp(loc::WHEEL_RR, 14);
             draw_temp(loc::BRAKE, 15);
-            for (int line=16; line<=21; line++) draw_eraseval(line);
+            for (int line=16; line<=20; line++) draw_eraseval(line);
+            drawval(21, tunetest, -100.0, 100.0, NAN, 3);
             drawval(22, wheeldifferr);
             draw_truth(23, dont_take_temperatures, 2);
         }
@@ -1126,7 +1126,8 @@ class Tuner {
             else if (sel == 14) gas.cruisepid.set_kd(tune(gas.cruisepid.kd(), id, 0.0f, NAN));
         }
         else if (datapage == PG_TEMP) {
-            if (sel == 13) tune(&wheeldifferr, id);
+            if (sel == 12) tune(&tunetest, id, -100.0, 100.0);
+            else if (sel == 13) tune(&wheeldifferr, id);
             else if (sel == 14) dont_take_temperatures = tune(id);
         }
         else if (datapage == PG_SIM) {
