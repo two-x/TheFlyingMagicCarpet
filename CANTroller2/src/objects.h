@@ -271,7 +271,7 @@ class Starter {
     void turnon() {                                            // function to start the motor
         ezread.printf("starter turnon\n");                     // maybe use ezread.squintf instead? (prints to both screen and console)
         lastgasmode = gas.motormode;                           // remember incumbent gas setting
-        gas.setmode(Starting);                                 // give it some gas
+        if (push_gas_when_starting && check_brake_before_starting) gas.setmode(Starting);  // give it some gas, unless there's risk of lurching forward
         starterTimer.set((int64_t)(run_timeout * 1000000.0));  // if left on the starter will turn off automatically after X seconds
         motor = HIGH;                                          // ensure starter variable always reflects the starter status regardless who is driving it
         write_pin(pin, motor);                                 // and start the motor
@@ -289,6 +289,7 @@ class Starter {
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         if (runmode == LOWPOWER) return;                             // starter isn't supported during powerdown
         if (now_req == REQ_TOG) now_req = motor ? REQ_OFF : REQ_ON;  // translate a toggle request to a drive request opposite to the current drive state
+        req_active = (now_req != REQ_NA);                   // for idiot light display
         if (two_click_starter) {                            // if 2 clicks are required to start
             if (now_req == REQ_ON && last_req != REQ_ON) {  // if we got a new on request
                 if (!one_click_done) {                      // if this is the 1st click
@@ -300,7 +301,6 @@ class Starter {
             if (twoclicktimer.expired()) one_click_done = false;  // cancel 2click sequence if too much time elapsed since last click
             last_req = now_req;                                   // allows us to detect when request first goes to on
         }
-        req_active = (now_req != REQ_NA);                         // for idiot light display
         if (motor && ((now_req == REQ_OFF) || starterTimer.expired())) turnoff();  // stop the motor if we're being asked to, or if it was left on too long
         if (motor || now_req != REQ_ON) {  // if starter is already being driven, or we aren't being tasked to drive it
             now_req = REQ_NA;              // cancel any requests

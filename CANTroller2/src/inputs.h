@@ -219,7 +219,7 @@ class Encoder {
 // * panels supported: i2c capacitive or spi resistive touchscreen, autodetected based on i2c address of captouch panel
 // * calibration: values of corners[][][] array must be edited for optimized location accuracy (for cap and res types)
 // * filtering: rejects short spurious false touches or losses of touch (needed for use through plastic box lid)
-// * methods supported:
+// * external methods supported:
 //    touched()     : returns true if a touch is in progress, otherwise false
 //    touch_pt(xy)  : returns coordinate of the point currently or most recently touched, along the given axis.  value is held until the next touch event begins
 //    landed_pt(xy) : returns coordinate of the initial touch point of the current or most recent touch event, along the given axis.  value is held until the next touch event begins
@@ -228,8 +228,8 @@ class Encoder {
 //    swipe()       : returns the dominant orthogonal direction of any valid swipe event detected, or otherwise DirNone.  a valid swipe is a touch that's dragged far enough then released soon enough.  querying or staleness timeout resets to DirNone 
 //    held()        : returns true if an in-progress touch persists until valid taps and swipes are no longer possible, without experiencing any.  resets to false upon release
 //    longpress()   : returns true if an in-progress touch persists long enough without significant drag.  resets to false upon release or query, and won't retrigger during the same touch event
-//    drag_axis(xy) : returns orthogonal distance dragged in pixels along the given axis, of the current or most recent touch event.  doesn't reset until the next touch event begins
-//    drag_dist()   : returns diagonal distance dragged in pixels, of the current or most recent touch event.  doesn't reset until the next touch event begins
+//    drag()        : returns diagonal distance dragged in pixels, of the current or most recent touch event.  doesn't reset until the next touch event begins
+//    drag(xy)      : returns orthogonal distance dragged in pixels along the given axis, of the current or most recent touch event.  doesn't reset until the next touch event begins
 //    get_delta()   : (for editing)  returns a value which goes 0 -> 1 upon touch, and continues to increment at an exponentially increasing rate (up to a max) as long as the touch persists. value becomes 0 on release or after query (query preserves acceleration)
 //    onrepeat()    : (for editing)  returns true periodically on fixed intervals while a touch event persists.  resets to false on release, or when queried (until the next interval)
 
@@ -278,8 +278,13 @@ class Touchscreen {
     }
     bool ontouch() { return nowtouch && !lasttouch; }  // returns true only if touch is new for this update cycle. only reliable if called internally, otherwise use tap()
     bool onrelease() { return !nowtouch && lasttouch; }  // returns true only if release is new for this update cycle. only reliable if called internally, otherwise use tap()
+    int drag_axis(int axis) {  // for internal use only. returns pixels dragged along a given axis since start of current drag event. result is vertically flipped so up is positive
+        int ret = tft_touch[axis] - landed[axis];
+        if (axis == VERT) ret *= -1;  //  if (axis == (flip_the_screen ? HORZ : VERT)) ret *= -1;
+        return ret;
+    }
     void update_swipe() {  // determines if there's a valid swipe, saved to variable
-        int _dragged[2] = { drag_axis(HORZ), drag_axis(VERT) };
+        int _dragged[2] = { drag(HORZ), drag(VERT) };
         int _axis = (std::abs(_dragged[HORZ]) > std::abs(_dragged[VERT])) ? HORZ : VERT;  // was swipe mostly horizontal or mostly vertical
         if (!swipe_possible || (std::abs(_dragged[_axis] < swipe_min))) ts_swipedir = DirNone;  // catch if swipe doesn't qualify
         else if (_axis == HORZ) ts_swipedir = (_dragged[HORZ] > 0) ? DirRight : DirLeft;
@@ -324,14 +329,11 @@ class Touchscreen {
         if (reset) idelta = 0;
         return ret;
     }
-    int drag_axis(int axis) {  // returns pixels dragged along a given axis since start of current drag event. result is vertically flipped so up is positive
+    // w/o argument, returns diagonal distance of an in-progress drag since its start.
+    // w/ a valid axis as argument, returns orthoganal distance dragged along the given axis. result is vertically flipped so up is positive
+    int drag(int axis=-1) {
         if (!nowtouch) return 0;  // return 0 if not being touched. indistinguishable from fixed press
-        int ret = tft_touch[axis] - landed[axis];
-        if (axis == VERT) ret *= -1;  //  if (axis == (flip_the_screen ? HORZ : VERT)) ret *= -1;
-        return ret;
-    }
-    int drag_dist() {  // returns diagonal distance dragged (in pixels) since start of current touch event
-        if (!nowtouch) return 0;  // return 0 if not being touched. indistinguishable from fixed press
+        if (axis == HORZ || axis == VERT) return drag_axis(axis);  // if a valid axis given
         float _dragged[2] = { (float)drag_axis(HORZ), (float)drag_axis(VERT) };
         return (int)(std::sqrt(_dragged[HORZ] * _dragged[HORZ] + _dragged[VERT] * _dragged[VERT]));  // pythagorean theorem
     }
@@ -394,7 +396,7 @@ class Touchscreen {
         }
         else {            // if this touch is continuing from previous loop(s)
             if (longpress_possible && (pressTimer.elapsed() >= longpress_timeout)) {
-                if (drag_dist() <= drag_dist_min) ts_longpressed = true;
+                if (drag() <= drag_dist_min) ts_longpressed = true;
                 longpress_possible = false;  // prevent a later longpress event in case drag returns to the original spot
             }
             if (pressTimer.elapsed() > swipe_timeout) swipe_possible = false;  // prevent meandering drags from being considered swipes
@@ -489,14 +491,14 @@ class Touchscreen {
         if (!last2tap && ts_doubletapped) ezread.squintf("ts: double-tap\n");
         if (!lastlongtap && ts_longpressed) ezread.squintf("ts: longpress\n");
         if (lastswipe != ts_swipedir) ezread.squintf("ts: swipe=%d\n", ts_swipedir);
-        if (lastdragx != drag_axis(HORZ) || lastdragy != drag_axis(VERT)) ezread.squintf("ts: drag %+3d,%+3d d:%+3d\n", drag_axis(HORZ), drag_axis(VERT), drag_dist());
+        if (lastdragx != drag(HORZ) || lastdragy != drag(VERT)) ezread.squintf("ts: drag %+3d,%+3d d:%+3d\n", drag(HORZ), drag(VERT), drag());
         last1tap = ts_tapped;
         last2tap = ts_doubletapped;
         lastlongtap = ts_longpressed;
         lastswipe = ts_swipedir;
         lastx = tft_touch[HORZ];
         lasty = tft_touch[VERT];
-        lastdragx = drag_axis(HORZ);
-        lastdragy = drag_axis(VERT);
+        lastdragx = drag(HORZ);
+        lastdragy = drag(VERT);
     }
 };
