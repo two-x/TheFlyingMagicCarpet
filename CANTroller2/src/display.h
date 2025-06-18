@@ -34,7 +34,7 @@ std::string pcbaglowcard[GlowNumModes] = { "Off", "Simple", "Hbeat", "Xfade", "S
 static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 5, 11, 9, 11, 12, 3, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 5, 11, 9, 11, 12, 4, 9 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
@@ -47,8 +47,8 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, __________, __________, __________, __________, maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PG_TEMP
-    { __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", "EZScroll", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", "EnRevers", "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", "PanelApp", },  // PG_UI
+    { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
+    { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", "EZScroll", "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", "PanelApp", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "psi",  "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "min",  ______, ______, "%",    "%",    },  // PG_RUN
@@ -62,8 +62,8 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { scroll, "%",    "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, b1nary, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
     { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, degreF, b1nary, },  // PG_TEMP
-    { ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, "lin",  },  // PG_SIM
-    { "us",   "us",   "fps",  scroll, "pix",  "pix",  "x",    "Hz",   b1nary, scroll, b1nary, "eyes", "%",    "%",    scroll, },  // PG_UI
+    { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
+    { "us",   "us",   "fps",  scroll, "pix",  "pix",  "x",    "Hz",   "lin",  scroll, b1nary, "eyes", "%",    "%",    scroll, },  // PG_UI
 };
 static std::string unitmapnames[20] = { "us", scroll, b1nary, "%", "ohm", "eyes", degree, degreF, "mph", "rpm", "psi", "atm", "g/s", "adc", "pix", "min", "%/s", degsec, "fps", "lin" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[20][13] = {  // now 13x7-pixel bitmaps for unit strings. required when string is over 2 characters
@@ -411,14 +411,14 @@ class Display {
         }
         disp_data_dirty[lineno] = false;
     }
-    void drawval(int lineno, int value, int lowlim=skip_int, int hilim=skip_int, int target=skip_int) {
+    void drawval(int lineno, int value, int lowlim=unlikely_int, int hilim=unlikely_int, int target=unlikely_int) {
         std::string val_string = num2string(value, (int)disp_maxlength);
         float lo, hi, targ;
-        if (lowlim == skip_int) lo = NAN;
+        if (lowlim == unlikely_int) lo = NAN;
         else lo = (float)lowlim;
-        if (hilim == skip_int) hi = NAN;
+        if (hilim == unlikely_int) hi = NAN;
         else hi = (float)hilim;
-        if (target == skip_int) targ = NAN;
+        if (target == unlikely_int) targ = NAN;
         else targ = (float)target;        
         drawval_core(lineno, val_string, (float)value, lo, hi, targ);
     }
@@ -455,8 +455,8 @@ class Display {
         std::string result(buffer);  // copy buffer to result
         return result.substr(0, result.find('e') + 1) + std::to_string(place);
     }
-    std::string num2string(float value, int maxlength, int sig_places=skip_int, bool chop_zeroes=true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
-        if (sig_places == skip_int) sig_places = disp_default_float_sig_dig;
+    std::string num2string(float value, int maxlength, int sig_places=unlikely_int, bool chop_zeroes=true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
+        if (sig_places == unlikely_int) sig_places = disp_default_float_sig_dig;
         value = abs(value);  // This function disregards sign
         int place = most_significant_place(value);  // Learn decimal place of the most significant digit in value
         if (place >= sig_places && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
@@ -633,7 +633,7 @@ class Display {
         draw_menu_toggle(ignition.signal, 5, disp_menutoggles_dirty);
         disp_menutoggles_dirty = false;
     }
-    // value rendering options:  for [optional] arguments use skip_int (for int) or NAN (for float) to get the default, same as not including. Default sig_places for floats is 3
+    // value rendering options:  for [optional] arguments use unlikely_int (for int) or NAN (for float) to get the default, same as not including. Default sig_places for floats is 3
     // * drawval (int_line, float_value)  // for floats
     // * drawval (int_line, float_value, [int_sig_places])  // for floats. sig_places is how many digits after decimal (if they fit) 
     // * drawval (int_line, float_value, [float_min], [float_max], [float_targ], [int_sig_places])  // for floats. if min & max are given it draws a bargraph of that range is drawn. If targ value is given then bargraph will include a target pointer. sig_places is how many digits after decimal (if they fit) 
@@ -831,19 +831,18 @@ class Display {
             draw_truth(23, dont_take_temperatures, 2);
         }
         else if (datapage == PG_SIM) {
-            for (int line=9; line<=11; line++) draw_eraseval(line);
-            draw_truth(12, sim->can_sim(sens::joy), 3);
-            draw_truth(13, sim->can_sim(sens::pressure), 3);
-            draw_truth(14, sim->can_sim(sens::brkpos), 3);
-            draw_truth(15, sim->can_sim(sens::speedo), 3);
-            draw_truth(16, sim->can_sim(sens::tach), 3);
-            draw_truth(17, sim->can_sim(sens::airvelo), 3);
-            draw_truth(18, sim->can_sim(sens::mapsens), 3);
-            draw_truth(19, sim->can_sim(sens::basicsw), 3);                    
-            draw_ascii(20, sensorcard[sim->potmap()]);
-            draw_truth(21, cal_brakemode, 3);
-            draw_truth(22, cal_gasmode, 3);
-            drawval(23, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
+            for (int line=9; line<=12; line++) draw_eraseval(line);
+            draw_truth(13, sim->can_sim(sens::joy), 3);
+            draw_truth(14, sim->can_sim(sens::pressure), 3);
+            draw_truth(15, sim->can_sim(sens::brkpos), 3);
+            draw_truth(16, sim->can_sim(sens::speedo), 3);
+            draw_truth(17, sim->can_sim(sens::tach), 3);
+            draw_truth(18, sim->can_sim(sens::airvelo), 3);
+            draw_truth(19, sim->can_sim(sens::mapsens), 3);
+            draw_truth(20, sim->can_sim(sens::basicsw), 3);                    
+            draw_ascii(21, sensorcard[sim->potmap()]);
+            draw_truth(22, cal_brakemode, 3);
+            draw_truth(23, cal_gasmode, 3);
         }
         else if (datapage == PG_UI) {
             drawval(9, loop_avg_us);
@@ -854,12 +853,12 @@ class Display {
             drawval(14, touch->touch_pt(1), 0, disp_height_pix);
             drawval(15, encoder.accel_factor(), 1, encoder.accel_max());
             drawval(16, encoder.spinrate(), 0.0, encoder.spinrate_max());
-            draw_truth(17, encoder.rev_spin_dir, 1);
+            drawval(17, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
             draw_ascii(18, pcbaglowcard[neo->pcbaglow]);
             draw_truth(19, flashdemo, 0);
             draw_truth(20, neo->sleepmode, 0);
-            drawval(21, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, skip_int, 3);
-            drawval(22, neosat, 1.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, skip_int, 3);
+            drawval(21, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, unlikely_int, 3);
+            drawval(22, neosat, 1.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, unlikely_int, 3);
             draw_ascii(23, uicontextcard[ui_app]);
         }
         disp_values_dirty = false;
@@ -1021,41 +1020,56 @@ class Tuner {
             tunctrl_last = tunctrl;
         }
         if (!screen->disp_datapage_dirty) datapage_last = datapage;
-        int encoder_sw_action = encoder.button.press_event();  // true = autoreset the event if there is one
-        if (encoder_sw_action != swNONE) {  // First deal with any unhandled switch press events
-            if (encoder_sw_action == swSHORT)  {  // if short press
-                if (tunctrl == EDIT) tunctrl = SELECT;  // If we were editing a value drop back to select mode
-                else if (tunctrl == SELECT) tunctrl = EDIT;  // If we were selecting a variable start editing its value
+        int encoder_sw_action = encoder.button.press_event(); // gather any encoder button press and reset it for next time (automatically if true).
+        if (encoder_sw_action != swNONE) {                    // First deal with any unhandled switch press events
+            if (encoder_sw_action == swSHORT)  {              // if short press
+                if (tunctrl == EDIT) tunctrl = SELECT;        // if we were editing a value, drop drop to data selection
+                else if (tunctrl == SELECT) tunctrl = EDIT;   // if we were selecting data, begin editing its value
                 else if (button_test_heartbeat_color) heartbeat_override_color = rando_color();  // temporary!! to test heartbeat color override feature
             }
-            else tunctrl = (tunctrl == OFF) ? SELECT : OFF;  // Long press starts/stops tuning
+            else tunctrl = (tunctrl == OFF) ? SELECT : OFF;    // encoder switch longpress toggles tuning mode
         }
-        id_encoder = encoder.rotation(true);   // accelerated
-        rdelta_encoder = constrain(id_encoder, -1, 1);
-        if (tunctrl == SELECT) sel += rdelta_encoder;  // If overflow constrain will fix in general handler below
-        else if (tunctrl == OFF) datapage += rdelta_encoder;  // If overflow tconstrain will fix in general below
-        if (touch->increment_sel) ++sel %= disp_tuning_lines;
-        if (touch->increment_datapage) ++datapage %= NUM_DATAPAGES;
-        touch->increment_sel = touch->increment_datapage = false;
-        id = id_encoder + touch->get_delta();  // Allow edits using the encoder or touchscreen
-        if (pot_tuner_acceleration && !sim.potmapping()) id = constrain(id * (int)(map(pot.val(), 0.0, 100.0, 1.0, 10.0)), 1, (int)encoder._accel_max); // {  // use pot to control level of acceleration
-        if (tunctrl != tunctrl_last || datapage != datapage_last || sel != sel_last || id) tuningAbandonmentTimer.reset();  // If just switched tuning mode or any tuning activity, reset the timer
-        else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;  // If the timer expired, go to OFF and redraw the tuning corner
-        datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1);  // select next or prev only 1 at a time, avoiding over/underflows, and without giving any int negative value
-        if (datapage != datapage_last) {
-            if (tunctrl == EDIT) tunctrl = SELECT;  // If page is flipped during edit, drop back to select mode
-            screen->disp_datapage_dirty = true;  // Redraw the fixed text in the tuning corner of the screen with data from the new dataset page
+        id_encoder = encoder.rotation(true);                        // get encoder travel times acceleration factor
+        rdelta_encoder = constrain(id_encoder, -1, 1);              // save unaccelerated encoder travel (-1, 0, or 1)
+        if (tunctrl == SELECT) sel += rdelta_encoder;               // when selecting data, scroll thru data values using unaccelerated encoder value. will not wrap around, overflow handled below
+        else if (tunctrl == OFF) datapage += rdelta_encoder;        // when not tuning, flip thru datapages using unaccel encoder value. will not wrap around. constrain done below
+        if (touch->increment_sel) ++sel %= disp_tuning_lines;       // on touchscreen select, select next editable data line, wrapping around
+        if (touch->increment_datapage) ++datapage %= NUM_DATAPAGES; // touchscreen datapage change, go to next page, wrapping around
+        touch->increment_sel = touch->increment_datapage = false;   // reset the touch requests
+        id = id_encoder + touch->get_delta();                       // combine accelerated value changes from both the encoder and the touchscreen
+        // // trying to debug edit acceleration
+        // static int testprintcount = 0, lastid = id;
+        // if (id != lastid) {
+        //     edit_id_persist = id;
+        //     ezread.printf("%d ", id);
+        //     if (++testprintcount > 6) {
+        //         ezread.printf("\n");
+        //         testprintcount = 0;
+        //     }
+        // }
+        // lastid = id;
+        if (pot_tuner_acceleration && !sim.potmapping()) id = constrain(id * (int)(map(pot.val(), 0.0, 100.0, 1.0, 10.0)), 1, (int)encoder._accel_max);  // if pot is allowed to control data edit acceleration (experimental)
+        if (tunctrl != tunctrl_last || datapage != datapage_last || sel != sel_last || id) tuningAbandonmentTimer.reset();  // any tuning activity by the user postpones tuner timeout
+        else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;      // turn off the tuner after extended user inactivity
+        datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1); // keep datapage value in range
+        if (datapage != datapage_last) {                               // if datapage changed
+            if (tunctrl == EDIT) tunctrl = SELECT;                     // stop editing a value if the datapage got changed
+            screen->disp_datapage_dirty = true;                        // flag the datapage data for a redraw
         }
-        if (tunctrl == SELECT) {
-            sel = constrain(sel, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // Skip unchangeable values for all PID modes
-            if (sel != sel_last) screen->disp_selection_dirty = true;
+        if (tunctrl == SELECT) {  // select means we're attempting to scroll thru the datapage data values for a value to edit
+            sel = constrain(sel, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // constrain selection to editable values, which must be grouped at the end of the datapage
+            if (sel != sel_last) screen->disp_selection_dirty = true;  // if selection changed, highlight must move to new data, so flag a redraw of the variable names
         }
-        if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selection_dirty = true;
-    }
+        if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selection_dirty = true; // on datapage redraw or change in tuning mode, flag a redraw of the variable names (eg to remove highlight) 
+    }  // at this point if an edit is in progress, our id variable has the amount to change for this loop.
     void edit_values() {  // Change tunable values when editing
-        if (tunctrl != EDIT || !id) return;
-        if (datapage == PG_RUN) {
-            if (sel == 13) gas.set_governor_pc(tune(gas.governor, id, 0.0f, 100.0f));
+        if (tunctrl != EDIT || !id) return;  // if not editing data values, or if amount of edit is 0, just ditch
+        if (datapage == PG_RUN) {  // each data entry has its sanctioned way of being changed. so just a bunch of if statements here. use tune() to achieve auto-precision fanciness
+            
+            // with recent changes to tune() I had to move the setter function for governor value into the
+            // gas update function, or edit acceleration wouldn't work
+            // if (sel == 13) gas.set_governor_pc(tune(gas.governor, id, 0.0f, 100.0f));
+            if (sel == 13) tune(gas.governor, id, 0.0f, 100.0f);
             else if (sel == 14) tune(&steer.steer_safe_pc, id, 0.0f, 100.0f);
         }
         else if (datapage == PG_JOY) {
@@ -1132,26 +1146,30 @@ class Tuner {
         }
         else if (datapage == PG_SIM) {
             screen->disp_simbuttons_dirty = true;  // any of the following will necessitate a redraw of the simbuttons
-            if (sel == 3) sim.set_can_sim(sens::joy, tune(id));
-            else if (sel == 4) sim.set_can_sim(sens::pressure, tune(id));
-            else if (sel == 5) sim.set_can_sim(sens::brkpos, tune(id));
-            else if (sel == 6) sim.set_can_sim(sens::speedo, tune(id));
-            else if (sel == 7) sim.set_can_sim(sens::tach, tune(id));
-            else if (sel == 8) sim.set_can_sim(sens::airvelo, tune(id));
-            else if (sel == 9) sim.set_can_sim(sens::mapsens, tune(id));
-            else if (sel == 10) sim.set_can_sim(sens::basicsw, tune(id));
-            else if (sel == 11) sim.set_potmap((sens)(tune((int)sim.potmap(), id, 0, (int)(sens::starter) - 1, true)));
-            else if (sel == 12) cal_brakemode_request = tune(id);
-            else if (sel == 13) cal_gasmode_request = tune(id);
-            else if (sel == 14) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize));
+            if (sel == 4) sim.set_can_sim(sens::joy, tune(id));
+            else if (sel == 5) sim.set_can_sim(sens::pressure, tune(id));
+            else if (sel == 6) sim.set_can_sim(sens::brkpos, tune(id));
+            else if (sel == 7) sim.set_can_sim(sens::speedo, tune(id));
+            else if (sel == 8) sim.set_can_sim(sens::tach, tune(id));
+            else if (sel == 9) sim.set_can_sim(sens::airvelo, tune(id));
+            else if (sel == 10) sim.set_can_sim(sens::mapsens, tune(id));
+            else if (sel == 11) sim.set_can_sim(sens::basicsw, tune(id));
+            else if (sel == 12) sim.set_potmap((sens)(tune((int)sim.potmap(), id, 0, (int)(sens::starter) - 1, true)));
+            else if (sel == 13) cal_brakemode_request = tune(id);
+            else if (sel == 14) cal_gasmode_request = tune(id);
         }
         else if (datapage == PG_UI) {
             // if (sel == 8) encoder.set_reverse_encoder(tune(encoder.rev_spin_dir));
-            if (sel == 9) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, GlowNumModes - 1, true));
+            if (sel == 8) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize));            
+            else if (sel == 9) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, GlowNumModes - 1, true));
             else if (sel == 10) neo->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 11) neo->sleepmode_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
-            else if (sel == 12) neo->setbright(tune(neobright, id, 0.0f, 100.0f));  //  neo->setbright(neobright); }
-            else if (sel == 13) neo->setsat(tune(neosat, id, 0.0f, 100.0f));  //  neo->setbright(neobright); }
+            
+            // with recent changes to tune() I had to move the setter function for these into the neopix
+            // updat function, or acceleration wouldn't work
+            else if (sel == 12) tune(&neobright, id, 0.0, 100.0);
+            else if (sel == 13) tune(&neosat, id, 0.0, 100.0);
+            
             else if (sel == 14) tune(&ui_app, id, 0, NumContextsUI-1, true);
         }
         id = 0;

@@ -588,8 +588,8 @@ class ThrottleControl : public ServoMotor {
         }
         motormode = _mode;
     }
-    void update_ctrl_config(int new_pid_ena=-5) {   // run w/o arguments each loop to enforce configuration limitations, or call with an argument to enable/disable pid and update. do not change pid_enabled anywhere else!
-        if (new_pid_ena != -5) pid_enabled = (bool)new_pid_ena;     // receive new pid enable setting (ON/OFF) if given
+    void update_ctrl_config(int new_pid_ena=unlikely_int) {   // run w/o arguments each loop to enforce configuration limitations, or call with an argument to enable/disable pid and update. do not change pid_enabled anywhere else!
+        if (new_pid_ena != unlikely_int) pid_enabled = (bool)new_pid_ena;     // receive new pid enable setting (ON/OFF) if given
         if (pid_enabled != pid_ena_last) {
             if (pid_enabled) {
                 cruisepid.set_limits(tach->idle_ptr(), tach->opmax_ptr());  // switch cruise pid parameters to feed valid throttle angle values to openloop gas
@@ -620,6 +620,13 @@ class ThrottleControl : public ServoMotor {
     void update() {
         if (runmode == LOWPOWER) return;
         if (pid_timer.expireset()) {
+
+            // with recent changes to tune() I had to move the setter function for these here,
+            // instead of inline in the tuner like it was, to make edit acceleration work
+            static float gov_last;
+            if (governor != gov_last) set_governor_pc(governor);
+            gov_last = governor;
+
             update_ctrl_config();
             update_idle();                // Step 1 : do any idle speed management needed          
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling

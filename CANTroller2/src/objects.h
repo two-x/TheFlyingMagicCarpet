@@ -385,3 +385,13 @@ void BootButton::actions() {  // temporary (?) functionality added for developme
         }  // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
     }
 }
+
+// // trying to debug edit acceleration
+// void tune_tester() {
+//     if (tunetest_lastval != tunetest) {
+//         tunetest_enc_id = encoder._delta * encoder.accel_factor();
+//         tunetest_ts_id = touch.idelta;
+//         tunetest_change = tunetest - tunetest_lastval;
+//         tunetest_lastval = tunetest;
+//     }
+// }
