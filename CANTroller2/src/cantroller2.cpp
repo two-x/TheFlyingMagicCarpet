@@ -3,31 +3,32 @@
 TaskHandle_t temptask = NULL, maftask = NULL, pushtask = NULL, drawtask = NULL;
 
 void setup() {
-    initialize_pins_and_console();
-    semaphore_setup();
-    i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);
-    touch.setup(&lcd, &i2c);
-    screen.setup();             // start up the screen asap so we can monitor the boot progress on the ezread console
-    xTaskCreatePinnedToCore(push_task, "taskPush", 2048, NULL, 4, &pushtask, CONFIG_ARDUINO_RUNNING_CORE);      // 2048 works, 1024 failed
-    xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 4, &drawtask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // 4096 works, 2048 failed
-    running_on_devboard = !tempsens.setup();  // onewire bus and temp sensors
-    xTaskCreatePinnedToCore(tempsens_task, "taskTemp", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // Temperature sensors task  // 4096 works, 3072 failed,  priority is from 0 to 24=highest    
-    set_board_defaults();       // set variables as appropriate if on a breadboard
-    run_tests();
-    watchdog.setup(&temptask, &drawtask, &pushtask, &maftask);
-    bootbutton.setup();
-    hotrc.setup();
-    pot.setup();
-    encoder.setup();
-    pressure.setup();
-    brkpos.setup();
-    mulebatt.setup();
-    tach.setup();
-    speedo.setup();
-    airvelo.setup();           // must be done after i2c is started
-    mapsens.setup();
+    initialize_pins_and_console();  // set pins, read the basic switch (only possible w/o console), then start the serial console for boot msgs. run 1st!
+    semaphore_setup();              // needed by display buffering, so run before screen setup
+    i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);  // run early as i2c addrs used to autodetect touchscreen type, & other sensors
+    touch.setup(&lcd, &i2c);        // set up touchscreen object. must run before screen driver, which is also driver for touchscreen
+    screen.setup();                 // start up the screen asap so we can monitor the boot progress on the ezread console. also inits touchscreen
+    xTaskCreatePinnedToCore(push_task, "taskPush", 2048, NULL, 4, &pushtask, CONFIG_ARDUINO_RUNNING_CORE);         // display bus-push task  // 2048 works, 1024 failed
+    xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 4, &drawtask, 1 - CONFIG_ARDUINO_RUNNING_CORE);     // display drawing task   // 4096 works, 2048 failed
+    running_on_devboard = !tempsens.setup();  // initialize onewire bus & temp sensors. The addrs of detected sensors informs if running on vehicle
+    xTaskCreatePinnedToCore(tempsens_task, "taskTemp", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE); // temp sensors read task // 4096 works, 3072 failed,  priority is from 0 to 24=highest    
+    set_board_defaults();  // changes some configuration options based on whether we're running on the real car
+    run_tests();           // runs some sanity checks to ensure the code is self-consistent - Anders wrote this but it needs expansion
+    watchdog.setup(&temptask, &drawtask, &pushtask, &maftask);  // the watchdog must frequently be pet by the code, or it will assume we crashed & automatically reset it. disabled due to some bug i forgot
+    bootbutton.setup();    // init button on the esp board, for misc use
+    hotrc.setup();         // init hotrc remote control handle, source of steering/throttle/brake commands (how we drive the car)
+    pot.setup();           // init potentiometer knob which is a user input device, used for adjusting analog values including emulating sensor or motor activity
+    encoder.setup();       // init rotary encoder which is a user input device, used for digital adjustments including graphical ui navigation
+    pressure.setup();      // init analog brake pressure sensor, used as feedback to control application of brake
+    brkpos.setup();        // init analog brake position sensor, used as feedback to control release of brake
+    mulebatt.setup();      // init car battery voltage monitor
+    tach.setup();          // init tachometer, which is based on pulses from a magnet on the crankshaft passing near a hall effect sensor
+    speedo.setup();        // init speedometer, which is based on pulses from magnets on the drive axle passing near a hall effect sensor
+    ezread.printf("\nspeedo done\n");
+    // airvelo.setup();       // init i2c air velocity sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
+    // mapsens.setup();       // init i2c manifold air pressure sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
     xTaskCreatePinnedToCore(maf_task, "taskMAF", 4096, NULL, 4, &maftask, CONFIG_ARDUINO_RUNNING_CORE);  // update mass airflow determination, including reading map and airvelo sensors
-    lightbox.setup();
+    // lightbox.setup();
     starter.setup();
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // used for servos
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
@@ -64,7 +65,7 @@ void loop() {                  // arduino-style loop() is like main() but with a
     tuner.update();            // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update();             // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update();              // update/send neopixel colors 
-    lightbox.update(speedo.val());  // communicate any relevant data to the lighting controller
+    // lightbox.update(speedo.val());  // communicate any relevant data to the lighting controller
     looptimer.update();             // looptimer.mark("F");
     vTaskDelay(pdMS_TO_TICKS(1));   // momentarily pause continuous execution for multitasking purposes. delays the loop but in a good way
 }

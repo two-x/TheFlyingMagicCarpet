@@ -832,9 +832,10 @@ class PanelAppManager {
         if (swipe == DirLeft) changeit--;  // swipe left for previous animation
         else if (swipe == DirRight) changeit++;  // swipe right for next animation
 
-        // temporary alternate touch method since swiping is broken
-        if (touch->doubletap()) changeit++;
-
+        if (touch->doubletap()) { // temporary alternate touch method since swiping is broken
+            if (touch->touch_pt(HORZ) >= (disp_width_pix >> 1)) changeit++; // doubletap on right half to cycle fwd
+            else changeit--;                                                // or on left half to cycle back
+        }
         if (bootbutton.shortpress()) changeit++;  // boot button also cycles, always forward
         return changeit;
     }
@@ -853,16 +854,16 @@ class PanelAppManager {
         changeit = constrain(changeit, DirRev, DirFwd);
         if (nowsaver == Collisions) {  // if on ball saver
             change_saver();  // switch to eraser saver
-            eSaver.change_pattern((changeit == DirFwd) ? 0 : eSaver.num_shapes - 1);  // go to first or last pattern
+            eSaver.change_pattern((changeit == DirFwd) ? 0 : eSaver.num_shapes - 1);  // go to first or last erasersaver pattern
             return;
         }
-        if (changeit == DirFwd) {  //go forward one animation
-            if (eSaver.shape == eSaver.num_shapes - 1) change_saver();  // going past the last pattern changes to ball saver
-            else eSaver.change_pattern(-1);
+        if (changeit == DirFwd) {  // go forward one animation
+            if (eSaver.shape == eSaver.num_shapes - 1) change_saver();  // going past the last erasersaver pattern changes to ball saver
+            else eSaver.change_pattern(-1);  // erasersaver goes to next pattern
             return;
         }  // else go back one animation (below)
-        if (eSaver.shape == 0) change_saver();  // going to before the first pattern changes to ball saver
-        else eSaver.change_pattern(-3);  // still_running = 0;
+        if (eSaver.shape == 0) change_saver();  // requesting to go below 1st erasersaver pattern switches to ball saver
+        else eSaver.change_pattern(-3);  // erasersaver goes back one pattern
     }
     void change_saver() {  // switch back and forth between ball saver / eraser saver
         ++nowsaver %= NumSaverMenu;

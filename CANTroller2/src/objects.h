@@ -13,8 +13,8 @@ static TemperatureSensorManager tempsens(onewire_pin);
 static CarBattery mulebatt(mulebatt_pin);
 static PressureSensor pressure(pressure_pin);
 static BrakePositionSensor brkpos(brake_pos_pin);
-static Speedometer speedo(speedo_pin, 0.5);  // 0.5x because there are 2 magnets
-static Tachometer tach(tach_pin, 8.0);  // 8.0x frequency divider
+static Speedometer speedo(speedo_pin, 2.0f);  // mult-by-2 because there are 2 magnets per turn
+static Tachometer tach(tach_pin, 0.125f);  // divide-by-8 due to external frequency divider
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(&i2c);
 static MAPSensor mapsens(&i2c);
@@ -112,10 +112,12 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
 // RTOS task that updates map and airflow sensors, and mass airflow calculation
 void maf_task(void *parameter) {
     while (true) {
-        mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
-        vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
-        airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
-        maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+        if (i2c.detected(i2c_map) && i2c.detected(i2c_airvelo)) {
+            mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
+            vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
+            airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
+            maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+        }
         vTaskDelay(pdMS_TO_TICKS(95)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
@@ -266,7 +268,7 @@ class Starter {
     bool req_active = false, one_click_done = false, motor = LOW;    // motor is the current state of starter voltage. set in this class only
     float run_timeout = 3.5, run_lolimit = 1.0, run_hilimit = 10.0;  // in seconds
     void setup() {
-        ezread.squintf("Starter.. output-only supported\n");
+        ezread.squintf("starter (p%d) output-only supported\n", pin);
         set_pin(pin, OUTPUT);                                  // set pin as output
     }
     void request(int req) { now_req = req; }                   // squintf("r:%d n:%d\n", req, now_req);}

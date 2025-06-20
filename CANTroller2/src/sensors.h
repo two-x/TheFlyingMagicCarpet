@@ -433,7 +433,6 @@ class Sensor : public Transducer {
             _first_filter_run = false;
             return;  // Serial.printf("x");
         }  // Serial.printf("+ (%.4lf)", _si_raw);
-        
         set_si(ema_filt(_si_raw, _si.val(), _ema_alpha), false);
     }
     virtual void set_val_from_undef() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
@@ -503,7 +502,7 @@ class I2CSensor : public Sensor {
     // }
     void print_on_boot(bool detected, bool responding) {
         // if (header) Transducer::print_config(true, false);
-        ezread.squintf("  %s sensor %sdetected", _short_name.c_str(), _detected ? "" : "not ");
+        ezread.squintf("%s sensor (p%d) %sdetected", _short_name.c_str(), _pin, _detected ? "" : "not ");
         if (detected) {
             if (responding) {
                 // ezread.squintf(", responding properly\n");
@@ -792,13 +791,16 @@ class BrakePositionSensor : public AnalogSensor {
 class PulseSensor : public Sensor {
   protected:
     // volatile int64_t timestamp_last_us;  // _stop_timeout_us = 1250000;  // time after last magnet pulse when we can assume the engine is stopped (in us)
-    Timer _stop_timer;
+    Timer _stop_timer, _pulsecount_timer{1000000};
     bool _low_pulse = true, _pin_level, _pin_inactive = false;
-    float _us, _freqdiv = 1.0, _idle = 600.0, _idle_cold = 750.0, _idle_hot = 500.0;  // an external ripple counter divides pulse stream frequency by this, we need to compensate
+    float _us, _idle = 600.0, _idle_cold = 750.0, _idle_hot = 500.0;
+    float _freqfactor = 1.0; // freq correction factor equal to received-pulses/actual-rotations (correct for any divider circuitry (<1) or multple magnets per turn (>1).  also, best gay club in miami
     Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
     volatile int64_t _isr_us = 0;
     volatile int64_t _isr_time_last_us = 0;
     volatile int64_t _isr_time_current_us = 0;
+    volatile int _pulse_count = 0;  // record pulses occurring for debug/monitoring pulse activity
+    int _pulses_per_sec = 0;
     // volatile float _isr_us;
     // we maintain our min and max pulse period, for each pulse sensor
     // absmax_us is the reciprocal of our native absmin value in MHz. once max_us has elapsed since the last pulse our si sets to zero
@@ -816,6 +818,7 @@ class PulseSensor : public Sensor {
         _stop_timer.reset();
         _isr_time_last_us = _isr_time_current_us;
         _isr_us = time_us;
+        _pulse_count++;
     }
     void set_pin_inactive() {
         static bool pinlevel_last;
@@ -844,6 +847,10 @@ class PulseSensor : public Sensor {
         _si_raw = from_native(new_native);
         calculate_ema(); // filtered values are kept in si format
         _pin_level = read_pin(_pin);  // _pin_level = !_pin_level;
+        if (_pulsecount_timer.expireset()) {
+            _pulses_per_sec = _pulse_count;  // pulses_per_sec can be used for monitoring/debugging;
+            _pulse_count = 0;
+        }
     }
     float us_to_hz(float arg_us) {
         if (iszero(arg_us) || std::isnan(arg_us)) return 0.0;  // zero is a special value meaning we timed out
@@ -860,7 +867,7 @@ class PulseSensor : public Sensor {
   public:
     std::string _uber_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
 
-    PulseSensor(int arg_pin, float arg_freqdiv=1.0) : Sensor(arg_pin), _freqdiv(arg_freqdiv) {
+    PulseSensor(int arg_pin, float arg_freqfactor=1.0) : Sensor(arg_pin), _freqfactor(arg_freqfactor) {
         _long_name = "Unknown Hall-Effect";
         _short_name = "pulsen";
         _native_units = "Hz";
@@ -905,13 +912,14 @@ class PulseSensor : public Sensor {
     void set_idle(float newidle) { _idle = constrain(newidle, _opmin, _opmax); }
     float us() { return _us; }
     float ms() { return _us / 1000.0; }
+    int alt_native() { return _pulses_per_sec; };  // returns pulse freq in hz based on count, rather than conversion (just a check to debug) (only updates once per second)
 };
 // Tachometer represents a magnetic pulse measurement of the engine rotation
 // it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
 class Tachometer : public PulseSensor {
   public:
     sens _senstype = sens::tach;
-    Tachometer(int arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {
+    Tachometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {  // where actual_hz = pulses_hz * freqfactor (due to external circuitry or magnet arrangement)
         _long_name = "Tachometer";
         _short_name = "tach";
         _si_units = "rpm";
@@ -919,7 +927,11 @@ class Tachometer : public PulseSensor {
     Tachometer() = delete;
     void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
         PulseSensor::setup();
-        float m = 60.0 * _freqdiv;  // 1 Hz = 1 pulse/sec * 8 rot/pulse * 60 sec/min = 480 rot/min, (so 480 rpm/Hz)
+        float m = 60.0 / _freqfactor;  // 1 Hz = 1 pulse/sec * 60 sec/min / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
+        // note the max pulse freq at the mcu pin is max-rpm/m , or:  pinmax hz = 4500 rpm * (1/480) hz/rpm = 9.375 hz  (max freq at pin)
+        // bc of the divider max freq in the wire is max-pin-hz/freqfactor , or:  wiremax hz = 9.375 hz / 0.125 = 75 hz  (max freq in wire)
+        // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=220nF (round up)
+        
         set_conversions(m, 0.0);
         set_abslim(0.0, 4500.0);  // the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
         // do i need this line?
@@ -945,7 +957,7 @@ class Tachometer : public PulseSensor {
 class Speedometer : public PulseSensor {
   public:
     sens _senstype = sens::speedo;
-    Speedometer(int arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {
+    Speedometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {
         _long_name = "Speedometer";
         _short_name = "speedo";
         _si_units = "mph";
@@ -954,9 +966,12 @@ class Speedometer : public PulseSensor {
     void setup() {
         PulseSensor::setup();
         // ezread.squintf("%s..\n", _long_name.c_str());
-        float m = 3600.0 * 20 * M_PI * _freqdiv / (2 * 12 * 5280);  // 1 Hz = 1 pulse/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.8 mph per Hz)
+        float m = 3600.0 * 20 * M_PI / (_freqfactor * 12 * 5280); // 1 Hz = 1 pulse/sec * 3600 sec/hr * 20*pi in/whlrot * 1/2 whlrot/pulse * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.785 mph/Hz)
+        // note the max pulse freq is max-mph/m , or:  pinmax hz = 20 mph * (1 / 1.785) hz/mph = 11.2 hz  (max freq at pin and in wire)
+        // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=1uF
+
         set_conversions(m, 0.0);
-        set_abslim(0.0, 25.0);  // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
+        set_abslim(0.0, 20.0);  // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
 
         // do i need this line?
         // set_abslim_native(us_to_hz(10000), NAN, false);  // for pulse sensor, set absmin_native to define the stop timeout period. Less Hz means more us which slows our detection of being stopped
@@ -1111,6 +1126,9 @@ class SteerMotor2 : public Jaguar {
 // simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // note: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,
 //       we can simplify the logic here a lot.
+
+// Simulator class: manager class for the simulator settings and status. Note simulation values are not assigned here
+//   appropriately, the objects for each simulated transducer would s  objects to sensorather, a simulation management object.
 class Simulator {
   private:
     // note: if we only simulated devices, we could keep track of simulability in the Device class. We could keep the default source in Device the same way.
@@ -1232,7 +1250,7 @@ class Simulator {
                         bool _can_sim = std::get<0>(kv->second);
                         if (_can_sim) d->set_source(src::POT); // if we allow simulation for this componenent, then set its input source to the pot
                     }
-                    else ezread.squintf("invalid pot map selected: %d/n", arg_sensor);
+                    else ezread.squintf("invalid pot map: %d\n", arg_sensor);
                 }
             }
             _potmap = arg_sensor;
@@ -1323,6 +1341,9 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     float failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     float failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
   private:
+    
+    bool printnow = false;
+
     Simulator* sim;
     Potentiometer* pot;
     static const int failsafe_timeout = 15000;
@@ -1346,7 +1367,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
   public:
     Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) { derive(); }
     void setup() {
-        ezread.squintf("Hotrc init.. Starting rmt..\n");
+        ezread.squintf("hotrc init.. Starting rmt..\n");
         for (int axis=HORZ; axis<=CH4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
         failsafe_timer.set(failsafe_timeout); 
     }
@@ -1366,10 +1387,17 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         }
     }
     void update() {
+
+        static Timer printtimer{10000000};
+        if (printtimer.expireset()) printnow = true;
+        if (printnow) ezread.printf("hotrc:\n"); 
+        
         radiolost_update();
         toggles_update();
         // if (runmode == LOWPOWER) return;  // causes rmt errors
         direction_update();
+        
+        printnow = false;
     }
     void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
         for (int ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
@@ -1399,13 +1427,20 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     void toggles_update() {  //
         for (int chan = CH3; chan <= CH4; chan++) {
             us[chan][RAW] = (float)(rmt[chan].readPulseWidth(true));
+            
+            if (printnow) ezread.printf("  ch%d=%d", chan+1, (int)us[chan][RAW]);
+            
             sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
             if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
                 _sw_event[chan] = true;          // so a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+                
+                if (printnow) ezread.printf("!");
+                
                 kick_inactivity_timer(HURCTog);  // evidence of user activity
             }
             sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
         }
+        if (printnow) ezread.printf("\n");
     }
     float us_to_pc(int axis, float _us) {
         if (_us >= us[axis][CENT]) return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
@@ -1423,23 +1458,49 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             // ezread.squintf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
         }
         else for (int axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
+            if (printnow) ezread.printf(" ax%s:", axis ? "V" : "H");
             us[axis][RAW] = (float)(rmt[axis].readPulseWidth(true));
+            if (printnow) ezread.printf(" usR=%d", (int)us[axis][RAW]);
             pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
+            if (printnow) ezread.printf(" pcR=%d", (int)pc[axis][RAW]);
             spike_us[axis] = spike_filter(axis, us[axis][RAW]);            
+            if (printnow) ezread.printf(" s=%d\n", (int)spike_us[axis]);
             ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha);
+            if (printnow) ezread.printf("   e=%d", (int)ema_us[axis]);
             us[axis][FILT] = remove_deadbands_us(axis, ema_us[axis]);
+            if (printnow) ezread.printf(" usF=%d", (int)us[axis][FILT]);
             pc[axis][FILT] = us_to_pc(axis, us[axis][FILT]);
+            if (printnow) ezread.printf(" pcF=%d\n", (int)pc[axis][FILT]);
+
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set pc value to CENTer value (for sane controls), but not us value (for debugging/error detection)
-            else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(HURCTrig);  // indicate evidence of user activity
+            else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(HURCTrig);  // indicate evidence of user activity        
+
         }
-        for (int axis = HORZ; axis <= VERT; axis++) pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
+        if (printnow) ezread.printf("\n");
+        for (int axis = HORZ; axis <= VERT; axis++) {
+            pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
+            // if (printnow) ezread.printf(" B) ax%d=%4.0f", axis, us[axis][FILT]);
+            
+        }
+        if (printnow) ezread.printf(" pc2F[H]=%d  pc2F[V]=%d\n", (int)pc[HORZ][FILT], (int)pc[VERT][FILT]);
+
     }
     bool radiolost_update() {
-        if (us[VERT][FILT] > failsafe_us + failsafe_margin_us) {
+        static bool radiolost_last = _radiolost;
+        if (printnow) ezread.printf("checkradio:");
+        if (us[VERT][RAW] > failsafe_us + failsafe_margin_us) {
             failsafe_timer.reset();
             _radiolost = false;
+            if (printnow && radiolost_last) ezread.printf(" cleared");
         }
-        else if (failsafe_timer.expired()) _radiolost = true;
+        else if (failsafe_timer.expired()) {
+            _radiolost = true;
+            if (printnow && !radiolost_last) ezread.printf(" event");
+        }
+
+        if (printnow) ezread.printf(" lost? %d\n", (int)_radiolost);
+        
+        radiolost_last = _radiolost;
         return _radiolost;
     }
     // spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 

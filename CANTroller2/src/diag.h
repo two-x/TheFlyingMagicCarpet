@@ -176,13 +176,15 @@ class DiagRuntime {
     void set_sensidiots() {
         for (int err=0; err<=_GPIO; err++) {
             sensidiots[err] = false;
-            for (int typ=0; typ<NUM_ERR_TYPES; typ++) sensidiots[err] = sensidiots[err] || err_sens[typ][err];
+            for (int typ=0; typ<NUM_ERR_TYPES; typ++) sensidiots[err] |= err_sens[typ][err];
         }
     }
     void count_errors() {
         for (int t=LOST; t<=WARN; t++) {
             registered_errcount[t] = 0;
-            for (int j=0; j<NumTelemetryFull; j++) if (registered[j] && err_sens[t][j]) registered_errcount[t]++;
+            for (int j=0; j<NumTelemetryFull; j++)
+                if (registered[j] && err_sens[t][j])
+                    registered_errcount[t]++;
         }
     }
     void set_idiot_blinks() {  // adds blink code to lost and range err neopixels corresponing to the lowest numbered failing sensor

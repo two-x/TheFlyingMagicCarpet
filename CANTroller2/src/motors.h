@@ -465,7 +465,7 @@ class ThrottleControl : public ServoMotor {
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
-        ezread.squintf("Throttle servo.. pid %s\n", pid_enabled ? "enabled" : "disabled");
+        ezread.squintf("throttle servo (p%d) pid %s\n", pin, pid_enabled ? "enabled" : "disabled");
         ezread.squintf("  Cruise pid %s, using %s adj scheme\n", cruise_pid_enabled ? "enabled" : "disabled", cruiseschemecard[cruise_adjust_scheme].c_str());
         si[OPMIN] = 58.0;
         si[PARKED] = 57.0;
@@ -701,7 +701,7 @@ class BrakeControl : public JagMotor {
         return brake_tempsens_exists;
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, ThrottleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-        ezread.squintf("Brake pid %s, feedback: %s\n", pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
+        ezread.squintf("brake (p%d) pid %s, feedback: %s\n", pin, pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         pid_timeout = 40000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
         JagMotor::setup(_hotrc, _speedo, _batt);
@@ -1017,7 +1017,7 @@ class SteeringControl : public JagMotor {
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         set_out_changerate_pcps(350.0);
-        ezread.squintf("Steering motor..\n");
+        ezread.squintf("steering motor {p%d)\n", pin);
         JagMotor::setup(_hotrc, _speedo, _batt);
     }
     void update() {

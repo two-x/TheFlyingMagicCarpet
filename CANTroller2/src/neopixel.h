@@ -113,7 +113,7 @@ void NeopixelStrip::refresh(bool force) {
     neoobj.Show();
 }
 void NeopixelStrip::setup() {
-    ezread.squintf("Neopixels.. ");
+    ezread.squintf("neopixels (p%d) ", pin);
     set_pcba_glow(GlowSine);
     neoobj.Begin();
     if (!running_on_devboard) setbright(100.0);
@@ -392,7 +392,7 @@ class IdiotLights {
         &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(), // tach.pin_inactive_ptr(), speedo.pin_inactive_ptr(),
         &nowtouch, &ts_tapped, &ts_doubletapped, encoder.activity_ptr(), &running_on_devboard, &not_syspower,  //  touch.tap_ptr(), touch.doubletap_ptr(), bootbutton.ptr(), sim.enabled_ptr(), &encoder.enc_a, 
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
-        &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],  // &sensidiots[_MuleBatt]
+        &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],  // &sensidiots[_MuleBatt] <-- is the same value as &nowtouch (wtf!?) so now using &diag.battrangeerr as workaround due to 
     };  // , &encoder.enc_b, &starter.req_active, &powering_up
         // _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero,
     uint8_t icon[iconcount][11] = {
@@ -488,7 +488,7 @@ class IdiotLights {
         myneo = _neo;
         // int n = new_idiot(&(err_sens_alarm[LOST]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
         for (int i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[ON][i], val(i));
-        ezread.squintf("Idiot lights set up %d icons & %d neopix hazards\n", iconcount, myneo->idiotcount);
+        ezread.squintf("  idiot lights: %d icons & %d neopix hazards\n", iconcount, myneo->idiotcount);
     }
     int num_idiots() { return iconcount; }
     bool val(int index) { return *(vals[index]); }

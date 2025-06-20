@@ -109,8 +109,8 @@ enum boolean_states { ON=1 };
 enum brakeextra { NumBrakeSens=2 };
 enum telemetry_idiots {                              // list of transducers which have onscreen idiotlights showing status
     _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
-    _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are actuators, driven by us
-    _Speedo=3, _Tach=4, _BrakePres=5, _BrakePosn=6,  // these transducers are sensors, we read from
+    _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are mission-critical actuators, driven by us
+    _Speedo=3, _Tach=4, _BrakePres=5, _BrakePosn=6,  // these transducers are mission-critical sensors, we read from
     _HotRC=7, _Temps=8, _Other=9, _GPIO=10,          // these are actually groups of multiple sensors (see below)
     NumTelemetryIdiots=11,                           // size of the list of values with idiot lights
 };
@@ -223,7 +223,7 @@ int ts_swipedir = DirNone;  // touchscreen
 // bool nowtouch2 = false;
 bool captouch = true;
 float loop_avg_us;
-bool sensidiots[11];
+bool sensidiots[11];  // array holds an error flag for each critical sensor or sensor group 
 int ui_app = EZReadUI, ui_app_default = EZReadUI;
 bool panicstop = false;
 
