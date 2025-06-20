@@ -41,7 +41,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { " Pot Raw", brAk"Posn", brAk"Posn", brAk"Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PG_SENS
     { "TachPuls", "Tach Raw", "TcAltRaw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpAltRaw", "SpeedRaw", "   Speed", __________, "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", spEd"Idle", },  // PG_PULS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
-    { "Gas Mode", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StartGas", "StTimOut", "MaxBoost", "ColdTemp", "Hot Temp", },  // PG_IDLE
+    { "Gas Mode", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "BkEnaPID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", "GasEnPID", "CrEnaPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PG_MOTR    
     { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
@@ -56,7 +56,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "adc",  "adc",  "in",   "%",    "adc",  "psi",  "%",    "adc",  "V",    ______, "psi",  "psi",  "in",   "in",   "in",   },  // PG_SENS
     { "ms",   "Hz",   "Hz",   "rpm",  "ms",   "Hz",   "Hz",   "mph",  "%",    ______, "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
-    { scroll, "rpm",  "%",    "%",    degree, "rpm",  ______, ______, ______, ______, "%",    "sec",  "%",    degreF, degreF, },  // PG_IDLE
+    { scroll, "rpm",  "%",    "%",    degree, "rpm",  ______, ______, ______, ______, "s",    "%",    "%",    degreF, degreF, },  // PG_IDLE
     { "%",    degreF, "%",    ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, b1nary, scroll, },  // PG_MOTR
     { scroll, "%",    "psi",  "%",    "in",   "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, b1nary, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
@@ -1103,8 +1103,8 @@ class Tuner {
             else if (sel == 14) brake.set(&brake.duty_fwd_pc, tune(brake.duty_fwd_pc, id, 0.0f, 100.0f));
         }
         else if (datapage == PG_IDLE) {
-            if (sel == 10) tune(&gas.starting_pc, id, gas.pc[OPMIN], gas.pc[OPMAX]);
-            else if (sel == 11) starter.set_runtimeout(tune(starter.run_timeout, id, starter.run_lolimit, starter.run_hilimit));
+            if (sel == 10) tune(&starter.run_timeout, id, starter.run_lolimit, starter.run_hilimit);
+            else if (sel == 11) tune(&gas.starting_pc, id, gas.pc[OPMIN], gas.pc[OPMAX]);
             else if (sel == 12) tune(&gas.idle_max_boost_pc, id, 0.0f, 100.0f);
             else if (sel == 13) tune(&gas.idle_temp_lim_f[LOW], id, tempsens.opmin(loc::ENGINE), gas.idle_temp_lim_f[HIGH]);
             else if (sel == 14) tune(&gas.idle_temp_lim_f[HIGH], id, gas.idle_temp_lim_f[LOW], tempsens.opmax(loc::ENGINE));

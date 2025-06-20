@@ -1354,13 +1354,6 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[CH3]
         RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[CH4]
     };
-    bool spike_signbit;
-    int spike_length, this_delta, interpolated_slope, loopindex, previndex, spike_cliff[NUM_AXES];
-    int spike_threshold[NUM_AXES] = { 6, 6 };
-    int prespike_index[NUM_AXES] = { -1, -1 };
-    int index[NUM_AXES] = { 1, 1 };  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
-    static const int depth = 9;  // more depth will reject longer spikes at the expense of controller delay
-    int raw_history[NUM_AXES][depth], filt_history[NUM_AXES][depth];  // Values before and after filtering.
   public:
     Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) { derive(); }
     void setup() {
@@ -1465,6 +1458,13 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         radiolost_last = _radiolost;
         return _radiolost;
     }
+    bool spike_signbit;
+    int spike_length, this_delta, interpolated_slope, loopindex, previndex, spike_cliff[NUM_AXES];
+    int spike_threshold[NUM_AXES] = { 6, 6 };
+    int prespike_index[NUM_AXES] = { -1, -1 };
+    int index[NUM_AXES] = { 1, 1 };  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
+    static const int depth = 9;  // more depth will reject longer spikes at the expense of controller delay
+    int raw_history[NUM_AXES][depth], filt_history[NUM_AXES][depth];  // Values before and after filtering.
     // spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
     // interpolated from before and after the spike. also smoothes out abrupt value changes that don't recover later
     float spike_filter(int axis, float new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value

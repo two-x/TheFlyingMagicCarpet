@@ -260,8 +260,8 @@ class Ignition {
 };
 class Starter {
   private:
-    int lastbrakemode, lastgasmode, pin, turnoff_timeout = 100000;
-    Timer starterTimer, twoclicktimer{2000000}, brakeTimer{(int64_t)4000000};  // if remotely-started starting event is left on for this long, end it automatically
+    int lastbrakemode, lastgasmode, pin;
+    Timer starterTimer, twoclicktimer{2000000}, brakeTimer{4000000};  // if remotely-started starting event is left on for this long, end it automatically
   public:
     Starter(int _pin) : pin(_pin) {}
     int now_req = REQ_NA, last_req = REQ_NA;
@@ -289,9 +289,14 @@ class Starter {
         if (brake.motormode == AutoHold && runmode != HOLD) brake.setmode(lastbrakemode);  // unless successfully into hold mode, put the brake back to doing whatever it was doing before
         now_req = REQ_NA;                                         // cancel current request
     }  // if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
-    void set_runtimeout(float newtime) { if (newtime <= run_hilimit && newtime >= run_lolimit) run_timeout = newtime; }
+    // void set_runtimeout(float newtime) { if (newtime <= run_hilimit && newtime >= run_lolimit) run_timeout = newtime; }
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         if (runmode == LOWPOWER) return;                             // starter isn't supported during powerdown
+        bool pin_now = read_pin(pin);    // get current value of pin to do a check
+        if (motor != pin_now) {          // check to ensure nothing outside this class changed our motor value
+            ezread.printf("err: starter pointer abuse! p=%d,m=%d\n", (int)pin_now, (int)motor);  // how do we not miss this message?
+            motor = pin_now;             // fix the discrepancy to prevent false starts hopefully
+        }
         if (now_req == REQ_TOG) now_req = motor ? REQ_OFF : REQ_ON;  // translate a toggle request to a drive request opposite to the current drive state
         req_active = (now_req != REQ_NA);                   // for idiot light display
         if (two_click_starter) {                            // if 2 clicks are required to start
@@ -335,7 +340,7 @@ class Starter {
         if (brakeTimer.expired()) {                      // waited long enough for the brake to push
             if (!check_brake_before_starting) turnon();  // if no need to check whether brake succeeded, then start the car
             else {                                       // if we were supposed to apply the brakes and also check they got pushed
-                ezread.printf("warn: starter cancel - no brake\n");
+                ezread.printf("warn: cant start, no brake\n");
                 now_req = REQ_NA;                        // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
                 if (brake.motormode == AutoHold && runmode != HOLD) brake.setmode(lastbrakemode); // restore prev brake mode, unless it's already been changed
             }
