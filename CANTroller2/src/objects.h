@@ -258,6 +258,8 @@ class Ignition {
         panic_req = ign_req = REQ_NA;  // cancel outstanding requests
     }
 };
+static Ignition ignition(ignition_pin);
+
 class Starter {
   private:
     int lastbrakemode, lastgasmode, pin;
@@ -281,21 +283,24 @@ class Starter {
         write_pin(pin, motor);                                 // and start the motor
         now_req = REQ_NA;                                      // we have serviced starter-on request, so cancel it
     }
-    void turnoff() {                                              // function to stop the motor
+    void turnoff(bool bypass_modechanges=false) {                                              // function to stop the motor
         ezread.printf("starter turnoff\n");
         motor = LOW;                                              // we will turn it off
         write_pin(pin, motor);                                    // begin driving the pin low voltage
-        if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
-        if (brake.motormode == AutoHold && runmode != HOLD) brake.setmode(lastbrakemode);  // unless successfully into hold mode, put the brake back to doing whatever it was doing before
+        if (!bypass_modechanges) {
+            if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
+            if (brake.motormode == AutoHold && runmode != HOLD) brake.setmode(lastbrakemode);  // unless successfully into hold mode, put the brake back to doing whatever it was doing before
+        }
         now_req = REQ_NA;                                         // cancel current request
     }  // if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
     // void set_runtimeout(float newtime) { if (newtime <= run_hilimit && newtime >= run_lolimit) run_timeout = newtime; }
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
-        if (runmode == LOWPOWER) return;                             // starter isn't supported during powerdown
-        bool pin_now = read_pin(pin);    // get current value of pin to do a check
-        if (motor != pin_now) {          // check to ensure nothing outside this class changed our motor value
-            ezread.printf("err: starter pointer abuse! p=%d,m=%d\n", (int)pin_now, (int)motor);  // how do we not miss this message?
-            motor = pin_now;             // fix the discrepancy to prevent false starts hopefully
+        if (runmode == LOWPOWER) return;              // starter isn't supported during powerdown
+        bool pin_now = read_pin(pin);                 // get current value of pin to do a check
+        if (motor != pin_now) {                       // check if someone changed the motor value or drive our pin
+            ezread.printf("err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor);  // how do we not miss this message?
+            turnoff(true);                            // stop the motor either way
+            ignition.panic_request(REQ_ON);           // request panic to stop the car in case it did start
         }
         if (now_req == REQ_TOG) now_req = motor ? REQ_OFF : REQ_ON;  // translate a toggle request to a drive request opposite to the current drive state
         req_active = (now_req != REQ_NA);                   // for idiot light display
@@ -347,7 +352,6 @@ class Starter {
         }  // otherwise we're still waiting for the brake to push, meanwhile the starter turn-on request remains intact
     }
 };
-static Ignition ignition(ignition_pin);
 static Starter starter(starter_pin);
 #include "diag.h"
 static LoopTimer looptimer;
@@ -392,13 +396,3 @@ void BootButton::actions() {  // temporary (?) functionality added for developme
         }  // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
     }
 }
-
-// // trying to debug edit acceleration
-// void tune_tester() {
-//     if (tunetest_lastval != tunetest) {
-//         tunetest_enc_id = encoder._delta * encoder.accel_factor();
-//         tunetest_ts_id = touch.idelta;
-//         tunetest_change = tunetest - tunetest_lastval;
-//         tunetest_lastval = tunetest;
-//     }
-// }

@@ -61,7 +61,6 @@ void loop() {                  // arduino-style loop() is like main() but with a
     brake.update();            // drive motor output based on controller inputs, feedback, run mode, etc.
     steer.update();            // drive motor output based on controller inputs, run mode, etc.
     touch.update();            // read touchscreen input and do what it tells us to
-    // tune_tester();             // trying to debug edit acceleration
     tuner.update();            // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update();             // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update();              // update/send neopixel colors 
