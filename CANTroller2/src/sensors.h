@@ -1341,9 +1341,6 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     float failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     float failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
   private:
-    
-    bool printnow = false;
-
     Simulator* sim;
     Potentiometer* pot;
     static const int failsafe_timeout = 15000;
@@ -1387,17 +1384,9 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         }
     }
     void update() {
-
-        static Timer printtimer{10000000};
-        if (printtimer.expireset()) printnow = true;
-        if (printnow) ezread.printf("hotrc:\n"); 
-        
         radiolost_update();
         toggles_update();
-        // if (runmode == LOWPOWER) return;  // causes rmt errors
         direction_update();
-        
-        printnow = false;
     }
     void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
         for (int ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
@@ -1427,79 +1416,52 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     void toggles_update() {  //
         for (int chan = CH3; chan <= CH4; chan++) {
             us[chan][RAW] = (float)(rmt[chan].readPulseWidth(true));
-            
-            if (printnow) ezread.printf("  ch%d=%d", chan+1, (int)us[chan][RAW]);
-            
             sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
             if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
                 _sw_event[chan] = true;          // so a handler routine can be signaled. Handler must reset this to false. Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
-                
-                if (printnow) ezread.printf("!");
-                
                 kick_inactivity_timer(HURCTog);  // evidence of user activity
             }
             sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
         }
-        if (printnow) ezread.printf("\n");
     }
     float us_to_pc(int axis, float _us) {
         if (_us >= us[axis][CENT]) return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
         return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);    
     }
     float remove_deadbands_us(int axis, float _us) {
-        float retval = pc[axis][CENT];
-        if (_us > us[axis][DBTOP]) retval = map(_us, us[axis][DBTOP], us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-        else if (_us < us[axis][DBBOT]) retval = map(_us, us[axis][DBBOT], us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
-        return retval;
+        if (_us > us[axis][DBTOP]) return map(_us, us[axis][DBTOP], us[axis][OPMAX], us[axis][CENT], us[axis][OPMAX]);
+        else if (_us < us[axis][DBBOT]) return map(_us, us[axis][DBBOT], us[axis][OPMIN], us[axis][CENT], us[axis][OPMIN]);
+        return us[axis][CENT];
     }
     void direction_update() {
         if (sim->simulating(sens::joy)) {
             if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
-            // ezread.squintf("%d %d %lf\n",sim->potmapping(sens::joy),sim->potmapping(), pc[HORZ][FILT]);
         }
         else for (int axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
-            if (printnow) ezread.printf(" ax%s:", axis ? "V" : "H");
             us[axis][RAW] = (float)(rmt[axis].readPulseWidth(true));
-            if (printnow) ezread.printf(" usR=%d", (int)us[axis][RAW]);
-            pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
-            if (printnow) ezread.printf(" pcR=%d", (int)pc[axis][RAW]);
             spike_us[axis] = spike_filter(axis, us[axis][RAW]);            
-            if (printnow) ezread.printf(" s=%d\n", (int)spike_us[axis]);
             ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha);
-            if (printnow) ezread.printf("   e=%d", (int)ema_us[axis]);
             us[axis][FILT] = remove_deadbands_us(axis, ema_us[axis]);
-            if (printnow) ezread.printf(" usF=%d", (int)us[axis][FILT]);
+
+            pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
             pc[axis][FILT] = us_to_pc(axis, us[axis][FILT]);
-            if (printnow) ezread.printf(" pcF=%d\n", (int)pc[axis][FILT]);
-
+           
             if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set pc value to CENTer value (for sane controls), but not us value (for debugging/error detection)
-            else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(HURCTrig);  // indicate evidence of user activity        
-
-        }
-        if (printnow) ezread.printf("\n");
+            else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(HURCTrig);  // register evidence of user activity        
+        }  
         for (int axis = HORZ; axis <= VERT; axis++) {
             pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
-            // if (printnow) ezread.printf(" B) ax%d=%4.0f", axis, us[axis][FILT]);
-            
         }
-        if (printnow) ezread.printf(" pc2F[H]=%d  pc2F[V]=%d\n", (int)pc[HORZ][FILT], (int)pc[VERT][FILT]);
-
     }
     bool radiolost_update() {
         static bool radiolost_last = _radiolost;
-        if (printnow) ezread.printf("checkradio:");
         if (us[VERT][RAW] > failsafe_us + failsafe_margin_us) {
             failsafe_timer.reset();
             _radiolost = false;
-            if (printnow && radiolost_last) ezread.printf(" cleared");
         }
         else if (failsafe_timer.expired()) {
             _radiolost = true;
-            if (printnow && !radiolost_last) ezread.printf(" event");
         }
-
-        if (printnow) ezread.printf(" lost? %d\n", (int)_radiolost);
-        
         radiolost_last = _radiolost;
         return _radiolost;
     }

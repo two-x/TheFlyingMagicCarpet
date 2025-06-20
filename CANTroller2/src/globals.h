@@ -295,13 +295,6 @@ bool linearizer(float* in_pc_ptr, float exponent) {
     *in_pc_ptr = inval * polarity;                             // set input pointer value, restoring its original polarity
     return true;
 }
-// static Timer printtimer{2000000};
-// if (printtimer.expireset()) ezread.squintf("joy: %f, exp:%f\n", *in_pc_ptr, exponent);
-
-
-
-// TUNE!
-
 
 // Timer objects are prolific in every corner of the code and thus this is global
 class Timer {  // !!! beware, this 54-bit microsecond timer overflows after every 571 years

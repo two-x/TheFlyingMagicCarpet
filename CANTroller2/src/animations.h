@@ -598,10 +598,12 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         }
     }
     void the_eraser() {
+        static bool seizure = false;
+        static Timer seizuretimer{10000000};
         int eraser_velo_min = 3, eraser_velo_max = 7;
         static int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, eraser_rad = 14;
         static int eraser_velo[2] = { rn(eraser_velo_max), rn(eraser_velo_max) };
-        if ((cycle != 0) && has_eraser) {
+        if ((cycle != 0) && has_eraser && !seizure) {
             int erpos_max[2] = {(vp->w - eraser_rad) / 2, (vp->h - eraser_rad) / 2};
             for (int axis = HORZ; axis <= VERT; axis++) {
                 erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
@@ -614,6 +616,10 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
                 }
             }
             sprite->fillCircle((vp->w / 2) + erpos[HORZ] + vp->x, (vp->h / 2) + erpos[VERT] + vp->y, eraser_rad * scaler, BLK);
+        }
+        if (seizuretimer.expired()) {
+            seizure = !seizure;
+            seizuretimer.set(200000 + 300000 * rn(seizure ? 4 : 10));
         }
         if (lucktimer.expired())  {
             lotto = !lotto;
