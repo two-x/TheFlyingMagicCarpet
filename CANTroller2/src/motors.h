@@ -768,7 +768,7 @@ class BrakeControl : public JagMotor {
     // position-based, fade to 100% pressure-based at mid/high pressures.
     // "dominant" PID means the PID loop (pressure or position) that has the majority influence over the motor
     float calc_hybrid_ratio(float pressure_val) {  // returns pressure influence as a ratio (from 0.0 to 1.0) for a given pressure level in percent 
-        if (feedback == NoneFB) return NAN;             // this should not happen, maybe print an error message
+        if (feedback == NoneFB) return NAN;
         if (feedback == PressureFB) return 1.0;
         if (feedback == PositionFB) return 0.0;
         float pressure_ratio = pressure->pc() / 100.0;  // (pressure_val - pressure->opmin()) / (pressure->opmax() - pressure->opmin());  // calculate ratio of output to range

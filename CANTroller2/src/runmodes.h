@@ -25,13 +25,14 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else runmode = oldmode;  // don't drop to hold mode from other (driving) modes
         }
         we_just_switched_modes = (runmode != oldmode);  // currentMode should not be changed after this point in loop
-        oldmode = runmode;        
         if (we_just_switched_modes) {
             if (runmode != LOWPOWER) autosaver_request = REQ_OFF;
+            if (starter.motor && runmode != HOLD && oldmode != STALL) starter.request(REQ_OFF); // the only mode transition the starter motor may remain running thru is stall -> hold
             watchdog.set_codestatus();
             cleanup_state_variables();
         }
-        // common to almost all the modes, so i put it here
+        oldmode = runmode;        
+         // common to almost all the modes, so i put it here
         if (runmode != LOWPOWER) {  // use separate if statement below to check hotrc.sw_event because it will reset any event
             if (hotrc.sw_event(CH3)) ignition.request(REQ_TOG);  // Turn on/off the vehicle ignition. if ign is turned off while the car is moving, this leads to panic stop
         }

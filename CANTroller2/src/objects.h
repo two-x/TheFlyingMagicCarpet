@@ -283,27 +283,31 @@ class Starter {
         write_pin(pin, motor);                                 // and start the motor
         now_req = REQ_NA;                                      // we have serviced starter-on request, so cancel it
     }
-    void turnoff(bool bypass_modechanges=false) {                                              // function to stop the motor
+    void turnoff(bool bypass_modechanges=false) {              // function to stop the motor
         ezread.printf("starter turnoff\n");
-        motor = LOW;                                              // we will turn it off
-        write_pin(pin, motor);                                    // begin driving the pin low voltage
+        motor = LOW;                                           // we will turn it off
+        write_pin(pin, motor);                                 // begin driving the pin low voltage
         if (!bypass_modechanges) {
-            if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
-            if (brake.motormode == AutoHold && runmode != HOLD) brake.setmode(lastbrakemode);  // unless successfully into hold mode, put the brake back to doing whatever it was doing before
+            if (gas.motormode == Starting) gas.setmode(lastgasmode); // put the throttle back to doing whatever it was doing before
+            if (brake.motormode == AutoHold && runmode != HOLD) brake.setmode(lastbrakemode); // unless successfully into hold mode, put the brake back to doing whatever it was doing before
         }
-        now_req = REQ_NA;                                         // cancel current request
+        now_req = REQ_NA;                                      // cancel current request
     }  // if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
+    void check_for_external_tampering() {   // in case an external bug could be turning on the starter instead of us    
+        bool pin_now = read_pin(pin);       // get current value of pin to do the following check
+        if (motor != pin_now) {             // check if someone changed the motor value or started driving our pin
+            ezread.printf("err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
+            turnoff(true);                  // stop the motor either way
+            ignition.panic_request(REQ_ON); // request panic will kill the ignition just in case it did start up
+        }
+    }
     // void set_runtimeout(float newtime) { if (newtime <= run_hilimit && newtime >= run_lolimit) run_timeout = newtime; }
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
-        if (runmode == LOWPOWER) return;              // starter isn't supported during powerdown
-        bool pin_now = read_pin(pin);                 // get current value of pin to do a check
-        if (motor != pin_now) {                       // check if someone changed the motor value or drive our pin
-            ezread.printf("err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor);  // how do we not miss this message?
-            turnoff(true);                            // stop the motor either way
-            ignition.panic_request(REQ_ON);           // request panic to stop the car in case it did start
-        }
+        if (runmode == LOWPOWER) return;  // bypass all this processing and sensor reads, etc. when we're in powerdown mode
+        check_for_external_tampering();
         if (now_req == REQ_TOG) now_req = motor ? REQ_OFF : REQ_ON;  // translate a toggle request to a drive request opposite to the current drive state
         req_active = (now_req != REQ_NA);                   // for idiot light display
+        if (motor && ((now_req == REQ_OFF) || starterTimer.expired())) turnoff(); // stop the motor if we're being asked to, or if it was left on too long
         if (two_click_starter) {                            // if 2 clicks are required to start
             if (now_req == REQ_ON && last_req != REQ_ON) {  // if we got a new on request
                 if (!one_click_done) {                      // if this is the 1st click
@@ -315,7 +319,6 @@ class Starter {
             if (twoclicktimer.expired()) one_click_done = false;  // cancel 2click sequence if too much time elapsed since last click
             last_req = now_req;                                   // allows us to detect when request first goes to on
         }
-        if (motor && ((now_req == REQ_OFF) || starterTimer.expired())) turnoff();  // stop the motor if we're being asked to, or if it was left on too long
         if (motor || now_req != REQ_ON) {  // if starter is already being driven, or we aren't being tasked to drive it
             now_req = REQ_NA;              // cancel any requests
             return;                        // and ditch

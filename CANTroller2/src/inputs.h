@@ -320,6 +320,7 @@ class Touchscreen {
     bool touched() { return nowtouch; }  // returns whether a touch is currently in progress
     bool held() { return (nowtouch && twotapTimer.expired() && !ts_tapped && !ts_doubletapped); } // true if press is held longer than the double-tap validity timeout
     bool onrepeat() {  // if touch is held down, this will return true periodically on consistent key repeat intervals like a pc keyboard
+        if (ontouch()) return true;
         if (!nowtouch || (pressTimer.elapsed() / repeat_timeout <= keyrepeats)) return false;
         keyrepeats++;
         return true;

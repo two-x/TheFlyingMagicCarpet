@@ -793,8 +793,9 @@ class PulseSensor : public Sensor {
     // volatile int64_t timestamp_last_us;  // _stop_timeout_us = 1250000;  // time after last magnet pulse when we can assume the engine is stopped (in us)
     Timer _stop_timer, _pulsecount_timer{1000000};
     bool _low_pulse = true, _pin_level, _pin_inactive = false;
-    float _us, _idle = 600.0, _idle_cold = 750.0, _idle_hot = 500.0;
-    float _freqfactor = 1.0; // freq correction factor equal to received-pulses/actual-rotations (correct for any divider circuitry (<1) or multple magnets per turn (>1).  also, best gay club in miami
+    float _us, _idle = 600.0, _idle_cold = 750.0, _idle_hot = 500.0;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer
+    float _freqfactor = 1.0;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
+    // float _calfactor = 1.0;   // a tunable/calibratable factor same as the above, where if <1 gives fewer si-units/pulse-hz and vice versa.         also, the worst weight-loss scam in miami
     Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
     volatile int64_t _isr_us = 0;
     volatile int64_t _isr_time_last_us = 0;
@@ -877,6 +878,15 @@ class PulseSensor : public Sensor {
         Transducer::print_config(header, ranges);
         if (ranges) ezread.squintf("  pulse = %.0lf %s, abs: %.0lf-%.0lf %s\n", _us, _uber_native_units.c_str(), _absmin_us, _absmax_us, _uber_native_units.c_str());
     }
+    // void calc_mfactor() {  // child classes need to overload this with correct math
+    //     _mfactor = 1.0 * _freqfactor * _calfactor
+    //     set_conversions(_mfactor)  // unfinished.  second guessing this approach
+    // };
+    // void set_calfactor(float newval) {
+    //     if (!iszero(newval) && newval > 0.0) _calfactor = newval;
+
+    // }
+
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // overload the normal function so we can also include us calculations 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
@@ -916,28 +926,36 @@ class PulseSensor : public Sensor {
 };
 // Tachometer represents a magnetic pulse measurement of the engine rotation
 // it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
+// testing 250620:  healthy idle ranges from 1200-1600
+//                  running w/o governor, engine can spin up to 10k rpm. but the governor doesn't allow over like 6k. or maybe as low as 4.5k. check the book!
 class Tachometer : public PulseSensor {
   public:
     sens _senstype = sens::tach;
+    float _calfactor = 1.0;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
+    // float _calfactor = 0.25;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
     Tachometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {  // where actual_hz = pulses_hz * freqfactor (due to external circuitry or magnet arrangement)
         _long_name = "Tachometer";
         _short_name = "tach";
         _si_units = "rpm";
     }
     Tachometer() = delete;
+    float calc_mfactor() { return 60.0 * _calfactor / _freqfactor; }  // 1 Hz = 1 pulse/sec * 60 sec/min * 1.0 / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
+    // float calc_mfactor() { return 60.0 * _calfactor / _freqfactor; }  // 1 Hz = 1 pulse/sec * 60 sec/min * 0.25 / 0.125 pulse/rot = 120 rot/min, (so 120 rpm/Hz)
     void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
         PulseSensor::setup();
-        float m = 60.0 / _freqfactor;  // 1 Hz = 1 pulse/sec * 60 sec/min / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
         // note the max pulse freq at the mcu pin is max-rpm/m , or:  pinmax hz = 4500 rpm * (1/480) hz/rpm = 9.375 hz  (max freq at pin)
         // bc of the divider max freq in the wire is max-pin-hz/freqfactor , or:  wiremax hz = 9.375 hz / 0.125 = 75 hz  (max freq in wire)
         // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=220nF (round up)
-        
-        set_conversions(m, 0.0);
-        set_abslim(0.0, 4500.0);  // the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
+
+        // now we find our final rpm reading seems to be about 4x what it should. until we figure out the root cause, i'm adding a cal factor to compensate it
+        float mfact = calc_mfactor();
+        // mfact = 60.0 / _freqfactor;  // 1 Hz = 1 pulse/sec * 60 sec/min / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
+        set_conversions(mfact, 0.0);
+        set_abslim(0.0, 4800.0);  // estimating the highest rpm we could conceivably ever see from the engine. but may lower b/c the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
         // do i need this line?
         // set_abslim_native(us_to_hz(6000), NAN, false);  // for pulse sensor, set absmin_native to define the stop timeout period. Less Hz means more us which slows our detection of being stopped
         
-        set_oplim(0.0, 3600.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        set_oplim(0.0, 3600.0);  // aka redline,  Max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(10.0);
         set_si(50.0);
@@ -954,6 +972,10 @@ class Tachometer : public PulseSensor {
 
 // Speedometer represents a magnetic pulse measurement of the enginge rotation
 // it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to MPH
+
+// ~ 200ms pulses according to datapage when wheel was turning steady 3.3s per rotation, should have been 1.65s pulses! So, suspect super noisy.
+// also that 220ms was not steady in the slightest, jumped continuously from ~100ms to ~380ms.
+// at higher rpm wheel went faster but was reporting max 20mph when wheel maybe at jogging speed (could be similar 4x calfactor like tach?)
 class Speedometer : public PulseSensor {
   public:
     sens _senstype = sens::speedo;
@@ -966,11 +988,11 @@ class Speedometer : public PulseSensor {
     void setup() {
         PulseSensor::setup();
         // ezread.squintf("%s..\n", _long_name.c_str());
-        float m = 3600.0 * 20 * M_PI / (_freqfactor * 12 * 5280); // 1 Hz = 1 pulse/sec * 3600 sec/hr * 20*pi in/whlrot * 1/2 whlrot/pulse * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.785 mph/Hz)
+        float mfact = 3600.0 * 20 * M_PI / (_freqfactor * 12 * 5280); // 1 Hz = 1 pulse/sec * 3600 sec/hr * 20*pi in/whlrot * 1/2 whlrot/pulse * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.785 mph/Hz)
         // note the max pulse freq is max-mph/m , or:  pinmax hz = 20 mph * (1 / 1.785) hz/mph = 11.2 hz  (max freq at pin and in wire)
         // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=1uF
 
-        set_conversions(m, 0.0);
+        set_conversions(mfact, 0.0);
         set_abslim(0.0, 20.0);  // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
 
         // do i need this line?
@@ -1267,7 +1289,7 @@ class Simulator {
 };
 
 // rmtinput is used by hotrc class below
-class RMTInput {
+class RMTInput {  // note: for some reason if we ever stop reading our rmt objects, the code fails and floods the console w/ rmt failures :(
   public:
     RMTInput(rmt_channel_t channel, gpio_num_t gpio) {
         channel_ = channel;
@@ -1319,7 +1341,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
   public:
     float ema_alpha = 0.065;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
     float pc[NUM_AXES][NUM_VALUS];           // values range from -100% to 100% are all derived or auto-assigned
-    float us[NUM_CHANS][NUM_VALUS] = {
+    float us[NUM_CHANS][NUM_VALUS] = {       // these inherently integral values are kept as floats for more abstractified unit management
         // vals for hotrc v1 (with matte black "HotRC" sticker/receiver)
         // {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         // { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
@@ -1333,7 +1355,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         { 1202, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
         { 1304, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
     float spike_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]  // added
-    float ema_us[NUM_AXES] = { 1500.0, 1500.0 };    // [HORZ/VERT]  // un-deprecated
+    float ema_us[NUM_AXES] = { 1500.0, 1500.0 };    // [HORZ/VERT]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
     float absmin_us = 880;
     float absmax_us = 2091;
     float deadband_us = 15.0f;  // all [DBBOT] and [DBTOP] values above are derived from this by calling derive()
@@ -1430,7 +1452,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         if (sim->simulating(sens::joy)) {
             if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
         }
-        else for (int axis = HORZ; axis <= VERT; axis++) {  // read pulses and update filtered percent values
+        else for (int axis = HORZ; axis <= VERT; axis++) {  // read and filter incoming pwm pulses to update our percent values
             us[axis][RAW] = (float)(rmt[axis].readPulseWidth(true));
             spike_us[axis] = spike_filter(axis, us[axis][RAW]);            
             ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha);
@@ -1458,6 +1480,10 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         radiolost_last = _radiolost;
         return _radiolost;
     }
+    // spike_filter() : i wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals
+    // coming from the hotrc. often the incoming values change suddenly then, usually, quickly jump back by the same
+    // amount. this will erase any spikes that recover fast enough and otherwise change any cliffs detected into gentle
+    // slopes. The cost of this is our readings are delayed by the max spike duration we hope to be able to erase
     bool spike_signbit;
     int spike_length, this_delta, interpolated_slope, loopindex, previndex, spike_cliff[NUM_AXES];
     int spike_threshold[NUM_AXES] = { 6, 6 };
