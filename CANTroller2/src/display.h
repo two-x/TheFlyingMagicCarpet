@@ -665,7 +665,7 @@ class Display {
             draw_ascii(18, motormodecard[steer.motormode]);
             drawval(19, looptimer.uptime());
             for (int line=20; line<=21; line++) draw_eraseval(line);
-            drawval(22, gas.governor, 0.0f, 100.0f, NAN, 1);
+            drawval(22, governor, 0.0f, 100.0f, NAN, 1);
             drawval(23, steer.steer_safe_pc, 0.0f, 100.0f, NAN, 1);
         }
         else if (datapage == PG_JOY) {
@@ -1072,7 +1072,7 @@ class Tuner {
             // with recent changes to tune() I had to move the setter function for governor value into the
             // gas update function, or edit acceleration wouldn't work
             // if (sel == 13) gas.set_governor_pc(tune(gas.governor, id, 0.0f, 100.0f));
-            if (sel == 13) tune(gas.governor, id, 0.0f, 100.0f);
+            if (sel == 13) tune(governor, id, 0.0f, 100.0f);
             else if (sel == 14) tune(&steer.steer_safe_pc, id, 0.0f, 100.0f);
         }
         else if (datapage == PG_JOY) {
@@ -1116,8 +1116,8 @@ class Tuner {
             else if (sel == 7) brake.update_ctrl_config(-1, -1, tune(brake.openloop_mode, id, 0, NumOpenLoopModes-1, true));
             else if (sel == 8) brake.enforce_positional_limits = tune(id);
             else if (sel == 9) brake.set_out_changerate_pcps(tune(brake.max_out_changerate_pcps, id, 0.0f, 1000.0f));
-            else if (sel == 10) gas.update_ctrl_config((int)tune(id));
-            else if (sel == 11) gas.update_cruise_ctrl_config((int)tune(id));
+            else if (sel == 10) gas.set_pid_ena(tune(id));
+            else if (sel == 11) gas.set_cruise_pid_ena(tune(id));
             else if (sel == 12) gas.set_cruise_scheme(tune(gas.cruise_adjust_scheme, id, 0, NumCruiseSchemes-1, true));
             else if (sel == 13) tune(&cruise_brake, id);
             else if (sel == 14) tune(&drive_mode, id, FLY, CRUISE, true);
@@ -1129,7 +1129,7 @@ class Tuner {
             else if (sel == 14) brake.pid_dom->set_kd(tune(brake.pid_dom->kd(), id, 0.0f, NAN));
         }
         else if (datapage == PG_GPID) {
-            if (sel == 9) gas.update_ctrl_config(-1, tune(throttle_linearize_trigger, id));
+            if (sel == 9) tune(&throttle_linearize_trigger, id);
             else if (sel == 10) tune(&gas.linearizer_exponent, id, 1.0f, 3.0f);
             else if (sel == 11) gas.set_out_changerate_degps(tune(gas.get_max_out_changerate_degps(), id, 0.0f, 180.0f));
             else if (sel == 12) gas.pid.set_kp(tune(gas.pid.kp(), id, 0.0f, NAN));
@@ -1137,7 +1137,7 @@ class Tuner {
             else if (sel == 14) gas.pid.set_kd(tune(gas.pid.kd(), id, 0.0f, NAN));
         }
         else if (datapage == PG_CPID) {
-            if (sel == 10) gas.update_cruise_ctrl_config(-1, tune(throttle_linearize_cruise, id));
+            if (sel == 10) tune(&throttle_linearize_cruise, id);
             else if (sel == 11) tune(&cruise_delta_max_pc_per_s, id, 1.0, 35.0);
             else if (sel == 12) gas.cruisepid.set_kp(tune(gas.cruisepid.kp(), id, 0.0f, NAN));
             else if (sel == 13) gas.cruisepid.set_ki(tune(gas.cruisepid.ki(), id, 0.0f, NAN));

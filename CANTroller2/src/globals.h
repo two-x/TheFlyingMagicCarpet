@@ -77,7 +77,7 @@ enum runmode { BASIC=0, LOWPOWER=1, STANDBY=2, STALL=3, HOLD=4, FLY=5, CRUISE=6,
 enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes=3 };
 enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
-enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, NumMotorModes=13 };
+enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, AutoPID=13, NumMotorModes=14 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
 enum openloopmodes { MedianPoint=0, AutoRelease=1, AutoRelHoldable=2, NumOpenLoopModes=3 };
 enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9, PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
@@ -160,10 +160,11 @@ bool overtemp_shutoff_engine = true; // should an engine temp beyond opmax cause
 bool overtemp_shutoff_wheel = true;  // should a wheel temp beyond opmax cause engine shutoff?
 bool throttle_linearize_trigger = true;  // should trigger values be linearized for gas determination?
 bool throttle_linearize_cruise = false;  // should trigger values be linearized when in cruise mode?
-// bool stall_mode_timeout = true;   // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
-bool encoder_reverse = false;        // should clockwise encoder twists indicate decreases instead of an increases?
-int drive_mode = CRUISE;             // from hold mode, enter cruise or fly mode by default?
-int throttle_ctrl_mode = ActivePID;  // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
+// bool stall_mode_timeout = true;    // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
+bool encoder_reverse = false;         // should clockwise encoder twists indicate decreases instead of an increases?
+bool throttle_pid_default = true;     // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
+bool cruise_pid_default = false;      // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
+int drive_mode = CRUISE;              // from hold mode, enter cruise or fly mode by default?
 
 // global tunable variables
 float wheeldifferr = 35.0f;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel before idiot light
@@ -180,6 +181,7 @@ float tuning_rate_pcps = 7.5f;          // values being edited by touch buttons 
 float neobright = 20.0f;                // default for us dim/brighten the neopixels in percent
 float neosat = 90.0f;                   // default saturation of neopixels in percent
 int i2c_frequency = 400000;             // in kHz. standard freqs are: 100k, 400k, 1M, 3.4M, 5M
+float governor = 95.0f;                 // software governor will only allow this percent of full-open throttle (percent 0-100)
 
 // non-tunable values. probably these belong with their related code, but are global to allow accessibility from everywhere
 #ifdef MonitorBaudrate
@@ -444,13 +446,14 @@ void kick_inactivity_timer(int source=-1) {
 // };
 
 // EZRead is a text-logging console for display on a small low-res LCD in a window (or fullscreen if you feel like coding it).
-//   the output text is very efficient with use of space, except the most recent message at bottom, which is zoomed in enormously
-//   the user-obsessed legibility of EZRead is something you'll definitely want to write home to your parents about after every use
-//   lookback(int);   scrolls the given number of lines back in time to look at the past
+//   the output text is very space-efficient, except the most recent message at bottom, which is zoomed in "enormously".
+//   the user-obsessed legibility of EZRead is something you'll write home to your parents about after every use
+//   lookback(int);   scrolls the given number of lines into the past
 //   printf();   writes formatted text to ezread. use the same arguments as printf, plus an optional rgb332 color as the 1st arg
-//   squintf();  like running ezprint() followed by Serial.printf() on the same arguments. will write to both.
-//                 somewhere is documentation on why this is called squintf, but I wasn't able to read it
-//   arguments for the above: ([optional uint8_t color], "printf-compatible format string", <other_printf_supported_args>);
+//   squintf();  like running ezread.printf(...) followed by Serial.printf(...) w/ the same arguments. splits content to both.
+//               ok to use the optional extra 1st argument to color the ezread content, this is ignored by the console content.
+//               the documentation explains why this is called squintf, but I wasn't able to read it w/o my eye loupe.
+//   arguments for last two: ([optional uint8_t color], "printf-compatible format string", <other_printf_supported_args>);
 #include <iostream>
 #include <string>
 #include <sstream>

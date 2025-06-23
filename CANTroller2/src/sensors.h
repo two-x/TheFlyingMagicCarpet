@@ -926,12 +926,11 @@ class PulseSensor : public Sensor {
 };
 // Tachometer represents a magnetic pulse measurement of the engine rotation
 // it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
-// testing 250620:  healthy idle ranges from 1200-1600
-//                  running w/o governor, engine can spin up to 10k rpm. but the governor doesn't allow over like 6k. or maybe as low as 4.5k. check the book!
 class Tachometer : public PulseSensor {
   public:
     sens _senstype = sens::tach;
     float _calfactor = 1.0;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
+    float _governmax_rpm;
     // float _calfactor = 0.25;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
     Tachometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {  // where actual_hz = pulses_hz * freqfactor (due to external circuitry or magnet arrangement)
         _long_name = "Tachometer";
@@ -956,16 +955,23 @@ class Tachometer : public PulseSensor {
         // set_abslim_native(us_to_hz(6000), NAN, false);  // for pulse sensor, set absmin_native to define the stop timeout period. Less Hz means more us which slows our detection of being stopped
         
         set_oplim(0.0, 3600.0);  // aka redline,  Max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        _governmax_rpm = _opmax * governor / 100.0;
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(10.0);
         set_si(50.0);
         _us = hz_to_us(_native.val());
         print_config();
     }
+    void set_val_from_pin() {
+        PulseSensor::set_val_from_pin();
+        _governmax_rpm = _opmax * governor / 100.0;
+    }
     // float idle() { return _idle; }
     // float* idle_ptr() { return &_idle; }
     float idle_cold() { return _idle_cold; }
     float idle_hot() { return _idle_hot; }
+    float governmax() { return _governmax_rpm; }
+    float* governmax_ptr() { return &_governmax_rpm; }
     void set_idlecold(float newidlecold) { _idle_cold = constrain(newidlecold, _idle_hot + 1.0, _opmax); }
     void set_idlehot(float newidlehot) { _idle_hot = constrain(newidlehot, _opmin, _idle_cold - 1.0); }
 };
