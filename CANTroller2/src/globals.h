@@ -77,7 +77,7 @@ enum runmode { BASIC=0, LOWPOWER=1, STANDBY=2, STALL=3, HOLD=4, FLY=5, CRUISE=6,
 enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes { SuspendFly=0, TriggerPull=1, TriggerHold=2, NumCruiseSchemes=3 };
 enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
-enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, Linearized=13, NumMotorModes=14 };
+enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, NumMotorModes=13 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
 enum openloopmodes { MedianPoint=0, AutoRelease=1, AutoRelHoldable=2, NumOpenLoopModes=3 };
 enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9, PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
@@ -152,16 +152,18 @@ bool screensaver_enabled = true;     // does fullscreen screensaver start automa
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
 bool use_tft_colors_for_neo = true;  // should neopixel colors be based on onscreen icon colors? (otherwise they'll split the full hue spectrum amongst themselves)
 bool print_error_changes = false;    // !!! temporarily suppressed !!! should diag print status changes and new error events to console?
-bool pot_controls_animation_timeout = false;  // when showing fullscreen animations, should the pot value control the next animation timeout?
+bool pot_controls_animation_timeout = false; // when showing fullscreen animations, should the pot value control the next animation timeout?
 bool cruise_brake = true;            // does brake work in cruise mode
 bool use_idle_boost = false;         // should we try to manage a dynamic idle speed?
 bool overtemp_shutoff_brake = true;  // should a brake temp beyond opmax cause a brake motor and engine shutoff?
 bool overtemp_shutoff_engine = true; // should an engine temp beyond opmax cause engine shutoff and possible panic?
 bool overtemp_shutoff_wheel = true;  // should a wheel temp beyond opmax cause engine shutoff?
-// bool stall_mode_timeout = true;      // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
+bool throttle_linearize_trigger = true;  // should trigger values be linearized for gas determination?
+bool throttle_linearize_cruise = false;  // should trigger values be linearized when in cruise mode?
+// bool stall_mode_timeout = true;   // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
 bool encoder_reverse = false;        // should clockwise encoder twists indicate decreases instead of an increases?
-int drive_mode = CRUISE;             // enter cruise or fly mode initially?
-int throttle_ctrl_mode = Linearized; // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
+int drive_mode = CRUISE;             // from hold mode, enter cruise or fly mode by default?
+int throttle_ctrl_mode = ActivePID;  // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 
 // global tunable variables
 float wheeldifferr = 35.0f;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel before idiot light

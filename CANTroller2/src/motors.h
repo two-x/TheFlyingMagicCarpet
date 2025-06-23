@@ -235,7 +235,7 @@ class QPID {
     float* target_ptr() { return &_target; }
 };
 
-static std::string motormodecard[NumMotorModes] = { "NA", "Halt", "Idle", "Releas", "OpLoop", "PropLp", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start", "Linear" };
+static std::string motormodecard[NumMotorModes] = { "NA", "Halt", "Idle", "Releas", "OpLoop", "PropLp", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start" };
 static std::string cruiseschemecard[NumCruiseSchemes] = { "FlyPID", "TrPull", "TrHold" };
 static std::string brakefeedbackcard[NumBrakeFB] = { "BkPosn", "BkPres", "Hybrid", "None" };
 static std::string openloopmodecard[NumOpenLoopModes] = { "Median", "AutRel", "ARHold" };
@@ -267,10 +267,10 @@ class ServoMotor {
         pid_timer.set(pid_timeout);
         motor.attach(pin, us[ABSMIN], us[ABSMAX]);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     }
-    float out_pc_to_si(float _pc) {  // Eventually this should be linearized
+    float out_pc_to_si(float _pc) {
         return map(_pc, pc[ABSMIN], pc[ABSMAX], si[ABSMIN], si[ABSMAX]); 
     }
-    float out_si_to_pc(float _si) {  // Eventually this should be linearized
+    float out_si_to_pc(float _si) {
         return map(_si, si[ABSMIN], si[ABSMAX], pc[ABSMIN], pc[ABSMAX]);
     }
     float out_si_to_us(float _si, bool rev=false) {  // works for motor with or without stop value
@@ -320,12 +320,12 @@ class JagMotor : public ServoMotor {
         si[OPMAX] = map(pc[OPMAX], pc[STOP], pc[ABSMAX], si[STOP], si[ABSMAX]);
         si[MARGIN] = map(pc[MARGIN], pc[ABSMIN], pc[ABSMAX], si[ABSMIN], si[ABSMAX]);  // us[MARGIN] = map(pc[MARGIN], pc[ABSMIN], pc[ABSMAX], us[ABSMIN], us[ABSMAX]);
     }
-    float out_pc_to_si(float _pc) {  // Eventually this should be linearized
+    float out_pc_to_si(float _pc) {
         if (_pc > pc[STOP]) return map(_pc, pc[STOP], pc[ABSMAX], si[STOP], si[ABSMAX]);
         if (_pc < pc[STOP]) return map(_pc, pc[STOP], pc[ABSMIN], si[STOP], si[ABSMIN]);
         return si[STOP];
     }
-    float out_si_to_pc(float _si) {  // Eventually this should be linearized
+    float out_si_to_pc(float _si) {
         if (_si > si[STOP]) return map(_si, si[STOP], si[ABSMAX], pc[STOP], pc[ABSMAX]);
         if (_si < si[STOP]) return map(_si, si[STOP], si[ABSMIN], pc[STOP], pc[ABSMIN]);
         return pc[STOP];
@@ -422,7 +422,6 @@ class ThrottleControl : public ServoMotor {
     float _idle_pc = 0.0, idle_boost_pc = 0.0; // 11.3;                // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
     float idle_temp_f = NAN;  // temperature determined for purpose of calculating boost. will prefer engine temp sensor but has fallback options 
-    bool linearize_trigger = true;  // in the future, remove Linearized as a motor mode instead use this simple flag
     // ... with:
     // ThrottleServo servo;
     // ThrottleControl(int pin, int freq) {
@@ -483,7 +482,7 @@ class ThrottleControl : public ServoMotor {
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
         cruisepid.init(speedo->ptr(), &pc[OPMIN], &pc[GOVERN], cruise_opengas_kp, cruise_opengas_ki,
             cruise_opengas_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
-        update_ctrl_config(pid_enabled);
+        update_ctrl_config(pid_enabled, (int)throttle_linearize_trigger);
         set_out_changerate_pcps(out_si_to_pc(65.0));  // don't turn faster than 65 degrees per sec
         Serial.printf("reverse=%d 0% = %lf us, 100% = %lf us\n", reverse, out_pc_to_us(0.0, reverse), out_pc_to_us(100.0, reverse));
     }
@@ -502,71 +501,76 @@ class ThrottleControl : public ServoMotor {
         _idle_pc = pc[OPMIN] + idle_boost_pc;
         // ezread.squintf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);
     }
-    void cruise_adjust(int joydir) {
+    float cruise_adjust(int joydir, float thr_targ) {
         if (joydir == JOY_UP) ctrlratio = (trigger_vert_pc - hotrc->pc[VERT][CENT]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][CENT]);
         else ctrlratio = (hotrc->pc[VERT][CENT] - trigger_vert_pc) / (hotrc->pc[VERT][CENT] - hotrc->pc[VERT][OPMIN]);
         if (cruise_adjust_scheme == TriggerHold) {
-            if (cruise_adjusting) throttle_target_pc += joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
+            if (cruise_adjusting) throttle_linearize_cruise += joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
             cruiseDeltaTimer.reset(); 
         }
         else if (cruise_adjust_scheme == TriggerPull && std::abs(trigger_vert_pc) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
-            if (!cruise_adjusting) adjustpoint = throttle_target_pc;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
-            throttle_target_pc = adjustpoint + ctrlratio * cruise_angle_attenuator * (((joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
+            if (!cruise_adjusting) adjustpoint = thr_targ;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
+            thr_targ = adjustpoint + ctrlratio * cruise_angle_attenuator * (((joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
             cruise_ctrl_extent_pc = std::abs(trigger_vert_pc);
         }
         else if (cruise_adjust_scheme == SuspendFly) {
             if (!cruise_adjusting) adjustpoint = (cruise_pid_enabled) ? rpm_to_pc(tach->val()) : pc[OUT];
-            throttle_target_pc = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[GOVERN] : _idle_pc) - adjustpoint);
+            thr_targ = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[GOVERN] : _idle_pc) - adjustpoint);
         }
-        if (cruise_pid_enabled) cruisepid.set_target(speedo->val());  // while adjusting, constantly update cruise pid target to whatever the current speed is
-        cruise_adjusting = true;
+        if (cruise_pid_enabled) {
+            cruisepid.set_output(thr_targ);  // while adjusting, the cruise pid is not in control, so update its output value to stay accurate
+            cruisepid.set_target(speedo->val());  // while adjusting, constantly update cruise pid target to whatever the current speed is
+        }
+        return thr_targ;
     }
-    void cruise_logic() {
-        int joydir = hotrc->joydir(VERT);
-        if ((joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released) {  // adjustments disabled until trigger has been to center at least once since going to cruise mode
-            cruise_adjust(joydir);
-            return;
+    float cruise_logic(float thr_targ) {
+        int joydir = hotrc->joydir(VERT); // if trigger is being pulled under any other conditions we do nothing. below can assume trigger is released
+        cruise_adjusting = (joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released;  // adjustments disabled until trigger has been to center at least once since going to cruise mode
+        if (joydir == JOY_CENT) {
+            cruise_adjusting = false;
+            cruise_trigger_released = true;
+            cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
+            if (cruise_pid_enabled) thr_targ = cruisepid.compute();  // if cruise is using pid, it's only active when trigger is released
         }
-        if (joydir != JOY_CENT) return;  // if trigger is being pulled under any other conditions we do nothing. below can assume trigger is released
-        cruise_adjusting = false;
-        cruise_trigger_released = true;
-        cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
-        if (cruise_pid_enabled) throttle_target_pc = cruisepid.compute();  // if cruise is using pid, it's only active when trigger is released
+        else if (cruise_adjusting) thr_targ = cruise_adjust(joydir, thr_targ);
+        return thr_targ;
     }
     void set_output() {
-        // ezread.squintf("mode");
-        trigger_vert_pc = hotrc->pc[VERT][FILT];  // copy current trigger value to internal value, in case we linearize it
-        if (motormode == Linearized && linearize_trigger) linearizer(&trigger_vert_pc, linearizer_exponent);  // we now linearize the trigger value not the output value
-        // if (linearize_trigger) linearizer(&trigger_vert_pc, linearizer_exponent);  // eventually use this instead of above (have a flag instead of a motor mode)
-        
-        if (motormode == Idle) throttle_target_pc = _idle_pc;
-        else if (motormode == Starting) throttle_target_pc = starting_pc;
-        else if (motormode == Cruise) cruise_logic();  // cruise mode just got too big to be nested in this if-else clause
-        else if (motormode == ParkMotor) throttle_target_pc = pc[PARKED];
-        else if (motormode == OpenLoop || motormode == ActivePID || motormode == Linearized) {
-            if (hotrc->joydir() != JOY_UP) throttle_target_pc = _idle_pc;  // If in deadband or being pushed down, we want idle
-            else throttle_target_pc = map(trigger_vert_pc, hotrc->pc[VERT][CENT], hotrc->pc[VERT][OPMAX], _idle_pc, pc[GOVERN]);  // actuators still respond even w/ engine turned off
-        }
-        else if (motormode == Calibrate) {
+        if (motormode == Calibrate) {
             cal_gasmode = true;
             pc[OUT] = out_si_to_pc(map(pot->val(), pot->opmin(), pot->opmax(), si[ABSMIN], si[ABSMAX]));  // gas_ccw_max_us, gas_cw_min_us
             return;  // cal mode sets the output directly, skipping the post processing below
         }  // ezread.squintf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], _idle_pc);
-        float new_out;
-        throttle_target_pc = constrain(throttle_target_pc, pc[PARKED], pc[OPMAX]);
-        if (motormode == ActivePID) {
-            pid.set_target(pc_to_rpm(throttle_target_pc));
-            new_out = pid.compute();
+
+        trigger_vert_pc = hotrc->pc[VERT][FILT];  // copy current trigger value to internal value, in case we linearize it
+        if (motormode == Idle) throttle_target_pc = _idle_pc;
+        else if (motormode == Starting) throttle_target_pc = starting_pc;
+        else if (motormode == ParkMotor) throttle_target_pc = pc[PARKED];
+        else if (motormode == Cruise) {
+            if (throttle_linearize_cruise) linearizer(&trigger_vert_pc, linearizer_exponent);  // we now linearize the trigger value not the output value
+            throttle_target_pc = cruise_logic(throttle_target_pc);  // cruise mode just got too big to be nested in this if-else clause
         }
-        else new_out = throttle_target_pc;  // ezread.squintf(" ela:%ld pcps:%lf", throttleRateTimer.elapsed(), max_throttle_angular_velocity_pcps);
-        pc[OUT] = new_out;
-        // if (motormode == Linearized) linearizer(&pc[OUT], linearizer_exponent);  // we used to linearize the motor output, now instead linearizing the trigger input
-        if (motormode != ActivePID) rate_limiter();  // the pid should already be set to limit rate if needed.   pc[OUT] = rate_limiter(new_out);  max_out_change_rate_pcps
+        else if (motormode == OpenLoop || motormode == ActivePID) {  // combine these into one "Driving" mode
+            if (throttle_linearize_trigger) linearizer(&trigger_vert_pc, linearizer_exponent);  // we now linearize the trigger value not the output value
+            if (hotrc->joydir() == JOY_UP) throttle_target_pc = map(trigger_vert_pc, hotrc->pc[VERT][CENT], hotrc->pc[VERT][OPMAX], _idle_pc, pc[GOVERN]);  // actuators still respond even w/ engine turned off
+            else throttle_target_pc = _idle_pc;  // If in deadband or being pushed down, we want idle
+        }
+        else {
+            ezread.squintf(RED, "err: invalid gas motor mode (%d)\n", motormode);  // ignition.panic_request(REQ_ON);
+            return;
+        }
+        throttle_target_pc = constrain(throttle_target_pc, pc[PARKED], pc[OPMAX]);
+        if (pid_enabled) {
+            pid.set_target(pc_to_rpm(throttle_target_pc));
+            pc[OUT] = pid.compute();
+        }
+        else pc[OUT] = throttle_target_pc;
     }
     void postprocessing() {
         if (motormode == Calibrate) pc[OUT] = constrain(pc[OUT], pc[ABSMIN], pc[ABSMAX]);
         else if (motormode == ParkMotor || motormode == Halt) pc[OUT] = constrain(pc[OUT], pc[PARKED], pc[GOVERN]);
-        else if (motormode != ActivePID) pc[OUT] = constrain(pc[OUT], _idle_pc, pc[GOVERN]);   // pid should constrain on its own, do not want to go editing its output
+        else pc[OUT] = constrain(pc[OUT], _idle_pc, pc[GOVERN]);   // pid should constrain on its own, do not want to go editing its output
+        if (!pid_enabled) rate_limiter();  // the pid should already be set to limit rate if needed.   pc[OUT] = rate_limiter(new_out);  max_out_change_rate_pcps
         // if (motormode == ActivePID) pid.set_output(pc[OUT]);  // feed possibly-modified output value back into pid
         // if ((motormode == Cruise) && cruise_pid_enabled) cruisepid.set_output(throttle_target_pc);  // feed possibly-modified output value back into pid
     }
@@ -578,6 +582,7 @@ class ThrottleControl : public ServoMotor {
         throttleRateTimer.reset();
         if (_mode == Cruise) {
             cruisepid.set_target(speedo->val());  // set pid loop speed target to current speed  (for SuspendFly mode)
+            cruisepid.set_output(pc[OUT]);  // set pid loop speed target to current speed  (for SuspendFly mode)
             pid.set_target(tach->val());  // initialize pid output (rpm target) to current rpm  (for SuspendFly mode)
             throttle_target_pc = pc[OUT];  //  set target throttle angle to current throttle angle  (for TriggerPull/TriggerHold modes)
             cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
@@ -588,7 +593,8 @@ class ThrottleControl : public ServoMotor {
         }
         motormode = _mode;
     }
-    void update_ctrl_config(int new_pid_ena=unlikely_int) {   // run w/o arguments each loop to enforce configuration limitations, or call with an argument to enable/disable pid and update. do not change pid_enabled anywhere else!
+    void update_ctrl_config(int new_pid_ena=unlikely_int, int new_linearize=unlikely_int) {   // run w/o arguments each loop to enforce configuration limitations, or call with an argument to enable/disable pid and update. do not change pid_enabled anywhere else!
+        bool printit = false;
         if (new_pid_ena != unlikely_int) pid_enabled = (bool)new_pid_ena;     // receive new pid enable setting (ON/OFF) if given
         if (pid_enabled != pid_ena_last) {
             if (pid_enabled) {
@@ -600,13 +606,24 @@ class ThrottleControl : public ServoMotor {
                 cruisepid.set_tunings(cruise_opengas_kp, cruise_opengas_ki, cruise_opengas_kd);
                 setmode(motormode);  // ensure current motor mode is consistent with configs set here
             }
-            ezread.squintf("throttle pid %s\n", pid_enabled ? "enabled" : "disabled");
+            printit = true;
         }
+        if ((new_linearize != unlikely_int) && ((bool)(new_linearize) != throttle_linearize_trigger)) {
+            throttle_linearize_trigger = (bool)new_linearize;
+            printit = true;
+        }
+        if (printit) ezread.squintf("throttle pid %s, %s linearizer\n", pid_enabled ? "enabled" : "disabled", throttle_linearize_trigger ? "w/" : "w/o");
         pid_ena_last = pid_enabled;
     }
-    void update_cruise_ctrl_config(int new_pid_ena=-5) {  // pass in OFF or ON (for compatibility with brake function)
-        if (new_pid_ena != -5) cruise_pid_enabled = (bool)new_pid_ena;     // otherwise receive new pid enable setting (ON/OFF) if given
-        if (cruise_pid_enabled != cruise_pid_ena_last) ezread.squintf("cruise pid %s\n", cruise_pid_enabled ? "enabled" : "disabled");
+    void update_cruise_ctrl_config(int new_pid_ena=unlikely_int, int new_linearize=unlikely_int) {  // pass in OFF or ON (for compatibility with brake function)
+        bool printit = false;
+        if (new_pid_ena != unlikely_int) cruise_pid_enabled = (bool)new_pid_ena;      
+        if (cruise_pid_enabled != cruise_pid_ena_last) printit = true;       
+        if ((new_linearize != unlikely_int) && ((bool)(new_linearize) != throttle_linearize_cruise)) {
+            throttle_linearize_cruise = (bool)new_linearize;
+            printit = true;
+        }
+        if (printit) ezread.squintf("cruise pid %s, %s linearizer\n", cruise_pid_enabled ? "enabled" : "disabled", throttle_linearize_cruise ? "w/" : "w/o");
         cruise_pid_ena_last = cruise_pid_enabled;
     }
     void set_cruise_scheme(int newscheme) {

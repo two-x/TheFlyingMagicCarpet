@@ -260,20 +260,79 @@ class Ignition {
 };
 static Ignition ignition(ignition_pin);
 
+// Here i have started inplementing a way to record and display a record of what the last requests were and where they came from. abandoned for now
+// class Ignition {
+//   private:
+//     int ign_req = REQ_NA, panic_req = REQ_NA, pin;
+//     bool paniclast, booted = false;
+//     Timer panicTimer{15000000};  // how long should a panic stop last?  we can't stay mad forever
+//     void ign_request(int req, std::string reason="unknown") {  // keep these reasons 6 chars or less so we can display in datapage!
+//         ign_req = ign_req_last = req;
+//         ign_req_reason_last = reason;
+//     }
+//   public:
+//     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
+//     std::string ign_req_reason_last = "init", panic_req_reason_last = "init";
+//     int ign_req_last = REQ_NA, panic_req_last = REQ_NA;;
+//     // bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
+//     Ignition(int _pin) : pin(_pin) {}
+//     void request(int req, std::string reason="unknown") {  // just so the externally accessible function has a more understandable name?  pretty stupid or what
+//         ign_request(req, reason);
+//     }
+//     void panic_request(int req, std::string reason="unknown") {  // keep these reasons 6 chars or less so we can display in datapage!
+//         panic_req = panic_req_last = req;
+//         panic_req_reason_last = reason;
+//     }
+//     void setup() {  // must run after diag recovery function, to ensure initial ign value is asserted correctly
+//         bool pin_initial_val = LOW;
+//         if (!booted) {
+//             if (ign_req == REQ_ON) pin_initial_val = HIGH;
+//             else pin_initial_val = LOW;        
+//             set_pin(pin, OUTPUT, pin_initial_val);
+//         }
+//         booted = true;
+//         ign_req = REQ_NA;
+//     }
+//     void update() {  // Run once each main loop
+//         if (runmode == LOWPOWER) return;
+//         if (panic_req == REQ_TOG) panic_req = !panicstop;
+//         if (ign_req == REQ_TOG) ign_req = !signal;
+//         // else if (request == signal) request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
+//         if (speedo.stopped() || panicTimer.expired()) panic_req = REQ_OFF;  // Cancel panic stop if car is stopped
+//         if (!speedo.stopped() && (runmode == FLY || runmode == CRUISE || runmode == HOLD)) {
+//             if (signal && ign_req == REQ_OFF) panic_request(REQ_ON, "intern");;  // ignition cut while driving causes panic stop
+//             if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_request(REQ_ON, "intern");
+//         }
+//         if (panic_req != REQ_NA) {
+//             panicstop = (panic_req == REQ_ON) ? true : false;    // ezread.squintf("panic=%d\n", panicstop);
+//             if (panicstop != paniclast) {
+//                 prefs.putUInt("panicstop", (uint32_t)panicstop);  // this is read at boot, see diag.h
+//                 if (panicstop) panicTimer.reset();
+//             }
+//         }
+//         paniclast = panicstop;
+//         if (panicstop) ign_req = REQ_OFF;  // panic stop causes ignition cut
+//         if (ign_req != REQ_NA && runmode != LOWPOWER) {
+//             signal = (bool)ign_req;
+//             write_pin(pin, signal);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
+//         }
+//         panic_req = ign_req = REQ_NA;  // cancel outstanding requests
+//     }
+// };
+// static Ignition ignition(ignition_pin);
+
 class Starter {
   private:
     int lastbrakemode, lastgasmode, pin;
     Timer starterTimer, twoclicktimer{2000000}, brakeTimer{4000000};  // if remotely-started starting event is left on for this long, end it automatically
-  public:
-    Starter(int _pin) : pin(_pin) {}
-    int now_req = REQ_NA, last_req = REQ_NA;
-    bool req_active = false, one_click_done = false, motor = LOW;    // motor is the current state of starter voltage. set in this class only
-    float run_timeout = 3.5, run_lolimit = 1.0, run_hilimit = 10.0;  // in seconds
-    void setup() {
-        ezread.squintf("starter (p%d) output-only supported\n", pin);
-        set_pin(pin, OUTPUT);                                  // set pin as output
+    void check_for_external_tampering() {   // in case an external bug could be turning on the starter instead of us    
+        bool pin_now = read_pin(pin);       // get current value of pin to do the following check
+        if (motor != pin_now) {             // check if someone changed the motor value or started driving our pin
+            ezread.printf("err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
+            turnoff(true);                  // stop the motor either way
+            ignition.panic_request(REQ_ON); // request panic will kill the ignition just in case it did start up
+        }
     }
-    void request(int req) { now_req = req; }                   // squintf("r:%d n:%d\n", req, now_req);}
     void turnon() {                                            // function to start the motor
         ezread.printf("starter turnon\n");                     // maybe use ezread.squintf instead? (prints to both screen and console)
         lastgasmode = gas.motormode;                           // remember incumbent gas setting
@@ -293,14 +352,16 @@ class Starter {
         }
         now_req = REQ_NA;                                      // cancel current request
     }  // if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
-    void check_for_external_tampering() {   // in case an external bug could be turning on the starter instead of us    
-        bool pin_now = read_pin(pin);       // get current value of pin to do the following check
-        if (motor != pin_now) {             // check if someone changed the motor value or started driving our pin
-            ezread.printf("err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
-            turnoff(true);                  // stop the motor either way
-            ignition.panic_request(REQ_ON); // request panic will kill the ignition just in case it did start up
-        }
+public:
+    Starter(int _pin) : pin(_pin) {}
+    int now_req = REQ_NA, last_req = REQ_NA;
+    bool req_active = false, one_click_done = false, motor = LOW;    // motor is the current state of starter voltage. set in this class only
+    float run_timeout = 3.5, run_lolimit = 1.0, run_hilimit = 10.0;  // in seconds
+    void setup() {
+        ezread.squintf("starter (p%d) output-only supported\n", pin);
+        set_pin(pin, OUTPUT);                                  // set pin as output
     }
+    void request(int req) { now_req = req; }                   // squintf("r:%d n:%d\n", req, now_req);}
     // void set_runtimeout(float newtime) { if (newtime <= run_hilimit && newtime >= run_lolimit) run_timeout = newtime; }
     void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
         if (runmode == LOWPOWER) return;  // bypass all this processing and sensor reads, etc. when we're in powerdown mode

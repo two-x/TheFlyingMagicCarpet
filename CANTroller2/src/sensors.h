@@ -1392,7 +1392,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             pc[axis][OPMIN] = -100.0;
             pc[axis][CENT] = 0.0;
             pc[axis][OPMAX] = 100.0;
-            m_factor = (pc[axis][OPMAX] - pc[axis][OPMIN]) / (float)(us[axis][OPMAX] - us[axis][OPMIN]);
+            m_factor = (pc[axis][OPMAX] - pc[axis][OPMIN]) / (us[axis][OPMAX] - us[axis][OPMIN]);
             pc[axis][DBBOT] = pc[axis][CENT] - deadband_us * m_factor;
             pc[axis][DBTOP] = pc[axis][CENT] + deadband_us * m_factor;
             pc[axis][MARGIN] = margin_us * m_factor;
@@ -1423,36 +1423,48 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     }
     int next_unfilt_rawval (int axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
     int joydir(int axis = VERT) {
-        if (axis == VERT) return (pc[axis][FILT] > pc[axis][CENT]) ? JOY_UP : ((pc[axis][FILT] < pc[axis][FILT]) ? JOY_DN : JOY_CENT);
-        return ((pc[axis][FILT] > pc[axis][CENT]) ? JOY_RT : ((pc[axis][FILT] < pc[axis][CENT]) ? JOY_LT : JOY_CENT));
+        if (axis == VERT) return (pc[axis][FILT] > pc[axis][CENT]) ? JOY_UP : (pc[axis][FILT] < pc[axis][CENT]) ? JOY_DN : JOY_CENT;
+        return (pc[axis][FILT] > pc[axis][CENT]) ? JOY_RT : (pc[axis][FILT] < pc[axis][CENT]) ? JOY_LT : JOY_CENT;
     }  // return (pc[axis][FILT] > pc[axis][CENT]) ? ((axis == VERT) ? JOY_UP : JOY_RT) : (pc[axis][FILT] < pc[axis][CENT]) ? ((axis == VERT) ? JOY_DN : JOY_LT) : JOY_CENT;
     void sim_button_press(int chan) { _sw_event[chan] = true; }
   private:
-    void toggles_update() {  // note indices for some arrays use [chan-2] to use lower indices
-        static Timer toggletimer[2] = { 60000, 60000 }; // to ensure no spurious events, changes must persist this long to count (no human can click this fast)
-        static bool sw_pending[2];                      // flags whether a new value is pending, waiting for validity timeout
-        if (_radiolost) return;                         // no possibility of channel clicks if there's no radio
-        for (int chan = CH3; chan <= CH4; chan++) {     // do once for each digital channel
-            us[chan][RAW] = (float)(rmt[chan].readPulseWidth(true)); // read the newest pulsewidth in us
-            bool current = (us[chan][RAW] <= us[chan][CENT]);        // determine the sw value just read (if new reading is below or above the center frequency)
-            if (current != sw[chan]) {                    // if new read value differs from prev valid value ...
-                if (!sw_pending[chan-2]) {                           // if we don't already have a new pending value change ...
-                    sw_pending[chan-2] = true;                       // flag that we do have a potential value change
-                    toggletimer[chan-2].reset();                     // and start the validity timer.
-                }  // until the timer runs out all new readings must also differ from prev valid value, for the pending value to commit
-                else if (toggletimer[chan-2].expired()) { // if we do have a switch pending, and the validity timer expires ...
-                    sw[chan] = current;                   // commit the new value
-                    _sw_event[chan] = true;               // flag that a switch event occurred, detectable by external code
-                    kick_inactivity_timer(HURCTog);       // register that human activity occurred
-                    sw_pending[chan-2] = false;           // reset pending state
-                }
+    void toggles_update() {
+        for (int chan = CH3; chan <= CH4; chan++) {
+            us[chan][RAW] = (float)(rmt[chan].readPulseWidth(true));
+            sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
+            if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
+                _sw_event[chan] = true;          // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+                kick_inactivity_timer(HURCTog);  // evidence of user activity
             }
-            else sw_pending[chan-2] = false;  // if new read value differs from previous reads before the timeout, reject the pending value as noise
+            sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
         }
     }
+    // new untested reimplementation of handler for the digital hotrc channel buttons, on the back deck for now
+    // void toggles_update() {
+    //     static Timer toggletimer[2] = { 60000, 60000 };   // to ensure no spurious events, changes must persist this long to count (no human can click this fast)
+    //     static bool sw_pending[2];                        // flags whether a new value is pending, waiting for validity timeout
+    //     if (_radiolost) return;                           // no possibility of channel clicks if there's no radio
+    //     for (int chan = CH3; chan <= CH4; chan++) {       // do once for each digital channel
+    //         us[chan][RAW] = (float)(rmt[chan].readPulseWidth(true)); // read the newest pulsewidth in us
+    //         bool current = (us[chan][RAW] <= us[chan][CENT]);        // determine the sw value just read (if new reading is below or above the center frequency)
+    //         if (current != sw[chan]) {                    // if new read value differs from prev valid value ...
+    //             if (!sw_pending[chan-2]) {                // if we don't already have a new pending value change ...
+    //                 sw_pending[chan-2] = true;            // flag that we do have a potential value change
+    //                 toggletimer[chan-2].reset();          // and start the validity timer.
+    //             }  // until the timer runs out all new readings must also differ from prev valid value, for the pending value to commit
+    //             else if (toggletimer[chan-2].expired()) { // if we do have a switch pending, and the validity timer expires ...
+    //                 sw[chan] = current;                   // commit the new value
+    //                 _sw_event[chan] = true;               // flag that a switch event occurred, detectable by external code
+    //                 kick_inactivity_timer(HURCTog);       // register that human activity occurred
+    //                 sw_pending[chan-2] = false;           // reset pending state
+    //             }
+    //         }      // if new read value differs from previous reads before the timeout, reject the pending value as noise
+    //         else sw_pending[chan-2] = false;
+    //     }
+    // }
     float us_to_pc(int axis, float _us) {
-        if (_us >= us[axis][CENT]) return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-        return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);    
+        if (_us >= us[axis][CENT]) return map(_us, us[axis][CENT], us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
+        return map(_us, us[axis][CENT], us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);    
     }
     float remove_deadbands_us(int axis, float _us) {
         if (_us > us[axis][DBTOP]) return map(_us, us[axis][DBTOP], us[axis][OPMAX], us[axis][CENT], us[axis][OPMAX]);
