@@ -509,7 +509,7 @@ class I2CSensor : public Sensor {
     // }
     void print_on_boot(bool detected, bool responding) {
         // if (header) Transducer::print_config(true, false);
-        ezread.squintf("%s sensor (p%d) %sdetected", _short_name.c_str(), _pin, _detected ? "" : "not ");
+        ezread.squintf("%s sensor (i2c 0x%02x) %sdetected", _short_name.c_str(), addr, _detected ? "" : "not ");
         if (detected) {
             if (responding) {
                 // ezread.squintf(", responding properly\n");
@@ -518,7 +518,7 @@ class I2CSensor : public Sensor {
                 set_source(src::PIN); // sensor working
             }
             else {
-                ezread.squintf(", not responding\n");  // begin communication with air flow sensor) over I2C 
+                ezread.squintf(", no response\n");  // begin communication with air flow sensor) over I2C 
                 set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
             }
         }
@@ -800,8 +800,7 @@ class PulseSensor : public Sensor {
     // volatile int64_t timestamp_last_us;  // _stop_timeout_us = 1250000;  // time after last magnet pulse when we can assume the engine is stopped (in us)
     Timer _stop_timer, _pulsecount_timer{1000000};
     bool _low_pulse = true, _pin_level, _pin_inactive = false;
-    float _us, _idle = 600.0, _idle_cold = 750.0, _idle_hot = 500.0;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer
-    float _freqfactor = 1.0;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
+    float _us, _freqfactor = 1.0;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
     // float _calfactor = 1.0;   // a tunable/calibratable factor same as the above, where if <1 gives fewer si-units/pulse-hz and vice versa.         also, the worst weight-loss scam in miami
     Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
     volatile int64_t _isr_us = 0;
@@ -924,9 +923,6 @@ class PulseSensor : public Sensor {
     float absmax_us() { return _absmax_us; }
     float absmin_ms() { return _absmin_us / 1000.0; }
     float absmax_ms() { return _absmax_us / 1000.0; }
-    float idle() { return _idle; }
-    float* idle_ptr() { return &_idle; }
-    void set_idle(float newidle) { _idle = constrain(newidle, _opmin, _opmax); }
     float us() { return _us; }
     float ms() { return _us / 1000.0; }
     int alt_native() { return _pulses_per_sec; };  // returns pulse freq in hz based on count, rather than conversion (just a check to debug) (only updates once per second)
@@ -938,6 +934,7 @@ class Tachometer : public PulseSensor {
     sens _senstype = sens::tach;
     float _calfactor = 1.0;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
     float _governmax_rpm;
+    float _idle = 300.0, _idle_cold = 425.0, _idle_hot = 225.0;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer
     // float _calfactor = 0.25;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
     Tachometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {  // where actual_hz = pulses_hz * freqfactor (due to external circuitry or magnet arrangement)
         _long_name = "Tachometer";
@@ -973,12 +970,13 @@ class Tachometer : public PulseSensor {
         PulseSensor::set_val_from_pin();
         _governmax_rpm = _opmax * governor / 100.0;
     }
-    // float idle() { return _idle; }
-    // float* idle_ptr() { return &_idle; }
+    float idle() { return _idle; }
+    float* idle_ptr() { return &_idle; }
     float idle_cold() { return _idle_cold; }
     float idle_hot() { return _idle_hot; }
     float governmax() { return _governmax_rpm; }
     float* governmax_ptr() { return &_governmax_rpm; }
+    void set_idle(float newidle) { _idle = constrain(newidle, _opmin, _opmax); }
     void set_idlecold(float newidlecold) { _idle_cold = constrain(newidlecold, _idle_hot + 1.0, _opmax); }
     void set_idlehot(float newidlehot) { _idle_hot = constrain(newidlehot, _opmin, _idle_cold - 1.0); }
 };
@@ -1016,7 +1014,7 @@ class Speedometer : public PulseSensor {
         set_margin(0.2);
         // set_si(50.0);
         _us = hz_to_us(_native.val());
-        _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
+        // _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
         print_config();
     }
 };

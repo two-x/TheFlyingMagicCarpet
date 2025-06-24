@@ -10,8 +10,8 @@
 #define         pot_pin  5 // adc1.4            // analog in from 20k pot
 #define   brake_pos_pin  6 // adc1.5            // analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define    pressure_pin  7 // adc1.6            // analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V
-#define     i2c_sda_pin  8 // sda0/adc1.7       // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
-#define     i2c_scl_pin  9 // qhd0/scl0/adc1.8  // i2c bus for airspeed/map sensors, lighting board, cap touchscreen
+#define     i2c_sda_pin  8 // sda0/adc1.7       // i2c bus for airvelo/map sensors, lighting board, cap touchscreen
+#define     i2c_scl_pin  9 // qhd0/scl0/adc1.8  // i2c bus for airvelo/map sensors, lighting board, cap touchscreen
 #define      tft_cs_pin 10 // cs0/adc1.9      * // output, active low, chip select allows ILI9341 display chip use of the spi bus. can reclaim pin if tft is the only spi device (no sd card or resist. touch), if so the tft CS pin must be grounded
 #define    spi_mosi_pin 11 // mosi0/adc2.0      // used as spi interface data for tft screen, sd card and resistive touch panel
 #define    spi_sclk_pin 12 // sclk0/adc2.1      // used as spi interface clock for tft screen, sd card and resistive touch panel
@@ -163,8 +163,8 @@ bool throttle_linearize_trigger = true;  // should trigger values be linearized 
 bool throttle_linearize_cruise = false;  // should trigger values be linearized when in cruise mode?
 // bool stall_mode_timeout = true;    // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
 bool encoder_reverse = false;         // should clockwise encoder twists indicate decreases instead of an increases?
-bool throttle_pid_default = true;     // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
-bool cruise_pid_default = false;      // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
+bool throttle_pid_default = false;    // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
+bool cruise_pid_default = true;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 int drive_mode = CRUISE;              // from hold mode, enter cruise or fly mode by default?
 
 // global tunable variables
@@ -564,7 +564,7 @@ static EZReadConsole ezread;
 // used for sensibly guessing precision of edits, and for efficiently displaying numeric values
 template<typename T>  // note by default will return 1 if value is 0
 int most_significant_place(T value, int zeroplace=1) {
-    if constexpr (std::is_integral<T>::value) {
+    if constexpr (std::is_integral<T>::value) {  // if value is an integer
         if (value == 0) return zeroplace;
         value = std::abs(value);
         int place = 1;
@@ -573,7 +573,8 @@ int most_significant_place(T value, int zeroplace=1) {
             place++;
         }
         return place;
-    } else {
+    }
+    else {  // if value is a float
         if (value == 0.0f) return zeroplace;  // if (iszero(value)) return zeroplace; breaks tune crossing zero
         value = std::fabs(value);  // safer to directly use fabs within a type-ambiguous template
         int place = 0;

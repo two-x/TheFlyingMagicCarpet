@@ -33,8 +33,8 @@ class DiagRuntime {
   public:
     // diag tunable values
     int err_margin_adc = 5;
-    uint32_t errstatus[NUM_ERR_TYPES] = { 0x00, 0x00, 0x00 };  // keeps current error status in efficient hex words
-    std::string err_type_card[NUM_ERR_TYPES] = { "Lost", "Rang", "Warn" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
+    uint errstatus[NUM_ERR_TYPES] = { 0x00, 0x00, 0x00 };  // keeps current error status in efficient hex words
+    std::string err_type_card[NUM_ERR_TYPES] = { "Lost", "Rang", "Warn" };  // this needs to match err_type enum   // , "Lost", "Range", "Warn"
     std::string err_sens_card[NumTelemetryFull+3] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA, None, and Hybrid tacked on the end.  access these names using ascii_name() function
         "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HotRC",
         "Temps", "Other", "GPIO", "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4", "Batery",
@@ -172,6 +172,13 @@ class DiagRuntime {
             setflag(_TempWheel, typ, err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL] || err_sens[typ][_TempWhRR]);
             setflag(_Temps, typ, err_sens[typ][_TempEng] || err_sens[typ][_TempWheel] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb]);
         }
+        // adding this workaround for the mulebatt errors, which should have been included in the _Other group above,
+        // but as you can see above I had to comment it out b/c of the confounding fact that err_sens[RANGE][_MuleBatt]
+        // for some reason has the same mem address as the global nowtouch flag (!!)
+        setflag(_Other, WARN, err_sens[WARN][_Other] || err_sens[WARN][_MuleBatt]);
+        setflag(_Other, LOST, err_sens[LOST][_Other] || err_sens[LOST][_MuleBatt]);
+        setflag(_Other, RANGE, err_sens[RANGE][_Other] || battrangeerr);
+        // end of cheesy workaround
     }
     void set_sensidiots() {
         for (int err=0; err<=_GPIO; err++) {
@@ -314,8 +321,8 @@ class DiagRuntime {
         // setflag(_BrakePosn, RANGE, (brkpos->pc() > 100.0 + brkpos->margin_pc()) || (brkpos->pc() < 0.0 - brkpos->margin_pc()));  // if position reading is outside oprange, set flag
         // setflag(_BrakePres, RANGE, (pressure->pc() > 100.0 + pressure->margin_pc()) || (pressure->pc() < 0.0 - pressure->margin_pc()));  // if pressure reading is outside oprange, set flag
         bool found_err = false;
-        if ((brake->feedback != _BrakePres) && (err_sens[LOST][_BrakePosn] || err_sens[RANGE][_BrakePosn])) found_err = true;
-        if ((brake->feedback != _BrakePosn) && (err_sens[LOST][_BrakePres] || err_sens[RANGE][_BrakePres])) found_err = true;
+        if (brake->feedback_enabled[PressureFB] && (err_sens[LOST][_BrakePosn] || err_sens[RANGE][_BrakePosn])) found_err = true;
+        if (brake->feedback_enabled[PositionFB] && (err_sens[LOST][_BrakePres] || err_sens[RANGE][_BrakePres])) found_err = true;
         setflag(_BrakeMotor, WARN, found_err);
         pressure_last_pc = pressure->pc();
         brkpos_last_pc = brkpos->pc();
@@ -367,14 +374,10 @@ class DiagRuntime {
     void HotRCFailure() {
         for (int ch = HORZ; ch <= CH4; ch++) {
             int errindex;
-            if (ch == HORZ) errindex = _HotRCHorz;
-            else if (ch == VERT) errindex = _HotRCVert;
-            else if (ch == CH3) errindex = _HotRCCh3;
-            else if (ch == CH4) errindex = _HotRCCh4;
-            checkrange(_HotRCHorz, !hotrc->radiolost());
-            checkrange(_HotRCVert, !hotrc->radiolost());
-            checkrange(_HotRCCh3, !hotrc->radiolost());
-            checkrange(_HotRCCh4, !hotrc->radiolost());
+            if (ch == HORZ)      { errindex = _HotRCHorz; checkrange(_HotRCHorz, !hotrc->radiolost()); }
+            else if (ch == VERT) { errindex = _HotRCVert; checkrange(_HotRCVert, !hotrc->radiolost()); }
+            else if (ch == CH3)  { errindex = _HotRCCh3;  checkrange(_HotRCCh3, !hotrc->radiolost());  }
+            else if (ch == CH4)  { errindex = _HotRCCh4;  checkrange(_HotRCCh4, !hotrc->radiolost());  }
             // setflag(errindex, RANGE, !hotrc->radiolost() && ((hotrc->us[ch][FILT] < hotrc->us[ch][OPMIN] - hotrc->us[ch][MARGIN]) 
             //                         || (hotrc->us[ch][FILT] > hotrc->us[ch][OPMAX] + hotrc->us[ch][MARGIN])));  // && ch != VERT
             setflag(errindex, LOST, !hotrc->radiolost() && ((hotrc->us[ch][FILT] < hotrc->absmin_us - hotrc->us[ch][MARGIN])

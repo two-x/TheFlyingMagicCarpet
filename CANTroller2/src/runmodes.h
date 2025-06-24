@@ -130,7 +130,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_holdMode(bool recovering=false) {
         if (we_just_switched_modes) {
             joy_centered = recovering;  // Fly mode will be locked until the joystick first is put at or below center
-            gas.setmode(AutoPID);
+            gas.setmode(OpenLoop);
             brake.setmode(AutoHold);
             steer.setmode(OpenLoop);
         }
@@ -141,7 +141,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_flyMode() {
         if (we_just_switched_modes) {
             car_hasnt_moved = speedo.stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
-            gas.setmode(AutoPID);
+            gas.setmode(OpenLoop);
             brake.setmode(ActivePID);
             steer.setmode(OpenLoop);
         }

@@ -447,7 +447,8 @@ static BootButton bootbutton(boot_sw_pin);
 void BootButton::actions() {  // temporary (?) functionality added for development convenience
     if (longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
     if (shortpress()) {
-        if (auto_saver_enabled) panel.change_saver();
+        if (runmode == LOWPOWER) sleep_request = REQ_OFF;
+        else if (auto_saver_enabled) panel.change_saver();
         else {
             sim.toggle();
             Timer printtimer;

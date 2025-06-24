@@ -34,12 +34,12 @@ std::string pcbaglowcard[GlowNumModes] = { "Off", "Simple", "Hbeat", "Xfade", "S
 static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 5, 11, 9, 7, 12, 4, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 11, 11, 10, 5, 11, 9, 7, 12, 4, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
     { " Pot Raw", brAk"Posn", brAk"Posn", brAk"Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PG_SENS
-    { "TachPuls", "Tach Raw", "TcAltRaw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpAltRaw", "SpeedRaw", "   Speed", __________, "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", spEd"Idle", },  // PG_PULS
+    { "TachPuls", "Tach Raw", "TcAltRaw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpAltRaw", "SpeedRaw", "   Speed", __________, __________, "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", },  // PG_PULS
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
     { "Gas Mode", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PG_IDLE
     { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "BkEnaPID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", "GasEnPID", "CrEnaPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PG_MOTR    
@@ -47,14 +47,14 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "GasEnPID", "CrEnaPID", "Lineariz", "Exponent", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PG_TEMP
-    { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
+    { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
     { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", "EZScroll", "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", "PanelApp", },  // PG_UI
 };
 static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "psi",  "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "min",  ______, ______, "%",    "%",    },  // PG_RUN
     { "us",   "us",   "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, "mph",  "atm",  "atm",  "us",   "us",   },  // PG_JOY
     { "adc",  "adc",  "in",   "%",    "adc",  "psi",  "%",    "adc",  "V",    ______, "psi",  "psi",  "in",   "in",   "in",   },  // PG_SENS
-    { "ms",   "Hz",   "Hz",   "rpm",  "ms",   "Hz",   "Hz",   "mph",  "%",    ______, "rpm",  "rpm",  "mph",  "mph",  "mph",  },  // PG_PULS
+    { "ms",   "Hz",   "Hz",   "rpm",  "ms",   "Hz",   "Hz",   "mph",  "%",    ______, ______, "rpm",  "rpm",  "mph",  "mph",  },  // PG_PULS
     { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
     { scroll, "rpm",  "%",    "%",    degree, "rpm",  ______, ______, ______, ______, "s",    "%",    "%",    degreF, degreF, },  // PG_IDLE
     { "%",    degreF, "%",    ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, b1nary, scroll, },  // PG_MOTR
@@ -713,12 +713,11 @@ class Display {
             drawval(15, speedo.alt_native(), (int)speedo.opmin(), (int)speedo.opmax());
             drawval(16, speedo.raw(), speedo.opmin(), speedo.opmax());
             drawval(17, speedo.pc(), 0.0, 100.0);
-            for (int line=18; line<=18; line++) draw_eraseval(line);
-            drawval(19, tach.opmin(), tach.absmin(), tach.absmax());
-            drawval(20, tach.opmax(), tach.absmin(), tach.absmax());
-            drawval(11, speedo.opmin(), speedo.absmin(), speedo.absmax());
-            drawval(22, speedo.opmax(), speedo.absmin(), speedo.absmax());
-            drawval(23, speedo.idle(), speedo.opmin(), speedo.opmax());
+            for (int line=18; line<=19; line++) draw_eraseval(line);
+            drawval(20, tach.opmin(), tach.absmin(), tach.absmax());
+            drawval(21, tach.opmax(), tach.absmin(), tach.absmax());
+            drawval(22, speedo.opmin(), speedo.absmin(), speedo.absmax());
+            drawval(23, speedo.opmax(), speedo.absmin(), speedo.absmax());
         }
         else if (datapage == PG_PWMS) {
             drawval(9, gas.si[OUT], gas.si[OPMIN], gas.si[OPMAX]);
@@ -806,8 +805,8 @@ class Display {
         }
         else if (datapage == PG_CPID) {
             drange = tach.opmax() - tach.idle();
-            drawval(9, gas.cruisepid.target(), speedo.idle(), speedo.opmax());
-            drawval(10, gas.cruisepid.err(), speedo.idle()-speedo.opmax(), speedo.opmax()-speedo.idle());
+            drawval(9, gas.cruisepid.target(), speedo.opmin(), speedo.opmax());
+            drawval(10, gas.cruisepid.err(), speedo.opmin()-speedo.opmax(), speedo.opmax()-speedo.opmin());
             drawval(11, gas.cruisepid.pterm(), -drange, drange);
             drawval(12, gas.cruisepid.iterm(), -drange, drange);
             drawval(13, gas.cruisepid.dterm(), -drange, drange);
@@ -871,7 +870,12 @@ class Display {
     }
   public:
     bool draw_all(LGFX_Sprite* spr) {
+        static Timer lowpowertimer{1000000};
         static bool starter_last = false;
+        if (runmode == LOWPOWER) {
+            if (lowpowertimer.expireset()) blackout();
+            return false;
+        }
         if (!display_enabled) return false;
         if (reset_request) reset();
         auto_saver();
@@ -1043,17 +1047,6 @@ class Tuner {
         if (touch->increment_datapage) ++datapage %= NUM_DATAPAGES; // touchscreen datapage change, go to next page, wrapping around
         touch->increment_sel = touch->increment_datapage = false;   // reset the touch requests
         id = id_encoder + touch->get_delta();                       // combine accelerated value changes from both the encoder and the touchscreen
-        // // trying to debug edit acceleration
-        // static int testprintcount = 0, lastid = id;
-        // if (id != lastid) {
-        //     edit_id_persist = id;
-        //     ezread.printf("%d ", id);
-        //     if (++testprintcount > 6) {
-        //         ezread.printf("\n");
-        //         testprintcount = 0;
-        //     }
-        // }
-        // lastid = id;
         if (pot_tuner_acceleration && !sim.potmapping()) id = constrain(id * (int)(map(pot.val(), 0.0, 100.0, 1.0, 10.0)), 1, (int)encoder._accel_max);  // if pot is allowed to control data edit acceleration (experimental)
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel != sel_last || id) tuningAbandonmentTimer.reset();  // any tuning activity by the user postpones tuner timeout
         else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;      // turn off the tuner after extended user inactivity
@@ -1094,11 +1087,10 @@ class Tuner {
             // else if (sel == 14) mulebatt.set_conversions(tune(mulebatt.mfactor(), id, 0.001, 0.009, -5), NAN);  // this works till you try to tune it, any edit causes conversion failures (showing nan result) followed by crash
         }
         else if (datapage == PG_PULS) {
-            if (sel == 10) tach.set_oplim(tune(tach.opmin(), id, tach.absmin(), tach.opmax()), NAN);
-            else if (sel == 11) tach.set_oplim(NAN, tune(tach.opmax(), id, tach.opmin(), tach.absmax()));
-            else if (sel == 12) speedo.set_oplim(tune(speedo.opmin(), id, speedo.absmin(), speedo.opmax()), NAN);
-            else if (sel == 13) speedo.set_oplim(NAN, tune(speedo.opmax(), id, speedo.opmin(), speedo.absmax()));
-            else if (sel == 14) tune(speedo.idle_ptr(), id, speedo.opmin(), speedo.opmax());
+            if (sel == 11) tach.set_oplim(tune(tach.opmin(), id, tach.absmin(), tach.opmax()), NAN);
+            else if (sel == 12) tach.set_oplim(NAN, tune(tach.opmax(), id, tach.opmin(), tach.absmax()));
+            else if (sel == 13) speedo.set_oplim(tune(speedo.opmin(), id, speedo.absmin(), speedo.opmax()), NAN);
+            else if (sel == 14) speedo.set_oplim(NAN, tune(speedo.opmax(), id, speedo.opmin(), speedo.absmax()));
         }                
         else if (datapage == PG_PWMS) {
             if (sel == 11) gas.set(&gas.si[OPMIN], tune(gas.si[OPMIN], id, gas.si[ABSMIN], gas.si[OPMAX]));

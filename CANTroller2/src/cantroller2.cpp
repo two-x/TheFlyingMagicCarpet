@@ -24,7 +24,6 @@ void setup() {
     mulebatt.setup();      // init car battery voltage monitor
     tach.setup();          // init tachometer, which is based on pulses from a magnet on the crankshaft passing near a hall effect sensor
     speedo.setup();        // init speedometer, which is based on pulses from magnets on the drive axle passing near a hall effect sensor
-    ezread.printf("\nspeedo done\n");
     airvelo.setup();       // init i2c air velocity sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
     mapsens.setup();       // init i2c manifold air pressure sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
     xTaskCreatePinnedToCore(maf_task, "taskMAF", 4096, NULL, 4, &maftask, CONFIG_ARDUINO_RUNNING_CORE);  // update mass airflow determination, including reading map and airvelo sensors

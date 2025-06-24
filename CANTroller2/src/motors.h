@@ -247,7 +247,6 @@ class ServoMotor {
     Hotrc* hotrc;
     Speedometer* speedo;
     Servo motor;
-    // QPID* pid;
     int pid_timeout = 30000;  // if too high, servo performance is choppy
     float lastoutput;
     Timer pid_timer, outchangetimer;
@@ -382,8 +381,8 @@ class ThrottleControl : public ServoMotor {
     float gas_kd = 0.000;             // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
     float cruise_kp[2] = { 0.013f,  5.57f }; // [GasOpen/GasPID] PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
     float cruise_ki[2] = { 0.050f, 11.00f }; // [GasOpen/GasPID] PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
-    float cruise_kd[2] = { 0.00f,   0.00f }; // [GasOpen/GasPID] PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-    float* cruise_outmin_ptr[2] = { &pc[OPMIN], tach->idle_ptr() };      // [GasOpen/GasPID] 
+    float cruise_kd[2] = {  0.00f,  0.00f }; // [GasOpen/GasPID] PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
+    float* cruise_outmin_ptr[2] = { &pc[OPMIN],  tach->idle_ptr() };      // [GasOpen/GasPID] 
     float* cruise_outmax_ptr[2] = { &pc[GOVERN], tach->governmax_ptr() }; // [GasOpen/GasPID] 
     float cruise_ctrl_extent_pc, adjustpoint, ctrlratio;  // During cruise adjustments, saves farthest trigger position read
     Timer cruiseDeltaTimer;
@@ -446,11 +445,9 @@ class ThrottleControl : public ServoMotor {
         pc[GOVERN] = map(governor, 0.0, 100.0, pc[OPMIN], pc[OPMAX]);  // pc[GOVERN] = pc[OPMIN] + governor * (pc[OPMAX] - pc[OPMIN]) / 100.0;      
         si[GOVERN] = map(pc[GOVERN], pc[OPMIN], pc[OPMAX], si[OPMIN], si[OPMAX]);
         pc[MARGIN] = map(si[MARGIN], si[OPMIN], si[OPMAX], pc[OPMIN], pc[OPMAX]);
-        // max_throttle_angular_velocity_pcps = 100.0 * max_throttle_angular_velocity_degps / (si[OPMAX] - si[OPMIN]);
-    }
+    }   // max_throttle_angular_velocity_pcps = 100.0 * max_throttle_angular_velocity_degps / (si[OPMAX] - si[OPMIN]);
     void set_out_changerate_pcps(float newrate) {
-        max_out_changerate_pcps = newrate;
-        // max_out_changerate_pcps = 100.0 * max_out_changerate_degps / (si[OPMAX] - si[OPMIN]);
+        max_out_changerate_pcps = newrate;  // max_out_changerate_pcps = 100.0 * max_out_changerate_degps / (si[OPMAX] - si[OPMIN]);
         pid.set_max_out_changerate_ps(max_out_changerate_pcps);
     }
     void set_out_changerate_degps(float newrate_deg) {
@@ -491,7 +488,6 @@ class ThrottleControl : public ServoMotor {
     float idle_us() { return out_pc_to_us(_idle_pc); }    
   private:
     void update_idle() {  // updates _idle_pc based on temperature, ranging from pc[OPMIN] (when warm) to full boost% applied (when cold)
-        // ezread.squintf("idle");
         if (!use_idle_boost) return;
         idle_temp_f = tempsens->val(loc::ENGINE);
         if (std::isnan(idle_temp_f)) idle_boost_pc = 0.0;  // without valid temp reading do not boost
@@ -499,8 +495,7 @@ class ThrottleControl : public ServoMotor {
         idle_boost_pc = constrain(idle_boost_pc, 0.0f, idle_max_boost_pc);
         tach->set_idle(map(idle_boost_pc, 0.0, idle_max_boost_pc, tach->idle_hot(), tach->idle_cold()));
         _idle_pc = pc[OPMIN] + idle_boost_pc;
-        // ezread.squintf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);
-    }
+    }  // ezread.squintf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);
     float cruise_logic(float thr_targ) {
         int joydir = hotrc->joydir(VERT); // if trigger is being pulled under any other conditions we do nothing. below can assume trigger is released
         cruise_adjusting = (joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released;  // adjustments disabled until trigger has been to center at least once since going to cruise mode
@@ -593,7 +588,7 @@ class ThrottleControl : public ServoMotor {
         if (pid_enabled) pid.set_limits(&pc[OPMIN], &pc[GOVERN]);
         // pid.reset();
     }
-    void set_cruise_tunings(float a_kp=NAN, float a_ki=NAN, float a_kd=NAN) {  // for external tuner to calibrate the cruise pid coefficients. helper function needed to remember the edited settings independently for whether gas pid is open of closed loop
+    void set_cruise_tunings(float a_kp=NAN, float a_ki=NAN, float a_kd=NAN) {  // for external tuner to calibrate the cruise pid coefficients. helper function needed to remember the edited settings independently for whether gas pid is open or closed loop
         if (!std::isnan(a_kp)) cruise_kp[pid_enabled] = a_kp;  // remember these calibrated settings as specific to the current state of the gas pid 
         if (!std::isnan(a_ki)) cruise_ki[pid_enabled] = a_ki;
         if (!std::isnan(a_kd)) cruise_kd[pid_enabled] = a_kd;
@@ -677,7 +672,6 @@ class BrakeControl : public JagMotor {
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
     Timer stopcar_timer{10000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000}, blindaction_timer{3000000};
     bool stopped_last = false;
-    bool feedback_enabled[NumBrakeSens];
     void set_dominant_sensor(float _hybrid_ratio) {
         if (feedback == PressureFB || feedback == PositionFB) dominantsens = feedback;
         else if (std::isnan(_hybrid_ratio)) return;  // dominantsens = NoneFB;
@@ -693,6 +687,7 @@ class BrakeControl : public JagMotor {
     using JagMotor::JagMotor;
     bool pid_enabled = true, pid_ena_last = true, enforce_positional_limits = true, no_feedback = false;    // default for use of pid allowed
     int feedback = HybridFB, feedback_last = HybridFB;  // this is the default for sensors to use as feedback
+    bool feedback_enabled[NumBrakeSens];
     int dominantsens, motormode = Halt, oldmode = Halt;  // not tunable
     int openloop_mode = AutoRelHoldable;  // if true, when in openloop the brakes release when trigger released. otherwise, control with thrigger using halfway point scheme
     bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == PositionFB);
