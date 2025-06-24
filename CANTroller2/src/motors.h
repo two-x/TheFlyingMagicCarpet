@@ -377,15 +377,14 @@ class ThrottleControl : public ServoMotor {
     Tachometer* tach;
     Potentiometer* pot;
     TemperatureSensorManager* tempsens;
-    float cruise_pidgas_kp = 5.57;    // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
-    float cruise_pidgas_ki = 0.000;   // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
-    float cruise_pidgas_kd = 0.000;   // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
-    float cruise_opengas_kp = 7.00;   // PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
-    float cruise_opengas_ki = 0.000;  // PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
-    float cruise_opengas_kd = 0.000;  // PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
     float gas_kp = 0.013;             // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
-    float gas_ki = 0.000;             // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
+    float gas_ki = 0.050;             // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
     float gas_kd = 0.000;             // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
+    float cruise_kp[2] = { 0.013f,  5.57f }; // [GasOpen/GasPID] PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
+    float cruise_ki[2] = { 0.050f, 11.00f }; // [GasOpen/GasPID] PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
+    float cruise_kd[2] = { 0.00f,   0.00f }; // [GasOpen/GasPID] PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
+    float* cruise_outmin_ptr[2] = { &pc[OPMIN], tach->idle_ptr() };      // [GasOpen/GasPID] 
+    float* cruise_outmax_ptr[2] = { &pc[GOVERN], tach->governmax_ptr() }; // [GasOpen/GasPID] 
     float cruise_ctrl_extent_pc, adjustpoint, ctrlratio;  // During cruise adjustments, saves farthest trigger position read
     Timer cruiseDeltaTimer;
     bool pid_ena_last = false, cruise_pid_ena_last = false;
@@ -415,6 +414,7 @@ class ThrottleControl : public ServoMotor {
     // * set operational angular range (OPMIN/OPMAX), margin (MARGIN) and parking angle (PARKED) here.
 
     float linearizer_exponent = 1.75;
+    float cruise_linearizer_exponent = 1.25;
     float trigger_vert_pc = 0.0;
     float idle_max_boost_pc = 15.0;  // max amount (in percent) to boost idle if the engine is too cold
     float idle_temp_lim_f[2] = { 60.0, 80.0 };  // [LOW]/HIGH] temperature range (in F) over which to apply idle boost. max boost at temp=LOW or less, and no boost at temp=HIGH or more 
@@ -457,6 +457,15 @@ class ThrottleControl : public ServoMotor {
         set_out_changerate_pcps(out_si_to_pc(newrate_deg));
     }
     float get_max_out_changerate_degps() { return out_pc_to_si(max_out_changerate_pcps); }
+    void init_pid() {
+        pid.init(tach->ptr(), &pc[OPMIN], &pc[GOVERN], gas_kp, gas_ki, gas_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
+    }
+    void init_cruise_pid() {
+        cruisepid.init(speedo->ptr(), cruise_outmin_ptr[pid_enabled], cruise_outmax_ptr[pid_enabled],
+            cruise_kp[pid_enabled], cruise_ki[pid_enabled], cruise_kd[pid_enabled],
+            QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
+        update_cruise_pid();  // conditionally correct the cruise pid settings above
+    }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
         ezread.squintf("throttle servo (p%d) pid %s\n", pin, pid_enabled ? "enabled" : "disabled");
@@ -472,11 +481,8 @@ class ThrottleControl : public ServoMotor {
         reverse = false;
         ServoMotor::setup(_hotrc, _speedo);
         derive();
-        pid.init(tach->ptr(), &pc[OPMIN], &pc[GOVERN], gas_kp, gas_ki, gas_kd, QPID::pmod::onerr, 
-            QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
-        cruisepid.init(speedo->ptr(), &pc[OPMIN], &pc[GOVERN], cruise_opengas_kp, cruise_opengas_ki,
-            cruise_opengas_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
-        update_cruise_pid();  // conditionally correct the cruise pid settings above
+        init_pid();
+        init_cruise_pid();
         set_out_changerate_pcps(out_si_to_pc(65.0));  // don't turn faster than 65 degrees per sec
         Serial.printf("reverse=%d 0% = %lf us, 100% = %lf us\n", reverse, out_pc_to_us(0.0, reverse), out_pc_to_us(100.0, reverse));
     }
@@ -522,7 +528,7 @@ class ThrottleControl : public ServoMotor {
             thr_targ = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[GOVERN] : _idle_pc) - adjustpoint);
         }
         if (cruise_pid_enabled) {
-            cruisepid.set_output(thr_targ);  // while adjusting, the cruise pid is not in control, so update its output value to stay accurate
+            cruisepid.set_output(pid_enabled ? pc_to_rpm(thr_targ) : thr_targ); // while adjusting, the cruise pid is not in control, so update its output value to stay accurate (staying correct to the current status of the gas pid)
             cruisepid.set_target(speedo->val());  // while adjusting, constantly update cruise pid target to whatever the current speed is
         }
         return thr_targ;
@@ -542,7 +548,7 @@ class ThrottleControl : public ServoMotor {
         else if (motormode == Starting) throttle_target_pc = starting_pc;
         else if (motormode == ParkMotor) throttle_target_pc = out_lowlim = pc[PARKED];
         else if (motormode == Cruise) {
-            if (throttle_linearize_cruise) linearizer(&trigger_vert_pc, linearizer_exponent);  // we now linearize the trigger value not the output value
+            if (throttle_linearize_cruise) linearizer(&trigger_vert_pc, cruise_linearizer_exponent);  // we now linearize the trigger value not the output value
             throttle_target_pc = cruise_logic(throttle_target_pc);  // cruise mode just got too big to be nested in this if-else clause
         }
         else if (motormode == OpenLoop || motormode == ActivePID) {  // combine these into one "Driving" mode
@@ -587,15 +593,19 @@ class ThrottleControl : public ServoMotor {
         if (pid_enabled) pid.set_limits(&pc[OPMIN], &pc[GOVERN]);
         // pid.reset();
     }
+    void set_cruise_tunings(float a_kp=NAN, float a_ki=NAN, float a_kd=NAN) {  // for external tuner to calibrate the cruise pid coefficients. helper function needed to remember the edited settings independently for whether gas pid is open of closed loop
+        if (!std::isnan(a_kp)) cruise_kp[pid_enabled] = a_kp;  // remember these calibrated settings as specific to the current state of the gas pid 
+        if (!std::isnan(a_ki)) cruise_ki[pid_enabled] = a_ki;
+        if (!std::isnan(a_kd)) cruise_kd[pid_enabled] = a_kd;
+        cruisepid.set_tunings(cruise_kp[pid_enabled], cruise_ki[pid_enabled], cruise_kd[pid_enabled]);
+    }
     void update_cruise_pid(bool limits_only=false) {  // always and only call whenever either pid enable is changed. send in true if only adjusting limits
         if (!cruise_pid_enabled) return;
-        if (pid_enabled) cruisepid.set_limits(tach->idle_ptr(), tach->governmax_ptr());  // switch cruise pid parameters to feed valid throttle angle values to openloop gas
-        else cruisepid.set_limits(&pc[OPMIN], &pc[GOVERN]);  // switch cruise pid parameters to feed valid rpm targets to gas pid
+        cruisepid.set_limits(cruise_outmin_ptr[pid_enabled], cruise_outmax_ptr[pid_enabled]); // switch cruise pid limits to those appropriate for current gas pid status
         if (limits_only) return;
         cruisepid.set_target(speedo->val()); // set pid loop speed target to current speed
-        cruisepid.set_output(pc[OUT]); // set pid loop speed target to current speed
-        if (pid_enabled) cruisepid.set_tunings(cruise_pidgas_kp, cruise_pidgas_ki, cruise_pidgas_kd);
-        else cruisepid.set_tunings(cruise_opengas_kp, cruise_opengas_ki, cruise_opengas_kd); 
+        cruisepid.set_output(pid_enabled ? tach->val() : pc[OUT]); // set pid output to current value appropriate to current gas pid status
+        cruisepid.set_tunings(cruise_kp[pid_enabled], cruise_ki[pid_enabled], cruise_kd[pid_enabled]);
         cruisepid.reset();
     }
     void set_cruise_pid_ena(bool new_cruise_pid_ena) {   // run w/o arguments each loop to enforce configuration limitations, or call with an argument to enable/disable pid and update. do not change pid_enabled anywhere else!

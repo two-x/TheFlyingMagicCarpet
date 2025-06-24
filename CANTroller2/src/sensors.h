@@ -158,6 +158,8 @@ class Device {
     // which types of sources are possible for this device?
     int _pin;
     bool _enabled = true;
+    int val_refresh_period = 5000;  // minimum delay between value updates, just to be efficient w/ processing. (overload this per device)
+    Timer valrefreshtimer;
     Potentiometer* _pot; // to pull input from the pot if we're in simulation mode
     src _source = src::UNDEF;
     bool _can_source[6] = { true, true, false, true, false, false };  // [UNDEF/FIXED/PIN/SIM/POT/CALC]
@@ -178,7 +180,9 @@ class Device {
     sens _senstype = sens::none;
     Device() = delete; // should always be created with a pin
     // note: should we start in PIN mode?
-    Device(int arg_pin) : _pin(arg_pin) {}
+    Device(int arg_pin) : _pin(arg_pin) {
+        valrefreshtimer.set(val_refresh_period);
+    }
     bool can_source(src arg_source) { return _can_source[static_cast<int>(arg_source)]; }
     bool set_source(src arg_source) {
         if (_can_source[static_cast<int>(arg_source)]) {
@@ -190,15 +194,18 @@ class Device {
         return false;
     }
     void update() {  // I changed case statement into if statements and now is 10 lines long instead of 28.  case sucks like that
-        if (runmode == LOWPOWER || !_enabled) return; // do nothing if in lowpower mode or this device is disabled
-        if (_source == src::UNDEF) set_val_from_undef();
-        else if (_source == src::FIXED) set_val_from_fixed();
-        else if (_source == src::PIN) set_val_from_pin();
-        else if (_source == src::SIM) set_val_from_sim();
-        else if (_source == src::POT) set_val_from_pot();
-        else if (_source == src::CALC) set_val_from_calc();
-        else ezread.squintf("invalid Device source: %d\n", _source);
-        set_val_common();
+        if (valrefreshtimer.expired()) {
+            valrefreshtimer.set(val_refresh_period);  // allows for dynamic adjustment of update period as needed each device
+            if (runmode == LOWPOWER || !_enabled) return; // do nothing if in lowpower mode or this device is disabled
+            if (_source == src::UNDEF) set_val_from_undef();
+            else if (_source == src::FIXED) set_val_from_fixed();
+            else if (_source == src::PIN) set_val_from_pin();
+            else if (_source == src::SIM) set_val_from_sim();
+            else if (_source == src::POT) set_val_from_pot();
+            else if (_source == src::CALC) set_val_from_calc();
+            else ezread.squintf("invalid Device source: %d\n", _source);
+            set_val_common();
+        }
     }
     void attach_pot(Potentiometer &pot_arg) {
         _pot = &pot_arg;

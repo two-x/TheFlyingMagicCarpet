@@ -34,7 +34,7 @@ std::string pcbaglowcard[GlowNumModes] = { "Off", "Simple", "Hbeat", "Xfade", "S
 static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 5, 11, 9, 10, 12, 4, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 10, 11, 10, 5, 11, 9, 7, 12, 4, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
@@ -45,7 +45,7 @@ static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] =
     { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "BkEnaPID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", "GasEnPID", "CrEnaPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PG_MOTR    
     { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
     { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
-    { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, __________, __________, __________, "Lineariz", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
+    { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "GasEnPID", "CrEnaPID", "Lineariz", "Exponent", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PG_TEMP
     { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "AirSpeed", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
     { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", "EZScroll", "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", "PanelApp", },  // PG_UI
@@ -60,7 +60,7 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "%",    degreF, "%",    ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, b1nary, scroll, },  // PG_MOTR
     { scroll, "%",    "psi",  "%",    "in",   "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, b1nary, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
-    { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, ______, ______, ______, b1nary, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
+    { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, b1nary, b1nary, b1nary, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, degreF, b1nary, },  // PG_TEMP
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
     { "us",   "us",   "fps",  scroll, "pix",  "pix",  "x",    "Hz",   "lin",  scroll, b1nary, "eyes", "%",    "%",    scroll, },  // PG_UI
@@ -798,7 +798,7 @@ class Display {
             // drawval(15, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
             for (int line=17; line<=17; line++) draw_eraseval(line);
             draw_truth(18, throttle_linearize_trigger, 3);
-            drawval(19, gas.linearizer_exponent, 1.0f, 3.0f);
+            drawval(19, gas.linearizer_exponent, 1.0f, 5.0f);
             drawval(20, gas.out_pc_to_si(gas.max_out_changerate_pcps), 0.0f, 360.0f);
             drawval(21, gas.pid.kp());
             drawval(22, gas.pid.ki());
@@ -813,8 +813,11 @@ class Display {
             drawval(13, gas.cruisepid.dterm(), -drange, drange);
             // drawval(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
             drawval(14, gas.throttle_target_pc, 0.0f, 100.0f);
-            for (int line=15; line<=18; line++) draw_eraseval(line);
-            draw_truth(19, throttle_linearize_cruise, 3);
+            for (int line=15; line<=15; line++) draw_eraseval(line);
+            draw_truth(16, gas.pid_enabled, 3);
+            draw_truth(17, gas.cruise_pid_enabled, 3);
+            draw_truth(18, throttle_linearize_cruise, 3);
+            drawval(19, gas.cruise_linearizer_exponent, 1.0f, 5.0f);
             drawval(20, cruise_delta_max_pc_per_s, 1, 35);
             drawval(21, gas.cruisepid.kp());
             drawval(22, gas.cruisepid.ki());
@@ -1137,11 +1140,14 @@ class Tuner {
             else if (sel == 14) gas.pid.set_kd(tune(gas.pid.kd(), id, 0.0f, NAN));
         }
         else if (datapage == PG_CPID) {
-            if (sel == 10) tune(&throttle_linearize_cruise, id);
+            if (sel == 7) gas.set_pid_ena(tune(id));
+            else if (sel == 8) gas.set_cruise_pid_ena(tune(id));
+            else if (sel == 9) tune(&throttle_linearize_cruise, id);
+            else if (sel == 10) tune(&gas.cruise_linearizer_exponent, id, 1.0f, 3.0f);
             else if (sel == 11) tune(&cruise_delta_max_pc_per_s, id, 1.0, 35.0);
-            else if (sel == 12) gas.cruisepid.set_kp(tune(gas.cruisepid.kp(), id, 0.0f, NAN));
-            else if (sel == 13) gas.cruisepid.set_ki(tune(gas.cruisepid.ki(), id, 0.0f, NAN));
-            else if (sel == 14) gas.cruisepid.set_kd(tune(gas.cruisepid.kd(), id, 0.0f, NAN));
+            else if (sel == 12) gas.set_cruise_tunings(tune(gas.cruisepid.kp(), id, 0.0f, NAN), NAN, NAN);
+            else if (sel == 13) gas.set_cruise_tunings(NAN, tune(gas.cruisepid.ki(), id, 0.0f, NAN), NAN);
+            else if (sel == 14) gas.set_cruise_tunings(NAN, NAN, tune(gas.cruisepid.kd(), id, 0.0f, NAN));
         }
         else if (datapage == PG_TEMP) {
             if (sel == 12) tune(&tunetest, id, -100.0, 100.0);

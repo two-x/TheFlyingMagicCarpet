@@ -89,6 +89,7 @@ enum pcba_glow_modes { GlowOff=0, GlowSimple=1, GlowHeart=2, GlowXFade=3, GlowSi
 enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6
 enum directional { DirNone=0, DirDown=1, DirUp=2, DirLeft=3, DirRight=4, NumDirs=5 };
 enum cycle_dirs { DirRev=-1, DirFwd=1 };
+enum cruisepids { GasOpen=0, GasPID=1 };
 //
 // this group is used in multiple places in different ways, and is thus high-risk.
 // for example, arrays exist with indexes drawn from different combinations of multiple ones of these enums

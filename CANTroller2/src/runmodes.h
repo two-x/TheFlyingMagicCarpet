@@ -19,14 +19,14 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (!ignition.signal) runmode = STANDBY;
             else if (tach.stopped()) runmode = STALL;  // otherwise if engine not running --> Stall Mode
         }
-        if ((runmode == HOLD) && (brake.feedback == _None)) {  // we can not autohold the brake when running brake open loop
+        if ((runmode == HOLD) && (brake.feedback == _None)) {  // if we have no brake feedback then hold mode must be skipped...
             if (oldmode == STALL || oldmode == STANDBY) runmode = drive_mode;  // skip hold mode when starting up
             else if (oldmode == BASIC || oldmode == CAL || oldmode == LOWPOWER) runmode = STANDBY;  // just to cover all possibilities
             else runmode = oldmode;  // don't drop to hold mode from other (driving) modes
         }
         we_just_switched_modes = (runmode != oldmode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) {
-            if (runmode != LOWPOWER) autosaver_request = REQ_OFF;
+            if (runmode != STANDBY) autosaver_request = REQ_OFF;
             if (starter.motor && runmode != HOLD && oldmode != STALL) starter.request(REQ_OFF); // the only mode transition the starter motor may remain running thru is stall -> hold
             watchdog.set_codestatus();
             cleanup_state_variables();
@@ -44,7 +44,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (runmode == FLY) run_flyMode();
         else if (runmode == CRUISE) run_cruiseMode();
         else if (runmode == CAL) run_calMode();
-        else Serial.println(F("Error: Invalid runmode entered"));  // Obviously this should never happen
+        else Serial.println(F("err: Invalid runmode entered"));  // Obviously this should never happen
         return runmode;
     }
   private:

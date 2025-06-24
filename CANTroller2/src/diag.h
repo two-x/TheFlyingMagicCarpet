@@ -194,7 +194,7 @@ class DiagRuntime {
             err_sens_fails[t] = 0;
             for (int s=0; s<NumTelemetryIdiots; s++)
                 if (err_sens[t][s]) {
-                    if (most_critical_sensor[t] = _None) most_critical_sensor[t] = s;
+                    if (most_critical_sensor[t] == _None) most_critical_sensor[t] = s;
                     err_sens_alarm[t] = true;
                     err_sens_fails[t]++;
                 }

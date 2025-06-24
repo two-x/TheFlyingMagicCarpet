@@ -25,10 +25,10 @@ void setup() {
     tach.setup();          // init tachometer, which is based on pulses from a magnet on the crankshaft passing near a hall effect sensor
     speedo.setup();        // init speedometer, which is based on pulses from magnets on the drive axle passing near a hall effect sensor
     ezread.printf("\nspeedo done\n");
-    // airvelo.setup();       // init i2c air velocity sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
-    // mapsens.setup();       // init i2c manifold air pressure sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
+    airvelo.setup();       // init i2c air velocity sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
+    mapsens.setup();       // init i2c manifold air pressure sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
     xTaskCreatePinnedToCore(maf_task, "taskMAF", 4096, NULL, 4, &maftask, CONFIG_ARDUINO_RUNNING_CORE);  // update mass airflow determination, including reading map and airvelo sensors
-    // lightbox.setup();
+    lightbox.setup();
     starter.setup();
     for (int ch=0; ch<4; ch++) ESP32PWM::allocateTimer(ch);  // used for servos
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
@@ -64,7 +64,7 @@ void loop() {                  // arduino-style loop() is like main() but with a
     tuner.update();            // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update();             // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update();              // update/send neopixel colors 
-    // lightbox.update(speedo.val());  // communicate any relevant data to the lighting controller
+    lightbox.update(speedo.val());  // communicate any relevant data to the lighting controller
     looptimer.update();             // looptimer.mark("F");
     vTaskDelay(pdMS_TO_TICKS(1));   // momentarily pause continuous execution for multitasking purposes. delays the loop but in a good way
 }
