@@ -246,25 +246,26 @@ class ServoMotor {
   protected:
     Hotrc* hotrc;
     Speedometer* speedo;
-    Servo motor;
+    Servo* motor;
     int pid_timeout = 30000;  // if too high, servo performance is choppy
     float lastoutput;
     Timer pid_timer, outchangetimer;
-    int pin, freq;
+    int pin, freq, timerno;
   public:
     bool reverse = false;  // defaults. subclasses override as necessary
     float pc[NUM_MOTORVALS] = { 0.0, NAN, 100.0, 0.0, NAN, NAN, NAN, NAN };  // percent values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]  values range from -100% to 100% are all derived or auto-assigned
     float si[NUM_MOTORVALS] = { 45.0, NAN, 90.0, NAN, 0, 180.0, 1.0 };  // standard si-unit values [OPMIN/PARKED/OPMAX/OUT/GOVERN/ABSMIN/ABSMAX/MARGIN]
     float us[NUM_MOTORVALS] = { NAN, 1500.0, NAN, NAN, NAN, 500.0, 2500.0, NAN };  // us pulsewidth values [-/CENT/-/OUT/-/ABSMIN/ABSMAX/-]
     float max_out_changerate_pcps = 200.0;  // max rate of change of motor output as a percent of motor range per second. set to 0 to disable limitation
-
-    ServoMotor(int _pin, int _freq) { pin = _pin; freq = _freq; }
+    ServoMotor(int _pin, int _timerno, int _freq) : pin(_pin), timerno(_timerno), freq(_freq) {}
     void setup(Hotrc* _hotrc, Speedometer* _speedo) {
         hotrc = _hotrc;
         speedo = _speedo;
-        motor.setPeriodHertz(freq);
+        ESP32PWM::allocateTimer(timerno);
+        motor = new Servo();
+        motor->setPeriodHertz(freq);
         pid_timer.set(pid_timeout);
-        motor.attach(pin, us[ABSMIN], us[ABSMAX]);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
+        motor->attach(pin, us[ABSMIN], us[ABSMAX]);  // Servo goes from 500us (+90deg CW) to 2500us (-90deg CCW)
     }
     float out_pc_to_si(float _pc) {
         return map(_pc, pc[ABSMIN], pc[ABSMAX], si[ABSMIN], si[ABSMAX]); 
@@ -279,7 +280,7 @@ class ServoMotor {
         return map(_pc, pc[ABSMIN], pc[ABSMAX], rev ? us[ABSMAX] : us[ABSMIN], rev ? us[ABSMIN] : us[ABSMAX]);
     }
     void write_motor() {
-        if (!std::isnan(us[OUT])) motor.writeMicroseconds((int32_t)(us[OUT]));
+        if (!std::isnan(us[OUT])) motor->writeMicroseconds((int32_t)(us[OUT]));
         lastoutput = pc[OUT];    
     }
     void set(float* member, float val) {  // generic setter for any member floats. basically makes sure to rerun derive() after
@@ -306,11 +307,11 @@ class JagMotor : public ServoMotor {
     using ServoMotor::ServoMotor;
     float duty_fwd_pc = 100;  // default. subclasses override as necessary
     float duty_rev_pc = 100;  // default. subclasses override as necessary
-    float (&volt)[arraysize(si)] = si;  // our standard si value is volts. Create reference so si and volt are interchangeable
+    float* volt = si;  // apparently not legal:  float (&volt)[arraysize(si)] = si;  // our standard si value is volts. Create reference so si and volt are interchangeable
     #if !BrakeThomson
     // set opmin to avoid driving motor with under 8%
     #endif
-    JagMotor(int _pin, int _freq) : ServoMotor(_pin, _freq) {}
+    JagMotor(int _pin, int _timerno, int _freq) : ServoMotor(_pin, _timerno, _freq) {}
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
         si[ABSMAX] = running_on_devboard ? car_batt_fake_v : mulebatt->val();
         si[ABSMIN] = -(si[ABSMAX]);

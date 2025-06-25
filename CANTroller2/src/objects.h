@@ -18,9 +18,9 @@ static Tachometer tach(tach_pin, 0.125f);  // divide-by-8 due to external freque
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(&i2c);
 static MAPSensor mapsens(&i2c);
-static ThrottleControl gas(gas_pwm_pin, 52);
-static BrakeControl brake(brake_pwm_pin, 50);
-static SteeringControl steer(steer_pwm_pin, 50);
+static ThrottleControl gas(gas_pwm_pin, 0, 50);
+static BrakeControl brake(brake_pwm_pin, 1, 50);
+static SteeringControl steer(steer_pwm_pin, 2, 50);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
 
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
