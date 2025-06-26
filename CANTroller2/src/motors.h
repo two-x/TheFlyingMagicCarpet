@@ -236,7 +236,7 @@ class QPID {
 };
 
 static std::string motormodecard[NumMotorModes] = { "NA", "Halt", "Idle", "Releas", "OpLoop", "PropLp", "ActPID", "AuStop", "AuHold", "Park", "Cruise", "Calib", "Start", "Auto" };
-static std::string cruiseschemecard[NumCruiseSchemes] = { "FlyPID", "TrPull", "TrHold" };
+static std::string cruiseschemecard[NumCruiseSchemes] = { "OnePul", "HoldTm" };
 static std::string brakefeedbackcard[NumBrakeFB] = { "BkPosn", "BkPres", "Hybrid", "None" };
 static std::string openloopmodecard[NumOpenLoopModes] = { "Median", "AutRel", "ARHold" };
 
@@ -367,10 +367,9 @@ class JagMotor : public ServoMotor {
 // pid_config : (configurable default)
 //    OpenLoop : Servo angle is simply proportional to trigger pull. This is our tested default
 //    ActivePID : Servo angle is determined by PID calculation designed to converge engine rpm to a target value set proportional to trigger pull
-// cruise_adjust_scheme : (compile time option) Pick from 3 different styles for adjustment of cruise setpoint. I prefer TriggerHold.
-//    TriggerPull : Cruise locks servo angle (throttle_target_pc), instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
-//    TriggerHold : Cruise locks servo angle (throttle_target_pc), instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
-//    SuspendFly : Cruise uses its own pid targeting a speed value. The PID output is either a servo angle or an rpm target for the gas pid, depending on pid_config setting above. Whatever speed you're at when trigger releases is new cruise target  
+// cruise_adjust_scheme : (compile time option) Pick from different styles for adjustment of cruise setpoint. I prefer HoldTime.
+//    OnePull : Cruise locks servo angle (throttle_target_pc), instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
+//    HoldTime : Cruise locks servo angle (throttle_target_pc), instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
 class ThrottleControl : public ServoMotor {
 // replace with class ThrottleControl {
   private:
@@ -385,8 +384,6 @@ class ThrottleControl : public ServoMotor {
     float cruise_kd[2] = {  0.00f,  0.00f }; // [GasOpen/GasPID] PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
     float* cruise_outmin_ptr[2] = { &pc[OPMIN],  tach->idle_ptr() };      // [GasOpen/GasPID] 
     float* cruise_outmax_ptr[2] = { &pc[GOVERN], tach->governmax_ptr() }; // [GasOpen/GasPID] 
-    float cruise_ctrl_extent_pc, adjustpoint, ctrlratio;  // During cruise adjustments, saves farthest trigger position read
-    Timer cruiseDeltaTimer;
     bool pid_ena_last = false, cruise_pid_ena_last = false;
   public:
     // replace this: ...
@@ -423,20 +420,11 @@ class ThrottleControl : public ServoMotor {
     float _idle_pc = 0.0, idle_boost_pc = 0.0; // 11.3;                // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
     float idle_temp_f = NAN;  // temperature determined for purpose of calculating boost. will prefer engine temp sensor but has fallback options 
-    // ... with:
-    // ThrottleServo servo;
-    // ThrottleControl(int pin, int freq) {
-    //     servo = ThrottleServo(pin, freq);
-    // }
-    // float throttle_target_pc, tach_last;
-
     QPID pid, cruisepid;
     int throttle_ctrl_mode = OpenLoop;   // set default ctrl behavior. should gas servo use the rpm-sensing pid? values: ActivePID or OpenLoop
-    bool pid_enabled = false, cruise_pid_enabled = false;
-    int cruise_adjust_scheme = TriggerHold;  // edit these to be the defaults on boot
-    int motormode = Idle;  // not tunable  // pid_status = OpenLoop, cruise_pid_status = OpenLoop,
-    bool cruise_trigger_released = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
-    float (&deg)[arraysize(si)] = si;                  // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
+    bool pid_enabled, cruise_pid_enabled, cruise_trigger_released = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
+    int cruise_adjust_scheme = HoldTime, motormode = Idle;  // not tunable  // pid_status = OpenLoop, cruise_pid_status = OpenLoop,
+    float* deg = si;             // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float pc_to_rpm(float _pc) { return map(_pc, 0.0, 100.0, tach->idle(), tach->opmax()); }
     float rpm_to_pc(float _rpm) { return map(_rpm, tach->idle(), tach->opmax(), 0.0, 100.0); }
     void derive() {  // calc derived limit values for all units based on tuned values for each motor
@@ -466,8 +454,8 @@ class ThrottleControl : public ServoMotor {
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
-        ezread.squintf("throttle servo (p%d) pid %s\n", pin, pid_enabled ? "enabled" : "disabled");
-        ezread.squintf("  Cruise pid %s, using %s adj scheme\n", cruise_pid_enabled ? "enabled" : "disabled", cruiseschemecard[cruise_adjust_scheme].c_str());
+        ezread.squintf("throttle servo (p%d) pid %s\n", pin, pid_enabled ? "ena" : "dis");
+        ezread.squintf("  Cruise pid %s, using %s adj scheme\n", cruise_pid_enabled ? "ena" : "dis", cruiseschemecard[cruise_adjust_scheme].c_str());
         si[OPMIN] = 58.0;
         si[PARKED] = 57.0;
         si[OPMAX] = 158.0;
@@ -481,8 +469,8 @@ class ThrottleControl : public ServoMotor {
         derive();
         init_pid();
         init_cruise_pid();
-        set_out_changerate_pcps(out_si_to_pc(65.0));  // don't turn faster than 65 degrees per sec
-        Serial.printf("reverse=%d 0% = %lf us, 100% = %lf us\n", reverse, out_pc_to_us(0.0, reverse), out_pc_to_us(100.0, reverse));
+        set_out_changerate_pcps(out_si_to_pc(65.0f));  // don't turn faster than 65 degrees per sec
+        Serial.printf("reverse=%d 0% = %lf us, 100% = %lf us\n", reverse, out_pc_to_us(0.0f, reverse), out_pc_to_us(100.0f, reverse));
     }
     float idle_pc() { return _idle_pc; }
     float idle_si() { return out_pc_to_si(_idle_pc); }
@@ -491,52 +479,56 @@ class ThrottleControl : public ServoMotor {
     void update_idle() {  // updates _idle_pc based on temperature, ranging from pc[OPMIN] (when warm) to full boost% applied (when cold)
         if (!use_idle_boost) return;
         idle_temp_f = tempsens->val(loc::ENGINE);
-        if (std::isnan(idle_temp_f)) idle_boost_pc = 0.0;  // without valid temp reading do not boost
-        else idle_boost_pc = map(idle_temp_f, idle_temp_lim_f[LOW], idle_temp_lim_f[HIGH], idle_max_boost_pc, 0.0);
+        if (std::isnan(idle_temp_f)) idle_boost_pc = 0.0f;  // without valid temp reading do not boost
+        else idle_boost_pc = map(idle_temp_f, idle_temp_lim_f[LOW], idle_temp_lim_f[HIGH], idle_max_boost_pc, 0.0f);
         idle_boost_pc = constrain(idle_boost_pc, 0.0f, idle_max_boost_pc);
-        tach->set_idle(map(idle_boost_pc, 0.0, idle_max_boost_pc, tach->idle_hot(), tach->idle_cold()));
+        tach->set_idle(map(idle_boost_pc, 0.0f, idle_max_boost_pc, tach->idle_hot(), tach->idle_cold()));
         _idle_pc = pc[OPMIN] + idle_boost_pc;
     }  // ezread.squintf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);
+    float cruise_adjust(int joydir, float thr_targ) {
+        static Timer deltatimer;      // used by HoldTime scheme, allows algo to know time elapsed since last function call
+        static float running_max_pc;  // used by SinglePull scheme, keeps the furthest the trigger has been from center since start of the adjustment event
+        if (cruise_adjust_scheme == HoldTime) {  // this one continually adjusts the current thr_targ based on how far from center (in either dir) you hold the trigger
+            if (cruise_adjusting) thr_targ += trigger_vert_pc * cruise_delta_max_pc_per_s * deltatimer.elapsed() / 1000000.0f; // if this isn't our first time through (b/c timer hasn't been reset), calculate our adjustment since last loop
+            deltatimer.reset();       // reset timer so we can measure elapsed loop time the next time through
+        }
+        else if (cruise_adjust_scheme == OnePull) {  // this one makes a single adjustment with each departure from trigger center, based on how far you push it (in either dir).
+            if (!cruise_adjusting) running_max_pc = hotrc->pc[VERT][CENT];  // on first time thru, recenter our max-trigger-value-so-far value back to center
+            if (std::abs(trigger_vert_pc) >= joydir * running_max_pc) {     // if new trigger read beats our record so far (to avoid continuing adjustments when trigger hasn't moved or is decreasing)
+                thr_targ += (trigger_vert_pc - running_max_pc) * cruise_angle_attenuator;  // make an adjustment proportional to the incremental difference
+                running_max_pc = trigger_vert_pc;   // update our value for the furthest trigger read thusfar during the push
+            }
+        }
+        else ezread.printf(RED, "err: invalid cruise scheme %d\n", cruise_adjust_scheme);  // leaving thr_targ unchanged
+        cruise_adjusting = true;  // flag the current adjustment event is initialized and now in progress
+        return thr_targ;
+    }
     float cruise_logic(float thr_targ) {
-        int joydir = hotrc->joydir(VERT); // if trigger is being pulled under any other conditions we do nothing. below can assume trigger is released
-        cruise_adjusting = (joydir == JOY_UP || (joydir == JOY_DN && cruise_speed_lowerable)) && cruise_trigger_released;  // adjustments disabled until trigger has been to center at least once since going to cruise mode
-        if (joydir == JOY_CENT) {
-            cruise_trigger_released = true;
-            cruise_ctrl_extent_pc = hotrc->pc[VERT][CENT];  // After an adjustment, need this to prevent setpoint from following the trigger back to center as you release it
-            if (cruise_pid_enabled) thr_targ = cruisepid.compute();  // if cruise is using pid, it's only active when trigger is released
-            return thr_targ;
+        static bool adjusting_last = false;
+        int joydir = hotrc->joydir(VERT);                           // read vertical joystick direction
+        if ((joydir == JOY_CENT) || !cruise_trigger_released) {     // if joystick is at center, or hasn't yet been to center since entering cruise mode
+            if (joydir == JOY_CENT) cruise_trigger_released = true; // if joystick is at center, flag that it has been to center since first entering cruise mode
+            cruise_adjusting = false;                               // flag that no cruise adjustment is in progress
+        }  // above leaves thr_targ unchanged for now
+        else thr_targ = cruise_adjust(joydir, thr_targ); // if trigger is off center (and not b/c it's returning to center after initially entering cruise), then we are adjusting, so make adjustment & get new thr_targ
+        if (cruise_pid_enabled) {                                       // whenever cruise is running on pid
+            if (cruise_adjusting) cruisepid.set_target(speedo->val());  // during adjustment, pid is paused, but constantly update pid speed target to the current speed
+            else {                                                      // if not adjusting
+                if (adjusting_last) cruisepid.set_output(thr_targ);     // if we just stopped adjusting, update the pid output to match current gas target
+                thr_targ = cruisepid.compute();                         // overwrite thr_targ with the pid calculated value instead
+            }
         }
-        else if (!cruise_adjusting) return thr_targ;
-        // from here down we are adjusting the cruise speed
-        if (joydir == JOY_UP) ctrlratio = (trigger_vert_pc - hotrc->pc[VERT][CENT]) / (hotrc->pc[VERT][OPMAX] - hotrc->pc[VERT][CENT]);
-        else ctrlratio = (hotrc->pc[VERT][CENT] - trigger_vert_pc) / (hotrc->pc[VERT][CENT] - hotrc->pc[VERT][OPMIN]);
-        if (cruise_adjust_scheme == TriggerHold) {
-            if (cruise_adjusting) thr_targ += joydir * ctrlratio * cruise_delta_max_pc_per_s * cruiseDeltaTimer.elapsed() / 1000000.0;
-            cruiseDeltaTimer.reset(); 
-        }
-        else if (cruise_adjust_scheme == TriggerPull && std::abs(trigger_vert_pc) >= cruise_ctrl_extent_pc) {  // to avoid the adjustments following the trigger back to center when released
-            if (!cruise_adjusting) adjustpoint = thr_targ;  // When beginning adjustment, save current throttle pulse value to use as adjustment endpoint
-            thr_targ = adjustpoint + ctrlratio * cruise_angle_attenuator * (((joydir == JOY_UP) ? 100.0 : 0.0) - adjustpoint);
-            cruise_ctrl_extent_pc = std::abs(trigger_vert_pc);
-        }
-        else if (cruise_adjust_scheme == SuspendFly) {
-            if (!cruise_adjusting) adjustpoint = (cruise_pid_enabled) ? rpm_to_pc(tach->val()) : pc[OUT];
-            thr_targ = adjustpoint + ctrlratio * (((joydir == JOY_UP) ? pc[GOVERN] : _idle_pc) - adjustpoint);
-        }
-        if (cruise_pid_enabled) {
-            cruisepid.set_output(pid_enabled ? pc_to_rpm(thr_targ) : thr_targ); // while adjusting, the cruise pid is not in control, so update its output value to stay accurate (staying correct to the current status of the gas pid)
-            cruisepid.set_target(speedo->val());  // while adjusting, constantly update cruise pid target to whatever the current speed is
-        }
+        adjusting_last = cruise_adjusting;  // so we can detect when an adjustment event ends
         return thr_targ;
     }
     void set_output() {
         float out_temp, out_lowlim = _idle_pc;
         if (motormode == Halt) return;
-        else if (motormode == Calibrate) {
-            cal_gasmode = true;
-            out_temp = map(pot->val(), pot->opmin(), pot->opmax(), si[ABSMIN], si[ABSMAX]);  // gas_ccw_max_us, gas_cw_min_us
-            pc[OUT] = constrain(out_si_to_pc(out_temp), pc[ABSMIN], pc[ABSMAX]);
-            return;  // cal mode sets the output directly, skipping the post processing below
+        else if (motormode == Calibrate) {  // allows adjustment of gas using potmap, with its operational limits temporarily disabled (to facilitate calibrating those limits)
+            cal_gasmode = true;  // flag that we have officially entered cal mode, as the potmapped gas was within the incumbent operational limits when cal mode started
+            out_temp = map(pot->val(), pot->opmin(), pot->opmax(), si[ABSMIN], si[ABSMAX]);  // translate pot value to a gas value
+            pc[OUT] = constrain(out_si_to_pc(out_temp), pc[ABSMIN], pc[ABSMAX]);  // make doubly sure the resulting gas value is within its *absolute* limits 
+            return;  // cal mode sets the output directly, ignoring the normal operational process at the bottom of this function
         }  // ezread.squintf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], _idle_pc);
         
         trigger_vert_pc = hotrc->pc[VERT][FILT];  // copy current trigger value to internal value, in case we linearize it
@@ -568,26 +560,25 @@ class ThrottleControl : public ServoMotor {
     }
   public:
     void setmode(int _mode) {
-        int lastmode = motormode;
-        if (_mode == AutoPID) _mode = throttle_pid_default ? ActivePID : OpenLoop;  // AutoPID will become one of these based on if pid is enabled
-        if (_mode == motormode) return;
-        cal_gasmode = false;
+        int lastmode = motormode;  // remember incumbent mode
+        if (_mode == AutoPID) _mode = throttle_pid_default ? ActivePID : OpenLoop;  // translate "AutoPID" (a fake mode) into ActivePID or OpenLoop mode, depending on current configuration
+        if (_mode == motormode) return;  // if mode isn't being changed, then do nothing and ditch out
+        cal_gasmode = false;  // 
         if (_mode == Calibrate) {
             float temp = pot->mapToRange(0.0, 180.0);
             if (temp < si[PARKED] || temp > si[OPMAX]) return;  // do not change to cal mode if attempting to enter while pot is out of range
         }
         else if (_mode == ActivePID) set_pid_ena(true);
         else if (_mode == OpenLoop) set_pid_ena(false);
-        else if (_mode == Cruise) {
-            cruise_adjusting = cruise_trigger_released = false;  // in case trigger is being pulled as cruise mode is entered, the ability to adjust is only unlocked after the trigger is subsequently released to the center
-            update_cruise_pid();
-            throttle_target_pc = pc[OUT];  //  set target throttle angle to current throttle angle  (for TriggerPull/TriggerHold modes)
+        else if (_mode == Cruise) {           // upon entering cruise mode ...
+            cruise_trigger_released = false;  // flag that the trigger could be off center upon entering cruise mode, so we don't interpret that as an adjustment in progress
+            update_cruise_pid();  // update the cruise pid adjustments to the current settings, and its variables to the current state, for a smooth transition into cruise mode
+            throttle_target_pc = pid_enabled ? tach->val() : pc[OUT]; // set throttle target to its current state, for a smooth transition into cruise mode
         }
-        motormode = _mode;
+        motormode = _mode;  // actually change the motor mode
     }
     void update_pid() {  // must call whenever governor or tach limits are changed
-        if (pid_enabled) pid.set_limits(&pc[OPMIN], &pc[GOVERN]);
-        // pid.reset();
+        if (pid_enabled) pid.set_limits(&pc[OPMIN], &pc[GOVERN]);  // pid.reset();
     }
     void set_cruise_tunings(float a_kp=NAN, float a_ki=NAN, float a_kd=NAN) {  // for external tuner to calibrate the cruise pid coefficients. helper function needed to remember the edited settings independently for whether gas pid is open or closed loop
         if (!std::isnan(a_kp)) cruise_kp[pid_enabled] = a_kp;  // remember these calibrated settings as specific to the current state of the gas pid 
@@ -669,8 +660,8 @@ class BrakeControl : public JagMotor {
     float posn_ki = 35.5;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_kd = 0.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
-    int dominantsens_last = HybridFB, preforce_request;    // float posn_inflect, pres_inflect, pc_inflect;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
+    int dominantsens_last = HybridFB, preforce_request;    // float posn_inflect, pres_inflect, pc_inflect;
     Timer stopcar_timer{10000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000}, blindaction_timer{3000000};
     bool stopped_last = false;
     void set_dominant_sensor(float _hybrid_ratio) {

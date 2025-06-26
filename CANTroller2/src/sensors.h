@@ -36,7 +36,7 @@ class Potentiometer {
     Potentiometer() = delete; // must have a pin defined
     sens _senstype = sens::none;
     void setup() {
-        ezread.squintf("Pot setup..\n");
+        ezread.squintf("pot setup..\n");
         set_pin(_pin, INPUT);
         _activity_ref = _pc;
     }
@@ -453,7 +453,7 @@ class Sensor : public Transducer {
         // set_si(_si.val + touch.fdelta);  // I would think this should look something like this (needs some coding on the other side to support)
     }
     virtual float read_sensor() {
-        ezread.squintf("Err: %s does not have an overridden read_sensor() function\n", _short_name.c_str());
+        ezread.squintf(RED, "err: %s does not have an overridden read_sensor() function\n", _short_name.c_str());
         return NAN;
     }
     virtual void set_val_from_pin() {
