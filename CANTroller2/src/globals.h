@@ -174,8 +174,8 @@ constexpr int unlikely_int = -92935762; // random ass unlikely value for detecti
 int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;    // when looptime_print == 1, will linefeed after printing loops taking > this value. set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 3.0f;  // margin of error (in percent) for determining hard brake value for dropping out of cruise mode
-float cruise_holdtime_attenuator_pc = 20.0f;  // (in TriggerHold mode) what's the fastest rate cruise adjustment can change pulse width (in us per second)
-float cruise_onepull_attenuator_pc = 1.6f; // (in TriggerPull mode) limits the change of each adjust trigger pull to this fraction of what's possible
+float cruise_holdtime_attenuator_pc = 20.0f; // adjustment rate multiplier for cruise HoldTime mode
+float cruise_onepull_attenuator_pc = 14.0f;  // adjustment rate multiplier for cruise OnePull mode
 float maf_min_gps = 0.0;                // in grams per second
 float maf_max_gps = 50.0f;              // i just made this number up as i have no idea what's normal for MAF
 float tuning_rate_pcps = 7.5f;          // values being edited by touch buttons change value at this percent of their overall range per second

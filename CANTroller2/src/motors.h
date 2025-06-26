@@ -498,7 +498,7 @@ class ThrottleControl : public ServoMotor {
         else if (cruise_adjust_scheme == OnePull) {  // this one makes a single adjustment with each departure from trigger center, based on how far you push it (in either dir).
             static float running_max_pc;             // stores the furthest the trigger has been from center since start of the adjustment event
             if (!cruise_adjusting) running_max_pc = hotrc->pc[VERT][CENT];  // on first time thru, recenter our max-trigger-value-so-far value back to center
-            if (std::abs(trigger_vert_pc) >= joydir * running_max_pc) {     // if new trigger read beats our record so far (to avoid continuing adjustments when trigger hasn't moved or is decreasing)
+            if (std::abs(trigger_vert_pc) >= std::abs(running_max_pc)) {     // if new trigger read beats our record so far (to avoid continuing adjustments when trigger hasn't moved or is decreasing)
                 thr_targ += (trigger_vert_pc - running_max_pc) * cruise_onepull_attenuator_pc / 100.0f;  // make an adjustment proportional to the incremental difference
                 running_max_pc = trigger_vert_pc;    // update our value for the furthest trigger read thusfar during the push
             }
@@ -512,8 +512,6 @@ class ThrottleControl : public ServoMotor {
             if (joydir == JOY_CENT) cruise_trigger_released = true; // if joystick is at center, flag that it has been to center since first entering cruise mode
             if (cruise_pid_enabled && cruise_adjusting) {           // if running pid and this return to center marks the end of an adjustment
                 cruisepid.set_output(thr_targ);                     // update the pid output to the current gas target
-                ezread.printf("set pid out to %4.4f\n", thr_targ);
-                // cruisepid.reset();                               // reset the pid to ensure smooth transition to new value
             }
             cruise_adjusting = false;                               // flag that no cruise adjustment is in progress. (resumes pid ctrl of thrtarg, if running pid)
             if (cruise_pid_enabled) thr_targ = cruisepid.compute(); // if running on pid and not adjusting, use the pid math to drive thr_targ
