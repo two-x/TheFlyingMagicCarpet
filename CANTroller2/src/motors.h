@@ -500,25 +500,26 @@ class ThrottleControl : public ServoMotor {
             }
         }
         else ezread.printf(RED, "err: invalid cruise scheme %d\n", cruise_adjust_scheme);  // leaving thr_targ unchanged
-        cruise_adjusting = true;  // flag the current adjustment event is initialized and now in progress
         return thr_targ;
     }
     float cruise_logic(float thr_targ) {
-        static bool adjusting_last = false;
         int joydir = hotrc->joydir(VERT);                           // read vertical joystick direction
         if ((joydir == JOY_CENT) || !cruise_trigger_released) {     // if joystick is at center, or hasn't yet been to center since entering cruise mode
             if (joydir == JOY_CENT) cruise_trigger_released = true; // if joystick is at center, flag that it has been to center since first entering cruise mode
-            cruise_adjusting = false;                               // flag that no cruise adjustment is in progress
-        }  // above leaves thr_targ unchanged for now
-        else thr_targ = cruise_adjust(joydir, thr_targ); // if trigger is off center (and not b/c it's returning to center after initially entering cruise), then we are adjusting, so make adjustment & get new thr_targ
-        if (cruise_pid_enabled) {                                       // whenever cruise is running on pid
-            if (cruise_adjusting) cruisepid.set_target(speedo->val());  // during adjustment, pid is paused, but constantly update pid speed target to the current speed
-            else {                                                      // if not adjusting
-                if (adjusting_last) cruisepid.set_output(thr_targ);     // if we just stopped adjusting, update the pid output to match current gas target
-                thr_targ = cruisepid.compute();                         // overwrite thr_targ with the pid calculated value instead
+            if (cruise_pid_enabled && cruise_adjusting) {           // if running pid and this is the end of an adjustment
+                cruisepid.set_output(thr_targ);                     // update the pid output to the current gas target
+                cruisepid.reset();                                  // reset the pid to ensure smooth transition to new value
             }
+            cruise_adjusting = false;                               // flag that no cruise adjustment is in progress
+        }                                                           // note, so far thr_targ has been left unchanged
+        else {                                          // if trigger is off center (and not b/c it's returning to center after initially entering cruise) ..
+            thr_targ = cruise_adjust(joydir, thr_targ); // then we are adjusting, so make adjustment & get new thr_targ
+            cruise_adjusting = true;                    // flag the current adjustment event has been initialized and now in progress
         }
-        adjusting_last = cruise_adjusting;  // so we can detect when an adjustment event ends
+        if (cruise_pid_enabled) {                                      // whenever cruise is running on pid
+            if (cruise_adjusting) cruisepid.set_target(speedo->val()); // during adjustment, pid is paused, but constantly update its speed target to the current speed
+            else thr_targ = cruisepid.compute();                       // if not adjusting, overwrite thr_targ with the pid calculated value instead
+        }
         return thr_targ;
     }
     void set_output() {
@@ -551,7 +552,7 @@ class ThrottleControl : public ServoMotor {
         
         throttle_target_pc = constrain(throttle_target_pc, pc[PARKED], pc[OPMAX]);
         if (pid_enabled) {
-            pid.set_target(pc_to_rpm(throttle_target_pc));
+            pid.set_target(pc_to_rpm(throttle_target_pc));  // revisit this line, it may not be this simple to convert to rpm
             out_temp = pid.compute();
         }
         else out_temp = throttle_target_pc;
