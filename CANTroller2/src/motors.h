@@ -289,12 +289,10 @@ class ServoMotor {
     }
   protected:
     float rate_limiter(float a_outval) {
-        if (!iszero(max_out_changerate_pcps)) {  // bypass rate limiter feature by setting max rate to 0
-            float max_out_change_pc = max_out_changerate_pcps * outchangetimer.elapsed() / 1000000.0;
-            outchangetimer.reset();
-            return constrain(a_outval, lastoutput - max_out_change_pc, lastoutput + max_out_change_pc);
-        }
-        return a_outval;
+        if (iszero(max_out_changerate_pcps)) return a_outval;  // bypass rate limiter feature by setting max rate to 0
+        float max_out_change_pc = max_out_changerate_pcps * outchangetimer.elapsed() / 1000000.0;
+        outchangetimer.reset();
+        return constrain(a_outval, lastoutput - max_out_change_pc, lastoutput + max_out_change_pc);
     }
     void derive() {};  // child overload this
 };
@@ -379,9 +377,9 @@ class ThrottleControl : public ServoMotor {
     float gas_kp = 0.013;             // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
     float gas_ki = 0.050;             // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
     float gas_kd = 0.000;             // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
-    float cruise_kp[2] = { 0.013f,  5.57f }; // [GasOpen/GasPID] PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
-    float cruise_ki[2] = { 0.050f, 11.00f }; // [GasOpen/GasPID] PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
-    float cruise_kd[2] = {  0.00f,  0.00f }; // [GasOpen/GasPID] PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
+    float cruise_kp[2] = { 2.33f,  5.57f }; // [GasOpen/GasPID] PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
+    float cruise_ki[2] = { 1.06f, 11.00f }; // [GasOpen/GasPID] PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
+    float cruise_kd[2] = { 0.00f,  0.00f }; // [GasOpen/GasPID] PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
     float* cruise_outmin_ptr[2] = { &pc[OPMIN],  tach->idle_ptr() };      // [GasOpen/GasPID] 
     float* cruise_outmax_ptr[2] = { &pc[GOVERN], tach->governmax_ptr() }; // [GasOpen/GasPID] 
     bool pid_ena_last = false, cruise_pid_ena_last = false;
@@ -410,8 +408,8 @@ class ThrottleControl : public ServoMotor {
 
     // * set operational angular range (OPMIN/OPMAX), margin (MARGIN) and parking angle (PARKED) here.
 
-    float linearizer_exponent = 1.75;
-    float cruise_linearizer_exponent = 1.25;
+    float linearizer_exponent = 2.52;
+    float cruise_linearizer_exponent = 1.05;
     float trigger_vert_pc = 0.0;
     float idle_max_boost_pc = 15.0;  // max amount (in percent) to boost idle if the engine is too cold
     float idle_temp_lim_f[2] = { 60.0, 80.0 };  // [LOW]/HIGH] temperature range (in F) over which to apply idle boost. max boost at temp=LOW or less, and no boost at temp=HIGH or more 
@@ -440,9 +438,13 @@ class ThrottleControl : public ServoMotor {
         pid.set_max_out_changerate_ps(max_out_changerate_pcps);
     }
     void set_out_changerate_degps(float newrate_deg) {
-        set_out_changerate_pcps(out_si_to_pc(newrate_deg));
+        if (iszero(si[OPMAX] - si[OPMIN])) return;  // no divide by zero
+        set_out_changerate_pcps(newrate_deg * (pc[OPMAX] - pc[OPMIN]) / (si[OPMAX] - si[OPMIN]));
     }
-    float get_max_out_changerate_degps() { return out_pc_to_si(max_out_changerate_pcps); }
+    float get_max_out_changerate_degps() {
+        if (iszero(pc[OPMAX] - pc[OPMIN])) return NAN;  // no divide by zero
+        return max_out_changerate_pcps * (si[OPMAX] - si[OPMIN]) / (pc[OPMAX] - pc[OPMIN]);
+    }
     void init_pid() {
         pid.init(tach->ptr(), &pc[OPMIN], &pc[GOVERN], gas_kp, gas_ki, gas_kd, QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
     }
@@ -469,7 +471,9 @@ class ThrottleControl : public ServoMotor {
         derive();
         init_pid();
         init_cruise_pid();
-        set_out_changerate_pcps(out_si_to_pc(65.0f));  // don't turn faster than 65 degrees per sec
+        set_pid_ena(throttle_pid_default);
+        set_cruise_pid_ena(cruise_pid_default);
+        set_out_changerate_degps(65.0f);  // don't turn faster than 65 degrees per sec
         Serial.printf("reverse=%d 0% = %lf us, 100% = %lf us\n", reverse, out_pc_to_us(0.0f, reverse), out_pc_to_us(100.0f, reverse));
     }
     float idle_pc() { return _idle_pc; }
@@ -486,17 +490,17 @@ class ThrottleControl : public ServoMotor {
         _idle_pc = pc[OPMIN] + idle_boost_pc;
     }  // ezread.squintf(" si:%lf pc:%lf\n", idle_si[OUT], idle_pc);
     float cruise_adjust(int joydir, float thr_targ) {
-        static Timer deltatimer;      // used by HoldTime scheme, allows algo to know time elapsed since last function call
-        static float running_max_pc;  // used by SinglePull scheme, keeps the furthest the trigger has been from center since start of the adjustment event
         if (cruise_adjust_scheme == HoldTime) {  // this one continually adjusts the current thr_targ based on how far from center (in either dir) you hold the trigger
-            if (cruise_adjusting) thr_targ += trigger_vert_pc * cruise_delta_max_pc_per_s * deltatimer.elapsed() / 1000000.0f; // if this isn't our first time through (b/c timer hasn't been reset), calculate our adjustment since last loop
-            deltatimer.reset();       // reset timer so we can measure elapsed loop time the next time through
+            static Timer deltatimer;             // timer allows algorithm to know time elapsed since last function call
+            if (cruise_adjusting) thr_targ += trigger_vert_pc * cruise_holdtime_attenuator_pc * deltatimer.elapsed() / (100.0f * 1000000.0f); // if this isn't our first time through (b/c timer hasn't been reset), calculate our adjustment since last loop
+            deltatimer.reset();                  // reset timer so we can measure elapsed loop time the next time through
         }
         else if (cruise_adjust_scheme == OnePull) {  // this one makes a single adjustment with each departure from trigger center, based on how far you push it (in either dir).
+            static float running_max_pc;             // stores the furthest the trigger has been from center since start of the adjustment event
             if (!cruise_adjusting) running_max_pc = hotrc->pc[VERT][CENT];  // on first time thru, recenter our max-trigger-value-so-far value back to center
             if (std::abs(trigger_vert_pc) >= joydir * running_max_pc) {     // if new trigger read beats our record so far (to avoid continuing adjustments when trigger hasn't moved or is decreasing)
-                thr_targ += (trigger_vert_pc - running_max_pc) * cruise_angle_attenuator;  // make an adjustment proportional to the incremental difference
-                running_max_pc = trigger_vert_pc;   // update our value for the furthest trigger read thusfar during the push
+                thr_targ += (trigger_vert_pc - running_max_pc) * cruise_onepull_attenuator_pc / 100.0f;  // make an adjustment proportional to the incremental difference
+                running_max_pc = trigger_vert_pc;    // update our value for the furthest trigger read thusfar during the push
             }
         }
         else ezread.printf(RED, "err: invalid cruise scheme %d\n", cruise_adjust_scheme);  // leaving thr_targ unchanged
@@ -506,29 +510,28 @@ class ThrottleControl : public ServoMotor {
         int joydir = hotrc->joydir(VERT);                           // read vertical joystick direction
         if ((joydir == JOY_CENT) || !cruise_trigger_released) {     // if joystick is at center, or hasn't yet been to center since entering cruise mode
             if (joydir == JOY_CENT) cruise_trigger_released = true; // if joystick is at center, flag that it has been to center since first entering cruise mode
-            if (cruise_pid_enabled && cruise_adjusting) {           // if running pid and this is the end of an adjustment
+            if (cruise_pid_enabled && cruise_adjusting) {           // if running pid and this return to center marks the end of an adjustment
                 cruisepid.set_output(thr_targ);                     // update the pid output to the current gas target
-                cruisepid.reset();                                  // reset the pid to ensure smooth transition to new value
+                ezread.printf("set pid out to %4.4f\n", thr_targ);
+                // cruisepid.reset();                               // reset the pid to ensure smooth transition to new value
             }
-            cruise_adjusting = false;                               // flag that no cruise adjustment is in progress
-        }                                                           // note, so far thr_targ has been left unchanged
-        else {                                          // if trigger is off center (and not b/c it's returning to center after initially entering cruise) ..
-            thr_targ = cruise_adjust(joydir, thr_targ); // then we are adjusting, so make adjustment & get new thr_targ
-            cruise_adjusting = true;                    // flag the current adjustment event has been initialized and now in progress
-        }
-        if (cruise_pid_enabled) {                                      // whenever cruise is running on pid
-            if (cruise_adjusting) cruisepid.set_target(speedo->val()); // during adjustment, pid is paused, but constantly update its speed target to the current speed
-            else thr_targ = cruisepid.compute();                       // if not adjusting, overwrite thr_targ with the pid calculated value instead
+            cruise_adjusting = false;                               // flag that no cruise adjustment is in progress. (resumes pid ctrl of thrtarg, if running pid)
+            if (cruise_pid_enabled) thr_targ = cruisepid.compute(); // if running on pid and not adjusting, use the pid math to drive thr_targ
+        }                                                           // note, so far thr_targ has been left unchanged, ie the basic point of cruise ctrl after all
+        else {                                                      // if trigger is off center (and not b/c it's returning to center after first entering cruise)
+            thr_targ = cruise_adjust(joydir, thr_targ);             // we are adjusting, so do adjustment & get new thr_targ. must come before cruise_adjusting=true
+            cruise_adjusting = true;                                // flag the current adjust event is initialized & in progress (suspends pid ctrl of thrtarg)
+            if (cruise_pid_enabled) cruisepid.set_target(speedo->val()); // during adjustment, constantly update the pid speed target to the current speed
         }
         return thr_targ;
     }
     void set_output() {
-        float out_temp, out_lowlim = _idle_pc;
+        float new_out, out_lowlim = _idle_pc;
         if (motormode == Halt) return;
         else if (motormode == Calibrate) {  // allows adjustment of gas using potmap, with its operational limits temporarily disabled (to facilitate calibrating those limits)
             cal_gasmode = true;  // flag that we have officially entered cal mode, as the potmapped gas was within the incumbent operational limits when cal mode started
-            out_temp = map(pot->val(), pot->opmin(), pot->opmax(), si[ABSMIN], si[ABSMAX]);  // translate pot value to a gas value
-            pc[OUT] = constrain(out_si_to_pc(out_temp), pc[ABSMIN], pc[ABSMAX]);  // make doubly sure the resulting gas value is within its *absolute* limits 
+            new_out = map(pot->val(), pot->opmin(), pot->opmax(), si[ABSMIN], si[ABSMAX]);  // translate pot value to a gas value
+            pc[OUT] = constrain(out_si_to_pc(new_out), pc[ABSMIN], pc[ABSMAX]);  // make doubly sure the resulting gas value is within its *absolute* limits 
             return;  // cal mode sets the output directly, ignoring the normal operational process at the bottom of this function
         }  // ezread.squintf(":%d tgt:%lf pk:%lf idl:%lf\n", motormode, throttle_target_pc, pc[PARKED], _idle_pc);
         
@@ -553,11 +556,11 @@ class ThrottleControl : public ServoMotor {
         throttle_target_pc = constrain(throttle_target_pc, pc[PARKED], pc[OPMAX]);
         if (pid_enabled) {
             pid.set_target(pc_to_rpm(throttle_target_pc));  // revisit this line, it may not be this simple to convert to rpm
-            out_temp = pid.compute();
+            new_out = pid.compute();
         }
-        else out_temp = throttle_target_pc;
-        if (!pid_enabled) out_temp = rate_limiter(out_temp);  // the pid should already be set to limit rate if needed.   pc[OUT] = rate_limiter(new_out);  max_out_change_rate_pcps
-        pc[OUT] = constrain(out_temp, out_lowlim, pc[GOVERN]);   // pid should constrain on its own, do not want to go editing its output
+        else new_out = throttle_target_pc;
+        if (!pid_enabled) new_out = rate_limiter(new_out);  // the pid should already be set to limit rate if needed.   pc[OUT] = rate_limiter(new_out);  max_out_change_rate_pcps
+        pc[OUT] = constrain(new_out, out_lowlim, pc[GOVERN]);   // pid should constrain on its own, do not want to go editing its output
     }
   public:
     void setmode(int _mode) {
@@ -601,7 +604,7 @@ class ThrottleControl : public ServoMotor {
         cruise_pid_enabled = new_cruise_pid_ena;
         if (cruise_pid_ena_last != cruise_pid_enabled) {
             update_cruise_pid();
-            ezread.squintf("cruise pid %s , %s linearizer\n", cruise_pid_enabled ? "enabled" : "disabled", throttle_linearize_cruise ? "w/" : "w/o");
+            ezread.squintf("cruis pid %s %s linz\n", cruise_pid_enabled ? "enab" : "disab", throttle_linearize_cruise ? "w/" : "w/o");
         }
     }    
     void set_pid_ena(bool new_pid_ena) {   // run w/o arguments each loop to enforce configuration limitations, or call with an argument to enable/disable pid and update. do not change pid_enabled anywhere else!
@@ -612,7 +615,7 @@ class ThrottleControl : public ServoMotor {
             else if (motormode == ActivePID && !pid_enabled) motormode = OpenLoop; 
             update_pid();
             update_cruise_pid();
-            if (pid_ena_last != pid_enabled) ezread.squintf("throttle pid %s, %s linearizer\n", pid_enabled ? "enabled" : "disabled", throttle_linearize_trigger ? "w/" : "w/o");
+            if (pid_ena_last != pid_enabled) ezread.squintf("throt pid %s %s linz\n", pid_enabled ? "enab" : "disab", throttle_linearize_trigger ? "w/" : "w/o");
         }
     }
     void set_cruise_scheme(int newscheme) {
@@ -919,16 +922,16 @@ class BrakeControl : public JagMotor {
         }
     }
     void postprocessing() {  // keep within the operational range, or to full absolute range if calibrating (caution don't break anything!)
-        float out_temp = pc[OUT];
+        float new_out = pc[OUT];
         if (motormode == ActivePID);  // don't mess with the output value that's being controlled internally to a pid. except for an artificial cleanzero unbeknownst to the pid
-        else if (motormode == Calibrate) out_temp = constrain(out_temp, pc[ABSMIN], pc[ABSMAX]);
+        else if (motormode == Calibrate) new_out = constrain(new_out, pc[ABSMIN], pc[ABSMAX]);
         else if (enforce_positional_limits                                // IF we're not to exceed actuator position limits
-          && ((out_temp < pc[STOP] && brkpos->val() > brkpos->opmax())     // AND ( trying to extend while at extension limit OR trying to retract while at retraction limit )
-          || (out_temp > pc[STOP] && brkpos->val() < brkpos->opmin())))                              //  - brkpos->margin() //  + brkpos->margin()
-            out_temp = pc[STOP];                                           // THEN stop the motor
-        else out_temp = constrain(out_temp, pc[OPMIN], pc[OPMAX]);          // constrain motor value to operational range (in pid mode pids should manage this)
-        cleanzero(&out_temp, 0.01);  // if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;                                 // prevent stupidly small values which i was seeing
-        pc[OUT] = rate_limiter(out_temp);  // changerate_limiter();
+          && ((new_out < pc[STOP] && brkpos->val() > brkpos->opmax())     // AND ( trying to extend while at extension limit OR trying to retract while at retraction limit )
+          || (new_out > pc[STOP] && brkpos->val() < brkpos->opmin())))                              //  - brkpos->margin() //  + brkpos->margin()
+            new_out = pc[STOP];                                           // THEN stop the motor
+        else new_out = constrain(new_out, pc[OPMIN], pc[OPMAX]);          // constrain motor value to operational range (in pid mode pids should manage this)
+        cleanzero(&new_out, 0.01);  // if (std::abs(pc[OUT]) < 0.01) pc[OUT] = 0.0;                                 // prevent stupidly small values which i was seeing
+        pc[OUT] = rate_limiter(new_out);  // changerate_limiter();
         // for (int p = PositionFB; p <= PressureFB; p++) if (feedback_enabled[p]) pids[p].set_output(pc[OUT]);  // feed the final value back into the pids
     }
   public:
@@ -1047,19 +1050,19 @@ class SteeringControl : public JagMotor {
         return pc[STOP] + (endpoint - pc[STOP]) * (1.0 - steer_safe_pc * speedo->val() / (100.0 * speedo->opmax()));
     }
     void set_output() {
-        float out_temp = pc[OUT];
-        if (motormode == Halt) out_temp = pc[STOP];  // Stop the steering motor if in standby mode and standby is complete
+        float new_out = pc[OUT];
+        if (motormode == Halt) new_out = pc[STOP];  // Stop the steering motor if in standby mode and standby is complete
         else if (motormode == OpenLoop) {
             int _joydir = hotrc->joydir(HORZ);
             if (_joydir == JOY_RT)
-                out_temp = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][CENT], hotrc->pc[HORZ][OPMAX], pc[STOP], steer_safe(pc[OPMAX]));  // if joy to the right of deadband
+                new_out = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][CENT], hotrc->pc[HORZ][OPMAX], pc[STOP], steer_safe(pc[OPMAX]));  // if joy to the right of deadband
             else if (_joydir == JOY_LT)
-                out_temp = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][CENT], hotrc->pc[HORZ][OPMIN], pc[STOP], steer_safe(pc[OPMIN]));  // if joy to the left of deadband
+                new_out = map(hotrc->pc[HORZ][FILT], hotrc->pc[HORZ][CENT], hotrc->pc[HORZ][OPMIN], pc[STOP], steer_safe(pc[OPMIN]));  // if joy to the left of deadband
             else
-                out_temp = pc[STOP];  // Stop the steering motor if inside the deadband
+                new_out = pc[STOP];  // Stop the steering motor if inside the deadband
         }
-        out_temp = rate_limiter(out_temp);  // changerate_limiter();
-        cleanzero(&out_temp, 0.01);
-        pc[OUT] = constrain(out_temp, pc[OPMIN], pc[OPMAX]);
+        new_out = rate_limiter(new_out);  // changerate_limiter();
+        cleanzero(&new_out, 0.01);
+        pc[OUT] = constrain(new_out, pc[OPMIN], pc[OPMAX]);
     }
 };

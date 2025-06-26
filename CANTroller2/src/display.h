@@ -60,13 +60,13 @@ static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
     { "%",    degreF, "%",    ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, b1nary, scroll, },  // PG_MOTR
     { scroll, "%",    "psi",  "%",    "in",   "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PG_BPID
     { scroll, "%",    "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, b1nary, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
-    { "mph",  "mph",  "rpm",  "rpm",  "rpm",  "%",    ______, b1nary, b1nary, b1nary, ______, "%/s",  ______, "Hz",   "s",    },  // PG_CPID
+    { "mph",  "mph",  "%|r",  "%|r",  "%|r",  "%",    ______, b1nary, b1nary, b1nary, ______, "%",    ______, "Hz",   "s",    },  // PG_CPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, degreF, b1nary, },  // PG_TEMP
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
     { "us",   "us",   "fps",  scroll, "pix",  "pix",  "x",    "Hz",   "lin",  scroll, b1nary, "eyes", "%",    "%",    scroll, },  // PG_UI
 };
-static std::string unitmapnames[20] = { "us", scroll, b1nary, "%", "ohm", "eyes", degree, degreF, "mph", "rpm", "psi", "atm", "g/s", "adc", "pix", "min", "%/s", degsec, "fps", "lin" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
-static constexpr uint8_t unitmaps[20][13] = {  // now 13x7-pixel bitmaps for unit strings. required when string is over 2 characters
+static std::string unitmapnames[21] = { "us", scroll, b1nary, "%", "ohm", "eyes", degree, degreF, "mph", "rpm", "psi", "atm", "g/s", "adc", "pix", "min", "%/s", "%|r", degsec, "fps", "lin" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
+static constexpr uint8_t unitmaps[21][13] = {  // now 13x7-pixel bitmaps for unit strings. required when string is over 2 characters
     { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, },  // us - b/c the font's lowercase mu character doesn't work
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x20, 0x7f, 0x00, 0x7f, 0x02, 0x04, },  // up/down arrows to indicate multiple choices. this one is right-aligned one char over to allow longer names
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x75, 0x75, 0x22, 0x00, },  // binary vertical on/off dots
@@ -84,6 +84,7 @@ static constexpr uint8_t unitmaps[20][13] = {  // now 13x7-pixel bitmaps for uni
     { 0x7e, 0x12, 0x12, 0x0c, 0x00, 0x04, 0x3d, 0x00, 0x22, 0x14, 0x08, 0x14, 0x22, },  // pix
     { 0x7c, 0x04, 0x78, 0x04, 0x78, 0x00, 0x44, 0x7d, 0x40, 0x00, 0x7c, 0x04, 0x78, },  // min
     { 0x23, 0x13, 0x08, 0x64, 0x62, 0x00, 0x60, 0x18, 0x06, 0x48, 0x54, 0x54, 0x24, },  // %/s
+    { 0x23, 0x13, 0x08, 0x64, 0x62, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x7c, 0x04, 0x08, },  // %|r
     { 0x06, 0x09, 0x09, 0x06, 0x60, 0x18, 0x06, 0x00, 0x48, 0x54, 0x54, 0x24, 0x00, },  // deg/s  // 0x06, 0x0f, 0x09, 0x0f, 0x06,
     { 0x08, 0x7e, 0x09, 0x02, 0x00, 0x7e, 0x12, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x12, },  // fps
     { 0x41, 0x7f, 0x40, 0x00, 0x44, 0x7d, 0x40, 0x00, 0x7c, 0x04, 0x04, 0x78, 0x00, },  // lin
@@ -232,10 +233,11 @@ class Display {
     }
     void blackout() {
         sprptr->fillSprite(BLK);
+        // below is the nerdy way i initially coded this till i found the command above. they're equivalent. man what a nerd
         // std::uint32_t* s;
         // for (int f=0; f<2; f++) {
-        //     s = (std::uint32_t*)(*spr).getBuffer();
-        //     for (int w=0; w<(spr->width() * spr->height() / 4); w++) s[w] = 0x00000000;
+        //     s = (std::uint32_t*)(*sprptr).getBuffer();
+        //     for (int w=0; w<(sprptr->width() * sprptr->height() / 4); w++) s[w] = 0x00000000;
         // }
     }
     void set_runmodecolors() {
@@ -804,12 +806,11 @@ class Display {
             drawval(23, gas.pid.kd());
         }
         else if (datapage == PG_CPID) {
-            drange = tach.opmax() - tach.idle();
             drawval(9, gas.cruisepid.target(), speedo.opmin(), speedo.opmax());
             drawval(10, gas.cruisepid.err(), speedo.opmin()-speedo.opmax(), speedo.opmax()-speedo.opmin());
-            drawval(11, gas.cruisepid.pterm(), -drange, drange);
-            drawval(12, gas.cruisepid.iterm(), -drange, drange);
-            drawval(13, gas.cruisepid.dterm(), -drange, drange);
+            drawval(11, gas.cruisepid.pterm());  // drange = tach.opmax() - tach.idle();
+            drawval(12, gas.cruisepid.iterm());
+            drawval(13, gas.cruisepid.dterm());
             // drawval(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
             drawval(14, gas.throttle_target_pc, 0.0f, 100.0f);
             for (int line=15; line<=15; line++) draw_eraseval(line);
@@ -817,7 +818,7 @@ class Display {
             draw_truth(17, gas.cruise_pid_enabled, 3);
             draw_truth(18, throttle_linearize_cruise, 3);
             drawval(19, gas.cruise_linearizer_exponent, 1.0f, 5.0f);
-            drawval(20, cruise_delta_max_pc_per_s, 1, 35);
+            drawval(20, cruise_holdtime_attenuator_pc, 0.0f, 100.0f);
             drawval(21, gas.cruisepid.kp());
             drawval(22, gas.cruisepid.ki());
             drawval(23, gas.cruisepid.kd());
@@ -870,10 +871,9 @@ class Display {
     }
   public:
     bool draw_all(LGFX_Sprite* spr) {
-        static Timer lowpowertimer{1000000};
         static bool starter_last = false;
         if (runmode == LOWPOWER) {
-            if (lowpowertimer.expireset()) blackout();
+            blackout();
             return false;
         }
         if (!display_enabled) return false;
@@ -1136,7 +1136,7 @@ class Tuner {
             else if (sel == 8) gas.set_cruise_pid_ena(tune(id));
             else if (sel == 9) tune(&throttle_linearize_cruise, id);
             else if (sel == 10) tune(&gas.cruise_linearizer_exponent, id, 1.0f, 3.0f);
-            else if (sel == 11) tune(&cruise_delta_max_pc_per_s, id, 1.0, 35.0);
+            else if (sel == 11) tune(&cruise_holdtime_attenuator_pc, id, 0.0f, 100.0f);
             else if (sel == 12) gas.set_cruise_tunings(tune(gas.cruisepid.kp(), id, 0.0f, NAN), NAN, NAN);
             else if (sel == 13) gas.set_cruise_tunings(NAN, tune(gas.cruisepid.ki(), id, 0.0f, NAN), NAN);
             else if (sel == 14) gas.set_cruise_tunings(NAN, NAN, tune(gas.cruisepid.kd(), id, 0.0f, NAN));

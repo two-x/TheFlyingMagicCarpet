@@ -4,7 +4,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     int lowpower_delay_sec = 1500;  // Time of inactivity after entering standby mode before going to lowpower mode.  900sec = 15min
     int screensaver_delay_sec = 600;  // Time of inactivity after entering standby mode before starting screensaver turns on.  300sec = 5min
     Timer gestureFlyTimer{500000};  // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-    Timer pwrup_timer{500000};  // Timeout to allow powerup of system devices during wakeup. delays entry to standby mode (in us)
+    Timer pwrchange_timer{500000};  // Timeout to allow powerup of system devices during wakeup. delays entry to standby mode (in us)
     Timer standby_timer{5000000};
     Timer stall_timer;
     int _joydir, oldmode = LOWPOWER;
@@ -72,19 +72,26 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (we_just_switched_modes) {
             sleep_request = REQ_NA;
             powering_up = false;
+            powering_down = true;
+            pwrchange_timer.reset();
             brake.setmode(Halt);
             steer.setmode(Halt);
-            set_syspower(LOW);     // Power down devices to save battery
             autosaver_request = REQ_OFF;  // actually this should be REQ_OFF, plus request screen backlight is shut off or at least black out screen
         }
-        if (encoder.button.shortpress()) sleep_request = REQ_OFF;
-        if ((!hotrc.radiolost() && hotrc.sw_event(CH4)) || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // start powering up
-            set_syspower(HIGH);    // switch on control system devices
-            pwrup_timer.reset();   // stay in lowpower mode for a delay to allow devices to power up
-            powering_up = true;
-            autosaver_request = REQ_OFF;
+        if (powering_down) {
+            if (pwrchange_timer.expired()) set_syspower(LOW);  // Power down devices to save battery
+            powering_down = false;
         }
-        if (powering_up && pwrup_timer.expired()) runmode = (in_basicmode) ? BASIC : STANDBY;  // basicsw.val()  finish powering up . display->all_dirty();  // tells display to redraw everything. display must set back to false
+        else {
+            if (encoder.button.shortpress()) sleep_request = REQ_OFF;
+            if ((!hotrc.radiolost() && hotrc.sw_event(CH4)) || sleep_request == REQ_TOG || sleep_request == REQ_OFF) {  // start powering up
+                set_syspower(HIGH);    // switch on control system devices
+                pwrchange_timer.reset();   // stay in lowpower mode for a delay to allow devices to power up
+                powering_up = true;
+                autosaver_request = REQ_OFF;
+            }
+            if (powering_up && pwrchange_timer.expired()) runmode = (in_basicmode) ? BASIC : STANDBY;  // basicsw.val()  finish powering up . display->all_dirty();  // tells display to redraw everything. display must set back to false
+        }
         sleep_request = REQ_NA;
     }
     void run_standbyMode() { // In standby mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.

@@ -1,4 +1,11 @@
 #pragma once
+// platformio includes necessary for web function:
+//   ottowinter/ESPAsyncWebServer-esphome ;@^3.1.0
+//   links2004/WebSockets                 ;@^2.4.1
+//   ayushsharma82/ElegantOTA             ;@^3.1.0
+//   bblanchon/ArduinoJson                ;@^6.21.5
+//   esphome/AsyncTCP-esphome             ;@^2.1.1
+
 // set up our flash filesystem
 #define FORMAT_LITTLEFS_IF_FAILED true
 #include <FS.h>

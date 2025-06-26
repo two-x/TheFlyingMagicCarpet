@@ -451,8 +451,9 @@ void BootButton::actions() {  // temporary (?) functionality added for developme
         else if (auto_saver_enabled) panel.change_saver();
         else {
             sim.toggle();
-            Timer printtimer;
+            // below trying to debug mulebatt error bit having same addr as nowtouch
             ezread.squintf("addr: batt:%08X touch:%08X\n", &sensidiots[_MuleBatt], &nowtouch);
+            Timer printtimer;
             for (int i=0; i<NumTelemetryFull; i++) {
                 ezread.squintf("%02d: %08X %s\n", i, &sensidiots[i], diag.err_sens_card[i].c_str());            
             }
