@@ -14,7 +14,7 @@
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "ANI" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { "CAL", "SIM", "CH4", "IGN" };
-std::string ch4_menu_buttons[NUM_RUNMODES] = { "CH4", "WAKE", "SLEEP", "START", "START", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
+std::string ch4_menu_buttons[NumRunModes] = { "CH4", "WAKE", "SLEEP", "START", "START", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 std::string pcbaglowcard[GlowNumModes] = { "Off", "Simple", "Hbeat", "Xfade", "Sine" };
@@ -33,37 +33,37 @@ std::string pcbaglowcard[GlowNumModes] = { "Off", "Simple", "Hbeat", "Xfade", "S
 #define horfailsaf "HFails\x83""f"
 static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
-static std::string pagecard[datapages::NUM_DATAPAGES] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NUM_DATAPAGES] = { 13, 10, 10, 11, 11, 10, 5, 11, 9, 7, 12, 4, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
-static std::string datapage_names[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
-    { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PG_RUN
-    { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PG_JOY
-    { " Pot Raw", brAk"Posn", brAk"Posn", brAk"Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PG_SENS
-    { "TachPuls", "Tach Raw", "TcAltRaw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpAltRaw", "SpeedRaw", "   Speed", __________, __________, "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", },  // PG_PULS
-    { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PG_PWMS
-    { "Gas Mode", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PG_IDLE
-    { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "BkEnaPID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", "GasEnPID", "CrEnaPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PG_MOTR    
-    { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PG_BPID
-    { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PG_GPID
-    { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "GasEnPID", "CrEnaPID", "Lineariz", "Exponent", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PG_CPID
-    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PG_TEMP
-    { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PG_SIM
-    { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", "EZScroll", "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", "PanelApp", },  // PG_UI
+static std::string pagecard[datapages::NumDataPages] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
+static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 10, 10, 11, 11, 10, 5, 11, 9, 7, 12, 4, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
+static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = {
+    { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PgRun
+    { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PgJoy
+    { " Pot Raw", brAk"Posn", brAk"Posn", brAk"Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PgSens
+    { "TachPuls", "Tach Raw", "TcAltRaw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpAltRaw", "SpeedRaw", "   Speed", __________, __________, "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", },  // PgPuls
+    { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PgPWMs
+    { "Gas Mode", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PgIdle
+    { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "BkEnaPID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", "GasEnPID", "CrEnaPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PgMotr    
+    { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PgBPID
+    { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PgGPID
+    { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "GasEnPID", "CrEnaPID", "Lineariz", "Exponent", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
+    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
+    { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PgSim
+    { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", "EZScroll", "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", "PanelApp", },  // PgUI
 };
-static std::string tuneunits[datapages::NUM_DATAPAGES][disp_tuning_lines] = {
-    { "psi",  "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "min",  ______, ______, "%",    "%",    },  // PG_RUN
-    { "us",   "us",   "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, "mph",  "atm",  "atm",  "us",   "us",   },  // PG_JOY
-    { "adc",  "adc",  "in",   "%",    "adc",  "psi",  "%",    "adc",  "V",    ______, "psi",  "psi",  "in",   "in",   "in",   },  // PG_SENS
-    { "ms",   "Hz",   "Hz",   "rpm",  "ms",   "Hz",   "Hz",   "mph",  "%",    ______, ______, "rpm",  "rpm",  "mph",  "mph",  },  // PG_PULS
-    { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PG_PWMS
-    { scroll, "rpm",  "%",    "%",    degree, "rpm",  ______, ______, ______, ______, "s",    "%",    "%",    degreF, degreF, },  // PG_IDLE
-    { "%",    degreF, "%",    ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, b1nary, scroll, },  // PG_MOTR
-    { scroll, "%",    "psi",  "%",    "in",   "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PG_BPID
-    { scroll, "%",    "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, b1nary, ______, degsec, ______, "Hz",   "s",    },  // PG_GPID
-    { "mph",  "mph",  "%|r",  "%|r",  "%|r",  "%",    ______, b1nary, b1nary, b1nary, ______, "%",    ______, "Hz",   "s",    },  // PG_CPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, degreF, b1nary, },  // PG_TEMP
-    { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PG_SIM
-    { "us",   "us",   "fps",  scroll, "pix",  "pix",  "x",    "Hz",   "lin",  scroll, b1nary, "eyes", "%",    "%",    scroll, },  // PG_UI
+static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {
+    { "psi",  "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "min",  ______, ______, "%",    "%",    },  // PgRun
+    { "us",   "us",   "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, "mph",  "atm",  "atm",  "us",   "us",   },  // PgJoy
+    { "adc",  "adc",  "in",   "%",    "adc",  "psi",  "%",    "adc",  "V",    ______, "psi",  "psi",  "in",   "in",   "in",   },  // PgSens
+    { "ms",   "Hz",   "Hz",   "rpm",  "ms",   "Hz",   "Hz",   "mph",  "%",    ______, ______, "rpm",  "rpm",  "mph",  "mph",  },  // PgPuls
+    { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PgPWMs
+    { scroll, "rpm",  "%",    "%",    degree, "rpm",  ______, ______, ______, ______, "s",    "%",    "%",    degreF, degreF, },  // PgIdle
+    { "%",    degreF, "%",    ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, b1nary, scroll, },  // PgMotr
+    { scroll, "%",    "psi",  "%",    "in",   "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PgBPID
+    { scroll, "%",    "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, b1nary, ______, degsec, ______, "Hz",   "s",    },  // PgGPID
+    { "mph",  "mph",  "%|r",  "%|r",  "%|r",  "%",    ______, b1nary, b1nary, b1nary, ______, "%",    ______, "Hz",   "s",    },  // PgCPID
+    { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, degreF, b1nary, },  // PgTemp
+    { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PgSim
+    { "us",   "us",   "fps",  scroll, "pix",  "pix",  "x",    "Hz",   "lin",  scroll, b1nary, "eyes", "%",    "%",    scroll, },  // PgUI
 };
 static std::string unitmapnames[21] = { "us", scroll, b1nary, "%", "ohm", "eyes", degree, degreF, "mph", "rpm", "psi", "atm", "g/s", "adc", "pix", "min", "%/s", "%|r", degsec, "fps", "lin" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
 static constexpr uint8_t unitmaps[21][13] = {  // now 13x7-pixel bitmaps for unit strings. required when string is over 2 characters
@@ -150,8 +150,8 @@ class Display {
         ezread.squintf(" %dx buffers ", num_bufs);
         lcd.setColorDepth(sprite_color_depth);
         for (int i = 0; i < num_bufs; i++) framebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
-        auto framewidth = sprsize[HORZ];
-        auto frameheight = sprsize[VERT];
+        auto framewidth = sprsize[Horz];
+        auto frameheight = sprsize[Vert];
         bool fail = false;
         bool using_psram = false;
         for (int i = 0; !fail && i < num_bufs; ++i) {
@@ -205,7 +205,7 @@ class Display {
         for (int row=0; row<arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
         for (int row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
         for (int row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
-        datapage = prefs.getUInt("dpage", PG_RUN);
+        datapage = prefs.getUInt("dpage", PgRun);
         init_framebuffers(disp_width_pix, disp_height_pix);
         panel.setup(&lcd, sim, touch, disp_apppanel_x, disp_apppanel_y, disp_apppanel_w, disp_apppanel_h);
         sprptr = &framebuf[flip];
@@ -242,8 +242,8 @@ class Display {
     }
     void set_runmodecolors() {
         uint8_t saturat = 255;  uint8_t hue_offset = 0;
-        for (int rm=0; rm<NUM_RUNMODES; rm++) {
-            int division = NUM_RUNMODES;
+        for (int rm=0; rm<NumRunModes; rm++) {
+            int division = NumRunModes;
             uint32_t color32 = hsv_to_rgb<uint32_t>((65536 * (uint16_t)(rm % division) / division + hue_offset), saturat, 255);  // , 0, 220);
             colorcard[rm] = color_to_332(color32);  // 5957 = 2^16/11
             disp_runmode_dirty = true;
@@ -528,8 +528,8 @@ class Display {
     void draw_selected_name(int tun_ctrl, int selection, int selected_last, int selected_last_last) {
         static int last_selected; 
         uint8_t color = LGRY;
-        if (tun_ctrl == EDIT) color = GRN;
-        else if (tun_ctrl == SELECT) color = YEL;
+        if (tun_ctrl == Edit) color = GRN;
+        else if (tun_ctrl == Select) color = YEL;
         draw_string(12, (last_selected + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][last_selected], nulstr, LGRY, BLK, true);
         draw_string(12, (selection + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][selection], nulstr, color, BLK, true);
         last_selected = selection;
@@ -538,7 +538,7 @@ class Display {
     void draw_menu_toggle(bool value, int col, bool force=false) {  // Draws values of boolean data
         if ((disp_bool_values[col - 2] != value) || force) {  // If value differs, Erase old value and write new
             std::string drawme = top_menu_buttons[col-2];
-            if (drawme == "CAL" && !(runmode == STANDBY || runmode == CAL)) drawme = "NA";
+            if (drawme == "CAL" && !(runmode == Standby || runmode == Cal)) drawme = "NA";
             else if (drawme == "CH4") drawme = ch4_menu_buttons[runmode];
             int x_mod = touch_margin_h_pix + touch_cell_h_pix * (col) + (touch_cell_h_pix >> 1);
             sprptr->fillRect(x_mod - 5 * (disp_font_width >> 1) + 1, 0, 5 * disp_font_width, disp_font_height, DGRY);
@@ -555,7 +555,7 @@ class Display {
         sprptr->setTextColor(LGRY);
         for (int row = 0; row < arraysize(side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
             std::string drawme = side_menu_buttons[row];
-            if (drawme == "ANI" && runmode != STANDBY) drawme = "NA";
+            if (drawme == "ANI" && runmode != Standby) drawme = "NA";
             sprptr->fillRoundRect(-9, touch_cell_v_pix * row + 3, 18, touch_cell_v_pix - 6, 8, DGRY);
             sprptr->drawRoundRect(-9, touch_cell_v_pix * row + 3, 18, touch_cell_v_pix - 6, 8, LGRY);
             namelen = 0;
@@ -592,8 +592,8 @@ class Display {
         else drawval(draw_index, tempsens.val(location), tempsens.opmin(location), tempsens.opmax(location));  //temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
     }
     void draw_idiotbitmap(int i, int x, int y) {
-        uint8_t bg = idiots->val(i) ? idiots->color[ON][i] : BLK;
-        uint8_t color = idiots->val(i) ? BLK : idiots->color[OFF][i];
+        uint8_t bg = idiots->val(i) ? idiots->color[On][i] : BLK;
+        uint8_t color = idiots->val(i) ? BLK : idiots->color[Off][i];
         sprptr->drawRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
         for (int xo = 0; xo < (2 * disp_font_width - 1); xo++)
             for (int yo = 0; yo < disp_font_height - 1; yo++)
@@ -602,8 +602,8 @@ class Display {
     void draw_idiotlight(int i, int x, int y) {
         if (!idiots->val(i)) sprptr->fillRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, BLK);  // erase rectangle when turning off. need to test if this is necessary
         if (idiots->icon[i][0] == 0xff) {  // 0xff in the first byte will draw 2-letter string instead of bitmap
-            sprptr->fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, (idiots->val(i)) ? idiots->color[ON][i] : BLK);
-            sprptr->setTextColor(idiots->val(i) ? BLK : idiots->color[OFF][i]);  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
+            sprptr->fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, (idiots->val(i)) ? idiots->color[On][i] : BLK);
+            sprptr->setTextColor(idiots->val(i) ? BLK : idiots->color[Off][i]);  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
             sprptr->setCursor(x+1, y+1);
             sprptr->print(idiots->letters[i].c_str());
         }
@@ -616,9 +616,9 @@ class Display {
             if (i < neo->num_neo_idiots()) {  // the first group of displayed idiot lights are also represented by neopixels
                 if (*ptr != idiots->last[i]) neo->setlogic(i, *ptr);
                 if (*ptr) {
-                    if (ptr == &panicstop || ptr == &diag.err_sens[RANGE][_TempEng] || ptr == &wheeltemperr) neo->setflash(i, 3, 1, 2, 100, 0xffffff);  // add a brilliant flash to the more critical idiot lights
-                    else if (ptr == &diag.err_sens_alarm[LOST]) neo->setflash(i, diag.errorcount(LOST), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
-                    else if (ptr == &diag.err_sens_alarm[RANGE]) neo->setflash(i, diag.errorcount(RANGE), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
+                    if (ptr == &panicstop || ptr == &diag.err_sens[ErrRange][_TempEng] || ptr == &wheeltemperr) neo->setflash(i, 3, 1, 2, 100, 0xffffff);  // add a brilliant flash to the more critical idiot lights
+                    else if (ptr == &diag.err_sens_alarm[ErrLost]) neo->setflash(i, diag.errorcount(ErrLost), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
+                    else if (ptr == &diag.err_sens_alarm[ErrRange]) neo->setflash(i, diag.errorcount(ErrRange), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
                 }
                 else neo->setflash(i, 0);
             }
@@ -629,7 +629,7 @@ class Display {
         disp_idiots_dirty = false;
     }
     void disp_menu_bools() {
-        draw_menu_toggle((runmode == CAL), 2, disp_menutoggles_dirty);
+        draw_menu_toggle((runmode == Cal), 2, disp_menutoggles_dirty);
         draw_menu_toggle(sim->simulating(), 3, disp_menutoggles_dirty);
         draw_menu_toggle(starter.motor, 4, disp_menutoggles_dirty);
         draw_menu_toggle(ignition.signal, 5, disp_menutoggles_dirty);
@@ -646,15 +646,15 @@ class Display {
     // * draw_eraseval (int_line)  // leaves the entry blank. use for every line not containing a value
     void disp_datapage_values() {
         float drange;
-        drawval(1, hotrc.pc[VERT][FILT], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        drawval(2, hotrc.pc[HORZ][FILT], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+        drawval(1, hotrc.pc[Vert][Filt], hotrc.pc[Vert][OpMin], hotrc.pc[Vert][OpMax]);
+        drawval(2, hotrc.pc[Horz][Filt], hotrc.pc[Horz][OpMin], hotrc.pc[Horz][OpMax]);
         drawval(3, speedo.val(), 0.0f, speedo.opmax(), gas.cruisepid.target());
         drawval(4, tach.val(), 0.0f, tach.opmax(), gas.pid.target());
         drawval(5, brake.combined_read_pc, 0.0, 100.0, brake.target_pc);  // (brake_active_pid == S_PID) ? (int)brakeSPID.targ() : pressure_target_adc);
-        drawval(6, gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], gas.throttle_target_pc);
-        drawval(7, brake.pc[OUT], brake.pc[OPMIN], brake.pc[OPMAX]);
-        drawval(8, steer.pc[OUT], steer.pc[OPMIN], steer.pc[OPMAX]);
-        if (datapage == PG_RUN) {
+        drawval(6, gas.pc[Out], gas.pc[OpMin], gas.pc[OpMax], gas.throttle_target_pc);
+        drawval(7, brake.pc[Out], brake.pc[OpMin], brake.pc[OpMax]);
+        drawval(8, steer.pc[Out], steer.pc[OpMin], steer.pc[OpMax]);
+        if (datapage == PgRun) {
             drawval(9, pressure.val(), pressure.opmin(), pressure.opmax());
             drawval(10, brkpos.val(), brkpos.opmin(), brkpos.opmax());
             drawval(11, mulebatt.val(), mulebatt.opmin(), mulebatt.opmax(), NAN, 4);
@@ -670,23 +670,23 @@ class Display {
             drawval(22, governor, 0.0f, 100.0f, NAN, 1);
             drawval(23, steer.steer_safe_pc, 0.0f, 100.0f, NAN, 1);
         }
-        else if (datapage == PG_JOY) {
-            drawval(9, hotrc.us[HORZ][FILT], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
-            drawval(10, hotrc.us[VERT][FILT], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
-            drawval(11, hotrc.us[HORZ][RAW], hotrc.us[HORZ][OPMIN], hotrc.us[HORZ][OPMAX]);
-            drawval(12, hotrc.us[VERT][RAW], hotrc.us[VERT][OPMIN], hotrc.us[VERT][OPMAX]);
-            drawval(13, hotrc.us[CH3][RAW], hotrc.us[CH3][OPMIN], hotrc.us[CH3][OPMAX]);
-            drawval(14, hotrc.us[CH4][RAW], hotrc.us[CH4][OPMIN], hotrc.us[CH4][OPMAX]);
-            drawval(15, hotrc.pc[HORZ][RAW], hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
-            drawval(16, hotrc.pc[VERT][RAW], hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
+        else if (datapage == PgJoy) {
+            drawval(9, hotrc.us[Horz][Filt], hotrc.us[Horz][OpMin], hotrc.us[Horz][OpMax]);
+            drawval(10, hotrc.us[Vert][Filt], hotrc.us[Vert][OpMin], hotrc.us[Vert][OpMax]);
+            drawval(11, hotrc.us[Horz][Raw], hotrc.us[Horz][OpMin], hotrc.us[Horz][OpMax]);
+            drawval(12, hotrc.us[Vert][Raw], hotrc.us[Vert][OpMin], hotrc.us[Vert][OpMax]);
+            drawval(13, hotrc.us[Ch3][Raw], hotrc.us[Ch3][OpMin], hotrc.us[Ch3][OpMax]);
+            drawval(14, hotrc.us[Ch4][Raw], hotrc.us[Ch4][OpMin], hotrc.us[Ch4][OpMax]);
+            drawval(15, hotrc.pc[Horz][Raw], hotrc.pc[Horz][OpMin], hotrc.pc[Horz][OpMax]);
+            drawval(16, hotrc.pc[Vert][Raw], hotrc.pc[Vert][OpMin], hotrc.pc[Vert][OpMax]);
             for (int line=17; line<=18; line++) draw_eraseval(line);
             drawval(19, airvelo.opmax(), airvelo.absmin(), airvelo.absmax());
             drawval(20, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
             drawval(21, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
-            drawval(22, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]);
+            drawval(22, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[Vert][OpMin] - hotrc.us[Vert][Margin]);
             drawval(23, hotrc.deadband_us, 0.0, 100.0);
         }
-        else if (datapage == PG_SENS) {
+        else if (datapage == PgSens) {
             drawval(9, pot.native(), pot.absmin_native(), pot.absmax_native());
             drawval(10, brkpos.native(), brkpos.opmin_native(), brkpos.opmax_native());
             drawval(11, brkpos.val(), brkpos.opmin(), brkpos.opmax());
@@ -705,7 +705,7 @@ class Display {
             drawval(22, brkpos.opmax(), brkpos.absmin(), brkpos.absmax());
             drawval(23, brkpos.zeropoint(), brkpos.opmin(), brkpos.opmax());  // BrakePositionSensor::absmin_retract_in, BrakePositionSensor::absmax_extend_in);
         }
-        else if (datapage == PG_PULS) {
+        else if (datapage == PgPuls) {
             drawval(9, tach.ms(), tach.absmin_ms(), tach.absmax_ms());
             drawval(10, tach.native(), tach.opmin_native(), tach.opmax_native());
             drawval(11, tach.alt_native(), (int)tach.opmin(), (int)tach.opmax());
@@ -721,34 +721,34 @@ class Display {
             drawval(22, speedo.opmin(), speedo.absmin(), speedo.absmax());
             drawval(23, speedo.opmax(), speedo.absmin(), speedo.absmax());
         }
-        else if (datapage == PG_PWMS) {
-            drawval(9, gas.si[OUT], gas.si[OPMIN], gas.si[OPMAX]);
-            drawval(10, gas.us[OUT], gas.us[ABSMIN], gas.us[ABSMAX]);
-            drawval(11, brake.volt[OUT], brake.volt[OPMIN], brake.volt[OPMAX]);
-            drawval(12, brake.us[OUT], brake.us[ABSMIN], brake.us[ABSMAX]);
-            drawval(13, steer.volt[OUT], steer.volt[OPMIN], steer.volt[OPMAX]);
-            drawval(14, steer.us[OUT], steer.us[ABSMIN], steer.us[ABSMAX]);
+        else if (datapage == PgPWMs) {
+            drawval(9, gas.si[Out], gas.si[OpMin], gas.si[OpMax]);
+            drawval(10, gas.us[Out], gas.us[AbsMin], gas.us[AbsMax]);
+            drawval(11, brake.volt[Out], brake.volt[OpMin], brake.volt[OpMax]);
+            drawval(12, brake.us[Out], brake.us[AbsMin], brake.us[AbsMax]);
+            drawval(13, steer.volt[Out], steer.volt[OpMin], steer.volt[OpMax]);
+            drawval(14, steer.us[Out], steer.us[AbsMin], steer.us[AbsMax]);
             for (int line=15; line<=19; line++) draw_eraseval(line);
-            drawval(20, gas.si[OPMIN], gas.si[ABSMIN], gas.si[ABSMAX]);
-            drawval(21, gas.si[OPMAX], gas.si[ABSMIN], gas.si[ABSMAX]);
-            drawval(22, brake.us[STOP], brake.us[ABSMIN], brake.us[ABSMAX]);
+            drawval(20, gas.si[OpMin], gas.si[AbsMin], gas.si[AbsMax]);
+            drawval(21, gas.si[OpMax], gas.si[AbsMin], gas.si[AbsMax]);
+            drawval(22, brake.us[Stop], brake.us[AbsMin], brake.us[AbsMax]);
             drawval(23, brake.duty_fwd_pc, 0.0f, 100.0f);
         }
-        else if (datapage == PG_IDLE) {
+        else if (datapage == PgIdle) {
             draw_ascii(9, motormodecard[gas.motormode]);
             drawval(10, gas.pid.target(), tach.opmin(), tach.opmax());
             drawval(11, gas.idle_boost_pc, 0.0f, gas.idle_max_boost_pc);
-            drawval(12, gas.idle_pc(), gas.pc[OPMIN], gas.pc[OPMAX]);
-            drawval(13, gas.idle_si(), gas.si[OPMIN], gas.si[OPMAX]);
+            drawval(12, gas.idle_pc(), gas.pc[OpMin], gas.pc[OpMax]);
+            drawval(13, gas.idle_si(), gas.si[OpMin], gas.si[OpMax]);
             drawval(14, tach.idle(), tach.opmin(), tach.opmax());
             for (int line=15; line<=18; line++) draw_eraseval(line);
             drawval(19, starter.run_timeout, starter.run_lolimit, starter.run_hilimit);
-            drawval(20, gas.starting_pc, gas.pc[OPMIN], gas.pc[OPMAX]);
+            drawval(20, gas.starting_pc, gas.pc[OpMin], gas.pc[OpMax]);
             drawval(21, gas.idle_max_boost_pc);
             drawval(22, gas.idle_temp_lim_f[LOW], tempsens.opmin(loc::ENGINE), tempsens.opmax(loc::ENGINE));
             drawval(23, gas.idle_temp_lim_f[HIGH], tempsens.opmin(loc::ENGINE), tempsens.opmax(loc::ENGINE));
         }
-        else if (datapage == PG_MOTR) {
+        else if (datapage == PgMotr) {
             drawval(9, brake.duty(), brake.dutymin(), brake.dutymax());  // brake_spid_speedo_delta_adc, -range, range);            
             drawval(10, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
             drawval(11, brake.combined_read_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
@@ -764,8 +764,8 @@ class Display {
             draw_truth(22, cruise_brake, 1);
             draw_ascii(23, modecard[drive_mode]);
         }
-        else if (datapage == PG_BPID) {
-            drange = brake.us[ABSMIN]-brake.us[ABSMAX];
+        else if (datapage == PgBPID) {
+            drange = brake.us[AbsMin]-brake.us[AbsMax];
             draw_ascii(9, motormodecard[brake.motormode]);
             drawval(10, pressure.pc(), 0.0, 100.0, brake.pids[PressureFB].target());
             drawval(11, brake.pids[PressureFB].target(), pressure.opmin(), pressure.opmax());
@@ -787,7 +787,7 @@ class Display {
             drawval(22, brake.pid_dom->ki());
             drawval(23, brake.pid_dom->kd());
         }
-        else if (datapage == PG_GPID) {
+        else if (datapage == PgGPID) {
             draw_ascii(9, motormodecard[gas.motormode]);
             drawval(10, gas.trigger_vert_pc, 0.0, 100.0);
             drawval(11, gas.throttle_target_pc, tach.opmin(), tach.opmax());
@@ -805,7 +805,7 @@ class Display {
             drawval(22, gas.pid.ki());
             drawval(23, gas.pid.kd());
         }
-        else if (datapage == PG_CPID) {
+        else if (datapage == PgCPID) {
             drawval(9, gas.cruisepid.target(), speedo.opmin(), speedo.opmax());
             drawval(10, gas.cruisepid.err(), speedo.opmin()-speedo.opmax(), speedo.opmax()-speedo.opmin());
             drawval(11, gas.cruisepid.pterm());  // drange = tach.opmax() - tach.idle();
@@ -823,7 +823,7 @@ class Display {
             drawval(22, gas.cruisepid.ki());
             drawval(23, gas.cruisepid.kd());
         }
-        else if (datapage == PG_TEMP) {
+        else if (datapage == PgTemp) {
             draw_temp(loc::AMBIENT, 9);
             draw_temp(loc::ENGINE, 10);
             draw_temp(loc::WHEEL_FL, 11);
@@ -836,7 +836,7 @@ class Display {
             drawval(22, wheeldifferr);
             draw_truth(23, dont_take_temperatures, 2);
         }
-        else if (datapage == PG_SIM) {
+        else if (datapage == PgSim) {
             for (int line=9; line<=12; line++) draw_eraseval(line);
             draw_truth(13, sim->can_sim(sens::joy), 3);
             draw_truth(14, sim->can_sim(sens::pressure), 3);
@@ -850,7 +850,7 @@ class Display {
             draw_truth(22, cal_brakemode, 3);
             draw_truth(23, cal_gasmode, 3);
         }
-        else if (datapage == PG_UI) {
+        else if (datapage == PgUI) {
             drawval(9, loop_avg_us);
             drawval(10, looptimer.loop_peak_us);
             drawval(11, fps);
@@ -872,7 +872,7 @@ class Display {
   public:
     bool draw_all(LGFX_Sprite* spr) {
         static bool starter_last = false;
-        if (runmode == LOWPOWER) {
+        if (runmode == LowPower) {
             blackout();
             return false;
         }
@@ -955,14 +955,14 @@ class Display {
     }
     void auto_saver() {
         static int ui_app_last;
-        if (autosaver_request == REQ_TOG) autosaver_request = auto_saver_enabled ? REQ_OFF : REQ_ON;  // (int)(!auto_saver_enabled);
-        if (runmode != STANDBY) {
-            if (autosaver_request == REQ_ON) autosaver_request = REQ_NA;
-            if (auto_saver_enabled) autosaver_request = REQ_OFF;
+        if (autosaver_request == ReqTog) autosaver_request = auto_saver_enabled ? ReqOff : ReqOn;  // (int)(!auto_saver_enabled);
+        if (runmode != Standby) {
+            if (autosaver_request == ReqOn) autosaver_request = ReqNA;
+            if (auto_saver_enabled) autosaver_request = ReqOff;
         }
-        if (autosaver_request == (int)(auto_saver_enabled)) autosaver_request = REQ_NA;
+        if (autosaver_request == (int)(auto_saver_enabled)) autosaver_request = ReqNA;
         static bool was_simulating;
-        if (autosaver_request == REQ_ON) {
+        if (autosaver_request == ReqOn) {
             was_simulating = sim->enabled();
             sim->disable();
             panel.set_vp(0, 0, disp_width_pix, disp_height_pix);
@@ -971,14 +971,14 @@ class Display {
             ui_app = ScreensaverUI;
             panel.anim_reset_request = true;
         }
-        else if (autosaver_request == REQ_OFF) {
+        else if (autosaver_request == ReqOff) {
             auto_saver_enabled = false;
             ui_app = ui_app_last;
             panel.set_vp(disp_apppanel_x, disp_apppanel_y, disp_apppanel_w, disp_apppanel_h);
             reset_request = true;
             if (was_simulating) sim->enable();
         }
-        autosaver_request = REQ_NA;
+        autosaver_request = ReqNA;
     }
     void printframebufs(int reduce=2, bool ascii=false) {  // reduce is how many times to shrink the screen by half (0, 1, 2, 3, or 4). ascii=true gives ascii art output
         std::string brites[16] = {" ", ".", ",", ":", ";", "+", "=", ">", "%", "#", "*", "$", "@", "&", "M", "W"};
@@ -1017,7 +1017,7 @@ class Tuner {
     int id, id_encoder = 0;  // idelta is integer edit value accelerated, and is used for all tuning edits regardless if int float or bool
     int rdelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
     void update() {
-        if (runmode == LOWPOWER) return;
+        if (runmode == LowPower) return;
         process_inputs();
         edit_values();
     }
@@ -1031,39 +1031,39 @@ class Tuner {
         }
         if (!screen->disp_datapage_dirty) datapage_last = datapage;
         int encoder_sw_action = encoder.button.press_event(); // gather any encoder button press and reset it for next time (automatically if true).
-        if (encoder_sw_action != swNONE) {                    // First deal with any unhandled switch press events
-            if (encoder_sw_action == swSHORT)  {              // if short press
-                if (tunctrl == EDIT) tunctrl = SELECT;        // if we were editing a value, drop drop to data selection
-                else if (tunctrl == SELECT) tunctrl = EDIT;   // if we were selecting data, begin editing its value
+        if (encoder_sw_action != SwNone) {                    // First deal with any unhandled switch press events
+            if (encoder_sw_action == SwShort)  {              // if short press
+                if (tunctrl == Edit) tunctrl = Select;        // if we were editing a value, drop drop to data selection
+                else if (tunctrl == Select) tunctrl = Edit;   // if we were selecting data, begin editing its value
                 else if (button_test_heartbeat_color) heartbeat_override_color = rando_color();  // temporary!! to test heartbeat color override feature
             }
-            else tunctrl = (tunctrl == OFF) ? SELECT : OFF;    // encoder switch longpress toggles tuning mode
+            else tunctrl = (tunctrl == Off) ? Select : Off;    // encoder switch longpress toggles tuning mode
         }
         id_encoder = encoder.rotation(true);                        // get encoder travel times acceleration factor
         rdelta_encoder = constrain(id_encoder, -1, 1);              // save unaccelerated encoder travel (-1, 0, or 1)
-        if (tunctrl == SELECT) sel += rdelta_encoder;               // when selecting data, scroll thru data values using unaccelerated encoder value. will not wrap around, overflow handled below
-        else if (tunctrl == OFF) datapage += rdelta_encoder;        // when not tuning, flip thru datapages using unaccel encoder value. will not wrap around. constrain done below
+        if (tunctrl == Select) sel += rdelta_encoder;               // when selecting data, scroll thru data values using unaccelerated encoder value. will not wrap around, overflow handled below
+        else if (tunctrl == Off) datapage += rdelta_encoder;        // when not tuning, flip thru datapages using unaccel encoder value. will not wrap around. constrain done below
         if (touch->increment_sel) ++sel %= disp_tuning_lines;       // on touchscreen select, select next editable data line, wrapping around
-        if (touch->increment_datapage) ++datapage %= NUM_DATAPAGES; // touchscreen datapage change, go to next page, wrapping around
+        if (touch->increment_datapage) ++datapage %= NumDataPages; // touchscreen datapage change, go to next page, wrapping around
         touch->increment_sel = touch->increment_datapage = false;   // reset the touch requests
         id = id_encoder + touch->get_delta();                       // combine accelerated value changes from both the encoder and the touchscreen
         if (pot_tuner_acceleration && !sim.potmapping()) id = constrain(id * (int)(map(pot.val(), 0.0, 100.0, 1.0, 10.0)), 1, (int)encoder._accel_max);  // if pot is allowed to control data edit acceleration (experimental)
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel != sel_last || id) tuningAbandonmentTimer.reset();  // any tuning activity by the user postpones tuner timeout
-        else if (tuningAbandonmentTimer.expired()) tunctrl = OFF;      // turn off the tuner after extended user inactivity
-        datapage = constrain(datapage, 0, datapages::NUM_DATAPAGES-1); // keep datapage value in range
+        else if (tuningAbandonmentTimer.expired()) tunctrl = Off;      // turn off the tuner after extended user inactivity
+        datapage = constrain(datapage, 0, datapages::NumDataPages-1); // keep datapage value in range
         if (datapage != datapage_last) {                               // if datapage changed
-            if (tunctrl == EDIT) tunctrl = SELECT;                     // stop editing a value if the datapage got changed
+            if (tunctrl == Edit) tunctrl = Select;                     // stop editing a value if the datapage got changed
             screen->disp_datapage_dirty = true;                        // flag the datapage data for a redraw
         }
-        if (tunctrl == SELECT) {  // select means we're attempting to scroll thru the datapage data values for a value to edit
+        if (tunctrl == Select) {  // select means we're attempting to scroll thru the datapage data values for a value to edit
             sel = constrain(sel, tuning_first_editable_line[datapage], disp_tuning_lines-1);  // constrain selection to editable values, which must be grouped at the end of the datapage
             if (sel != sel_last) screen->disp_selection_dirty = true;  // if selection changed, highlight must move to new data, so flag a redraw of the variable names
         }
         if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selection_dirty = true; // on datapage redraw or change in tuning mode, flag a redraw of the variable names (eg to remove highlight) 
     }  // at this point if an edit is in progress, our id variable has the amount to change for this loop.
     void edit_values() {  // Change tunable values when editing
-        if (tunctrl != EDIT || !id) return;  // if not editing data values, or if amount of edit is 0, just ditch
-        if (datapage == PG_RUN) {  // each data entry has its sanctioned way of being changed. so just a bunch of if statements here. use tune() to achieve auto-precision fanciness
+        if (tunctrl != Edit || !id) return;  // if not editing data values, or if amount of edit is 0, just ditch
+        if (datapage == PgRun) {  // each data entry has its sanctioned way of being changed. so just a bunch of if statements here. use tune() to achieve auto-precision fanciness
             
             // with recent changes to tune() I had to move the setter function for governor value into the
             // gas update function, or edit acceleration wouldn't work
@@ -1071,14 +1071,14 @@ class Tuner {
             if (sel == 13) tune(governor, id, 0.0f, 100.0f);
             else if (sel == 14) tune(&steer.steer_safe_pc, id, 0.0f, 100.0f);
         }
-        else if (datapage == PG_JOY) {
+        else if (datapage == PgJoy) {
             if (sel == 10) airvelo.set_oplim(NAN, tune(airvelo.opmax(), id, airvelo.opmin(), airvelo.absmax()));
             else if (sel == 11) mapsens.set_oplim(tune(mapsens.opmin(), id, mapsens.absmin(), mapsens.opmax()), NAN);
             else if (sel == 12) mapsens.set_oplim(NAN, tune(mapsens.opmax(), id, mapsens.opmin(), mapsens.absmax()));
-            else if (sel == 13) hotrc.set(&hotrc.failsafe_us, tune(hotrc.failsafe_us, id, hotrc.absmin_us, hotrc.us[VERT][OPMIN] - hotrc.us[VERT][MARGIN]));
+            else if (sel == 13) hotrc.set(&hotrc.failsafe_us, tune(hotrc.failsafe_us, id, hotrc.absmin_us, hotrc.us[Vert][OpMin] - hotrc.us[Vert][Margin]));
             else if (sel == 14) hotrc.set(&hotrc.deadband_us, tune(hotrc.deadband_us, id, 0.0f, 100.0f));  // use hotrc.set function to force derive
         }
-        else if (datapage == PG_SENS) {
+        else if (datapage == PgSens) {
             if (sel == 10) pressure.set_oplim(tune(pressure.opmin(), id, pressure.absmin(), pressure.opmax()), NAN);
             else if (sel == 11) pressure.set_oplim(NAN, tune(pressure.opmax(), id, pressure.opmin(), pressure.absmax()));
             else if (sel == 12) brkpos.set_oplim(tune(brkpos.opmin(), id, brkpos.absmin(), brkpos.opmax()), NAN);
@@ -1086,26 +1086,26 @@ class Tuner {
             else if (sel == 14) tune(brkpos.zeropoint_ptr(), id, brkpos.opmin(), brkpos.opmax());
             // else if (sel == 14) mulebatt.set_conversions(tune(mulebatt.mfactor(), id, 0.001, 0.009, -5), NAN);  // this works till you try to tune it, any edit causes conversion failures (showing nan result) followed by crash
         }
-        else if (datapage == PG_PULS) {
+        else if (datapage == PgPuls) {
             if (sel == 11) tach.set_oplim(tune(tach.opmin(), id, tach.absmin(), tach.opmax()), NAN);
             else if (sel == 12) tach.set_oplim(NAN, tune(tach.opmax(), id, tach.opmin(), tach.absmax()));
             else if (sel == 13) speedo.set_oplim(tune(speedo.opmin(), id, speedo.absmin(), speedo.opmax()), NAN);
             else if (sel == 14) speedo.set_oplim(NAN, tune(speedo.opmax(), id, speedo.opmin(), speedo.absmax()));
         }                
-        else if (datapage == PG_PWMS) {
-            if (sel == 11) gas.set(&gas.si[OPMIN], tune(gas.si[OPMIN], id, gas.si[ABSMIN], gas.si[OPMAX]));
-            else if (sel == 12) gas.set(&gas.si[OPMAX], tune(gas.si[OPMAX], id, gas.si[OPMIN], gas.si[ABSMAX]));
-            else if (sel == 13) brake.set(&brake.us[STOP], tune(brake.us[STOP], id, brake.us[OPMIN], brake.us[OPMAX]));
+        else if (datapage == PgPWMs) {
+            if (sel == 11) gas.set(&gas.si[OpMin], tune(gas.si[OpMin], id, gas.si[AbsMin], gas.si[OpMax]));
+            else if (sel == 12) gas.set(&gas.si[OpMax], tune(gas.si[OpMax], id, gas.si[OpMin], gas.si[AbsMax]));
+            else if (sel == 13) brake.set(&brake.us[Stop], tune(brake.us[Stop], id, brake.us[OpMin], brake.us[OpMax]));
             else if (sel == 14) brake.set(&brake.duty_fwd_pc, tune(brake.duty_fwd_pc, id, 0.0f, 100.0f));
         }
-        else if (datapage == PG_IDLE) {
+        else if (datapage == PgIdle) {
             if (sel == 10) tune(&starter.run_timeout, id, starter.run_lolimit, starter.run_hilimit);
-            else if (sel == 11) tune(&gas.starting_pc, id, gas.pc[OPMIN], gas.pc[OPMAX]);
+            else if (sel == 11) tune(&gas.starting_pc, id, gas.pc[OpMin], gas.pc[OpMax]);
             else if (sel == 12) tune(&gas.idle_max_boost_pc, id, 0.0f, 100.0f);
             else if (sel == 13) tune(&gas.idle_temp_lim_f[LOW], id, tempsens.opmin(loc::ENGINE), gas.idle_temp_lim_f[HIGH]);
             else if (sel == 14) tune(&gas.idle_temp_lim_f[HIGH], id, gas.idle_temp_lim_f[LOW], tempsens.opmax(loc::ENGINE));
         }
-        else if (datapage == PG_MOTR) {
+        else if (datapage == PgMotr) {
             if (sel == 5) brake.update_ctrl_config((int)tune(id));
             else if (sel == 6) brake.update_ctrl_config(-1, tune(brake.feedback, id, 0, NumBrakeFB-1, true));
             else if (sel == 7) brake.update_ctrl_config(-1, -1, tune(brake.openloop_mode, id, 0, NumOpenLoopModes-1, true));
@@ -1115,15 +1115,15 @@ class Tuner {
             else if (sel == 11) gas.set_cruise_pid_ena(tune(id));
             else if (sel == 12) gas.set_cruise_scheme(tune(gas.cruise_adjust_scheme, id, 0, NumCruiseSchemes-1, true));
             else if (sel == 13) tune(&cruise_brake, id);
-            else if (sel == 14) tune(&drive_mode, id, FLY, CRUISE, true);
+            else if (sel == 14) tune(&drive_mode, id, Fly, Cruise, true);
         }
-        else if (datapage == PG_BPID) {
+        else if (datapage == PgBPID) {
             if (sel == 11) brake.pid_dom->set_sampletime(tune(brake.pid_dom->sampletime(), id, 1000));
             else if (sel == 12) brake.pid_dom->set_kp(tune(brake.pid_dom->kp(), id, 0.0f, NAN));
             else if (sel == 13) brake.pid_dom->set_ki(tune(brake.pid_dom->ki(), id, 0.0f, NAN));
             else if (sel == 14) brake.pid_dom->set_kd(tune(brake.pid_dom->kd(), id, 0.0f, NAN));
         }
-        else if (datapage == PG_GPID) {
+        else if (datapage == PgGPID) {
             if (sel == 9) tune(&throttle_linearize_trigger, id);
             else if (sel == 10) tune(&gas.linearizer_exponent, id, 1.0f, 3.0f);
             else if (sel == 11) gas.set_out_changerate_degps(tune(gas.get_max_out_changerate_degps(), id, 0.0f, 180.0f));
@@ -1131,7 +1131,7 @@ class Tuner {
             else if (sel == 13) gas.pid.set_ki(tune(gas.pid.ki(), id, 0.0f, NAN));
             else if (sel == 14) gas.pid.set_kd(tune(gas.pid.kd(), id, 0.0f, NAN));
         }
-        else if (datapage == PG_CPID) {
+        else if (datapage == PgCPID) {
             if (sel == 7) gas.set_pid_ena(tune(id));
             else if (sel == 8) gas.set_cruise_pid_ena(tune(id));
             else if (sel == 9) tune(&throttle_linearize_cruise, id);
@@ -1141,12 +1141,12 @@ class Tuner {
             else if (sel == 13) gas.set_cruise_tunings(NAN, tune(gas.cruisepid.ki(), id, 0.0f, NAN), NAN);
             else if (sel == 14) gas.set_cruise_tunings(NAN, NAN, tune(gas.cruisepid.kd(), id, 0.0f, NAN));
         }
-        else if (datapage == PG_TEMP) {
+        else if (datapage == PgTemp) {
             if (sel == 12) tune(&tunetest, id, -100.0, 100.0);
             else if (sel == 13) tune(&wheeldifferr, id);
             else if (sel == 14) dont_take_temperatures = tune(id);
         }
-        else if (datapage == PG_SIM) {
+        else if (datapage == PgSim) {
             screen->disp_simbuttons_dirty = true;  // any of the following will necessitate a redraw of the simbuttons
             if (sel == 4) sim.set_can_sim(sens::joy, tune(id));
             else if (sel == 5) sim.set_can_sim(sens::pressure, tune(id));
@@ -1160,7 +1160,7 @@ class Tuner {
             else if (sel == 13) cal_brakemode_request = tune(id);
             else if (sel == 14) cal_gasmode_request = tune(id);
         }
-        else if (datapage == PG_UI) {
+        else if (datapage == PgUI) {
             // if (sel == 8) encoder.set_reverse_encoder(tune(encoder.rev_spin_dir));
             if (sel == 8) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize));            
             else if (sel == 9) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, GlowNumModes - 1, true));
@@ -1193,15 +1193,15 @@ static void push_task(void *parameter) {
     static int lastmode;
     static bool lastpush = false;
     while (true) {
-        if (runmode == LOWPOWER) {
-            if (lastmode != LOWPOWER) {
+        if (runmode == LowPower) {
+            if (lastmode != LowPower) {
                 vTaskDelay(portMAX_DELAY * 2);
                 lastpush = true;
             }
             else vTaskDelay(pdMS_TO_TICKS(1000));
             lastmode = runmode;
         }
-        if ((runmode != LOWPOWER) || lastpush) {
+        if ((runmode != LowPower) || lastpush) {
             if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
                 screen.do_push();
                 xSemaphoreGive(pushbuf_sem);
@@ -1216,15 +1216,15 @@ static void push_task(void *parameter) {
 static void draw_task(void *parameter) {
     static int lastmode;
     while (true) {
-        while (runmode == LOWPOWER) {
-            if (lastmode != LOWPOWER) {
+        while (runmode == LowPower) {
+            if (lastmode != LowPower) {
                 screen.blackout();
                 reset_request = true;
             }
             else vTaskDelay(pdMS_TO_TICKS(1000));
             lastmode = runmode;
         }
-        // if (runmode != LOWPOWER && lastmode == LOWPOWER) screen.reset();
+        // if (runmode != LowPower && lastmode == LowPower) screen.reset();
         // if ((esp_timer_get_time() - screen_refresh_time > refresh_limit) || always_max_refresh || auto_saver_enabled) {
         if (xSemaphoreTake(drawbuf_sem, portMAX_DELAY) == pdTRUE) {
             screen_refresh_time = esp_timer_get_time();

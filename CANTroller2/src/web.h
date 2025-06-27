@@ -240,7 +240,7 @@ class WebManager {
         return String("rgb(") + String(random(256)) + "," + String(random(256)) + "," + String(random(256)) + ")";  // Generate a random RGB color
     }
     void update() {
-        if (runmode == LOWPOWER) return;
+        if (runmode == LowPower) return;
         if (!wifi_web_supported) web_disabled = true;
         if (web_disabled) return;
         if (!web_started) setup();

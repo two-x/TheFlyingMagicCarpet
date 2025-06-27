@@ -73,20 +73,20 @@
 // global enums. these can be super convenient but are also prone to errors, some more than others (see comments)
 //
 // this group has enums which are relatively straightforward, i.e. each used in only one context 
-enum runmode { BASIC=0, LOWPOWER=1, STANDBY=2, STALL=3, HOLD=4, FLY=5, CRUISE=6, CAL=7, NUM_RUNMODES=8 };
-enum req { REQ_NA=-1, REQ_OFF=0, REQ_ON=1, REQ_TOG=2 };  // requesting handler actions of digital values with handler functions
+enum runmode { Basic=0, LowPower=1, Standby=2, Stall=3, Hold=4, Fly=5, Cruise=6, Cal=7, NumRunModes=8 };
+enum req { ReqNA=-1, ReqOff=0, ReqOn=1, ReqTog=2, NumReqs=3 };  // requesting handler actions of digital values with handler functions
 enum cruise_modes { OnePull=0, HoldTime=1, NumCruiseSchemes=2 };
-enum sw_presses { swNONE=0, swSHORT=1, swLONG=2 };
-enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, Cruise=10, Calibrate=11, Starting=12, AutoPID=13, NumMotorModes=14 };
+enum sw_presses { SwNone=0, SwShort=1, SwLong=2 };
+enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, CruiseMode=10, Calibrate=11, Starting=12, AutoPID=13, NumMotorModes=14 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
 enum openloopmodes { MedianPoint=0, AutoRelease=1, AutoRelHoldable=2, NumOpenLoopModes=3 };
-enum datapages { PG_RUN=0, PG_JOY=1, PG_SENS=2, PG_PULS=3, PG_PWMS=4, PG_IDLE=5, PG_MOTR=6, PG_BPID=7, PG_GPID=8, PG_CPID=9, PG_TEMP=10, PG_SIM=11, PG_UI=12, NUM_DATAPAGES=13 };
+enum datapages { PgRun=0, PgJoy=1, PgSens=2, PgPuls=3, PgPWMs=4, PgIdle=5, PgMotr=6, PgBPID=7, PgGPID=8, PgCPID=9, PgTemp=10, PgSim=11, PgUI=12, NumDataPages=13 };
 enum diag_val { DiagVal=0, DiagMin=1, DiagMax=2, DiagMargin=3, NumDiagVals=4 };
-enum joydirs { JOY_RT=-2, JOY_DN=-1, JOY_CENT=0, JOY_UP=1, JOY_LT=2, JOY_PLUS=3, JOY_MINUS=4 };
+enum joydirs { JoyRt=-2, JoyDn=-1, JoyCent=0, JoyUp=1, JoyLt=2, JoyPlus=3, JoyMinus=4 };
 enum panel_apps { EZReadUI=0, MuleChassisUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel
-enum codestatus { Confused=0, Asleep=1, Booting=2, Parked=3, Stopped=4, Driving=5, InBasic=6, Panicking=7, NumCodeStatuses=8 };
+enum codestatus { StConfused=0, StAsleep=1, StBooting=2, StParked=3, StStopped=4, StDriving=5, StInBasic=6, StPanicking=7, NumCodeStatuses=8 };
 enum pcba_glow_modes { GlowOff=0, GlowSimple=1, GlowHeart=2, GlowXFade=3, GlowSine=4, GlowNumModes=5 };
-enum err_type { LOST=0, RANGE=1, WARN=2, NUM_ERR_TYPES=3 };  // VALUE=2, STATE=3, WARN=4, CRIT=5, INFO=6
+enum err_type { ErrLost=0, ErrRange=1, ErrWarn=2, NumErrTypes=3 };
 enum directional { DirNone=0, DirDown=1, DirUp=2, DirLeft=3, DirRight=4, NumDirs=5 };
 enum cycle_dirs { DirRev=-1, DirFwd=1 };
 enum cruisepids { GasOpen=0, GasPID=1 };
@@ -94,17 +94,16 @@ enum cruisepids { GasOpen=0, GasPID=1 };
 // this group is used in multiple places in different ways, and is thus high-risk.
 // for example, arrays exist with indexes drawn from different combinations of multiple ones of these enums
 // search for all uses and understand them before changing anything
-enum hotrc_axis { HORZ=0, VERT=1, CH3=2, CH4=3 };
-enum hotrc_val { OPMIN=0, CENT=1, OPMAX=2, RAW=3, FILT=4, DBBOT=5, DBTOP=6 };
-enum motor_val { PARKED=1, OUT=3, GOVERN=4 , ABSMIN=5, ABSMAX=6, MARGIN=7, NUM_MOTORVALS=8 }; // IDLE=8, NUM_MOTORVALS=9 };
-enum stop_val { STOP=1 };
-enum steer_val { SAFE=1 };
-enum temp_val { ALARM=3 };
-enum size_enums { NUM_AXES=2, NUM_CHANS=4, NUM_VALUS=8 };
+enum hotrc_axis { Horz=0, Vert=1, Ch3=2, Ch4=3 };
+enum hotrc_val { OpMin=0, Cent=1, OpMax=2, Raw=3, Filt=4, DBBot=5, DBTop=6 };
+enum motor_val { Parked=1, Out=3, Govern=4 , AbsMin=5, AbsMax=6, Margin=7, NumMotorVals=8 }; // IDLE=8, NumMotorVals=9 };
+enum stop_val { Stop=1 };
+enum temp_val { Alarm=3 };
+enum size_enums { NumAxes=2, NumChans=4, NumValues=8 };
 //
-// the OFF and ON values in these two enums are used in multiple places I think
-enum tunerstuff { ERASE=-1, OFF=0, SELECT=1, EDIT=2 };
-enum boolean_states { ON=1 };
+// the Off and On values in these two enums are used in multiple places I think
+enum tunerstuff { Off=0, Select=1, Edit=2 };
+enum boolean_states { On=1 };
 //
 // these telemetry enums overlap in their use and so be cautious when making changes to check everything
 enum brakeextra { NumBrakeSens=2 };
@@ -165,7 +164,7 @@ bool throttle_linearize_cruise = false;  // should trigger values be linearized 
 bool encoder_reverse = false;         // should clockwise encoder twists indicate decreases instead of an increases?
 bool throttle_pid_default = false;    // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool cruise_pid_default = true;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
-int drive_mode = CRUISE;              // from hold mode, enter cruise or fly mode by default?
+int drive_mode = Cruise;              // from hold mode, enter cruise or fly mode by default?
 
 // global tunable variables
 float wheeldifferr = 35.0f;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel before idiot light
@@ -184,18 +183,18 @@ float neosat = 90.0f;                   // default saturation of neopixels in pe
 int i2c_frequency = 400000;             // in kHz. standard freqs are: 100k, 400k, 1M, 3.4M, 5M
 float governor = 95.0f;                 // software governor will only allow this percent of full-open throttle (percent 0-100)
 
-// non-tunable values. probably these belong with their related code, but are global to allow accessibility from everywhere
-#ifdef MonitorBaudrate
-int serial_monitor_baudrate = (int)MonitorBaudrate;
-#else
-int serial_monitor_baudrate = 921600;
+#ifndef MonitorBaudrate
+#define MonitorBaudrate 115200
 #endif
-std::string modecard[NUM_RUNMODES] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
+
+// non-tunable values. probably these belong with their related code, but are global to allow accessibility from everywhere
+int serial_monitor_baudrate = (int)MonitorBaudrate;
+std::string modecard[NumRunModes] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 float permanan = NAN;
 bool wheeltemperr;
 float* nanptr = &permanan;
-uint32_t codestatus = Booting;
-int runmode = STANDBY;
+uint32_t codestatus = StBooting;
+int runmode = Standby;
 bool flashdemo = false;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool fun_flag = false;                  // since now using temp sensor address to detect vehicle, our tx resistor can be used for who knows what else!
@@ -213,15 +212,15 @@ bool powering_down = false;             // minor state variable for lowpower mod
 bool calmode_request = false;
 bool flycruise_toggle_request = false;
 bool in_basicmode = false;              // bool basicmode_request = false;
-int tunctrl = OFF, tunctrl_last = OFF;
-int datapage = PG_RUN;                  // which of the dataset pages is currently displayed and available to edit?
-int autosaver_request = REQ_NA;
+int tunctrl = Off, tunctrl_last = Off;
+int datapage = PgRun;                  // which of the dataset pages is currently displayed and available to edit?
+int autosaver_request = ReqNA;
 volatile bool auto_saver_enabled = false;
 volatile int sel = 0;                   // in the real time tuning UI, which of the editable values is selected. -1 for none 
 volatile int sel_last = 0;          
 volatile int sel_last_last = 0;          
 bool syspower = HIGH, not_syspower = !syspower; // set by handler only. Reflects current state of the signal
-int sleep_request = REQ_NA;
+int sleep_request = ReqNA;
 float maf_gps = 0;                              // manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
 bool nowtouch = false, ts_tapped = false, ts_doubletapped = false, ts_longpressed = false, ts_swiped = false;  // touchscreen globals
@@ -279,11 +278,11 @@ float ema_filt(float _raw, float _filt, float _alpha) {
     _alpha = constrain(_alpha, 0.0, 1.0);
     return (_alpha * _raw) + ((1.0 - _alpha) * _filt);
 }
-// template<typename RAW_T, typename FILT_T>
-// void ema_filt(RAW_T _raw, FILT_T* _filt, float _alpha) {
+// template<typename Raw_T, typename Filt_T>
+// void ema_filt(Raw_T _raw, Filt_T* _filt, float _alpha) {
 //     float _raw_f = static_cast<float>(_raw);
 //     float _filt_f = static_cast<float>(*_filt);
-//     *_filt = static_cast<FILT_T>(ema_filt(_raw_f, _filt_f, _alpha));
+//     *_filt = static_cast<Filt_T>(ema_filt(_raw_f, _filt_f, _alpha));
 // }
 
 // linearizer() : transforms value at given pointer (in percent) based on an exponential curve. value must be nonzero.
@@ -402,7 +401,7 @@ const uint8_t MPNK = 0xeb;  // we need all shades of pink
 const uint8_t LPNK = 0xf3;  // especially light pink, the champagne of pinks
 const uint8_t NON  = 0x45;  // used as default value when color is unspecified
 
-uint8_t colorcard[NUM_RUNMODES] = { MGT, PUR, RED, ORG, YEL, GRN, TEAL, WHT };
+uint8_t colorcard[NumRunModes] = { MGT, PUR, RED, ORG, YEL, GRN, TEAL, WHT };
 
 // kick_inactivity_timer() function to call whenever human activity occurs, for accurate inactivity timeout feature
 //   integer argument encodes which source of human activity has kicked the timer. Here are the codes:

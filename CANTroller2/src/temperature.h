@@ -6,14 +6,14 @@ enum class loc { AMBIENT=0, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR, BRAK
 enum temp_categories { CatUnknown=0, CatAmbient=1, CatEngine=2, CatWheel=3, CatBrake=4, NumTempCategories=5 };  // 
 enum brakemotor_types { NIL=-1, Thomson=0, LAE=1 };
     
-float temp_lims_f[NumTempCategories][NUM_MOTORVALS] {
+float temp_lims_f[NumTempCategories][NumMotorVals] {
     // changed opmin values all to 40 to avoid idiot lights. engine opmin was 125, wheel was 50, brake was 45
-    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatUnknown] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
-    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatAmbient] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
-    {  40.0, 178.0, 205.0, 218.0, NAN, -67.0, 257.0, 2.0 },  //  [CatEngine] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
-    {  40.0,  77.0, 170.0, 145.0, NAN, -67.0, 257.0, 2.0 },  //   [CatWheel] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN] (applies to all wheels)
-    {  45.0,  77.0, 125.0, 135.0, NAN, -67.0, 257.0, 2.0 },  //   [CatBrake] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
-};  // float* degf[(int)loc::NUM_LOCATIONS][NUM_MOTORVALS];
+    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatUnknown] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatAmbient] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0, 178.0, 205.0, 218.0, NAN, -67.0, 257.0, 2.0 },  //  [CatEngine] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0,  77.0, 170.0, 145.0, NAN, -67.0, 257.0, 2.0 },  //   [CatWheel] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin] (applies to all wheels)
+    {  45.0,  77.0, 125.0, 135.0, NAN, -67.0, 257.0, 2.0 },  //   [CatBrake] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+};  // float* degf[(int)loc::NUM_LOCATIONS][NumMotorVals];
 
 class TemperatureSensor {
 public:
@@ -33,7 +33,7 @@ public:
    : _location(location), _address(address), _tempsensebus(tempsensebus), _temperature(-999) {}
 
     TemperatureSensor() = delete; // always create with a pointer to the tempsensorbus
-    float* degf[NUM_MOTORVALS] = { nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr };
+    float* degf[NumMotorVals] = { nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr };
 
     void request_temperature() {
         // Request temperature from sensor
@@ -59,7 +59,7 @@ public:
             return DEVICE_DISCONNECTED_F;
         } 
         _temperature = temp;
-        // *degf[FILT] = _temperature;
+        // *degf[Filt] = _temperature;
         return _temperature;
     }
 
@@ -80,8 +80,8 @@ public:
         else if (_location == loc::BRAKE) category = CatBrake;
         else if (_location == loc::WHEEL_FL || _location == loc::WHEEL_FR || _location == loc::WHEEL_RL || _location == loc::WHEEL_RR ) category = CatWheel;
         else category = CatUnknown;
-        for (int i=0; i<NUM_MOTORVALS; i++) if (i != FILT) degf[i] = &temp_lims_f[category][i];  // degf[(int)sens][FILT] = &_temperature;
-        degf[FILT] = &_temperature;
+        for (int i=0; i<NumMotorVals; i++) if (i != Filt) degf[i] = &temp_lims_f[category][i];  // degf[(int)sens][Filt] = &_temperature;
+        degf[Filt] = &_temperature;
     }
     
     void print_address() const {
@@ -109,21 +109,21 @@ public:
         }
     }
     float val() { return _temperature; }
-    float opmin() { return *degf[OPMIN]; }
-    float opmax() { return *degf[OPMAX]; }
-    float absmin() { return *degf[ABSMIN]; }
-    float absmax() { return *degf[ABSMAX]; }
-    float alarm() { return *degf[ALARM]; }
-    float margin() { return *degf[MARGIN]; }
-    float cent() { return *degf[CENT]; }
+    float opmin() { return *degf[OpMin]; }
+    float opmax() { return *degf[OpMax]; }
+    float absmin() { return *degf[AbsMin]; }
+    float absmax() { return *degf[AbsMax]; }
+    float alarm() { return *degf[Alarm]; }
+    float margin() { return *degf[Margin]; }
+    float cent() { return *degf[Cent]; }
     float* ptr() { return &_temperature; }
-    float* opmin_ptr() { return degf[OPMIN]; }
-    float* opmax_ptr() { return degf[OPMAX]; }
-    float* absmin_ptr() { return degf[ABSMIN]; }
-    float* absmax_ptr() { return degf[ABSMAX]; }
-    float* alarm_ptr() { return degf[ALARM]; }
-    float* margin_ptr() { return degf[MARGIN]; }
-    float* cent_ptr() { return degf[CENT]; }
+    float* opmin_ptr() { return degf[OpMin]; }
+    float* opmax_ptr() { return degf[OpMax]; }
+    float* absmin_ptr() { return degf[AbsMin]; }
+    float* absmax_ptr() { return degf[AbsMax]; }
+    float* alarm_ptr() { return degf[Alarm]; }
+    float* margin_ptr() { return degf[Margin]; }
+    float* cent_ptr() { return degf[Cent]; }
 };
 
 
@@ -269,10 +269,10 @@ private:
     // void assign_category(*TemperatureSensor sens, int temp_category) {
     //     auto sensor_it = sensors.find(sens);
     //     if (sensor_it == sensors.end()) {
-    //             for (int i=0; i<NUM_MOTORVALS; i++) {  // if (i != FILT) degf[(int)sens][i] = &temp_lims_f[temp_category][i];
-    //         if (i != FILT) degf[i] = &temp_lims_f[temp_category][i];  // degf[(int)sens][FILT] = &_temperature;
+    //             for (int i=0; i<NumMotorVals; i++) {  // if (i != Filt) degf[(int)sens][i] = &temp_lims_f[temp_category][i];
+    //         if (i != Filt) degf[i] = &temp_lims_f[temp_category][i];  // degf[(int)sens][Filt] = &_temperature;
     //     }
-    //     degf[FILT] = &_temperature;
+    //     degf[Filt] = &_temperature;
     //     }
     // }
     // void assign_categories() {

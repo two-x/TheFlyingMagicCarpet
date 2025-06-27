@@ -277,7 +277,7 @@ void NeopixelStrip::update_pcba_glow() {
 }
 void NeopixelStrip::update() {
     static int runmode_last;
-    if (runmode != runmode_last) sleepmode_ena(runmode == LOWPOWER);
+    if (runmode != runmode_last) sleepmode_ena(runmode == LowPower);
     runmode_last = runmode;
 
     // trying to debug edit acceleration
@@ -389,7 +389,7 @@ class IdiotLights {
     static constexpr int row_height = 11;
     static constexpr int iconcount = 36;  // number of boolean values included on the screen panel (not the neopixels) 
     bool* vals[iconcount] = {  // 6 per line
-        &diag.err_sens_alarm[LOST], &diag.err_sens_alarm[RANGE], &diag.err_sens[RANGE][_TempEng], &diag.err_sens[RANGE][_TempBrake], &wheeltemperr, hotrc.radiolost_ptr(), // &diag.err_sens[RANGE][_TempWheel]
+        &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, hotrc.radiolost_ptr(), // &diag.err_sens[ErrRange][_TempWheel]
         &panicstop, &shutting_down, &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting,
         &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(), // tach.pin_inactive_ptr(), speedo.pin_inactive_ptr(),
         &nowtouch, &ts_tapped, &ts_doubletapped, encoder.activity_ptr(), &running_on_devboard, &not_syspower,  //  touch.tap_ptr(), touch.doubletap_ptr(), bootbutton.ptr(), sim.enabled_ptr(), &encoder.enc_a, 
@@ -488,8 +488,8 @@ class IdiotLights {
     }
     void setup(NeopixelStrip* _neo) {
         myneo = _neo;
-        // int n = new_idiot(&(err_sens_alarm[LOST]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
-        for (int i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[ON][i], val(i));
+        // int n = new_idiot(&(err_sens_alarm[ErrLost]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
+        for (int i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[On][i], val(i));
         ezread.squintf("  idiot lights: %d icons & %d neopix hazards\n", iconcount, myneo->idiotcount);
     }
     int num_idiots() { return iconcount; }
@@ -501,7 +501,7 @@ class IdiotLights {
         for (int i=0; i<iconcount; i++) {
             int division = row_count;
             uint32_t color32 = hsv_to_rgb<uint32_t>((65535 * (uint16_t)(i % division) / division + idiot_hue_offset), idiot_saturation, 255);  // , 0, 220);
-            color[ON][i] = color_to_332(color32);  // 5957 = 2^16/11
+            color[On][i] = color_to_332(color32);  // 5957 = 2^16/11
         }
     }
 };

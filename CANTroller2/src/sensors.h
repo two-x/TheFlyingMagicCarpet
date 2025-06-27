@@ -196,7 +196,7 @@ class Device {
     void update() {  // I changed case statement into if statements and now is 10 lines long instead of 28.  case sucks like that
         if (valrefreshtimer.expired()) {
             valrefreshtimer.set(val_refresh_period);  // allows for dynamic adjustment of update period as needed each device
-            if (runmode == LOWPOWER || !_enabled) return; // do nothing if in lowpower mode or this device is disabled
+            if (runmode == LowPower || !_enabled) return; // do nothing if in lowpower mode or this device is disabled
             if (_source == src::UNDEF) set_val_from_undef();
             else if (_source == src::FIXED) set_val_from_fixed();
             else if (_source == src::PIN) set_val_from_pin();
@@ -1067,7 +1067,7 @@ class ServoMotor2 : public Transducer {
         float max_out_change_pc = max_out_change_rate_pcps * outchangetimer.elapsed() / 1000000.0;
         outchangetimer.reset();
         set_si(constrain(_si.val(), lastoutput - max_out_change_pc, lastoutput + max_out_change_pc));
-        // lastoutput = pc[OUT];  // note: you must set lastoutput = pc[OUT]
+        // lastoutput = pc[Out];  // note: you must set lastoutput = pc[Out]
     }
   public:
     // ServoMotor(int pin, int freq) : Transducer<float, float>(pin) {
@@ -1112,8 +1112,8 @@ class ThrottleServo2 : public ServoMotor2 {
     Param governor_pc, idle_si, idletemp_f;
     float max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     
-    // float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    // float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    // float idle_si[NumMotorVals] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OpMin(hot)/-/OpMax(cold)/Out/-/AbsMin/AbsMax/Margin]
+    // float idletemp_f[NumMotorVals] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OpMin/-/OpMax/Out/-/AbsMin/AbsMax/Margin]
     float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
   public:
@@ -1351,26 +1351,26 @@ class RMTInput {  // note: for some reason if we ever stop reading our rmt objec
 class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
     float ema_alpha = 0.065;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
-    float pc[NUM_AXES][NUM_VALUS];           // values range from -100% to 100% are all derived or auto-assigned
-    float us[NUM_CHANS][NUM_VALUS] = {       // these inherently integral values are kept as floats for more abstractified unit management
+    float pc[NumAxes][NumValues];           // values range from -100% to 100% are all derived or auto-assigned
+    float us[NumChans][NumValues] = {       // these inherently integral values are kept as floats for more abstractified unit management
         // vals for hotrc v1 (with matte black "HotRC" sticker/receiver)
-        // {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        // { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        // { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        // { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+        // {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        // { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [Vert] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        // { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        // { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
         // vals for hotrc v2 (with gloss black "HotRC" sticker/receiver)
         // note: opmin/opmax range should be set to be just smaller than the actual measured limits. this way it will reach all the way to 100%
         //       margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
-        {  973, 1477, 1975, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        { 1081, 1577, 2085, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        { 1202, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        { 1304, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-    float spike_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]  // added
-    float ema_us[NUM_AXES] = { 1500.0, 1500.0 };    // [HORZ/VERT]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
+        {  973, 1477, 1975, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        { 1081, 1577, 2085, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2,  // [Vert] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        { 1202, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        { 1304, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+    float spike_us[NumAxes] = { 1500.0, 1500.0 };  // [Horz/Vert]  // added
+    float ema_us[NumAxes] = { 1500.0, 1500.0 };    // [Horz/Vert]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
     float absmin_us = 880;
     float absmax_us = 2091;
-    float deadband_us = 15.0f;  // all [DBBOT] and [DBTOP] values above are derived from this by calling derive()
-    float margin_us = 13;    // all [MARGIN] values above are derived from this by calling derive()
+    float deadband_us = 15.0f;  // all [DBBot] and [DBTop] values above are derived from this by calling derive()
+    float margin_us = 13;    // all [Margin] values above are derived from this by calling derive()
     float failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     float failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
   private:
@@ -1379,34 +1379,34 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     static const int failsafe_timeout = 15000;
     Timer failsafe_timer;  // how long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
     bool _radiolost = true;
-    bool sw[NUM_CHANS] = { 1, 1, 0, 0 };  // index[2]=CH3, index[3]=CH4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
-    bool _sw_event[NUM_CHANS];  // first 2 indices are unused.  what a tragic waste
-    RMTInput rmt[NUM_CHANS] = {
-        RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_h_pin)),  // hotrc[HORZ]
-        RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_v_pin)),  // hotrc[VERT]
-        RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[CH3]
-        RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[CH4]
+    bool sw[NumChans] = { 1, 1, 0, 0 };  // index[2]=Ch3, index[3]=Ch4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
+    bool _sw_event[NumChans];  // first 2 indices are unused.  what a tragic waste
+    RMTInput rmt[NumChans] = {
+        RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_h_pin)),  // hotrc[Horz]
+        RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_v_pin)),  // hotrc[Vert]
+        RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[Ch3]
+        RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[Ch4]
     };
   public:
     Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) { derive(); }
     void setup() {
         ezread.squintf("hotrc init.. Starting rmt..\n");
-        for (int axis=HORZ; axis<=CH4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
+        for (int axis=Horz; axis<=Ch4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
         failsafe_timer.set(failsafe_timeout); 
     }
     void derive() {
         float m_factor;
-        for (int axis=HORZ; axis<=VERT; axis++) {
-            us[axis][DBBOT] = us[axis][CENT] - deadband_us;
-            us[axis][DBTOP] = us[axis][CENT] + deadband_us;
-            us[axis][MARGIN] = margin_us;
-            pc[axis][OPMIN] = -100.0;
-            pc[axis][CENT] = 0.0;
-            pc[axis][OPMAX] = 100.0;
-            m_factor = (pc[axis][OPMAX] - pc[axis][OPMIN]) / (us[axis][OPMAX] - us[axis][OPMIN]);
-            pc[axis][DBBOT] = pc[axis][CENT] - deadband_us * m_factor;
-            pc[axis][DBTOP] = pc[axis][CENT] + deadband_us * m_factor;
-            pc[axis][MARGIN] = margin_us * m_factor;
+        for (int axis=Horz; axis<=Vert; axis++) {
+            us[axis][DBBot] = us[axis][Cent] - deadband_us;
+            us[axis][DBTop] = us[axis][Cent] + deadband_us;
+            us[axis][Margin] = margin_us;
+            pc[axis][OpMin] = -100.0;
+            pc[axis][Cent] = 0.0;
+            pc[axis][OpMax] = 100.0;
+            m_factor = (pc[axis][OpMax] - pc[axis][OpMin]) / (us[axis][OpMax] - us[axis][OpMin]);
+            pc[axis][DBBot] = pc[axis][Cent] - deadband_us * m_factor;
+            pc[axis][DBTop] = pc[axis][Cent] + deadband_us * m_factor;
+            pc[axis][Margin] = margin_us * m_factor;
         }
     }
     void update() {
@@ -1415,7 +1415,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         direction_update();
     }
     void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
-        for (int ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
+        for (int ch = Ch3; ch <= Ch4; ch++) _sw_event[ch] = false;
     }
     bool radiolost() { return _radiolost; }
     bool* radiolost_ptr() { return &_radiolost; }
@@ -1433,16 +1433,17 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         derive();
     }
     int next_unfilt_rawval (int axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
-    int joydir(int axis = VERT) {
-        if (axis == VERT) return (pc[axis][FILT] > pc[axis][CENT]) ? JOY_UP : (pc[axis][FILT] < pc[axis][CENT]) ? JOY_DN : JOY_CENT;
-        return (pc[axis][FILT] > pc[axis][CENT]) ? JOY_RT : (pc[axis][FILT] < pc[axis][CENT]) ? JOY_LT : JOY_CENT;
-    }  // return (pc[axis][FILT] > pc[axis][CENT]) ? ((axis == VERT) ? JOY_UP : JOY_RT) : (pc[axis][FILT] < pc[axis][CENT]) ? ((axis == VERT) ? JOY_DN : JOY_LT) : JOY_CENT;
+    int joydir(int axis = Vert) {
+        if (sim->simulating(sens::joy) && (std::abs(pc[axis][Filt]) < us_to_pc(axis, deadband_us))) return JoyCent;  // allows some needed slop around centerpoint when simulating, or you can never center it
+        if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? JoyUp : (pc[axis][Filt] < pc[axis][Cent]) ? JoyDn : JoyCent;
+        return (pc[axis][Filt] > pc[axis][Cent]) ? JoyRt : (pc[axis][Filt] < pc[axis][Cent]) ? JoyLt : JoyCent;
+    }  // return (pc[axis][Filt] > pc[axis][Cent]) ? ((axis == Vert) ? JoyUp : JoyRt) : (pc[axis][Filt] < pc[axis][Cent]) ? ((axis == Vert) ? JoyDn : JoyLt) : JoyCent;
     void sim_button_press(int chan) { _sw_event[chan] = true; }
   private:
     void toggles_update() {
-        for (int chan = CH3; chan <= CH4; chan++) {
-            us[chan][RAW] = (float)(rmt[chan].readPulseWidth(true));
-            sw[chan] = (us[chan][RAW] <= us[chan][CENT]); // Ch3 switch true if short pulse, otherwise false  us[CH3][CENT]
+        for (int chan = Ch3; chan <= Ch4; chan++) {
+            us[chan][Raw] = (float)(rmt[chan].readPulseWidth(true));
+            sw[chan] = (us[chan][Raw] <= us[chan][Cent]); // Ch3 switch true if short pulse, otherwise false  us[Ch3][Cent]
             if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
                 _sw_event[chan] = true;          // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
                 kick_inactivity_timer(HURCTog);  // evidence of user activity
@@ -1455,9 +1456,9 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     //     static Timer toggletimer[2] = { 60000, 60000 };   // to ensure no spurious events, changes must persist this long to count (no human can click this fast)
     //     static bool sw_pending[2];                        // flags whether a new value is pending, waiting for validity timeout
     //     if (_radiolost) return;                           // no possibility of channel clicks if there's no radio
-    //     for (int chan = CH3; chan <= CH4; chan++) {       // do once for each digital channel
-    //         us[chan][RAW] = (float)(rmt[chan].readPulseWidth(true)); // read the newest pulsewidth in us
-    //         bool current = (us[chan][RAW] <= us[chan][CENT]);        // determine the sw value just read (if new reading is below or above the center frequency)
+    //     for (int chan = Ch3; chan <= Ch4; chan++) {       // do once for each digital channel
+    //         us[chan][Raw] = (float)(rmt[chan].readPulseWidth(true)); // read the newest pulsewidth in us
+    //         bool current = (us[chan][Raw] <= us[chan][Cent]);        // determine the sw value just read (if new reading is below or above the center frequency)
     //         if (current != sw[chan]) {                    // if new read value differs from prev valid value ...
     //             if (!sw_pending[chan-2]) {                // if we don't already have a new pending value change ...
     //                 sw_pending[chan-2] = true;            // flag that we do have a potential value change
@@ -1474,37 +1475,37 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     //     }
     // }
     float us_to_pc(int axis, float _us) {
-        if (_us >= us[axis][CENT]) return map(_us, us[axis][CENT], us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-        return map(_us, us[axis][CENT], us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);    
+        if (_us >= us[axis][Cent]) return map(_us, us[axis][Cent], us[axis][OpMax], pc[axis][Cent], pc[axis][OpMax]);
+        return map(_us, us[axis][Cent], us[axis][OpMin], pc[axis][Cent], pc[axis][OpMin]);    
     }
     float remove_deadbands_us(int axis, float _us) {
-        if (_us > us[axis][DBTOP]) return map(_us, us[axis][DBTOP], us[axis][OPMAX], us[axis][CENT], us[axis][OPMAX]);
-        else if (_us < us[axis][DBBOT]) return map(_us, us[axis][DBBOT], us[axis][OPMIN], us[axis][CENT], us[axis][OPMIN]);
-        return us[axis][CENT];
+        if (_us > us[axis][DBTop]) return map(_us, us[axis][DBTop], us[axis][OpMax], us[axis][Cent], us[axis][OpMax]);
+        else if (_us < us[axis][DBBot]) return map(_us, us[axis][DBBot], us[axis][OpMin], us[axis][Cent], us[axis][OpMin]);
+        return us[axis][Cent];
     }
     void direction_update() {
         if (sim->simulating(sens::joy)) {
-            if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
+            if (sim->potmapping(sens::joy)) pc[Horz][Filt] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]);  // overwrite horz value if potmapping
         }
-        else for (int axis = HORZ; axis <= VERT; axis++) {  // read and filter incoming pwm pulses to update our percent values
-            us[axis][RAW] = (float)(rmt[axis].readPulseWidth(true));
-            spike_us[axis] = spike_filter(axis, us[axis][RAW]);            
+        else for (int axis = Horz; axis <= Vert; axis++) {  // read and filter incoming pwm pulses to update our percent values
+            us[axis][Raw] = (float)(rmt[axis].readPulseWidth(true));
+            spike_us[axis] = spike_filter(axis, us[axis][Raw]);            
             ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha);
-            us[axis][FILT] = remove_deadbands_us(axis, ema_us[axis]);
+            us[axis][Filt] = remove_deadbands_us(axis, ema_us[axis]);
 
-            pc[axis][RAW] = us_to_pc(axis, us[axis][RAW]);
-            pc[axis][FILT] = us_to_pc(axis, us[axis][FILT]);
+            pc[axis][Raw] = us_to_pc(axis, us[axis][Raw]);
+            pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]);
            
-            if (_radiolost) pc[axis][FILT] = pc[axis][CENT];  // if radio lost set pc value to CENTer value (for sane controls), but not us value (for debugging/error detection)
-            else if (std::abs(pc[axis][FILT] - pc[axis][CENT]) > pc[axis][MARGIN]) kick_inactivity_timer(HURCTrig);  // register evidence of user activity        
+            if (_radiolost) pc[axis][Filt] = pc[axis][Cent];  // if radio lost set pc value to Center value (for sane controls), but not us value (for debugging/error detection)
+            else if (std::abs(pc[axis][Filt] - pc[axis][Cent]) > pc[axis][Margin]) kick_inactivity_timer(HURCTrig);  // register evidence of user activity        
         }  
-        for (int axis = HORZ; axis <= VERT; axis++) {
-            pc[axis][FILT] = constrain(pc[axis][FILT], pc[axis][OPMIN], pc[axis][OPMAX]);
+        for (int axis = Horz; axis <= Vert; axis++) {
+            pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
         }
     }
     bool radiolost_update() {
         static bool radiolost_last = _radiolost;
-        if (us[VERT][RAW] > failsafe_us + failsafe_margin_us) {
+        if (us[Vert][Raw] > failsafe_us + failsafe_margin_us) {
             failsafe_timer.reset();
             _radiolost = false;
         }
@@ -1519,12 +1520,12 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     // amount. this will erase any spikes that recover fast enough and otherwise change any cliffs detected into gentle
     // slopes. The cost of this is our readings are delayed by the max spike duration we hope to be able to erase
     bool spike_signbit;
-    int spike_length, this_delta, interpolated_slope, loopindex, previndex, spike_cliff[NUM_AXES];
-    int spike_threshold[NUM_AXES] = { 6, 6 };
-    int prespike_index[NUM_AXES] = { -1, -1 };
-    int index[NUM_AXES] = { 1, 1 };  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
+    int spike_length, this_delta, interpolated_slope, loopindex, previndex, spike_cliff[NumAxes];
+    int spike_threshold[NumAxes] = { 6, 6 };
+    int prespike_index[NumAxes] = { -1, -1 };
+    int index[NumAxes] = { 1, 1 };  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
     static const int depth = 9;  // more depth will reject longer spikes at the expense of controller delay
-    int raw_history[NUM_AXES][depth], filt_history[NUM_AXES][depth];  // Values before and after filtering.
+    int raw_history[NumAxes][depth], filt_history[NumAxes][depth];  // Values before and after filtering.
     // spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
     // interpolated from before and after the spike. also smoothes out abrupt value changes that don't recover later
     float spike_filter(int axis, float new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
