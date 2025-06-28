@@ -232,16 +232,15 @@ bool sensidiots[11];  // array holds an error flag for each critical sensor or s
 int ui_app = EZReadUI, ui_app_default = EZReadUI;
 bool panicstop = false;
 
-constexpr float float_zero = 0.000069f; // if two floats being compared are closer than this, we consider them equal
-inline bool iszero(float num, float margin=float_zero) noexcept {  // checks if a float value is "effectively" zero (avoid hyperprecision errors)
-    if (std::isnan(num)) {  // calling w/ nan as argument is invalid, but we print this error to console rather than let the math crash us
-        Serial.printf("err: iszero(NAN) was called\n");
-        return false;
-    }
-    return (std::abs(num) <= margin);
+constexpr float float_zero = 0.000069f;  // minimum required float precision. use for comparisons & zero checking
+inline bool iszero(float num, float margin=NAN) noexcept {  // safe check for if a float is effectively zero (avoid hyperprecision errors)
+    if (std::isnan(margin)) margin = float_zero;  // assume global default margin value if nothing specific is given
+    if (!std::isnan(num)) return (std::abs(num) <= margin);  // if input is valid return result
+    Serial.printf("err: iszero(NAN) called\n");  // print err rather than crash. would prefer ezread if it were defined
+    return true;  // default to true if given nan, b/c more likely to best inform calls intending to prevent divzero
 }
-inline void cleanzero(float* num, float margin=NAN) noexcept {
-    if (num && iszero(*num, margin)) *num = 0.0f;  // note, checks pointer isn't null
+inline void cleanzero(float* num, float margin=NAN) noexcept {  // zeroes float values which are obnoxiously close to zero
+    if (num && iszero(*num, margin)) *num = 0.0f;  // notes: 1) lets iszero() deal w/ nan margin, 2) checks for null pointer
 }
 // fast macros
 #define arraysize(x) ((int)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays 
@@ -253,10 +252,12 @@ inline long constrain(long amt, long low, long high) { return (amt < low) ? low 
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
     if (!iszero(in_max - in_min)) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
+    Serial.printf("err: map(%3.3f, %3.3f, %3.3f ...) called\n", x, in_min, in_max); // would prefer ezread if it were defined
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
 inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
+    Serial.printf("err: map(%d, %d, %d ...) called\n", x, in_min, in_max); // would prefer ezread if it were defined
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
 
@@ -285,18 +286,16 @@ float ema_filt(float _raw, float _filt, float _alpha) {
 //     *_filt = static_cast<Filt_T>(ema_filt(_raw_f, _filt_f, _alpha));
 // }
 
-// linearizer(): applies an exponential curve to the signed percent value at the given pointer
-// - 'exp' is the exponent (>= 1.0); higher values increase curvature. exp=1.0 leaves value unchanged
-// - Returns true if transformation was applied, or false if the input was zero or exponent < 1
-// - Performs: out = 100 * (|in| / 100)^exp = 100 * e^(exp * ln(|in| / 100)) , (use identity x^a = e^(a*ln(x)) to avoid expensive pow() calls)
-// - Preserves sign of original input. Zero is untouched to avoid log(0) crash
-bool linearizer(float* in_pc_ptr, float exp) {
+// linearizer(): applies an exponential curve transformation to a signed percent value at the given ptr
+// - 'ex' is the exponent (>= 1.0); higher values increase curvature (ex=1.0 leaves value unchanged)
+// - math: out = 100*(|in|/100)^ex = 100*e^(ex*ln(|in|/100)) , use identity x^a=e^(a*ln(x)) avoids expensive pow()
+// - can scale positive or negative vals (sign of input is preserved). input==0 will leave value unchanged
+bool linearizer(float* in_pc_ptr, float ex) {  // returns true if transformation applied, or false if invalid args
     float in = *in_pc_ptr;   // store input value so we can mess around with it
-    cleanzero(&in);          // if value is obnoxiously close to zero, set it to zero (avoiding floating precision bugs)
-    if (iszero(in) || exp < 1.0f) return false; // avoid log(0) crash or potential sub-1.0 exponent crashes
-    float sign = (in >= 0.0f) ? 1.0f : -1.0f;
-    *in_pc_ptr = sign * 100.0f * expf(exp * logf(fabsf(in) / 100.0f));
-    return true;
+    cleanzero(&in);          // if value is obnoxiously close to zero, set it to zero (avoid float precision bugs)
+    if (iszero(in) || ex < 1.0f) return false; // avoid ln(0) crash or potential sub-1.0 exponent crashes
+    *in_pc_ptr = ((in >= 0.0f) ? 100.0f : -100.0f) * expf(ex * logf(fabsf(in) / 100.0f));  // do nerdy math
+    return true;             // indicate transformation successfully applied
 }
 
 // Timer objects are prolific in every corner of the code and thus this is global
