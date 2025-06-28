@@ -232,6 +232,17 @@ bool sensidiots[11];  // array holds an error flag for each critical sensor or s
 int ui_app = EZReadUI, ui_app_default = EZReadUI;
 bool panicstop = false;
 
+constexpr float float_zero = 0.000069f; // if two floats being compared are closer than this, we consider them equal
+inline bool iszero(float num, float margin=float_zero) noexcept {  // checks if a float value is "effectively" zero (avoid hyperprecision errors)
+    if (std::isnan(num)) {  // calling w/ nan as argument is invalid, but we print this error to console rather than let the math crash us
+        Serial.printf("err: iszero(NAN) was called\n");
+        return false;
+    }
+    return (std::abs(num) <= margin);
+}
+inline void cleanzero(float* num, float margin=NAN) noexcept {
+    if (num && iszero(*num, margin)) *num = 0.0f;  // note, checks pointer isn't null
+}
 // fast macros
 #define arraysize(x) ((int)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays 
 #undef constrain
@@ -241,7 +252,7 @@ inline uint constrain(uint amt, uint low, uint high) { return (amt < low) ? low 
 inline long constrain(long amt, long low, long high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
-    if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
+    if (!iszero(in_max - in_min)) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
 inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
@@ -255,17 +266,6 @@ void write_pin(int pin, int val) {  if (pin >= 0 && pin != 255) digitalWrite (pi
 void set_pin(int pin, int mode, int val) { set_pin(pin, mode); write_pin(pin, val); }
 int read_pin(int pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
 
-constexpr float float_zero = 0.000069f; // if two floats being compared are closer than this, we consider them equal
-inline bool iszero(float num, float margin=float_zero) noexcept {  // checks if a float value is "effectively" zero (avoid hyperprecision errors)
-    if (std::isnan(num)) {  // calling w/ nan as argument is invalid, but we print this error to console rather than let the math crash us
-        Serial.printf("err: iszero(NAN) was called\n");
-        return false;
-    }
-    return (std::abs(num) <= margin);
-}
-inline void cleanzero(float* num, float margin=NAN) noexcept {
-    if (num && iszero(*num, margin)) *num = 0.0f;  // note, checks pointer isn't null
-}
 float convert_units(float from_units, float convert_factor, bool invert, float in_offset = 0.0, float out_offset = 0.0) {
     if (!invert) return out_offset + convert_factor * (from_units - in_offset);
     if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
@@ -285,19 +285,17 @@ float ema_filt(float _raw, float _filt, float _alpha) {
 //     *_filt = static_cast<Filt_T>(ema_filt(_raw_f, _filt_f, _alpha));
 // }
 
-// linearizer() : transforms value at given pointer (in percent) based on an exponential curve. value must be nonzero.
-// exponent argument (must be >=1) describes the formula curvature. eg: if 1.0, data is unchanged. if 3.0, applies severe curvature
-// returns true if transformation was performed, or false if inputs are invalid (w/ no changes made)
-// performs this math: out = 100*((in/100)^A)^B , which would code as out = 100.0*powf(in, exp) , which is computationally inefficient.
-//   but b/c of the identity x^a = e^(a*ln(x)) , our equation becomes out = 100.0f* e^( ln(in/100.0f)) * exp ) , with req for in > 0
-bool linearizer(float* in_pc_ptr, float exponent) {
-    float inval = *in_pc_ptr;   // store input value so we can mess around with it
-    cleanzero(&inval);          // if value is obnoxiously close to zero, set it to zero (avoiding floating precision bugs)
-    if (iszero(inval) || exponent < 1.0f) return false; // avoid log(0) crash or potential sub-1.0 exponent crashes
-    float polarity = (float)(((int)(inval > 0.0f) << 1) - 1);  // remember polarity if input value (pos=1.0, neg=-1.0)
-    inval *= polarity;                                         // make the value positive, b/c math crashes on zero/subzero values
-    inval = 100.0f * expf(logf(inval / 100.0f) * exponent);    // math it up
-    *in_pc_ptr = inval * polarity;                             // set input pointer value, restoring its original polarity
+// linearizer(): applies an exponential curve to the signed percent value at the given pointer
+// - 'exp' is the exponent (>= 1.0); higher values increase curvature. exp=1.0 leaves value unchanged
+// - Returns true if transformation was applied, or false if the input was zero or exponent < 1
+// - Performs: out = 100 * (|in| / 100)^exp = 100 * e^(exp * ln(|in| / 100)) , (use identity x^a = e^(a*ln(x)) to avoid expensive pow() calls)
+// - Preserves sign of original input. Zero is untouched to avoid log(0) crash
+bool linearizer(float* in_pc_ptr, float exp) {
+    float in = *in_pc_ptr;   // store input value so we can mess around with it
+    cleanzero(&in);          // if value is obnoxiously close to zero, set it to zero (avoiding floating precision bugs)
+    if (iszero(in) || exp < 1.0f) return false; // avoid log(0) crash or potential sub-1.0 exponent crashes
+    float sign = (in >= 0.0f) ? 1.0f : -1.0f;
+    *in_pc_ptr = sign * 100.0f * expf(exp * logf(fabsf(in) / 100.0f));
     return true;
 }
 
