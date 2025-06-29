@@ -212,7 +212,7 @@ class Display {
         // ezread.squintf("  display initialized\n");
     }
     void reset() {
-        blackout();
+        blackout(sprptr);
         all_dirty();
         reset_request = false;
     }
@@ -231,8 +231,8 @@ class Display {
         disp_runmode_dirty = disp_simbuttons_dirty = disp_values_dirty = true;
         ui_app = ui_app_default;
     }
-    void blackout() {
-        sprptr->fillSprite(BLK);
+    void blackout(LGFX_Sprite* spr) {
+        spr->fillSprite(BLK);
         // below is the nerdy way i initially coded this till i found the command above. they're equivalent. man what a nerd
         // std::uint32_t* s;
         // for (int f=0; f<2; f++) {
@@ -872,13 +872,15 @@ class Display {
   public:
     bool draw_all(LGFX_Sprite* spr) {
         static bool starter_last = false;
-        if (runmode == LowPower) {
-            blackout();
-            return false;
-        }
         if (!display_enabled) return false;
-        if (reset_request) reset();
-        auto_saver();
+        if (runmode == LowPower) {
+            if (!powering_up) blackout(spr);  // this is not working when autosaver is enabled
+            return true;
+        }
+        else {
+            if (reset_request) reset();
+            auto_saver();
+        }
         if (!auto_saver_enabled) {
             tiny_text();
             update_idiots(disp_idiots_dirty);
@@ -954,7 +956,7 @@ class Display {
         lcd.endWrite();   // lcd->display();
     }
     void auto_saver() {
-        static int ui_app_last;
+        static int ui_app_last;            
         if (autosaver_request == ReqTog) autosaver_request = auto_saver_enabled ? ReqOff : ReqOn;  // (int)(!auto_saver_enabled);
         if (runmode != Standby) {
             if (autosaver_request == ReqOn) autosaver_request = ReqNA;
@@ -973,6 +975,7 @@ class Display {
         }
         else if (autosaver_request == ReqOff) {
             auto_saver_enabled = false;
+            // blackout(sprptr);  // attempt to make screen black out on entering lowpower mode, but doesn't work
             ui_app = ui_app_last;
             panel.set_vp(disp_apppanel_x, disp_apppanel_y, disp_apppanel_w, disp_apppanel_h);
             reset_request = true;
@@ -1190,41 +1193,21 @@ bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickT
     return pdFALSE;  // unable to take at least 1 of the 2 semaphores, so return false
 }
 static void push_task(void *parameter) {
-    static int lastmode;
-    static bool lastpush = false;
     while (true) {
-        if (runmode == LowPower) {
-            if (lastmode != LowPower) {
-                vTaskDelay(portMAX_DELAY * 2);
-                lastpush = true;
-            }
-            else vTaskDelay(pdMS_TO_TICKS(1000));
-            lastmode = runmode;
-        }
-        if ((runmode != LowPower) || lastpush) {
-            if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
-                screen.do_push();
-                xSemaphoreGive(pushbuf_sem);
-                xSemaphoreGive(drawbuf_sem);
-            }
+        while (runmode == LowPower && !powering_down) vTaskDelay(pdMS_TO_TICKS(200));
+        if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
+            screen.do_push();
+            xSemaphoreGive(pushbuf_sem);
+            xSemaphoreGive(drawbuf_sem);
         }
         vTaskDelay(pdMS_TO_TICKS(1));  // vTaskDelete(NULL);
-        lastpush = false;
-        lastmode = runmode;
     }
 }
 static void draw_task(void *parameter) {
-    static int lastmode;
     while (true) {
-        while (runmode == LowPower) {
-            if (lastmode != LowPower) {
-                screen.blackout();
-                reset_request = true;
-            }
-            else vTaskDelay(pdMS_TO_TICKS(1000));
-            lastmode = runmode;
-        }
-        // if (runmode != LowPower && lastmode == LowPower) screen.reset();
+        static int lastmode;
+        while (runmode == LowPower && !powering_down) vTaskDelay(pdMS_TO_TICKS(200));
+        if (runmode != LowPower && lastmode == LowPower) reset_request = true;  // screen.reset();
         // if ((esp_timer_get_time() - screen_refresh_time > refresh_limit) || always_max_refresh || auto_saver_enabled) {
         if (xSemaphoreTake(drawbuf_sem, portMAX_DELAY) == pdTRUE) {
             screen_refresh_time = esp_timer_get_time();
@@ -1237,6 +1220,7 @@ static void draw_task(void *parameter) {
         lastmode = runmode;
     }
 }
+
 // The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
 // See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // Rinkydink home page: http://www.rinkydinkelectronics.com

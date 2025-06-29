@@ -895,7 +895,16 @@ class PanelAppManager {
         else if (nowsaver == Collisions) cSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
         anim_reset_request = false;
     }
+    void clearscreen(LGFX_Sprite* spr) {
+        spr->fillSprite(BLK);
+        mule_drawn = false;
+        ezdraw->dirty = true;
+    }
     float update(LGFX_Sprite* spr, bool argdirty=false) {
+        if (runmode == LowPower && !powering_up) {
+            clearscreen(spr);
+            return 0.0;
+        }
         if ((ui_app_last != ScreensaverUI) && (ui_app == ScreensaverUI)) cycle_anim(DirFwd);  // next saver.  ptrsaver->reset();
         if (ui_app_last != ui_app) dirty = true;
         if (argdirty) dirty = true;
@@ -903,11 +912,7 @@ class PanelAppManager {
         if (anim_reset_request) reset();
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
         if (!sim->enabled() && simulating_last) dirty = true;  // if we just left the simulator erase everything to get rid of the simulator buttons
-        if (dirty) {
-            spr->fillSprite(BLK);
-            mule_drawn = false;
-            ezdraw->dirty = true;
-        }
+        if (dirty) clearscreen(spr);
         if (ui_app == EZReadUI) ezdraw->update(spr);
         else if (ui_app == MuleChassisUI) draw_mule(spr);
         else if (ui_app == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec

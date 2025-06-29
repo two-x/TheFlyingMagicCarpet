@@ -159,22 +159,24 @@ private:
         loc::WHEEL_RR,
         loc::BRAKE,
     };
-    std::map<loc, DeviceAddress> known_addresses = {
-        {loc::ENGINE, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
-        {loc::AMBIENT, {0x28, 0x53, 0x57, 0xad, 0x5c, 0x21, 0x01, 0x02}},
-        {loc::WHEEL_FL, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},
-        {loc::WHEEL_FR, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
-        {loc::WHEEL_RL, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
-        {loc::WHEEL_RR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}},
-        {loc::BRAKE, {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}},
+    std::map<loc, DeviceAddress> known_addresses = {  // these are the (default?) sensor addresses
+        {loc::ENGINE, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},  // these are the sensors on the car
+        {loc::AMBIENT, {0x28, 0x53, 0x57, 0xad, 0x5c, 0x21, 0x01, 0x02}},  // sensor glued to the the control box
+        {loc::WHEEL_FL, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},  // these are the sensors on the car
+        {loc::WHEEL_FR, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},  // these are the sensors on the car
+        {loc::WHEEL_RL, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},  // these are the sensors on the car
+        {loc::WHEEL_RR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}},  // these are the sensors on the car
+        {loc::BRAKE, {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}},  // sensor on soren's breadboard
         
-        // Attn Bobby!
-        // Todo: The BRAKE sensor above might be either of two sensor addresses, depending on which motor is installed.
-        // Actually we'd like to use this fact to autodetect which motor is installed, that can inform other parts of 
-        // the code. But whichever of the two is detected should be assigned to the loc::BRAKE location.
-        // Here are the two addresses:
-        // Thomson Motor: {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e}
-        //     LAE Motor: {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc}
+        // {0x28, 0x53, 0x57, 0xad, 0x5c, 0x21, 0x01, 0x02}  // sensor glued to the the control box
+        // {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}  // sensor on soren's breadboard
+        // {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e}  // Thomson motor
+        // {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc}  // LAE (2024) motor
+        // { ? }  //  2025 motor
+
+        // A different sensor is glued to each motor, so address depends which one is installed.
+        // Use this fact to autodetect the motor, assign it to the loc::BRAKE location ...
+        // so we can load the appropriate calibrations, etc.
     };
 
     std::map<loc, TemperatureSensor> sensors;
@@ -374,7 +376,8 @@ public:
                 set_state(State::CONVERTING);
                 last_read_request_time = millis();
             }
-        } else if (millis() - last_read_request_time >= tempsensebus.millisToWaitForConversion(tempsensebus.getResolution())) {
+        }
+        else if (millis() - last_read_request_time >= tempsensebus.millisToWaitForConversion(tempsensebus.getResolution())) {
             // Enough time has passed since the last conversion request, so check if conversions are complete
             update_state();
         }

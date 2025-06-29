@@ -71,26 +71,30 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_lowpowerMode() {  // turns off syspower and just idles. sleep_request are handled here or in standby mode below
         if (we_just_switched_modes) {
             sleep_request = ReqNA;
-            powering_up = false;
-            powering_down = true;
-            pwrchange_timer.reset();
+            powering_up = false;  // three state variables to track entry/exit phases of lowpower mode
+            powering_down = true; // during this time we blackout the screen (should be done in display.h)
             brake.setmode(Halt);
             steer.setmode(Halt);
-            autosaver_request = ReqOff;  // actually this should be ReqOff, plus request screen backlight is shut off or at least black out screen
+            autosaver_request = ReqOff;
+            pwrchange_timer.reset();  // give some time for screen to blackout
         }
-        if (powering_down) {
-            if (pwrchange_timer.expired()) set_syspower(LOW);  // Power down devices to save battery
+        else if (powering_down && pwrchange_timer.expired()) {  // blackout time is over, now go to sleep
+            set_syspower(LOW);  // Power down devices to save battery
             powering_down = false;
+        }
+        else if (powering_up && pwrchange_timer.expired()) {  // by now sensors etc. have got powered up, so switch runmode
+            powering_up = false;
+            runmode = (in_basicmode) ? Basic : Standby;  // basicsw.val()  finish powering up . display->all_dirty();  // tells display to redraw everything. display must set back to false
         }
         else {
             if (encoder.button.shortpress()) sleep_request = ReqOff;
-            if ((!hotrc.radiolost() && hotrc.sw_event(Ch4)) || sleep_request == ReqTog || sleep_request == ReqOff) {  // start powering up
+            if (!hotrc.radiolost() && hotrc.sw_event(Ch4)) sleep_request = ReqOff;
+            if (sleep_request == ReqTog || sleep_request == ReqOff) {  // start powering up
                 set_syspower(HIGH);    // switch on control system devices
                 pwrchange_timer.reset();   // stay in lowpower mode for a delay to allow devices to power up
                 powering_up = true;
                 autosaver_request = ReqOff;
             }
-            if (powering_up && pwrchange_timer.expired()) runmode = (in_basicmode) ? Basic : Standby;  // basicsw.val()  finish powering up . display->all_dirty();  // tells display to redraw everything. display must set back to false
         }
         sleep_request = ReqNA;
     }

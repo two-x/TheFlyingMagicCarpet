@@ -21,7 +21,7 @@
 // #define CONFIG_WIFI_LWIP_ALLOCATION_FROM_SPIRAM_FIRST
 // #define CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
 
-// Custom settings for ESP32 LovyanGFX library - all chinese commentary has been translated
+// Custom settings for ESP32 LovyanGFX library - all japanese commentary has been translated
 // The original setting is the same as the original setting, and the LGFX_Device is a derivative of the original creation.
 
 // Soren notes from Espressif site:  The SPI Master driver allows multiple Devices to be connected on a same SPI bus (sharing 
