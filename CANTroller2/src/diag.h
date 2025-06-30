@@ -53,7 +53,7 @@ class DiagRuntime {
         return err_sens_card[NumTelemetryFull];        
     }
     // diag non-tunable values
-    // bool temp_err[NumTempCategories];  // [AMBIENT/ENGINE/WHEEL/BRAKE]
+    // bool temp_err[NumTempCategories];  // [TempAmbient/TempEngine/WHEEL/TempBrake]
     bool err_sens_alarm[NumErrTypes] = { false, false, false, };  //  [ErrLost/ErrRange/ErrWarn]
     int err_sens_fails[NumErrTypes] = { 0, 0, 0, };
     bool err_sens[NumErrTypes][NumTelemetryFull]; //  [ErrLost/ErrRange/ErrWarn] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
@@ -91,13 +91,13 @@ class DiagRuntime {
         register_device(_AirVelo, airvelo->ptr(), airvelo->opmin_ptr(), airvelo->opmax_ptr(), airvelo->margin_ptr());
         register_device(_MAP, mapsens->ptr(), mapsens->opmin_ptr(), mapsens->opmax_ptr(), mapsens->margin_ptr());
         register_device(_Pot, pot->ptr(), pot->opmin_ptr(), pot->opmax_ptr(), pot->margin_ptr());
-        register_device(_TempEng, tempsens->ptr(loc::ENGINE), tempsens->opmin_ptr(loc::ENGINE), tempsens->opmax_ptr(loc::ENGINE), tempsens->margin_ptr(loc::ENGINE));
-        register_device(_TempAmb, tempsens->ptr(loc::AMBIENT), tempsens->opmin_ptr(loc::AMBIENT), tempsens->opmax_ptr(loc::AMBIENT), tempsens->margin_ptr(loc::AMBIENT));
-        register_device(_TempBrake, tempsens->ptr(loc::BRAKE), tempsens->opmin_ptr(loc::BRAKE), tempsens->opmax_ptr(loc::BRAKE), tempsens->margin_ptr(loc::BRAKE));
-        register_device(_TempWhFL, tempsens->ptr(loc::WHEEL_FL), tempsens->opmin_ptr(loc::WHEEL_FL), tempsens->opmax_ptr(loc::WHEEL_FL), tempsens->margin_ptr(loc::WHEEL_FL));
-        register_device(_TempWhFR, tempsens->ptr(loc::WHEEL_FR), tempsens->opmin_ptr(loc::WHEEL_FR), tempsens->opmax_ptr(loc::WHEEL_FR), tempsens->margin_ptr(loc::WHEEL_FR));
-        register_device(_TempWhRL, tempsens->ptr(loc::WHEEL_RL), tempsens->opmin_ptr(loc::WHEEL_RL), tempsens->opmax_ptr(loc::WHEEL_RL), tempsens->margin_ptr(loc::WHEEL_RL));
-        register_device(_TempWhRR, tempsens->ptr(loc::WHEEL_RR), tempsens->opmin_ptr(loc::WHEEL_RR), tempsens->opmax_ptr(loc::WHEEL_RR), tempsens->margin_ptr(loc::WHEEL_RR));
+        register_device(_TempEng, tempsens->ptr(loc::TempEngine), tempsens->opmin_ptr(loc::TempEngine), tempsens->opmax_ptr(loc::TempEngine), tempsens->margin_ptr(loc::TempEngine));
+        register_device(_TempAmb, tempsens->ptr(loc::TempAmbient), tempsens->opmin_ptr(loc::TempAmbient), tempsens->opmax_ptr(loc::TempAmbient), tempsens->margin_ptr(loc::TempAmbient));
+        register_device(_TempBrake, tempsens->ptr(loc::TempBrake), tempsens->opmin_ptr(loc::TempBrake), tempsens->opmax_ptr(loc::TempBrake), tempsens->margin_ptr(loc::TempBrake));
+        register_device(_TempWhFL, tempsens->ptr(loc::TempWheelFL), tempsens->opmin_ptr(loc::TempWheelFL), tempsens->opmax_ptr(loc::TempWheelFL), tempsens->margin_ptr(loc::TempWheelFL));
+        register_device(_TempWhFR, tempsens->ptr(loc::TempWheelFR), tempsens->opmin_ptr(loc::TempWheelFR), tempsens->opmax_ptr(loc::TempWheelFR), tempsens->margin_ptr(loc::TempWheelFR));
+        register_device(_TempWhRL, tempsens->ptr(loc::TempWheelRL), tempsens->opmin_ptr(loc::TempWheelRL), tempsens->opmax_ptr(loc::TempWheelRL), tempsens->margin_ptr(loc::TempWheelRL));
+        register_device(_TempWhRR, tempsens->ptr(loc::TempWheelRR), tempsens->opmin_ptr(loc::TempWheelRR), tempsens->opmax_ptr(loc::TempWheelRR), tempsens->margin_ptr(loc::TempWheelRR));
         // register_bool_device(_Ignition, ignition->signal_ptr());
         // register_bool_device(_Starter, starter->signal_ptr());
     }

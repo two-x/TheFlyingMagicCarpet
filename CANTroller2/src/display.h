@@ -15,9 +15,9 @@
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "ANI" };  // Pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { "CAL", "SIM", "CH4", "IGN" };
 std::string ch4_menu_buttons[NumRunModes] = { "CH4", "WAKE", "SLEEP", "START", "START", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
-std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airflw", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
+std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airvel", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
-std::string pcbaglowcard[GlowNumModes] = { "Off", "Simple", "Hbeat", "Xfade", "Sine" };
+std::string pcbaglowcard[GlowNumModes] = { "off", "simple", "heart", "xfade", "sine" };
 #define stEr "St\x88r"     // These defines are just a convenience to keep the below datapage strings
 #define brAk "Br\x83k"     //   array initializations aligned in neat rows & cols for legibility
 #define spEd "Sp\x88""d"
@@ -69,7 +69,7 @@ static std::string unitmapnames[21] = { "us", scroll, b1nary, "%", "ohm", "eyes"
 static constexpr uint8_t unitmaps[21][13] = {  // now 13x7-pixel bitmaps for unit strings. required when string is over 2 characters
     { 0x40, 0x7e, 0x20, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x2a, 0x12, 0x00, },  // us - b/c the font's lowercase mu character doesn't work
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x20, 0x7f, 0x00, 0x7f, 0x02, 0x04, },  // up/down arrows to indicate multiple choices. this one is right-aligned one char over to allow longer names
-    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x75, 0x75, 0x22, 0x00, },  // binary vertical on/off dots
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x57, 0x57, 0x22, 0x00, },  // binary vertical on/off dots
     { 0x02, 0x45, 0x25, 0x12, 0x08, 0x24, 0x52, 0x51, 0x20, 0x00, 0x00, 0x00, 0x00, },  // % - we use this a lot and the font % looks feeble
     { 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },  // capital omega - for ohms
     { 0x00, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x41, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
@@ -446,7 +446,7 @@ class Display {
         drawval_core(lineno, name, 1, NAN, NAN, NAN, CYN);
     }
     void draw_truth(int lineno, bool truthy, int styl=2) {  // 0:on/off, 1:yes/no, 2:true/false, 3: ena/dis.
-        drawval_core(lineno, (truthy) ? ((styl==0) ? "on" : ((styl==1) ? "yes" : ((styl==2) ? "true" : "ena"))) : ((styl==0) ? "off" : ((styl==1) ? "no" : ((styl==2) ? "false" : "dis"))), 1, NAN, NAN, NAN, (truthy) ? LPUR : ORCD);
+        drawval_core(lineno, (truthy) ? ((styl==0) ? "on" : ((styl==1) ? "yes" : ((styl==2) ? "true" : "enable"))) : ((styl==0) ? "off" : ((styl==1) ? "no" : ((styl==2) ? "false" : "disabl"))), 1, NAN, NAN, NAN, (truthy) ? LPUR : ORCD);
     }    
     std::string num2string(int value, int maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
         value = abs(value);  // This function disregards sign
@@ -745,8 +745,8 @@ class Display {
             drawval(19, starter.run_timeout, starter.run_lolimit, starter.run_hilimit);
             drawval(20, gas.starting_pc, gas.pc[OpMin], gas.pc[OpMax]);
             drawval(21, gas.idle_max_boost_pc);
-            drawval(22, gas.idle_temp_lim_f[LOW], tempsens.opmin(loc::ENGINE), tempsens.opmax(loc::ENGINE));
-            drawval(23, gas.idle_temp_lim_f[HIGH], tempsens.opmin(loc::ENGINE), tempsens.opmax(loc::ENGINE));
+            drawval(22, gas.idle_temp_lim_f[LOW], tempsens.opmin(loc::TempEngine), tempsens.opmax(loc::TempEngine));
+            drawval(23, gas.idle_temp_lim_f[HIGH], tempsens.opmin(loc::TempEngine), tempsens.opmax(loc::TempEngine));
         }
         else if (datapage == PgMotr) {
             drawval(9, brake.duty(), brake.dutymin(), brake.dutymax());  // brake_spid_speedo_delta_adc, -range, range);            
@@ -824,13 +824,13 @@ class Display {
             drawval(23, gas.cruisepid.kd());
         }
         else if (datapage == PgTemp) {
-            draw_temp(loc::AMBIENT, 9);
-            draw_temp(loc::ENGINE, 10);
-            draw_temp(loc::WHEEL_FL, 11);
-            draw_temp(loc::WHEEL_FR, 12);
-            draw_temp(loc::WHEEL_RL, 13);
-            draw_temp(loc::WHEEL_RR, 14);
-            draw_temp(loc::BRAKE, 15);
+            draw_temp(loc::TempAmbient, 9);
+            draw_temp(loc::TempEngine, 10);
+            draw_temp(loc::TempWheelFL, 11);
+            draw_temp(loc::TempWheelFR, 12);
+            draw_temp(loc::TempWheelRL, 13);
+            draw_temp(loc::TempWheelRR, 14);
+            draw_temp(loc::TempBrake, 15);
             for (int line=16; line<=20; line++) draw_eraseval(line);
             drawval(21, tunetest, -100.0, 100.0, NAN, 3);
             drawval(22, wheeldifferr);
@@ -1105,8 +1105,8 @@ class Tuner {
             if (sel == 10) tune(&starter.run_timeout, id, starter.run_lolimit, starter.run_hilimit);
             else if (sel == 11) tune(&gas.starting_pc, id, gas.pc[OpMin], gas.pc[OpMax]);
             else if (sel == 12) tune(&gas.idle_max_boost_pc, id, 0.0f, 100.0f);
-            else if (sel == 13) tune(&gas.idle_temp_lim_f[LOW], id, tempsens.opmin(loc::ENGINE), gas.idle_temp_lim_f[HIGH]);
-            else if (sel == 14) tune(&gas.idle_temp_lim_f[HIGH], id, gas.idle_temp_lim_f[LOW], tempsens.opmax(loc::ENGINE));
+            else if (sel == 13) tune(&gas.idle_temp_lim_f[LOW], id, tempsens.opmin(loc::TempEngine), gas.idle_temp_lim_f[HIGH]);
+            else if (sel == 14) tune(&gas.idle_temp_lim_f[HIGH], id, gas.idle_temp_lim_f[LOW], tempsens.opmax(loc::TempEngine));
         }
         else if (datapage == PgMotr) {
             if (sel == 5) brake.update_ctrl_config((int)tune(id));

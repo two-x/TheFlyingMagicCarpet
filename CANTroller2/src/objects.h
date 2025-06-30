@@ -74,9 +74,9 @@ void tempsens_task(void *parameter) {
         while (runmode == LowPower) vTaskDelay(pdMS_TO_TICKS(1000));
         if (!dont_take_temperatures) tempsens.update_temperatures();
         if (sim.potmapping(sens::engtemp)) {
-            TemperatureSensor *engine_sensor = tempsens.get_sensor(loc::ENGINE);
+            TemperatureSensor *engine_sensor = tempsens.get_sensor(loc::TempEngine);
             if (engine_sensor != nullptr) {
-                engine_sensor->set_temperature(pot.mapToRange(tempsens.opmin(loc::ENGINE), tempsens.opmax(loc::ENGINE)));  // temp_sensor_min_f, temp_sensor_max_f));
+                engine_sensor->set_temperature(pot.mapToRange(tempsens.opmin(loc::TempEngine), tempsens.opmax(loc::TempEngine)));  // temp_sensor_min_f, temp_sensor_max_f));
             }
         }
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
@@ -93,8 +93,8 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
     float new_map = mapsens.val();
     if (std::isnan(_ambient)) {
         if (new_velo == maf_velo_last && new_map == maf_map_last) return maf_gps;  // if no new sensor readings, don't recalculate the same value
-        temp = tempsens.val(loc::AMBIENT);
-        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::BRAKE);
+        temp = tempsens.val(loc::TempAmbient);
+        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::TempBrake);
         if (std::isnan(temp)) return NAN;  // Avoid crashing due to trying to read absent sensor
     }
     maf_velo_last = new_velo;

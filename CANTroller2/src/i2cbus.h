@@ -202,7 +202,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     static constexpr uint8_t addr = 0x69;
     LightingBox(I2C* _i2c) : i2c{_i2c} {}  // LightingBox(DiagRuntime* _diag) : diag(_diag) {}
     void setup() {
-        Serial.printf("Lighting box serial comm..\n");  // ezread.squintf("Lighting box serial comm..\n");
+        ezread.squintf("lighting box serial comm..\n");  // ezread.squintf("Lighting box serial comm..\n");
     }
     bool sendstatus() {
         uint8_t byt = 0x00;  // command template for status update

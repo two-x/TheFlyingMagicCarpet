@@ -303,6 +303,11 @@ int NeopixelStrip::num_neo_idiots() { return idiotcount; }
 void NeopixelStrip::sleepmode_ena(bool ena) {
     if (!ena && sleepmode) refresh(true);
     sleepmode = ena;
+    if (sleepmode) {  // ezread.squintf("sleeping rm:%d (0x%02x)\n", runmode, colorcard[runmode]);
+        set_heartcolor(colorcard[runmode]);
+        update_pcba_glow();
+        refresh();
+    }
 }
 void NeopixelStrip::knightrider() {
     static Timer knighttimer{150000};

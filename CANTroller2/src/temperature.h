@@ -2,9 +2,9 @@
 #include <vector>
 #include <DallasTemperature.h>
 
-enum class loc { AMBIENT=0, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR, BRAKE, NUM_LOCATIONS };  // , SOREN_DEV0, SOREN_DEV1, };
+enum class loc { TempAmbient=0, TempEngine, TempWheelFL, TempWheelFR, TempWheelRL, TempWheelRR, TempBrake, NumTempLocations };  // , SOREN_DEV0, SOREN_DEV1, };
 enum temp_categories { CatUnknown=0, CatAmbient=1, CatEngine=2, CatWheel=3, CatBrake=4, NumTempCategories=5 };  // 
-enum brakemotor_types { NIL=-1, Thomson=0, LAE=1 };
+enum brakemotor_types { Nil=-1, Thomson=0, MotorFactoryStore=1, GoMotorWorld=2, NumBrakeMotorTypes=3 };
     
 float temp_lims_f[NumTempCategories][NumMotorVals] {
     // changed opmin values all to 40 to avoid idiot lights. engine opmin was 125, wheel was 50, brake was 45
@@ -13,7 +13,7 @@ float temp_lims_f[NumTempCategories][NumMotorVals] {
     {  40.0, 178.0, 205.0, 218.0, NAN, -67.0, 257.0, 2.0 },  //  [CatEngine] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
     {  40.0,  77.0, 170.0, 145.0, NAN, -67.0, 257.0, 2.0 },  //   [CatWheel] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin] (applies to all wheels)
     {  45.0,  77.0, 125.0, 135.0, NAN, -67.0, 257.0, 2.0 },  //   [CatBrake] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
-};  // float* degf[(int)loc::NUM_LOCATIONS][NumMotorVals];
+};  // float* degf[(int)loc::NumTempLocations][NumMotorVals];
 
 class TemperatureSensor {
 public:
@@ -75,10 +75,10 @@ public:
         _address = address;
     }
     void set_lims() {
-        if (_location == loc::AMBIENT) category = CatAmbient;
-        else if (_location == loc::ENGINE) category = CatEngine;
-        else if (_location == loc::BRAKE) category = CatBrake;
-        else if (_location == loc::WHEEL_FL || _location == loc::WHEEL_FR || _location == loc::WHEEL_RL || _location == loc::WHEEL_RR ) category = CatWheel;
+        if (_location == loc::TempAmbient) category = CatAmbient;
+        else if (_location == loc::TempEngine) category = CatEngine;
+        else if (_location == loc::TempBrake) category = CatBrake;
+        else if (_location == loc::TempWheelFL || _location == loc::TempWheelFR || _location == loc::TempWheelRL || _location == loc::TempWheelRR ) category = CatWheel;
         else category = CatUnknown;
         for (int i=0; i<NumMotorVals; i++) if (i != Filt) degf[i] = &temp_lims_f[category][i];  // degf[(int)sens][Filt] = &_temperature;
         degf[Filt] = &_temperature;
@@ -98,13 +98,13 @@ public:
 
     static std::string location_to_string(loc location) {
         switch(location) {
-            case loc::AMBIENT: return "ambient";
-            case loc::ENGINE: return "engine";
-            case loc::WHEEL_FL: return "wheel_fl";
-            case loc::WHEEL_FR: return "wheel_fr";
-            case loc::WHEEL_RL: return "wheel_rl";
-            case loc::WHEEL_RR: return "wheel_rr";
-            case loc::BRAKE: return "brakemotor";
+            case loc::TempAmbient: return "ambient";
+            case loc::TempEngine: return "engine";
+            case loc::TempWheelFL: return "wheel_fl";
+            case loc::TempWheelFR: return "wheel_fr";
+            case loc::TempWheelRL: return "wheel_rl";
+            case loc::TempWheelRR: return "wheel_rr";
+            case loc::TempBrake: return "brakemotor";
             default: return "unknown";
         }
     }
@@ -135,7 +135,7 @@ public:
         READY_TO_READ
     };
     bool vehicle_detected = true;
-    int brakemotor_type_detected = NIL;  // default value
+    int brakemotor_type_detected = Nil;  // default value
     int temperature_precision = 11;  // 9-12 bit resolution
     int detected_devices_ct = 0;
 private:
@@ -151,31 +151,31 @@ private:
 
     std::vector<DeviceAddress> detected_addresses;
     std::vector<loc> all_locations = {
-        loc::ENGINE,
-        loc::AMBIENT,
-        loc::WHEEL_FL,
-        loc::WHEEL_FR,
-        loc::WHEEL_RL,
-        loc::WHEEL_RR,
-        loc::BRAKE,
+        loc::TempEngine,
+        loc::TempAmbient,
+        loc::TempWheelFL,
+        loc::TempWheelFR,
+        loc::TempWheelRL,
+        loc::TempWheelRR,
+        loc::TempBrake,
     };
     std::map<loc, DeviceAddress> known_addresses = {  // these are the (default?) sensor addresses
-        {loc::ENGINE, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},  // these are the sensors on the car
-        {loc::AMBIENT, {0x28, 0x53, 0x57, 0xad, 0x5c, 0x21, 0x01, 0x02}},  // sensor glued to the the control box
-        {loc::WHEEL_FL, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},  // these are the sensors on the car
-        {loc::WHEEL_FR, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},  // these are the sensors on the car
-        {loc::WHEEL_RL, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},  // these are the sensors on the car
-        {loc::WHEEL_RR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}},  // these are the sensors on the car
-        {loc::BRAKE, {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}},  // sensor on soren's breadboard
+        {loc::TempEngine, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},  // mule engine sensor
+        {loc::TempAmbient, {0x28, 0x53, 0x57, 0xad, 0x5c, 0x21, 0x01, 0x02}},  // sensor glued to the the control box
+        {loc::TempWheelFL, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},  // these are the sensors on the car
+        {loc::TempWheelFR, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},  // these are the sensors on the car
+        {loc::TempWheelRL, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},  // these are the sensors on the car
+        {loc::TempWheelRR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}},  // these are the sensors on the car
+        {loc::TempBrake, {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}},  // ?
         
         // {0x28, 0x53, 0x57, 0xad, 0x5c, 0x21, 0x01, 0x02}  // sensor glued to the the control box
-        // {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}  // sensor on soren's breadboard
-        // {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e}  // Thomson motor
-        // {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc}  // LAE (2024) motor
-        // { ? }  //  2025 motor
+        // {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e}  // sensor on soren's breadboard
+        // {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}  // Thomson (2023) motor (?) confirm this
+        // {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc}  // MotorFactoryStore (2024) motor
+        // {0x28, 0xf0, 0x03, 0xb6, 0x5c, 0x21, 0x01, 0x21}  // GoMotorWorld (2025) motor
 
         // A different sensor is glued to each motor, so address depends which one is installed.
-        // Use this fact to autodetect the motor, assign it to the loc::BRAKE location ...
+        // Use this fact to autodetect the motor, assign it to the loc::TempBrake location ...
         // so we can load the appropriate calibrations, etc.
     };
 
@@ -184,23 +184,28 @@ private:
     // Assigns known addresses to Sensors. The sensors will have locations like engine or ambient
     void assign_known_addresses() {
         int lost_sensors = 0;
-        DeviceAddress thomson_brake_address = {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e};
-        DeviceAddress lae_brake_address = {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc};
+        DeviceAddress thomson_brake_address = {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2};
+        DeviceAddress mfs_brake_address = {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc};
+        DeviceAddress gmw_brake_address = {0x28, 0xf0, 0x03, 0xb6, 0x5c, 0x21, 0x01, 0x21};
+        
         bool brake_assigned = false;
 
         // First handle brake sensors
         for (auto& detected_address : detected_addresses) {
             if (std::equal(detected_address.begin(), detected_address.end(), thomson_brake_address.begin())) {
-                 brakemotor_type_detected = Thomson;  // default value
+                 brakemotor_type_detected = Thomson;
             }
-            else if (std::equal(detected_address.begin(), detected_address.end(), lae_brake_address.begin())) {
-                brakemotor_type_detected = LAE;  // default value
+            else if (std::equal(detected_address.begin(), detected_address.end(), mfs_brake_address.begin())) {
+                brakemotor_type_detected = MotorFactoryStore;
             }
-            if (!brake_assigned && (brakemotor_type_detected != NIL)) {
-                sensors.emplace(loc::BRAKE, TemperatureSensor(loc::BRAKE, detected_address, &tempsensebus));
+            else if (std::equal(detected_address.begin(), detected_address.end(), gmw_brake_address.begin())) {
+                brakemotor_type_detected = GoMotorWorld;
+            }
+            if (!brake_assigned && (brakemotor_type_detected != Nil)) {
+                sensors.emplace(loc::TempBrake, TemperatureSensor(loc::TempBrake, detected_address, &tempsensebus));
                 Serial.printf("  detected %s brake sensor addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
                 ezread.printf("  %s brake addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
-                sensors.at(loc::BRAKE).print_address();
+                sensors.at(loc::TempBrake).print_address();
                 brake_assigned = true;
             }
             continue;
@@ -208,7 +213,7 @@ private:
 
         // Then handle other sensors
         for (auto& known_address : known_addresses) {
-            if (known_address.first == loc::BRAKE) continue; // Skip brake because it's already handled
+            if (known_address.first == loc::TempBrake) continue; // Skip brake because it's already handled
 
             // check to see if we have a known address that wasn't detected, print a warning if yes
             auto detected_address_it = std::find_if(detected_addresses.begin(), detected_addresses.end(), [&](const DeviceAddress& detected_address) {
@@ -244,7 +249,7 @@ private:
             }
         }
         if (lost_sensors) ezread.squintf("  did not detect %d known sensor(s)\n", lost_sensors);
-        vehicle_detected = detected(loc::AMBIENT);
+        vehicle_detected = detected(loc::TempAmbient);
     }
 
     // Assign remaining addresses to any unassigned locations, in order of the locations enum
@@ -278,13 +283,13 @@ private:
     //     }
     // }
     // void assign_categories() {
-    //     for (loc i=AMBIENT; i<NUM_LOCATIONS; i = (loc)((int)i + 1)) {
+    //     for (loc i=TempAmbient; i<NumTempLocations; i = (loc)((int)i + 1)) {
     //         auto it = sensors.find(i);
     //         if (it != sensors.end()) {
-    //             if (i == AMBIENT) assign_category(&it->second, CatAmbient);
-    //             else if (i == ENGINE) assign_category(&it->second, CatEngine);
-    //             else if (i == BRAKE) assign_category(&it->second, CatBrake);
-    //             else if (i == WHEEL_FL || i == WHEEL_FR || i == WHEEL_RL || i == WHEEL_RR ) assign_category(&it->second, CatWheel);
+    //             if (i == TempAmbient) assign_category(&it->second, CatAmbient);
+    //             else if (i == TempEngine) assign_category(&it->second, CatEngine);
+    //             else if (i == TempBrake) assign_category(&it->second, CatBrake);
+    //             else if (i == TempWheelFL || i == TempWheelFR || i == TempWheelRL || i == TempWheelRR ) assign_category(&it->second, CatWheel);
     //             else assign_category(&it->second, CatUnknown);
     //         }                
     //         else {
@@ -295,9 +300,10 @@ private:
     // }
     static std::string brakemotor_type_to_string(int motortype) {
         switch(motortype) {
-            case NIL: return "undetected";
+            case Nil: return "undetected";
             case Thomson: return "Thomson";
-            case LAE: return "LAE";
+            case MotorFactoryStore: return "MFS";
+            case GoMotorWorld: return "GMW";
             default: return "undetected";
         }
     }
@@ -426,12 +432,12 @@ public:
         TemperatureSensor* sens = get_sensor(locat);  // ambient
         return (bool)sens; 
     }
-    int locint(loc locat = loc::NUM_LOCATIONS) {
+    int locint(loc locat = loc::NumTempLocations) {
         return static_cast<int>(locat);
     }
     int errclass(loc locat) {
-        if (locat == loc::AMBIENT || locat == loc::ENGINE) return static_cast<int>(locat);
-        return static_cast<int>(loc::WHEEL_FL);  // All wheels use this error class
+        if (locat == loc::TempAmbient || locat == loc::TempEngine) return static_cast<int>(locat);
+        return static_cast<int>(loc::TempWheelFL);  // All wheels use this error class
     }
     int errclass(int locat) { return errclass(static_cast<loc>(locat)); }
     float val(int locat) { return val(static_cast<loc>(locat)); }

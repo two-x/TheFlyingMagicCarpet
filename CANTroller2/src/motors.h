@@ -482,7 +482,7 @@ class ThrottleControl : public ServoMotor {
   private:
     void update_idle() {  // updates _idle_pc based on temperature, ranging from pc[OpMin] (when warm) to full boost% applied (when cold)
         if (!use_idle_boost) return;
-        idle_temp_f = tempsens->val(loc::ENGINE);
+        idle_temp_f = tempsens->val(loc::TempEngine);
         if (std::isnan(idle_temp_f)) idle_boost_pc = 0.0f;  // without valid temp reading do not boost
         else idle_boost_pc = map(idle_temp_f, idle_temp_lim_f[LOW], idle_temp_lim_f[HIGH], idle_max_boost_pc, 0.0f);
         idle_boost_pc = constrain(idle_boost_pc, 0.0f, idle_max_boost_pc);
@@ -701,7 +701,7 @@ class BrakeControl : public JagMotor {
         hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);  // pre-do some of the math to speed up hybrid calculations
     }
     bool detect_tempsens() {
-        float trytemp = tempsens->val(loc::BRAKE);
+        float trytemp = tempsens->val(loc::TempBrake);
         brake_tempsens_exists = !std::isnan(trytemp);
         ezread.squintf(" using heat %s sensor\n", brake_tempsens_exists ? "readings from detected" : "estimates in lieu of");
         return brake_tempsens_exists;
@@ -714,7 +714,7 @@ class BrakeControl : public JagMotor {
         pres_last = pressure->val();
         posn_last = brkpos->val();
         detect_tempsens();
-        if (!std::isnan(tempsens->val(loc::AMBIENT))) motor_heat_min = tempsens->val(loc::AMBIENT) - 2;
+        if (!std::isnan(tempsens->val(loc::TempAmbient))) motor_heat_min = tempsens->val(loc::TempAmbient) - 2;
         derive();
         update_ctrl_config();
         pids[PressureFB].init(pressure->ptr(), &(pc[OpMin]), &(pc[OpMax]), press_kp, press_ki, press_kd, QPID::pmod::onerr,
@@ -723,7 +723,7 @@ class BrakeControl : public JagMotor {
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::strict, pc[Stop]);  // QPID::centmod::off);
         // pids[PressureFB].set_iaw_cond_thresh(0.25);  // set the fraction of the output range within which integration works at all
         // pids[PositionFB].set_iaw_cond_thresh(0.25);
-        set_out_changerate_pcps(200.0);  // LAE actuator stutters and stalls when changing direction suddenly, when power is low
+        set_out_changerate_pcps(200.0);  // MotorFactoryStore actuator stutters and stalls when changing direction suddenly, when power is low
     }
     void set_out_changerate_pcps(float newrate) {
         max_out_changerate_pcps = newrate;
@@ -736,9 +736,9 @@ class BrakeControl : public JagMotor {
         static bool printed_error = false;
         if (motorheat_timer.expireset()) {
             out_ratio = pc[Out] / 100.0;
-            if (brake_tempsens_exists) motor_heat = tempsens->val(loc::BRAKE);
+            if (brake_tempsens_exists) motor_heat = tempsens->val(loc::TempBrake);
             else {
-                nowtemp = tempsens->val(loc::AMBIENT);
+                nowtemp = tempsens->val(loc::TempAmbient);
                 if (std::isnan(motor_heat) && !std::isnan(nowtemp)) motor_heat = nowtemp;  // ezread.squintf("Actively forecasting brake motor heat generation\n");
                 else {
                     if (std::isnan(nowtemp)) added_heat = motor_heatloss_rate / -4.0;
@@ -751,13 +751,13 @@ class BrakeControl : public JagMotor {
                     motor_heat += added_heat;
                 }
             }
-            motor_heat = constrain(motor_heat, tempsens->absmin(loc::BRAKE), tempsens->absmax(loc::BRAKE));            
+            motor_heat = constrain(motor_heat, tempsens->absmin(loc::TempBrake), tempsens->absmax(loc::TempBrake));            
             
             // duty_pc is intended for us to estimate the current duty of the actuator, as a percent. for now is proportional to temp reading
             duty_pc = map(motor_heat, motor_heat_min, motor_heat_max, 0.0, brakemotor_duty_spec_pc);  // replace this w/ ongoing estimate
             
             if (overtemp_shutoff_brake) {  // here the brakemotor is shut off if overtemp. also in diag class the engine is stopped
-                if (motor_heat > tempsens->opmax(loc::BRAKE)) {
+                if (motor_heat > tempsens->opmax(loc::TempBrake)) {
                     if (!printed_error) ezread.squintf(RED, "err: brake motor overheating. stop motor\n");
                     printed_error = true;
                     setmode(Halt);        // stop the brake motor // pc[Out] = pc[Stop];  // setmode(ParkMotor);

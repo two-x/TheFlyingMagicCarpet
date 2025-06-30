@@ -769,8 +769,8 @@ class BrakePositionSensor : public AnalogSensor {
             set_abslim_native(1035, 3102, false);  // tuned 240809 pre-bm24
             set_oplim(0.506, 4.234)  // 4.624  //tuned 230602 - best position to park the actuator out of the way so we can use the pedal (in)
             _zeropoint = 3.17;  // tuned 230602 - brake position value corresponding to the point where fluid PSI hits zero (in)
-        #else  // if LAE motor
-            // 240513 cal data LAE actuator:  measured to tip of piston
+        #else  // if MotorFactoryStore motor
+            // 240513 cal data MotorFactoryStore actuator:  measured to tip of piston
             // fully retracted 0.95 in, Vpot = 0.83 V (1179 adc), fully extended 8.85 in (), Vpot = 2.5 V (3103 adc)
             // calc (2.5 - 0.83) / 3.3 = 0.506 . 0.506 * 4096 = 2072 . (8.85 - 0.95) / 2072 = .00381 in/adc or 262 adc/in
             
@@ -779,7 +779,7 @@ class BrakePositionSensor : public AnalogSensor {
             set_abslim_native(1885, 3100, false);  // tuned 240513 - don't remember if values read from screen or calculated.  need to redo
             set_abslim(4.33, 8.84, false);  // tuned 240513 - actuator inches measured
             set_oplim(4.52, 6.00); 
-             // 240609 determined opmin on vehicle, with LAE motor connected w/ quicklink + carabeener
+             // 240609 determined opmin on vehicle, with MotorFactoryStore motor connected w/ quicklink + carabeener
             _zeropoint = 5.87;  // 240609 3.65in, 1707 adc - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
 
             // don't also set native oplims as they will autocalc from oplims setting
@@ -1497,7 +1497,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]);
            
             if (_radiolost) pc[axis][Filt] = pc[axis][Cent];  // if radio lost set pc value to Center value (for sane controls), but not us value (for debugging/error detection)
-            else if (std::abs(pc[axis][Filt] - pc[axis][Cent]) > pc[axis][Margin]) kick_inactivity_timer(HURCTrig);  // register evidence of user activity        
+            else if (std::abs(pc[axis][Filt] - pc[axis][Cent]) > pc[axis][Margin]) kick_inactivity_timer((axis == Horz) ? HURCJoy : HURCTrig);  // register evidence of user activity        
         }  
         for (int axis = Horz; axis <= Vert; axis++) {
             pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);

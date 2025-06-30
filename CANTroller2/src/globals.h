@@ -398,12 +398,12 @@ const uint8_t MPNK = 0xeb;  // we need all shades of pink
 const uint8_t LPNK = 0xf3;  // especially light pink, the champagne of pinks
 const uint8_t NON  = 0x45;  // used as default value when color is unspecified
 
-uint8_t colorcard[NumRunModes] = { MGT, PUR, RED, ORG, YEL, GRN, TEAL, WHT };
+uint8_t colorcard[NumRunModes] = { MGT, BLK, RED, ORG, YEL, GRN, TEAL, WHT };
 
 // kick_inactivity_timer() function to call whenever human activity occurs, for accurate inactivity timeout feature
 //   integer argument encodes which source of human activity has kicked the timer. Here are the codes:
-enum human_activities { HUNone=-1, HUMomDown=0, HUMomUp=1, HUEncTurn=2, HUTouch=3, HURCTog=4, HURCTrig=5, HUPot=6, HUTogSw=7, HUNumActivities=8 };
-std::string activitiescard[HUNumActivities] = { "msw_dn", "msw_up", "encodr", "touch", "rc_btn", "rctrig", "pot", "tog_sw" };
+enum human_activities { HUNone=-1, HUMomDown=0, HUMomUp=1, HUEncTurn=2, HUTouch=3, HURCTog=4, HURCJoy=5, HURCTrig=6, HUPot=7, HUTogSw=8, HUNumActivities=9 };
+std::string activitiescard[HUNumActivities] = { "buttdn", "buttup", "encodr", "touch", "rcbutt", "rcjoy", "rctrig", "pot", "toggle" };
 Timer user_inactivity_timer;  // how long of not touching it before it goes to low power mode
 int last_activity = HUNone;
 void kick_inactivity_timer(int source=-1) {
