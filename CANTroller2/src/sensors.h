@@ -12,10 +12,10 @@
 // this enum class represent the components which can be simulated (sensor). It's int type under the covers, so it can be used as an index
 // typedef int opt_t;
 enum si_native_convmethods { LinearMath=0, AbsLimMap=1, OpLimMap=2 };
-enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, airvelo=6, mapsens=7, engtemp=8, mulebatt=9, starter=10, basicsw=11, NUM_SENSORS=12 };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
-enum class src : int { UNDEF=0, FIXED=1, PIN=2, SIM=3, POT=4, CALC=5 };
+enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, airvelo=6, mapsens=7, engtemp=8, mulebatt=9, starter=10, basicsw=11, NumSensors=12 };  //, ignition, syspower };  // , NumSensors, err_flag };
+enum class src : int { Undef=0, Fixed=1, Pin=2, Sim=3, Pot=4, Calc=5 };
 
-int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF) };
+int sources[static_cast<int>(sens::NumSensors)] = { static_cast<int>(src::Undef) };
 
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
@@ -49,7 +49,7 @@ class Potentiometer {
             // Serial.printf("r: %.6lf f: %.6lf\n", _raw, _pc);
             if (std::abs(_pc - _activity_ref) > _margin_pc) {
                 // ezread.squintf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
-                kick_inactivity_timer(HUPot);  // evidence of user activity
+                kick_inactivity_timer(HuPot);  // evidence of user activity
                 _activity_ref = _pc;
                 // ezread.squintf("r2:%lf\n", _activity_ref);
             }
@@ -161,8 +161,8 @@ class Device {
     int val_refresh_period = 5000;  // minimum delay between value updates, just to be efficient w/ processing. (overload this per device)
     Timer valrefreshtimer;
     Potentiometer* _pot; // to pull input from the pot if we're in simulation mode
-    src _source = src::UNDEF;
-    bool _can_source[6] = { true, true, false, true, false, false };  // [UNDEF/FIXED/PIN/SIM/POT/CALC]
+    src _source = src::Undef;
+    bool _can_source[6] = { true, true, false, true, false, false };  // [Undef/Fixed/Pin/Sim/Pot/Calc]
     // source handling functions (should be overridden in child classes as needed)
     virtual void set_val_from_undef() {}
     virtual void set_val_from_fixed() {}
@@ -179,7 +179,7 @@ class Device {
     Timer timer;  // can be used for external purposes
     sens _senstype = sens::none;
     Device() = delete; // should always be created with a pin
-    // note: should we start in PIN mode?
+    // note: should we start in Pin mode?
     Device(int arg_pin) : _pin(arg_pin) {
         valrefreshtimer.set(val_refresh_period);
     }
@@ -197,12 +197,12 @@ class Device {
         if (valrefreshtimer.expired()) {
             valrefreshtimer.set(val_refresh_period);  // allows for dynamic adjustment of update period as needed each device
             if (runmode == LowPower || !_enabled) return; // do nothing if in lowpower mode or this device is disabled
-            if (_source == src::UNDEF) set_val_from_undef();
-            else if (_source == src::FIXED) set_val_from_fixed();
-            else if (_source == src::PIN) set_val_from_pin();
-            else if (_source == src::SIM) set_val_from_sim();
-            else if (_source == src::POT) set_val_from_pot();
-            else if (_source == src::CALC) set_val_from_calc();
+            if (_source == src::Undef) set_val_from_undef();
+            else if (_source == src::Fixed) set_val_from_fixed();
+            else if (_source == src::Pin) set_val_from_pin();
+            else if (_source == src::Sim) set_val_from_sim();
+            else if (_source == src::Pot) set_val_from_pot();
+            else if (_source == src::Calc) set_val_from_calc();
             else ezread.squintf("invalid Device source: %d\n", _source);
             set_val_common();
         }
@@ -217,8 +217,8 @@ class Device {
     bool enabled() { return _enabled; }
 };
 
-enum class TransDir : int { REV=0, FWD=1, NumTransDir=2 }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
-enum TransType { ActuatorType=0, SensorType=1, NumTransType=2 }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
+enum class TransDir : int { Rev=0, Fwd=1, NumTransDir=2 }; // possible dir values. Rev means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
+enum TransType { ActuatorType=0, SensorType=1, NumTransType=2 }; // possible dir values. Rev means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
 std::string transtypecard[NumTransType] = { "actuator", "sensor" };
 std::string transdircard[(int)TransDir::NumTransDir] = { "rev", "fwd" };
 
@@ -250,7 +250,7 @@ class Transducer : public Device {
     float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;
     int _transtype, _convmethod = LinearMath;  // the default method
     Param _si, _native;
-    TransDir _dir = TransDir::FWD;
+    TransDir _dir = TransDir::Fwd;
   public:
     // operator float() { return _si.val(); }
     Transducer(int arg_pin) : Device(arg_pin) {
@@ -300,13 +300,13 @@ class Transducer : public Device {
     }
     virtual float to_pc(float arg_si) {  // convert an absolute si value to percent form.  note this honors the _dir setting
         if (std::isnan(arg_si)) return NAN;
-        float ret = map(arg_si, _opmin, _opmax, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD));
+        float ret = map(arg_si, _opmin, _opmax, 100.0 * (_dir == TransDir::Rev), 100.0 * (_dir == TransDir::Fwd));
         cleanzero(&ret, float_conversion_zero);
         return ret;
     }
     virtual float from_pc(float arg_pc) {  // convert an absolute percent value to si unit form.  note this honors the _dir setting
         if (std::isnan(arg_pc)) return NAN;
-        float ret = map(arg_pc, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD), _opmin, _opmax);
+        float ret = map(arg_pc, 100.0 * (_dir == TransDir::Rev), 100.0 * (_dir == TransDir::Fwd), _opmin, _opmax);
         cleanzero(&ret, float_conversion_zero);
         return ret;
     }
@@ -376,7 +376,7 @@ class Transducer : public Device {
         return set_si(from_pc(arg_val_pc), also_set_raw);
     }
     bool sim_si(float arg_val_si, bool also_set_raw=true) {
-        if (_source != src::SIM && _source != src::POT) return false;
+        if (_source != src::Sim && _source != src::Pot) return false;
         if (!_si.set(arg_val_si)) return false;
         if (also_set_raw) _si_raw = _si.val();
         _native.set(to_native(_si.val()));
@@ -464,7 +464,7 @@ class Sensor : public Transducer {
         set_si(_pot->mapToRange(_opmin, _opmax));  // as currently written, the pot will spoof both si and native raw values in addition to the filtered si value.  do we want this?
     }
     // virtual void update_si_limits() { _val_filt.set_limits(_si.min_shptr(), _si.max_shptr()); } // make sure our filtered value has the same limits as our regular value
-    void update_source() { if (_source == src::PIN) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
+    void update_source() { if (_source == src::Pin) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
   public:
     Sensor(int pin) : Transducer(pin) {
         _long_name = "Unknown";
@@ -472,7 +472,7 @@ class Sensor : public Transducer {
     }  
     virtual void setup() {
         _transtype = SensorType;
-        if (!_detected) set_source(src::FIXED);
+        if (!_detected) set_source(src::Fixed);
         Transducer::setup();
     }
     void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
@@ -485,7 +485,7 @@ class Sensor : public Transducer {
 //     TemperatureSensorManager* _tempsens;
 //   public:
 //     void setup() {
-//         set_can_source(src::POT, true);
+//         set_can_source(src::Pot, true);
 //     }
 // };
 
@@ -515,16 +515,16 @@ class I2CSensor : public Sensor {
                 // ezread.squintf(", responding properly\n");
                 float readval = read_sensor();  // _sensor.readPressure(ATM);
                 ezread.squintf(" and reading %.4f %s\n", readval, _si_units.c_str());
-                set_source(src::PIN); // sensor working
+                set_source(src::Pin); // sensor working
             }
             else {
                 ezread.squintf(", no response\n");  // begin communication with air flow sensor) over I2C 
-                set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
+                set_source(src::Fixed); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
             }
         }
         else {
             ezread.squintf("\n");
-            set_source(src::FIXED); // don't even have a device at all..
+            set_source(src::Fixed); // don't even have a device at all..
         }
     }
   public:
@@ -532,11 +532,11 @@ class I2CSensor : public Sensor {
     I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor(-1), _i2c(i2c_arg), addr(i2c_address_arg) {
         _long_name = "Unknown I2C";
         _short_name = "unki2c";
-        set_can_source(src::PIN, true);
+        set_can_source(src::Pin, true);
     }
     I2CSensor() = delete;
     virtual void setup() {
-        set_can_source(src::POT, true);
+        set_can_source(src::Pot, true);
         _detected = _i2c->detected_by_addr(addr);
         if (!_detected || !_responding) _enabled = false;
         print_on_boot(_detected, _responding);
@@ -551,9 +551,9 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     Timer airveloTimer{85000};
   public:
     float read_sensor() {
-        if (!_i2c->detected(i2c_airvelo)) return NAN;
+        if (!_i2c->detected(I2CAirVelo)) return NAN;
         // if (force) goodreading = _sensor.readMilesPerHour();
-        else if (!_i2c->not_my_turn(i2c_airvelo)) {
+        else if (!_i2c->not_my_turn(I2CAirVelo)) {
             if (airveloTimer.expireset()) goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
         }
         // ezread.squintf("a:%.3lf\n", goodreading);
@@ -570,7 +570,7 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     AirVeloSensor() = delete;
 
     void set_val_common() {
-        if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
+        if (_i2c->i2cbaton == I2CAirVelo) _i2c->pass_i2c_baton();
     }
     void setup() {  // ezread.squintf("%s..", _long_name.c_str());
         set_conversions(1.0, 0.0);
@@ -592,10 +592,10 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     int mapread_timeout = 100000, mapretry_timeout = 10000;
   public:
     float read_sensor() {
-        // ezread.squintf("det m:%d\n", _i2c->detected(i2c_map));
-        if (!_i2c->detected(i2c_map)) return NAN;
+        // ezread.squintf("det m:%d\n", _i2c->detected(I2CMAP));
+        if (!_i2c->detected(I2CMAP)) return NAN;
         // if (force) goodreading = _sensor.readPressure(ATM, false);
-        else if (!_i2c->not_my_turn(i2c_map)) {
+        else if (!_i2c->not_my_turn(I2CMAP)) {
             if (mapreadTimer.expired()) {
                 float temp = _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
                 if (!std::isnan(temp)) {
@@ -618,7 +618,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     }
     MAPSensor() = delete;
     void set_val_common() {
-        if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
+        if (_i2c->i2cbaton == I2CMAP) _i2c->pass_i2c_baton();
     }
     void setup() {
         set_conversions(1.0, 0.0);
@@ -648,9 +648,9 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
     virtual void setup() {  // child classes call this before setting limits
         Sensor::setup();
         set_pin(_pin, INPUT);
-        set_can_source(src::PIN, true);
-        set_can_source(src::POT, true);
-        set_source(src::PIN);
+        set_can_source(src::Pin, true);
+        set_can_source(src::Pot, true);
+        set_source(src::Pin);
         set_abslim_native(0.0, (float)adcrange_adc, false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
     }
 };
@@ -671,7 +671,7 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
         set_oplim(10.7, 14.8);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
         set_si(11.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
         set_ema_alpha(0.005);
-        set_can_source(src::POT, true);
+        set_can_source(src::Pot, true);
         print_config();
     }
     void set_val_from_sim() { set_si(12.0); }  // what exactly is going on here? maybe an attempt to prevent always showing battery errors on dev boards?
@@ -762,7 +762,7 @@ class BrakePositionSensor : public AnalogSensor {
     void setup() {
         AnalogSensor::setup();
         // ezread.squintf("%s..\n", _long_name.c_str());
-        _dir = TransDir::REV;  // causes percent conversions to use inverted scale 
+        _dir = TransDir::Rev;  // causes percent conversions to use inverted scale 
         _convmethod = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
         #if BrakeThomson
             set_abslim(0.968, 8.875, false);  // tuned 240809 pre-bm24. measured from housing end to piston end. (pin hole is 0.343 back from the piston end)
@@ -908,10 +908,10 @@ class PulseSensor : public Sensor {
     virtual void setup() {
         Sensor::setup();
         set_pin(_pin, INPUT_PULLUP);
-        set_can_source(src::PIN, true);
-        set_source(src::PIN);
+        set_can_source(src::Pin, true);
+        set_source(src::Pin);
         attachInterrupt(digitalPinToInterrupt(_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
-        set_can_source(src::POT, true);
+        set_can_source(src::Pot, true);
         _stop_timer.set(_absmax_us);
     }
     // float last_read_time() { return _last_read_time_us; }
@@ -1043,8 +1043,8 @@ class RCChannel : public Sensor {  // class for each channel of the hotrc
     virtual void setup() {
         Sensor::setup();
         set_pin(_pin, INPUT);
-        set_can_source(src::PIN, true);
-        set_source(src::PIN);
+        set_can_source(src::Pin, true);
+        set_source(src::Pin);
     }
 };
 class RCToggle : public RCChannel {};
@@ -1118,7 +1118,7 @@ class ThrottleServo2 : public ServoMotor2 {
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
   public:
     ThrottleServo2(int pin, int freq) : ServoMotor2(pin, freq) {
-        _dir = TransDir::FWD;  // if your servo goes CCW with increasing pulsewidths, change to REV
+        _dir = TransDir::Fwd;  // if your servo goes CCW with increasing pulsewidths, change to Rev
         _long_name = "Throttle servo";
         _short_name = "throtl";
         _si_units = "deg";
@@ -1175,7 +1175,7 @@ class Simulator {
     Preferences* _myprefs;
   public:
     Simulator(Potentiometer& pot_arg, Preferences* myprefs) : _pot(pot_arg), _myprefs(myprefs) {
-        for (int sensor = (int)sens::none + 1; sensor < (int)sens::NUM_SENSORS; sensor++) set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
+        for (int sensor = (int)sens::none + 1; sensor < (int)sens::NumSensors; sensor++) set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
         set_potmap(); // set initial pot map
     }  // syspower, ignition removed, as they are not sensors or even inputs
 
@@ -1186,7 +1186,7 @@ class Simulator {
             if (can_sim && _potmap != deviceEntry.first) {  // if the device can be simulated and isn't being mapped from the potentiometer
                 Device *d = std::get<1>(deviceEntry.second);
                 if (d != nullptr) {  // if the device exists... (note: the nullptr checks here and below exist so that we can work with boolean components as well as Devices, for backwards compatability)
-                    if (enableSimulation) d->set_source(src::SIM);  // if we're enabling the simulation, set the device's source to the simulator
+                    if (enableSimulation) d->set_source(src::Sim);  // if we're enabling the simulation, set the device's source to the simulator
                     else {                                          // otherwise, set it to its default mode
                         src default_mode = std::get<2>(deviceEntry.second);
                         d->set_source(default_mode);
@@ -1208,11 +1208,11 @@ class Simulator {
         if (kv != _devices.end()) {
             can_sim = std::get<0>(kv->second); // if an entry for the component already existed, preserve its simulatability status
             if (can_sim) { // if simulability has already been enabled...
-                if (arg_sensor == _potmap) d.set_source(src::POT); // ...and the pot is supposed to map to this component, thenset the input source for the associated Device to read from the pot
-                else if (_enabled) d.set_source(src::SIM); // ...or otherwise if the pot isn't mapping to this component, but the simulator is running, then set the input source for the associated Device to take values from the simulator
+                if (arg_sensor == _potmap) d.set_source(src::Pot); // ...and the pot is supposed to map to this component, thenset the input source for the associated Device to read from the pot
+                else if (_enabled) d.set_source(src::Sim); // ...or otherwise if the pot isn't mapping to this component, but the simulator is running, then set the input source for the associated Device to take values from the simulator
             }
         }
-        if (d.can_source(src::POT)) d.attach_pot(_pot); // if this device can be mapped from the pot, connect it to pot input
+        if (d.can_source(src::Pot)) d.attach_pot(_pot); // if this device can be mapped from the pot, connect it to pot input
         _devices[arg_sensor] = simulable_t(can_sim, &d, default_mode); // store info for this component
     }
     
@@ -1222,7 +1222,7 @@ class Simulator {
         return false; // couldn't find component, so there's no way we can simulate it
     }
     // bool touchable(sens arg_sensor) {
-    //     return can_sim(arg_sensor) && (sources[static_cast<int>(arg_sensor)] == static_cast<int>(src::TOUCH));
+    //     return can_sim(arg_sensor) && (sources[static_cast<int>(arg_sensor)] == static_cast<int>(src::Touch));
     // }
   private:
     void set_can_sim_nosave(sens arg_sensor, bool can_sim) {  // set a device so simulator will include it when enabled. does not write to flash
@@ -1230,20 +1230,20 @@ class Simulator {
         if (kv != _devices.end()) { // if an entry for this component already exists, check if the new simulatability status is different from the old
             bool old_can_sim = std::get<0>(kv->second);
             if (can_sim != old_can_sim) { // if the simulation status has changed, we need to update the input source for the component
-                src default_mode = src::UNDEF;
+                src default_mode = src::Undef;
                 Device *d = std::get<1>(kv->second);
                 if (d != nullptr) { // if there is no associated Device with this component then input handling is done in the main code
                     default_mode = std::get<2>(kv->second); // preserve the stored default controller mode
                     if (can_sim) { // if we just enabled simulatability...
-                        if (arg_sensor == _potmap) d->set_source(src::POT); // if the pot is supposed to map to this component, then set the input source for the associated Device to read from the pot
-                        else if (_enabled) d->set_source(src::SIM); // otherwise if the simulator is running, then set the input source for the associated Device to read from the simulator
+                        if (arg_sensor == _potmap) d->set_source(src::Pot); // if the pot is supposed to map to this component, then set the input source for the associated Device to read from the pot
+                        else if (_enabled) d->set_source(src::Sim); // otherwise if the simulator is running, then set the input source for the associated Device to read from the simulator
                     }
                     else d->set_source(default_mode); // we disabled simulation for this component, set it back to its default input source
                 }
                 kv->second = simulable_t(can_sim, d, default_mode); // update the entry with the new simulatability status
             }
         }
-        else _devices[arg_sensor] = simulable_t(can_sim, nullptr, src::UNDEF); // add a new entry with the simulatability status for this component
+        else _devices[arg_sensor] = simulable_t(can_sim, nullptr, src::Undef); // add a new entry with the simulatability status for this component
     }
   public:
     void set_can_sim(sens arg_sensor, bool can_sim) {  // this wrapper function sets a device as able to be simulated, then store to flash
@@ -1253,12 +1253,12 @@ class Simulator {
     void set_can_sim(sens arg_sensor, int can_sim) { set_can_sim(arg_sensor, (can_sim > 0)); } // allows interpreting -1 as 0, convenient for our tuner etc.
     void save_cansim() {  // compress can_sim status of all devices into a 32 bit int, and save it to flash
         uint32_t simword = 0;
-        for (int s=1; s<(int)sens::NUM_SENSORS; s++) simword = simword | ((uint32_t)can_sim((sens)s) << s);
+        for (int s=1; s<(int)sens::NumSensors; s++) simword = simword | ((uint32_t)can_sim((sens)s) << s);
         _myprefs->putUInt("cansim", simword);
     }
     void recall_cansim() {  // pull 32 bit int containing can_sim status of all devices from previous flash save, and set all devices accordingly
         uint32_t simword = _myprefs->getUInt("cansim", 0);
-        for (int s=1; s<(int)sens::NUM_SENSORS; s++) set_can_sim_nosave((sens)s, (bool)((simword >> s) & 1));
+        for (int s=1; s<(int)sens::NumSensors; s++) set_can_sim_nosave((sens)s, (bool)((simword >> s) & 1));
     }
     // set the component to be overridden by the pot (the pot can only override one component at a time)
     void set_potmap(sens arg_sensor) {
@@ -1268,7 +1268,7 @@ class Simulator {
                 Device *d = std::get<1>(kv->second);
                 if (d != nullptr) { // if we were mapping to a component with an associated Device...
                     bool _can_sim = std::get<0>(kv->second);
-                    if (_enabled && _can_sim) d->set_source(src::SIM); // ...and the simulator is on, and we're able to be simulated, then set the input source to the simulator
+                    if (_enabled && _can_sim) d->set_source(src::Sim); // ...and the simulator is on, and we're able to be simulated, then set the input source to the simulator
                     else { // (otherwise either the simulator is off or we aren't allowing simulation for this component)
                         src default_mode = std::get<2>(kv->second);
                         d->set_source(default_mode); // then set the input source for the component to its default
@@ -1279,9 +1279,9 @@ class Simulator {
             if (kv != _devices.end()) {
                 Device *d = std::get<1>(kv->second);
                 if (d != nullptr ) { // if  we're mapping to a component with an associated device, we need to change the input source to the pot
-                    if (d->can_source(src::POT)) { // ...and we're allowed to map to this component...
+                    if (d->can_source(src::Pot)) { // ...and we're allowed to map to this component...
                         bool _can_sim = std::get<0>(kv->second);
-                        if (_can_sim) d->set_source(src::POT); // if we allow simulation for this componenent, then set its input source to the pot
+                        if (_can_sim) d->set_source(src::Pot); // if we allow simulation for this componenent, then set its input source to the pot
                     }
                     else ezread.squintf("invalid pot map: %d\n", arg_sensor);
                 }
@@ -1446,7 +1446,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             sw[chan] = (us[chan][Raw] <= us[chan][Cent]); // Ch3 switch true if short pulse, otherwise false  us[Ch3][Cent]
             if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
                 _sw_event[chan] = true;          // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
-                kick_inactivity_timer(HURCTog);  // evidence of user activity
+                kick_inactivity_timer(HuRCTog);  // evidence of user activity
             }
             sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
         }
@@ -1467,7 +1467,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     //             else if (toggletimer[chan-2].expired()) { // if we do have a switch pending, and the validity timer expires ...
     //                 sw[chan] = current;                   // commit the new value
     //                 _sw_event[chan] = true;               // flag that a switch event occurred, detectable by external code
-    //                 kick_inactivity_timer(HURCTog);       // register that human activity occurred
+    //                 kick_inactivity_timer(HuRCTog);       // register that human activity occurred
     //                 sw_pending[chan-2] = false;           // reset pending state
     //             }
     //         }      // if new read value differs from previous reads before the timeout, reject the pending value as noise
@@ -1497,7 +1497,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]);
            
             if (_radiolost) pc[axis][Filt] = pc[axis][Cent];  // if radio lost set pc value to Center value (for sane controls), but not us value (for debugging/error detection)
-            else if (std::abs(pc[axis][Filt] - pc[axis][Cent]) > pc[axis][Margin]) kick_inactivity_timer((axis == Horz) ? HURCJoy : HURCTrig);  // register evidence of user activity        
+            else if (std::abs(pc[axis][Filt] - pc[axis][Cent]) > pc[axis][Margin]) kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig);  // register evidence of user activity        
         }  
         for (int axis = Horz; axis <= Vert; axis++) {
             pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);

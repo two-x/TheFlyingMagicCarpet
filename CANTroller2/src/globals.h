@@ -96,7 +96,7 @@ enum cruisepids { GasOpen=0, GasPID=1 };
 // search for all uses and understand them before changing anything
 enum hotrc_axis { Horz=0, Vert=1, Ch3=2, Ch4=3 };
 enum hotrc_val { OpMin=0, Cent=1, OpMax=2, Raw=3, Filt=4, DBBot=5, DBTop=6 };
-enum motor_val { Parked=1, Out=3, Govern=4 , AbsMin=5, AbsMax=6, Margin=7, NumMotorVals=8 }; // IDLE=8, NumMotorVals=9 };
+enum motor_val { Parked=1, Out=3, Govern=4 , AbsMin=5, AbsMax=6, Margin=7, NumMotorVals=8 }; // Idle=8, NumMotorVals=9 };
 enum stop_val { Stop=1 };
 enum temp_val { Alarm=3 };
 enum size_enums { NumAxes=2, NumChans=4, NumValues=8 };
@@ -252,12 +252,12 @@ inline long constrain(long amt, long low, long high) { return (amt < low) ? low 
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
     if (!iszero(in_max - in_min)) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
-    Serial.printf("err: map(%3.3f, %3.3f, %3.3f ...) called\n", x, in_min, in_max); // would prefer ezread if it were defined
+    Serial.printf("err: map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
 inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
-    Serial.printf("err: map(%d, %d, %d ...) called\n", x, in_min, in_max); // would prefer ezread if it were defined
+    Serial.printf("err: map(%d, %d, %d, %d, %d) called\n", x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
 
@@ -270,7 +270,7 @@ int read_pin(int pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1
 float convert_units(float from_units, float convert_factor, bool invert, float in_offset = 0.0, float out_offset = 0.0) {
     if (!invert) return out_offset + convert_factor * (from_units - in_offset);
     if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
-    Serial.printf("convert_units refused to divide by zero: %lf, %lf, %d, %lf, %lf", from_units, convert_factor, invert, in_offset, out_offset);
+    Serial.printf("err: convert_units(%3.3f, %3.3f, %d, %3.3f, %3.3f) called\n", from_units, convert_factor, invert, in_offset, out_offset); // would prefer ezread if it were defined
     return -1;
 }
 // Exponential Moving Average filter : smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
@@ -352,7 +352,7 @@ T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
     else if (std::is_same<T, uint32_t>::value) return (T)((out[0] << 16) | (out[1] << 8) | out[2]);
 }
 uint8_t rando_color() {
-    return ((uint8_t)random(0x7) << 5) | ((uint8_t)random(0x7) << 2) | (uint8_t)random(0x3); 
+    return ((uint8_t)random(0b111) << 5) | ((uint8_t)random(0b111) << 2) | (uint8_t)random(0b11); 
 }
 const uint8_t BLK  = 0x00;  // greyscale: full black (RGB elements off)
 const uint8_t DGRY = 0x49;  // pseudo-greyscale: very dark grey (blueish)
@@ -402,10 +402,10 @@ uint8_t colorcard[NumRunModes] = { MGT, BLK, RED, ORG, YEL, GRN, TEAL, WHT };
 
 // kick_inactivity_timer() function to call whenever human activity occurs, for accurate inactivity timeout feature
 //   integer argument encodes which source of human activity has kicked the timer. Here are the codes:
-enum human_activities { HUNone=-1, HUMomDown=0, HUMomUp=1, HUEncTurn=2, HUTouch=3, HURCTog=4, HURCJoy=5, HURCTrig=6, HUPot=7, HUTogSw=8, HUNumActivities=9 };
-std::string activitiescard[HUNumActivities] = { "buttdn", "buttup", "encodr", "touch", "rcbutt", "rcjoy", "rctrig", "pot", "toggle" };
+enum human_activities { HuNone=-1, HuMomDown=0, HuMomUp=1, HuEncTurn=2, HuTouch=3, HuRCTog=4, HuRCJoy=5, HuRCTrig=6, HuPot=7, HuTogSw=8, HuNumActivities=9 };
+std::string activitiescard[HuNumActivities] = { "buttdn", "buttup", "encodr", "touch", "rcbutt", "rcjoy", "rctrig", "pot", "toggle" };
 Timer user_inactivity_timer;  // how long of not touching it before it goes to low power mode
-int last_activity = HUNone;
+int last_activity = HuNone;
 void kick_inactivity_timer(int source=-1) {
     if (source < 0) return;
     user_inactivity_timer.reset();  // evidence of user activity

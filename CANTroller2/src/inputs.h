@@ -24,7 +24,7 @@ class MomentarySwitch {
 
         if (myread) {     // if encoder sw is being pressed (switch is active low)
             if (!_val) {  // if the press just occurred
-                if (activity_timer_keepalive) kick_inactivity_timer(HUMomDown);  // evidence of user activity
+                if (activity_timer_keepalive) kick_inactivity_timer(HuMomDown);  // evidence of user activity
                 _longpressTimer.reset();  // start a press timer
                 _timer_active = true;     // flag to indicate timing for a possible long press
             }
@@ -36,7 +36,7 @@ class MomentarySwitch {
         }
         else {  // if encoder sw is not being pressed
             if (_val) {
-                if (activity_timer_keepalive) kick_inactivity_timer(HUMomUp);  // evidence of user activity
+                if (activity_timer_keepalive) kick_inactivity_timer(HuMomUp);  // evidence of user activity
                 if(!_suppress_click) _sw_action = SwShort;  // if the switch was just released, a short press occurred, which must be handled
             }
             _timer_active = false;   // allows detection of next long press event
@@ -70,7 +70,7 @@ class MomentarySwitch {
 };
 class Encoder {
   private:
-    enum _inputs { ENC_A=0, ENC_B=1 };
+    enum _inputs { EncA=0, EncB=1 };
     Timer activitytimer{300000};
     // using panasonic-type encoder (16 detents/spin, 1 transition per detent)
     // 800us: soren's best, maybe glitched, 15000us: uncomfortably fast, 40000us: regular twist, 800000us: eeeextra slow
@@ -78,7 +78,7 @@ class Encoder {
     volatile int _spintime_isr_us = 100000;  // time elapsed between last two detents
     volatile int isr_time_now;
     volatile int isr_time_last;
-    volatile int _bounce_lock = ENC_B;           // which of the encoder A or B inputs is currently untrustworthy due to bouncing 
+    volatile int _bounce_lock = EncB;           // which of the encoder A or B inputs is currently untrustworthy due to bouncing 
     static const int _bounce_expire_us = 10000;  // need to let bounce lock expire to reliably catch turn events in either direction on direction reversals
     volatile int _delta = 0;                     // keeps track of un-handled rotary clicks of the encoder. positive for CW clicks, Negative for CCW. 
     int _a_pin, _b_pin, _sw_pin, _state = 0, _spintime_us = 1000000;  // how many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
@@ -96,7 +96,7 @@ class Encoder {
     void IRAM_ATTR _a_isr() {                         // A isr has been triggered by A signal rise or fall transition. A will now be bouncing for a while and can't be trusted
         isr_time_now = esp_timer_get_time();          // put some flavor in your flav
         int elapsed = isr_time_now - isr_time_last;   // note time elapsed since last valid event on A isr. might be invalid for use by outside code if this is a bounce   
-        if (_bounce_lock == Encoder::ENC_A) {         // if A isr is bounce locked, B isr hasn't yet triggered since our last trigger
+        if (_bounce_lock == Encoder::EncA) {         // if A isr is bounce locked, B isr hasn't yet triggered since our last trigger
             if (elapsed <= _bounce_expire_us) return; // if it's not yet been long enough since the initial transition we assume this is a bounce and just bail
             val_a_isr = digitalRead(_a_pin);          // otherwise since B isr hasn't triggered, we are reversing direction and must update our own value
         }
@@ -104,11 +104,11 @@ class Encoder {
         _spintime_isr_us = elapsed;                   // save elapsed time since last trigger, to calculate spin rate
         isr_time_last = isr_time_now;                 // reset spin rate timer for next time
         _delta += (val_a_isr == val_b_isr) ? -1 : 1;  // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
-        _bounce_lock = Encoder::ENC_A;                // bounce lock this isr to avoid retriggering, and unlock the B isr
+        _bounce_lock = Encoder::EncA;                // bounce lock this isr to avoid retriggering, and unlock the B isr
     }
     #else                                                    // eg soren's dev board encoder
     void IRAM_ATTR _a_isr() {                                // A isr has been triggered by A signal rise or fall transition. A will now bounce for a while and can't be trusted
-        if (_bounce_lock == Encoder::ENC_A) return;          // if A isr is bounce locked then bail
+        if (_bounce_lock == Encoder::EncA) return;          // if A isr is bounce locked then bail
         if (!val_a_isr) {                                    // if the A signal is now low (i.e. recent B isr read A pin as high)
             isr_time_now = esp_timer_get_time();             // put some flavor in your flav
             _spintime_isr_us = isr_time_now - isr_time_last; // save elapsed time since last trigger, to calculate spin rate
@@ -116,13 +116,13 @@ class Encoder {
             val_b_isr = !digitalRead(_b_pin);                // Get a clean reading of the B signal
             _delta += val_b_isr ? -1 : 1;                    // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
         }
-        _bounce_lock = Encoder::ENC_A;                       // bounce lock this isr to avoid retriggering, and unlock the B isr
+        _bounce_lock = Encoder::EncA;                       // bounce lock this isr to avoid retriggering, and unlock the B isr
     }
     #endif
     void IRAM_ATTR _b_isr() {                        // B isr has been triggered by B signal rise or fall transition. B will now bounce for a while and can't be trusted
-        if (_bounce_lock == Encoder::ENC_B) return;  // if B isr is bounce locked then bail
+        if (_bounce_lock == Encoder::EncB) return;  // if B isr is bounce locked then bail
         val_a_isr = !digitalRead(_a_pin);            // get a clean reading of A signal, forecasting it will invert
-        _bounce_lock = Encoder::ENC_B;               // bounce lock this isr to avoid retriggering, and unlock the A isr
+        _bounce_lock = Encoder::EncB;               // bounce lock this isr to avoid retriggering, and unlock the A isr
     }
     Timer twisttimer{500000};        // set to the max amount of time you can reliably expect to see w/o any detents turned in between rapid twists
     float _spinrate, _spinrate_max;  // , spinrate_accel_thresh;  // in Hz
@@ -197,14 +197,14 @@ class Encoder {
     int rotation(bool accel=true) {  // returns detents spun since last call, accelerated by spin rate or not
         int d = _delta;
         _delta = 0;  // our responsibility to reset this flag after queries
-        if (d) kick_inactivity_timer(HUEncTurn);  // register evidence of user activity
+        if (d) kick_inactivity_timer(HuEncTurn);  // register evidence of user activity
         if (accel) d *= _accel_factor;
         return d;
     }
     int rotdirection() {  // returns 0 if unspun, -1 if spun CCW, or 1 if spun CW
         int d = _delta;
         _delta = 0;       // our responsibility to reset this flag after queries
-        if (d) kick_inactivity_timer(HUEncTurn);  // register evidence of user activity
+        if (d) kick_inactivity_timer(HuEncTurn);  // register evidence of user activity
         return constrain(d, -1, 1);
     }
     // void rezero() { _delta = 0; }  // handling code needs to call to rezero after reading rotations
@@ -304,7 +304,7 @@ class Touchscreen {
         _i2c = i2c;
         disp_size[Horz] = disp_width_pix;
         disp_size[Vert] = disp_height_pix;
-        captouch = (i2c->detected(i2c_touch));
+        captouch = (i2c->detected(I2CTouch));
         Serial.printf("Touchscreen.. %s panel", (captouch) ? "detected captouch" : "using resistive");
         if (   (senseTimer.timeout() >= filterTimer.timeout()) || (filterTimer.timeout() >= twotapTimer.timeout())  // checks all the timeouts are in length order
             || (filterTimer.timeout() >= repeat_timeout)       || (filterTimer.timeout() >= accel_timeout)
@@ -365,7 +365,7 @@ class Touchscreen {
     // bool* doubletap_ptr() { return &ts_doubletapped; }  // for idiot light
     // bool* longpress_ptr() { return &ts_longpressed; }
     void update() {
-        if (captouch && _i2c->not_my_turn(i2c_touch)) return;             // if (captouch && _i2c->not_my_turn(i2c_touch)) return;
+        if (captouch && _i2c->not_my_turn(I2CTouch)) return;             // if (captouch && _i2c->not_my_turn(I2CTouch)) return;
         if (senseTimer.expireset()) {
             get_touch_debounced();
             if (nowtouch) process_touched();
@@ -382,7 +382,7 @@ class Touchscreen {
     }  // Serial.printf("%s", nowtouch ? "+" : "-");
   private:
     void process_touched() {  // executes on update whenever screen is being touched (nowtouch == true)
-        kick_inactivity_timer(HUTouch);  // register evidence of user activity to prevent going to sleep
+        kick_inactivity_timer(HuTouch);  // register evidence of user activity to prevent going to sleep
         for (int axis=Horz; axis<=Vert; axis++) {
             // if (captouch) tft_touch[axis] = raw[axis];  // disp_width - 1 - raw[Horz];
             tft_touch[axis] = map(raw[axis], corners[captouch][axis][tsmin], corners[captouch][axis][tsmax], 0, disp_size[axis]);

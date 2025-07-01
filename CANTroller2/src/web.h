@@ -246,7 +246,7 @@ class WebManager {
         if (!web_started) setup();
         wifi.enable(syspower);
         if (syspower) server.update();
-        // if (<activity in web page is detected>) kick_inactivity_timer(HUWeb);  // evidence of user activity
+        // if (<activity in web page is detected>) kick_inactivity_timer(HuWeb);  // evidence of user activity
     }
 };
 #endif  // end of if wifi/web is enabled

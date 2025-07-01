@@ -2,7 +2,7 @@
 #include <vector>
 #include <DallasTemperature.h>
 
-enum class loc { TempAmbient=0, TempEngine, TempWheelFL, TempWheelFR, TempWheelRL, TempWheelRR, TempBrake, NumTempLocations };  // , SOREN_DEV0, SOREN_DEV1, };
+enum class loc { TempAmbient=0, TempEngine, TempWheelFL, TempWheelFR, TempWheelRL, TempWheelRR, TempBrake, NumTempLocations };  // , SorenDev0, SorenDev1, };
 enum temp_categories { CatUnknown=0, CatAmbient=1, CatEngine=2, CatWheel=3, CatBrake=4, NumTempCategories=5 };  // 
 enum brakemotor_types { Nil=-1, Thomson=0, MotorFactoryStore=1, GoMotorWorld=2, NumBrakeMotorTypes=3 };
     
@@ -442,7 +442,7 @@ public:
     int errclass(int locat) { return errclass(static_cast<loc>(locat)); }
     float val(int locat) { return val(static_cast<loc>(locat)); }
     bool detected(int locat) { return detected(static_cast<loc>(locat)); }
-    src source() { return src::PIN; }
+    src source() { return src::Pin; }
     int brake_type() { return brakemotor_type_detected; }
 
     float opmin(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->opmin(); }

@@ -112,7 +112,7 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
 // RTOS task that updates map and airflow sensors, and mass airflow calculation
 void maf_task(void *parameter) {
     while (true) {
-        if (i2c.detected(i2c_map) && i2c.detected(i2c_airvelo)) {
+        if (i2c.detected(I2CMAP) && i2c.detected(I2CAirVelo)) {
             mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
             vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
             airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
@@ -143,7 +143,7 @@ class ToggleSwitch {
     }
     void update() {
         if ((attached_sensor == sens::none) || !sim.simulating(attached_sensor)) readswpin();
-        if (last != val) kick_inactivity_timer(HUTogSw);
+        if (last != val) kick_inactivity_timer(HuTogSw);
     }
 };
 // the basic mode switch puts either a pullup or pulldown onto the serial tx pin. so to read it we must turn off the serial console, read the pin, then turn the console back on
@@ -156,7 +156,7 @@ class BasicModeSwitch : public ToggleSwitch {
         val = digitalRead(pin);
         in_basicmode = val;
         // readswpin();
-        if (last != val) kick_inactivity_timer(HUTogSw);
+        if (last != val) kick_inactivity_timer(HuTogSw);
     }
     void reread() {
         if (sim.simulating(attached_sensor)) return;

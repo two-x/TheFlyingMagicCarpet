@@ -53,7 +53,7 @@ class DiagRuntime {
         return err_sens_card[NumTelemetryFull];        
     }
     // diag non-tunable values
-    // bool temp_err[NumTempCategories];  // [TempAmbient/TempEngine/WHEEL/TempBrake]
+    // bool temp_err[NumTempCategories];  // [CatAmbient/CatEngine/CatWheel/CatBrake]
     bool err_sens_alarm[NumErrTypes] = { false, false, false, };  //  [ErrLost/ErrRange/ErrWarn]
     int err_sens_fails[NumErrTypes] = { 0, 0, 0, };
     bool err_sens[NumErrTypes][NumTelemetryFull]; //  [ErrLost/ErrRange/ErrWarn] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]

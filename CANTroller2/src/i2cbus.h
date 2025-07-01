@@ -1,31 +1,31 @@
 #pragma once
 #include <Wire.h>   // for i2c bus support
-enum i2c_nodes : int { i2c_touch, i2c_lightbox, i2c_airvelo, i2c_map, num_i2c_slaves };  // i2c_touch, 
-// enum i2c_nodes { i2c_touch=0, i2c_lightbox=1, i2c_airvelo=2, i2c_map=3, num_i2c_slaves=4 };  // i2c_touch, 
+enum i2c_nodes : int { I2CTouch, I2CLightbox, I2CAirVelo, I2CMAP, NumI2CSlaves };  // I2CTouch, 
+// enum i2c_nodes { I2CTouch=0, I2CLightbox=1, I2CAirVelo=2, I2CMAP=3, NumI2CSlaves=4 };  // I2CTouch, 
 
 class I2C {
   private:
     bool disabled = false;
     int _sda_pin, _scl_pin, _devicecount = 0;
     uint8_t _detaddrs[10];  // addresses detected, unordered
-    uint8_t _devaddrs[num_i2c_slaves];  // addresses of known devices, ordered per enum
-    bool _detected[num_i2c_slaves];  // detection status of known devices, ordered per enum
+    uint8_t _devaddrs[NumI2CSlaves];  // addresses of known devices, ordered per enum
+    bool _detected[NumI2CSlaves];  // detection status of known devices, ordered per enum
     Timer scanTimer;
     void fill_det_array() {
-        for (int sl = 0; sl<num_i2c_slaves; sl++) {
+        for (int sl = 0; sl<NumI2CSlaves; sl++) {
             _detected[sl] = false;
             for (int i = 0; i<_devicecount; i++)
                 if (_detaddrs[i] == _devaddrs[sl]) _detected[sl] = true;
         }
     }
   public:
-    int i2cbaton = i2c_lightbox;             // A semaphore mechanism to prevent bus conflict on i2c bus
+    int i2cbaton = I2CLightbox;             // A semaphore mechanism to prevent bus conflict on i2c bus
     I2C(int sda_pin_arg, int scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
     int setup(uint8_t touch_addr, uint8_t lightbox_addr, uint8_t airvelo_addr, uint8_t map_addr) {
-        _devaddrs[i2c_touch] = touch_addr;
-        _devaddrs[i2c_lightbox] = lightbox_addr;
-        _devaddrs[i2c_airvelo] = airvelo_addr;
-        _devaddrs[i2c_map] = map_addr;
+        _devaddrs[I2CTouch] = touch_addr;
+        _devaddrs[I2CLightbox] = lightbox_addr;
+        _devaddrs[I2CAirVelo] = airvelo_addr;
+        _devaddrs[I2CMAP] = map_addr;
         Serial.printf("I2C bus"); delay(1);  // Attempt to force print to happen before init
         scanTimer.reset();
         if (disabled) return 0;
@@ -46,7 +46,7 @@ class I2C {
         if (_devicecount == 0) Serial.printf(" no devices found.");
         Serial.printf(" ..done\n");
         fill_det_array();
-        return detected(i2c_touch);
+        return detected(I2CTouch);
     }
     bool detected_by_addr(uint8_t addr) {  // argument is an i2c address
         for (int i=0; i < _devicecount; i++) if (_detaddrs[i] == addr) return true;
@@ -56,17 +56,17 @@ class I2C {
         return _detected[device];
     }
     void pass_i2c_baton() {
-        static int lastsens = i2c_map;
+        static int lastsens = I2CMAP;
         // Serial.printf("%d->", i2cbaton);
         if (!use_i2c_baton) return;
-        if (i2cbaton == i2c_airvelo || i2cbaton == i2c_map) {
-            if (captouch) i2cbaton = i2c_touch;
-            else i2cbaton = i2c_lightbox;
+        if (i2cbaton == I2CAirVelo || i2cbaton == I2CMAP) {
+            if (captouch) i2cbaton = I2CTouch;
+            else i2cbaton = I2CLightbox;
         } 
-        else if (i2cbaton == i2c_touch) i2cbaton = i2c_lightbox;
-        else if (i2cbaton == i2c_lightbox) {
-            if (lastsens == i2c_airvelo) i2cbaton = i2c_map;
-            else i2cbaton = i2c_airvelo;
+        else if (i2cbaton == I2CTouch) i2cbaton = I2CLightbox;
+        else if (i2cbaton == I2CLightbox) {
+            if (lastsens == I2CAirVelo) i2cbaton = I2CMAP;
+            else i2cbaton = I2CAirVelo;
             lastsens = i2cbaton;
         }
         // Serial.printf("\r-%d-", i2cbaton);
@@ -242,8 +242,8 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     uint8_t get_addr() { return addr; }
     void update(float speed) {
         bool sent = false;
-        if (i2c->not_my_turn(i2c_lightbox)) return;
-        // if (i2c->detected(i2c_lightbox) && send_timer.expireset()) {
+        if (i2c->not_my_turn(I2CLightbox)) return;
+        // if (i2c->detected(I2CLightbox) && send_timer.expireset()) {
         if (send_timer.expireset()) {  // enable for now to test
             sent = sendstatus();  // send status if it changed since last time
             sent |= sendrunmode(runmode);  // send runmode if it changed since last time
