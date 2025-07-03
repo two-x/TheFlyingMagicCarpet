@@ -729,7 +729,7 @@ class PressureSensor : public AnalogSensor {
         set_oplim(0.0, NAN);  // now set just the si oplim to exactly zero. This will cause native oplims to autocalc such that any small errors don't cause our si oplim to be nonzero
         // set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
         // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
-        set_ema_alpha(0.15);
+        set_ema_alpha(0.055);
         set_margin(2.5);       // max acceptible error when checking psi levels
         hold_initial = 135.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
         hold_increment = 3.0;  // incremental pressure added periodically when auto stopping (adc count 0-4095)
@@ -859,18 +859,13 @@ class PulseSensor : public Sensor {
             _pulse_count = 0;
         }
     }
-    float us_to_hz(float arg_us) {
-        if (iszero(arg_us) || std::isnan(arg_us)) return 0.0;  // zero is a special value meaning we timed out
-        return 1000000.0 / arg_us;
+    float us_to_hz(float arg) {
+        if (iszero(arg) || std::isnan(arg)) return 0.0;  // zero is a special value meaning we timed out
+        return 1000000.0 / arg;
         // ezread.squintf("Err: %s us_to_hz() reciprocal of zero\n", _short_name.c_str());
         // return absmax();
     }
-    float hz_to_us(float arg_hz) {
-        if (iszero(arg_hz) || std::isnan(arg_hz)) return 0.0;  // zero is a special value meaning we timed out
-        return 1000000.0 / arg_hz;
-        // ezread.squintf("Err: %s hz_to_us() reciprocal of zero\n", _short_name.c_str());
-        // return _absmax_us;
-    }
+    float hz_to_us(float arg) { return us_to_hz(arg); }  // funny that the same math converts in either direction
   public:
     std::string _uber_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
 
@@ -1373,12 +1368,11 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     float margin_us = 13;    // all [Margin] values above are derived from this by calling derive()
     float failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     float failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
-  private:
+    private:
     Simulator* sim;
     Potentiometer* pot;
-    static const int failsafe_timeout = 15000;
-    Timer failsafe_timer;  // how long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
-    bool _radiolost = true;
+    bool _radiolost = true, _radiolost_untested = true;  // has any radiolost condition been detected since boot?  allows us to verify radiolost works before driving 
+;
     bool sw[NumChans] = { 1, 1, 0, 0 };  // index[2]=Ch3, index[3]=Ch4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
     bool _sw_event[NumChans];  // first 2 indices are unused.  what a tragic waste
     RMTInput rmt[NumChans] = {
@@ -1392,7 +1386,6 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     void setup() {
         ezread.squintf("hotrc init.. Starting rmt..\n");
         for (int axis=Horz; axis<=Ch4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
-        failsafe_timer.set(failsafe_timeout); 
     }
     void derive() {
         float m_factor;
@@ -1419,6 +1412,8 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     }
     bool radiolost() { return _radiolost; }
     bool* radiolost_ptr() { return &_radiolost; }
+    bool radiolost_untested() { return _radiolost_untested; }
+    bool* radiolost_untested_ptr() { return &_radiolost_untested; }
     bool sw_event(int ch) {  // returns if there's an event on the given channel then resets that channel
         bool retval = _sw_event[ch];
         _sw_event[ch] = false;
@@ -1503,18 +1498,28 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
         }
     }
-    bool radiolost_update() {
-        static bool radiolost_last = _radiolost;
-        if (us[Vert][Raw] > failsafe_us + failsafe_margin_us) {
-            failsafe_timer.reset();
-            _radiolost = false;
+    bool radiolost_update() {  // note: member variables _radiolost and _radiolost_untested must be initialized to true on boot
+        static Timer failsafe_timer{15000};  // values must remain steady for this long after changing before being valid (to reject spurious readings)
+        static bool nowlost_last = _radiolost;
+        bool nowlost = (us[Vert][Raw] <= failsafe_us + failsafe_margin_us);  // is the newest reading in the failsafe range?
+        if (nowlost != nowlost_last) failsafe_timer.reset();   // start timer if change in state detected
+        if (failsafe_timer.expired()) {  // if the current reading has remained stable throughout timer duration
+            _radiolost = nowlost;        // make the current reading official
+            if (_radiolost) _radiolost_untested = false;  // on first valid detection of radiolost, flag radiolost detection is known to work
         }
-        else if (failsafe_timer.expired()) {
-            _radiolost = true;
-        }
-        radiolost_last = _radiolost;
-        return _radiolost;
+        nowlost_last = nowlost;  // remember current reading for comparison on next loop
+        return _radiolost;       // return the official status
     }
+    // if (!nowlost) {  // if pwm pulsewidth is in correct operational range
+    //     failsafe_timer.reset();
+    //     _radiolost = false;
+    // }
+    // else if (failsafe_timer.expired()) {  // if pwm pulsewidth is at failsafe value
+    //     _radiolost = true;
+    // }
+    // now_lost = nowlost_last;
+    // return _radiolost;
+
     // spike_filter() : i wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals
     // coming from the hotrc. often the incoming values change suddenly then, usually, quickly jump back by the same
     // amount. this will erase any spikes that recover fast enough and otherwise change any cliffs detected into gentle

@@ -445,8 +445,9 @@ class Display {
     void draw_ascii(int lineno, std::string name) {
         drawval_core(lineno, name, 1, NAN, NAN, NAN, CYN);
     }
-    void draw_truth(int lineno, bool truthy, int styl=2) {  // 0:on/off, 1:yes/no, 2:true/false, 3: ena/dis.
-        drawval_core(lineno, (truthy) ? ((styl==0) ? "on" : ((styl==1) ? "yes" : ((styl==2) ? "true" : "enable"))) : ((styl==0) ? "off" : ((styl==1) ? "no" : ((styl==2) ? "false" : "disabl"))), 1, NAN, NAN, NAN, (truthy) ? LPUR : ORCD);
+    void draw_truth(int lineno, bool truthy, int styl=2) {  // styl lets you pick your favorite pair of words from the array below
+        static std::string words[4][2] = { {"off","on"}, {"no","yes"}, {"false","true"}, {"disabl","enable"} };  // selectable verbiage styles 0, 1, 2, 3
+        drawval_core(lineno, words[styl][truthy], 1, NAN, NAN, NAN, (truthy) ? LPUR : ORCD);
     }    
     std::string num2string(int value, int maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
         value = abs(value);  // This function disregards sign
@@ -457,11 +458,12 @@ class Display {
         std::string result(buffer);  // copy buffer to result
         return result.substr(0, result.find('e') + 1) + std::to_string(place);
     }
-    std::string num2string(float value, int maxlength, int sig_places=unlikely_int, bool chop_zeroes=true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
-        if (sig_places == unlikely_int) sig_places = disp_default_float_sig_dig;
+    std::string num2string(float value, int maxlength, int sig_places=disp_default_float_sig_dig, bool chop_zeroes=true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
+        // if (sig_places == unlikely_int) sig_places = disp_default_float_sig_dig;
         value = abs(value);  // This function disregards sign
+        maxlength--;  // otherwise all my logic below is off by one
         int place = most_significant_place(value);  // Learn decimal place of the most significant digit in value
-        if (place >= sig_places && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 123456, 12345, 1234)
+        if (place >= sig_places && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 12345, 1234)
             std::string result(std::to_string((int)value));
             return result;
         }
@@ -474,7 +476,7 @@ class Display {
             if (result.back() == '.') result.pop_back();
             return result;
         }
-        if (place < 0 && sig_places - place <= maxlength) {  // Then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123, .00123)
+        if (place < 0 && sig_places - place <= maxlength) {  // Then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123)
             std::string result (std::to_string(value));  // sd=3,  0.1234  d=1 l=6    0.00123
             size_t decimalPos = result.find('.');  // decimalPos will always be 1 (?)
             if (decimalPos != std::string::npos) result = result.substr(decimalPos, std::min(sig_places-place, maxlength));  // Remove any digits to the left of the decimal point
@@ -832,7 +834,7 @@ class Display {
             draw_temp(loc::TempWheelRR, 14);
             draw_temp(loc::TempBrake, 15);
             for (int line=16; line<=20; line++) draw_eraseval(line);
-            drawval(21, tunetest, -100.0, 100.0, NAN, 3);
+            drawval(21, tunetest);  // drawval(21, tunetest, -100.0, 100.0, NAN, 3);
             drawval(22, wheeldifferr);
             draw_truth(23, dont_take_temperatures, 2);
         }
@@ -1145,7 +1147,7 @@ class Tuner {
             else if (sel == 14) gas.set_cruise_tunings(NAN, NAN, tune(gas.cruisepid.kd(), id, 0.0f, NAN));
         }
         else if (datapage == PgTemp) {
-            if (sel == 12) tune(&tunetest, id, -100.0, 100.0);
+            if (sel == 12) tune(&tunetest, id);
             else if (sel == 13) tune(&wheeldifferr, id);
             else if (sel == 14) dont_take_temperatures = tune(id);
         }

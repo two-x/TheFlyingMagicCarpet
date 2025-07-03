@@ -523,7 +523,7 @@ class ThrottleControl : public ServoMotor {
     }
     void set_output() {
         float new_out, out_lowlim = _idle_pc;
-        if (motormode == Halt) return;
+        if (motormode == Halt) return;  // a servo by its nature will hold its current angle whenever its pwm input pulsewidth isn't changing
         else if (motormode == Calibrate) {  // allows adjustment of gas using potmap, with its operational limits temporarily disabled (to facilitate calibrating those limits)
             cal_gasmode = true;  // flag that we have officially entered cal mode, as the potmapped gas was within the incumbent operational limits when cal mode started
             new_out = map(pot->val(), pot->opmin(), pot->opmax(), si[AbsMin], si[AbsMax]);  // translate pot value to a gas value

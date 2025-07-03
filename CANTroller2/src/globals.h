@@ -164,6 +164,7 @@ bool throttle_linearize_cruise = false;  // should trigger values be linearized 
 bool encoder_reverse = false;         // should clockwise encoder twists indicate decreases instead of an increases?
 bool throttle_pid_default = false;    // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool cruise_pid_default = true;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
+bool require_hotrc_powercycle = true; // refuse to enter drive modes until the code has verified functionality of radiolost detection
 int drive_mode = Cruise;              // from hold mode, enter cruise or fly mode by default?
 
 // global tunable variables

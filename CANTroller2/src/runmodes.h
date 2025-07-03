@@ -147,7 +147,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         if (hotrc.sw_event(Ch4)) starter.request(ReqOff);
         if (hotrc.joydir(Vert) != JoyUp) joy_centered = true;  // mark joystick at or below center, now pushing up will go to fly mode
-        else if (joy_centered && !starter.motor && (sim.simulating(sens::joy) || !hotrc.radiolost())) runmode = drive_mode;  // Enter Fly or Cruise Mode upon joystick movement from center to above center  // Possibly add "&& stopped()" to above check?
+        else if (joy_centered && !starter.motor && (sim.simulating(sens::joy) || (!hotrc.radiolost_untested() && !hotrc.radiolost()))) runmode = drive_mode;  // Enter Fly or Cruise Mode upon joystick movement from center to above center  // Possibly add "&& stopped()" to above check?
     }
     void run_flyMode() {
         if (we_just_switched_modes) {

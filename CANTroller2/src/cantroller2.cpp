@@ -64,5 +64,4 @@ void loop() {                  // arduino-style loop() is like main() but with a
     neo.update();              // update/send neopixel colors 
     lightbox.update(speedo.val());  // communicate any relevant data to the lighting controller
     looptimer.update();             // looptimer.mark("F");
-    vTaskDelay(pdMS_TO_TICKS(1));   // momentarily pause continuous execution for multitasking purposes. delays the loop but in a good way
-}
+ }  // vTaskDelay(pdMS_TO_TICKS(1));   // pause continuous execution for 1ms to allow other tasks some cpu time
