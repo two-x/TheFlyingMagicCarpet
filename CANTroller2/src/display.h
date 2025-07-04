@@ -5,7 +5,7 @@
 #define disp_fixed_lines 8  // Lines of static variables/values always displayed
 #define disp_line_height_pix 10  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
 #define disp_bargraph_width 38
-#define disp_maxlength 5  // How many characters is max data value
+#define disp_maxlength 6  // How many characters is max data value.  Allowing 6 characters which overwrites the unit string, b/c this happens rarely. but should fix this to be consistent
 #define disp_datapage_names_x 12
 #define disp_datapage_values_x 59
 #define disp_datapage_units_x 96  // 103        

@@ -393,11 +393,14 @@ class IdiotLights {
     static constexpr int row_count = 12;
     static constexpr int row_height = 11;
     static constexpr int iconcount = 36;  // number of boolean values included on the screen panel (not the neopixels) 
-    bool* vals[iconcount] = {  // 6 per line
-        &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, hotrc.radiolost_ptr(), // &diag.err_sens[ErrRange][_TempWheel]
-        &panicstop, &shutting_down, &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting,
+    bool* vals[iconcount] = {  // 6 bool pointers per code line
+        // row 1 onscreen.  note the 1st 7 of these are also copied to the last 7 neopixel idiot lights
+        &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, &panicstop, // &diag.err_sens[ErrRange][_TempWheel]
+        hotrc.radiolost_ptr(), hotrc.radiolost_untested_ptr(), &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting,   // &shutting_down, 
+        // row 2 onscreen
         &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(), // tach.pin_inactive_ptr(), speedo.pin_inactive_ptr(),
         &nowtouch, &ts_tapped, &ts_doubletapped, encoder.activity_ptr(), &running_on_devboard, &not_syspower,  //  touch.tap_ptr(), touch.doubletap_ptr(), bootbutton.ptr(), sim.enabled_ptr(), &encoder.enc_a, 
+        // row 3 onscreen
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
         &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],  // &sensidiots[_MuleBatt] <-- is the same value as &nowtouch (wtf!?) so now using &diag.battrangeerr as workaround due to 
     };  // , &encoder.enc_b, &starter.req_active, &powering_up
@@ -408,9 +411,9 @@ class IdiotLights {
         { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x10, 0x10, 0x77, 0x65, 0x07, },  // "En" w/ degree symbol
         { 0x7f, 0x49, 0x49, 0x36, 0x36, 0x00, 0x78, 0x10, 0x37, 0x25, 0x07, },  // "Br" w/ degree symbol
         { 0x7f, 0x30, 0x18, 0x30, 0x7f, 0x00, 0x7e, 0x10, 0x77, 0x65, 0x07, },  // "Wh" w/ degree symbol
-        { 0x7a, 0x7f, 0x4f, 0x17, 0x06, 0x00, 0x22, 0x1c, 0x00, 0x41, 0x3e, },  // hotrc w/ radio waves
         { 0x7f, 0x7f, 0x09, 0x09, 0x77, 0x16, 0x70, 0x60, 0x00, 0x6f, 0x6f, },  // "Pn!"
-        { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // "SHD..."
+        { 0x7a, 0x7f, 0x4f, 0x17, 0x06, 0x00, 0x22, 0x1c, 0x00, 0x41, 0x3e, },  // hotrc w/ radio waves
+        { 0x7a, 0x7f, 0x4f, 0x17, 0x06, 0x00, 0x06, 0x01, 0x59, 0x45, 0x02, },  // hotrc w/ "?"
         { 0x3e, 0x63, 0x41, 0x7d, 0x7d, 0x55, 0x55, 0x5d, 0x49, 0x63, 0x3e, },  // circle-"P"
         { 0x3e, 0x49, 0x1c, 0x00, 0x6e, 0x6b, 0x3b, 0x00, 0x1c, 0x49, 0x3e, },  // brake assembly w/ "S"
         { 0x3e, 0x49, 0x1c, 0x00, 0x7f, 0x18, 0x7f, 0x00, 0x1c, 0x49, 0x3e, },  // brake assembly w/ "H"
@@ -440,6 +443,7 @@ class IdiotLights {
         { 0x7f, 0x6b, 0x6b, 0x00, 0x03, 0x7f, 0x03, 0x00, 0x3e, 0x63, 0x63, },  // "ETC"
         { 0x2a, 0x2a, 0x2a, 0x7f, 0x7d, 0x7f, 0x7f, 0x7f, 0x2a, 0x2a, 0x2a, },  // chip
     };
+     // { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // "SHD..."
      // { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },  // boot
      // { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },  // "SIM"
      // { 0x4c, 0x2a, 0x19, 0x00, 0x63, 0x63, 0x63, 0x63, 0x77, 0x3e, 0x1c, },  // [original] magnet w/ zap
