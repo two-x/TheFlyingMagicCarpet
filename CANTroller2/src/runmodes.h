@@ -148,7 +148,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (hotrc.sw_event(Ch4)) starter.request(ReqOff);
         if (hotrc.joydir(Vert) != JoyUp) joy_centered = true;  // mark joystick at or below center, now pushing up will go to fly mode
         else {  // else user is pushing up and trying to start driving
-            int allowed_to_fly = joy_centered && !starter.motor;
+            bool allowed_to_fly = joy_centered && !starter.motor;
             if (!sim.simulating(sens::joy)) {  // when using the hotrc remote there are a few checks we gotta make for safety
                 if (hotrc.radiolost_untested() && require_hotrc_powercycle) allowed_to_fly = false;
                 if (hotrc.radiolost()) allowed_to_fly = false;
