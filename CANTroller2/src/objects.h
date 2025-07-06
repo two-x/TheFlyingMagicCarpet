@@ -326,22 +326,29 @@ class Starter {
   private:
     int lastbrakemode, lastgasmode, pin;
     Timer starterTimer, twoclicktimer{2000000}, brakeTimer{4000000};  // if remotely-started starting event is left on for this long, end it automatically
+    int req_source_timeout = 5000000;  // request to turn on starter will fail if no activity occurred within this time on any valid ReqOn source
+    Timer simBtnTimer, hotrcBtnTimer;  // keep track of last activity on all possible sources of ReqOn, to serve as a safety net preventing phantom starts
     void check_for_external_tampering() {   // in case an external bug could be turning on the starter instead of us    
         bool pin_now = read_pin(pin);       // get current value of pin to do the following check
         if (motor != pin_now) {             // check if someone changed the motor value or started driving our pin
-            ezread.printf("err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
+            ezread.printf(RED, "err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
             turnoff(true);                  // stop the motor either way
-            ignition.panic_request(ReqOn); // request panic will kill the ignition just in case it did start up
+            ignition.panic_request(ReqOn);  // request panic will kill the ignition just in case it did start up
         }
     }
-    void turnon() {                                            // function to start the motor
+    void turnon() {                                              // function to start the motor
+        if ((hotrc.sim_button_time() < req_source_timeout) && (hotrc.ch4_button_time() < req_source_timeout)) {  // if we have not seen recent activity on any valid request source
+            ezread.printf(RED, "err: starter reqOn w/o human activity!\n");  // print an error
+            now_req = ReqNA;  // cancel request
+            return;  // gtfo
+        }
         ezread.printf("starter turnon\n");                     // maybe use ezread.squintf instead? (prints to both screen and console)
         lastgasmode = gas.motormode;                           // remember incumbent gas setting
         if (push_gas_when_starting && check_brake_before_starting) gas.setmode(Starting);  // give it some gas, unless there's risk of lurching forward
         starterTimer.set((int64_t)(run_timeout * 1000000.0));  // if left on the starter will turn off automatically after X seconds
         motor = HIGH;                                          // ensure starter variable always reflects the starter status regardless who is driving it
         write_pin(pin, motor);                                 // and start the motor
-        now_req = ReqNA;                                      // we have serviced starter-on request, so cancel it
+        now_req = ReqNA;  // we have serviced starter-on request, so cancel it
     }
     void turnoff(bool bypass_modechanges=false) {              // function to stop the motor
         ezread.printf("starter turnoff\n");
@@ -391,7 +398,7 @@ public:
         }
         if (brake_before_starting) {        // if we must apply brakes before starting
             if (brake.feedback == _None) {  // check if brake is running in openloop mode (we can't control an autohold)
-                ezread.printf("warn: starter can't use openloop brake\n");
+                ezread.printf(SALM, "warn: starter can't use openloop brake\n");
                 now_req = ReqNA;           // cancel turn on request
                 return;                     // and then ditch out
             }
@@ -410,7 +417,7 @@ public:
         if (brakeTimer.expired()) {                      // waited long enough for the brake to push
             if (!check_brake_before_starting) turnon();  // if no need to check whether brake succeeded, then start the car
             else {                                       // if we were supposed to apply the brakes and also check they got pushed
-                ezread.printf("warn: cant start, no brake\n");
+                ezread.printf(SALM, "warn: cant start, no brake\n");
                 now_req = ReqNA;                        // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
                 if (brake.motormode == AutoHold && runmode != Hold) brake.setmode(lastbrakemode); // restore prev brake mode, unless it's already been changed
             }
