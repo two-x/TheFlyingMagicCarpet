@@ -244,7 +244,7 @@ inline void cleanzero(float* num, float margin=NAN) noexcept {  // zeroes float 
     if (num && iszero(*num, margin)) *num = 0.0f;  // notes: 1) lets iszero() deal w/ nan margin, 2) checks for null pointer
 }
 // fast macros
-#define arraysize(x) ((int)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the length of string arrays 
+#define arraysize(x) ((int)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the size of arrays 
 #undef constrain
 inline float constrain(float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline int constrain(int amt, int low, int high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
@@ -374,7 +374,7 @@ const uint8_t ZBLU = 0x01;  // the darkest blue
 const uint8_t ZMGT = 0x21;  // the darkest magenta
 const uint8_t DRED = 0x80;  // dark red
 const uint8_t BORG = 0xe8;  // blood orange (very reddish orange)
-const uint8_t SALM = 0xe9;  // salmon (0xc9 is more muted)
+const uint8_t SALM = 0xc9;  // salmon (0xe9 is less muted)
 const uint8_t BRN  = 0x88;  // dark orange aka brown
 const uint8_t DBRN = 0x44;  // dark brown
 const uint8_t ORG  = 0xf0;  // orange
@@ -466,8 +466,8 @@ class EZReadConsole {
     int maxlength=40, last_drawn = bufferSize; // size_t bufferSize; // Size of the ring buffer
     std::string textlines[bufferSize];
     int newest_content = bufferSize, current_index = 0, offset = 0;
-    uint8_t linecolors[num_lines], color;
-    uint8_t defaultcolor = MYEL, sadcolor = SALM, happycolor = LGRN, highlightcolor = DCYN, usecolor;    // std::vector<std::string> textlines; // Ring buffer array
+    uint8_t linecolors[num_lines], color, usecolor;
+    uint8_t defaultcolor = LGRY, sadcolor = SALM, happycolor = LGRN, highlightcolor = DCYN;    // std::vector<std::string> textlines; // Ring buffer array
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
   private:
     std::string remove_nonprintable(const std::string& victim) {
@@ -506,7 +506,7 @@ class EZReadConsole {
         for (int i=0; i<bufferSize; i++) {
             // linecolors[i] = MGRY;
             this->printf("%s", blank.c_str());
-            linecolors[i] = MYEL;
+            linecolors[i] = defaultcolor;
         }
         this->printf(highlightcolor, "welcome to EZ-Read console\n");
         dirty = true;

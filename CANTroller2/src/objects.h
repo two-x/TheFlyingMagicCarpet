@@ -121,7 +121,6 @@ void maf_task(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(95)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-
 class ToggleSwitch {
   public:
     bool val = LOW;  // pin low means val high
@@ -391,7 +390,7 @@ public:
         }
         if (brake_before_starting) {        // if we must apply brakes before starting
             if (brake.feedback == _None) {  // check if brake is running in openloop mode (we can't control an autohold)
-                ezread.printf("warn: starter can't use openloop brake\n");
+                ezread.printf(SALM, "warn: starter can't use openloop brake\n");
                 now_req = ReqNA;           // cancel turn on request
                 return;                     // and then ditch out
             }
@@ -410,7 +409,7 @@ public:
         if (brakeTimer.expired()) {                      // waited long enough for the brake to push
             if (!check_brake_before_starting) turnon();  // if no need to check whether brake succeeded, then start the car
             else {                                       // if we were supposed to apply the brakes and also check they got pushed
-                ezread.printf("warn: cant start, no brake\n");
+                ezread.printf(SALM, "warn: cant start, no brake\n");
                 now_req = ReqNA;                        // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
                 if (brake.motormode == AutoHold && runmode != Hold) brake.setmode(lastbrakemode); // restore prev brake mode, unless it's already been changed
             }

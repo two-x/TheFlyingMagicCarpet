@@ -419,7 +419,6 @@ class Transducer : public Device {
     float* margin_ptr() { return &_margin; }
     float* zeropoint_ptr() { return &_zeropoint; }
 };
-
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
 // 
 // Sensor class notes:  Some definitions (240522 soren)
@@ -746,8 +745,7 @@ class PressureSensor : public AnalogSensor {
     bool parked() { return (std::abs(val() - _opmin) <= _margin); }  // is tha brake motor parked?
     float parkpos() { return _opmin; }
 };
-// BrakePositionSensor represents a linear position sensor
-// for measuring brake position (TODO which position? pad? pedal?)
+// BrakePositionSensor represents a linear position sensor for measuring brake pedal position
 // extends AnalogSensor for handling analog pin reading and conversion.
 class BrakePositionSensor : public AnalogSensor {
   public:
@@ -879,15 +877,6 @@ class PulseSensor : public Sensor {
         Transducer::print_config(header, ranges);
         if (ranges) ezread.squintf("  pulse = %.0lf %s, abs: %.0lf-%.0lf %s\n", _us, _uber_native_units.c_str(), _absmin_us, _absmax_us, _uber_native_units.c_str());
     }
-    // void calc_mfactor() {  // child classes need to overload this with correct math
-    //     _mfactor = 1.0 * _freqfactor * _calfactor
-    //     set_conversions(_mfactor)  // unfinished.  second guessing this approach
-    // };
-    // void set_calfactor(float newval) {
-    //     if (!iszero(newval) && newval > 0.0) _calfactor = newval;
-
-    // }
-
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // overload the normal function so we can also include us calculations 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
@@ -1345,21 +1334,21 @@ class RMTInput {  // note: for some reason if we ever stop reading our rmt objec
 };
 class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
-    float ema_alpha = 0.065;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
-    float pc[NumAxes][NumValues];           // values range from -100% to 100% are all derived or auto-assigned
-    float us[NumChans][NumValues] = {       // these inherently integral values are kept as floats for more abstractified unit management
+    float ema_alpha = 0.065;           // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+    float pc[NumAxes][NumValues];      // values range from -100% to 100% are all derived or auto-assigned
+    float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
+        // vals for hotrc v2 (with gloss black "HotRC" sticker/receiver)
+        {  973, 1477, 1975, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        { 1081, 1577, 2085, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2,  // [Vert] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        { 1202, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        { 1304, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
         // vals for hotrc v1 (with matte black "HotRC" sticker/receiver)
         // {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
         // { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [Vert] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
         // { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
         // { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
-        // vals for hotrc v2 (with gloss black "HotRC" sticker/receiver)
         // note: opmin/opmax range should be set to be just smaller than the actual measured limits. this way it will reach all the way to 100%
-        //       margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
-        {  973, 1477, 1975, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
-        { 1081, 1577, 2085, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2,  // [Vert] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
-        { 1202, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
-        { 1304, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        //   margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
     float spike_us[NumAxes] = { 1500.0, 1500.0 };  // [Horz/Vert]  // added
     float ema_us[NumAxes] = { 1500.0, 1500.0 };    // [Horz/Vert]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
     float absmin_us = 880;
@@ -1372,7 +1361,6 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     Simulator* sim;
     Potentiometer* pot;
     bool _radiolost = true, _radiolost_untested = true;  // has any radiolost condition been detected since boot?  allows us to verify radiolost works before driving 
-;
     bool sw[NumChans] = { 1, 1, 0, 0 };  // index[2]=Ch3, index[3]=Ch4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
     bool _sw_event[NumChans];  // first 2 indices are unused.  what a tragic waste
     RMTInput rmt[NumChans] = {
@@ -1402,23 +1390,6 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             pc[axis][Margin] = margin_us * m_factor;
         }
     }
-    void update() {
-        radiolost_update();
-        toggles_update();
-        direction_update();
-    }
-    void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
-        for (int ch = Ch3; ch <= Ch4; ch++) _sw_event[ch] = false;
-    }
-    bool radiolost() { return _radiolost; }
-    bool* radiolost_ptr() { return &_radiolost; }
-    bool radiolost_untested() { return _radiolost_untested; }
-    bool* radiolost_untested_ptr() { return &_radiolost_untested; }
-    bool sw_event(int ch) {  // returns if there's an event on the given channel then resets that channel
-        bool retval = _sw_event[ch];
-        _sw_event[ch] = false;
-        return retval;        
-    }
     void set(float* member, float val) {  // generic setter for any member floats. basically makes sure to rerun derive() after
         *member = val;
         derive();
@@ -1427,27 +1398,31 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         *member = (float)val;
         derive();
     }
-    int next_unfilt_rawval (int axis) { return raw_history[axis][index[axis]]; }  // helps to debug the filter from outside the class
+    void update() {
+        radiolost_update();
+        toggles_update();
+        direction_update();
+    }
+    bool radiolost() { return _radiolost; }
+    bool* radiolost_ptr() { return &_radiolost; }
+    bool radiolost_untested() { return _radiolost_untested; }
+    bool* radiolost_untested_ptr() { return &_radiolost_untested; }
     int joydir(int axis = Vert) {
         if (sim->simulating(sens::joy) && (std::abs(pc[axis][Filt]) < us_to_pc(axis, deadband_us))) return JoyCent;  // allows some needed slop around centerpoint when simulating, or you can never center it
         if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? JoyUp : (pc[axis][Filt] < pc[axis][Cent]) ? JoyDn : JoyCent;
         return (pc[axis][Filt] > pc[axis][Cent]) ? JoyRt : (pc[axis][Filt] < pc[axis][Cent]) ? JoyLt : JoyCent;
     }  // return (pc[axis][Filt] > pc[axis][Cent]) ? ((axis == Vert) ? JoyUp : JoyRt) : (pc[axis][Filt] < pc[axis][Cent]) ? ((axis == Vert) ? JoyDn : JoyLt) : JoyCent;
     void sim_button_press(int chan) { _sw_event[chan] = true; }
-  private:
-    void toggles_update() {
-        for (int chan = Ch3; chan <= Ch4; chan++) {
-            us[chan][Raw] = (float)(rmt[chan].readPulseWidth(true));
-            sw[chan] = (us[chan][Raw] <= us[chan][Cent]); // Ch3 switch true if short pulse, otherwise false  us[Ch3][Cent]
-            if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
-                _sw_event[chan] = true;          // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
-                kick_inactivity_timer(HuRCTog);  // evidence of user activity
-            }
-            sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
-        }
+    bool sw_event(int ch) {  // returns if there's an event on the given channel then resets that channel
+        bool retval = _sw_event[ch];
+        _sw_event[ch] = false;
+        return retval;        
     }
-    // new untested reimplementation of handler for the digital hotrc channel buttons, on the back deck for now
-    // void toggles_update() {
+    void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
+        for (int ch = Ch3; ch <= Ch4; ch++) _sw_event[ch] = false;
+    }
+  private:
+    // void toggles_update() {  // newer implementation of hotrc channel button handler which has spurious value protection
     //     static Timer toggletimer[2] = { 60000, 60000 };   // to ensure no spurious events, changes must persist this long to count (no human can click this fast)
     //     static bool sw_pending[2];                        // flags whether a new value is pending, waiting for validity timeout
     //     if (_radiolost) return;                           // no possibility of channel clicks if there's no radio
@@ -1469,6 +1444,17 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     //         else sw_pending[chan-2] = false;
     //     }
     // }
+    void toggles_update() {  // older, simpler implementation of hotrc channel button handler which has no spurious value protection
+        for (int chan = Ch3; chan <= Ch4; chan++) {
+            us[chan][Raw] = (float)(rmt[chan].readPulseWidth(true));
+            sw[chan] = (us[chan][Raw] <= us[chan][Cent]); // Ch3 switch true if short pulse, otherwise false  us[Ch3][Cent]
+            if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
+                _sw_event[chan] = true;          // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+                kick_inactivity_timer(HuRCTog);  // evidence of user activity
+            }
+            sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
+        }
+    }
     float us_to_pc(int axis, float _us) {
         if (_us >= us[axis][Cent]) return map(_us, us[axis][Cent], us[axis][OpMax], pc[axis][Cent], pc[axis][OpMax]);
         return map(_us, us[axis][Cent], us[axis][OpMin], pc[axis][Cent], pc[axis][OpMin]);    
@@ -1487,10 +1473,8 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             spike_us[axis] = spike_filter(axis, us[axis][Raw]);            
             ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha);
             us[axis][Filt] = remove_deadbands_us(axis, ema_us[axis]);
-
             pc[axis][Raw] = us_to_pc(axis, us[axis][Raw]);
             pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]);
-           
             if (_radiolost) pc[axis][Filt] = pc[axis][Cent];  // if radio lost set pc value to Center value (for sane controls), but not us value (for debugging/error detection)
             else if (std::abs(pc[axis][Filt] - pc[axis][Cent]) > pc[axis][Margin]) kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig);  // register evidence of user activity        
         }  
@@ -1499,7 +1483,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         }
     }
     bool radiolost_update() {  // note: member variables _radiolost and _radiolost_untested must be initialized to true on boot
-        static Timer failsafe_timer{15000};  // values must remain steady for this long after changing before being valid (to reject spurious readings)
+        static Timer failsafe_timer{15000};  // values must remain in range for this long after changing or after boot, before being valid (to reject spurious readings)
         static bool nowlost_last = _radiolost;
         bool nowlost = (us[Vert][Raw] <= failsafe_us + failsafe_margin_us);  // is the newest reading in the failsafe range?
         if (nowlost != nowlost_last) failsafe_timer.reset();   // start timer if change in state detected
@@ -1510,62 +1494,51 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         nowlost_last = nowlost;  // remember current reading for comparison on next loop
         return _radiolost;       // return the official status
     }
-    // if (!nowlost) {  // if pwm pulsewidth is in correct operational range
-    //     failsafe_timer.reset();
-    //     _radiolost = false;
-    // }
-    // else if (failsafe_timer.expired()) {  // if pwm pulsewidth is at failsafe value
-    //     _radiolost = true;
-    // }
-    // now_lost = nowlost_last;
-    // return _radiolost;
-
-    // spike_filter() : i wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals
-    // coming from the hotrc. often the incoming values change suddenly then, usually, quickly jump back by the same
-    // amount. this will erase any spikes that recover fast enough and otherwise change any cliffs detected into gentle
-    // slopes. The cost of this is our readings are delayed by the max spike duration we hope to be able to erase
-    bool spike_signbit;
-    int spike_length, this_delta, interpolated_slope, loopindex, previndex, spike_cliff[NumAxes];
-    int spike_threshold[NumAxes] = { 6, 6 };
-    int prespike_index[NumAxes] = { -1, -1 };
-    int index[NumAxes] = { 1, 1 };  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
-    static const int depth = 9;  // more depth will reject longer spikes at the expense of controller delay
-    int raw_history[NumAxes][depth], filt_history[NumAxes][depth];  // Values before and after filtering.
-    // spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
-    // interpolated from before and after the spike. also smoothes out abrupt value changes that don't recover later
+    // spike_filter() : I wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals
+    // coming from the hotrc. often the incoming values change suddenly then, usually, quickly jump back by the same amount. 
+    // This works by pushing new hotrc readings into a LIFO ring buffer, and replacing any well-defined spikes with values 
+    // interpolated from before and after the spike, thereby erasing any spikes that recover fast enough.
+    // Also if a detected cliff edge (potential spike) doesn't recover in time, it will smooth out the transition linearly.
+    // The cost of this is our readings are delayed by a number of readings (equal to the maximum erasable spike duration).
+    static const int lifodepth = 9;  // more depth will reject longer spikes at the expense of controller delay
+    int spike_length, interp_slope, loopindex, filthist[NumAxes][lifodepth], rawhist[NumAxes][lifodepth];
+    int prespike_index[NumAxes] = { -1, -1 }, lifoindex[NumAxes] = { 1, 1 };
     float spike_filter(int axis, float new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
-        previndex = (depth + index[axis] - 1) % depth;         // previndex is where the incoming new value will be stored
-        this_delta = new_val - filt_history[axis][previndex];  // value change since last reading
-        if (std::abs(this_delta) > spike_cliff[axis]) {  // if new value is a cliff edge (start or end of a spike)
-            if (prespike_index[axis] == -1) {            // if this cliff edge is the start of a new spike
-                prespike_index[axis] = previndex;        // save index of last good value just before the cliff
-                spike_signbit = signbit(this_delta);     // save the direction of the cliff
+        static bool spike_signbit;
+        static int this_delta, previndex, spike_cliff[NumAxes], spike_threshold[NumAxes] = { 6, 6 };
+        previndex = (lifodepth + lifoindex[axis] - 1) % lifodepth; // previndex is where the incoming new value will be stored
+        this_delta = new_val - filthist[axis][previndex];          // value change since last reading
+        if (std::abs(this_delta) > spike_cliff[axis]) {            // if new value is a cliff edge (start or end of a spike)
+            if (prespike_index[axis] == -1) {                      // if this cliff edge is the start of a new spike
+                prespike_index[axis] = previndex;                  // save index of last good value just before the cliff
+                spike_signbit = signbit(this_delta);               // save the direction of the cliff
             }
             else if (spike_signbit == signbit(this_delta)) {  // if this cliff edge deepens an in-progress spike (or more likely the change is valid)
-                inject_interpolations(axis, previndex, filt_history[axis][previndex]);  // smoothly grade the values from before the last cliff to previous value
-                prespike_index[axis] = previndex;  // consider this cliff edge the start of the spike instead
+                inject_interpolations(axis, previndex, filthist[axis][previndex]);  // smooth out the values between the last cliff & previous value
+                prespike_index[axis] = previndex;                                   // consider this cliff edge the start of the spike instead
             }
-            else {  // if this cliff edge is a recovery of an in-progress spike
-                inject_interpolations(axis, index[axis], new_val);  // fill in the spiked values with interpolated values
-                prespike_index[axis] = -1;  // cancel the current spike
+            else {                                                      // if this cliff edge is a recovery of an in-progress spike
+                inject_interpolations(axis, lifoindex[axis], new_val);  // fill in the spiked values with interpolated values
+                prespike_index[axis] = -1;                              // cancel the current spike
             }
         }
-        else if (prespike_index[axis] == index[axis]) {  // if a current spike lasted thru our whole buffer
-            inject_interpolations(axis, previndex, filt_history[axis][previndex]);  // smoothly grade the whole buffer
-            prespike_index[axis] = -1;  // cancel the current spike
+        else if (prespike_index[axis] == lifoindex[axis]) {                     // if a current spike lasted thru our whole buffer
+            inject_interpolations(axis, previndex, filthist[axis][previndex]);  // smoothly grade the whole buffer
+            prespike_index[axis] = -1;                                          // cancel the current spike
         }
-        float returnval = filt_history[axis][index[axis]];  // save the incumbent value at current index (oldest value) into buffer
-        filt_history[axis][index[axis]] = new_val;
-        raw_history[axis][index[axis]] = new_val;
-        ++(index[axis]) %= depth;  // update index for next time
-        return returnval;          // return the saved old value
+        float returnval = filthist[axis][lifoindex[axis]];  // save the incumbent value at current index (oldest value) into buffer
+        filthist[axis][lifoindex[axis]] = new_val;
+        rawhist[axis][lifoindex[axis]] = new_val;
+        ++(lifoindex[axis]) %= lifodepth;  // update index for next time
+        return returnval;                  // return the value coming out of the buffer
     }
-    void inject_interpolations(int axis, int endspike_index, float endspike_val) {  // replaces values between indexes with linear interpolated values
-        spike_length = ((depth + endspike_index - prespike_index[axis]) % depth) - 1;  // equal to the spiking values count plus one
+    void inject_interpolations(int axis, int endspike_index, float endspike_val) {  // replaces values between indexes w/ linear interpolated values
+        spike_length = ((lifodepth + endspike_index - prespike_index[axis]) % lifodepth) - 1;  // equal to the spiking values count plus one
         if (!spike_length) return;  // two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
-        interpolated_slope = (endspike_val - filt_history[axis][prespike_index[axis]]) / spike_length;
+        interp_slope = (endspike_val - filthist[axis][prespike_index[axis]]) / spike_length;
         loopindex = 0;
         while (++loopindex <= spike_length)
-            filt_history[axis][(prespike_index[axis] + loopindex) % depth] = filt_history[axis][prespike_index[axis]] + loopindex * interpolated_slope;
+            filthist[axis][(prespike_index[axis] + loopindex) % lifodepth] = filthist[axis][prespike_index[axis]] + loopindex * interp_slope;
     }
+    int next_unfilt_rawval (int axis) { return rawhist[axis][lifoindex[axis]]; }  // helps to debug the filter from outside the class
 };

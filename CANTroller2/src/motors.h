@@ -941,10 +941,10 @@ class BrakeControl : public JagMotor {
                 _mode = OpenLoop;      // can't use loops, drop to openloop instead
             }
             else if (_mode == AutoHold || (_mode == AutoStop && !panicstop)) {    // todo: rethink these scenarios 
-                ezread.squintf(ORG, "warn: autobrake unavailable in openloop\n");
+                ezread.squintf(SALM, "warn: autobrake unavailable in openloop\n");
                 return;  // keep current mode
             }
-            else if (_mode == AutoStop) ezread.squintf(ORG, "warn: performing blind panic stop maneuver\n");
+            else if (_mode == AutoStop) ezread.squintf(SALM, "warn: performing blind panic stop maneuver\n");
             else if (_mode == Release) {
                 _mode = Halt;
                 mode_forced = true;
