@@ -1073,7 +1073,8 @@ class Tuner {
             // with recent changes to tune() I had to move the setter function for governor value into the
             // gas update function, or edit acceleration wouldn't work
             // if (sel == 13) gas.set_governor_pc(tune(gas.governor, id, 0.0f, 100.0f));
-            if (sel == 13) tune(governor, id, 0.0f, 100.0f);
+            // if (sel == 13) tune(governor, id, 0.0f, 100.0f);
+            if (sel == 13) gas.set_governor_pc(tune(governor, id, 0.0f, 100.0f));
             else if (sel == 14) tune(&steer.steer_safe_pc, id, 0.0f, 100.0f);
         }
         else if (datapage == PgJoy) {

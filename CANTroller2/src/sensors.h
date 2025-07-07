@@ -1369,6 +1369,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[Ch3]
         RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[Ch4]
     };
+    Timer simBtnTimer, ch4BtnTimer;  // keep track of last activity on all possible sources of ReqOn, to serve as a safety net preventing phantom starts
   public:
     Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) { derive(); }
     void setup() {
@@ -1412,17 +1413,27 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? JoyUp : (pc[axis][Filt] < pc[axis][Cent]) ? JoyDn : JoyCent;
         return (pc[axis][Filt] > pc[axis][Cent]) ? JoyRt : (pc[axis][Filt] < pc[axis][Cent]) ? JoyLt : JoyCent;
     }  // return (pc[axis][Filt] > pc[axis][Cent]) ? ((axis == Vert) ? JoyUp : JoyRt) : (pc[axis][Filt] < pc[axis][Cent]) ? ((axis == Vert) ? JoyDn : JoyLt) : JoyCent;
-    void sim_button_press(int chan) { _sw_event[chan] = true; }
-    bool sw_event(int ch) {  // returns if there's an event on the given channel then resets that channel
-        bool retval = _sw_event[ch];
-        _sw_event[ch] = false;
-        return retval;        
+    void sim_button_press(int chan) {
+        _sw_event[chan] = true;
+        if (chan == Ch4) simBtnTimer.reset();  // so we can know time since last sim button press, to help prevent phantom starter events
     }
-    void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
-        for (int ch = Ch3; ch <= Ch4; ch++) _sw_event[ch] = false;
-    }
+    int sim_button_time() { return (int)simBtnTimer.elapsed(); }  // returns time since last simulated ch4 button press. to help prevent phantom starter turnon
+    int ch4_button_time() { return (int)ch4BtnTimer.elapsed(); }  // returns time since last ch4 button press. to help prevent phantom starter turnon
   private:
-    // void toggles_update() {  // newer implementation of hotrc channel button handler which has spurious value protection
+    void toggles_update() {
+        for (int chan = Ch3; chan <= Ch4; chan++) {
+            us[chan][Raw] = (float)(rmt[chan].readPulseWidth(true));
+            sw[chan] = (us[chan][Raw] <= us[chan][Cent]); // Ch3 switch true if short pulse, otherwise false  us[Ch3][Cent]
+            if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
+                _sw_event[chan] = true;          // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
+                kick_inactivity_timer(HuRCTog);  // evidence of user activity
+                if (chan == Ch4) ch4BtnTimer.reset();  // so we can know time since last ch4 button press, to help prevent phantom starter events
+            }
+            sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
+        }
+    }
+    // new untested reimplementation of handler for the digital hotrc channel buttons, on the back deck for now
+    // void toggles_update() {
     //     static Timer toggletimer[2] = { 60000, 60000 };   // to ensure no spurious events, changes must persist this long to count (no human can click this fast)
     //     static bool sw_pending[2];                        // flags whether a new value is pending, waiting for validity timeout
     //     if (_radiolost) return;                           // no possibility of channel clicks if there's no radio
@@ -1439,6 +1450,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     //                 _sw_event[chan] = true;               // flag that a switch event occurred, detectable by external code
     //                 kick_inactivity_timer(HuRCTog);       // register that human activity occurred
     //                 sw_pending[chan-2] = false;           // reset pending state
+    //                 if (chan == Ch4) starter.register_source_activity_hotrc();  // let starter object know there was a valid Ch4 event
     //             }
     //         }      // if new read value differs from previous reads before the timeout, reject the pending value as noise
     //         else sw_pending[chan-2] = false;
