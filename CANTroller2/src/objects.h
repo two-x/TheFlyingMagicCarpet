@@ -130,9 +130,8 @@ class ToggleSwitch {
     sens attached_sensor = sens::none;
     void readswpin() {
         last = val;
-        do {
-            val = digitalRead(pin);   // !value because electrical signal is active low
-        } while (val == digitalRead(pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+        do val = digitalRead(pin);   // !value because electrical signal is active low
+        while (val == digitalRead(pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
   public:
     ToggleSwitch(int _pin, sens _sens=sens::none) : pin(_pin), attached_sensor(_sens) {}
@@ -439,6 +438,7 @@ static RunModeManager run;
 class BootButton : public MomentarySwitch {
   protected:
     void actions();  // function prototyhpe. see full definition below
+    int dummyprintcount = 0;
   public:
     BootButton(int apin) : MomentarySwitch(apin, false) {}
     void update() {
@@ -452,6 +452,8 @@ static BootButton bootbutton(boot_sw_pin);
 #include "display.h"
 
 void BootButton::actions() {  // temporary (?) functionality added for development convenience
+    if (val()) ezread.printf("long ass print %d\n", ++dummyprintcount);
+    return;
     if (longpress()) autosaver_request = ReqTog;  // screen.auto_saver(!auto_saver_enabled);
     if (shortpress()) {
         if (runmode == LowPower) sleep_request = ReqOff;

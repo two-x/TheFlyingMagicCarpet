@@ -90,6 +90,7 @@ enum err_type { ErrLost=0, ErrRange=1, ErrWarn=2, NumErrTypes=3 };
 enum directional { DirNone=0, DirDown=1, DirUp=2, DirLeft=3, DirRight=4, NumDirs=5 };
 enum cycle_dirs { DirRev=-1, DirFwd=1 };
 enum cruisepids { GasOpen=0, GasPID=1 };
+enum rgb { Red=0, Grn=1, Blu=2, NumRGB=3 };
 //
 // this group is used in multiple places in different ways, and is thus high-risk.
 // for example, arrays exist with indexes drawn from different combinations of multiple ones of these enums
@@ -131,7 +132,7 @@ bool flip_the_screen = false;        // did you mount your screen upside-down?
 bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool use_i2c_baton = false;          // use soren's custom homemade semaphores to prevent i2c bus collisions?
-bool always_max_refresh = true;      // set to true to enforce a cap on screen frame draws (90 Hz I think it is), otherwise draw as fast as we can. fullscreen screensaver ignores this, always balls-out
+bool limit_framerate = true;         // set to true to enforce a cap on screen frame draws during operational modes, otherwise draw as fast as we can. fullscreen screensaver ignores this, always balls-out
 bool brake_before_starting = true;   // if true, the starter motor attempts to apply the brake pedal before turning on the starter motor
 bool check_brake_before_starting = true;  // if true, the starter motor won't turn on until or unless it senses the brake pressure is enough. otherwise then after a timeout it will start anyway
 bool push_gas_when_starting = true;  // will help start esp when engine is cold, in lieu of choke access, however if it lurches then disable. automatically disables if brake check is disabled
@@ -165,9 +166,11 @@ bool encoder_reverse = false;         // should clockwise encoder twists indicat
 bool throttle_pid_default = false;    // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool cruise_pid_default = true;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool require_hotrc_powercycle = true; // refuse to enter drive modes until the code has verified functionality of radiolost detection
+bool ezread_suppress_deluge = true;   // activates ezread feature to suppress data coming into the console too fast (to prevent overrun crashes)
 int drive_mode = Cruise;              // from hold mode, enter cruise or fly mode by default?
 
 // global tunable variables
+int operational_framerate_limit_fps = 120;  // max display frame rate to enforce while driving whenever limit_framerate == true
 float wheeldifferr = 35.0f;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel before idiot light
 constexpr float float_conversion_zero = 0.001f;
 constexpr int unlikely_int = -92935762; // random ass unlikely value for detecting unintended arguments
@@ -190,6 +193,7 @@ float governor = 95.0f;                 // software governor will only allow thi
 
 // non-tunable values. probably these belong with their related code, but are global to allow accessibility from everywhere
 int serial_monitor_baudrate = (int)MonitorBaudrate;
+volatile int refresh_limit_us = 1000000 / operational_framerate_limit_fps; // 60 Hz -> 16666 us, 90 Hz -> 11111 us, 120 Hz -> 8333 us
 std::string modecard[NumRunModes] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 float permanan = NAN;
 bool wheeltemperr;
@@ -327,34 +331,35 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
 //
 template <typename T>  // feed me hue/sat/bright values and get back an rgb color formatted as rgb332 (8b), rgb565 (16b), or rgb888 (32b)
 T hsv_to_rgb(uint16_t hue, uint8_t sat = 255, uint8_t val = 255) {
-    uint8_t rgb[3] = { 0, 0, 0 };  // [r,g,b];
+    uint8_t rgb[NumRGB] = { 0, 0, 0 };  // [Red,Grn,Blu];
     hue = (hue * 1530L + 32768) / 65536;
-    if (hue < 510) { // Red to Green-1
-        if (hue < 255) { rgb[0] = 255; rgb[1] = hue; }  //   Red to Yellow-1, g = 0 to 254
-        else { rgb[0] = 510 - hue; rgb[1] = 255; }  //  Yellow to Green-1, r = 255 to 1
+    if (hue < 510) { // Red to Grn-1
+        if (hue < 255) { rgb[Red] = 255; rgb[Grn] = hue; }  //   Red to Yel-1, Grn = 0 to 254
+        else { rgb[Red] = 510 - hue; rgb[Grn] = 255; }  //  Yel to Grn-1, Red = 255 to 1
     }
-    else if (hue < 1020) { // Green to Blue-1
-        if (hue < 765) { rgb[1] = 255; rgb[2] = hue - 510; }  //  Green to Cyan-1, b = 0 to 254
-        else { rgb[1] = 1020 - hue; rgb[2] = 255; }  // Cyan to Blue-1, g = 255 to 1
+    else if (hue < 1020) { // Grn to Blu-1
+        if (hue < 765) { rgb[Grn] = 255; rgb[Blu] = hue - 510; }  //  Grn to Cyn-1, Blu = 0 to 254
+        else { rgb[Grn] = 1020 - hue; rgb[Blu] = 255; }  // Cyn to Blu-1, Grn = 255 to 1
     }
-    else if (hue < 1530) {  // Blue to Red-1
-        if (hue < 1275) { rgb[0] = hue - 1020; rgb[2] = 255; }  // Blue to Magenta-1, r = 0 to 254
-        else { rgb[0] = 255; rgb[2] = 1530 - hue; }  //   Magenta to Red-1, b = 255 to 1
+    else if (hue < 1530) {  // Blu to Red-1
+        if (hue < 1275) { rgb[Red] = hue - 1020; rgb[Blu] = 255; }  // Blu to Mgt-1, Red = 0 to 254
+        else { rgb[Red] = 255; rgb[Blu] = 1530 - hue; }  //   Mgt to Red-1, Blu = 255 to 1
     }
-    else { rgb[0] = 255; }  // Last 0.5 Red (quicker than % operator)
+    else { rgb[Red] = 255; }  // Last 0.5 Red (quicker than % operator)
     uint32_t v1 = 1 + val;  // 1 to 256; allows >>8 instead of /255
     uint16_t s1 = 1 + sat;  // 1 to 256; same reason
     uint8_t s2 = 255 - sat; // 255 to 0
-    uint16_t out[3];
-    for (int led=0; led<3; led++) out[led] = (((((rgb[led] * s1) >> 8) + s2) * v1) & 0xff00) >> 8;
-    // if (fake_color332) if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xe0) << 8) | ((out[1] & 0xe0) << 5) | ((out[2] & 0xc0) >> 3);
-    if (std::is_same<T, uint16_t>::value) return (T)((out[0] & 0xf8) << 8) | ((out[1] & 0xfc) << 5) | (out[2] >> 3);
-    else if (std::is_same<T, uint8_t>::value) return (T)((out[0] & 0xe0) | ((out[1] & 0xe0) >> 3) | ((out[2] & 0xc0) >> 6));
-    else if (std::is_same<T, uint32_t>::value) return (T)((out[0] << 16) | (out[1] << 8) | out[2]);
+    uint16_t out[NumRGB];
+    for (int led=Red; led<NumRGB; led++) out[led] = (((((rgb[led] * s1) >> 8) + s2) * v1) & 0xff00) >> 8;
+    // if (fake_color332) if (std::is_same<T, uint16_t>::value) return (T)((out[Red] & 0xe0) << 8) | ((out[Grn] & 0xe0) << 5) | ((out[Blu] & 0xc0) >> 3);
+    if (std::is_same<T, uint16_t>::value) return (T)((out[Red] & 0xf8) << 8) | ((out[Grn] & 0xfc) << 5) | (out[Blu] >> 3);
+    else if (std::is_same<T, uint8_t>::value) return (T)((out[Red] & 0xe0) | ((out[Grn] & 0xe0) >> 3) | ((out[Blu] & 0xc0) >> 6));
+    else if (std::is_same<T, uint32_t>::value) return (T)((out[Red] << 16) | (out[Grn] << 8) | out[Blu]);
 }
 uint8_t rando_color() {
     return ((uint8_t)random(0b111) << 5) | ((uint8_t)random(0b111) << 2) | (uint8_t)random(0b11); 
 }
+// named 8-bit colors (332 format)
 const uint8_t BLK  = 0x00;  // greyscale: full black (RGB elements off)
 const uint8_t DGRY = 0x49;  // pseudo-greyscale: very dark grey (blueish)
 const uint8_t MGRY = 0x6d;  // pseudo-greyscale: medium grey (yellowish)
@@ -452,14 +457,20 @@ void kick_inactivity_timer(int source=-1) {
 //   squintf();  like running ezread.printf(...) followed by Serial.printf(...) w/ the same arguments. splits content to both.
 //               ok to use the optional extra 1st argument to color the ezread content, this is ignored by the console content.
 //               the documentation explains why this is called squintf, but I wasn't able to read it w/o my eye loupe.
+//   debugf();   is like squintf() except it will always wait between prints to avoid causing a deluge (for debugging in loops)
 //   arguments for last two: ([optional uint8_t color], "printf-compatible format string", <other_printf_supported_args>);
 #include <iostream>
 #include <string>
 #include <sstream>
 #include <stdarg.h>
 class EZReadConsole {
+  private:  // behavior parameters for ezread's data deluge suppression feature
+    int ezread_deluge_window_us = 1500000;  // console history epoch over which to calculate average data rate into buffer
+    int ezread_deluge_max_chars_per_sec = 50000;  // threshold data rate over window epoch beyond which ezread considers a data deluge needs to be suppressed
+    int ezread_deluge_passthru_interval_us = 300000;  // during active deluge, ezread will allow lines to leak thru at this reduced rate
+    int64_t ezread_deluge_boot_graceperiod_us = 3500000;  // ezread deluge detection is suspended for this long after intitial boot
   public:
-    bool dirty = true;
+    bool dirty = true, has_wrapped = false;
     EZReadConsole() {}
     static constexpr int num_lines = 300;
     static constexpr int bufferSize = num_lines;
@@ -470,15 +481,48 @@ class EZReadConsole {
     uint8_t defaultcolor = LGRY, sadcolor = SALM, happycolor = LGRN, highlightcolor = DCYN;    // std::vector<std::string> textlines; // Ring buffer array
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
   private:
-    std::string remove_nonprintable(const std::string& victim) {
-        std::string result;
-        for (char ch : victim) {
-            // if (ch == '\r' || ch == '\n') result += " | "; else
-            if (isprint(static_cast<unsigned char>(ch))) result += ch;
+    int deluge_window_start_us = 0, deluge_chars_accum = 0, last_allowed_us = 0;
+    bool deluge_active = false, deluge_notice_shown = false;
+    bool should_allow_output(size_t upcoming_chars) {
+        if (!ezread_suppress_deluge || (esp_timer_get_time() < ezread_deluge_boot_graceperiod_us)) return true;
+        int64_t now = esp_timer_get_time();
+        if (deluge_window_start_us == 0 || now - deluge_window_start_us > ezread_deluge_window_us) {
+            deluge_window_start_us = now;
+            deluge_chars_accum = 0;
         }
-        return result;
+        deluge_chars_accum += upcoming_chars;
+        float elapsed_sec = (now - deluge_window_start_us) / 1e6f;
+        float current_rate = deluge_chars_accum / elapsed_sec;
+        if (current_rate > ezread_deluge_max_chars_per_sec) {
+            if (!deluge_active) {
+                deluge_active = true;
+                deluge_notice_shown = false;
+            }
+            if (!deluge_notice_shown) {
+                deluge_notice_shown = true;
+                // this->printf("\n");  // ensure our announcement has its own line (also ensures colorization applies to the announcement line)
+                this->printf(sadcolor, "\nezread suppressing deluge...\n");
+            }
+            if (now - last_allowed_us < ezread_deluge_passthru_interval_us) return false;  // suppress
+            last_allowed_us = now;
+            return true;  // allow throttled print
+        } else {
+            if (deluge_active) {
+                deluge_active = false;
+                deluge_notice_shown = false;
+                // this->printf("\n");  // ensure our announcement has its own line (also ensures colorization applies to the announcement line)
+                this->printf(happycolor, "\nezread suppression ended\n");
+            }
+            return true;
+        }
     }
     void printf_impl(uint8_t _color, const char* format, va_list args) {  // this is not called directly but by one ots overloads below
+        char preview[100];
+        va_list args_copy;
+        va_copy(args_copy, args);
+        vsnprintf(preview, sizeof(preview), format, args_copy);
+        va_end(args_copy);
+        if (!should_allow_output(strlen(preview))) return;  // if suppression is active then disregard this call altogether, abandoning the data
         char temp[100];
         color = _color;
         vsnprintf(temp, sizeof(temp), format, args);
@@ -492,6 +536,7 @@ class EZReadConsole {
             end = str.find_first_of("\r\n", start);
             textlines[current_index] = remove_nonprintable(textlines[current_index]);
             ++current_index %= bufferSize; // Update next insertion index
+            if (current_index == 0) has_wrapped = true;
         }
         if (start < str.size()) {
             textlines[current_index] += str.substr(start);  // Append the remaining part of the string
@@ -499,6 +544,14 @@ class EZReadConsole {
             linecolors[current_index] = color;
         }
         dirty = true;
+    }
+    std::string remove_nonprintable(const std::string& victim) {
+        std::string result;
+        for (char ch : victim) {
+            // if (ch == '\r' || ch == '\n') result += " | "; else
+            if (isprint(static_cast<unsigned char>(ch))) result += ch;
+        }
+        return result;
     }
   public:
     void setup() {
@@ -546,6 +599,23 @@ class EZReadConsole {
             Serial.printf("%s", temp);
             Serial.flush();
         }
+    }
+    void debugf(const char* format, ...) {
+        static int64_t last_debug_us = 0;
+        const int64_t min_interval_us = 250000;  // 0.25 seconds
+
+        int64_t now = esp_timer_get_time();
+        if (now - last_debug_us < min_interval_us) return;
+        last_debug_us = now;
+
+        char temp[100];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(temp, sizeof(temp), format, args);
+        va_end(args);
+
+        // bypass suppression (if you want), or use normal path
+        this->squintf(highlightcolor, "[dbg] %s\n", temp);
     }
     void lookback(int off) {
         int offset_old = offset;

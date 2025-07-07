@@ -1,25 +1,25 @@
 #pragma once
 
 #define disp_runmode_text_x 12
-#define disp_lines 24  // Max lines of text displayable at line height = disp_line_height_pix
-#define disp_fixed_lines 8  // Lines of static variables/values always displayed
-#define disp_line_height_pix 10  // Pixel height of each text line. Screen can fit 16x 15-pixel or 20x 12-pixel lines
+#define disp_lines 24  // max lines of text displayable at line height = disp_line_height_pix
+#define disp_fixed_lines 8  // lines of static variables/values always displayed
+#define disp_line_height_pix 10  // pixel height of each text line. Screen can fit 16x 15pix, 20x 12pix, or 24x 10pix lines
 #define disp_bargraph_width 38
-#define disp_maxlength 6  // How many characters is max data value.  Allowing 6 characters which overwrites the unit string, b/c this happens rarely. but should fix this to be consistent
+#define disp_maxlength 6  // how many characters is max data value. allowing 6 characters which overwrites the unit string, b/c this happens rarely. but should fix this to be consistent
 #define disp_datapage_names_x 12
 #define disp_datapage_values_x 59
 #define disp_datapage_units_x 96  // 103        
 #define disp_bargraphs_x 111  // 122
 #define disp_datapage_title_x 83
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
-std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "ANI" };  // Pad shorter names with spaces on the right
+std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "ANI" };  // pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { "CAL", "SIM", "CH4", "IGN" };
 std::string ch4_menu_buttons[NumRunModes] = { "CH4", "WAKE", "SLEEP", "START", "START", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airvel", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 std::string pcbaglowcard[GlowNumModes] = { "off", "simple", "heart", "xfade", "sine" };
-#define stEr "St\x88r"     // These defines are just a convenience to keep the below datapage strings
-#define brAk "Br\x83k"     //   array initializations aligned in neat rows & cols for legibility
+#define stEr "St\x88r"     // these defines are just a convenience to keep the below datapage strings
+#define brAk "Br\x83k"     // array initializations aligned in neat rows & cols for legibility
 #define spEd "Sp\x88""d"
 #define b1nary "  \xa7"
 #define scroll "\x12"
@@ -63,15 +63,15 @@ static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  //
     { "mph",  "mph",  "%|r",  "%|r",  "%|r",  "%",    ______, b1nary, b1nary, b1nary, ______, "%",    ______, "Hz",   "s",    },  // PgCPID
     { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, degreF, b1nary, },  // PgTemp
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PgSim
-    { "us",   "us",   "fps",  scroll, "pix",  "pix",  "x",    "Hz",   "lin",  scroll, b1nary, "eyes", "%",    "%",    scroll, },  // PgUI
+    { "us",   "us",   "fps",  scroll, "pix",  "pix",  "x",    "Hz",   "lin",  scroll, b1nary, "eye",  "%",    "%",    scroll, },  // PgUI
 };
-static std::string unitmapnames[21] = { "us", scroll, b1nary, "%", "ohm", "eyes", degree, degreF, "mph", "rpm", "psi", "atm", "g/s", "adc", "pix", "min", "%/s", "%|r", degsec, "fps", "lin" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
-static constexpr uint8_t unitmaps[21][13] = {  // now 13x7-pixel bitmaps for unit strings. required when string is over 2 characters
+static std::string unitmapnames[21] = { "us", scroll, b1nary, "%", "ohm", "eye", degree, degreF, "mph", "rpm", "psi", "atm", "g/s", "adc", "pix", "min", "%/s", "%|r", degsec, "fps", "lin" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
+static constexpr uint8_t unitmaps[21][13] = {  // 13x7-pixel bitmaps for unit strings. required when string is over 2 characters
     { 0x00, 0x00, 0x00, 0x40, 0x7e, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x12, },  // us - b/c the font's lowercase mu character doesn't work
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x20, 0x7f, 0x00, 0x7f, 0x02, 0x04, },  // up/down arrows to indicate multiple choices. right-aligned to fit longer string values
-    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x57, 0x57, 0x22, 0x00, },  // binary vertical on/off dots. right-aligned to allow longer string values
-    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x25, 0x17, 0x08, 0x74, 0x52, 0x71, },  // % - we use this a lot and the font % looks feeble. right-aligned to allow longer string values
-    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, },  // capital omega - for ohms
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x57, 0x57, 0x22, 0x00, },  // on/off dots for binary values. right-aligned to allow longer string values
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x25, 0x17, 0x08, 0x74, 0x52, 0x71, },  // % - we use this a lot and the font % looks feeble.
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, },  // capital omega for ohms
     { 0x00, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x41, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
     { 0x00, 0x00, 0x06, 0x09, 0x49, 0x66, 0x50, 0x48, 0x4c, 0x72, 0x41, 0x40, 0x40, },  // angular degrees
     { 0x00, 0x00, 0x00, 0x06, 0x09, 0x09, 0x06, 0x00, 0x7f, 0x09, 0x09, 0x09, 0x01, },  // degrees F
@@ -88,12 +88,12 @@ static constexpr uint8_t unitmaps[21][13] = {  // now 13x7-pixel bitmaps for uni
     { 0x00, 0x06, 0x09, 0x09, 0x06, 0x60, 0x18, 0x06, 0x00, 0x48, 0x54, 0x54, 0x24, },  // deg/s  // 0x06, 0x0f, 0x09, 0x0f, 0x06,
     { 0x08, 0x7e, 0x09, 0x02, 0x00, 0x7e, 0x12, 0x12, 0x0c, 0x00, 0x2c, 0x2a, 0x12, },  // fps
     { 0x00, 0x41, 0x7f, 0x40, 0x00, 0x44, 0x7d, 0x40, 0x00, 0x7c, 0x04, 0x04, 0x78, },  // lin
-};  // These bitmaps are in the same format as the idiot light bitmaps, described in neopixel.h
-    // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x14, 0x22, 0x41, 0x22, 0x14, },  // up/down arrows to indicate multiple choices. right-aligned to allow longer string values
-    // { 0x00, 0x00, 0x00, 0x00, 0x3e, 0x41, 0x45, 0x49, 0x51, 0x49, 0x45, 0x41, 0x3e, },  // dropdown arrow to indicate multiple choices. right-aligned to allow longer string values
-    // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x7e, 0x3f, 0x00, 0x7e, 0x3f, 0x10, },  // thick-ass scroll arrows from the 80s
-    // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x7e, 0x07, 0x00, 0x70, 0x3f, 0x18, },  // scroll arrows - curvy and sorta disfigured
-    // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x66, 0x7f, 0x66, 0x60, },  // 0/1 - to indicate binary value. right-aligned to maybe distinguish it from actual units
+};  // these bitmaps are in the same format as the idiot light bitmaps, described in neopixel.h
+    // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x14, 0x22, 0x41, 0x22, 0x14, },  // up/down arrows for multiple choices. right-aligned to allow longer string values
+    // { 0x00, 0x00, 0x00, 0x00, 0x3e, 0x41, 0x45, 0x49, 0x51, 0x49, 0x45, 0x41, 0x3e, },  // dropdown arrow for multiple choices. right-aligned to allow longer string values
+    // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x7e, 0x3f, 0x00, 0x7e, 0x3f, 0x10, },  // thick-ass scroll arrows from the 80s. right-aligned to allow longer string values
+    // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x7e, 0x07, 0x00, 0x70, 0x3f, 0x18, },  // curvy and sorta disfigured scroll arrows. right-aligned to allow longer string values
+    // { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x60, 0x66, 0x7f, 0x66, 0x60, },  // 0/1 for binary values. right-aligned to allow longer string values
 
 static EZReadDrawer ezdraw(&ezread);
 static PanelAppManager panel(&ezdraw);
@@ -101,18 +101,18 @@ volatile float fps = 0.0;
 // int pushclock, drawclock, idleclock;
 volatile bool reset_request = false;
 
-SemaphoreHandle_t pushbuf_sem;  // StaticSemaphore_t push_semaphorebuf_sem;
-SemaphoreHandle_t drawbuf_sem;  // StaticSemaphore_t draw_semaphorebuf_sem;
+SemaphoreHandle_t drawnbuf_sem;  // points to the buffer ready to send to the screen  // StaticSemaphore_t push_semaphorebuf_sem;
+SemaphoreHandle_t easelbuf_sem;  // points to the buffer currently being drawn on  // StaticSemaphore_t draw_semaphorebuf_sem;
 static void push_task(void *parameter);
 static void draw_task(void *parameter);
 void semaphore_setup() {
     ezread.squintf("Semaphores..");
-    pushbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
-    drawbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t draw_semaphorebuf_sem;
-    if (pushbuf_sem == NULL || drawbuf_sem == NULL) ezread.squintf(" creation failed");
+    drawnbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
+    easelbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t draw_semaphorebuf_sem;
+    if (drawnbuf_sem == NULL || easelbuf_sem == NULL) ezread.squintf(" creation failed");
     else {
-        xSemaphoreGive(pushbuf_sem);
-        xSemaphoreGive(drawbuf_sem);
+        xSemaphoreGive(drawnbuf_sem);
+        xSemaphoreGive(easelbuf_sem);
     }
     ezread.squintf("\n");
 }
@@ -126,20 +126,19 @@ class Display {
     Touchscreen* touch;
     Simulator* sim;
     IdiotLights* idiots;
-    Timer valuesRefreshTimer{160000};  // Don't refresh screen faster than this (16667us = 60fps, 33333us = 30fps, 66666us = 15fps)
-    uint8_t palettesize = 2;
-    // uint16_t palette[256] = { BLK, WHT };
+    Timer valuesRefreshTimer{160000};
+    // uint8_t palettesize = 2;  // uint16_t palette[256] = { BLK, WHT };
     static constexpr int runOnCore = CONFIG_ARDUINO_RUNNING_CORE == 0 ? 1 : 0;
     Timer dispAgeTimer[disp_lines];  // int disp_age_timer_us[disp_lines];
     static constexpr int idiots_corner_x = disp_apppanel_x + 2;
-    static constexpr int idiots_corner_y = 13;
+    static constexpr int idiots_corner_y = 11;
     static constexpr int idiots_spacing_x = 1;
     bool sim_last = false, fullscreen_last = false;
     int runmode_last = -1;
   public:
-    std::string disp_values[disp_lines];  // Holds previously drawn value strings for each line
+    std::string disp_values[disp_lines];  // holds previously drawn value strings for each line
     uint8_t disp_val_colors[disp_lines];
-    bool disp_bool_values[6], disp_bargraphs[disp_lines], disp_polarities[disp_lines];  // Holds sign of previously drawn values
+    bool disp_bool_values[6], disp_bargraphs[disp_lines], disp_polarities[disp_lines];  // holds sign of previously drawn values
     int disp_datapage_last, disp_needles[disp_lines], disp_targets[disp_lines], disp_age_quanta[disp_lines];
     bool disp_selection_dirty, disp_datapage_dirty, disp_values_dirty, disp_data_dirty[disp_lines], disp_menutoggles_dirty;
     bool disp_menus_dirty, disp_runmode_dirty, disp_simbuttons_dirty,disp_idiots_dirty, disp_units_dirty;
@@ -149,7 +148,7 @@ class Display {
         int sprsize[2] = { _sprwidth, _sprheight };
         ezread.squintf(" %dx buffers ", num_bufs);
         lcd.setColorDepth(sprite_color_depth);
-        for (int i = 0; i < num_bufs; i++) framebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+        for (int i = 0; i < num_bufs; i++) framebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[Horz];
         auto frameheight = sprsize[Vert];
         bool fail = false;
@@ -203,14 +202,13 @@ class Display {
             disp_polarities[lineno] = 1;
         }
         for (int row=0; row<arraysize(disp_bool_values); row++) disp_bool_values[row] = 1;
-        for (int row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // Otherwise the very first needle draw will blackout a needle shape at x=0. Do this offscreen
-        for (int row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // Otherwise the very first target draw will blackout a target shape at x=0. Do this offscreen
+        for (int row=0; row<arraysize(disp_needles); row++) disp_needles[row] = -5;  // otherwise the very first needle draw will blackout a needle shape at x=0. do this offscreen
+        for (int row=0; row<arraysize(disp_targets); row++) disp_targets[row] = -5;  // otherwise the very first target draw will blackout a target shape at x=0. do this offscreen
         datapage = prefs.getUInt("dpage", PgRun);
         init_framebuffers(disp_width_pix, disp_height_pix);
         panel.setup(&lcd, sim, touch, disp_apppanel_x, disp_apppanel_y, disp_apppanel_w, disp_apppanel_h);
         sprptr = &framebuf[flip];
-        // ezread.squintf("  display initialized\n");
-    }
+    }  // ezread.squintf("  display initialized\n");
     void reset() {
         blackout(sprptr);
         all_dirty();
@@ -450,24 +448,24 @@ class Display {
         drawval_core(lineno, words[styl][truthy], 1, NAN, NAN, NAN, (truthy) ? LPUR : ORCD);
     }    
     std::string num2string(int value, int maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
-        value = abs(value);  // This function disregards sign
+        value = abs(value);  // this function disregards sign
         int place = most_significant_place(value);  // check how slow is log() function? Compare performance vs. multiple divides ( see num2string() )
         if (place <= maxlength) return std::to_string(value);  // If value is short enough, return it
-        char buffer[maxlength+1];  // Allocate buffer with the maximum required size
+        char buffer[maxlength+1];  // allocate buffer with the maximum required size
         std::snprintf(buffer, sizeof(buffer), "%.*e", maxlength - 4 - (int)(place >= 10), (float)value);
         std::string result(buffer);  // copy buffer to result
         return result.substr(0, result.find('e') + 1) + std::to_string(place);
     }
     std::string num2string(float value, int maxlength, int sig_places=disp_default_float_sig_dig, bool chop_zeroes=true) {  // returns an ascii string representation of a given float value, formatted efficiently. It will not exceed maxlength. fractional digits will be removed respecting given number of significant digits
         // if (sig_places == unlikely_int) sig_places = disp_default_float_sig_dig;
-        value = abs(value);  // This function disregards sign
+        value = abs(value);  // this function disregards sign
         maxlength--;  // otherwise all my logic below is off by one
-        int place = most_significant_place(value);  // Learn decimal place of the most significant digit in value
-        if (place >= sig_places && place <= maxlength) {  // Then we want simple cast to an integer w/o decimal point (eg 12345, 1234)
+        int place = most_significant_place(value);  // learn decimal place of the most significant digit in value
+        if (place >= sig_places && place <= maxlength) {  // then we want simple cast to an integer w/o decimal point (eg 12345, 1234)
             std::string result(std::to_string((int)value));
             return result;
         }
-        if (place >= 0 && place < maxlength) {  // Then we want float formatted with enough nonzero digits after the decimal point for given significant digits (eg 123.4, 12.34, 1.234, 0.000)
+        if (place >= 0 && place < maxlength) {  // then we want float formatted with enough nonzero digits after the decimal point for given significant digits (eg 123.4, 12.34, 1.234, 0.000)
             int length = std::min(sig_places+1, maxlength);
             char buffer[length+1];
             std::snprintf(buffer, length + 1, (chop_zeroes) ? "%.*g" : "%.*f", length - 1, value);  // (buf, letters incl. end, %.*g = floats formatted in shortest form, length-1 digits after decimal, val)
@@ -476,22 +474,22 @@ class Display {
             if (result.back() == '.') result.pop_back();
             return result;
         }
-        if (place < 0 && sig_places - place <= maxlength) {  // Then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123)
+        if (place < 0 && sig_places - place <= maxlength) {  // then we want decimal w/o initial '0' limited to given significant digits (eg .123, .0123)
             std::string result (std::to_string(value));  // sd=3,  0.1234  d=1 l=6    0.00123
             size_t decimalPos = result.find('.');  // decimalPos will always be 1 (?)
-            if (decimalPos != std::string::npos) result = result.substr(decimalPos, std::min(sig_places-place, maxlength));  // Remove any digits to the left of the decimal point
+            if (decimalPos != std::string::npos) result = result.substr(decimalPos, std::min(sig_places-place, maxlength));  // remove any digits to the left of the decimal point
             if (value != 0.0 && chop_zeroes && result.find('.') != std::string::npos) result = result.substr(0, result.find_last_not_of('0') + 1);
             return result;
-        }  // Otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
-        char buffer[maxlength+1];  // Allocate buffer with the maximum required size
+        }  // otherwise we want scientific notation with precision removed as needed to respect maxlength (eg 1.23e4, 1.23e5, but using long e character not e for negative exponents
+        char buffer[maxlength+1];  // allocate buffer with the maximum required size
         int truncit = std::min(sig_places - 1, maxlength - 4 - (int)(place <= -10 || place >= 10));
         std::snprintf(buffer, sizeof(buffer), "%.*e", truncit, value);
         std::string result(buffer);  // copy buffer to result
         result += std::to_string(std::abs(place));  // put exponent on
-        if (result.find("e+0") != std::string::npos) result.replace(result.find("e+0"), 3, "e");  // Remove useless "+0" from exponent
-        else if (result.find("e-0") != std::string::npos) result.replace(result.find("e-0"), 3, "\x88");  // For very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find("e-0") != std::string::npos) 
-        else if (result.find("e+") != std::string::npos) result.replace(result.find("e+"), 2, "e");  // For ridiculously large values
-        else if (result.find("e-") != std::string::npos) result.replace(result.find("e-"), 2, "\x88");  // For ridiculously small values
+        if (result.find("e+0") != std::string::npos) result.replace(result.find("e+0"), 3, "e");  // remove useless "+0" from exponent
+        else if (result.find("e-0") != std::string::npos) result.replace(result.find("e-0"), 3, "\x88");  // for very small scientific notation values, replace the "e-0" with a phoenetic long e character, to indicate negative power  // if (result.find("e-0") != std::string::npos) 
+        else if (result.find("e+") != std::string::npos) result.replace(result.find("e+"), 2, "e");  // for ridiculously large values
+        else if (result.find("e-") != std::string::npos) result.replace(result.find("e-"), 2, "\x88");  // for ridiculously small values
         return result;
     }
     void draw_runmode(int _nowmode, uint8_t color_override=NON) {  // color_override = NON uses default color
@@ -513,7 +511,7 @@ class Display {
             }
             disp_values_dirty = true;
         }
-        draw_fixed(page, disp_datapage_last, true, forced);  // Erase and redraw variable names and units for data on this page
+        draw_fixed(page, disp_datapage_last, true, forced);  // erase and redraw variable names and units for data on this page
         draw_string(disp_datapage_title_x, 0, pagecard[page], pagecard[disp_datapage_last], STBL, BLK, forced); // +6*(arraysize(modecard[_runmode.mode()])+4-namelen)/2
         disp_datapage_last = page;
         disp_units_dirty = true;
@@ -537,8 +535,8 @@ class Display {
         last_selected = selection;
         disp_selection_dirty = false;    
     }
-    void draw_menu_toggle(bool value, int col, bool force=false) {  // Draws values of boolean data
-        if ((disp_bool_values[col - 2] != value) || force) {  // If value differs, Erase old value and write new
+    void draw_menu_toggle(bool value, int col, bool force=false) {  // draws values of boolean data
+        if ((disp_bool_values[col - 2] != value) || force) {  // if value differs, erase old value and write new
             std::string drawme = top_menu_buttons[col-2];
             if (drawme == "CAL" && !(runmode == Standby || runmode == Cal)) drawme = "NA";
             else if (drawme == "CH4") drawme = ch4_menu_buttons[runmode];
@@ -551,26 +549,26 @@ class Display {
             disp_bool_values[col - 2] = value;
         }
     }
-    void draw_menus(bool side_only = false) {  // draws edge buttons with names in 'em. If replace_names, just updates names
+    void draw_menus(bool side_only = false) {  // draws edge buttons with names in 'em.  if replace_names, just updates names
         sprptr->setTextDatum(textdatum_t::top_left);
         int namelen = 0;
         sprptr->setTextColor(LGRY);
-        for (int row = 0; row < arraysize(side_menu_buttons); row++) {  // Step thru all rows to draw buttons along the left edge
+        for (int row = 0; row < arraysize(side_menu_buttons); row++) {  // step thru all rows to draw buttons along the left edge
             std::string drawme = side_menu_buttons[row];
             if (drawme == "ANI" && runmode != Standby) drawme = "NA";
             sprptr->fillRoundRect(-9, touch_cell_v_pix * row + 3, 18, touch_cell_v_pix - 6, 8, DGRY);
             sprptr->drawRoundRect(-9, touch_cell_v_pix * row + 3, 18, touch_cell_v_pix - 6, 8, LGRY);
             namelen = 0;
             for (int x = 0 ; x < drawme.length() ; x++ ) {
-                if (drawme[x] != ' ') namelen++; // Go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
+                if (drawme[x] != ' ') namelen++; // go thru each button name. Need to remove spaces padding the ends of button names shorter than 4 letters 
             }
-            for (int letter = 0; letter < namelen; letter++) {  // Going letter by letter thru each button name so we can write vertically 
+            for (int letter = 0; letter < namelen; letter++) {  // going letter by letter thru each button name so we can write vertically 
                 sprptr->setCursor(1, (touch_cell_v_pix * row) + (touch_cell_v_pix / 2) + (disp_font_height + 1) * (letter - (namelen >> 1)) - 3); // adjusts vertical offset depending how many letters in the button name and which letter we're on
-                sprptr->print(drawme[letter]);  // Writes each letter such that the whole name is centered vertically on the button
+                sprptr->print(drawme[letter]);  // writes each letter such that the whole name is centered vertically on the button
             }
         }
         if (!side_only) {
-            for (int col = 2; col <= 5; col++) {  // Step thru all cols to draw buttons across the top edge
+            for (int col = 2; col <= 5; col++) {  // step thru all cols to draw buttons across the top edge
                 sprptr->fillRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, DGRY);
                 sprptr->drawRoundRect(touch_margin_h_pix + touch_cell_h_pix*(col) + 3, -9, touch_cell_h_pix-6, 18, 8, LGRY);  // sprptr->width()-9, 3, 18, (sprptr->height()/5)-6, 8, LGRY);
             }
@@ -951,10 +949,12 @@ class Display {
                 while (s[xe] == r[xe]) --xe;
                 lcd.pushImageDMA(xs, y, xe - xs + 1, 1, &s[xs]);
                 memcpy(&r[xs], &s[xs], sizeof(s[0])*(xe - xs + 1));
-            } while (x32 < w32);
+            }
+            while (x32 < w32);
             s32 += w32;
             r32 += w32;
-        } while (++y < sprheight);
+        }
+        while (++y < sprheight);
         lcd.endWrite();   // lcd->display();
     }
     void auto_saver() {
@@ -974,14 +974,15 @@ class Display {
             ui_app_last = ui_app;
             ui_app = ScreensaverUI;
             panel.anim_reset_request = true;
+            refresh_limit_us = 0; // go balls to the wall when running full screen animations
         }
         else if (autosaver_request == ReqOff) {
             auto_saver_enabled = false;
-            // blackout(sprptr);  // attempt to make screen black out on entering lowpower mode, but doesn't work
             ui_app = ui_app_last;
             panel.set_vp(disp_apppanel_x, disp_apppanel_y, disp_apppanel_w, disp_apppanel_h);
             reset_request = true;
             if (was_simulating) sim->enable();
+            refresh_limit_us = 1000000 / operational_framerate_limit_fps; // 60 Hz -> 16666 us, 90 Hz -> 11111 us, 120 Hz -> 8333 us
         }
         autosaver_request = ReqNA;
     }
@@ -1014,8 +1015,8 @@ class Tuner {
     Display* screen;
     NeopixelStrip* neo;
     Touchscreen* touch;
-    Timer tuningAbandonmentTimer{45000000};  // This times out edit mode after a a long period of inactivity
-    Timer tuningEditTimer{50000};  // Control frequency of polling for new edits
+    Timer tuningAbandonmentTimer{45000000};  // this times out edit mode after a a long period of inactivity
+    Timer tuningEditTimer{50000};  // control frequency of polling for new edits
     int datapage_last;
   public:
     Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
@@ -1036,7 +1037,7 @@ class Tuner {
         }
         if (!screen->disp_datapage_dirty) datapage_last = datapage;
         int encoder_sw_action = encoder.button.press_event(); // gather any encoder button press and reset it for next time (automatically if true).
-        if (encoder_sw_action != SwNone) {                    // First deal with any unhandled switch press events
+        if (encoder_sw_action != SwNone) {                    // first deal with any unhandled switch press events
             if (encoder_sw_action == SwShort)  {              // if short press
                 if (tunctrl == Edit) tunctrl = Select;        // if we were editing a value, drop drop to data selection
                 else if (tunctrl == Select) tunctrl = Edit;   // if we were selecting data, begin editing its value
@@ -1049,13 +1050,13 @@ class Tuner {
         if (tunctrl == Select) sel += rdelta_encoder;               // when selecting data, scroll thru data values using unaccelerated encoder value. will not wrap around, overflow handled below
         else if (tunctrl == Off) datapage += rdelta_encoder;        // when not tuning, flip thru datapages using unaccel encoder value. will not wrap around. constrain done below
         if (touch->increment_sel) ++sel %= disp_tuning_lines;       // on touchscreen select, select next editable data line, wrapping around
-        if (touch->increment_datapage) ++datapage %= NumDataPages; // touchscreen datapage change, go to next page, wrapping around
+        if (touch->increment_datapage) ++datapage %= NumDataPages;  // touchscreen datapage change, go to next page, wrapping around
         touch->increment_sel = touch->increment_datapage = false;   // reset the touch requests
         id = id_encoder + touch->get_delta();                       // combine accelerated value changes from both the encoder and the touchscreen
         if (pot_tuner_acceleration && !sim.potmapping()) id = constrain(id * (int)(map(pot.val(), 0.0, 100.0, 1.0, 10.0)), 1, (int)encoder._accel_max);  // if pot is allowed to control data edit acceleration (experimental)
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel != sel_last || id) tuningAbandonmentTimer.reset();  // any tuning activity by the user postpones tuner timeout
         else if (tuningAbandonmentTimer.expired()) tunctrl = Off;      // turn off the tuner after extended user inactivity
-        datapage = constrain(datapage, 0, datapages::NumDataPages-1); // keep datapage value in range
+        datapage = constrain(datapage, 0, datapages::NumDataPages-1);  // keep datapage value in range
         if (datapage != datapage_last) {                               // if datapage changed
             if (tunctrl == Edit) tunctrl = Select;                     // stop editing a value if the datapage got changed
             screen->disp_datapage_dirty = true;                        // flag the datapage data for a redraw
@@ -1066,15 +1067,10 @@ class Tuner {
         }
         if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selection_dirty = true; // on datapage redraw or change in tuning mode, flag a redraw of the variable names (eg to remove highlight) 
     }  // at this point if an edit is in progress, our id variable has the amount to change for this loop.
-    void edit_values() {  // Change tunable values when editing
+    void edit_values() {  // change tunable values when editing
         if (tunctrl != Edit || !id) return;  // if not editing data values, or if amount of edit is 0, just ditch
         if (datapage == PgRun) {  // each data entry has its sanctioned way of being changed. so just a bunch of if statements here. use tune() to achieve auto-precision fanciness
-            
-            // with recent changes to tune() I had to move the setter function for governor value into the
-            // gas update function, or edit acceleration wouldn't work
-            // if (sel == 13) gas.set_governor_pc(tune(gas.governor, id, 0.0f, 100.0f));
-            // if (sel == 13) tune(governor, id, 0.0f, 100.0f);
-            if (sel == 13) gas.set_governor_pc(tune(governor, id, 0.0f, 100.0f));
+            if (sel == 13) gas.set_governor_pc(tune(governor, id, 0.0f, 100.0f));  // if (sel == 13) tune(governor, id, 0.0f, 100.0f);  (attempt to fix edit accel, however tuning stopped working)
             else if (sel == 14) tune(&steer.steer_safe_pc, id, 0.0f, 100.0f);
         }
         else if (datapage == PgJoy) {
@@ -1090,7 +1086,6 @@ class Tuner {
             else if (sel == 12) brkpos.set_oplim(tune(brkpos.opmin(), id, brkpos.absmin(), brkpos.opmax()), NAN);
             else if (sel == 13) brkpos.set_oplim(NAN, tune(brkpos.opmax(), id, brkpos.opmin(), brkpos.absmax()));
             else if (sel == 14) tune(brkpos.zeropoint_ptr(), id, brkpos.opmin(), brkpos.opmax());
-            // else if (sel == 14) mulebatt.set_conversions(tune(mulebatt.mfactor(), id, 0.001, 0.009, -5), NAN);  // this works till you try to tune it, any edit causes conversion failures (showing nan result) followed by crash
         }
         else if (datapage == PgPuls) {
             if (sel == 11) tach.set_oplim(tune(tach.opmin(), id, tach.absmin(), tach.opmax()), NAN);
@@ -1172,12 +1167,10 @@ class Tuner {
             else if (sel == 9) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, GlowNumModes - 1, true));
             else if (sel == 10) neo->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 11) neo->sleepmode_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
-            
             // with recent changes to tune() I had to move the setter function for these into the neopix
             // updat function, or acceleration wouldn't work
             else if (sel == 12) tune(&neobright, id, 0.0, 100.0);
             else if (sel == 13) tune(&neosat, id, 0.0, 100.0);
-            
             else if (sel == 14) tune(&ui_app, id, 0, NumContextsUI-1, true);
         }
         id = 0;
@@ -1197,11 +1190,11 @@ bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickT
 }
 static void push_task(void *parameter) {
     while (true) {
-        while (runmode == LowPower && !powering_down) vTaskDelay(pdMS_TO_TICKS(200));
-        if (take_two_semaphores(&pushbuf_sem, &drawbuf_sem, portMAX_DELAY) == pdTRUE) {
+        while ((runmode == LowPower) && !powering_down) vTaskDelay(pdMS_TO_TICKS(200));
+        if (take_two_semaphores(&drawnbuf_sem, &easelbuf_sem, portMAX_DELAY) == pdTRUE) {
             screen.do_push();
-            xSemaphoreGive(pushbuf_sem);
-            xSemaphoreGive(drawbuf_sem);
+            xSemaphoreGive(drawnbuf_sem);
+            xSemaphoreGive(easelbuf_sem);
         }
         vTaskDelay(pdMS_TO_TICKS(1));  // vTaskDelete(NULL);
     }
@@ -1209,23 +1202,22 @@ static void push_task(void *parameter) {
 static void draw_task(void *parameter) {
     while (true) {
         static int lastmode;
-        while (runmode == LowPower && !powering_down) vTaskDelay(pdMS_TO_TICKS(200));
-        if (runmode != LowPower && lastmode == LowPower) reset_request = true;  // screen.reset();
-        // if ((esp_timer_get_time() - screen_refresh_time > refresh_limit) || always_max_refresh || auto_saver_enabled) {
-        if (xSemaphoreTake(drawbuf_sem, portMAX_DELAY) == pdTRUE) {
+        while ((runmode == LowPower) && !powering_down) vTaskDelay(pdMS_TO_TICKS(200));
+        if ((runmode != LowPower) && (lastmode == LowPower)) reset_request = true;  // screen.reset();
+        // if ((esp_timer_get_time() - screen_refresh_time > refresh_limit_us) || !limit_framerate || auto_saver_enabled) {
+        if (xSemaphoreTake(easelbuf_sem, portMAX_DELAY) == pdTRUE) {  // grab the easel once it's available
             screen_refresh_time = esp_timer_get_time();
             screen.do_draw();
-            xSemaphoreGive(drawbuf_sem);
+            xSemaphoreGive(easelbuf_sem);  // give away the easel so it can be processed & sent to the screen
         }
-        vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
-        vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit / 1000 - 1)));  //   || sim.enabled()
-        // if (!always_max_refresh && !auto_saver_enabled) vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit / 1000 - 1)));  //   || sim.enabled()
+        // vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
+        vTaskDelay(pdMS_TO_TICKS(1 + ((int)limit_framerate * refresh_limit_us / 1000)));  //   || sim.enabled()
+        // if (limit_framerate && !auto_saver_enabled) vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit_us / 1000 - 1)));  //   || sim.enabled()
         lastmode = runmode;
     }
 }
-
-// The following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
-// See this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
-// Rinkydink home page: http://www.rinkydinkelectronics.com
+// the following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
+// see this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
+// rinkydink home page: http://www.rinkydinkelectronics.com
 // moving transparent arrow sprite over background: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
 // bar graphs: https://www.youtube.com/watch?v=g4jlj_T-nRw&ab_channel=VolosProjects

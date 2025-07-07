@@ -2,9 +2,9 @@
 #include <Arduino.h>
 
 #define disp_apppanel_x 150
-#define disp_apppanel_y 48
+#define disp_apppanel_y 43  // was 48
 #define disp_apppanel_w (disp_width_pix - disp_apppanel_x)  // 156
-#define disp_apppanel_h (disp_height_pix - disp_apppanel_y)  // 192
+#define disp_apppanel_h (disp_height_pix - disp_apppanel_y)  // 197  // was 192
 #define disp_simbuttons_x 164
 #define disp_simbuttons_y 48
 #define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)  // 156
@@ -27,7 +27,6 @@ std::string simgrid[4][3] = {
 volatile bool _is_running;
 static constexpr int SHIFTSIZE = 8;
 volatile bool flip = 0;
-volatile int refresh_limit = 1111; // 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
 volatile int screen_refresh_time;
 LGFX lcd;
 static constexpr int num_bufs = 2;
@@ -40,7 +39,7 @@ class CollisionsSaver {
     viewport* vp;
     ball_info_t* balls;
     ball_info_t* a;
-    static constexpr bool touchball_invisible = true;
+    static constexpr bool touchball_invisible = false;
     static constexpr int touchball_r = 15;
     static constexpr int BALL_MAX = 35;  // 256
     LGFX_Sprite* sprite;
@@ -181,13 +180,12 @@ class CollisionsSaver {
         return new_round;
     }
   public:
-    void touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
-        // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
+    void touch(LGFX_Sprite* spr, int x, int y) {  // you can create a new phantom ball and bash around the other balls w/ it
+        touchnow = true;
+        touchx = map(x, vp->x, vp->x + vp->w, 0, vp->w);
+        touchy = map(y, vp->y, vp->y + vp->h, 0, vp->h);
         lastx = touchball.x;
         lasty = touchball.y;
-        touchx = x;
-        touchy = y;
-        touchnow = true;
         touchball.x = constrain(touchx, touchball_r, vp->w - touchball_r) << SHIFTSIZE;
         touchball.y = constrain(touchy, touchball_r, vp->h - touchball_r) << SHIFTSIZE;
         touchball.dx = (touchball.x - lastx) / 2;
@@ -269,11 +267,12 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
     }
     void touchwrite(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
         // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
-        spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
+        spr->fillCircle(x, y, 20 * scaler, pencolor);
+        // spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
     }
     void touchadjust(int x, int y) {  // you can draw colorful lines on the screensaver
-        season = map(y, 0, disp_height_pix, 0, 3);
-        precess = map(x, 0, disp_width_pix, 0, 9);
+        season = map(y, vp->y, vp->y + vp->h, 0, 3);
+        precess = map(x, vp->x, vp->x + vp->w, 0, 9);
     }
     void pot_timing() {
         if (!pot_controls_animation_timeout) return;
@@ -655,7 +654,8 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
     bool dirty = true;
     std::string drawnow; // Ring buffer array
   private:
-    int _main_x, pix_margin = 2, font_height = 6, linelength, scrollbar_width = 3;
+    static const int row_padding_pix = 1;
+    int _main_x, pix_margin = 2, linelength, scrollbar_width = 3, font_height = 6 + row_padding_pix;  // add one extra line between lines for readability
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
     viewport* vp;
@@ -688,37 +688,28 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
         // for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
     }
     void draw(LGFX_Sprite* spr) {
-        draw_scrollbar(spr, LGRY);  // !! i just noticed this is before sprite blackout below, probably should be moved to after that
-        int botline = (ez->current_index - ez->offset - (int)ez->textlines[ez->current_index].empty() + ez->bufferSize) % ez->bufferSize;
+        draw_scrollbar(spr, LGRY);  // currently does not draw anything
         spr->fillSprite(BLK);
         spr->setTextWrap(false);
-        // int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
-        spr->setFont(&fonts::Font0);  // spr->setFont(&fonts::Org_01);
-        spr->setTextDatum(textdatum_t::top_left);
-        spr->setTextColor(ez->linecolors[botline]);
-        std::string nowline = ez->textlines[botline];
-        int chopit = chars_to_fit_pix(spr, nowline, vp->w);
-        bool toobig = (chopit < nowline.length());
-        if (toobig) {
-            spr->setCursor(_main_x, vp->y + vp->h - 18);
-            nowline = ez->textlines[botline].substr(0, chopit);
-            spr->print(nowline.c_str());
-            nowline = ez->textlines[botline].substr(chopit);
-        }
-        spr->setCursor(_main_x, vp->y + vp->h - 9);
-        spr->print(nowline.c_str());
-        int bottom_extent = vp->y + vp->h - 9 * (1 + (int)toobig);
-        // spr->drawFastHLine(vp->x + 3, bottom_extent, vp->w - 6, LGRY);  // separator for the newest line at the bottom will be printed larger and span 2 lines
         spr->setFont(&fonts::TomThumb);
-        for (int line=1; line<ez->num_lines; line++) {
-            int backindex = (botline + ez->bufferSize - line) % ez->bufferSize;
-            spr->setCursor(_main_x, bottom_extent - line * (font_height + pix_margin));
-            // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
-            int strsize = std::min((int)linelength, (int)ez->textlines[backindex].length());
-            spr->setTextColor(ez->linecolors[backindex]);
-            spr->print(ez->textlines[backindex].c_str());
+        spr->setTextDatum(textdatum_t::top_left);
+        int max_lines = (vp->h + 1 + row_padding_pix) / font_height;  // add 1-2 to vp->h b/c do not need extra spacing between rows on last row
+        if (max_lines <= 0) return;
+        int max_offset = ez->has_wrapped ? ez->bufferSize - 1 : ez->current_index;  // clamp offset to available history
+        int safe_offset = constrain(ez->offset, 0, max_offset);
+        int newest_line = (ez->current_index - safe_offset + ez->bufferSize) % ez->bufferSize; // start from the newest visible line (working backward)
+        for (int i = max_lines - 1; i >= 0; --i) {
+            int idx = (newest_line - (max_lines - 1 - i) + ez->bufferSize) % ez->bufferSize;
+            std::string& nowline = ez->textlines[idx];
+            if (nowline.empty()) continue;
+            int y = vp->y + i * font_height;
+            spr->setTextColor(ez->linecolors[idx]);
+            // int chop = chars_to_fit_pix(spr, nowline, vp->w);
+            // ezread.debugf("draw idx=%d len=%d chop=%d vpw=%d", idx, (int)nowline.length(), chop, vp->w);
+            // std::string clipped = nowline.substr(0, chop);
+            spr->setCursor(_main_x, y);
+            spr->print(nowline.c_str());
         }
-        dirty = false;
     }
   public:
     void setup(viewport* _vp) {
@@ -908,16 +899,20 @@ class PanelAppManager {
             mule_drawn = false;
             ezdraw->dirty = true;
         }
+        bool touch_valid = ((touch->landed_pt(Horz) >= vp.x) && (touch->landed_pt(Horz) < vp.x + vp.w) &&
+                            (touch->landed_pt(Vert) >= vp.y) && (touch->landed_pt(Vert) < vp.y + vp.h));
         if (ui_app == EZReadUI) ezdraw->update(spr);
         else if (ui_app == MuleChassisUI) draw_mule(spr);
         else if (ui_app == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             // mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
             if (nowsaver == Eraser) {
                 still_running = eSaver.update(spr, &vp);
-                if (touch->tap()) eSaver.touchadjust(touch->touch_pt(Horz), touch->touch_pt(Vert));
-                else if (touch->held()) eSaver.touchwrite(spr, touch->touch_pt(Horz), touch->touch_pt(Vert));
+                if (touch_valid) {
+                    if (touch->tap()) eSaver.touchadjust(touch->touch_pt(Horz), touch->touch_pt(Vert));
+                    else if (touch->held()) eSaver.touchwrite(spr, touch->touch_pt(Horz), touch->touch_pt(Vert)); 
+                }
             }
-            else if (nowsaver == Collisions) {
+            else if ((nowsaver == Collisions) && touch_valid) {
                 still_running = cSaver.update(spr, &vp);  // if ((bool)still_running) 
                 if (touch->held()) cSaver.touch(spr, touch->touch_pt(Horz), touch->touch_pt(Vert));
             }

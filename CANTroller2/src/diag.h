@@ -517,14 +517,14 @@ class LoopTimer {
     float loop_sum_s, loopfreq_hz;
     int looptimes_us[20];
     bool loop_dirty[20];
-    int64_t loop_cout_mark_us, boot_mark;
+    int64_t loop_cout_mark_us, boot_mark_us;
     int loop_cout_us = 0, loop_peak_us = 0, loop_now = 0;;
     static constexpr int loop_history = 100;
     int loop_periods_us[loop_history];
     // std::vector<std::string> loop_names(20);
     std::string loop_names[20];
     void setup() {  // Run once at end of setup()
-        boot_mark = esp_timer_get_time();
+        boot_mark_us = esp_timer_get_time();
         if (looptime_print) {
             for (int x=1; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
             loop_names[0] = std::string("top");
@@ -580,8 +580,11 @@ class LoopTimer {
         ++loop_now %= loop_history;
         loopno++;  // I like to count how many loops
     }
+    int uptime_us() {  // returns uptime since last reset in microseconds
+        return esp_timer_get_time() - boot_mark_us;
+    }
     float uptime() {  // returns uptime since last reset in minutes
-        return (float)((esp_timer_get_time() - boot_mark)) / (60.0 * 1000000.0);
+        return (float)((esp_timer_get_time() - boot_mark_us)) / (60.0 * 1000000.0);
     }
 };
 class BootMonitor {

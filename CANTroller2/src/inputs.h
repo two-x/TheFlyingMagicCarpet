@@ -125,7 +125,7 @@ class Encoder {
         _bounce_lock = Encoder::EncB;               // bounce lock this isr to avoid retriggering, and unlock the A isr
     }
     Timer twisttimer{500000};        // set to the max amount of time you can reliably expect to see w/o any detents turned in between rapid twists
-    float _spinrate, _spinrate_max;  // , spinrate_accel_thresh;  // in Hz
+    float _spinrate, _spinrate_max;  // spinrate_accel_thresh;  // in Hz
     int _accel_factor = 1;
   public:
     MomentarySwitch button;
@@ -136,7 +136,7 @@ class Encoder {
     Encoder() = delete;           // must be instantiated with pins
     
     void setup() {
-        ezread.squintf("Encoder setup..\n");
+        ezread.squintf("encoder setup..\n");
         set_pin(_a_pin, INPUT_PULLUP);
         set_pin(_b_pin, INPUT_PULLUP);
         button.setup();
@@ -232,7 +232,6 @@ class Encoder {
 //    drag(xy)      : returns orthogonal distance dragged in pixels along the given axis, of the current or most recent touch event.  doesn't reset until the next touch event begins
 //    get_delta()   : (for editing)  returns a value which goes 0 -> 1 upon touch, and continues to increment at an exponentially increasing rate (up to a max) as long as the touch persists. value becomes 0 on release or after query (query preserves acceleration)
 //    onrepeat()    : (for editing)  returns true periodically on fixed intervals while a touch event persists.  resets to false on release, or when queried (until the next interval)
-
 class Touchscreen {
   private:
     I2C* _i2c;
