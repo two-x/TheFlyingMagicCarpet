@@ -762,7 +762,7 @@ class Display {
             draw_truth(20, gas.cruise_pid_enabled, 3);
             draw_ascii(21, cruiseschemecard[gas.cruise_adjust_scheme]);
             draw_truth(22, cruise_brake, 1);
-            draw_ascii(23, modecard[drive_mode]);
+            draw_ascii(23, modecard[default_drive_mode]);
         }
         else if (datapage == PgBPID) {
             drange = brake.us[AbsMin]-brake.us[AbsMax];
@@ -1116,7 +1116,7 @@ class Tuner {
             else if (sel == 11) gas.set_cruise_pid_ena(tune(id));
             else if (sel == 12) gas.set_cruise_scheme(tune(gas.cruise_adjust_scheme, id, 0, NumCruiseSchemes-1, true));
             else if (sel == 13) tune(&cruise_brake, id);
-            else if (sel == 14) tune(&drive_mode, id, Fly, Cruise, true);
+            else if (sel == 14) tune(&default_drive_mode, id, Fly, Cruise, true);
         }
         else if (datapage == PgBPID) {
             if (sel == 11) brake.pid_dom->set_sampletime(tune(brake.pid_dom->sampletime(), id, 1000));

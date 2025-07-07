@@ -1,6 +1,7 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
 TaskHandle_t temptask = NULL, maftask = NULL, pushtask = NULL, drawtask = NULL;
+
 void setup() {
     initialize_pins_and_console();  // set pins, read the basic switch (only possible w/o console), then start the serial console for boot msgs. run 1st!
     semaphore_setup();              // needed by display buffering, so run before screen setup

@@ -166,11 +166,11 @@ bool encoder_reverse = false;         // should clockwise encoder twists indicat
 bool throttle_pid_default = false;    // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool cruise_pid_default = true;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool require_hotrc_powercycle = true; // refuse to enter drive modes until the code has verified functionality of radiolost detection
-bool ezread_suppress_deluge = true;   // activates ezread feature to suppress data coming into the console too fast (to prevent overrun crashes)
-int drive_mode = Cruise;              // from hold mode, enter cruise or fly mode by default?
+bool ezread_suppress_spam = true;   // activates ezread feature to suppress data coming into the console too fast (to prevent overrun crashes)
+int default_drive_mode = Cruise;              // from hold mode, enter cruise or fly mode by default?
 
 // global tunable variables
-int operational_framerate_limit_fps = 120;  // max display frame rate to enforce while driving whenever limit_framerate == true
+int operational_framerate_limit_fps = 100;  // max display frame rate to enforce while driving whenever limit_framerate == true
 float wheeldifferr = 35.0f;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel before idiot light
 constexpr float float_conversion_zero = 0.001f;
 constexpr int unlikely_int = -92935762; // random ass unlikely value for detecting unintended arguments
@@ -464,11 +464,11 @@ void kick_inactivity_timer(int source=-1) {
 #include <sstream>
 #include <stdarg.h>
 class EZReadConsole {
-  private:  // behavior parameters for ezread's data deluge suppression feature
-    int ezread_deluge_window_us = 1500000;  // console history epoch over which to calculate average data rate into buffer
-    int ezread_deluge_max_chars_per_sec = 50000;  // threshold data rate over window epoch beyond which ezread considers a data deluge needs to be suppressed
-    int ezread_deluge_passthru_interval_us = 300000;  // during active deluge, ezread will allow lines to leak thru at this reduced rate
-    int64_t ezread_deluge_boot_graceperiod_us = 3500000;  // ezread deluge detection is suspended for this long after intitial boot
+  private:  // behavior parameters for ezread's data spam suppression feature
+    int ezread_spam_window_us = 1500000;  // console history epoch over which to calculate average data rate into buffer
+    int ezread_spam_max_chars_per_sec = 50000;  // threshold data rate over window epoch beyond which ezread considers the spam needs to be suppressed
+    int ezread_spam_passthru_interval_us = 300000;  // during active spam deluge, ezread will allow lines to leak thru at this reduced rate
+    int64_t ezread_spam_boot_graceperiod_us = 3500000;  // ezread spam detection is suspended for this long after intitial boot
   public:
     bool dirty = true, has_wrapped = false;
     EZReadConsole() {}
@@ -481,37 +481,37 @@ class EZReadConsole {
     uint8_t defaultcolor = LGRY, sadcolor = SALM, happycolor = LGRN, highlightcolor = DCYN;    // std::vector<std::string> textlines; // Ring buffer array
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
   private:
-    int deluge_window_start_us = 0, deluge_chars_accum = 0, last_allowed_us = 0;
-    bool deluge_active = false, deluge_notice_shown = false;
+    int spam_window_start_us = 0, spam_chars_accum = 0, last_allowed_us = 0;
+    bool spam_active = false, spam_notice_shown = false;
     bool should_allow_output(size_t upcoming_chars) {
-        if (!ezread_suppress_deluge || (esp_timer_get_time() < ezread_deluge_boot_graceperiod_us)) return true;
+        if (!ezread_suppress_spam || (esp_timer_get_time() < ezread_spam_boot_graceperiod_us)) return true;
         int64_t now = esp_timer_get_time();
-        if (deluge_window_start_us == 0 || now - deluge_window_start_us > ezread_deluge_window_us) {
-            deluge_window_start_us = now;
-            deluge_chars_accum = 0;
+        if (spam_window_start_us == 0 || now - spam_window_start_us > ezread_spam_window_us) {
+            spam_window_start_us = now;
+            spam_chars_accum = 0;
         }
-        deluge_chars_accum += upcoming_chars;
-        float elapsed_sec = (now - deluge_window_start_us) / 1e6f;
-        float current_rate = deluge_chars_accum / elapsed_sec;
-        if (current_rate > ezread_deluge_max_chars_per_sec) {
-            if (!deluge_active) {
-                deluge_active = true;
-                deluge_notice_shown = false;
+        spam_chars_accum += upcoming_chars;
+        float elapsed_sec = (now - spam_window_start_us) / 1e6f;
+        float current_rate = spam_chars_accum / elapsed_sec;
+        if (current_rate > ezread_spam_max_chars_per_sec) {
+            if (!spam_active) {
+                spam_active = true;
+                spam_notice_shown = false;
             }
-            if (!deluge_notice_shown) {
-                deluge_notice_shown = true;
+            if (!spam_notice_shown) {
+                spam_notice_shown = true;
                 // this->printf("\n");  // ensure our announcement has its own line (also ensures colorization applies to the announcement line)
-                this->printf(sadcolor, "\nezread suppressing deluge...\n");
+                this->printf(sadcolor, "ezread suppressing spam...\n");
             }
-            if (now - last_allowed_us < ezread_deluge_passthru_interval_us) return false;  // suppress
+            if (now - last_allowed_us < ezread_spam_passthru_interval_us) return false;  // suppress
             last_allowed_us = now;
             return true;  // allow throttled print
         } else {
-            if (deluge_active) {
-                deluge_active = false;
-                deluge_notice_shown = false;
+            if (spam_active) {
+                spam_active = false;
+                spam_notice_shown = false;
                 // this->printf("\n");  // ensure our announcement has its own line (also ensures colorization applies to the announcement line)
-                this->printf(happycolor, "\nezread suppression ended\n");
+                this->printf(happycolor, "ezread suppression ended\n");
             }
             return true;
         }

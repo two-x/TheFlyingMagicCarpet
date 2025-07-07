@@ -452,8 +452,7 @@ static BootButton bootbutton(boot_sw_pin);
 #include "display.h"
 
 void BootButton::actions() {  // temporary (?) functionality added for development convenience
-    if (val()) ezread.printf("long ass print %d\n", ++dummyprintcount);
-    return;
+    // if (val()) ezread.printf("long ass print %d\n", ++dummyprintcount); return;  // was useful for debugging ezread spam suppression feature
     if (longpress()) autosaver_request = ReqTog;  // screen.auto_saver(!auto_saver_enabled);
     if (shortpress()) {
         if (runmode == LowPower) sleep_request = ReqOff;

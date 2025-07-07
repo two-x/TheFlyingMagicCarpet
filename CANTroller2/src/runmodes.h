@@ -20,7 +20,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (tach.stopped()) runmode = Stall;  // otherwise if engine not running --> Stall Mode
         }
         if ((runmode == Hold) && (brake.feedback == _None)) {  // if we have no brake feedback then hold mode must be skipped...
-            if (oldmode == Stall || oldmode == Standby) runmode = drive_mode;  // skip hold mode when starting up
+            if (oldmode == Stall || oldmode == Standby) runmode = default_drive_mode;  // skip hold mode when starting up
             else if (oldmode == Basic || oldmode == Cal || oldmode == LowPower) runmode = Standby;  // just to cover all possibilities
             else runmode = oldmode;  // don't drop to hold mode from other (driving) modes
         }
@@ -141,7 +141,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_holdMode(bool recovering=false) {
         if (we_just_switched_modes) {
             joy_centered = recovering;  // Fly mode will be locked until the joystick first is put at or below center
-            gas.setmode(OpenLoop);
+            gas.setmode(AutoPID);
             brake.setmode(AutoHold);
             steer.setmode(OpenLoop);
         }
@@ -153,13 +153,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 if (hotrc.radiolost_untested() && require_hotrc_powercycle) allowed_to_fly = false;
                 if (hotrc.radiolost()) allowed_to_fly = false;
             }
-            if (allowed_to_fly) runmode = drive_mode;  // Enter Fly or Cruise Mode upon joystick movement from center to above center  // Possibly add "&& stopped()" to above check?
+            if (allowed_to_fly) runmode = default_drive_mode;  // Enter Fly or Cruise Mode upon joystick movement from center to above center  // Possibly add "&& stopped()" to above check?
         }
     }
     void run_flyMode() {
         if (we_just_switched_modes) {
             car_hasnt_moved = speedo.stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
-            gas.setmode(OpenLoop);
+            gas.setmode(AutoPID);
             brake.setmode(ActivePID);
             steer.setmode(OpenLoop);
         }
