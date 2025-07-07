@@ -1417,6 +1417,14 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         _sw_event[chan] = true;
         if (chan == Ch4) simBtnTimer.reset();  // so we can know time since last sim button press, to help prevent phantom starter events
     }
+    bool sw_event(int ch) {  // returns if there's an event on the given channel then resets that channel
+        bool retval = _sw_event[ch];
+        _sw_event[ch] = false;
+        return retval;
+    }
+    void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
+        for (int ch = Ch3; ch <= Ch4; ch++) _sw_event[ch] = false;
+    }
     int sim_button_time() { return (int)simBtnTimer.elapsed(); }  // returns time since last simulated ch4 button press. to help prevent phantom starter turnon
     int ch4_button_time() { return (int)ch4BtnTimer.elapsed(); }  // returns time since last ch4 button press. to help prevent phantom starter turnon
   private:
@@ -1456,17 +1464,6 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     //         else sw_pending[chan-2] = false;
     //     }
     // }
-    void toggles_update() {  // older, simpler implementation of hotrc channel button handler which has no spurious value protection
-        for (int chan = Ch3; chan <= Ch4; chan++) {
-            us[chan][Raw] = (float)(rmt[chan].readPulseWidth(true));
-            sw[chan] = (us[chan][Raw] <= us[chan][Cent]); // Ch3 switch true if short pulse, otherwise false  us[Ch3][Cent]
-            if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
-                _sw_event[chan] = true;          // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
-                kick_inactivity_timer(HuRCTog);  // evidence of user activity
-            }
-            sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
-        }
-    }
     float us_to_pc(int axis, float _us) {
         if (_us >= us[axis][Cent]) return map(_us, us[axis][Cent], us[axis][OpMax], pc[axis][Cent], pc[axis][OpMax]);
         return map(_us, us[axis][Cent], us[axis][OpMin], pc[axis][Cent], pc[axis][OpMin]);    
