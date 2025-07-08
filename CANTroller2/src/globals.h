@@ -222,8 +222,8 @@ int datapage = PgRun;                  // which of the dataset pages is currentl
 int autosaver_request = ReqNA;
 volatile bool auto_saver_enabled = false;
 volatile int sel = 0;                   // in the real time tuning UI, which of the editable values is selected. -1 for none 
-volatile int sel_last = 0;          
-volatile int sel_last_last = 0;          
+volatile int sel_last = 0;
+volatile int sel_last_last = 0;
 bool syspower = HIGH, not_syspower = !syspower; // set by handler only. Reflects current state of the signal
 int sleep_request = ReqNA;
 float maf_gps = 0;                              // manifold mass airflow in grams per second
@@ -252,8 +252,8 @@ inline void cleanzero(float* num, float margin=NAN) noexcept {  // zeroes float 
 #undef constrain
 inline float constrain(float amt, float low, float high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline int constrain(int amt, int low, int high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
-inline uint constrain(uint amt, uint low, uint high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 inline long constrain(long amt, long low, long high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
+inline unsigned int constrain(unsigned int amt, unsigned int low, unsigned int high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
     if (!iszero(in_max - in_min)) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
@@ -601,21 +601,15 @@ class EZReadConsole {
         }
     }
     void debugf(const char* format, ...) {
-        static int64_t last_debug_us = 0;
-        const int64_t min_interval_us = 250000;  // 0.25 seconds
-
-        int64_t now = esp_timer_get_time();
-        if (now - last_debug_us < min_interval_us) return;
-        last_debug_us = now;
-
+        static Timer debugtimer{1000};
+        if (!debugtimer.expired()) return;
+        debugtimer.set(ezread_spam_passthru_interval_us);
         char temp[100];
         va_list args;
         va_start(args, format);
         vsnprintf(temp, sizeof(temp), format, args);
         va_end(args);
-
-        // bypass suppression (if you want), or use normal path
-        this->squintf(highlightcolor, "[dbg] %s\n", temp);
+        this->squintf(highlightcolor, "%s", temp);
     }
     void lookback(int off) {
         int offset_old = offset;

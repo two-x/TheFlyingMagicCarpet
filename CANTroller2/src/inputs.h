@@ -439,26 +439,21 @@ class Touchscreen {
         
         // ezread.squintf("n%dl%dv%d q%02x tx:%3d ty:%3d e%d x%d\r", nowtouch, lasttouch, landed_coordinates_valid, tbox, tft_touch[0], tft_touch[1], fd, (int)fd_exponent);
         // std::cout << "n" << nowtouch << " e" << fd << " x" << fd_exponent << "\r";
-        if (tbox == 0x00 && onrepeat()) increment_datapage = true;  // displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
-        else if (tbox == 0x01) {  // long touch to enter/exit editing mode, if in editing mode, press to change the selection of the item to edit
-            if (tunctrl == Off) {
-                sel = 0;          // if entering select mode from off mode, select the first variable
-                if (longpress()) tunctrl = Select;
+        if (tbox == 0x00 && onrepeat()) increment_datapage = true;  // PAG btn: displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
+        else if (tbox == 0x01) {  // SEL btn: longpress to enter/exit select mode. if selecting, shortpress to cycle thru the data
+            if (tunctrl == Select && ontouch()) increment_sel = true; // in Select mode each new touch moves to the next selection
+            else if (tunctrl == Edit && ontouch()) tunctrl = Select;  // in Edit mode touch to drop back to Select mode
+            else if (longpress()) {  // long press toggles between Off and Select mode
+                if (tunctrl == Off) tunctrl = Select;
+                else if (tunctrl == Select) tunctrl = Off;
             }
-            else if (tunctrl == Edit && onrepeat()) {
-                tunctrl = Select;      // drop back to select mode
-                increment_sel = true;  // move to the next selection
-            }
-            else if (tunctrl == Select) {
-                if (ontouch()) increment_sel = true;
-                else if (longpress()) tunctrl = Off;
-            }
+            else if (tunctrl == Select && ontouch()) increment_sel = true;  // each short touch moves to the next selection
         }
-        else if (tbox == 0x02) {  // pressed the increase value button, for real-time tuning of variables
+        else if (tbox == 0x02) {  // + btn: to increase value being edited. for real-time tuning of variables
             if (tunctrl == Select) tunctrl = Edit;  // if just entering edit mode, don't change the value yet
             else if (tunctrl == Edit) idelta = id;  // if in edit mode, increase the value
         }
-        else if (tbox == 0x03) {  // pressed the decrease value button, for real-time tuning of variables
+        else if (tbox == 0x03) {  // - btn: to increase value being edited. for real-time tuning of variables
             if (tunctrl == Select) tunctrl = Edit;   // if just entering edit mode, don't change the value yet
             else if (tunctrl == Edit) idelta = -id;  // if in edit mode, decrease the value
         }

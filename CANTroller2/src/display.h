@@ -1031,11 +1031,11 @@ class Tuner {
     void process_inputs() {
         if (!tuningEditTimer.expired() || auto_saver_enabled) return;
         tuningEditTimer.reset();
-        if (!screen->disp_selection_dirty) {
-            sel_last = sel;
-            tunctrl_last = tunctrl;
-        }
-        if (!screen->disp_datapage_dirty) datapage_last = datapage;
+        // if (!screen->disp_datapage_dirty) datapage_last = datapage;
+        // if (!screen->disp_selection_dirty) {
+        //     sel_last = sel;
+        //     tunctrl_last = tunctrl;
+        // }
         int encoder_sw_action = encoder.button.press_event(); // gather any encoder button press and reset it for next time (automatically if true).
         if (encoder_sw_action != SwNone) {                    // first deal with any unhandled switch press events
             if (encoder_sw_action == SwShort)  {              // if short press
@@ -1047,8 +1047,11 @@ class Tuner {
         }
         id_encoder = encoder.rotation(true);                        // get encoder travel times acceleration factor
         rdelta_encoder = constrain(id_encoder, -1, 1);              // save unaccelerated encoder travel (-1, 0, or 1)
-        if (tunctrl == Select) sel += rdelta_encoder;               // when selecting data, scroll thru data values using unaccelerated encoder value. will not wrap around, overflow handled below
-        else if (tunctrl == Off) datapage += rdelta_encoder;        // when not tuning, flip thru datapages using unaccel encoder value. will not wrap around. constrain done below
+        if (tunctrl == Off) datapage += rdelta_encoder;        // when not tuning, flip thru datapages using unaccel encoder value. will not wrap around. constrain done below
+        else if (tunctrl == Select) {
+            sel += rdelta_encoder;                // when selecting data, scroll thru data values using unaccelerated encoder value. will not wrap around, overflow handled below
+            if (tunctrl_last != Select) sel = 0;  // upon entering select mode, start with the 1st editable value
+        }
         if (touch->increment_sel) ++sel %= disp_tuning_lines;       // on touchscreen select, select next editable data line, wrapping around
         if (touch->increment_datapage) ++datapage %= NumDataPages;  // touchscreen datapage change, go to next page, wrapping around
         touch->increment_sel = touch->increment_datapage = false;   // reset the touch requests
@@ -1058,7 +1061,7 @@ class Tuner {
         else if (tuningAbandonmentTimer.expired()) tunctrl = Off;      // turn off the tuner after extended user inactivity
         datapage = constrain(datapage, 0, datapages::NumDataPages-1);  // keep datapage value in range
         if (datapage != datapage_last) {                               // if datapage changed
-            if (tunctrl == Edit) tunctrl = Select;                     // stop editing a value if the datapage got changed
+            tunctrl = Off;                     // stop tuning when datapage changes  // was:  if (tunctrl == Edit) tunctrl = Select; 
             screen->disp_datapage_dirty = true;                        // flag the datapage data for a redraw
         }
         if (tunctrl == Select) {  // select means we're attempting to scroll thru the datapage data values for a value to edit
@@ -1066,6 +1069,10 @@ class Tuner {
             if (sel != sel_last) screen->disp_selection_dirty = true;  // if selection changed, highlight must move to new data, so flag a redraw of the variable names
         }
         if (tunctrl != tunctrl_last || screen->disp_datapage_dirty) screen->disp_selection_dirty = true; // on datapage redraw or change in tuning mode, flag a redraw of the variable names (eg to remove highlight) 
+        sel_last = sel;
+        tunctrl_last = tunctrl;
+        datapage_last = datapage;
+
     }  // at this point if an edit is in progress, our id variable has the amount to change for this loop.
     void edit_values() {  // change tunable values when editing
         if (tunctrl != Edit || !id) return;  // if not editing data values, or if amount of edit is 0, just ditch
@@ -1210,7 +1217,6 @@ static void draw_task(void *parameter) {
             screen.do_draw();
             xSemaphoreGive(easelbuf_sem);  // give away the easel so it can be processed & sent to the screen
         }
-        // vTaskDelay(pdMS_TO_TICKS(1));  //   || sim.enabled()
         vTaskDelay(pdMS_TO_TICKS(1 + ((int)limit_framerate * refresh_limit_us / 1000)));  //   || sim.enabled()
         // if (limit_framerate && !auto_saver_enabled) vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit_us / 1000 - 1)));  //   || sim.enabled()
         lastmode = runmode;

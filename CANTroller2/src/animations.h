@@ -23,7 +23,6 @@ std::string simgrid[4][3] = {
     { "pos", "joy", "joy" },
     { "pos", "joy", "joy" },
 };
-
 volatile bool _is_running;
 static constexpr int SHIFTSIZE = 8;
 volatile bool flip = 0;
@@ -660,17 +659,6 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
     LGFX_Sprite* nowspr_ptr;
     viewport* vp;
     EZReadConsole* ez;
-    int chars_to_fit_pix(LGFX_Sprite* spr, std::string& str, int pix) {
-        int totalwidth = 0, charcount = 0;
-        for (size_t i = 0; i < str.length(); ++i) {
-            std::string ch(1, str[i]); // Create a string with the single character
-            int charwidth = spr->textWidth(ch.c_str()); // Measure the width of the next character
-            if (totalwidth + charwidth > pix) break; // Stop if adding the next character exceeds the maximum width
-            totalwidth += charwidth;
-            charcount++;
-        }
-        return charcount;
-    }
     void draw_scrollbar(LGFX_Sprite* spr, uint8_t color) {  // this runs but is not finished and doesn't do anything
         int cent = (int)((float)vp->h * 0.125) - 6;
         for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
@@ -704,9 +692,6 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
             if (nowline.empty()) continue;
             int y = vp->y + i * font_height;
             spr->setTextColor(ez->linecolors[idx]);
-            // int chop = chars_to_fit_pix(spr, nowline, vp->w);
-            // ezread.debugf("draw idx=%d len=%d chop=%d vpw=%d", idx, (int)nowline.length(), chop, vp->w);
-            // std::string clipped = nowline.substr(0, chop);
             spr->setCursor(_main_x, y);
             spr->print(nowline.c_str());
         }
@@ -899,22 +884,20 @@ class PanelAppManager {
             mule_drawn = false;
             ezdraw->dirty = true;
         }
-        bool touch_valid = ((touch->landed_pt(Horz) >= vp.x) && (touch->landed_pt(Horz) < vp.x + vp.w) &&
-                            (touch->landed_pt(Vert) >= vp.y) && (touch->landed_pt(Vert) < vp.y + vp.h));
+        bool touch_valid = (touch->touched() && (touch->landed_pt(Horz) >= vp.x) && (touch->landed_pt(Vert) >= vp.y) && 
+                           (touch->landed_pt(Horz) < vp.x + vp.w) && (touch->landed_pt(Vert) < vp.y + vp.h));
         if (ui_app == EZReadUI) ezdraw->update(spr);
         else if (ui_app == MuleChassisUI) draw_mule(spr);
         else if (ui_app == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
             // mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
             if (nowsaver == Eraser) {
                 still_running = eSaver.update(spr, &vp);
-                if (touch_valid) {
-                    if (touch->tap()) eSaver.touchadjust(touch->touch_pt(Horz), touch->touch_pt(Vert));
-                    else if (touch->held()) eSaver.touchwrite(spr, touch->touch_pt(Horz), touch->touch_pt(Vert)); 
-                }
+                if (touch_valid && touch->tap()) eSaver.touchadjust(touch->touch_pt(Horz), touch->touch_pt(Vert));
+                else if (touch_valid && touch->held()) eSaver.touchwrite(spr, touch->touch_pt(Horz), touch->touch_pt(Vert)); 
             }
-            else if ((nowsaver == Collisions) && touch_valid) {
+            else if (nowsaver == Collisions) {
                 still_running = cSaver.update(spr, &vp);  // if ((bool)still_running) 
-                if (touch->held()) cSaver.touch(spr, touch->touch_pt(Horz), touch->touch_pt(Vert));
+                if (touch_valid && touch->held()) cSaver.touch(spr, touch->touch_pt(Horz), touch->touch_pt(Vert));
             }
             if (!still_running) change_saver();
             else cycle_anim(check_cycle_req());
