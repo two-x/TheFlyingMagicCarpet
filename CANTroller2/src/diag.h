@@ -26,7 +26,7 @@ class DiagRuntime {
     int64_t times[2][entries];
     // two sets of large arrays for storage of log data. when one fills up it jumps to the other, so the first might be written to an sd card
     float tel[2][NumTelemetryFull][entries];  // array for telemetry of all sensors for given timestamp
-    int index = 0, dic = 0, runmode;  // start with dictionary 0
+    int index = 0, dic = 0, total_registered = 0, runmode;  // start with dictionary 0
     Timer logTimer{100000};  // microseconds per logged reading
     Timer errTimer{175000};
     Timer speedoTimer{2500000}, tachTimer{2500000};  // how much time within which we expect the car will move after hitting the gas
@@ -71,6 +71,7 @@ class DiagRuntime {
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
           steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition) {}
     void setup() {
+        ezread.squintf("Diagnostic engine:");
         for (int i=0; i<NumErrTypes; i++)
             for (int j=0; j<NumTelemetryFull; j++) {
                 err_sens[i][j] = err_last[i][j] = false; // Initialize sensor error flags to false
@@ -83,10 +84,10 @@ class DiagRuntime {
         register_device(_Tach, tach->ptr(), tach->opmin_ptr(), tach->opmax_ptr(), tach->margin_ptr());
         register_device(_BrakePres, pressure->ptr(), pressure->opmin_ptr(), pressure->opmax_ptr(), pressure->margin_ptr());
         register_device(_BrakePosn, brkpos->ptr(), brkpos->opmin_ptr(), brkpos->opmax_ptr(), brkpos->margin_ptr());
-        register_device(_HotRCHorz, &hotrc->pc[Horz][Filt], &hotrc->pc[Horz][OpMin], &hotrc->pc[Horz][OpMax], &hotrc->pc[Horz][Margin]);
-        register_device(_HotRCVert, &hotrc->pc[Vert][Filt], &hotrc->pc[Vert][OpMin], &hotrc->pc[Vert][OpMax], &hotrc->pc[Vert][Margin]);
-        register_device(_HotRCCh3, &hotrc->pc[Ch3][Filt], &hotrc->pc[Ch3][OpMin], &hotrc->pc[Ch3][OpMax], &hotrc->pc[Ch3][Margin]);
-        register_device(_HotRCCh4, &hotrc->pc[Ch4][Filt], &hotrc->pc[Ch4][OpMin], &hotrc->pc[Ch4][OpMax], &hotrc->pc[Ch4][Margin]);
+        register_device(_HotRCHorz, &hotrc->us[Horz][Filt], &hotrc->us[Horz][OpMin], &hotrc->us[Horz][OpMax], &hotrc->us[Horz][Margin]);
+        register_device(_HotRCVert, &hotrc->us[Vert][Filt], &hotrc->us[Vert][OpMin], &hotrc->us[Vert][OpMax], &hotrc->us[Vert][Margin]);
+        register_device(_HotRCCh3, &hotrc->us[Ch3][Raw], &hotrc->us[Ch3][OpMin], &hotrc->us[Ch3][OpMax], &hotrc->us[Ch3][Margin]);
+        register_device(_HotRCCh4, &hotrc->us[Ch4][Raw], &hotrc->us[Ch4][OpMin], &hotrc->us[Ch4][OpMax], &hotrc->us[Ch4][Margin]);
         register_device(_MuleBatt, mulebatt->ptr(), mulebatt->opmin_ptr(), mulebatt->opmax_ptr(), mulebatt->margin_ptr());
         register_device(_AirVelo, airvelo->ptr(), airvelo->opmin_ptr(), airvelo->opmax_ptr(), airvelo->margin_ptr());
         register_device(_MAP, mapsens->ptr(), mapsens->opmin_ptr(), mapsens->opmax_ptr(), mapsens->margin_ptr());
@@ -100,6 +101,7 @@ class DiagRuntime {
         register_device(_TempWhRR, tempsens->ptr(loc::TempWheelRR), tempsens->opmin_ptr(loc::TempWheelRR), tempsens->opmax_ptr(loc::TempWheelRR), tempsens->margin_ptr(loc::TempWheelRR));
         // register_bool_device(_Ignition, ignition->signal_ptr());
         // register_bool_device(_Starter, starter->signal_ptr());
+        ezread.squintf(" monitoring %d devices\n", total_registered);
     }
     void update() {
         if (first_boot) {  // don't run too soon before sensors get initialized etc.
@@ -150,6 +152,7 @@ class DiagRuntime {
         devices[_enumname][DiagMax] = _max;
         devices[_enumname][DiagMargin] = _margin;
         registered[_enumname] = true;
+        total_registered++;
     }
     void update_status_words() {}
     void setflag(int device, int errtype, bool stat) {  // this sets the error flag in err_sens[type] array, and if device is registered, also in the status words
@@ -510,7 +513,7 @@ class DiagRuntime {
 
 class LoopTimer {
   public:
-    LoopTimer() {}
+    LoopTimer() { setup(); }
     // Loop timing related
     Timer loop_timer{1000000};  // how long the previous main loop took to run (in us)
     int loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
@@ -643,7 +646,7 @@ class BootMonitor {
         print_postmortem();
         recover_status();
         print_chip_info();
-        print_partition_table();
+        // print_partition_table();
         if (!watchdog_enabled) return;
         ezread.squintf("Boot manager.. \n");
         esp_task_wdt_init(timeout_sec, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
@@ -752,7 +755,7 @@ class BootMonitor {
     }
     void print_partition_table() {  // warning: this could hang/crash if no "coredump" labeled partition is found
         if (!running_on_devboard) return;
-        ezread.squintf("\nPartition Typ SubT  Address SizeByte   kB\n");
+        ezread.squintf("Partition Typ SubT  Address SizeByte   kB\n");
         esp_partition_iterator_t iterator = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
         const esp_partition_t *partition;
         while ((partition = esp_partition_get(iterator)) != NULL) {
@@ -768,10 +771,10 @@ class BootMonitor {
         esp_chip_info(&chip_info);
         unsigned major_rev = chip_info.revision / 100;
         unsigned minor_rev = chip_info.revision % 100;
-        ezread.squintf("  detected %s v%d.%d %d-core, ", CONFIG_IDF_TARGET, major_rev, minor_rev, chip_info.cores);
-        if(esp_flash_get_size(NULL, &flash_size) != ESP_OK) Serial.printf("(fail flash detect)\n");
+        ezread.squintf("MCU: detect %s v%d.%d %d-core, ", CONFIG_IDF_TARGET, major_rev, minor_rev, chip_info.cores);
+        if (esp_flash_get_size(NULL, &flash_size) != ESP_OK) ezread.squintf("fail flash detect\n");
         else ezread.squintf("%" PRIu32 "MB %s flash\n", flash_size / (uint32_t)(1024 * 1024),
-          (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "emb." : "ext.");  // embedded or external
+          (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "emb" : "ext");  // embedded or external
         ezread.squintf("  w/ %s%s%s%s.", 
           (chip_info.features & CHIP_FEATURE_WIFI_BGN) ? "WiFi/" : "",
           (chip_info.features & CHIP_FEATURE_BT) ? "BT" : "",
@@ -783,10 +786,10 @@ class BootMonitor {
 #if RUN_TESTS
     #include "unittests.h"
     void run_tests() {
-        Serial.printf("Running tests...\n");
+        Serial.printf("Tests running..");
         delay(5000);
         test_Param();
-        Serial.printf("Tests complete.\n");
+        Serial.printf("Tests complete\n");
         for(;;); // loop forever
     }
 #else

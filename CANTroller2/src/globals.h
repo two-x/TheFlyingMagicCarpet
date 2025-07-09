@@ -74,7 +74,8 @@
 //
 // this group has enums which are relatively straightforward, i.e. each used in only one context 
 enum runmode { Basic=0, LowPower=1, Standby=2, Stall=3, Hold=4, Fly=5, Cruise=6, Cal=7, NumRunModes=8 };
-enum req { ReqNA=-1, ReqOff=0, ReqOn=1, ReqTog=2, NumReqs=3 };  // requesting handler actions of digital values with handler functions
+enum req { ReqOff=0, ReqOn=1, ReqTog=2, ReqNA=3, NumReqs=4 };  // requesting handler actions of digital values with handler functions
+enum starter_requestors { StartUnknown=0, StartClass=1, StartHotrc=2, StartTouch=3, StartRunmode=4, NumStartReq=5 };  // for identification of starter motor request source
 enum cruise_modes { OnePull=0, HoldTime=1, NumCruiseSchemes=2 };
 enum sw_presses { SwNone=0, SwShort=1, SwLong=2 };
 enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, CruiseMode=10, Calibrate=11, Starting=12, AutoPID=13, NumMotorModes=14 };
@@ -195,6 +196,8 @@ float governor = 95.0f;                 // software governor will only allow thi
 int serial_monitor_baudrate = (int)MonitorBaudrate;
 volatile int refresh_limit_us = 1000000 / operational_framerate_limit_fps; // 60 Hz -> 16666 us, 90 Hz -> 11111 us, 120 Hz -> 8333 us
 std::string modecard[NumRunModes] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
+std::string requestcard[NumReqs] = { "Off", "On", "Tog", "NA" };
+
 float permanan = NAN;
 bool wheeltemperr;
 float* nanptr = &permanan;
@@ -224,7 +227,7 @@ volatile bool auto_saver_enabled = false;
 volatile int sel = 0;                   // in the real time tuning UI, which of the editable values is selected. -1 for none 
 volatile int sel_last = 0;
 volatile int sel_last_last = 0;
-bool syspower = HIGH, not_syspower = !syspower; // set by handler only. Reflects current state of the signal
+// bool syspower = HIGH, not_syspower = !syspower; // set by handler only. Reflects current state of the signal
 int sleep_request = ReqNA;
 float maf_gps = 0;                              // manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
@@ -465,12 +468,15 @@ void kick_inactivity_timer(int source=-1) {
 #include <stdarg.h>
 class EZReadConsole {
   private:  // behavior parameters for ezread's data spam suppression feature
-    int ezread_spam_window_us = 1500000;  // console history epoch over which to calculate average data rate into buffer
-    int ezread_spam_max_chars_per_sec = 50000;  // threshold data rate over window epoch beyond which ezread considers the spam needs to be suppressed
-    int ezread_spam_passthru_interval_us = 300000;  // during active spam deluge, ezread will allow lines to leak thru at this reduced rate
-    int64_t ezread_spam_boot_graceperiod_us = 3500000;  // ezread spam detection is suspended for this long after intitial boot
+    int spam_enable_thresh_cps = 2000;  // threshold data rate (avg over window) beyond which begins spam suppression
+    int spam_disable_thresh_cps = 500;  // threshold data rate (avg over window) below which ends spam suppression
+    int spam_window_us = 200000;  // console history epoch over which to calculate average data rate into buffer
+    Timer passthrutimer{300000};  // during suppressing spam, allow one print call to slip thru this often
+    int update_timeout_us = 20000;
+    int boot_graceperiod_timeout_us = 3500000;  // spam detection is suspended for this long after intitial boot
   public:
-    bool dirty = true, has_wrapped = false;
+    bool dirty = true, has_wrapped = false, graceperiod = true;
+    Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
     EZReadConsole() {}
     static constexpr int num_lines = 300;
     static constexpr int bufferSize = num_lines;
@@ -479,42 +485,35 @@ class EZReadConsole {
     int newest_content = bufferSize, current_index = 0, offset = 0;
     uint8_t linecolors[num_lines], color, usecolor;
     uint8_t defaultcolor = LGRY, sadcolor = SALM, happycolor = LGRN, highlightcolor = DCYN;    // std::vector<std::string> textlines; // Ring buffer array
-    Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
-  private:
-    int spam_window_start_us = 0, spam_chars_accum = 0, last_allowed_us = 0;
     bool spam_active = false, spam_notice_shown = false;
-    bool should_allow_output(size_t upcoming_chars) {
-        if (!ezread_suppress_spam || (esp_timer_get_time() < ezread_spam_boot_graceperiod_us)) return true;
-        int64_t now = esp_timer_get_time();
-        if (spam_window_start_us == 0 || now - spam_window_start_us > ezread_spam_window_us) {
-            spam_window_start_us = now;
-            spam_chars_accum = 0;
-        }
-        spam_chars_accum += upcoming_chars;
-        float elapsed_sec = (now - spam_window_start_us) / 1e6f;
-        float current_rate = spam_chars_accum / elapsed_sec;
-        if (current_rate > ezread_spam_max_chars_per_sec) {
-            if (!spam_active) {
-                spam_active = true;
-                spam_notice_shown = false;
-            }
-            if (!spam_notice_shown) {
-                spam_notice_shown = true;
-                // this->printf("\n");  // ensure our announcement has its own line (also ensures colorization applies to the announcement line)
-                this->printf(sadcolor, "ezread suppressing spam...\n");
-            }
-            if (now - last_allowed_us < ezread_spam_passthru_interval_us) return false;  // suppress
-            last_allowed_us = now;
-            return true;  // allow throttled print
-        } else {
-            if (spam_active) {
+    float avg_spamrate_cps = 0.0f, window_accum_char = 0.0f;  // variables to dynamically manage moving average
+    void update() {
+        static Timer updatetimer{boot_graceperiod_timeout_us};
+        if (!ezread_suppress_spam) return;
+        if (updatetimer.expireset()) {
+            if (graceperiod) updatetimer.set(update_timeout_us);
+            graceperiod = false;  // after here we can assume we're out of graceperiod and calltimer is accurate
+            window_accum_char = std::max(0.0f, window_accum_char - avg_spamrate_cps * update_timeout_us / 1e6f);  // let old spam fall out of the buffer.
+            cleanzero(&window_accum_char, 0.1);
+            avg_spamrate_cps = window_accum_char * 1e6f / spam_window_us;  // calc a new avg rate.
+            cleanzero(&avg_spamrate_cps, 0.1);
+            if (spam_active && ((int)avg_spamrate_cps < spam_disable_thresh_cps)) {
                 spam_active = false;
-                spam_notice_shown = false;
-                // this->printf("\n");  // ensure our announcement has its own line (also ensures colorization applies to the announcement line)
-                this->printf(happycolor, "ezread suppression ended\n");
+                this->printf(happycolor, "ezread spam suppression off\n");
             }
-            return true;
+            else if (!spam_active && ((int)avg_spamrate_cps > spam_enable_thresh_cps)) {
+                spam_active = true;
+                this->printf(sadcolor, "ezread spam suppression on\n");
+            }
         }
+    }
+  private:
+    int last_allowed_us = 0;
+    bool should_allow_output(size_t upcoming_chars) {
+        if (!ezread_suppress_spam || graceperiod) return true;
+        window_accum_char += upcoming_chars;  // add new spam to buffer
+        if (!spam_active) return true;
+        return passthrutimer.expireset();  // only return true upon passthru timer expiration, otherwise false
     }
     void printf_impl(uint8_t _color, const char* format, va_list args) {  // this is not called directly but by one ots overloads below
         char preview[100];
@@ -561,7 +560,7 @@ class EZReadConsole {
             this->printf("%s", blank.c_str());
             linecolors[i] = defaultcolor;
         }
-        this->printf(highlightcolor, "welcome to EZ-Read console\n");
+        this->printf(highlightcolor, "Welcome to EZ-Read console\n");
         dirty = true;
     }
     void printf(const char* format, ...) {  // for if we're called with same arguments as printf would take
@@ -603,7 +602,7 @@ class EZReadConsole {
     void debugf(const char* format, ...) {
         static Timer debugtimer{1000};
         if (!debugtimer.expired()) return;
-        debugtimer.set(ezread_spam_passthru_interval_us);
+        debugtimer.set(passthrutimer.timeout());
         char temp[100];
         va_list args;
         va_start(args, format);

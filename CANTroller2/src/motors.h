@@ -16,19 +16,18 @@ class QPID {
     // dmod: sets the computation method for the derivative term, to compute based either on error or on measurement (default)
     // awmode: sets the integral anti-windup mode to one of clamp, which clamps the output after adding integral and proportional (on measurement) terms,
     //   or cond (default), which provides some integral correction, prevents deep saturation and reduces overshoot. Option off disables anti-windup altogether
-    enum class ctrl : int {manual, automatic, toggle};            // controller mode
-    enum class cdir : int {reverse=-1, direct=1};                 // controller direction
-    enum class pmod : int {onerr, onmeas, onerrmeas};             // proportional mode
-    enum class dmod : int {onerr, onmeas};                        // derivative mode
-    enum class awmod : int {cond, clamp, off, round, roundcond};  // integral anti-windup mode
-    enum class centmod : int {off, on, strict};                   // Allows a defined output zero point
+    enum class ctrl { manual, automatic, toggle };            // controller mode
+    enum class cdir { reverse=-1, direct=1 };                 // controller direction
+    enum class pmod { onerr, onmeas, onerrmeas };             // proportional mode
+    enum class dmod { onerr, onmeas };                        // derivative mode
+    enum class awmod { cond, clamp, off, round, roundcond };  // integral anti-windup mode
+    enum class centmod { off, on, strict };                   // Allows a defined output zero point
   private:
     float dispkp = 0, dispki = 0, dispkd = 0, _iaw_cond_thresh = 1.0;  // set what fraction of output range beyond which applies integral anti-windup in cond mode
-    float _pterm, _iterm, _dterm, _kp, _ki, _kd, _err, lasterr, lastin, lastout, _cent, _outsum, _target;
+    float _pterm, _iterm, _dterm, _kp, _ki, _kd, _err, lasterr, lastin, lastout, _cent, _outsum, _target, _output;
     float *myin;     // Pointers to the input, output, and target variables. This  creates a
     float *_outmin;
     float *_outmax;
-    float _output;
     float _out_changerate_ps = 0.0;  // how much output is changing per sec (differential of output) 
     float _max_out_changerate_ps = 0.0;  // set to impose limits on how fast the output can change. set to 0.0 to disable
     bool pause_diff;
@@ -38,7 +37,8 @@ class QPID {
     dmod _dmode = dmod::onmeas;
     awmod _awmode = awmod::cond;
     centmod _centmode = centmod::off;
-    int _sampletime, lasttime;
+    int _sampletime;  // time in us between each output calculation
+    int64_t lasttime; // need 64 bit value to hold 54 bit esp hardware timer value (ensures no overflow after a few hours like micros())
   public:
     QPID() {}  // Default constructor
     QPID(float* a_in, float* a_min, float* a_max, float a_kp = 0, float a_ki = 0, float a_kd = 0,
@@ -64,9 +64,9 @@ class QPID {
         _sampletime = a_sampletime;
         set_dir(a_dir);
         set_tunings(a_kp, a_ki, a_kd, _pmode, _dmode, _awmode);
-        lasttime = micros() - _sampletime;
+        lasttime = esp_timer_get_time() - _sampletime;
     }
-    void init(float preload_output = NAN) {  // Ensure a bumpless transfer from manual to automatic mode
+    void init(float preload_output = NAN) {  // ensure a bumpless transfer from manual to automatic mode
         if (!std::isnan(preload_output)) _output = preload_output;
         _outsum = _output;
         lastin = *myin;
@@ -75,9 +75,9 @@ class QPID {
     // This function should be called every time "void loop()" executes. The function will decide whether a new 
     // PID output needs to be computed. Returns true when the output is computed, false when nothing has been done.
     float compute() {
-        int now = micros();
-        int timechange = (now - lasttime);
-        if (_mode == ctrl::automatic && timechange < _sampletime) return _output;  // If class is handling the timing and this time was a nop
+        int64_t now = esp_timer_get_time();
+        int timechange = (int)(now - lasttime);
+        if (_mode == ctrl::automatic && timechange < _sampletime) return _output;  // if class is handling the timing and this time was a nop
 
         float in = *myin;
         float din = in - lastin;
@@ -118,7 +118,7 @@ class QPID {
 
         _outsum += _iterm;  // by default, compute output as per PID_v1    // include integral amount and pmterm
         if (_awmode == awmod::off) _outsum -= pmterm;
-        else _outsum = constrain(_outsum - pmterm, *_outmin, *_outmax);  // Clamp
+        else _outsum = constrain(_outsum - pmterm, *_outmin, *_outmax);  // clamp
         
         lastout = _output;
         _output = constrain(_outsum + peterm + _dterm, *_outmin, *_outmax);  // include _dterm, clamp and drive output
@@ -145,7 +145,7 @@ class QPID {
         if (std::abs(a_ki) < float_conversion_zero) a_ki = 0.0;
         if (std::abs(a_kd) < float_conversion_zero) a_kd = 0.0;
         dispkp = a_kp; dispki = a_ki; dispkd = a_kd;
-        float sampletime_sec = (float)_sampletime / 1000000;
+        float sampletime_sec = (float)_sampletime / 1000000.0f;
         _kp = a_kp;
         _ki = a_ki * sampletime_sec;
         _kd = a_kd / sampletime_sec;
@@ -170,7 +170,7 @@ class QPID {
     }
     void set_mode(int a_mode) { set_mode((ctrl)a_mode); }
     void reset() {  // Does all the things that need to happen to ensure a bumpless transfer from manual to automatic mode.
-        lasttime = micros() - _sampletime;
+        lasttime = esp_timer_get_time() - _sampletime;
         lastin = 0; _outsum = 0;
         _pterm = 0; _iterm = 0; _dterm = 0;
     }
@@ -191,7 +191,7 @@ class QPID {
         _output = constrain(_output, *_outmin, *_outmax);
         _outsum = constrain(_outsum, *_outmin, *_outmax);
     }
-    void set_max_out_changerate_ps(float a_max_rate) { _max_out_changerate_ps = a_max_rate; }  // to set value of imposed maximum output change rate (per second). if 0.0 disables limits
+    void set_max_out_changerate(float a_max_rate) { _max_out_changerate_ps = a_max_rate; }  // to set value of imposed maximum output change rate (in output units per second). if 0.0 disables limits
     void set_kp(float a_kp) { set_tunings(std::max(0.0f, a_kp), dispki, dispkd, _pmode, _dmode, _awmode); }
     void set_ki(float a_ki) { set_tunings(dispkp, std::max(0.0f, a_ki), dispkd, _pmode, _dmode, _awmode); }
     void set_kd(float a_kd) { set_tunings(dispkp, dispki, std::max(0.0f, a_kd), _pmode, _dmode, _awmode); }
@@ -340,21 +340,14 @@ class JagMotor : public ServoMotor {
         return us[Stop];
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {
-        pc[OpMin] = NAN;
-        pc[Stop] = 0;
-        pc[OpMax] = NAN;
-        pc[Out] = 0;
-        pc[AbsMin] = -100;
-        pc[AbsMax] = 100;
-        pc[Margin] = 2;
-        si[OpMin] = NAN;
-        si[Stop] = 0;
-        si[OpMax] = NAN;
-        si[Out] = 0;
-        us[Cent] = 1500;
-        us[Out] = NAN;
-        us[AbsMin] = 670;
-        us[AbsMax] = 2330;
+        us[Out] = pc[OpMin] = pc[OpMax] = si[OpMin] = si[OpMax] = NAN;
+        pc[Out] = pc[Stop] = si[Out] = si[Stop] = 0.0f;
+        pc[AbsMin] = -100.0f;
+        pc[AbsMax] = 100.0f;
+        pc[Margin] = 2.0f;
+        us[Cent] = 1500.0f;
+        us[AbsMin] = 670.0f;
+        us[AbsMax] = 2330.0f;
         ServoMotor::setup(_hotrc, _speedo);
         mulebatt = _batt;
         derive();
@@ -374,9 +367,9 @@ class ThrottleControl : public ServoMotor {
     Tachometer* tach;
     Potentiometer* pot;
     TemperatureSensorManager* tempsens;
-    float gas_kp = 0.013;             // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
-    float gas_ki = 0.050;             // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
-    float gas_kd = 0.000;             // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
+    float gas_kp = 0.013f;             // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
+    float gas_ki = 0.050f;             // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
+    float gas_kd = 0.000f;             // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
     float cruise_kp[2] = { 2.33f,  5.57f }; // [GasOpen/GasPID] PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
     float cruise_ki[2] = { 1.06f, 11.00f }; // [GasOpen/GasPID] PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
     float cruise_kd[2] = { 0.00f,  0.00f }; // [GasOpen/GasPID] PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
@@ -388,14 +381,14 @@ class ThrottleControl : public ServoMotor {
     using ServoMotor::ServoMotor;
     // ThrottleControl(int _pin, int _freq) { pin = _pin; freq = _freq; };
     float tach_last, throttle_target_pc; //, max_throttle_angular_velocity_pcps;
-    // float si[NumMotorVals] = { 88.8, NAN, 5.0, 69.0, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OpMin/Parked/OpMax/Out/Govern/AbsMin/AbsMax/Margin]
+    // float si[NumMotorVals] = { 88.8, NAN, 5.0f, 69.0f, NAN, 0.0f, 180, 1.0f };  // standard si-unit values [OpMin/Parked/OpMax/Out/Govern/AbsMin/AbsMax/Margin]
     
-    // us[OpMin] = 1365.0;
-    // us[Parked] = 1340.0;
-    // us[OpMax] = 2475.0;
-    // us[Margin] = 30.0;
+    // us[OpMin] = 1365.0f;
+    // us[Parked] = 1340.0f;
+    // us[OpMax] = 2475.0f;
+    // us[Margin] = 30.0f;
     
-    // float us[NumMotorVals] = { 1365.0, 1340.0, 2475.0, NAN, NAN, 0.0, 180, 1.0 };  // standard si-unit values [OpMin/Parked/OpMax/Out/Govern/AbsMin/AbsMax/Margin]
+    // float us[NumMotorVals] = { 1365.0f, 1340.0f, 2475.0f, NAN, NAN, 0.0f, 180, 1.0f };  // standard si-unit values [OpMin/Parked/OpMax/Out/Govern/AbsMin/AbsMax/Margin]
  
     // * with servo at center position (1500 us pulsewidth) mount the servo horn inline with center of the servo body's long dimension. this is 90 deg. CW from here are higher angles and CCW are lower angles
     // * for best linearity, adjust the servo-carb linkage length so the carb throttle is at halfway point when the servo is at the 90 degree center position
@@ -408,34 +401,34 @@ class ThrottleControl : public ServoMotor {
 
     // * set operational angular range (OpMin/OpMax), margin (Margin) and parking angle (Parked) here.
 
-    float linearizer_exponent = 2.52;
-    float cruise_linearizer_exponent = 1.05;
-    float trigger_vert_pc = 0.0;
-    float idle_max_boost_pc = 15.0;  // max amount (in percent) to boost idle if the engine is too cold
-    float idle_temp_lim_f[2] = { 60.0, 80.0 };  // [LOW]/HIGH] temperature range (in F) over which to apply idle boost. max boost at temp=LOW or less, and no boost at temp=HIGH or more 
-    // float idle_si[NumMotorVals] = { 58.0, NAN, 65.0, NAN, NAN, 0.0, 180.0, 1.0 };          // in angular degrees [OpMin(hot)/-/OpMax(cold)/Out/-/AbsMin/AbsMax/Margin]
-    // float idletemp_f[NumMotorVals] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OpMin/-/OpMax/Out/-/AbsMin/AbsMax/Margin]
-    float _idle_pc = 0.0, idle_boost_pc = 0.0; // 11.3;                // idle percent is derived from the si (degrees) value
-    float starting_pc = 25.0;                          // percent throttle to open to while starting the car
+    float linearizer_exponent = 2.52f;
+    float cruise_linearizer_exponent = 1.05f;
+    float trigger_vert_pc = 0.0f;
+    float idle_max_boost_pc = 15.0f;  // max amount (in percent) to boost idle if the engine is too cold
+    float idle_temp_lim_f[2] = { 60.0f, 80.0f };  // [LOW]/HIGH] temperature range (in F) over which to apply idle boost. max boost at temp=LOW or less, and no boost at temp=HIGH or more 
+    // float idle_si[NumMotorVals] = { 58.0f, NAN, 65.0f, NAN, NAN, 0.0f, 180.0f, 1.0f };          // in angular degrees [OpMin(hot)/-/OpMax(cold)/Out/-/AbsMin/AbsMax/Margin]
+    // float idletemp_f[NumMotorVals] = { 60.0f, NAN, 205.0f, 75.0f, NAN, 40.0f, 225.0f, 1.5f};      // in degrees F [OpMin/-/OpMax/Out/-/AbsMin/AbsMax/Margin]
+    float _idle_pc = 0.0f, idle_boost_pc = 0.0f; // 11.3f;                // idle percent is derived from the si (degrees) value
+    float starting_pc = 25.0f;                          // percent throttle to open to while starting the car
     float idle_temp_f = NAN;  // temperature determined for purpose of calculating boost. will prefer engine temp sensor but has fallback options 
     QPID pid, cruisepid;
     int throttle_ctrl_mode = OpenLoop;   // set default ctrl behavior. should gas servo use the rpm-sensing pid? values: ActivePID or OpenLoop
     bool pid_enabled, cruise_pid_enabled, cruise_trigger_released = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
     int cruise_adjust_scheme = HoldTime, motormode = Idle;  // not tunable  // pid_status = OpenLoop, cruise_pid_status = OpenLoop,
     float* deg = si;             // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
-    float pc_to_rpm(float _pc) { return map(_pc, 0.0, 100.0, tach->idle(), tach->opmax()); }
-    float rpm_to_pc(float _rpm) { return map(_rpm, tach->idle(), tach->opmax(), 0.0, 100.0); }
+    float pc_to_rpm(float _pc) { return map(_pc, 0.0f, 100.0f, tach->idle(), tach->opmax()); }
+    float rpm_to_pc(float _rpm) { return map(_rpm, tach->idle(), tach->opmax(), 0.0f, 100.0f); }
     void derive() {  // calc derived limit values for all units based on tuned values for each motor
         pc[AbsMin] = map(si[AbsMin], si[OpMin], si[OpMax], pc[OpMin], pc[OpMax]);
         pc[AbsMax] = map(si[AbsMax], si[OpMin], si[OpMax], pc[OpMin], pc[OpMax]);
         pc[Parked] = map(si[Parked], si[OpMin], si[OpMax], pc[OpMin], pc[OpMax]);
-        pc[Govern] = map(governor, 0.0, 100.0, pc[OpMin], pc[OpMax]);  // pc[Govern] = pc[OpMin] + governor * (pc[OpMax] - pc[OpMin]) / 100.0;      
+        pc[Govern] = map(governor, 0.0f, 100.0f, pc[OpMin], pc[OpMax]);  // pc[Govern] = pc[OpMin] + governor * (pc[OpMax] - pc[OpMin]) / 100.0f;      
         si[Govern] = map(pc[Govern], pc[OpMin], pc[OpMax], si[OpMin], si[OpMax]);
         pc[Margin] = map(si[Margin], si[OpMin], si[OpMax], pc[OpMin], pc[OpMax]);
-    }   // max_throttle_angular_velocity_pcps = 100.0 * max_throttle_angular_velocity_degps / (si[OpMax] - si[OpMin]);
+    }   // max_throttle_angular_velocity_pcps = 100.0f * max_throttle_angular_velocity_degps / (si[OpMax] - si[OpMin]);
     void set_out_changerate_pcps(float newrate) {
-        max_out_changerate_pcps = newrate;  // max_out_changerate_pcps = 100.0 * max_out_changerate_degps / (si[OpMax] - si[OpMin]);
-        pid.set_max_out_changerate_ps(max_out_changerate_pcps);
+        max_out_changerate_pcps = newrate;  // max_out_changerate_pcps = 100.0f * max_out_changerate_degps / (si[OpMax] - si[OpMin]);
+        pid.set_max_out_changerate(max_out_changerate_pcps);
     }
     void set_out_changerate_degps(float newrate_deg) {
         if (iszero(si[OpMax] - si[OpMin])) return;  // no divide by zero
@@ -456,16 +449,15 @@ class ThrottleControl : public ServoMotor {
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
-        ezread.squintf("throttle servo (p%d) pid %s\n", pin, pid_enabled ? "ena" : "dis");
-        ezread.squintf("  Cruise pid %s, using %s adj scheme\n", cruise_pid_enabled ? "ena" : "dis", cruiseschemecard[cruise_adjust_scheme].c_str());
-        si[OpMin] = 58.0;
-        si[Parked] = 57.0;
-        si[OpMax] = 158.0;
-        si[Out] = 69.0;
+        ezread.squintf("Throttle servo (p%d), pid %s\n", pin, pid_enabled ? "ena" : "dis");
+        si[OpMin] = 58.0f;
+        si[Parked] = 57.0f;
+        si[OpMax] = 158.0f;
+        si[Out] = 69.0f;
         si[Govern] = NAN;
-        si[AbsMin] = 0.0;
-        si[AbsMax] = 180.0;
-        si[Margin] = 1.0;
+        si[AbsMin] = 0.0f;
+        si[AbsMax] = 180.0f;
+        si[Margin] = 1.0f;
         reverse = false;
         ServoMotor::setup(_hotrc, _speedo);
         derive();
@@ -474,7 +466,8 @@ class ThrottleControl : public ServoMotor {
         set_pid_ena(throttle_pid_default);
         set_cruise_pid_ena(cruise_pid_default);
         set_out_changerate_degps(65.0f);  // don't turn faster than 65 degrees per sec
-        Serial.printf("reverse=%d 0% = %lf us, 100% = %lf us\n", reverse, out_pc_to_us(0.0f, reverse), out_pc_to_us(100.0f, reverse));
+        ezread.squintf("  rev=%d 0%% = %dus, 100%% = %dus\n", reverse, (int)out_pc_to_us(0.0f, reverse), (int)out_pc_to_us(100.0f, reverse));
+        ezread.squintf("  cruise pid %sabled, w/ %s adj scheme\n", cruise_pid_enabled ? "en" : "dis", cruiseschemecard[cruise_adjust_scheme].c_str());
     }
     float idle_pc() { return _idle_pc; }
     float idle_si() { return out_pc_to_si(_idle_pc); }
@@ -503,7 +496,7 @@ class ThrottleControl : public ServoMotor {
                 running_max_pc = trigger_vert_pc;    // update our value for the furthest trigger read thusfar during the push
             }
         }
-        else ezread.printf(RED, "err: invalid cruise scheme %d\n", cruise_adjust_scheme);  // leaving thr_targ unchanged
+        else ezread.printf(RED, "err: invalid cruise scheme=%d\n", cruise_adjust_scheme);  // leaving thr_targ unchanged
         return thr_targ;
     }
     float cruise_logic(float thr_targ) {
@@ -545,7 +538,7 @@ class ThrottleControl : public ServoMotor {
             else throttle_target_pc = _idle_pc;  // If in deadband or being pushed down, we want idle
         }
         else {
-            ezread.squintf(RED, "err: invalid gas motor mode (%d)\n", motormode);  // ignition.panic_request(ReqOn);
+            ezread.squintf(RED, "err: invalid gas motor mode=%d\n", motormode);  // ignition.panic_request(ReqOn);
             return;
         }
         
@@ -565,7 +558,7 @@ class ThrottleControl : public ServoMotor {
         if (_mode == motormode) return;  // if mode isn't being changed, then do nothing and ditch out
         cal_gasmode = false;  // 
         if (_mode == Calibrate) {
-            float temp = pot->mapToRange(0.0, 180.0);
+            float temp = pot->mapToRange(0.0f, 180.0f);
             if (temp < si[Parked] || temp > si[OpMax]) return;  // do not change to cal mode if attempting to enter while pot is out of range
         }
         else if (_mode == ActivePID) set_pid_ena(true);
@@ -600,7 +593,7 @@ class ThrottleControl : public ServoMotor {
         cruise_pid_enabled = new_cruise_pid_ena;
         if (cruise_pid_ena_last != cruise_pid_enabled) {
             update_cruise_pid();
-            ezread.squintf("cruis pid %s %s linz\n", cruise_pid_enabled ? "enab" : "disab", throttle_linearize_cruise ? "w/" : "w/o");
+            // ezread.squintf("cruis pid %s %s linz\n", cruise_pid_enabled ? "enab" : "disab", throttle_linearize_cruise ? "w/" : "w/o");
         }
     }    
     void set_pid_ena(bool new_pid_ena) {   // run w/o arguments each loop to enforce configuration limitations, or call with an argument to enable/disable pid and update. do not change pid_enabled anywhere else!
@@ -611,13 +604,13 @@ class ThrottleControl : public ServoMotor {
             else if (motormode == ActivePID && !pid_enabled) motormode = OpenLoop; 
             update_pid();
             update_cruise_pid();
-            if (pid_ena_last != pid_enabled) ezread.squintf("throt pid %s %s linz\n", pid_enabled ? "enab" : "disab", throttle_linearize_trigger ? "w/" : "w/o");
+            // if (pid_ena_last != pid_enabled) ezread.squintf("throt pid %s %s linz\n", pid_enabled ? "enab" : "disab", throttle_linearize_trigger ? "w/" : "w/o");
         }
     }
     void set_cruise_scheme(int newscheme) {
         // if (cruise_pid_enabled) cruise_adjust_scheme = SuspendFly;  else // in pid mode cruise must use SuspendFly adjustment scheme (not sure if this restriction is necessary?)
         cruise_adjust_scheme = newscheme;  // otherwise anything goes
-        ezread.squintf("cruise using %s adj scheme\n", cruiseschemecard[cruise_adjust_scheme].c_str());
+        // ezread.squintf("cruise using %s adj scheme\n", cruiseschemecard[cruise_adjust_scheme].c_str());
     }
     bool parked() {
         return (std::abs(out_pc_to_si(pc[Out]) - si[Parked]) < 1);
@@ -703,11 +696,11 @@ class BrakeControl : public JagMotor {
     bool detect_tempsens() {
         float trytemp = tempsens->val(loc::TempBrake);
         brake_tempsens_exists = !std::isnan(trytemp);
-        ezread.squintf(" using heat %s sensor\n", brake_tempsens_exists ? "readings from detected" : "estimates in lieu of");
+        ezread.squintf("  using heat %s sensor\n", brake_tempsens_exists ? "readings from detected" : "estimates in lieu of");
         return brake_tempsens_exists;
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, ThrottleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-        ezread.squintf("brake (p%d) pid %s, feedback: %s\n", pin, pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
+        ezread.squintf("Brake (p%d) pid %s, feedback: %s\n", pin, pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         pid_timeout = 40000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
         JagMotor::setup(_hotrc, _speedo, _batt);
@@ -728,7 +721,7 @@ class BrakeControl : public JagMotor {
     void set_out_changerate_pcps(float newrate) {
         max_out_changerate_pcps = newrate;
         // max_out_changerate_pcps = 100.0 * max_out_changerate_degps / (si[OpMax] - si[OpMin]);
-        for (int mypid=PositionFB; mypid<=PressureFB; mypid++) pids[mypid].set_max_out_changerate_ps(max_out_changerate_pcps);
+        for (int mypid=PositionFB; mypid<=PressureFB; mypid++) pids[mypid].set_max_out_changerate(max_out_changerate_pcps);
     }
   private:
     void update_motorheat() {  // i am probably going to scrap all this nonsense and just put another temp sensor on the motor
@@ -1020,11 +1013,11 @@ class SteeringControl : public JagMotor {
     void set_out_changerate_pcps(float newrate) {
         max_out_changerate_pcps = newrate;
         // max_out_changerate_pcps = 100.0 * max_out_changerate_degps / (si[OpMax] - si[OpMin]);
-        // pid.set_max_out_changerate_ps(max_out_changerate_pcps); // if there ever is a pid
+        // pid.set_max_out_changerate(max_out_changerate_pcps); // if there ever is a pid
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         set_out_changerate_pcps(350.0);
-        ezread.squintf("steering motor {p%d)\n", pin);
+        ezread.squintf("Steering motor {p%d)\n", pin);
         JagMotor::setup(_hotrc, _speedo, _batt);
     }
     void update() {

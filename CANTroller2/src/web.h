@@ -244,8 +244,8 @@ class WebManager {
         if (!wifi_web_supported) web_disabled = true;
         if (web_disabled) return;
         if (!web_started) setup();
-        wifi.enable(syspower);
-        if (syspower) server.update();
+        wifi.enable(syspower.val());
+        if (syspower.val()) server.update();
         // if (<activity in web page is detected>) kick_inactivity_timer(HuWeb);  // evidence of user activity
     }
 };

@@ -6,8 +6,8 @@
 #define disp_line_height_pix 10  // pixel height of each text line. Screen can fit 16x 15pix, 20x 12pix, or 24x 10pix lines
 #define disp_bargraph_width 38
 #define disp_maxlength 6  // how many characters is max data value. allowing 6 characters which overwrites the unit string, b/c this happens rarely. but should fix this to be consistent
-#define disp_datapage_names_x 12
-#define disp_datapage_values_x 59
+#define disp_datapage_names_x 11
+#define disp_datapage_values_x 58
 #define disp_datapage_units_x 96  // 103        
 #define disp_bargraphs_x 111  // 122
 #define disp_datapage_title_x 83
@@ -46,7 +46,7 @@ static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = 
     { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PgBPID
     { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PgGPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "GasEnPID", "CrEnaPID", "Lineariz", "Exponent", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
-    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
+    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " EZ Spam", "EZAvgRat", "EZSpamBf", "EZDumbCt", __________, "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
     { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PgSim
     { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", "EZScroll", "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", "PanelApp", },  // PgUI
 };
@@ -61,7 +61,7 @@ static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  //
     { scroll, "%",    "psi",  "%",    "in",   "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PgBPID
     { scroll, "%",    "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, b1nary, ______, degsec, ______, "Hz",   "s",    },  // PgGPID
     { "mph",  "mph",  "%|r",  "%|r",  "%|r",  "%",    ______, b1nary, b1nary, b1nary, ______, "%",    ______, "Hz",   "s",    },  // PgCPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, degreF, ______, ______, ______, ______, ______, ______, degreF, b1nary, },  // PgTemp
+    { degreF, degreF, degreF, degreF, degreF, degreF, degreF, b1nary, "Hz",   "ch",   "lin",  ______, ______, degreF, b1nary, },  // PgTemp
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PgSim
     { "us",   "us",   "fps",  scroll, "pix",  "pix",  "x",    "Hz",   "lin",  scroll, b1nary, "eye",  "%",    "%",    scroll, },  // PgUI
 };
@@ -106,7 +106,7 @@ SemaphoreHandle_t easelbuf_sem;  // points to the buffer currently being drawn o
 static void push_task(void *parameter);
 static void draw_task(void *parameter);
 void semaphore_setup() {
-    ezread.squintf("Semaphores..");
+    ezread.squintf("Semaphores init");
     drawnbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
     easelbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t draw_semaphorebuf_sem;
     if (drawnbuf_sem == NULL || easelbuf_sem == NULL) ezread.squintf(" creation failed");
@@ -530,8 +530,8 @@ class Display {
         uint8_t color = LGRY;
         if (tun_ctrl == Edit) color = GRN;
         else if (tun_ctrl == Select) color = YEL;
-        draw_string(12, (last_selected + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][last_selected], nulstr, LGRY, BLK, true);
-        draw_string(12, (selection + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][selection], nulstr, color, BLK, true);
+        draw_string(disp_datapage_names_x, (last_selected + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][last_selected], nulstr, LGRY, BLK, true);
+        draw_string(disp_datapage_names_x, (selection + disp_fixed_lines + 1) * disp_line_height_pix, datapage_names[datapage][selection], nulstr, color, BLK, true);
         last_selected = selection;
         disp_selection_dirty = false;    
     }
@@ -831,7 +831,11 @@ class Display {
             draw_temp(loc::TempWheelRL, 13);
             draw_temp(loc::TempWheelRR, 14);
             draw_temp(loc::TempBrake, 15);
-            for (int line=16; line<=20; line++) draw_eraseval(line);
+            draw_truth(16, ezread.spam_active);
+            drawval(17, ezread.avg_spamrate_cps);
+            drawval(18, ezread.window_accum_char);
+            drawval(19, bootbutton.dummyprintcount);
+            for (int line=20; line<=20; line++) draw_eraseval(line);
             drawval(21, tunetest);  // drawval(21, tunetest, -100.0, 100.0, NAN, 3);
             drawval(22, wheeldifferr);
             draw_truth(23, dont_take_temperatures, 2);
@@ -1085,7 +1089,7 @@ class Tuner {
             else if (sel == 11) mapsens.set_oplim(tune(mapsens.opmin(), id, mapsens.absmin(), mapsens.opmax()), NAN);
             else if (sel == 12) mapsens.set_oplim(NAN, tune(mapsens.opmax(), id, mapsens.opmin(), mapsens.absmax()));
             else if (sel == 13) hotrc.set(&hotrc.failsafe_us, tune(hotrc.failsafe_us, id, hotrc.absmin_us, hotrc.us[Vert][OpMin] - hotrc.us[Vert][Margin]));
-            else if (sel == 14) hotrc.set(&hotrc.deadband_us, tune(hotrc.deadband_us, id, 0.0f, 100.0f));  // use hotrc.set function to force derive
+            else if (sel == 14) hotrc.set_deadband_us(tune(hotrc.deadband_us, id, 0.0f, hotrc.us[Horz][OpMax] - hotrc.us[Horz][Cent]));  // use hotrc.set function to force derive
         }
         else if (datapage == PgSens) {
             if (sel == 10) pressure.set_oplim(tune(pressure.opmin(), id, pressure.absmin(), pressure.opmax()), NAN);

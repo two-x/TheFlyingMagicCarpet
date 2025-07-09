@@ -36,7 +36,7 @@ class Potentiometer {
     Potentiometer() = delete; // must have a pin defined
     sens _senstype = sens::none;
     void setup() {
-        ezread.squintf("pot setup..\n");
+        ezread.squintf("Potentiometer init\n");
         set_pin(_pin, INPUT);
         _activity_ref = _pc;
     }
@@ -268,7 +268,7 @@ class Transducer : public Device {
     virtual void print_config(bool header=true, bool ranges=true) {
         if (header) {
             Serial.printf("%s %s", _long_name.c_str(), transtypecard[_transtype].c_str());
-            ezread.printf("%s", _short_name.c_str()); 
+            ezread.printf("%s", _long_name.c_str()); 
             if (_pin < 255 && _pin >= 0) {
                 Serial.printf(", pin %d", _pin);
                 ezread.printf(" (p%d)", _pin);
@@ -285,7 +285,7 @@ class Transducer : public Device {
         if (_convmethod == AbsLimMap) ret = map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
         else if (_convmethod == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
         else if (_convmethod == LinearMath) ret = _boffset + _mfactor * arg_native; // ezread.squintf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
-        else ezread.squintf("Err: %s from_native convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_native, _native.min(), _native.max());
+        else ezread.squintf(RED, "err: %s from_native convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_native, _native.min(), _native.max());
         cleanzero(&ret, float_conversion_zero);   // if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // reject any stupidly small near-zero values
         return ret;
     }
@@ -294,7 +294,7 @@ class Transducer : public Device {
         if (_convmethod == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
         else if (_convmethod == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
         else if ((_convmethod == LinearMath) && !iszero(_mfactor)) ret = (arg_si - _boffset) / _mfactor;
-        else ezread.squintf("Err: %s to_native can't convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_si, _si.min(), _si.max());
+        else ezread.squintf(RED, "err: %s to_native can't convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_si, _si.min(), _si.max());
         cleanzero(&ret, float_conversion_zero);
         return ret;
     }
@@ -508,16 +508,16 @@ class I2CSensor : public Sensor {
     // }
     void print_on_boot(bool detected, bool responding) {
         // if (header) Transducer::print_config(true, false);
-        ezread.squintf("%s sensor (i2c 0x%02x) %sdetected", _short_name.c_str(), addr, _detected ? "" : "not ");
+        ezread.squintf("%s sensor (i2c 0x%02x) %sdetected\n", _long_name.c_str(), addr, _detected ? "" : "not ");
         if (detected) {
             if (responding) {
                 // ezread.squintf(", responding properly\n");
                 float readval = read_sensor();  // _sensor.readPressure(ATM);
-                ezread.squintf(" and reading %.4f %s\n", readval, _si_units.c_str());
+                ezread.squintf("  reading %.4f %s\n", readval, _si_units.c_str());
                 set_source(src::Pin); // sensor working
             }
             else {
-                ezread.squintf(", no response\n");  // begin communication with air flow sensor) over I2C 
+                ezread.squintf(RED, "  no response\n");  // begin communication with air flow sensor) over I2C 
                 set_source(src::Fixed); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
             }
         }
@@ -529,7 +529,7 @@ class I2CSensor : public Sensor {
   public:
     uint8_t addr;
     I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor(-1), _i2c(i2c_arg), addr(i2c_address_arg) {
-        _long_name = "Unknown I2C";
+        _long_name = "Unknown i2c sensor";
         _short_name = "unki2c";
         set_can_source(src::Pin, true);
     }
@@ -561,7 +561,7 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     static constexpr uint8_t addr = 0x28;
     sens _senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        _long_name = "Manifold Air Velocity";
+        _long_name = "Air velocity";
         _short_name = "airvel";
         _native_units = "mph";
         _si_units = "mph";
@@ -610,7 +610,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     static constexpr uint8_t addr = 0x18;  // note: would all MAPSensors have the same address?  ANS: yes by default, or an alternate fixed addr can be hardware-selected by hooking a pin low or something
     sens _senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        _long_name = "Manifold Air Pressure";
+        _long_name = "MAP";
         _short_name = "map";
         _native_units = "atm";
         _si_units = "atm";
@@ -640,7 +640,7 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
     }
   public:
     AnalogSensor(int arg_pin) : Sensor(arg_pin) {
-        _long_name = "Unknown Analog";
+        _long_name = "Unknown analog";
         _short_name = "analog";
         _native_units = "adc";
     }
@@ -657,7 +657,7 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
   public:
     sens _senstype = sens::mulebatt;
     CarBattery(int arg_pin) : AnalogSensor(arg_pin) {
-        _long_name = "Vehicle Battery Voltage";
+        _long_name = "Battery";
         _short_name = "mulbat";
         _native_units = "adc";
         _si_units = "V";
@@ -690,7 +690,7 @@ class PressureSensor : public AnalogSensor {
     // Soren 230920: reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
     float hold_initial, hold_increment, panic_initial, panic_increment;  // , _margin_psi, _zeropoint_psi;
     PressureSensor(int arg_pin) : AnalogSensor(arg_pin) {
-        _long_name = "Brake Pressure";
+        _long_name = "BrkPressure";
         _short_name = "presur";
         _native_units = "adc";
         _si_units = "psi";
@@ -751,7 +751,7 @@ class BrakePositionSensor : public AnalogSensor {
   public:
     sens _senstype = sens::brkpos;
     BrakePositionSensor(int arg_pin) : AnalogSensor(arg_pin) {
-        _long_name = "Brake Position";
+        _long_name = "BrkPosition";
         _short_name = "brkpos";
         _native_units = "adc";
         _si_units = "in";
@@ -868,7 +868,7 @@ class PulseSensor : public Sensor {
     std::string _uber_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
 
     PulseSensor(int arg_pin, float arg_freqfactor=1.0) : Sensor(arg_pin), _freqfactor(arg_freqfactor) {
-        _long_name = "Unknown Hall-Effect";
+        _long_name = "Unknown hall-effect";
         _short_name = "pulsen";
         _native_units = "Hz";
     }
@@ -881,7 +881,7 @@ class PulseSensor : public Sensor {
     // overload the normal function so we can also include us calculations 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
         if ((!isnan(arg_min) && iszero(arg_min)) || (!isnan(arg_max) && iszero(arg_max))) {
-            ezread.squintf("Err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
+            ezread.squintf(RED, "Err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
             return;  // we can't accept 0 Hz for opmin
         }
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
@@ -1018,7 +1018,7 @@ class RCChannel : public Sensor {  // class for each channel of the hotrc
     }
   public:
     RCChannel(int arg_pin) : Sensor(arg_pin) {
-        _long_name = "RC Channel";
+        _long_name = "RC channel";
         _short_name = "rcchan";
         _native_units = "us";
         _si_units = "%";
@@ -1044,7 +1044,7 @@ class ServoMotor2 : public Transducer {
     float lastoutput, max_out_change_rate_pcps = 800.0;
     int _pin, _freq;
     virtual float write_sensor() {  // note: should be marked 'override' but compiler says it doesn't override anything...?
-        ezread.squintf("Err: %s does not have an overridden write_sensor() function\n", _short_name.c_str());
+        ezread.squintf(RED, "Err: %s does not have an overridden write_sensor() function\n", _short_name.c_str());
         return NAN;
     }
     void changerate_limiter() {
@@ -1154,6 +1154,7 @@ class Simulator {
     typedef std::tuple<bool, Device*, src> simulable_t;
     std::map<sens, simulable_t> _devices; // a collection of simulatable components
     bool _enabled = false; // keep track of whether the simulator is running or not
+    int _registered_device_count = 0;
     sens _potmap; // keep track of which component is getting info from the pot
     Potentiometer& _pot;
     Preferences* _myprefs;
@@ -1198,6 +1199,7 @@ class Simulator {
         }
         if (d.can_source(src::Pot)) d.attach_pot(_pot); // if this device can be mapped from the pot, connect it to pot input
         _devices[arg_sensor] = simulable_t(can_sim, &d, default_mode); // store info for this component
+        _registered_device_count++;
     }
     
     bool can_sim(sens arg_sensor) {  // check if a component can be simulated (by either the touchscreen or the pot)
@@ -1281,6 +1283,7 @@ class Simulator {
     int potmap() { return static_cast<int>(_potmap); }  // query which sensor is being potmapped
     bool enabled() { return _enabled; }
     bool* enabled_ptr() { return &_enabled; }
+    int registered_device_count() { return _registered_device_count; }
 };
 
 // rmtinput is used by hotrc class below
@@ -1338,31 +1341,32 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     float pc[NumAxes][NumValues];      // values range from -100% to 100% are all derived or auto-assigned
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
         // vals for hotrc v2 (with gloss black "HotRC" sticker/receiver)
-        {  973, 1477, 1975, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
-        { 1081, 1577, 2085, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2,  // [Vert] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
-        { 1202, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
-        { 1304, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        {  969, 1473, 1977, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        { 1080, 1583, 2087, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2, // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        { 1200, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2, // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        { 1300, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2, // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
         // vals for hotrc v1 (with matte black "HotRC" sticker/receiver)
-        // {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
-        // { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [Vert] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
-        // { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
-        // { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/DBBot/DBTop/Margin]
+        // {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        // { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        // { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        // { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
         // note: opmin/opmax range should be set to be just smaller than the actual measured limits. this way it will reach all the way to 100%
         //   margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
     float spike_us[NumAxes] = { 1500.0, 1500.0 };  // [Horz/Vert]  // added
     float ema_us[NumAxes] = { 1500.0, 1500.0 };    // [Horz/Vert]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
     float absmin_us = 880;
     float absmax_us = 2091;
-    float deadband_us = 15.0f;  // all [DBBot] and [DBTop] values above are derived from this by calling derive()
+    float deadband_pc, deadband_us = 15.0f;  // size of each side of the center deadband in us.  pc value is derived
     float margin_us = 13;    // all [Margin] values above are derived from this by calling derive()
     float failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     float failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
-    private:
+  private:
     Simulator* sim;
     Potentiometer* pot;
     bool _radiolost = true, _radiolost_untested = true;  // has any radiolost condition been detected since boot?  allows us to verify radiolost works before driving 
     bool sw[NumChans] = { 1, 1, 0, 0 };  // index[2]=Ch3, index[3]=Ch4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
     bool _sw_event[NumChans];  // first 2 indices are unused.  what a tragic waste
+    int _last_ch4_source = StartUnknown;
     RMTInput rmt[NumChans] = {
         RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_h_pin)),  // hotrc[Horz]
         RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_v_pin)),  // hotrc[Vert]
@@ -1373,23 +1377,23 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
   public:
     Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) { derive(); }
     void setup() {
-        ezread.squintf("hotrc init.. Starting rmt..\n");
+        ezread.squintf("Hotrc init.. starting rmt..\n");
         for (int axis=Horz; axis<=Ch4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
     }
     void derive() {
         float m_factor;
         for (int axis=Horz; axis<=Vert; axis++) {
-            us[axis][DBBot] = us[axis][Cent] - deadband_us;
-            us[axis][DBTop] = us[axis][Cent] + deadband_us;
             us[axis][Margin] = margin_us;
             pc[axis][OpMin] = -100.0;
             pc[axis][Cent] = 0.0;
             pc[axis][OpMax] = 100.0;
-            m_factor = (pc[axis][OpMax] - pc[axis][OpMin]) / (us[axis][OpMax] - us[axis][OpMin]);
-            pc[axis][DBBot] = pc[axis][Cent] - deadband_us * m_factor;
-            pc[axis][DBTop] = pc[axis][Cent] + deadband_us * m_factor;
-            pc[axis][Margin] = margin_us * m_factor;
+            pc[axis][Margin] = map(margin_us, us[axis][OpMin], us[axis][OpMax], pc[axis][OpMin], pc[axis][OpMax]);
+            set_deadband_us(deadband_us);  // run this to force derivation of deadband_pc value
         }
+    }
+    void set_deadband_us(float val) {
+        deadband_us = constrain(val, 0.0f, us[Horz][OpMax] - us[Horz][Cent]);  // using Horz for this b/c it's the same for either axis
+        deadband_pc = us_to_pc(Horz, val);  // convert in order to derive pc deadband value
     }
     void set(float* member, float val) {  // generic setter for any member floats. basically makes sure to rerun derive() after
         *member = val;
@@ -1405,23 +1409,27 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         direction_update();
     }
     bool radiolost() { return _radiolost; }
-    bool* radiolost_ptr() { return &_radiolost; }
     bool radiolost_untested() { return _radiolost_untested; }
+    bool* radiolost_ptr() { return &_radiolost; }
     bool* radiolost_untested_ptr() { return &_radiolost_untested; }
     int joydir(int axis = Vert) {
-        if (sim->simulating(sens::joy) && (std::abs(pc[axis][Filt]) < us_to_pc(axis, deadband_us))) return JoyCent;  // allows some needed slop around centerpoint when simulating, or you can never center it
+        if (sim->simulating(sens::joy) && (std::abs(pc[axis][Filt]) < us_to_pc(axis, margin_us))) return JoyCent;  // allows some needed slop around centerpoint when simulating, or you can never center it
         if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? JoyUp : (pc[axis][Filt] < pc[axis][Cent]) ? JoyDn : JoyCent;
         return (pc[axis][Filt] > pc[axis][Cent]) ? JoyRt : (pc[axis][Filt] < pc[axis][Cent]) ? JoyLt : JoyCent;
     }  // return (pc[axis][Filt] > pc[axis][Cent]) ? ((axis == Vert) ? JoyUp : JoyRt) : (pc[axis][Filt] < pc[axis][Cent]) ? ((axis == Vert) ? JoyDn : JoyLt) : JoyCent;
     void sim_button_press(int chan) {
         _sw_event[chan] = true;
-        if (chan == Ch4) simBtnTimer.reset();  // so we can know time since last sim button press, to help prevent phantom starter events
+        if (chan == Ch4) {
+            simBtnTimer.reset();  // so we can know time since last sim button press, to help prevent phantom starter events
+            _last_ch4_source = StartTouch;  // also to help phantom starter events
+        }
     }
-    bool sw_event(int ch) {  // returns if there's an event on the given channel then resets that channel
+    bool sw_event(int ch, bool autoreset=true) {  // returns if there's an event on the given channel then resets that channel (unless told not to)
         bool retval = _sw_event[ch];
-        _sw_event[ch] = false;
+        if (autoreset) _sw_event[ch] = false;
         return retval;
     }
+    int last_ch4_source() { return _last_ch4_source; }
     void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
         for (int ch = Ch3; ch <= Ch4; ch++) _sw_event[ch] = false;
     }
@@ -1435,12 +1443,18 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
                 _sw_event[chan] = true;          // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
                 kick_inactivity_timer(HuRCTog);  // evidence of user activity
-                if (chan == Ch4) ch4BtnTimer.reset();  // so we can know time since last ch4 button press, to help prevent phantom starter events
+                if (chan == Ch4) {
+                    ch4BtnTimer.reset();  // so we can know time since last ch4 button press, to help prevent phantom starter events
+                    _last_ch4_source = StartHotrc;  // also to help phantom starter events
+                }
+                // ezread.squintf("new %s event\n", (chan == Ch3) ? "Ch3" : "Ch4");
             }
             sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
         }
     }
-    // new untested reimplementation of handler for the digital hotrc channel buttons, on the back deck for now
+    // new implementation of handler for hotrc buttons which rejects spurious values which could cause false events (re: phantom starter bug)
+    // seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
+    // note: review this to ensure it includes some newer changes to the old handler, like source tracking and button timer
     // void toggles_update() {
     //     static Timer toggletimer[2] = { 60000, 60000 };   // to ensure no spurious events, changes must persist this long to count (no human can click this fast)
     //     static bool sw_pending[2];                        // flags whether a new value is pending, waiting for validity timeout
@@ -1469,27 +1483,31 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         return map(_us, us[axis][Cent], us[axis][OpMin], pc[axis][Cent], pc[axis][OpMin]);    
     }
     float remove_deadbands_us(int axis, float _us) {
-        if (_us > us[axis][DBTop]) return map(_us, us[axis][DBTop], us[axis][OpMax], us[axis][Cent], us[axis][OpMax]);
-        else if (_us < us[axis][DBBot]) return map(_us, us[axis][DBBot], us[axis][OpMin], us[axis][Cent], us[axis][OpMin]);
+        if (_us > us[axis][Cent] + deadband_us) return map(_us, us[axis][Cent] + deadband_us, us[axis][OpMax], us[axis][Cent], us[axis][OpMax]);
+        else if (_us < us[axis][Cent] - deadband_us) return map(_us, us[axis][Cent] - deadband_us, us[axis][OpMin], us[axis][Cent], us[axis][OpMin]);
         return us[axis][Cent];
     }
     void direction_update() {
-        if (sim->simulating(sens::joy)) {
-            if (sim->potmapping(sens::joy)) pc[Horz][Filt] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]);  // overwrite horz value if potmapping
-        }
-        else for (int axis = Horz; axis <= Vert; axis++) {  // read and filter incoming pwm pulses to update our percent values
-            us[axis][Raw] = (float)(rmt[axis].readPulseWidth(true));
-            spike_us[axis] = spike_filter(axis, us[axis][Raw]);            
-            ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha);
-            us[axis][Filt] = remove_deadbands_us(axis, ema_us[axis]);
+        for (int axis = Horz; axis <= Vert; axis++) {                // read and filter incoming pwm pulses to update our raw values
+            us[axis][Raw] = (float)(rmt[axis].readPulseWidth(true)); // don't stop reading rmt values or crash can occur in rmt library, floods the serial console
             pc[axis][Raw] = us_to_pc(axis, us[axis][Raw]);
-            pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]);
-            if (_radiolost) pc[axis][Filt] = pc[axis][Cent];  // if radio lost set pc value to Center value (for sane controls), but not us value (for debugging/error detection)
-            else if (std::abs(pc[axis][Filt] - pc[axis][Cent]) > pc[axis][Margin]) kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig);  // register evidence of user activity        
-        }  
-        for (int axis = Horz; axis <= Vert; axis++) {
-            pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
         }
+        if (sim->simulating(sens::joy)) {                            // if simulating, let the simulator write the Filt values
+            if (sim->potmapping(sens::joy)) pc[Horz][Filt] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]); // except if potmapping then write the Horz Filt value
+        }
+        else for (int axis = Horz; axis <= Vert; axis++) {                      // filter the raw values to create filt values
+            spike_us[axis] = spike_filter(axis, us[axis][Raw]);                 // apply spike filter on raw reading
+            ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha);   // apply ema filter on spike filter output
+            us[axis][Filt] = remove_deadbands_us(axis, ema_us[axis]); // enforce deadbands (in within them), otherwise scale the non-deadbanded range to full range
+            if (_radiolost) pc[axis][Filt] = pc[axis][Cent];          // if radio lost set pc value to Center value for sanity, but not us value b/c useful for debug
+            else {                                                              // otherwise if radio is not lost
+                pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]);                // convert filtered us value to percent
+                if (std::abs(pc[axis][Filt] - pc[axis][Cent]) > deadband_pc)    // and if we're not within the deadband
+                    kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig); // then register evidence of user activity
+            }
+        }
+        for (int axis = Horz; axis <= Vert; axis++)                             // always constrain the pc filt values
+            pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
     }
     bool radiolost_update() {  // note: member variables _radiolost and _radiolost_untested must be initialized to true on boot
         static Timer failsafe_timer{15000};  // values must remain in range for this long after changing or after boot, before being valid (to reject spurious readings)
@@ -1503,13 +1521,13 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         nowlost_last = nowlost;  // remember current reading for comparison on next loop
         return _radiolost;       // return the official status
     }
-    // spike_filter() : I wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals
-    // coming from the hotrc. often the incoming values change suddenly then, usually, quickly jump back by the same amount. 
+    // spike_filter() : I wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals coming
+    // from the hotrc, where often the incoming values change suddenly then (usually) quickly jump back by the same amount. 
     // This works by pushing new hotrc readings into a LIFO ring buffer, and replacing any well-defined spikes with values 
     // interpolated from before and after the spike, thereby erasing any spikes that recover fast enough.
     // Also if a detected cliff edge (potential spike) doesn't recover in time, it will smooth out the transition linearly.
     // The cost of this is our readings are delayed by a number of readings (equal to the maximum erasable spike duration).
-    static const int lifodepth = 9;  // more depth will reject longer spikes at the expense of controller delay
+    static const int lifodepth = 9;  // more depth will reject longer spikes at the expense of increased controller delay
     int spike_length, interp_slope, loopindex, filthist[NumAxes][lifodepth], rawhist[NumAxes][lifodepth];
     int prespike_index[NumAxes] = { -1, -1 }, lifoindex[NumAxes] = { 1, 1 };
     float spike_filter(int axis, float new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value

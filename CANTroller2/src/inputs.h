@@ -136,7 +136,7 @@ class Encoder {
     Encoder() = delete;           // must be instantiated with pins
     
     void setup() {
-        ezread.squintf("encoder setup..\n");
+        ezread.squintf("Encoder init\n");
         set_pin(_a_pin, INPUT_PULLUP);
         set_pin(_b_pin, INPUT_PULLUP);
         button.setup();
@@ -308,7 +308,7 @@ class Touchscreen {
         if (   (senseTimer.timeout() >= filterTimer.timeout()) || (filterTimer.timeout() >= twotapTimer.timeout())  // checks all the timeouts are in length order
             || (filterTimer.timeout() >= repeat_timeout)       || (filterTimer.timeout() >= accel_timeout)
             || (twotapTimer.timeout() >= longpress_timeout)    || (swipe_timeout >= longpress_timeout)
-            || (longpress_timeout >= pressTimer.timeout()) )   Serial.printf(" ERR in timing setup!");
+            || (longpress_timeout >= pressTimer.timeout()) )   ezread.squintf(RED, "err: invalid touchscreen timings\n");
         Serial.printf("\n");
     }
     // bool* touched_ptr() { return &nowtouch; }

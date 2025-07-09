@@ -26,25 +26,25 @@ class I2C {
         _devaddrs[I2CLightbox] = lightbox_addr;
         _devaddrs[I2CAirVelo] = airvelo_addr;
         _devaddrs[I2CMAP] = map_addr;
-        Serial.printf("I2C bus"); delay(1);  // Attempt to force print to happen before init
+        ezread.squintf("I2C bus"); delay(1);  // Attempt to force print to happen before init
         scanTimer.reset();
         if (disabled) return 0;
         Wire.begin(_sda_pin, _scl_pin, i2c_frequency);  // I2c bus needed for airflow sensor
         byte error, address;
-        Serial.printf(" scan..");
+        ezread.squintf(": found");
         _devicecount = 0;
         for (address = 1; address < 127; address++ ) {
             Wire.beginTransmission(address);
             error = Wire.endTransmission();
             if (error == 0) {
-                Serial.printf(" found addr: 0x%s%x", (address < 16) ? "0" : "", address);
+                ezread.squintf(" 0x%s%x,", (address < 16) ? "0" : "", address);
                 _detaddrs[_devicecount++] = address;
             }
-            else if (error==4) Serial.printf(" error addr: 0x%s%x", (address < 16) ? "0" : "", address);
+            else if (error==4) ezread.squintf(RED, "err: i2c addr 0x%s%x", (address < 16) ? "0" : "", address);
         }
-        if (scanTimer.elapsed() > 5000000) Serial.printf(" timeout & fail bus scan.");
-        if (_devicecount == 0) Serial.printf(" no devices found.");
-        Serial.printf(" ..done\n");
+        if (scanTimer.elapsed() > 5000000) ezread.squintf(RED, "err: i2c timeout & fail bus scan.");
+        if (_devicecount == 0) ezread.squintf(RED, "err: i2c no devices found.");
+        ezread.squintf(" (done)\n");
         fill_det_array();
         return detected(I2CTouch);
     }
@@ -202,13 +202,13 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     static constexpr uint8_t addr = 0x69;
     LightingBox(I2C* _i2c) : i2c{_i2c} {}  // LightingBox(DiagRuntime* _diag) : diag(_diag) {}
     void setup() {
-        ezread.squintf("lighting box (i2c 0x%02x) init\n", addr);  // ezread.squintf("Lighting box serial comm..\n");
+        ezread.squintf("Lightbox (i2c 0x%02x) init\n", addr);  // ezread.squintf("Lighting box serial comm..\n");
     }
     bool sendstatus() {
         uint8_t byt = 0x00;  // command template for status update
         uint8_t warning = 0;  // (diag->worst_sensor(3) != _None);
         uint8_t alarm = 0;  // (diag->worst_sensor(4) != _None);
-        byt |= (uint8_t)syspower | (uint8_t)(panicstop << 1) | (uint8_t)(warning << 2) | (alarm << 3);  // insert status bits nibble
+        byt |= (uint8_t)syspower.val() | (uint8_t)(panicstop << 1) | (uint8_t)(warning << 2) | (alarm << 3);  // insert status bits nibble
         if (byt == status_nibble_last) return false;  // bail if no change to status occured
         Wire.beginTransmission(addr);
         Wire.write(byt);

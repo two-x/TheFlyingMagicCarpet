@@ -45,8 +45,8 @@ class CollisionsSaver {
     ball_info_t _balls[2][BALL_MAX], touchball = { 100, 100, 0, 0, touchball_r << SHIFTSIZE, 10, GRN };
     int _ball_count = 0, _myfps = 0, ball_thismax, ball_count = 0, myfps = 0, frame_count = 0;
     int _width, _height, touchx, touchy, lastx, lasty, sec, psec, ball_create_rate = 3200, _loop_count = 0;
-    float ball_radius_base = 4.5 / 235.0;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
-    float ball_radius_modifier = 2.6 / 235.0;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
+    float ball_radius_base = 4.5f / 235.0f;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
+    float ball_radius_modifier = 2.6f / 235.0f;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
     uint8_t ball_redoubler_rate = 0x18;  // originally 0x07
     int8_t sqrme, slices = 8, ball_gravity_x = 0, ball_gravity_y = 16;  // ball_gravity = 16;  // originally 0 with suggestion of 4
     CollisionsSaver() {}

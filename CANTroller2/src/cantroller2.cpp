@@ -39,7 +39,6 @@ void setup() {
     ignition.setup();          // must be after diag setup
     run.setup();               // initialize runmode state machine. must be after diag setup
     finalize_boot();           // will stop the console if appropriate
-    looptimer.setup();
 }
 void loop() {                  // arduino-style loop() is like main() but with a builtin infinite while(1) loop
     watchdog.update();         // pet the watchdog regularly to prevent reset
@@ -63,5 +62,6 @@ void loop() {                  // arduino-style loop() is like main() but with a
     diag.update();             // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update();              // update/send neopixel colors 
     lightbox.update(speedo.val());  // communicate any relevant data to the lighting controller
+    ezread.update();
     looptimer.update();             // looptimer.mark("F");
  }  // vTaskDelay(pdMS_TO_TICKS(1));   // pause continuous execution for 1ms to allow other tasks some cpu time

@@ -12,7 +12,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     bool joy_centered = false, we_just_switched_modes = true, stoppedholdtimer_active = false;  // For mode logic to set things up upon first entry into mode
     bool display_reset_requested = false;  // set these for the display to poll and take action, since we don't have access to that object, but it has access to us
     RunModeManager() {}
-    void setup() { runmode = watchdog.boot_to_runmode; }  // we don't really need to set up anything, unless we need to recover to a specific runmode after crash
+    void setup() {
+        ezread.squintf("Runmode state machine init\n");
+        runmode = watchdog.boot_to_runmode;
+    }  // we don't really need to set up anything, unless we need to recover to a specific runmode after crash
     int mode_logic() {
         if (runmode != LowPower && runmode != Cal) {
             if (in_basicmode) runmode = Basic;  // basicsw.val() if basicmode switch was on at boot time --> Basic Mode
@@ -27,7 +30,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         we_just_switched_modes = (runmode != oldmode);  // currentMode should not be changed after this point in loop
         if (we_just_switched_modes) {
             if (runmode != Standby) autosaver_request = ReqOff;
-            if (starter.motor && runmode != Hold && oldmode != Stall) starter.request(ReqOff); // the only mode transition the starter motor may remain running thru is stall -> hold
+            if (starter.motor && runmode != Hold && oldmode != Stall) starter.request(ReqOff, StartRunmode); // the only mode transition the starter motor may remain running thru is stall -> hold
             watchdog.set_codestatus();
             cleanup_state_variables();
         }
@@ -44,7 +47,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (runmode == Fly) run_flyMode();
         else if (runmode == Cruise) run_cruiseMode();
         else if (runmode == Cal) run_calMode();
-        else Serial.println(F("err: Invalid runmode entered"));  // Obviously this should never happen
+        else ezread.squintf(RED, "err: invalid runmode=%d entered\n", runmode);  // Obviously this should never happen
         return runmode;
     }
   private:
@@ -79,7 +82,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             pwrchange_timer.reset();  // give some time for screen to blackout
         }
         else if (powering_down && pwrchange_timer.expired()) {  // blackout time is over, now go to sleep
-            set_syspower(LOW);  // Power down devices to save battery
+            syspower.set(LOW);  // Power down devices to save battery
             powering_down = false;
         }
         else if (powering_up && pwrchange_timer.expired()) {  // by now sensors etc. have got powered up, so switch runmode
@@ -90,7 +93,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (encoder.button.shortpress()) sleep_request = ReqOff;
             if (!hotrc.radiolost() && hotrc.sw_event(Ch4)) sleep_request = ReqOff;
             if (sleep_request == ReqTog || sleep_request == ReqOff) {  // start powering up
-                set_syspower(HIGH);    // switch on control system devices
+                syspower.set(HIGH);        // switch on control system devices
                 pwrchange_timer.reset();   // stay in lowpower mode for a delay to allow devices to power up
                 powering_up = true;
                 autosaver_request = ReqOff;
@@ -134,26 +137,35 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(ActivePID);
             steer.setmode(OpenLoop);
         }
+        if (!starter.motor && (starter.now_req != ReqOn)) {  // if starter is not running, or in-progress request to start running
+            if (brake.motormode != ActivePID) brake.setmode(ActivePID); // take back the brake after failed attempt to start
+            if (gas.motormode != OpenLoop) gas.setmode(OpenLoop); // take back the gas after failed attempt to start
+        }
         // if (stall_mode_timeout) {}      // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
-        if (hotrc.sw_event(Ch4)) starter.request(ReqTog);  // ezread.squintf("stall: req=%d\n", ReqTog);
+        if (hotrc.sw_event(Ch4)) starter.request(ReqTog, hotrc.last_ch4_source());  // ezread.squintf("stall: req=%d\n", ReqTog);
         if (starter.motor || !tach.stopped()) runmode = Hold;  // If we started the car, enter hold mode once starter is released
     }
     void run_holdMode(bool recovering=false) {
         if (we_just_switched_modes) {
             joy_centered = recovering;  // Fly mode will be locked until the joystick first is put at or below center
+            // if (!starter.motor || (gas.motormode != Starting)) gas.setmode(AutoPID);  // change gas mode unless starter has overridden it
             gas.setmode(AutoPID);
             brake.setmode(AutoHold);
             steer.setmode(OpenLoop);
         }
-        if (hotrc.sw_event(Ch4)) starter.request(ReqOff);
+        if (hotrc.sw_event(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());
         if (hotrc.joydir(Vert) != JoyUp) joy_centered = true;  // mark joystick at or below center, now pushing up will go to fly mode
         else {  // else user is pushing up and trying to start driving
             bool allowed_to_fly = joy_centered && !starter.motor;
+            bool radio_problem = false;
             if (!sim.simulating(sens::joy)) {  // when using the hotrc remote there are a few checks we gotta make for safety
-                if (hotrc.radiolost_untested() && require_hotrc_powercycle) allowed_to_fly = false;
-                if (hotrc.radiolost()) allowed_to_fly = false;
+                if (hotrc.radiolost_untested() && require_hotrc_powercycle) radio_problem = true;
+                if (hotrc.radiolost()) radio_problem = true;
             }
-            if (allowed_to_fly) runmode = default_drive_mode;  // Enter Fly or Cruise Mode upon joystick movement from center to above center  // Possibly add "&& stopped()" to above check?
+            if (allowed_to_fly) {
+                if (!radio_problem) runmode = default_drive_mode;  // Enter Fly or Cruise Mode upon joystick movement from center to above center  // Possibly add "&& stopped()" to above check?
+                else ezread.squintf(SALM, "warn: need working & tested radio to fly\n");
+            }
         }
     }
     void run_flyMode() {
