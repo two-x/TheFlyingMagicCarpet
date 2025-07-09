@@ -489,22 +489,20 @@ class EZReadConsole {
     float avg_spamrate_cps = 0.0f, window_accum_char = 0.0f;  // variables to dynamically manage moving average
     void update() {
         static Timer updatetimer{boot_graceperiod_timeout_us};
-        if (!ezread_suppress_spam) return;
-        if (updatetimer.expireset()) {
-            if (graceperiod) updatetimer.set(update_timeout_us);
-            graceperiod = false;  // after here we can assume we're out of graceperiod and calltimer is accurate
-            window_accum_char = std::max(0.0f, window_accum_char - avg_spamrate_cps * update_timeout_us / 1e6f);  // let old spam fall out of the buffer.
-            cleanzero(&window_accum_char, 0.1);
-            avg_spamrate_cps = window_accum_char * 1e6f / spam_window_us;  // calc a new avg rate.
-            cleanzero(&avg_spamrate_cps, 0.1);
-            if (spam_active && ((int)avg_spamrate_cps < spam_disable_thresh_cps)) {
-                spam_active = false;
-                this->printf(happycolor, "ezread spam suppression off\n");
-            }
-            else if (!spam_active && ((int)avg_spamrate_cps > spam_enable_thresh_cps)) {
-                spam_active = true;
-                this->printf(sadcolor, "ezread spam suppression on\n");
-            }
+        if (!ezread_suppress_spam || !updatetimer.expireset()) return;
+        if (graceperiod) updatetimer.set(update_timeout_us);
+        graceperiod = false;  // after here we can assume we're out of graceperiod and calltimer is accurate
+        window_accum_char = std::max(0.0f, window_accum_char - avg_spamrate_cps * update_timeout_us / 1e6f);  // let old spam fall out of the buffer.
+        cleanzero(&window_accum_char, 0.1);
+        avg_spamrate_cps = window_accum_char * 1e6f / spam_window_us;  // calc a new avg rate.
+        cleanzero(&avg_spamrate_cps, 0.1);
+        if (spam_active && ((int)avg_spamrate_cps < spam_disable_thresh_cps)) {
+            spam_active = false;
+            this->printf(happycolor, "ezread spam suppression off\n");
+        }
+        else if (!spam_active && ((int)avg_spamrate_cps > spam_enable_thresh_cps)) {
+            spam_active = true;
+            this->printf(sadcolor, "ezread spam suppression on\n");
         }
     }
   private:
