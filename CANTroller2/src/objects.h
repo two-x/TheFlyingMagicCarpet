@@ -3,15 +3,11 @@
 #include "globals.h"
 
 class SysPower {
-  protected:
     int _pin;
-    bool _lastval = HIGH;
-  public:
     bool _val = HIGH, _notval = LOW;  // _notval is meant for idiot light
     SysPower(int pin) : _pin(pin) { set_pin(_pin, OUTPUT, _val); }
     void set(bool val) {
-        _lastval = _val;
-        _val = val | keep_system_powered;
+        _val = val || keep_system_powered;
         _notval = !_val;
         write_pin(_pin, _val);
     }
