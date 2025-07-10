@@ -485,7 +485,7 @@ class EZReadConsole {
     std::string textlines[bufferSize];
     int newest_content = bufferSize, current_index = 0, offset = 0;
     uint8_t linecolors[num_lines], color, usecolor;
-    uint8_t defaultcolor = LGRY, sadcolor = SALM, happycolor = LGRN, highlightcolor = DCYN;    // std::vector<std::string> textlines; // Ring buffer array
+    uint8_t defaultcolor = LGRY, sadcolor = ORG, happycolor = LGRN, highlightcolor = DCYN;    // std::vector<std::string> textlines; // Ring buffer array
     bool spam_active = false, spam_notice_shown = false;
     float avg_spamrate_cps = 0.0f, window_accum_char = 0.0f;  // variables to dynamically manage moving average
     void update() {

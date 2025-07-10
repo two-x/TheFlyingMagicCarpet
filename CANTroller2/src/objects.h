@@ -347,7 +347,7 @@ public:
                 one_click_done = !one_click_done;                 // toggle next click will be the opposite of this one
             }
             if (twoclicktimer.expired()) {
-                if (one_click_done) ezread.printf(SALM, "warn: starter requires 2-clicks\n");
+                if (one_click_done) ezread.printf(ORG, "warn: starter requires 2-clicks\n");
                 one_click_done = false;  // cancel 2click sequence if too much time elapsed since last click
             }
             last_req_2click = now_req;   // allows us to detect when request first goes to on
@@ -362,7 +362,7 @@ public:
         }
         if (brake_before_starting) {        // if we must apply brakes before starting
             if (brake.feedback == _None) {  // check if brake is running in openloop mode (we can't control an autohold)
-                ezread.printf(SALM, "warn: starter can't use openloop brake\n");
+                ezread.printf(ORG, "warn: starter can't use openloop brake\n");
                 request(ReqNA, StartClass); // cancel turn on request
                 return;                     // and then ditch out
             }
@@ -380,7 +380,7 @@ public:
         if (brakeTimer.expired()) {                      // waited long enough for the brake to push
             if (!check_brake_before_starting) turnon();  // if no need to check whether brake succeeded, then start the car
             else {                                       // if we were supposed to apply the brakes and also check they got pushed
-                ezread.printf(SALM, "warn: cant start, no brake\n");
+                ezread.printf(ORG, "warn: cant start, no brake\n");
                 request(ReqNA, StartClass);              // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
             }
         }  // otherwise we're still waiting for the brake to push, meanwhile the starter turn-on request remains intact

@@ -170,7 +170,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             }
             if (allowed_to_fly) {
                 if (!radio_problem) runmode = default_drive_mode;  // Enter Fly or Cruise Mode upon joystick movement from center to above center  // Possibly add "&& stopped()" to above check?
-                else ezread.squintf(SALM, "warn: need working & tested radio to fly\n");
+                else ezread.squintf(ORG, "warn: need working & tested radio to fly\n");
             }
         }
     }

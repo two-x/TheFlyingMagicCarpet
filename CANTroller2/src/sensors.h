@@ -517,7 +517,7 @@ class I2CSensor : public Sensor {
                 set_source(src::Pin); // sensor working
             }
             else {
-                ezread.squintf(RED, "  no response\n");  // begin communication with air flow sensor) over I2C 
+                ezread.squintf(ORG, "  no response\n");  // begin communication with air flow sensor) over I2C 
                 set_source(src::Fixed); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
             }
         }
@@ -1337,7 +1337,7 @@ class RMTInput {  // note: for some reason if we ever stop reading our rmt objec
 };
 class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
-    bool _verbose = true;  // causes console print whenever an unfiltered switch event is queried externally, thus canceling the in-progress filtering
+    bool _verbose = false;  // causes console print whenever an unfiltered switch event is queried externally, thus canceling the in-progress filtering
     float ema_alpha = 0.065;           // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
     float pc[NumAxes][NumValues];      // values range from -100% to 100% are all derived or auto-assigned
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
@@ -1365,11 +1365,11 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     Simulator* sim;
     Potentiometer* pot;
     bool _radiolost = true, _radiolost_untested = true;  // has any radiolost condition been detected since boot?  allows us to verify radiolost works before driving 
-    bool _sw[NumChans] = { 0, 0, 0, 0 };  // switch "value" is whether the pulsewidth is above (1) or below (0) the center value.  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
+    bool _sw_val[NumChans] = { 0, 0, 0, 0 }; // switch "value" is whether the pulsewidth is above (1) or below (0) the center value.  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
+    bool _sw_last[NumChans] = { 0, 0, 0, 0 };  // stores the previous switch value
     bool _sw_pending[NumChans] = { 0, 0, 0, 0 }; // keeps whether a new value is pending, waiting for validity timeout.  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
     bool _sw_event_unfilt[NumChans] = { 0, 0, 0, 0 };  // stores if a yet-unserviced switch "event" has occurred (event is whenever switch value changes)
     bool _sw_event_filt[NumChans] = { 0, 0, 0, 0 };  // stores if a stable and filtered switch event has occurred
-    bool _sw_current[NumChans] = { 0, 0, 0, 0 };  // stores the most recent reading of switch value, before it has been committed to _sw
     int _last_ch4_source = StartUnknown;
     RMTInput rmt[NumChans] = {
         RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_h_pin)),  // hotrc[Horz]
@@ -1430,13 +1430,21 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     }
     bool sw_event_filt(int ch, bool autoreset=true) {  // returns if a stable & filtered event occurred on the given channel then resets that channel (unless told not to)
         bool retval = _sw_event_filt[ch];
-        if (autoreset && retval) reset_toggle(ch);  // if there is an event, reset all channel events and in-progress pending events
+        if (retval) {
+            _sw_last[ch] = _sw_val[ch];  // commit current reading to official switch value
+            if (autoreset) reset_toggle(ch);  // if there is an event, reset all channel events and in-progress pending events
+            if (_verbose) ezread.squintf("hotrc filt btn event serviced\n");
+        }
         return retval;
     }
     bool sw_event_unfilt(int ch, bool autoreset=true) {  // returns if any event occurred on the given channel. note: calling this cancels any in-progress event filtering
         if (force_hotrc_button_filter) return sw_event_filt(ch, autoreset); // if use of button event filter is forced for all contexts, use the filtered event function instead
         bool retval = _sw_event_unfilt[ch] || _sw_event_filt[ch];
-        if (autoreset && retval) reset_toggle(ch);  // if there is an event, reset all channel events and in-progress pending events
+        if (retval) {
+            _sw_last[ch] = _sw_val[ch];  // commit current reading to official switch value
+            if (autoreset) reset_toggle(ch);  // if there is an event, reset all channel events and in-progress pending events
+            if (_verbose) ezread.squintf("hotrc unfilt btn event serviced\n");
+        }
         return retval;
     }
     int last_ch4_source() { return _last_ch4_source; }
@@ -1451,27 +1459,27 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     // seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
     void toggles_update() {  // note, below the toggletimer[] indices are each 2 less than those of their corresponding switches (avoids creating 2 extra Timer instances)
         static Timer toggletimer[NumChans-2] = { 60000, 60000 }; // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
-        for (int ch = Ch3; ch <= Ch4; ch++) {                  // do once for each digital channel
+        for (int ch = Ch3; ch <= Ch4; ch++) {                    // do once for each digital channel
             us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true)); // read the newest pulsewidth in us
-            _sw_current[ch] = (us[ch][Raw] >= us[ch][Cent]);        // determine the sw value just read (if new reading is below or above the center frequency)
-            if (_sw_current[ch] != _sw[ch]) {                              // if new read value differs from prev valid value ...
+            _sw_val[ch] = (us[ch][Raw] >= us[ch][Cent]);         // determine the sw value just read (if new reading is below or above the center frequency)
+            if (_sw_val[ch] != _sw_last[ch]) {                   // if new read value differs from prev valid value ...
                 if (!_sw_pending[ch]) {
                     _sw_pending[ch] = _sw_event_unfilt[ch] = true; // if we don't already have a new pending value change, flag an unfiltered event occurred, and we have a potential filtered value change, 
                     toggletimer[ch-2].reset();        // set us up for filtering the next value change
                 }
                 else if (toggletimer[ch-2].expired()) { // if we do have a switch pending, and the validity timer expires. until the timer runs out all new readings must also differ from prev valid value, for the pending value to commit
-                    _sw[ch] = _sw_current[ch];                             // commit the new value
+                    _sw_last[ch] = _sw_val[ch];                    // commit the new value  (may be unnecessary since this also happens in the sw_event_xxx() functions)
                     _sw_event_filt[ch] = true;                     // flag that a filtered switch event occurred, detectable by external code and reset outside this function
-                    kick_inactivity_timer(HuRCTog);                  // register that human activity occurred
+                    kick_inactivity_timer(HuRCTog);                // register that human activity occurred
                     _sw_pending[ch] = false;                       // reset pending state
                     if (ch == Ch4) {                               // special mechanisms for ch4 to help prevent phantom starter events
-                        ch4BtnTimer.reset();                         // so we can know time since last ch4 button press
-                        _last_ch4_source = StartHotrc;               // also to help phantom starter events
+                        ch4BtnTimer.reset();                       // so we can know time since last ch4 button press
+                        _last_ch4_source = StartHotrc;             // also to help phantom starter events
                     }
                 }
             }
             else {  // otherwise if the new read value is equal to the previous valid value
-                if (_verbose && _sw_pending[ch]) ezread.squintf(SALM, "warn: hotrc Ch%d spurious reading detect\n", (ch == Ch3) ? 3 : 4 ); // if there was an active pending value change, but the value has returned to the original valid value before the timer expired
+                if (_sw_pending[ch]) ezread.squintf(ORG, "warn: hotrc Ch%d spurious reading detect\n", (ch == Ch3) ? 3 : 4 ); // if there was an active pending value change, but the value has returned to the original valid value before the timer expired  // _verbose &&
                 _sw_pending[ch] = false;          // in case of in-progress filtration, that is canceled due to the value has returned to previous valid value before timer expired
             }
         }
