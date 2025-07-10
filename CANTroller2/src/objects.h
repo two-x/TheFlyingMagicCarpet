@@ -276,6 +276,7 @@ class Ignition {
 static Ignition ignition(ignition_pin);
 class Starter {
   private:
+    bool verbose = false;  // set true to get console reports about all changes in request value
     std::string startreqcard[NumStartReq] = { "unknwn", "class", "hotrc", "touch", "runmod" };
     int lastbrakemode, lastgasmode, pin;
     Timer starterTimer, twoclicktimer{2000000}, brakeTimer{4000000};  // if remotely-started starting event is left on for this long, end it automatically
@@ -285,7 +286,7 @@ class Starter {
         bool pin_now = read_pin(pin);       // get current value of pin to do the following check
         if (motor != pin_now) {             // check if someone changed the motor value or started driving our pin
             ezread.printf(RED, "err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
-            turnoff(true);                  // stop the motor either way
+            turnoff();                  // stop the motor either way
             ignition.panic_request(ReqOn);  // request panic will kill the ignition just in case it did start up
         }
     }
@@ -304,7 +305,7 @@ class Starter {
         }
         request(ReqNA, StartClass);                            // we have serviced starter-on request, so cancel it
     }
-    void turnoff(bool bypass_modechanges=false) {              // function to stop the motor
+    void turnoff() {              // function to stop the motor
         ezread.printf("starter turnoff by %s\n", startreqcard[requestor].c_str());
         motor = LOW;                                           // we will turn it off
         write_pin(pin, motor);                                 // begin driving the pin low voltage
@@ -321,10 +322,10 @@ public:
     }
     void request(int _req, int _requestor=StartUnknown) {  // this is the only valid way to change the current request now_req, internally or externally
         static int last_req = ReqNA;  // for detecting external settings of now_req
-        if (now_req != last_req) ezread.printf(RED, "err: detected starter req value abuse!\n"); // prevent crash if requestor value passed is out of range
+        if (now_req != last_req) ezread.printf(RED, "err: detected starter req value abuse!\n"); // report now_req was apparently set by somewhere besides this function
         else if ((_requestor < 0) || (_requestor >= NumStartReq)) ezread.printf(RED, "err: invalid start requestor=%d\n", _requestor); // prevent crash if requestor value passed is out of range
         else {  // if no errors happened then accept the request
-            if ((_req != last_req) || (_requestor != StartClass)) ezread.printf("new starter %s request from %s\n", requestcard[_req].c_str(), startreqcard[_requestor].c_str());  // uncomment to monitor starter request activity
+            if (verbose && ((_req != last_req) || (_requestor != StartClass))) ezread.printf("new starter %s request from %s\n", requestcard[_req].c_str(), startreqcard[_requestor].c_str());  // report all request activity
             if (_req == ReqTog) _req = motor ? ReqOff : ReqOn;  // translate a toggle request to a drive request opposite to the current drive state
             now_req = _req;
             requestor = _requestor;

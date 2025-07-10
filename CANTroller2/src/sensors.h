@@ -1364,8 +1364,8 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     Simulator* sim;
     Potentiometer* pot;
     bool _radiolost = true, _radiolost_untested = true;  // has any radiolost condition been detected since boot?  allows us to verify radiolost works before driving 
-    bool sw[NumChans] = { 1, 1, 0, 0 };  // index[2]=Ch3, index[3]=Ch4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
-    bool _sw_event[NumChans];  // first 2 indices are unused.  what a tragic waste
+    bool _sw[NumChans] = { 0, 0, 0, 0 };  // switch "value" is whether the pulsewidth is above (1) or below (0) the center value.  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
+    bool _sw_event[NumChans];  // stores if a yet-unserviced switch "event" has occurred (event is whenever switch value changes).  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
     int _last_ch4_source = StartUnknown;
     RMTInput rmt[NumChans] = {
         RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_h_pin)),  // hotrc[Horz]
@@ -1430,54 +1430,42 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         return retval;
     }
     int last_ch4_source() { return _last_ch4_source; }
-    void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
+    void toggles_reset() {  // shouldn't be necessary to reset events due to _sw_event(ch) auto-resets when read
         for (int ch = Ch3; ch <= Ch4; ch++) _sw_event[ch] = false;
     }
     int sim_button_time() { return (int)simBtnTimer.elapsed(); }  // returns time since last simulated ch4 button press. to help prevent phantom starter turnon
     int ch4_button_time() { return (int)ch4BtnTimer.elapsed(); }  // returns time since last ch4 button press. to help prevent phantom starter turnon
   private:
-    void toggles_update() {
-        for (int chan = Ch3; chan <= Ch4; chan++) {
-            us[chan][Raw] = (float)(rmt[chan].readPulseWidth(true));
-            sw[chan] = (us[chan][Raw] <= us[chan][Cent]); // Ch3 switch true if short pulse, otherwise false  us[Ch3][Cent]
-            if ((sw[chan] != sw[chan - 2]) && !_radiolost) {  // if sw value has changed
-                _sw_event[chan] = true;          // Skip possible erroneous events while radio lost, because on powerup its switch pulses go low
-                kick_inactivity_timer(HuRCTog);  // evidence of user activity
-                if (chan == Ch4) {
-                    ch4BtnTimer.reset();  // so we can know time since last ch4 button press, to help prevent phantom starter events
-                    _last_ch4_source = StartHotrc;  // also to help phantom starter events
-                }
-                // ezread.squintf("new %s event\n", (chan == Ch3) ? "Ch3" : "Ch4");
-            }
-            sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
-        }
-    }
     // new implementation of handler for hotrc buttons which rejects spurious values which could cause false events (re: phantom starter bug)
     // seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
-    // note: review this to ensure it includes some newer changes to the old handler, like source tracking and button timer
-    // void toggles_update() {
-    //     static Timer toggletimer[2] = { 60000, 60000 };   // to ensure no spurious events, changes must persist this long to count (no human can click this fast)
-    //     static bool sw_pending[2];                        // flags whether a new value is pending, waiting for validity timeout
-    //     if (_radiolost) return;                           // no possibility of channel clicks if there's no radio
-    //     for (int chan = Ch3; chan <= Ch4; chan++) {       // do once for each digital channel
-    //         us[chan][Raw] = (float)(rmt[chan].readPulseWidth(true)); // read the newest pulsewidth in us
-    //         bool current = (us[chan][Raw] <= us[chan][Cent]);        // determine the sw value just read (if new reading is below or above the center frequency)
-    //         if (current != sw[chan]) {                    // if new read value differs from prev valid value ...
-    //             if (!sw_pending[chan-2]) {                // if we don't already have a new pending value change ...
-    //                 sw_pending[chan-2] = true;            // flag that we do have a potential value change
-    //                 toggletimer[chan-2].reset();          // and start the validity timer.
-    //             }  // until the timer runs out all new readings must also differ from prev valid value, for the pending value to commit
-    //             else if (toggletimer[chan-2].expired()) { // if we do have a switch pending, and the validity timer expires ...
-    //                 sw[chan] = current;                   // commit the new value
-    //                 _sw_event[chan] = true;               // flag that a switch event occurred, detectable by external code
-    //                 kick_inactivity_timer(HuRCTog);       // register that human activity occurred
-    //                 sw_pending[chan-2] = false;           // reset pending state
-    //                 if (chan == Ch4) starter.register_source_activity_hotrc();  // let starter object know there was a valid Ch4 event
-    //             }
-    //         }      // if new read value differs from previous reads before the timeout, reject the pending value as noise
-    //         else sw_pending[chan-2] = false;
-    //     }
-    // }
+    void toggles_update() {  // note, below the toggletimer[] indices are each 2 less than those of their corresponding switches (avoids creating 2 extra Timer instances)
+        static Timer toggletimer[NumChans-2] = { 60000, 60000 }; // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
+        static bool _sw_pending[NumChans] = { 0, 0, 0, 0 };      // keeps whether a new value is pending, waiting for validity timeout.  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
+        for (int chan = Ch3; chan <= Ch4; chan++) {                  // do once for each digital channel
+            us[chan][Raw] = (float)(rmt[chan].readPulseWidth(true)); // read the newest pulsewidth in us
+            bool current = (us[chan][Raw] >= us[chan][Cent]);        // determine the sw value just read (if new reading is below or above the center frequency)
+            if (current != _sw[chan]) {                              // if new read value differs from prev valid value ...
+                if (!_sw_pending[chan]) {                            // if we don't already have a new pending value change ...
+                    _sw_pending[chan] = true;                        // flag that we do have a potential value change
+                    toggletimer[chan-2].reset();                     // and start the validity timer.
+                }  // until the timer runs out all new readings must also differ from prev valid value, for the pending value to commit
+                else if (toggletimer[chan-2].expired()) {            // if we do have a switch pending, and the validity timer expires ...
+                    _sw[chan] = current;                             // commit the new value
+                    _sw_event[chan] = true;                          // flag that a switch event occurred, detectable by external code and reset outside this function
+                    kick_inactivity_timer(HuRCTog);                  // register that human activity occurred
+                    _sw_pending[chan] = false;                       // reset pending state
+                    if (chan == Ch4) {                               // special mechanisms for ch4 to help prevent phantom starter events
+                        ch4BtnTimer.reset();                         // so we can know time since last ch4 button press
+                        _last_ch4_source = StartHotrc;               // also to help phantom starter events
+                    }
+                }
+            }
+            else {  // otherwise if the new read value is equal to the previous valid value
+                if (_sw_pending[chan]) ezread.squintf(RED, "err: spurious reading rejected on hotrc Ch%d\n", (chan == Ch3) ? 3 : 4 ); // if there was an active pending value change, but the value has returned to the original valid value before the timer expired
+                _sw_pending[chan] = false;
+            }
+        }
+    }
     float us_to_pc(int axis, float _us) {
         if (_us >= us[axis][Cent]) return map(_us, us[axis][Cent], us[axis][OpMax], pc[axis][Cent], pc[axis][OpMax]);
         return map(_us, us[axis][Cent], us[axis][OpMin], pc[axis][Cent], pc[axis][OpMin]);    
