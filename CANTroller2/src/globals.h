@@ -167,6 +167,7 @@ bool encoder_reverse = false;         // should clockwise encoder twists indicat
 bool throttle_pid_default = false;    // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool cruise_pid_default = true;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool require_hotrc_powercycle = true; // refuse to enter drive modes until the code has verified functionality of radiolost detection
+bool force_hotrc_button_filter = false; // always force button filtration for all actions. otherwise unfiltered presses are allowed for safety events (ie ignition or starter kill), in case of radio interference
 bool ezread_suppress_spam = true;   // activates ezread feature to suppress data coming into the console too fast (to prevent overrun crashes)
 int default_drive_mode = Cruise;              // from hold mode, enter cruise or fly mode by default?
 
