@@ -621,7 +621,7 @@ class BootMonitor {
         wrote_ign = ignition.signal;
     }
   public:
-    int boot_to_runmode = Standby;
+    // int boot_to_runmode = Standby;    // disabling ability to recover to previous runmode after crash
     BootMonitor(Preferences* _prefs, LoopTimer* _loop) : myprefs(_prefs), myloop(_loop) {}
     void set_codestatus() {
         flash_runmode();
@@ -644,7 +644,7 @@ class BootMonitor {
         read_bootstatus();
         flash_codestatus(StBooting);
         print_postmortem();
-        recover_status();
+        panic_on_crash();
         print_chip_info();
         // print_partition_table();
         if (!watchdog_enabled) return;
@@ -721,18 +721,16 @@ class BootMonitor {
             ezread.squintf(", maftask:%d\n", highWaterBytes);
         }
     }
-    void recover_status() {
-        if ((codestatus_postmortem != StDriving && codestatus_postmortem != StStopped) || !crash_driving_recovery) return;
-        if (was_panicked) {
-            ezread.squintf("  Continuing to panic..\n");
-            ignition.panic_request(ReqOn);
-            return;
-        }
-        boot_to_runmode = runmode_postmortem;
-        if (runmode_postmortem == Cruise) boot_to_runmode = Fly;
-        else if (runmode_postmortem == Cal) boot_to_runmode = Standby;        
-        ezread.squintf("  Resuming %s run mode w/ ignition %s..\n", modecard[boot_to_runmode], ign_postmortem ? "on" : "off");
-        ignition.request(ign_postmortem ? ReqOn : ReqOff);
+    void panic_on_crash() {
+        // if ((codestatus_postmortem != StDriving && codestatus_postmortem != StStopped)|| !crash_driving_recovery) return;  // crash_driving_recovery
+        if (!panic_on_boot_after_crash || ((codestatus_postmortem != StDriving) && !was_panicked)) return;
+        ezread.squintf(ORG, "warn: panic condition %sstarted after crash detect\n", was_panicked ? "re" : "");
+        ignition.panic_request(ReqOn);
+        // boot_to_runmode = runmode_postmortem;  // disabling ability to recover to previous runmode after crash
+        // if (runmode_postmortem == Cruise) boot_to_runmode = Fly; // disabling ability to recover to previous runmode after crash
+        // else if (runmode_postmortem == Cal) boot_to_runmode = Standby; // disabling ability to recover to previous runmode after crash
+        // ezread.squintf("  Resuming %s run mode w/ ignition %s..\n", modecard[boot_to_runmode], ign_postmortem ? "on" : "off"); // disabling ability to recover to previous runmode after crash
+        // ignition.request(ign_postmortem ? ReqOn : ReqOff);  // this is ludicrous! commented out!
         // gas.(brake.pc[Stop]);  // brake.pid_targ_pc(brake.pc[Stop]);
     }
     void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-on-esp32-with-psram#

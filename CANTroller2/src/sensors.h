@@ -900,7 +900,10 @@ class PulseSensor : public Sensor {
     }
     // float last_read_time() { return _last_read_time_us; }
     // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
-    bool stopped() { return (std::abs(val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    bool stopped() {
+        // if (bootbutton_val) ezread.squintf("puls.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), _opmin, _margin, (int)(std::abs(val() - _opmin) <= _margin));
+        return (std::abs(val() - _opmin) <= _margin);  // Note due to weird float math stuff, can not just check if tach == 0.0
+    }
     bool* pin_inactive_ptr() { return &_pin_inactive; }
     bool* pin_level_ptr() { return &_pin_level; }
     float absmin_us() { return _absmin_us; }
@@ -963,6 +966,11 @@ class Tachometer : public PulseSensor {
     void set_idle(float newidle) { _idle = constrain(newidle, _opmin, _opmax); }
     void set_idlecold(float newidlecold) { _idle_cold = constrain(newidlecold, _idle_hot + 1.0, _opmax); }
     void set_idlehot(float newidlehot) { _idle_hot = constrain(newidlehot, _opmin, _idle_cold - 1.0); }
+    // bool stopped() {
+    //     if (bootbutton_val) 
+    //       ezread.squintf("tac.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), _opmin, _margin, (int)(std::abs(val() - _opmin) <= _margin));  // spam catcher works on this, (w/o bootbutton condition)
+    //     return PulseSensor::stopped();
+    // }
 };
 
 // Speedometer represents a magnetic pulse measurement of the enginge rotation
@@ -1001,6 +1009,11 @@ class Speedometer : public PulseSensor {
         // _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
         print_config();
     }
+    // bool stopped() {
+    //     if (bootbutton_val) 
+    //       ezread.squintf("spd.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), _opmin, _margin, (int)(std::abs(val() - _opmin) <= _margin));  // spam catcher fails on this, w/o bootbutton condition, but not with!
+    //     return PulseSensor::stopped();
+    // }
 };
 
 // below are beginnings of making hotrc and motors also conform to this class structure. unfinished and unused

@@ -414,7 +414,7 @@ class ThrottleControl : public ServoMotor {
     QPID pid, cruisepid;
     int throttle_ctrl_mode = OpenLoop;   // set default ctrl behavior. should gas servo use the rpm-sensing pid? values: ActivePID or OpenLoop
     bool pid_enabled, cruise_pid_enabled, cruise_trigger_released = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
-    int cruise_adjust_scheme = HoldTime, motormode = Idle;  // not tunable  // pid_status = OpenLoop, cruise_pid_status = OpenLoop,
+    int cruise_adjust_scheme = HoldTime, motormode = Parked;  // not tunable  // pid_status = OpenLoop, cruise_pid_status = OpenLoop,
     float* deg = si;             // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float pc_to_rpm(float _pc) { return map(_pc, 0.0f, 100.0f, tach->idle(), tach->opmax()); }
     float rpm_to_pc(float _rpm) { return map(_rpm, tach->idle(), tach->opmax(), 0.0f, 100.0f); }
@@ -515,6 +515,7 @@ class ThrottleControl : public ServoMotor {
         return thr_targ;
     }
     void set_output() {
+        // static int last_mode = Calibrate;
         float new_out, out_lowlim = _idle_pc;
         if (motormode == Halt) return;  // a servo by its nature will hold its current angle whenever its pwm input pulsewidth isn't changing
         else if (motormode == Calibrate) {  // allows adjustment of gas using potmap, with its operational limits temporarily disabled (to facilitate calibrating those limits)
@@ -550,6 +551,8 @@ class ThrottleControl : public ServoMotor {
         else new_out = throttle_target_pc;
         if (!pid_enabled) new_out = rate_limiter(new_out);  // the pid should already be set to limit rate if needed.   pc[Out] = rate_limiter(new_out);  max_out_change_rate_pcps
         pc[Out] = constrain(new_out, out_lowlim, pc[Govern]);   // pid should constrain on its own, do not want to go editing its output
+        // if (last_mode != motormode) ezread.printf("gas mode changed %s -> %s\n", motormodecard[last_mode].c_str(), motormodecard[motormode].c_str());
+        // last_mode = motormode;
     }
   public:
     void setmode(int _mode) {
@@ -569,6 +572,7 @@ class ThrottleControl : public ServoMotor {
             throttle_target_pc = pid_enabled ? tach->val() : pc[Out]; // set throttle target to its current state, for a smooth transition into cruise mode
         }
         motormode = _mode;  // actually change the motor mode
+        // ezread.printf("gas mode set to %s\n", motormodecard[motormode].c_str());
     }
     void update_pid() {  // must call whenever governor or tach limits are changed
         if (pid_enabled) pid.set_limits(&pc[OpMin], &pc[Govern]);  // pid.reset();
@@ -654,7 +658,7 @@ class BrakeControl : public JagMotor {
     float posn_kd = 0.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
-    int dominantsens_last = HybridFB, preforce_request;    // float posn_inflect, pres_inflect, pc_inflect;
+    int dominantsens_last = HybridFB, last_external_mode_request = Halt;
     Timer stopcar_timer{10000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000}, blindaction_timer{3000000};
     bool stopped_last = false;
     void set_dominant_sensor(float _hybrid_ratio) {
@@ -753,7 +757,7 @@ class BrakeControl : public JagMotor {
                 if (motor_heat > tempsens->opmax(loc::TempBrake)) {
                     if (!printed_error) ezread.squintf(RED, "err: brake motor overheating. stop motor\n");
                     printed_error = true;
-                    setmode(Halt);        // stop the brake motor // pc[Out] = pc[Stop];  // setmode(ParkMotor);
+                    setmode(Halt, false);        // stop the brake motor // pc[Out] = pc[Stop];  // setmode(ParkMotor, false);
                     // ignition.request(ReqOff);  // request kill ignition  // commented this out b/c is already in diag brake check
                 }
                 else printed_error = false;
@@ -884,7 +888,8 @@ class BrakeControl : public JagMotor {
             }
         }
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
-            throttle->setmode(Idle);  // Stop pushing the gas, will help us stop the car better
+            // ezread.printf("gas debug: mmode=%s, eval=%d\n", motormodecard[motormode].c_str(), (int)((run_motor_mode[runmode][_Throttle] == ParkMotor)));
+            throttle->setmode((run_motor_mode[runmode][_Throttle] == ParkMotor) ? ParkMotor : Idle);  // Stop pushing the gas, will help us stop the car better
             carstop(true);
             if (!autostopping) setmode(Halt, false);  // After AutoStop mode stops the car or times out, then stop driving the motor
         }
@@ -948,7 +953,7 @@ class BrakeControl : public JagMotor {
             if (_mode == ActivePID) _mode = PropLoop;  // drop to simple threshold-based loop scheme
         }
         if (_mode == motormode) return;
-        if (external_request) preforce_request = save_mode_request;  // remember what the outside world actually asked for, in case we override it but later wish to go back
+        if (external_request) last_external_mode_request = save_mode_request;  // remember what the outside world actually asked for, in case we override it but later wish to go back
         autostopping = autoholding = cal_brakemode = parking = releasing = false;        
         interval_timer.reset();
         stopcar_timer.reset();
@@ -965,7 +970,7 @@ class BrakeControl : public JagMotor {
         feedback_enabled[PressureFB] = ((feedback == PressureFB) || (feedback == HybridFB));  // set sensor enable consistent with feedback config
         no_feedback = (feedback == NoneFB);                              // for idiot light display
         if ((feedback != feedback_last) || (pid_enabled != pid_ena_last)) {
-            setmode(preforce_request, false);                            // ensure current motor mode is consistent with configs set here
+            setmode(last_external_mode_request, false);                            // ensure current motor mode is consistent with configs set here
             derive();  // on change need to recalculate some values
             ezread.squintf("brake pid %s feedback: %s\n", pid_enabled ? "enabled" : "disabled", brakefeedbackcard[feedback].c_str());        
         }
@@ -989,11 +994,13 @@ class BrakeControl : public JagMotor {
     bool parked() {
         if (feedback_enabled[PositionFB]) return brkpos->parked();
         if (feedback_enabled[PressureFB]) return pressure->released();  // pressure doesn't have a parked() function yet
+        ezread.squintf(ORG, "warn: brake unaware if parked w/o sensors\n");
         return false;  // really without sensors we have no idea if we're parked. Print an error message
     }
     bool released() {
         if (feedback_enabled[PositionFB]) return brkpos->released();
         if (feedback_enabled[PressureFB]) return pressure->released();  // pressure doesn't have a parked() function yet
+        ezread.squintf(ORG, "warn: brake unaware if released w/o sensors\n");
         return false;  // really without sensors we have no idea if we're released. Print an error message
     }
     float sensmin() { return (dominantsens == PressureFB) ? pressure->opmin() : brkpos->opmin(); }

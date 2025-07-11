@@ -111,7 +111,7 @@ enum boolean_states { On=1 };
 enum brakeextra { NumBrakeSens=2 };
 enum telemetry_idiots {                              // list of transducers which have onscreen idiotlights showing status
     _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
-    _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are mission-critical actuators, driven by us
+    _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are mission-critical actuators, driven by us.  note: these enums are also used to index global runmode:motormode array 
     _Speedo=3, _Tach=4, _BrakePres=5, _BrakePosn=6,  // these transducers are mission-critical sensors, we read from
     _HotRC=7, _Temps=8, _Other=9, _GPIO=10,          // these are actually groups of multiple sensors (see below)
     NumTelemetryIdiots=11,                           // size of the list of values with idiot lights
@@ -141,7 +141,6 @@ bool two_click_starter = false;      // to start the starter requires two reques
 bool watchdog_enabled = false;       // enable the esp's built-in watchdog circuit, it will reset us if it doesn't get pet often enough (to prevent infinite hangs). disabled cuz it seems to mess with the hotrc (?)
 bool print_task_stack_usage = false; // enable to have remaining heap size and free task memory printed to console every so often. for tuning memory allocation
 bool autosaver_display_fps = true;   // do you want to see the fps performance of the fullscreen saver in the corner?
-bool crash_driving_recovery = false; // if code crashes while driving, should it continue driving after reboot?
 bool pot_tuner_acceleration = false; // when editing values, can we use the pot to control acceleration of value changes? (assuming we aren't pot mapping some sensor at the time)
 bool dont_take_temperatures = false; // disables temp sensors. in case debugging dallas sensors or causing problems
 bool console_enabled = true;         // completely disables the console serial output. it can be safer disabled b/c serial printing itself can easily cause new problems, and libraries might do it whenever
@@ -168,8 +167,9 @@ bool throttle_pid_default = false;    // default throttle control mode. values: 
 bool cruise_pid_default = true;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool require_hotrc_powercycle = true; // refuse to enter drive modes until the code has verified functionality of radiolost detection
 bool force_hotrc_button_filter = false; // always force button filtration for all actions. otherwise unfiltered presses are allowed for safety events (ie ignition or starter kill), in case of radio interference
-bool ezread_suppress_spam = true;   // activates ezread feature to suppress data coming into the console too fast (to prevent overrun crashes)
-int default_drive_mode = Cruise;              // from hold mode, enter cruise or fly mode by default?
+bool ezread_suppress_spam = true;       // activates ezread feature to suppress data coming into the console too fast (to prevent overrun crashes)
+bool panic_on_boot_after_crash = true;  // causes bootmanager to do a panic on boot if car was in a drive state when reset 
+int default_drive_mode = Cruise;         // from hold mode, enter cruise or fly mode by default?
 
 // global tunable variables
 int operational_framerate_limit_fps = 100;  // max display frame rate to enforce while driving whenever limit_framerate == true
@@ -189,6 +189,17 @@ float neosat = 90.0f;                   // default saturation of neopixels in pe
 int i2c_frequency = 400000;             // in kHz. standard freqs are: 100k, 400k, 1M, 3.4M, 5M
 float governor = 95.0f;                 // software governor will only allow this percent of full-open throttle (percent 0-100)
 
+int run_motor_mode[NumRunModes][3] = {   // Array of which motor mode the gas/brake/steer get set to upon entering each runmode
+    { ParkMotor, ParkMotor, OpenLoop },  // Basic mode    (_Throttle/_BrakeMotor/_SteerMotor)
+    { ParkMotor, ParkMotor, Halt },      // LowPower mode (_Throttle/_BrakeMotor/_SteerMotor)
+    { ParkMotor, AutoStop, OpenLoop },   // Standby mode  (_Throttle/_BrakeMotor/_SteerMotor)
+    { OpenLoop, ActivePID, OpenLoop },   // Stall mode    (_Throttle/_BrakeMotor/_SteerMotor)
+    { AutoPID, AutoHold, OpenLoop },     // Hold mode     (_Throttle/_BrakeMotor/_SteerMotor)
+    { AutoPID, ActivePID, OpenLoop },    // Fly mode      (_Throttle/_BrakeMotor/_SteerMotor)
+    { CruiseMode, ActivePID, OpenLoop }, // Cruise mode   (_Throttle/_BrakeMotor/_SteerMotor)
+    { Idle, Halt, Halt },                // Cal mode      (_Throttle/_BrakeMotor/_SteerMotor)
+};
+
 #ifndef MonitorBaudrate
 #define MonitorBaudrate 115200
 #endif
@@ -200,10 +211,12 @@ std::string modecard[NumRunModes] = { "Basic", "LowPwr", "Stndby", "Stall", "Hol
 std::string requestcard[NumReqs] = { "Off", "On", "Tog", "NA" };
 
 float permanan = NAN;
+// bool first_drive = true;                // goes false upon first entry into a drive mode after a power cycle. thereafter the car will autohold the brake in standby/stall modes (to help prevent lurching forward on remote start)
 bool wheeltemperr;
 float* nanptr = &permanan;
 uint32_t codestatus = StBooting;
 int runmode = Standby;
+bool bootbutton_val;                    // added for debug, so other functions defined before bootbutton can read bootbutton value. likely can be removed later if i forget to do it
 bool flashdemo = false;
 bool running_on_devboard = false;       // will overwrite with value read thru pull resistor on tx pin at boot
 bool fun_flag = false;                  // since now using temp sensor address to detect vehicle, our tx resistor can be used for who knows what else!
@@ -469,13 +482,14 @@ void kick_inactivity_timer(int source=-1) {
 #include <stdarg.h>
 class EZReadConsole {
   private:  // behavior parameters for ezread's data spam suppression feature
-    int spam_enable_thresh_cps = 2000;  // threshold data rate (avg over window) beyond which begins spam suppression
-    int spam_disable_thresh_cps = 500;  // threshold data rate (avg over window) below which ends spam suppression
+    int spam_enable_thresh_cps = 2500;  // threshold data rate (avg over window) beyond which begins spam suppression
+    int spam_disable_thresh_cps = 650;  // threshold data rate (avg over window) below which ends spam suppression
     int spam_window_us = 200000;  // console history epoch over which to calculate average data rate into buffer
     Timer passthrutimer{300000};  // during suppressing spam, allow one print call to slip thru this often
     int update_timeout_us = 20000;
     int boot_graceperiod_timeout_us = 3500000;  // spam detection is suspended for this long after intitial boot
   public:
+    bool ezread_serial_console_enabled = console_enabled;  // when true then ezread.squintf() does the same thing as ezread.printf()
     bool dirty = true, has_wrapped = false, graceperiod = true;
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
     EZReadConsole() {}
@@ -579,7 +593,7 @@ class EZReadConsole {
         va_start(args, format);
         printf_impl(defaultcolor, format, args);
         va_end(args);
-        if (console_enabled) {
+        if (ezread_serial_console_enabled) {
             char temp[100];
             vsnprintf(temp, sizeof(temp), format, args);
             Serial.printf("%s", temp);
@@ -591,7 +605,7 @@ class EZReadConsole {
         va_start(args, format);
         printf_impl(color, format, args);  
         va_end(args);
-        if (console_enabled) {
+        if (ezread_serial_console_enabled) {
             char temp[100];
             vsnprintf(temp, sizeof(temp), format, args);
             Serial.printf("%s", temp);

@@ -306,7 +306,7 @@ class Starter {
         request(ReqNA, StartClass);                            // we have serviced starter-on request, so cancel it
     }
     void turnoff() {              // function to stop the motor
-        ezread.printf("starter turnoff by %s\n", startreqcard[requestor].c_str());
+        if (verbose) ezread.printf("starter turnoff by %s\n", startreqcard[requestor].c_str());
         motor = LOW;                                           // we will turn it off
         write_pin(pin, motor);                                 // begin driving the pin low voltage
         request(ReqNA, StartClass);                            // cancel current request
@@ -407,6 +407,7 @@ class BootButton : public MomentarySwitch {
     BootButton(int apin) : MomentarySwitch(apin, false) {}
     void update() {
         MomentarySwitch::update();
+        bootbutton_val = val();
         actions();
     }
 };

@@ -34,7 +34,7 @@ std::string pcbaglowcard[GlowNumModes] = { "off", "simple", "heart", "xfade", "s
 static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NumDataPages] = { "Run ", "Joy ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 10, 10, 11, 11, 10, 5, 11, 9, 7, 12, 4, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 10, 10, 11, 11, 10, 5, 11, 9, 7, 11, 4, 8 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PgRun
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PgJoy
@@ -46,7 +46,7 @@ static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = 
     { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PgBPID
     { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PgGPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "GasEnPID", "CrEnaPID", "Lineariz", "Exponent", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
-    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " EZ Spam", "EZAvgRat", "EZSpamBf", "EZDumbCt", __________, "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
+    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " EZ Spam", "EZAvgRat", "EZSpamBf", "EZDumbCt", "EZSerial", "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
     { __________, __________, __________, __________, "Joystick", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PgSim
     { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", "EZScroll", "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", "PanelApp", },  // PgUI
 };
@@ -61,7 +61,7 @@ static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  //
     { scroll, "%",    "psi",  "%",    "in",   "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PgBPID
     { scroll, "%",    "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, b1nary, ______, degsec, ______, "Hz",   "s",    },  // PgGPID
     { "mph",  "mph",  "%|r",  "%|r",  "%|r",  "%",    ______, b1nary, b1nary, b1nary, ______, "%",    ______, "Hz",   "s",    },  // PgCPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, degreF, b1nary, "Hz",   "ch",   "lin",  ______, ______, degreF, b1nary, },  // PgTemp
+    { degreF, degreF, degreF, degreF, degreF, degreF, degreF, b1nary, "Hz",   "ch",   "lin",  ______, b1nary, degreF, b1nary, },  // PgTemp
     { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PgSim
     { "us",   "us",   "fps",  scroll, "pix",  "pix",  "x",    "Hz",   "lin",  scroll, b1nary, "eye",  "%",    "%",    scroll, },  // PgUI
 };
@@ -443,9 +443,10 @@ class Display {
     void draw_ascii(int lineno, std::string name) {
         drawval_core(lineno, name, 1, NAN, NAN, NAN, CYN);
     }
-    void draw_truth(int lineno, bool truthy, int styl=2) {  // styl lets you pick your favorite pair of words from the array below
+    enum class binstyl { On, Yes, True, Enabled };  // used to indicated binary value display style in draw_truth() and calls to it
+    void draw_truth(int lineno, bool truthy, binstyl styl=binstyl::True) {  // styl lets you pick your favorite pair of words from the array below
         static std::string words[4][2] = { {"off","on"}, {"no","yes"}, {"false","true"}, {"disabl","enable"} };  // selectable verbiage styles 0, 1, 2, 3
-        drawval_core(lineno, words[styl][truthy], 1, NAN, NAN, NAN, (truthy) ? LPUR : ORCD);
+        drawval_core(lineno, words[(int)styl][truthy], 1, NAN, NAN, NAN, (truthy) ? LPUR : ORCD);
     }    
     std::string num2string(int value, int maxlength) {  // returns an ascii string representation of a given integer value, using scientific notation if necessary to fit within given width constraint
         value = abs(value);  // this function disregards sign
@@ -640,7 +641,7 @@ class Display {
     // * drawval (int_line, float_value, [int_sig_places])  // for floats. sig_places is how many digits after decimal (if they fit) 
     // * drawval (int_line, float_value, [float_min], [float_max], [float_targ], [int_sig_places])  // for floats. if min & max are given it draws a bargraph of that range is drawn. If targ value is given then bargraph will include a target pointer. sig_places is how many digits after decimal (if they fit) 
     // * drawval (int_line, int_value, [int_min], [int_max], [int_targ])  // for ints. if min & max are given it draws a bargraph of that range. If targ value is given then bargraph will include a target pointer. 
-    // * draw_truth (int_line, bool_value, [int_style])  // for bools. styles: 0 (on/off), 1 (yes/no), 2 (true/false) (default)
+    // * draw_truth (int_line, bool_value, style)  // for bools. for different styles, see binstyl enum
     // * draw_temp (int_line, sensor_location)  // for drawing temperatures
     // * draw_ascii (int_line, string)  // string must be length 6 max
     // * draw_eraseval (int_line)  // leaves the entry blank. use for every line not containing a value
@@ -753,15 +754,15 @@ class Display {
             drawval(10, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
             drawval(11, brake.combined_read_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
             for (int myline=12; myline<=13; myline++) draw_eraseval(myline);
-            draw_truth(14, brake.pid_enabled, 3);
+            draw_truth(14, brake.pid_enabled, binstyl::Enabled);
             draw_ascii(15, brakefeedbackcard[brake.feedback]);
             draw_ascii(16, openloopmodecard[brake.openloop_mode]);
-            draw_truth(17, brake.enforce_positional_limits, 1);
+            draw_truth(17, brake.enforce_positional_limits, binstyl::Yes);
             drawval(18, brake.max_out_changerate_pcps);
-            draw_truth(19, gas.pid_enabled, 3);
-            draw_truth(20, gas.cruise_pid_enabled, 3);
+            draw_truth(19, gas.pid_enabled, binstyl::Enabled);
+            draw_truth(20, gas.cruise_pid_enabled, binstyl::Enabled);
             draw_ascii(21, cruiseschemecard[gas.cruise_adjust_scheme]);
-            draw_truth(22, cruise_brake, 1);
+            draw_truth(22, cruise_brake, binstyl::Yes);
             draw_ascii(23, modecard[default_drive_mode]);
         }
         else if (datapage == PgBPID) {
@@ -798,7 +799,7 @@ class Display {
             drawval(16, gas.pid.dterm(), -100.0f, 100.0f);
             // drawval(15, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
             for (int line=17; line<=17; line++) draw_eraseval(line);
-            draw_truth(18, throttle_linearize_trigger, 3);
+            draw_truth(18, throttle_linearize_trigger, binstyl::Enabled);
             drawval(19, gas.linearizer_exponent, 1.0f, 5.0f);
             drawval(20, gas.out_pc_to_si(gas.max_out_changerate_pcps), 0.0f, 360.0f);
             drawval(21, gas.pid.kp());
@@ -814,9 +815,9 @@ class Display {
             // drawval(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
             drawval(14, gas.throttle_target_pc, 0.0f, 100.0f);
             for (int line=15; line<=15; line++) draw_eraseval(line);
-            draw_truth(16, gas.pid_enabled, 3);
-            draw_truth(17, gas.cruise_pid_enabled, 3);
-            draw_truth(18, throttle_linearize_cruise, 3);
+            draw_truth(16, gas.pid_enabled, binstyl::Enabled);
+            draw_truth(17, gas.cruise_pid_enabled, binstyl::Enabled);
+            draw_truth(18, throttle_linearize_cruise, binstyl::Enabled);
             drawval(19, gas.cruise_linearizer_exponent, 1.0f, 5.0f);
             drawval(20, cruise_holdtime_attenuator_pc, 0.0f, 100.0f);
             drawval(21, gas.cruisepid.kp());
@@ -835,24 +836,25 @@ class Display {
             drawval(17, ezread.avg_spamrate_cps);
             drawval(18, ezread.window_accum_char);
             drawval(19, bootbutton.dummyprintcount);
-            for (int line=20; line<=20; line++) draw_eraseval(line);
+            // for (int line=20; line<=20; line++) draw_eraseval(line);
+            draw_truth(20, ezread.ezread_serial_console_enabled, binstyl::True);
             drawval(21, tunetest);  // drawval(21, tunetest, -100.0, 100.0, NAN, 3);
             drawval(22, wheeldifferr);
-            draw_truth(23, dont_take_temperatures, 2);
+            draw_truth(23, dont_take_temperatures, binstyl::True);
         }
         else if (datapage == PgSim) {
             for (int line=9; line<=12; line++) draw_eraseval(line);
-            draw_truth(13, sim->can_sim(sens::joy), 3);
-            draw_truth(14, sim->can_sim(sens::pressure), 3);
-            draw_truth(15, sim->can_sim(sens::brkpos), 3);
-            draw_truth(16, sim->can_sim(sens::speedo), 3);
-            draw_truth(17, sim->can_sim(sens::tach), 3);
-            draw_truth(18, sim->can_sim(sens::airvelo), 3);
-            draw_truth(19, sim->can_sim(sens::mapsens), 3);
-            draw_truth(20, sim->can_sim(sens::basicsw), 3);                    
+            draw_truth(13, sim->can_sim(sens::joy), binstyl::Enabled);
+            draw_truth(14, sim->can_sim(sens::pressure), binstyl::Enabled);
+            draw_truth(15, sim->can_sim(sens::brkpos), binstyl::Enabled);
+            draw_truth(16, sim->can_sim(sens::speedo), binstyl::Enabled);
+            draw_truth(17, sim->can_sim(sens::tach), binstyl::Enabled);
+            draw_truth(18, sim->can_sim(sens::airvelo), binstyl::Enabled);
+            draw_truth(19, sim->can_sim(sens::mapsens), binstyl::Enabled);
+            draw_truth(20, sim->can_sim(sens::basicsw), binstyl::Enabled);                    
             draw_ascii(21, sensorcard[sim->potmap()]);
-            draw_truth(22, cal_brakemode, 3);
-            draw_truth(23, cal_gasmode, 3);
+            draw_truth(22, cal_brakemode, binstyl::Enabled);
+            draw_truth(23, cal_gasmode, binstyl::Enabled);
         }
         else if (datapage == PgUI) {
             drawval(9, loop_avg_us);
@@ -865,8 +867,8 @@ class Display {
             drawval(16, encoder.spinrate(), 0.0, encoder.spinrate_max());
             drawval(17, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
             draw_ascii(18, pcbaglowcard[neo->pcbaglow]);
-            draw_truth(19, flashdemo, 0);
-            draw_truth(20, neo->sleepmode, 0);
+            draw_truth(19, flashdemo, binstyl::On);
+            draw_truth(20, neo->sleepmode, binstyl::On);
             drawval(21, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, unlikely_int, 3);
             drawval(22, neosat, 1.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, unlikely_int, 3);
             draw_ascii(23, uicontextcard[ui_app]);
@@ -1154,7 +1156,8 @@ class Tuner {
             else if (sel == 14) gas.set_cruise_tunings(NAN, NAN, tune(gas.cruisepid.kd(), id, 0.0f, NAN));
         }
         else if (datapage == PgTemp) {
-            if (sel == 12) tune(&tunetest, id);
+            if (sel == 11) tune(&ezread.ezread_serial_console_enabled, id);
+            else if (sel == 12) tune(&tunetest, id);
             else if (sel == 13) tune(&wheeldifferr, id);
             else if (sel == 14) dont_take_temperatures = tune(id);
         }
