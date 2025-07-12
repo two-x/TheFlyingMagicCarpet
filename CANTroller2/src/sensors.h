@@ -1009,11 +1009,12 @@ class Speedometer : public PulseSensor {
         // _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
         print_config();
     }
-    // bool stopped() {
-    //     if (bootbutton_val) 
-    //       ezread.squintf("spd.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), _opmin, _margin, (int)(std::abs(val() - _opmin) <= _margin));  // spam catcher fails on this, w/o bootbutton condition, but not with!
-    //     return PulseSensor::stopped();
-    // }
+    bool stopped() {
+        bool joe = bootbutton_val;
+        if (joe) 
+          ezread.squintf("spd.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d, j%d\n", val(), _opmin, _margin, (int)(std::abs(val() - _opmin) <= _margin), (int)joe);  // spam catcher fails on this, w/o bootbutton condition, but not with!
+        return PulseSensor::stopped();
+    }
 };
 
 // below are beginnings of making hotrc and motors also conform to this class structure. unfinished and unused

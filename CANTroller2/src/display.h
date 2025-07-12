@@ -665,9 +665,16 @@ class Display {
             drawval(15, maf_gps, maf_min_gps, maf_max_gps);
             draw_ascii(16, motormodecard[gas.motormode]);
             draw_ascii(17, motormodecard[brake.motormode]);
-            draw_ascii(18, motormodecard[steer.motormode]);
-            drawval(19, looptimer.uptime());
-            for (int line=20; line<=21; line++) draw_eraseval(line);
+            
+            // draw_ascii(18, motormodecard[steer.motormode]);
+            // drawval(19, looptimer.uptime());
+            // for (int line=20; line<=21; line++) draw_eraseval(line);
+            
+            draw_truth(18, bootbutton_val);
+            draw_truth(19, ezread.spam_active);
+            drawval(20, ezread.avg_spamrate_cps);
+            drawval(21, ezread.window_accum_char);
+
             drawval(22, governor, 0.0f, 100.0f, NAN, 1);
             drawval(23, steer.steer_safe_pc, 0.0f, 100.0f, NAN, 1);
         }

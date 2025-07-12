@@ -486,11 +486,11 @@ class EZReadConsole {
     int spam_disable_thresh_cps = 650;  // threshold data rate (avg over window) below which ends spam suppression
     int spam_window_us = 200000;  // console history epoch over which to calculate average data rate into buffer
     Timer passthrutimer{300000};  // during suppressing spam, allow one print call to slip thru this often
-    int update_timeout_us = 20000;
-    int boot_graceperiod_timeout_us = 3500000;  // spam detection is suspended for this long after intitial boot
+    Timer updatetimer{20000};
+    // int boot_graceperiod_timeout_us = 3500000;  // spam detection is suspended for this long after intitial boot
   public:
     bool ezread_serial_console_enabled = console_enabled;  // when true then ezread.squintf() does the same thing as ezread.printf()
-    bool dirty = true, has_wrapped = false, graceperiod = true;
+    bool dirty = true, has_wrapped = false, graceperiod = true, graceperiod_valid = true;  // on boot spam detector is in a grace period for the boot messages, until end_bootgraceperiod() is called
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
     EZReadConsole() {}
     static constexpr int num_lines = 300;
@@ -503,11 +503,12 @@ class EZReadConsole {
     bool spam_active = false, spam_notice_shown = false;
     float avg_spamrate_cps = 0.0f, window_accum_char = 0.0f;  // variables to dynamically manage moving average
     void update() {
-        static Timer updatetimer{boot_graceperiod_timeout_us};
-        if (!ezread_suppress_spam || !updatetimer.expireset()) return;
-        if (graceperiod) updatetimer.set(update_timeout_us);
-        graceperiod = false;  // after here we can assume we're out of graceperiod and calltimer is accurate
-        window_accum_char = std::max(0.0f, window_accum_char - avg_spamrate_cps * update_timeout_us / 1e6f);  // let old spam fall out of the buffer.
+        if (graceperiod && !graceperiod_valid) {
+            graceperiod = false;
+            updatetimer.reset();
+        }
+        if (!ezread_suppress_spam || graceperiod || !updatetimer.expireset()) return;
+        window_accum_char = std::max(0.0f, window_accum_char - avg_spamrate_cps * updatetimer.timeout() / 1e6f);  // let old spam fall out of the buffer.
         cleanzero(&window_accum_char, 0.1);
         avg_spamrate_cps = window_accum_char * 1e6f / spam_window_us;  // calc a new avg rate.
         cleanzero(&avg_spamrate_cps, 0.1);
@@ -519,6 +520,9 @@ class EZReadConsole {
             spam_active = true;
             this->printf(sadcolor, "ezread spam suppression on\n");
         }
+    }
+    void end_bootgraceperiod() {
+        graceperiod_valid = false;
     }
   private:
     int last_allowed_us = 0;
@@ -541,6 +545,7 @@ class EZReadConsole {
         std::string str = temp;
         std::string::size_type start = 0;
         std::string::size_type end = str.find_first_of("\r\n");
+        textlines[current_index] = "";  // erase the current buffer entry (b/c old data will wrap around the ring buffer)
         while (end != std::string::npos) {  // if string contains at least one newline, chop off up to the first one and tack onto current line, and enqueue
             textlines[current_index] += str.substr(start, end - start);  // Append content up to the first newline
             linecolors[current_index] = color;  // Set color for this line
@@ -595,7 +600,10 @@ class EZReadConsole {
         va_end(args);
         if (ezread_serial_console_enabled) {
             char temp[100];
+            va_list args;  // suggested by ai tool
+            va_start(args, format);  // suggested by ai tool
             vsnprintf(temp, sizeof(temp), format, args);
+            va_end(args);  // suggested by ai tool
             Serial.printf("%s", temp);
             Serial.flush();
         }
@@ -607,7 +615,10 @@ class EZReadConsole {
         va_end(args);
         if (ezread_serial_console_enabled) {
             char temp[100];
+            va_list args;  // suggested by ai tool
+            va_start(args, format);  // suggested by ai tool
             vsnprintf(temp, sizeof(temp), format, args);
+            va_end(args);  // suggested by ai tool
             Serial.printf("%s", temp);
             Serial.flush();
         }

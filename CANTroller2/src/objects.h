@@ -200,7 +200,7 @@ void test_console_throughput() {
     }
     ezread.squintf("\b%ld baud\n", bits);
 }
-void initialize_pins_and_console() {                        // set up those straggler pins which aren't taken care of inside class objects
+void initialize_boot() {                        // set up those straggler pins which aren't taken care of inside class objects
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);                   // deasserting unused cs line ensures available spi bus
     set_pin(free_pin, INPUT_PULLUP);                       // avoid undefined inputs
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
@@ -224,6 +224,7 @@ void finalize_boot() {
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
     ezread.printf(DCYN, "magic carpet is booted\n");
+    ezread.end_bootgraceperiod();
 }
 class Ignition {
   private:
@@ -408,7 +409,7 @@ class BootButton : public MomentarySwitch {
     void update() {
         MomentarySwitch::update();
         bootbutton_val = val();
-        actions();
+        // actions();
     }
 };
 static BootButton bootbutton(boot_sw_pin);
