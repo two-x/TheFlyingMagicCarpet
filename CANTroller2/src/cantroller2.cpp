@@ -37,6 +37,7 @@ void setup() {             // runs once automatically immediately upon boot
     idiots.setup(&neo);    // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();          // initialize diagnostic engine
     ignition.setup();      // must be after diag setup
+    fan.setup();           // init vehicle thermostat controlling radiator cooling fan
     run.setup();           // initialize runmode state machine. must be after diag setup
     finalize_boot();       // will stop the console if appropriate
 }
@@ -62,6 +63,7 @@ void loop() {              // arduino-style loop() is like main() but with a bui
     diag.update();         // notice any screwy conditions or suspicious shenanigans - consistent 200us
     neo.update();          // update/send neopixel colors 
     lightbox.update(speedo.val());  // communicate any relevant data to the lighting controller
+    fan.update();          // update vehicle thermostat controlling radiator cooling fan
     ezread.update();       // allow the ezread spam detector to evaporate some old data from its buffer
     looptimer.update();    // looptimer.mark("F");
  }  // vTaskDelay(pdMS_TO_TICKS(1));   // pause continuous execution for 1ms to allow other tasks some cpu time

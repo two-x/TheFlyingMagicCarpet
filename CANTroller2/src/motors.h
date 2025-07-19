@@ -401,7 +401,7 @@ class ThrottleControl : public ServoMotor {
 
     // * set operational angular range (OpMin/OpMax), margin (Margin) and parking angle (Parked) here.
 
-    float linearizer_exponent = 2.52f;
+    float linearizer_exponent = 3.75f;
     float cruise_linearizer_exponent = 1.05f;
     float trigger_vert_pc = 0.0f;
     float idle_max_boost_pc = 15.0f;  // max amount (in percent) to boost idle if the engine is too cold
@@ -501,8 +501,8 @@ class ThrottleControl : public ServoMotor {
     }
     float cruise_logic(float thr_targ) {
         int joydir = hotrc->joydir(Vert);                           // read vertical joystick direction
-        if ((joydir == JoyCent) || !cruise_trigger_released) {     // if joystick is at center, or hasn't yet been to center since entering cruise mode
-            if (joydir == JoyCent) cruise_trigger_released = true; // if joystick is at center, flag that it has been to center since first entering cruise mode
+        if ((joydir == HrcCent) || !cruise_trigger_released) {     // if joystick is at center, or hasn't yet been to center since entering cruise mode
+            if (joydir == HrcCent) cruise_trigger_released = true; // if joystick is at center, flag that it has been to center since first entering cruise mode
             if (cruise_pid_enabled && cruise_adjusting) cruisepid.set_output(thr_targ);  // if this is the end of an adjustment, update pid out to current gas tgt
             cruise_adjusting = false;                               // flag that no cruise adjustment is in progress. (resumes pid ctrl of thrtarg, if running pid)
             if (cruise_pid_enabled) thr_targ = cruisepid.compute(); // if running on pid and not adjusting, use the pid math to drive thr_targ
@@ -535,7 +535,7 @@ class ThrottleControl : public ServoMotor {
         }
         else if (motormode == OpenLoop || motormode == ActivePID) {  // combine these into one "Driving" mode
             if (throttle_linearize_trigger) linearizer(&trigger_vert_pc, linearizer_exponent);  // we now linearize the trigger value not the output value
-            if (hotrc->joydir() == JoyUp) throttle_target_pc = map(trigger_vert_pc, hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMax], _idle_pc, pc[Govern]);  // actuators still respond even w/ engine turned off
+            if (hotrc->joydir() == HrcUp) throttle_target_pc = map(trigger_vert_pc, hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMax], _idle_pc, pc[Govern]);  // actuators still respond even w/ engine turned off
             else throttle_target_pc = _idle_pc;  // If in deadband or being pushed down, we want idle
         }
         else {
@@ -629,9 +629,9 @@ class ThrottleControl : public ServoMotor {
         if (runmode == LowPower) return;
         if (pid_timer.expireset()) {
             // with recent changes to tune() I had to move the setter function for these here, instead of inline in the tuner like it was, to make edit acceleration work
-            static float gov_last;
-            if (governor != gov_last) set_governor_pc(governor);
-            gov_last = governor;
+            // static float gov_last;                                // attempt to fix ui tuning acceleration of governor value
+            // if (governor != gov_last) set_governor_pc(governor);  // attempt to fix ui tuning acceleration of governor value
+            // gov_last = governor;                                  // attempt to fix ui tuning acceleration of governor value
             // update_ctrl_config();
             update_idle();                // Step 1 : do any idle speed management needed          
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
@@ -823,15 +823,15 @@ class BrakeControl : public JagMotor {
         if (openloop_mode == AutoRelHoldable) {  // AutoRelHoldable: releases brake whenever trigger is released, and presses brake when trigger pulled to max. anywhere in between stops brake movement
             if (hotrc->pc[Vert][Filt] <= hotrc->pc[Vert][OpMin] + hotrc->pc[Vert][Margin])
                 set_target(open_loop_attenuation_pc * pc[OpMax] / 100.0);
-            else if (hotrc->joydir() == JoyDn) set_target(pc[Stop]);
+            else if (hotrc->joydir() == HrcDn) set_target(pc[Stop]);
             else set_target(pc[OpMin]);
         }
         else if (openloop_mode == AutoRelease) {  // AutoRelease: releases brake whenever trigger is released, and presses brake proportional to trigger push. must hold trigger steady to stop brakes where they are
-            if (hotrc->joydir() == JoyDn) set_target(open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[Stop], pc[OpMax]) / 100.0);
+            if (hotrc->joydir() == HrcDn) set_target(open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[Stop], pc[OpMax]) / 100.0);
             else set_target(pc[OpMin]);
         }
         else {  // Median: holds brake when trigger is released, or if pulled to exactly halfway point. trigger pulls over or under halfway either proportionally apply or release the brake
-            if (hotrc->joydir() == JoyDn) set_target(open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[OpMin], pc[OpMax]) / 100.0);
+            if (hotrc->joydir() == HrcDn) set_target(open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[OpMin], pc[OpMax]) / 100.0);
             else set_target(pc[Stop]);
         }
         return target_pc;  // this is openloop (blind trigger) control scheme
@@ -899,8 +899,8 @@ class BrakeControl : public JagMotor {
         else if (motormode == Calibrate) {
             cal_brakemode = true;  // for sunmode state machine
             int _joydir = hotrc->joydir(); 
-            if (_joydir == JoyUp) pc[Out] = map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMax], pc[Stop], pc[OpMax]);
-            else if (_joydir == JoyDn) pc[Out] = map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][OpMin], hotrc->pc[Vert][Cent], pc[OpMin], pc[Stop]);
+            if (_joydir == HrcUp) pc[Out] = map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMax], pc[Stop], pc[OpMax]);
+            else if (_joydir == HrcDn) pc[Out] = map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][OpMin], hotrc->pc[Vert][Cent], pc[OpMin], pc[Stop]);
             else pc[Out] = pc[Stop];
         }
         else if (motormode == Release) {
@@ -910,7 +910,7 @@ class BrakeControl : public JagMotor {
             parking = goto_fixed_point(0.0, parked());
         }
         else if ((motormode == PropLoop) || (motormode == ActivePID)) {
-            if (hotrc->joydir(Vert) != JoyDn) set_target(pc[Stop]);  // let off the brake
+            if (hotrc->joydir(Vert) != HrcDn) set_target(pc[Stop]);  // let off the brake
             else set_target(map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
             pc[Out] = calc_loop_out();
         }
@@ -1050,9 +1050,9 @@ class SteeringControl : public JagMotor {
         if (motormode == Halt) new_out = pc[Stop];  // Stop the steering motor if in standby mode and standby is complete
         else if (motormode == OpenLoop) {
             int _joydir = hotrc->joydir(Horz);
-            if (_joydir == JoyRt)
+            if (_joydir == HrcRt)
                 new_out = map(hotrc->pc[Horz][Filt], hotrc->pc[Horz][Cent], hotrc->pc[Horz][OpMax], pc[Stop], steer_safe(pc[OpMax]));  // if joy to the right of deadband
-            else if (_joydir == JoyLt)
+            else if (_joydir == HrcLt)
                 new_out = map(hotrc->pc[Horz][Filt], hotrc->pc[Horz][Cent], hotrc->pc[Horz][OpMin], pc[Stop], steer_safe(pc[OpMin]));  // if joy to the left of deadband
             else
                 new_out = pc[Stop];  // Stop the steering motor if inside the deadband

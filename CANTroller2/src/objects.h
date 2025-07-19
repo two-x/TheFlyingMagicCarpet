@@ -436,3 +436,18 @@ void BootButton::actions() {  // temporary (?) functionality added for developme
         }  // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
     }
 }
+class CoolingFan {  // new class to serve as thermostat for vehicle radiator fan, in the inevitable eventuality that our current Engine Guardian system finally breaks
+  private:
+    int _pin = -1;  // uses the pin and transistor circuit existing onboard originally intended for the vehicle fuel pump
+  public:
+    int dummyprintcount = 0;
+    CoolingFan(int pin) : _pin(pin) {}
+    void setup() {
+        ezread.squintf("Cooling fan: init vehicle engine thermostat\n");
+    }
+    void update() {
+        // read engine temp
+        // turn on cooling fan as needed
+    }
+};
+static CoolingFan fan(fan_tp_cs_pin);  // uses the pin and transistor circuit existing onboard originally intended for the vehicle fuel pump

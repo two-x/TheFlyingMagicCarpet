@@ -1431,10 +1431,10 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     bool* radiolost_ptr() { return &_radiolost; }
     bool* radiolost_untested_ptr() { return &_radiolost_untested; }
     int joydir(int axis = Vert) {
-        if (sim->simulating(sens::joy) && (std::abs(pc[axis][Filt]) < us_to_pc(axis, margin_us))) return JoyCent;  // allows some needed slop around centerpoint when simulating, or you can never center it
-        if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? JoyUp : (pc[axis][Filt] < pc[axis][Cent]) ? JoyDn : JoyCent;
-        return (pc[axis][Filt] > pc[axis][Cent]) ? JoyRt : (pc[axis][Filt] < pc[axis][Cent]) ? JoyLt : JoyCent;
-    }  // return (pc[axis][Filt] > pc[axis][Cent]) ? ((axis == Vert) ? JoyUp : JoyRt) : (pc[axis][Filt] < pc[axis][Cent]) ? ((axis == Vert) ? JoyDn : JoyLt) : JoyCent;
+        if (sim->simulating(sens::joy) && (std::abs(pc[axis][Filt]) < us_to_pc(axis, margin_us))) return HrcCent;  // allows some needed slop around centerpoint when simulating, or you can never center it
+        if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? HrcUp : (pc[axis][Filt] < pc[axis][Cent]) ? HrcDn : HrcCent;
+        return (pc[axis][Filt] > pc[axis][Cent]) ? HrcRt : (pc[axis][Filt] < pc[axis][Cent]) ? HrcLt : HrcCent;
+    }  // return (pc[axis][Filt] > pc[axis][Cent]) ? ((axis == Vert) ? HrcUp : HrcRt) : (pc[axis][Filt] < pc[axis][Cent]) ? ((axis == Vert) ? HrcDn : HrcLt) : HrcCent;
     void sim_button_press(int chan) {
         _sw_event_filt[chan] = true;
         if (chan == Ch4) {

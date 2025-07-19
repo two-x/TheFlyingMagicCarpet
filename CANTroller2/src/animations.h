@@ -12,10 +12,10 @@
 #define disp_font_height 8
 #define disp_font_width 6
 int simgriddir[4][3] = {
-    { JoyPlus,  JoyPlus,  JoyPlus,  },
-    { JoyMinus, JoyMinus, JoyMinus, },
-    { JoyPlus,  JoyUp,    JoyRt,    },
-    { JoyMinus, JoyDn,    JoyLt,    },
+    { HrcPlus,  HrcPlus,  HrcPlus,  },
+    { HrcMinus, HrcMinus, HrcMinus, },
+    { HrcPlus,  HrcUp,    HrcRt,    },
+    { HrcMinus, HrcDn,    HrcLt,    },
 };
 std::string simgrid[4][3] = {
     { "psi", "rpm", "mph" },
@@ -730,12 +730,12 @@ class PanelAppManager {
     int64_t fps_mark;
     bool simulating_last = false, mule_drawn = false, dirty = true;
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint8_t color) {
-        if (dir == JoyPlus)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32x32x8, BLK);
-        else if (dir == JoyMinus) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32x32x8, BLK);
-        else if (dir == JoyUp) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_up_32x32x8, BLK);
-        else if (dir == JoyDn) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, BLK);
-        else if (dir == JoyLt) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, BLK);
-        else if (dir == JoyRt) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, BLK);
+        if (dir == HrcPlus)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32x32x8, BLK);
+        else if (dir == HrcMinus) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32x32x8, BLK);
+        else if (dir == HrcUp) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_up_32x32x8, BLK);
+        else if (dir == HrcDn) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, BLK);
+        else if (dir == HrcLt) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, BLK);
+        else if (dir == HrcRt) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, BLK);
     }
     void draw_simbuttons(LGFX_Sprite* spr) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         spr->setTextDatum(textdatum_t::middle_center);

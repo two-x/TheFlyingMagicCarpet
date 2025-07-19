@@ -141,7 +141,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (we_just_switched_modes) joy_centered = recovering;  // Fly mode will be locked until the joystick first is put at or below center
             // if (!starter.motor || (gas.motormode != Starting)) gas.setmode(AutoPID);  // change gas mode unless starter has overridden it
         if (starter.motor && hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());  // turn off starter if any Ch4 event occurred
-        if (hotrc.joydir(Vert) != JoyUp) joy_centered = true;  // mark joystick at or below center, now pushing up will go to fly mode
+        if (hotrc.joydir(Vert) != HrcUp) joy_centered = true;  // mark joystick at or below center, now pushing up will go to fly mode
         else {  // else user is pushing up and trying to start driving
             bool allowed_to_fly = joy_centered && !starter.motor;
             bool radio_problem = false;
@@ -158,10 +158,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_flyMode() {
         if (we_just_switched_modes) car_hasnt_moved = speedo.stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
         if (car_hasnt_moved) {
-            if (hotrc.joydir(Vert) != JoyUp) runmode = Hold;      // must keep pulling trigger until car moves, or it drops back to hold mode
+            if (hotrc.joydir(Vert) != HrcUp) runmode = Hold;      // must keep pulling trigger until car moves, or it drops back to hold mode
             else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
         }
-        else if (speedo.stopped() && hotrc.joydir() != JoyUp) runmode = Hold;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[Vert][Filt] <= hotrc.pc[Vert][Cent]
+        else if (speedo.stopped() && hotrc.joydir() != HrcUp) runmode = Hold;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[Vert][Filt] <= hotrc.pc[Vert][Cent]
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = Hold;   // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
         if (hotrc.sw_event_filt(Ch4)) runmode = Cruise;                        // enter cruise mode by pressing hrc ch4 button
     }
@@ -173,19 +173,19 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             gestureFlyTimer.reset();  // initialize brake-trigger timer
         }
         if (car_hasnt_moved) {
-            if (hotrc.joydir(Vert) != JoyUp) runmode = Hold;            // must keep pulling trigger until car moves, or it drops back to hold mode
+            if (hotrc.joydir(Vert) != HrcUp) runmode = Hold;            // must keep pulling trigger until car moves, or it drops back to hold mode
             else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of the mode
         }
         else if (speedo.stopped()) {
-            if (hotrc.joydir() == JoyDn) runmode = Hold;  // go to Hold Mode if we have slowed to a stop after previously moving  // && hotrc.pc[Vert][Filt] <= hotrc.pc[Vert][Cent]
-            else if (hotrc.joydir() != JoyUp) {  // unless attempting to increase cruise speed, when stopped drop to hold after a short timeout
+            if (hotrc.joydir() == HrcDn) runmode = Hold;  // go to Hold Mode if we have slowed to a stop after previously moving  // && hotrc.pc[Vert][Filt] <= hotrc.pc[Vert][Cent]
+            else if (hotrc.joydir() != HrcUp) {  // unless attempting to increase cruise speed, when stopped drop to hold after a short timeout
                 if (!stoppedholdtimer_active) {
                     stoppedholdtimer.reset();
                     stoppedholdtimer_active = true;
                 }
                 else if (stoppedholdtimer.expired()) runmode = Hold;
             }
-        }  // if (hotrc.joydir(Vert) == JoyDn && !cruise_speed_lowerable) runmode = Fly;
+        }  // if (hotrc.joydir(Vert) == HrcDn && !cruise_speed_lowerable) runmode = Fly;
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = Hold;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
         if (hotrc.sw_event_filt(Ch4)) runmode = Fly;                  // go to fly mode if hotrc ch4 button pushed
         
@@ -195,7 +195,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (gestureFlyTimer.expired()) runmode = Fly;  // new gesture to drop to fly mode is hold the brake all the way down for more than X ms
         }
         // removing requirement for car to be moving to stay in cruise mode 2024bm
-        // if (speedo.stopped()) runmode = (hotrc.joydir(Vert) == JoyUp) ? Fly : Hold;  // in case we slam into camp Q woofer stack, get out of cruise mode.
+        // if (speedo.stopped()) runmode = (hotrc.joydir(Vert) == HrcUp) ? Fly : Hold;  // in case we slam into camp Q woofer stack, get out of cruise mode.
     }
     void run_calMode() {  // calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration - don't use it unless you know how.
         if (we_just_switched_modes) calmode_request = cal_gasmode_request = cal_brakemode_request = false;
@@ -234,14 +234,14 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
 // turns, then it'll go to hold mode. May be useful if beoing pushed or towed, or when servicing.
 //
 // ** Hold Mode **
-// - Required: Engine running & JoyVert<=Center & BasicMode switch Off & Ignition On
+// - Required: Engine running & HrcVert<=Center & BasicMode switch Off & Ignition On
 // This mode ensures the car is stopped and stays stopped until you pull the trigger to give it gas, at which
 // point it goes to fly mode. This mode is entered from fly mode if the car comes to a stop, or from Stall Mode if
 // the engine starts turning. The starter can possibly be on through that transition, and thereafter it may be 
 // turned off but not on from hold mode.
 //
 // ** Fly Mode **
-// - Required: JoyVert>Center & Engine running & BasicMode Off & Ign On
+// - Required: HrcVert>Center & Engine running & BasicMode Off & Ign On
 // This mode is for driving under manual control. This mode is entered from hold mode by pulling the gas trigger.
 // If the trigger is released again before the car moves, it's back to hold mode though. Trigger pull controls throttle
 // and trigger push controls brake, either/or. Whenever the car stops, then back to hold mode. Cruise mode may be 

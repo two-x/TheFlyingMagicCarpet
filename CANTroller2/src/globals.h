@@ -28,7 +28,7 @@
 #define     starter_pin 36 // sram/ospi/glitch  // input/Output (both active high), output when starter is being driven.  ability to sense externally-driven start signal is disabled in hardware
 #define        tach_pin 37 // spiram/octspi     // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - note: maybe better on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
 #define  encoder_sw_pin 38 // spiram/octspi   * // input, rotary encoder push switch, for the UI. active low (needs pullup). signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
-#define       tp_cs_pin 39 // jtck/glitch     ! // output, controls touchpanel chip select for resistive types (dev board).  note possible known glitch: 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define   fan_tp_cs_pin 39 // jtck/glitch     ! // output, drives external 12V switch to cooling fan, -or- touchpanel chip select for resistive types (if detected on devboard).  note possible known glitch: 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define   hotrc_ch4_pin 40 // jtdo              // syspower, starter, and cruise mode toggle control. hotrc ch4 pwm toggle signal
 #define   hotrc_ch3_pin 41 // jtdi              // ignition control, hotrc Ch3 PWM toggle signal
 #define   encoder_a_pin 42 // jtms              // int input, the A (aka CLK) pin of the encoder. both A and B complete a negative pulse in between detents. if A pulse goes low first, turn is CCW. (needs pullup)
@@ -81,9 +81,9 @@ enum sw_presses { SwNone=0, SwShort=1, SwLong=2 };
 enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, CruiseMode=10, Calibrate=11, Starting=12, AutoPID=13, NumMotorModes=14 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
 enum openloopmodes { MedianPoint=0, AutoRelease=1, AutoRelHoldable=2, NumOpenLoopModes=3 };
-enum datapages { PgRun=0, PgJoy=1, PgSens=2, PgPuls=3, PgPWMs=4, PgIdle=5, PgMotr=6, PgBPID=7, PgGPID=8, PgCPID=9, PgTemp=10, PgSim=11, PgUI=12, NumDataPages=13 };
+enum datapages { PgRun=0, PgHrc=1, PgSens=2, PgPuls=3, PgPWMs=4, PgIdle=5, PgMotr=6, PgBPID=7, PgGPID=8, PgCPID=9, PgTemp=10, PgSim=11, PgNeo=12, PgUI=13, NumDataPages=14 };
 enum diag_val { DiagVal=0, DiagMin=1, DiagMax=2, DiagMargin=3, NumDiagVals=4 };
-enum joydirs { JoyRt=-2, JoyDn=-1, JoyCent=0, JoyUp=1, JoyLt=2, JoyPlus=3, JoyMinus=4 };
+enum joydirs { HrcRt=-2, HrcDn=-1, HrcCent=0, HrcUp=1, HrcLt=2, HrcPlus=3, HrcMinus=4 };
 enum panel_apps { EZReadUI=0, MuleChassisUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel
 enum codestatus { StConfused=0, StAsleep=1, StBooting=2, StParked=3, StStopped=4, StDriving=5, StInBasic=6, StPanicking=7, NumCodeStatuses=8 };
 enum pcba_glow_modes { GlowOff=0, GlowSimple=1, GlowHeart=2, GlowXFade=3, GlowSine=4, GlowNumModes=5 };
