@@ -720,7 +720,7 @@ class BrakeControl : public JagMotor {
             QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::strict, pc[Stop]);  // QPID::centmod::off);
         // pids[PressureFB].set_iaw_cond_thresh(0.25);  // set the fraction of the output range within which integration works at all
         // pids[PositionFB].set_iaw_cond_thresh(0.25);
-        set_out_changerate_pcps(200.0);  // MotorFactoryStore actuator stutters and stalls when changing direction suddenly, when power is low
+        set_out_changerate_pcps(400.0);  // MotorFactoryStore actuator stutters and stalls when changing direction suddenly, when power is low
     }
     void set_out_changerate_pcps(float newrate) {
         max_out_changerate_pcps = newrate;

@@ -724,15 +724,15 @@ class PressureSensor : public AnalogSensor {
         float b = -1.0 * min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
         set_abslim_native(0.0, (float)adcrange_adc);  // set native abslims after m and b are set.  si abslims will autocalc
-        set_oplim_native(min_adc, 2172.0);            // set native oplims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
+        set_oplim_native(min_adc, 2172.0);            // set native oplims, after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
         set_oplim(0.0, NAN);  // now set just the si oplim to exactly zero. This will cause native oplims to autocalc such that any small errors don't cause our si oplim to be nonzero
         // set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
         // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
         set_ema_alpha(0.055);
         set_margin(2.5);       // max acceptible error when checking psi levels
-        hold_initial = 135.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
+        hold_initial = 120.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
         hold_increment = 3.0;  // incremental pressure added periodically when auto stopping (adc count 0-4095)
-        panic_initial = 185.0; // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
+        panic_initial = 155.0; // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
         panic_increment = 5.0; // incremental pressure added periodically when auto stopping (adc count 0-4095)
         _zeropoint = from_native(680);   // pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
         set_native(_opmin_native);
@@ -767,16 +767,28 @@ class BrakePositionSensor : public AnalogSensor {
             set_abslim_native(1035, 3102, false);  // tuned 240809 pre-bm24
             set_oplim(0.506, 4.234)  // 4.624  //tuned 230602 - best position to park the actuator out of the way so we can use the pedal (in)
             _zeropoint = 3.17;  // tuned 230602 - brake position value corresponding to the point where fluid PSI hits zero (in)
-        #else  // if MotorFactoryStore motor
-            // 240513 cal data MotorFactoryStore actuator:  measured to tip of piston
+
+        // // #elsif XXX  // if MotorFactoryStore motor
+            //   // 240513 cal data MotorFactoryStore actuator:  measured to tip of piston
+            //   // fully retracted 0.95 in, Vpot = 0.83 V (1179 adc), fully extended 8.85 in (), Vpot = 2.5 V (3103 adc)
+            //   // calc (2.5 - 0.83) / 3.3 = 0.506 . 0.506 * 4096 = 2072 . (8.85 - 0.95) / 2072 = .00381 in/adc or 262 adc/in
+            //   set_abslim(4.33, 8.84, false);  // tuned 240513 - actuator inches measured
+            //   set_oplim(4.52, 6.00);
+            //   // 240609 determined opmin on vehicle, with MotorFactoryStore motor connected w/ quicklink + carabeener
+
+        #else  // if GoMotorWorld motor
+            // 250719 cal data GoMotorWorld actuator:  measured to tip of piston
             // fully retracted 0.95 in, Vpot = 0.83 V (1179 adc), fully extended 8.85 in (), Vpot = 2.5 V (3103 adc)
             // calc (2.5 - 0.83) / 3.3 = 0.506 . 0.506 * 4096 = 2072 . (8.85 - 0.95) / 2072 = .00381 in/adc or 262 adc/in
-            
-            // calibration: since we use AbsLimMap, set all four abslims, using false argument, to set up conversion
+
+            // calibration procedure:  (in progress!)
+            // 1) first set abslims separately for adc and inches, to use for conversions (since we use AbsLimMap):
+            //    A)  use false argument to prevent autocalculation.
             //   then indicate op limits in native or si and the zeropoint in si
-            set_abslim_native(1885, 3100, false);  // tuned 240513 - don't remember if values read from screen or calculated.  need to redo
-            set_abslim(4.33, 8.84, false);  // tuned 240513 - actuator inches measured
-            set_oplim(4.52, 6.00); 
+ 
+            set_abslim(1.22, 7.26, false);  // tuned 250719 - actuator inches measured (1.22, 7.26)
+            set_abslim_native(1885, 2933, false);  // tuned 250719 - using bkakposn adc datapage value while in cal mode (w/ no linkage)
+            set_oplim(2.98, 5.48); // tuned 250719 - measured pedal travel w/ foot (2.25"), round up some (2.5"), then center onto abslim range set above (2.98, 5.48). will adjust linkage to match as close as possible, then readjust to actual 
              // 240609 determined opmin on vehicle, with MotorFactoryStore motor connected w/ quicklink + carabeener
             _zeropoint = 5.87;  // 240609 3.65in, 1707 adc - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
 
