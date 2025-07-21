@@ -190,6 +190,7 @@ void initialize_boot() {                        // set up those straggler pins w
     set_pin(free_pin, INPUT_PULLUP);                       // avoid undefined inputs
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
+    Serial.flush();
     Serial.end(); // This is required so we can use the Serial port later for console output
     basicsw.read();
     Serial.begin(serial_monitor_baudrate); // 9600/19200/28800/57600/115200/230400/460800/921600 // open console serial port (will reassign tx pin as output)
@@ -207,6 +208,7 @@ void finalize_boot() {
     std::fflush(stdout);  // ensure immediate output
     if (!console_enabled) {
         delay(200);  // give time for serial to print everything in its buffer
+        Serial.flush();
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
     ezread.printf(DCYN, "magic carpet is booted\n");
