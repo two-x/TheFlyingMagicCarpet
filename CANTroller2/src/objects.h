@@ -168,7 +168,6 @@ class BasicModeSwitch : public ToggleSwitch {
         val = digitalRead(pin);
         in_basicmode = val;
         if (last != val) kick_inactivity_timer(HuTogSw);
-        Serial.end(); // Close serial console port so we can enable printing later.
     }
     void print_bootstatus() { ezread.squintf("Basic switch (p%d) read: %s\n", pin, in_basicmode ? "high" : "low"); }  // can't print during setup() due to sharing pin w/ serial console
 };
@@ -191,6 +190,7 @@ void initialize_boot() {                        // set up those straggler pins w
     set_pin(free_pin, INPUT_PULLUP);                       // avoid undefined inputs
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
+    Serial.end(); // This is required so we can use the Serial port later for console output
     basicsw.read();
     Serial.begin(serial_monitor_baudrate); // 9600/19200/28800/57600/115200/230400/460800/921600 // open console serial port (will reassign tx pin as output)
     delay(2000);          // 1200 use for 115200 baud // this is needed to allow the uart to initialize and the screen board enough time after a cold boot
