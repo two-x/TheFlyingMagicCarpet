@@ -719,22 +719,30 @@ class PressureSensor : public AnalogSensor {
         // * point just before pressure begins to rise from 0 (zeropoint):  posn = 3.63 in, pres = 0 psi (618 adc)
         // * max i can push w/ foot:  posn = 2.32 in (1352 adc), pres = 313 psi (2172 adc)
 
-        float min_adc = 635.0;  // reduced to be below zeropoint, was 684.0. temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
+        // Calibration procedure:  (in progress!)   circa 250720
+        // 1) set the adc opmax, by watching datapage value while pushing brake to max.  (2200) 250720
+        //    * guidelines: use one hand to grab dash for bracing, pump brake twice then push hard as soren can (no other aids). hard as one man can w/ his foot, while using one hand to grab the dash for bracingyour foot
+        // measure inches from housing end to piston end at both motor extremes (1.22, 7.26) on 250719 w/ gmw motor. this can also be done on the bench
+
+
+
+        float min_adc = 682.0;  // tuning 250720:   682 to 713  (earlier i was seeing 662 min. hmm)
+        // was 635 // reduced to be below zeropoint, was 684.0. temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
         float b = -1.0 * min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
         set_abslim_native(0.0, (float)adcrange_adc);  // set native abslims after m and b are set.  si abslims will autocalc
-        set_oplim_native(min_adc, 2172.0);            // set native oplims, after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
+        set_oplim_native(min_adc, 2200.0);            // set native oplims, after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
         set_oplim(0.0, NAN);  // now set just the si oplim to exactly zero. This will cause native oplims to autocalc such that any small errors don't cause our si oplim to be nonzero
         // set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
         // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
-        set_ema_alpha(0.055);
+        set_ema_alpha(0.03);   // was 0.055.  (250720) 0.03 seems to be a decent middle ground to keep this super-fluttery sensor value to be kinda stable, but output takes a while to adjust when changed quickly.  hmm.
         set_margin(2.5);       // max acceptible error when checking psi levels
         hold_initial = 120.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
         hold_increment = 3.0;  // incremental pressure added periodically when auto stopping (adc count 0-4095)
         panic_initial = 155.0; // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
         panic_increment = 5.0; // incremental pressure added periodically when auto stopping (adc count 0-4095)
-        _zeropoint = from_native(680);   // pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
+        _zeropoint = from_native(686);   // tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
         set_native(_opmin_native);
         print_config();
     }
@@ -781,16 +789,30 @@ class BrakePositionSensor : public AnalogSensor {
             // fully retracted 0.95 in, Vpot = 0.83 V (1179 adc), fully extended 8.85 in (), Vpot = 2.5 V (3103 adc)
             // calc (2.5 - 0.83) / 3.3 = 0.506 . 0.506 * 4096 = 2072 . (8.85 - 0.95) / 2072 = .00381 in/adc or 262 adc/in
 
-            // calibration procedure:  (in progress!)
             // 1) first set abslims separately for adc and inches, to use for conversions (since we use AbsLimMap):
             //    A)  use false argument to prevent autocalculation.
             //   then indicate op limits in native or si and the zeropoint in si
  
-            set_abslim(1.22, 7.26, false);  // tuned 250719 - actuator inches measured (1.22, 7.26)
-            set_abslim_native(1885, 2933, false);  // tuned 250719 - using bkakposn adc datapage value while in cal mode (w/ no linkage)
-            set_oplim(2.98, 5.48); // tuned 250719 - measured pedal travel w/ foot (2.25"), round up some (2.5"), then center onto abslim range set above (2.98, 5.48). will adjust linkage to match as close as possible, then readjust to actual 
-             // 240609 determined opmin on vehicle, with MotorFactoryStore motor connected w/ quicklink + carabeener
-            _zeropoint = 5.87;  // 240609 3.65in, 1707 adc - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
+            // Calibration procedure:  (in progress!)   circa 250720
+            // 1) (w/o linkage, in cal mode), measure inches from housing end to piston end at both motor extremes (1.22, 7.26) on 250719 w/ gmw motor. this can also be done on the bench
+            // 2) (w/o linkage, in cal mode), get corresponding bkakposn adc values from datapage, at motor extremes (1885, 2933) on 250719 w/ gmw motor. this can also be done on the bench
+            // 3a) (on car w/o linkage, in cal mode) measure pedal travel w/ foot in inches (precision noncritical), to approximate operational range (2.25) on 250719 w/ gmw motor
+            // 3b) (math) add a buffer, like 0.75" to the approximate range b/c motor can pull harder, and for chain slack (3.0) 250719 w/ gmw motor
+            // 3c) (math) center this range within the abslim range above, to get approximate opmin & opmax (2.73, 5.73) on 250719 w/ gmw motor
+            // 4) (math) determine fake zeropoint value to midpoint of oprange above (4.23) on 250719 w/ gmw motor
+            // 5) compile in these results as follows (instead of values being used currently) and upload:
+            //    set_abslim(1.22, 7.26, false);        // from step #1
+            //    set_abslim_native(1885, 2933, false); // from step #2
+            //    set_oplim(2.73, 5.73);                // from step #3c
+            //    _zeropoint = 4.23;                    // from step #4
+            // 6) (on car w/o linkage, in cal mode), set the motor so datapage value matches the approximate opmax value from step #3c
+            // 7) if necessary, adjust the shim block under the actuator housing so the unit has minimal clearance to it when pedal is fully depressed and linkage is tight
+            // 8) attach brake pedal linkage, make as short as possible w/ a minimum of slack while still allowing pedal to fully release
+
+            set_abslim(1.22, 7.26, false);        // from step #1
+            set_abslim_native(1885, 2933, false); // from step #2
+            set_oplim(2.73, 5.73);                // from step #3c
+            _zeropoint = 4.07;  // 250720 tuned to 4.07in  240609 3.65in, 1707 adc - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
 
             // don't also set native oplims as they will autocalc from oplims setting
             // set_oplim_native(1445, 1923);  // 240609 1445 (2.68in) is full push, and 1923 (4.5in) is park position (with simple quicklink +carabeener linkage)
