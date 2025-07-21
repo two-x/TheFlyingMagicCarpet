@@ -167,8 +167,8 @@ class BasicModeSwitch : public ToggleSwitch {
         set_pin(pin, INPUT);
         val = digitalRead(pin);
         in_basicmode = val;
-        // readswpin();
         if (last != val) kick_inactivity_timer(HuTogSw);
+        Serial.end(); // Close serial console port so we can enable printing later.
     }
     void print_bootstatus() { ezread.squintf("Basic switch (p%d) read: %s\n", pin, in_basicmode ? "high" : "low"); }  // can't print during setup() due to sharing pin w/ serial console
 };
