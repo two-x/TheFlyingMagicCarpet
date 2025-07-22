@@ -167,24 +167,9 @@ class BasicModeSwitch : public ToggleSwitch {
         set_pin(pin, INPUT);
         val = digitalRead(pin);
         in_basicmode = val;
-        // readswpin();
         if (last != val) kick_inactivity_timer(HuTogSw);
     }
     void print_bootstatus() { ezread.squintf("Basic switch (p%d) read: %s\n", pin, in_basicmode ? "high" : "low"); }  // can't print during setup() due to sharing pin w/ serial console
-    void reread() {
-        if (sim.simulating(attached_sensor)) return;
-        if (runmode == Fly || runmode == Hold || runmode == Cruise) return;
-        if (console_enabled) {
-            // delay(200);  // give time for serial to print everything in its buffer
-            Serial.end();  // close serial console to prevent crashes due to error printing
-        }
-        read();
-        if (console_enabled) {
-            Serial.begin(serial_monitor_baudrate);  // 9600/19200/28800/57600/115200/230400/460800/921600;  // restart serial console to prevent crashes due to error printing
-            // Serial.begin(115200);  // restart serial console to prevent crashes due to error printing
-            // delay(1500);  // note we will miss console messages for a bit surrounding a read, unless we add back these delays
-        }
-    }
 };
 static BasicModeSwitch basicsw(tx_basic_pin);
 
@@ -205,6 +190,8 @@ void initialize_boot() {                        // set up those straggler pins w
     set_pin(free_pin, INPUT_PULLUP);                       // avoid undefined inputs
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
+    Serial.flush();
+    Serial.end(); // This is required so we can use the Serial port later for console output
     basicsw.read();
     Serial.begin(serial_monitor_baudrate); // 9600/19200/28800/57600/115200/230400/460800/921600 // open console serial port (will reassign tx pin as output)
     delay(2000);          // 1200 use for 115200 baud // this is needed to allow the uart to initialize and the screen board enough time after a cold boot
@@ -221,6 +208,7 @@ void finalize_boot() {
     std::fflush(stdout);  // ensure immediate output
     if (!console_enabled) {
         delay(200);  // give time for serial to print everything in its buffer
+        Serial.flush();
         Serial.end();  // close serial console to prevent crashes due to error printing
     }
     ezread.printf(DCYN, "magic carpet is booted\n");
