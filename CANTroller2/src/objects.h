@@ -194,7 +194,7 @@ void initialize_boot() {                        // set up those straggler pins w
     Serial.end(); // This is required so we can use the Serial port later for console output
     basicsw.read();
     Serial.begin(serial_monitor_baudrate); // 9600/19200/28800/57600/115200/230400/460800/921600 // open console serial port (will reassign tx pin as output)
-    delay(2000);          // 1200 use for 115200 baud // this is needed to allow the uart to initialize and the screen board enough time after a cold boot
+    delay(3000);   //  3000 is enough at 921600. Any less of a delay causes us to miss the first few lines of output
     ezread.squintf(LPUR, "** Setup begin **\n");  // !! colorization is not working for this line?
     Serial.printf("Serial console started. ");
     ezread.printf("Serial console started. ");
@@ -346,6 +346,7 @@ public:
             return;                      // and ditch
         }  // from here on, we can assume the starter is off and we are supposed to turn it on
         if (brake.autoholding) {         // if brake is successfully holding
+            ezread.printf("0 turnon(): if brake.autoholding\n");
             turnon();                    // start the car
             return;                      // and then ditch out
         }
@@ -363,11 +364,15 @@ public:
             }
         }
         else if (!check_brake_before_starting) {  // if we don't need to apply the brake nor even check for it
+            ezread.printf("1 turnon(): !check_brake_before_starting)\n");
             turnon();    // start the car
             return;      // and then ditch out
         }
         if (brakeTimer.expired()) {                      // waited long enough for the brake to push
-            if (!check_brake_before_starting) turnon();  // if no need to check whether brake succeeded, then start the car
+            if (!check_brake_before_starting) {
+                ezread.printf("2 turnon(): !check_brake_before_starting)\n");
+                turnon();  // if no need to check whether brake succeeded, then start the car
+            }
             else {                                       // if we were supposed to apply the brakes and also check they got pushed
                 ezread.printf(ORG, "warn: cant start, no brake\n");
                 request(ReqNA, StartClass);              // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
