@@ -116,7 +116,6 @@ void NeopixelStrip::setup() {
     ezread.squintf("Neopixels (p%d) ", pin);
     set_pcba_glow(GlowSine);
     neoobj.Begin();
-    if (!running_on_devboard) setbright(100.0);
     ezread.squintf("refresh.. ");
     flashTimer.set(fquantum_us * (int)fevresolution);
     refresh();
