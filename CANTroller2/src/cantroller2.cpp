@@ -54,7 +54,7 @@ void loop() {              // arduino-style loop() is like main() but with a bui
     speedo.update();       // get pulse timing from hall effect speedometer on axle
     mulebatt.update();     // vehicle battery voltage
     hotrc.update();        // ~100us for all hotrc functions.
-    run.mode_logic();      // runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in standby mode with no activity
+    run.update();          // runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in standby mode with no activity
     gas.update();          // drive servo output based on controller inputs, idle controller, (possible) feedback, run mode, etc.
     brake.update();        // drive motor output based on controller inputs, feedback, run mode, etc.
     steer.update();        // drive motor output based on controller inputs, run mode, etc.

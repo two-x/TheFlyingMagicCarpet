@@ -16,7 +16,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         ezread.squintf("Runmode state machine init\n");
         runmode = Standby;  // our first mode upon boot  // disabling ability to recover to previous runmode after crash:  runmode = watchdog.boot_to_runmode;
     }  // we don't really need to set up anything, unless we need to recover to a specific runmode after crash
-    int mode_logic() {
+    int update() {
         if (runmode != LowPower && runmode != Cal) {
             if (in_basicmode) runmode = Basic;  // basicsw.val() if basicmode switch was on at boot time --> Basic Mode
             else if (!ignition.signal) runmode = Standby;
