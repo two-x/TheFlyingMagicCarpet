@@ -2,7 +2,7 @@
 #include <NeoPixelBus.h>
 #define neorgb_t RgbColor  // RgbwColor
 #define striplength 10
-NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(striplength, neopixel_pin);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method, 
+// NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(striplength, neopixel_pin);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method,
 // Default for esp32 is dma via I2S bus 1 at 800kHz using RMT. Don't know the protocol difference between "Ws2812", "Ws2812x", and "Sk6812"
 // Run neos in a task example: https://github.com/Makuna/NeoPixelBus/wiki/ESP32-and-RTOS-Tasks
 
@@ -18,6 +18,8 @@ uint8_t color_to_332(uint32_t color888) { return static_cast<uint8_t>(((color888
 uint8_t color_to_332(neorgb_t colorneo) { return (colorneo.R & 0xe0) | ((colorneo.G & 0xe0) >> 3) | ((colorneo.B & 0xc0) >> 6); }
 neorgb_t color_to_neo(uint32_t color888) { return neorgb_t((color888 >> 16) & 0xff, (color888 >> 8) & 0xff, color888 & 0xff); }  // (static_cast<uint32_t>(color.W) << 24) |
 neorgb_t color_to_neo(uint16_t color565) { return neorgb_t((color565 & 0xf800) >> 8, (color565 & 0x7e0) >> 3, (color565 & 0x1f) << 3); }  // , 0);
+
+// used in neopixel2
 neorgb_t color_to_neo(uint8_t color332) { return neorgb_t(color332 & 0xe0, (color332 & 0x1c) << 3, (color332 & 0x3) << 6); }  // , 0);
 
 class NeopixelStrip {
@@ -105,12 +107,12 @@ void NeopixelStrip::recolor_idiots(int _idiot) {  // call w/ -1 to recolor all i
     }
 }
 void NeopixelStrip::refresh(bool force) {
-    neoobj.SetPixelColor(0, heartcolornow[0]);
-    neoobj.SetPixelColor(1, heartcolornow[1]);
-    neoobj.SetPixelColor(2, heartcolornow[0]);
-    for (int i=0; i<idiotcount; i++)
-        neoobj.SetPixelColor(i + heartcount + 1, recolor(cidiot[i][cnormal], fset[i][onoff] ? hibright_idiot : lobright_idiot, neosat));
-    neoobj.Show();
+    // neoobj.SetPixelColor(0, heartcolornow[0]);
+    // neoobj.SetPixelColor(1, heartcolornow[1]);
+    // neoobj.SetPixelColor(2, heartcolornow[0]);
+    // for (int i=0; i<idiotcount; i++)
+        // neoobj.SetPixelColor(i + heartcount + 1, recolor(cidiot[i][cnormal], fset[i][onoff] ? hibright_idiot : lobright_idiot, neosat));
+    // neoobj.Show();
 }
 void NeopixelStrip::setup() {
     ezread.squintf(ezread.highlightcolor, "Neopixels (p%d)..\n", pin);
@@ -244,6 +246,8 @@ void NeopixelStrip::fevpush(int _idiot, uint push_off, bool push_val) {  // flas
     fevents[_idiot][page] |= (push_val << (push_off - 32 * page));
 }
 void NeopixelStrip::flashdemo_ena(bool ena) {
+    ezread.squintf("flashdemo_ena(ena=%s)\n", ena ? "true" : "false");
+
     flashdemo = ena;
     if (flashdemo) {
         // for (int i=1; i<=6; i++) setflash(i, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
@@ -261,6 +265,7 @@ void NeopixelStrip::flashdemo_ena(bool ena) {
 void NeopixelStrip::update_idiot(int _idiot) {
     cidiot[_idiot][clast] = cidiot[_idiot][cnow];                                                          // remember previous color
     cidiot[_idiot][cnow] = fset[_idiot][onoff] ? cidiot[_idiot][con] : cidiot[_idiot][coff];               // set color to con or coff depending on state of idiotlight
+    // check this out: possibly an issue.
     if (fset[_idiot][fcount]) if (fevpop(_idiot, nowepoch)) cidiot[_idiot][cnow] = cidiot[_idiot][cflash]; // if flashing, override with the flash color
 }
 void NeopixelStrip::update_pcba_glow() {
@@ -316,14 +321,14 @@ void NeopixelStrip::knightrider() {
         if (posn <= first || posn >= striplength - 1) dir = -dir;   // reverse direction at the ends
         posn = constrain(posn, first, striplength - 1);             // clamp position within bounds
     }
-    for (int i=first; i<striplength; i++) neoobj.SetPixelColor(i, color_to_neo(BLK));  // clear the strip   
-    neoobj.SetPixelColor(posn, color_to_neo(recolor(color, neobright)));         // set the bright point
+    // for (int i=first; i<striplength; i++) neoobj.SetPixelColor(i, color_to_neo(BLK));  // clear the strip
+    // neoobj.SetPixelColor(posn, color_to_neo(recolor(color, neobright)));         // set the bright point
     for (int i=1; i<=tail; i++) {   // set the trailing effect
         int tailpos = posn - i * dir;
-        if (tailpos >= first && tailpos < striplength)
-            neoobj.SetPixelColor(tailpos, color_to_neo(recolor(color, neobright * (100.0 * (tail - i) / tail) / 100.0)));
+        // if (tailpos >= first && tailpos < striplength)
+            // neoobj.SetPixelColor(tailpos, color_to_neo(recolor(color, neobright * (100.0 * (tail - i) / tail) / 100.0)));
     }
-    neoobj.Show(); // Show the updated strip
+    // neoobj.Show(); // Show the updated strip
 }
 
 //     for (int i = 1; i <= tail; i++) {  // Set the tailing effect
@@ -388,6 +393,7 @@ class IdiotLights {
     static constexpr int row_count = 12;
     static constexpr int row_height = 11;
     static constexpr int iconcount = 36;  // number of boolean values included on the screen panel (not the neopixels) 
+// this is where we set the idiot lights
     bool* vals[iconcount] = {  // arranged here as 6 bool pointers per line of code
         // row 1 onscreen.  the 1st 7 of these are true hazard lights (lit only on error), also copied onto the last 7 neopixel idiot lights
         &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, &panicstop,
