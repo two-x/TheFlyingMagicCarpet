@@ -12,6 +12,7 @@
 #define disp_bargraphs_x 111  // 122
 #define disp_datapage_title_x 83
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
+#include "neopixel2.h"
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "ANI" };  // pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { "CAL", "SIM", "CH4", "IGN" };
 std::string ch4_menu_buttons[NumRunModes] = { "CH4", "WAKE", "SLEEP", "START", "DMODE", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
@@ -126,6 +127,7 @@ std::string* nulstrptr = &nulstr;
 class Display {
   private:
     NeopixelStrip* neo;
+    NeopixelStrip2* neo2;
     Touchscreen* touch;
     Simulator* sim;
     IdiotLights* idiots;
@@ -145,8 +147,8 @@ class Display {
     int disp_datapage_last, disp_needles[disp_lines], disp_targets[disp_lines], disp_age_quanta[disp_lines];
     bool disp_selection_dirty, disp_datapage_dirty, disp_values_dirty, disp_data_dirty[disp_lines], disp_menutoggles_dirty;
     bool disp_menus_dirty, disp_runmode_dirty, disp_simbuttons_dirty,disp_idiots_dirty, disp_units_dirty;
-    Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
-      : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
+    Display(NeopixelStrip* _neo, NeopixelStrip2* _neo2,Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
+      : neo(_neo), neo2(_neo2), touch(_touch), idiots(_idiots), sim(_sim) {}
     void init_framebuffers(int _sprwidth, int _sprheight) {
         int sprsize[2] = { _sprwidth, _sprheight };
         lcd.setColorDepth(sprite_color_depth);
@@ -618,11 +620,22 @@ class Display {
             if (i < neo->num_neo_idiots()) {  // the first group of displayed idiot lights are also represented by neopixels
                 if (*ptr != idiots->last[i]) neo->setlogic(i, *ptr);
                 if (*ptr) {
-                    if (ptr == &panicstop || ptr == &diag.err_sens[ErrRange][_TempEng] || ptr == &wheeltemperr) neo->setflash(i, 3, 1, 2, 100, 0xffffff);  // add a brilliant flash to the more critical idiot lights
-                    else if (ptr == &diag.err_sens_alarm[ErrLost]) neo->setflash(i, diag.errorcount(ErrLost), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
-                    else if (ptr == &diag.err_sens_alarm[ErrRange]) neo->setflash(i, diag.errorcount(ErrRange), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
+                    if (ptr == &panicstop || ptr == &diag.err_sens[ErrRange][_TempEng] || ptr == &wheeltemperr) {
+                        neo->setflash(i, 3, 1, 2, 100, 0xffffff);  // add a brilliant flash to the more critical idiot lights
+                        neo2->setidiotLightPanicMode(i, true);
+                    } else if (ptr == &diag.err_sens_alarm[ErrLost]) {
+                        neo->setflash(i, diag.errorcount(ErrLost), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
+                        neo2->setidiotLightWarningBlinkColor(i, RgbColor(255,0,0));
+                    } else if (ptr == &diag.err_sens_alarm[ErrRange]) {
+                        neo->setflash(i, diag.errorcount(ErrRange), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
+                        neo2->setidiotLightWarningBlinkColor(i, RgbColor(255,0,0));
+                    }
                 }
-                else neo->setflash(i, 0);
+                else {
+                    neo->setflash(i, 0);
+                    neo2->setidiotLightPanicMode(i, false);
+                    neo2->setidiotLightWarningBlinkColor(i, 0x000000);  // black blinks
+                }
             }
             if (force || (*ptr != idiots->last[i])) {
                 draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + idiots_spacing_x + 1) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int)(i / idiots->row_count));
@@ -1195,10 +1208,12 @@ class Tuner {
         id = 0;
     }
 };
+
+static NeopixelStrip2 neo2;
 static NeopixelStrip neo(neopixel_pin);
 static IdiotLights idiots;
 static Touchscreen touch;
-static Display screen(&neo, &touch, &idiots, &sim);
+static Display screen(&neo, &neo2, &touch, &idiots, &sim);
 static Tuner tuner(&screen, &neo, &touch);
 bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickType_t waittime=portMAX_DELAY) {   // pdMS_TO_TICKS(1)
     if (xSemaphoreTake(*sem1, waittime) == pdTRUE) {  // try to take 1st semaphore, and if successful ...
