@@ -213,7 +213,7 @@ void initialize_boot() {                        // set up those straggler pins w
     ezread.squintf(LPUR, "** Setup begin **\n");  // !! colorization is not working for this line?
     Serial.printf("Serial console started. ");
     ezread.printf("Serial console started. ");
-    test_console_throughput();
+    // test_console_throughput();
     syspower.print_bootstatus();
     basicsw.print_bootstatus();
 }

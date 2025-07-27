@@ -33,6 +33,8 @@ void setup() {             // runs once automatically immediately upon boot
     brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos, &gas, &tempsens);
     steer.setup(&hotrc, &speedo, &mulebatt);
     sim_setup();           // simulator initialize devices and pot map
+    neo2.setup();
+    neo2.test_pattern();
     neo.setup();           // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);    // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();          // initialize diagnostic engine
@@ -61,7 +63,7 @@ void loop() {              // arduino-style loop() is like main() but with a bui
     touch.update();        // read touchscreen input and do what it tells us to
     tuner.update();        // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update();         // notice any screwy conditions or suspicious shenanigans - consistent 200us
-    neo.update();          // update/send neopixel colors 
+    neo2.update();          // update/send neopixel colors
     lightbox.update(speedo.val());  // communicate any relevant data to the lighting controller
     // fan.update();          // update vehicle thermostat controlling radiator cooling fan
     ezread.update();       // allow the ezread spam detector to evaporate some old data from its buffer
