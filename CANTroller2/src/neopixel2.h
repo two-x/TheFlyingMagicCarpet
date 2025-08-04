@@ -89,18 +89,6 @@ public:
         // Default: show solid color
         return solidColor;
     }
-
-    // // Getters
-    // uint8_t getLed() const { return led; }
-    // bool isWarningMode() const { return warningMode; }
-    // bool isPanicMode() const { return panicMode; }
-    // RgbColor getWarningSolidColor() const { return warningSolidColor; }
-    // RgbColor getWarningFlashColor() const { return warningFlashColor; }
-    //
-    // // Setters
-    // void setWarningMode(bool mode) { warningMode = mode; }
-    // void setPanicMode(bool mode) { panicMode = mode; }
-    // void setWarningFlashColor(RgbColor color) { warningFlashColor = color; }
 };
 
 // Global idiot lights array
