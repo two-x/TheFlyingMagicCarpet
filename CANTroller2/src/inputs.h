@@ -136,7 +136,7 @@ class Encoder {
     Encoder() = delete;           // must be instantiated with pins
     
     void setup() {
-        ezread.squintf("Encoder init\n");
+        ezread.squintf(ezread.highlightcolor, "Encoder init\n");
         set_pin(_a_pin, INPUT_PULLUP);
         set_pin(_b_pin, INPUT_PULLUP);
         button.setup();
@@ -304,12 +304,11 @@ class Touchscreen {
         disp_size[Horz] = disp_width_pix;
         disp_size[Vert] = disp_height_pix;
         captouch = (i2c->detected(I2CTouch));
-        Serial.printf("Touchscreen.. %s panel", (captouch) ? "detected captouch" : "using resistive");
+        ezread.squintf(ezread.highlightcolor, "Touchscreen.. %s panel\n", (captouch) ? "detected captouch" : "using resistive");
         if (   (senseTimer.timeout() >= filterTimer.timeout()) || (filterTimer.timeout() >= twotapTimer.timeout())  // checks all the timeouts are in length order
             || (filterTimer.timeout() >= repeat_timeout)       || (filterTimer.timeout() >= accel_timeout)
             || (twotapTimer.timeout() >= longpress_timeout)    || (swipe_timeout >= longpress_timeout)
-            || (longpress_timeout >= pressTimer.timeout()) )   ezread.squintf(RED, "err: invalid touchscreen timings\n");
-        Serial.printf("\n");
+            || (longpress_timeout >= pressTimer.timeout()) )   ezread.squintf(ezread.madcolor, "  err: invalid touchscreen timings\n");
     }
     // bool* touched_ptr() { return &nowtouch; }
     int touch_x() { return tft_touch[Horz]; }

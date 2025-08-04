@@ -12,7 +12,7 @@ class SysPower {
         _notval = !_val;
         write_pin(_pin, _val);
     }
-    void print_bootstatus() { ezread.squintf("Syspower (p%d) is: %s\n", _pin, _val ? "on" : "off"); }
+    void print_bootstatus() { ezread.squintf(ezread.highlightcolor, "Syspower (p%d) is: %s\n", _pin, _val ? "on" : "off"); }
     bool val() { return _val; }
     bool notval() { return _notval; }
     bool* val_ptr() { return &_val; }
@@ -42,7 +42,7 @@ static SteeringControl steer(steer_pwm_pin, 2, 50);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
 
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
-    ezread.squintf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
+    ezread.squintf("  using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
     if (running_on_devboard) return;      // override settings if running on the real car
     looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
     encoder_reverse = true;
@@ -80,7 +80,7 @@ void sim_setup() {
     // sim.set_can_sim(sens::basicsw, running_on_devboard);
     // for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
     // sim.set_potmap(sens::none);        
-    ezread.squintf("Simulator: registered %d devices\n", sim.registered_device_count());
+    ezread.squintf(ezread.highlightcolor, "Simulator: registered %d devices\n", sim.registered_device_count());
 }
 // RTOS task that updates temp sensors in a separate task
 void tempsens_task(void *parameter) {
@@ -169,7 +169,7 @@ class BasicModeSwitch : public ToggleSwitch {
         in_basicmode = val;
         if (last != val) kick_inactivity_timer(HuTogSw);
     }
-    void print_bootstatus() { ezread.squintf("Basic switch (p%d) read: %s\n", pin, in_basicmode ? "high" : "low"); }  // can't print during setup() due to sharing pin w/ serial console
+    void print_bootstatus() { ezread.squintf(ezread.highlightcolor, "Basic switch (p%d) read: %s\n", pin, in_basicmode ? "high" : "low"); }  // can't print during setup() due to sharing pin w/ serial console
     void reread() {
         if (sim.simulating(attached_sensor)) return;
         if (runmode == Fly || runmode == Hold || runmode == Cruise) return;
@@ -190,7 +190,7 @@ static BasicModeSwitch basicsw(tx_basic_pin);
 
 void test_console_throughput() {
     int step = 0, bits = 0;
-    ezread.squintf("test: ");
+    Serial.printf("  test: ");
     Timer testtimer{1000000};  //, chartimer{100000};
     while (!testtimer.expired()) {
         Serial.printf("\b \b \b \b \b%s", (step == 0) ? "-" : ((step == 1) ? "\\" : "/"));  // ezread console can not yet support backspaces
@@ -198,7 +198,8 @@ void test_console_throughput() {
         ++step %= 3;
         bits += 10 * 8;
     }
-    ezread.squintf("\b%ld baud\n", bits);
+    Serial.printf("\b%ld baud\n", bits);
+    ezread.printf("  tested %ld baud\n", bits);
 }
 void initialize_boot() {                        // set up those straggler pins which aren't taken care of inside class objects
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);                   // deasserting unused cs line ensures available spi bus
@@ -206,27 +207,26 @@ void initialize_boot() {                        // set up those straggler pins w
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
     Serial.flush();       // ensure serial buffer is fully printed out before closing the port
-    Serial.end();         // Close serial console port. serial doesn't work w/o this. maybe b/c the esp bootloader uses 115200 & we don't?
+    Serial.end();         // close serial console port. serial doesn't work w/o this. maybe b/c the esp bootloader uses 115200 & we don't?
     basicsw.read();       // read the basic switch. the serial port must be fully stopped
     Serial.begin(serial_monitor_baudrate); // 9600/19200/28800/57600/115200/230400/460800/921600 // open console serial port (will reassign tx pin as output)
     delay(3000);   //  3000 is enough at 921600. Any less of a delay causes us to miss the first few lines of output
-    ezread.squintf(LPUR, "** Setup begin **\n");  // !! colorization is not working for this line?
-    Serial.printf("Serial console started. ");
-    ezread.printf("Serial console started. ");
+    ezread.setup();        // start the onscreen terminal
+    ezread.squintf(ezread.announcecolor, "Magic carpet setup begin ..\n");
+    ezread.squintf(ezread.highlightcolor, "Serial console is started\n");  //  Serial.printf("Serial console is started\n");
     test_console_throughput();
     syspower.print_bootstatus();
     basicsw.print_bootstatus();
 }
 void finalize_boot() {
-    ezread.squintf("%s", console_enabled ? "" : "Stopping console during runtime\n");
-    ezread.squintf(LPUR, "** Setup done **\n");
+    ezread.squintf("%s", console_enabled ? "" : "Stopping console during runtime\n");  // ezread.squintf(ezread.announcecolor, "** Setup done **\n");
     std::fflush(stdout);  // ensure immediate output
     if (!console_enabled) {
         delay(200);           // give time for serial to print everything in its buffer
         Serial.flush();       // ensure serial buffer is fully printed out before closing the port
         Serial.end();         // close serial console to prevent crashes due to error printing
     }
-    ezread.printf(DCYN, "magic carpet is booted\n");
+    ezread.printf(ezread.announcecolor, "Magic carpet is booted!\n");
     ezread.end_bootgraceperiod();
 }
 class Ignition {
@@ -238,7 +238,7 @@ class Ignition {
     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
     Ignition(int _pin) : pin(_pin) {}
     void setup() {  // must run after diag recovery function, to ensure initial ign value is asserted correctly
-        ezread.squintf("Ignition (p%d) handler init\n", pin);
+        ezread.squintf(ezread.highlightcolor, "Ignition (p%d) handler init\n", pin);
         bool pin_initial_val = LOW;
         if (!booted) {
             if (ign_req == ReqOn) pin_initial_val = HIGH;
@@ -248,7 +248,9 @@ class Ignition {
         booted = true;
         ign_req = ReqNA;
     }
-    void request(int req) { ign_req = req; } // ezread.squintf("new ign request %s\n", requestcard[ign_req].c_str());
+    void request(int req) { ign_req = req;
+        ezread.squintf("ign req %s\n", requestcard[req].c_str());
+    } // ezread.squintf("new ign request %s\n", requestcard[ign_req].c_str());
     void panic_request(int req) { panic_req = req; }
     void update() {  // Run once each main loop
         static bool ign_last = LOW;
@@ -284,30 +286,31 @@ class Starter {
     std::string startreqcard[NumStartReq] = { "unknwn", "class", "hotrc", "touch", "runmod" };
     int lastbrakemode, lastgasmode, pin;
     Timer starterTimer, twoclicktimer{2000000}, brakeTimer{4000000};  // if remotely-started starting event is left on for this long, end it automatically
-    int req_source_timeout = 5000000;  // request to turn on starter will fail if no activity occurred within this time on any valid ReqOn source
+    int req_source_timeout_ms = 5000;  // request to turn on starter will fail if no activity occurred within this time on any valid ReqOn source
     Timer simBtnTimer, hotrcBtnTimer;  // keep track of last activity on all possible sources of ReqOn, to serve as a safety net preventing phantom starts
     void check_for_external_tampering() {   // in case an external bug could be turning on the starter instead of us    
         bool pin_now = read_pin(pin);       // get current value of pin to do the following check
         if (motor != pin_now) {             // check if someone changed the motor value or started driving our pin
-            ezread.printf(RED, "err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
+            ezread.printf(ezread.madcolor, "err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
             turnoff();                  // stop the motor either way
             ignition.panic_request(ReqOn);  // request panic will kill the ignition just in case it did start up
         }
     }
-    void turnon() {                                              // function to start the motor
-        if ((hotrc.sim_button_time() < req_source_timeout) && (hotrc.ch4_button_time() < req_source_timeout)) {
-            ezread.printf(RED, "err: starter reqOn w/o human activity!\n"); // don't start without recent activity on valid request sources
-            ezread.printf(RED, "  hrc:%d,  sim:%d\n", hotrc.ch4_button_time(), hotrc.sim_button_time()); // don't start without recent activity on valid request sources
-        }    
-        else if ((requestor != StartHotrc) && (requestor != StartTouch)) ezread.printf(RED, "err: bad start requestor %s!\n", startreqcard[requestor].c_str()); // don't start if origin of request is unknown, or [buggy] member code, or invalid
-        else {  // if error checks are ok then go ahead and start
-            ezread.printf("starter turnon by %s\n", startreqcard[requestor].c_str());  // maybe use ezread.squintf instead? (prints to both screen and console)
-            if (push_gas_when_starting && check_brake_before_starting) gas.setmode(Starting);  // give it some gas, unless there's risk of lurching forward
+    void turnon(int code=-1) {  // function to start the motor.  code argument is so we can determine which internal function call got us here
+        if ((requestor == StartHotrc) && (hotrc.ch4_button_last_ms() > req_source_timeout_ms))  // don't start without recent activity on the particular requestor source used
+            ezread.printf(ezread.madcolor, "err: starter reqOn by Hrc.%d, %dms ago\n", code, hotrc.ch4_button_last_ms());
+        else if ((requestor == StartTouch) && (hotrc.sim_button_last_ms() > req_source_timeout_ms))  // don't start without recent activity on the particular requestor source used
+            ezread.printf(ezread.madcolor, "err: starter reqOn by Sim.%d, %dms ago\n", code, hotrc.sim_button_last_ms());
+        else if ((requestor != StartHotrc) && (requestor != StartTouch)) ezread.printf(ezread.madcolor, "err: bad start requestor %s (code=%d)\n", startreqcard[requestor].c_str(), code); // don't start if origin of request is invalid
+        else if (code == -1) ezread.printf(ezread.madcolor, "err: starter ReqOn w/o given code call\n");  // don't start if a code wasn't given when called
+        else {  // if no error checks were triggered then go ahead and start
+            ezread.printf("starter turnon by %s.%d\n", startreqcard[requestor].c_str(), code);  // maybe use ezread.squintf instead? (prints to both screen and console)
+            if (push_gas_when_starting && check_brake_before_starting) gas.setmode(Starting);  // give it some gas if we're allowed to, unless brake wasn't checked (due to risk of lurching forward)
             starterTimer.set((int64_t)(run_timeout * 1000000.0));  // if left on the starter will turn off automatically after X seconds
             motor = HIGH;                                          // ensure starter variable always reflects the starter status regardless who is driving it
             write_pin(pin, motor);                                 // and start the motor
         }
-        request(ReqNA, StartClass);                            // we have serviced starter-on request, so cancel it
+        request(ReqNA, StartClass);  // cancel the starter on request which we have serviced (or properly ignored if it was erroneous)
     }
     void turnoff() {              // function to stop the motor
         if (verbose) ezread.printf("starter turnoff by %s\n", startreqcard[requestor].c_str());
@@ -321,13 +324,13 @@ public:
     bool req_active = false, one_click_done = false, motor = LOW;    // motor is the current state of starter voltage. set in this class only
     float run_timeout = 3.5, run_lolimit = 1.0, run_hilimit = 10.0;  // in seconds
     void setup() {
-        ezread.squintf("Starter (p%d) handler init\n", pin);
+        ezread.squintf(ezread.highlightcolor, "Starter (p%d) handler init\n", pin);
         set_pin(pin, OUTPUT);                                  // set pin as output
     }
     void request(int _req, int _requestor=StartUnknown) {  // this is the only valid way to change the current request now_req, internally or externally
         static int last_req = ReqNA;  // for detecting external settings of now_req
-        if (now_req != last_req) ezread.printf(RED, "err: detected starter req value abuse!\n"); // report now_req was apparently set by somewhere besides this function
-        else if ((_requestor < 0) || (_requestor >= NumStartReq)) ezread.printf(RED, "err: invalid start requestor=%d\n", _requestor); // prevent crash if requestor value passed is out of range
+        if (now_req != last_req) ezread.printf(ezread.madcolor, "err: detected starter req value abuse!\n"); // report now_req was apparently set by somewhere besides this function
+        else if ((_requestor < 0) || (_requestor >= NumStartReq)) ezread.printf(ezread.madcolor, "err: invalid start requestor=%d\n", _requestor); // prevent crash if requestor value passed is out of range
         else {  // if no errors happened then accept the request
             if (verbose && ((_req != last_req) || (_requestor != StartClass))) ezread.printf("new starter %s request from %s\n", requestcard[_req].c_str(), startreqcard[_requestor].c_str());  // report all request activity
             if (_req == ReqTog) _req = motor ? ReqOff : ReqOn;  // translate a toggle request to a drive request opposite to the current drive state
@@ -351,7 +354,7 @@ public:
                 one_click_done = !one_click_done;                 // toggle next click will be the opposite of this one
             }
             if (twoclicktimer.expired()) {
-                if (one_click_done) ezread.printf(ORG, "warn: starter requires 2-clicks\n");
+                if (one_click_done) ezread.printf(ezread.sadcolor, "warn: starter requires 2-clicks\n");
                 one_click_done = false;  // cancel 2click sequence if too much time elapsed since last click
             }
             last_req_2click = now_req;   // allows us to detect when request first goes to on
@@ -361,13 +364,12 @@ public:
             return;                      // and ditch
         }  // from here on, we can assume the starter is off and we are supposed to turn it on
         if (brake.autoholding) {         // if brake is successfully holding
-            ezread.printf("0 turnon(): if brake.autoholding\n");
-            turnon();                    // start the car
+            turnon(0);                   // start the car   // ezread.printf("0 turnon(): if brake.autoholding\n");
             return;                      // and then ditch out
         }
         if (brake_before_starting) {        // if we must apply brakes before starting
             if (brake.feedback == _None) {  // check if brake is running in openloop mode (we can't control an autohold)
-                ezread.printf(ORG, "warn: starter can't use openloop brake\n");
+                ezread.printf(ezread.sadcolor, "warn: starter can't use openloop brake\n");
                 request(ReqNA, StartClass); // cancel turn on request
                 return;                     // and then ditch out
             }
@@ -379,17 +381,13 @@ public:
             }
         }
         else if (!check_brake_before_starting) {  // if we don't need to apply the brake nor even check for it
-            ezread.printf("1 turnon(): !check_brake_before_starting)\n");
-            turnon();    // start the car
+            turnon(1);    // start the car    // ezread.printf("1 turnon(): !check_brake_before_starting)\n");
             return;      // and then ditch out
         }
         if (brakeTimer.expired()) {                      // waited long enough for the brake to push
-            if (!check_brake_before_starting) {
-                ezread.printf("2 turnon(): !check_brake_before_starting)\n");
-                turnon();  // if no need to check whether brake succeeded, then start the car
-            }
+            if (!check_brake_before_starting) turnon(2);  // if no need to check whether brake succeeded, then start the car  // ezread.printf("2 turnon(): !check_brake_before_starting)\n");
             else {                                       // if we were supposed to apply the brakes and also check they got pushed
-                ezread.printf(ORG, "warn: cant start, no brake\n");
+                ezread.printf(ezread.sadcolor, "warn: cant start, no brake\n");
                 request(ReqNA, StartClass);              // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
             }
         }  // otherwise we're still waiting for the brake to push, meanwhile the starter turn-on request remains intact
@@ -417,7 +415,7 @@ class BootButton : public MomentarySwitch {
     void update() {
         MomentarySwitch::update();
         bootbutton_val = val();
-        // actions();
+        actions();
     }
 };
 static BootButton bootbutton(boot_sw_pin);
@@ -451,7 +449,7 @@ class CoolingFan {  // new class to serve as thermostat for vehicle radiator fan
     int dummyprintcount = 0;
     CoolingFan(int pin) : _pin(pin) {}
     void setup() {
-        ezread.squintf("Cooling fan: init vehicle engine thermostat\n");
+        ezread.squintf(ezread.highlightcolor, "Cooling fan: init vehicle engine thermostat\n");
     }
     void update() {
         // read engine temp

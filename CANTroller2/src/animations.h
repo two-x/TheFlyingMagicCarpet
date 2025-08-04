@@ -676,12 +676,12 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
         // for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
     }
     void draw(LGFX_Sprite* spr) {
-        draw_scrollbar(spr, LGRY);  // currently does not draw anything
+        draw_scrollbar(spr, LGRY);  // currently draws just a very skinny blank column a few pixels wide at the left side
         spr->fillSprite(BLK);
         spr->setTextWrap(false);
         spr->setFont(&fonts::TomThumb);
         spr->setTextDatum(textdatum_t::top_left);
-        int max_lines = (vp->h + 1 + row_padding_pix) / font_height;  // add 1-2 to vp->h b/c do not need extra spacing between rows on last row
+        int max_lines = 1 + (vp->h + 4 + row_padding_pix) / font_height;  // this math is probably wrong in general case, i found workable constants iteratively. must debug if window size changes
         if (max_lines <= 0) return;
         int max_offset = ez->has_wrapped ? ez->bufferSize - 1 : ez->current_index;  // clamp offset to available history
         int safe_offset = constrain(ez->offset, 0, max_offset);
@@ -698,10 +698,10 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
     }
   public:
     void setup(viewport* _vp) {
-        ez->setup();
+        // ez->setup();
         vp = _vp;
         _main_x = _vp->x + scrollbar_width + pix_margin;
-        linelength = (int)(vp->w / disp_font_width);
+        linelength = (int)(vp->w / disp_font_width);  // needs update to handle tomthumb font ??  seems to work ok tho
     }
     void update(LGFX_Sprite* spr, bool force=false) {
         if (ez->offsettimer.expired()) {

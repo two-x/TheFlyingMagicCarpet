@@ -113,13 +113,12 @@ void NeopixelStrip::refresh(bool force) {
     neoobj.Show();
 }
 void NeopixelStrip::setup() {
-    ezread.squintf("Neopixels (p%d) ", pin);
+    ezread.squintf(ezread.highlightcolor, "Neopixels (p%d)..\n", pin);
     set_pcba_glow(GlowSine);
     neoobj.Begin();
-    ezread.squintf("refresh.. ");
+    // ezread.squintf("  refreshed\n");
     flashTimer.set(fquantum_us * (int)fevresolution);
     refresh();
-    ezread.squintf("\n");
 }
 void NeopixelStrip::setbright(float bright_pc) {  // a way to specify brightness level as a percent
     static float lomultiplier = 3.0f;
@@ -191,7 +190,6 @@ void NeopixelStrip::heartsine_update() {
     heartcolornow[0] = recolor(heartcolorbase, lobright_heart[0] + (hibright_heart[0] - lobright_heart[0]) * (1.0f + (float)std::cos(phase)) / 2.0f);
     heartcolornow[1] = recolor(heartcolorbase, lobright_heart[1] + (hibright_heart[1] - lobright_heart[1]) * (1.0f + (float)std::sin(phase)) / 2.0f);
 }
-
 bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolstate) {
     if (_idiot >= idiotcount) return false;
     fset[_idiot][onoff] = startboolstate;
@@ -204,7 +202,6 @@ bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolst
     recolor_idiots(_idiot);
     return true;
 }
-
 // setflash() : Call this to add a blink sequence to one of the idiot lights which will repeat indefinitely in cycles
 //              Cycles are chopped into 128 definable segments of 50 ms each, for a total of 6.4 sec
 //   _idiot = which idiot light
@@ -249,16 +246,16 @@ void NeopixelStrip::fevpush(int _idiot, uint push_off, bool push_val) {  // flas
 void NeopixelStrip::flashdemo_ena(bool ena) {
     flashdemo = ena;
     if (flashdemo) {
-        for (int i=1; i<=6; i++) setflash(i, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
-        // setflash(4, 8, 8, 8, 20);            // brightness toggle in a continuous squarewave
-        // setflash(5, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
-        // setflash(6, 2, 5, 5, 0, 0);          // two short black pulses
+        // for (int i=1; i<=6; i++) setflash(i, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
+        setflash(4, 8, 8, 8, 20);            // brightness toggle in a continuous squarewave
+        setflash(5, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
+        setflash(6, 2, 5, 5, 0, 0);          // two short black pulses
     }
     else {                                   // cancel any current blink programs on these leds
-        for (int i=1; i<=6; i++) setflash(i, 0);
-        // setflash(4, 0);
-        // setflash(5, 0);
-        // setflash(6, 0);
+        // for (int i=1; i<=6; i++) setflash(i, 0);
+        setflash(4, 0);
+        setflash(5, 0);
+        setflash(6, 0);
     }
 }
 void NeopixelStrip::update_idiot(int _idiot) {
@@ -392,13 +389,13 @@ class IdiotLights {
     static constexpr int row_height = 11;
     static constexpr int iconcount = 36;  // number of boolean values included on the screen panel (not the neopixels) 
     bool* vals[iconcount] = {  // arranged here as 6 bool pointers per line of code
-        // row 1 onscreen.  note the 1st 7 of these are also copied to the last 7 neopixel idiot lights
+        // row 1 onscreen.  the 1st 7 of these are true hazard lights (lit only on error), also copied onto the last 7 neopixel idiot lights
         &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, &panicstop,
         hotrc.radiolost_ptr(), hotrc.radiolost_untested_ptr(), &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting,
-        // row 2 onscreen
+        // row 2 onscreen.  these are all just informational values
         &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(),
         &nowtouch, &ts_tapped, &ts_doubletapped, encoder.activity_ptr(), &running_on_devboard, syspower.notval_ptr(),
-        // row 3 onscreen
+        // row 3 onscreen.  this row has one light per actuator or sensor, lit when there's any kind of error w/ that device
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
         &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],
     };
@@ -488,7 +485,7 @@ class IdiotLights {
         myneo = _neo;
         // int n = new_idiot(&(err_sens_alarm[ErrLost]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
         for (int i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[On][i], val(i));
-        ezread.squintf("  idiot lights: %d icons & %d neopix hazards\n", iconcount, myneo->idiotcount);
+        ezread.squintf(ezread.highlightcolor, "Idiot lights: %d icons & %d neopix hazards\n", iconcount, myneo->idiotcount);
     }
     int num_idiots() { return iconcount; }
     bool val(int index) { return *(vals[index]); }

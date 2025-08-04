@@ -14,27 +14,21 @@
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "ANI" };  // pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { "CAL", "SIM", "CH4", "IGN" };
-std::string ch4_menu_buttons[NumRunModes] = { "CH4", "WAKE", "SLEEP", "START", "START", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
+std::string ch4_menu_buttons[NumRunModes] = { "CH4", "WAKE", "SLEEP", "START", "DMODE", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airvel", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 std::string pcbaglowcard[GlowNumModes] = { "off", "simple", "heart", "xfade", "sine" };
 #define stEr "St\x88r"     // these defines are just a convenience to keep the below datapage strings
 #define brAk "Br\x83k"     // array initializations aligned in neat rows & cols for legibility
 #define spEd "Sp\x88""d"
-#define b1nary "  \xa7"
-#define scroll "\x12"
-#define degree "\xf7"
-#define degreF "\xf7""F"
-#define degsec "\xf7/s"
-#define ______ ""
-#define __________ "      \xf9"
 #define neo_bright "NeoBr\x8dgt"
 #define maxadjrate "MaxAjR\x83t"
 #define horfailsaf "HFails\x83""f"
+#define __________ "      \xf9"
 static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
-static std::string pagecard[datapages::NumDataPages] = { "Run ", "Hrc ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "Neo ", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 10, 10, 11, 11, 10, 5, 11, 9, 7, 11, 4, 10, 13 };  // first value in each dataset page that's editable. All values after this must also be editable
+static std::string pagecard[datapages::NumDataPages] = { "Run ", "Hrc ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "Diag", "UI  " };
+static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 10, 10, 11, 11, 10, 5, 11, 9, 7, 12, 4, 10, 12 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PgRun
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PgHrc
@@ -46,28 +40,30 @@ static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = 
     { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PgBPID
     { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PgGPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "GasEnPID", "CrEnaPID", "Lineariz", "Exponent", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
-    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", " EZ Spam", "EZAvgRat", "EZSpamBf", "EZDumbCt", "EZSerial", "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
+    { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
     { __________, __________, __________, __________, "   HotRC", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PgSim
-    { __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", },  // PgNeo
-    { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", __________, __________, __________, __________, __________, "EZScroll", "PanelApp", },  // PgUI
+    { __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", },  // PgDiag
+    { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", " EZ Spam", "EZAvgRat", "EZSpamBf", "EZDumbCt", "EZSerial", "EZScroll", "PanelApp", },  // PgUI
 };
 static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  // note these will be right-aligned
-    { "psi",  "in",   "V",    "%",    "mph",  "atm",  "g/s",  scroll, scroll, scroll, "min",  ______, ______, "%",    "%",    },  // PgRun
-    { "us",   "us",   "us",   "us",   "us",   "us",   "%",    "%",    ______, ______, "mph",  "atm",  "atm",  "us",   "us",   },  // PgHrc
-    { "adc",  "adc",  "in",   "%",    "adc",  "psi",  "%",    "adc",  "V",    ______, "psi",  "psi",  "in",   "in",   "in",   },  // PgSens
-    { "ms",   "Hz",   "Hz",   "rpm",  "ms",   "Hz",   "Hz",   "mph",  "%",    ______, ______, "rpm",  "rpm",  "mph",  "mph",  },  // PgPuls
-    { degree, "us",   "V",    "us",   "V",    "us",   ______, ______, ______, ______, ______, degree, degree, "us",   "%",    },  // PgPWMs
-    { scroll, "rpm",  "%",    "%",    degree, "rpm",  ______, ______, ______, ______, "s",    "%",    "%",    degreF, degreF, },  // PgIdle
-    { "%",    degreF, "%",    ______, ______, b1nary, scroll, scroll, b1nary, "%/s",  b1nary, b1nary, scroll, b1nary, scroll, },  // PgMotr
-    { scroll, "%",    "psi",  "%",    "in",   "%",    "%",    "%",    "%",    "%",    "%",    "us",   ______, "Hz",   "s",    },  // PgBPID
-    { scroll, "%",    "%",    "rpm",  "rpm",  "%",    "%",    "%",    ______, b1nary, ______, degsec, ______, "Hz",   "s",    },  // PgGPID
-    { "mph",  "mph",  "%|r",  "%|r",  "%|r",  "%",    ______, b1nary, b1nary, b1nary, ______, "%",    ______, "Hz",   "s",    },  // PgCPID
-    { degreF, degreF, degreF, degreF, degreF, degreF, degreF, b1nary, "Hz",   "ch",   "lin",  ______, b1nary, degreF, b1nary, },  // PgTemp
-    { ______, ______, ______, ______, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, b1nary, scroll, b1nary, b1nary, },  // PgSim
-    { ______, ______, ______, ______, ______, ______, ______, ______, ______, ______, scroll, b1nary, "eye",  "%",    "%",    },  // PgNeo
-    { "us",   "us",   "fps",  scroll, "pix",  "pix",  "x",    "Hz",   ______, ______, ______, ______, ______, "lin",  scroll, },  // PgUI
+    { "psi",  "in",   "V",   "%", "mph", "atm", "g/s", "scr", "scr", "scr", "min",    "",    "",   "%",   "%", },  // PgRun
+    {  "us",  "us",  "us",  "us",  "us",  "us",   "%",   "%",    "",    "", "mph", "atm", "atm",  "us",  "us", },  // PgHrc
+    { "adc", "adc",  "in",   "%", "adc", "psi",   "%", "adc",   "V",    "", "psi", "psi",  "in",  "in",  "in", },  // PgSens
+    {  "ms",  "Hz",  "Hz", "rpm",  "ms",  "Hz",  "Hz", "mph",   "%",    "",    "", "rpm", "rpm", "mph", "mph", },  // PgPuls
+    { "ang",  "us",   "V",  "us",   "V",  "us",    "",    "",    "",    "",    "", "ang", "ang",  "us",   "%", },  // PgPWMs
+    { "scr", "rpm",   "%",   "%", "ang", "rpm",    "",    "",    "",    "",   "s",   "%",   "%", "deg", "deg", },  // PgIdle
+    {   "%", "deg",   "%",    "",    "", "0/1", "scr", "scr", "0/1", "%/s", "0/1", "0/1", "scr", "0/1", "scr", },  // PgMotr
+    { "scr",   "%", "psi",   "%",  "in",   "%",   "%",   "%",   "%",   "%",   "%",  "us",    "",  "Hz",   "s", },  // PgBPID
+    { "scr",   "%",   "%", "rpm", "rpm",   "%",   "%",   "%",    "", "0/1",    "", "d/s",    "",  "Hz",   "s", },  // PgGPID
+    { "mph", "mph", "%|r", "%|r", "%|r",   "%",    "", "0/1", "0/1", "0/1",    "",   "%",    "",  "Hz",   "s", },  // PgCPID
+    { "deg", "deg", "deg", "deg", "deg", "deg", "deg", "0/1",    "",    "",    "",    "",    "", "deg", "0/1", },  // PgTemp
+    {    "",    "",    "",    "", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "scr", "0/1", "0/1", },  // PgSim
+    {    "",    "",    "",    "",    "",    "",    "",    "",    "",    "", "scr", "0/1", "eye",   "%",   "%", },  // PgDiag
+    {  "us",  "us", "fps", "scr", "pix", "pix",   "x",  "Hz", "0/1",  "Hz",  "ch", "lin", "0/1", "lin", "scr", },  // PgUI
 };
-static std::string unitmapnames[21] = { "us", scroll, b1nary, "%", "ohm", "eye", degree, degreF, "mph", "rpm", "psi", "atm", "g/s", "adc", "pix", "min", "%/s", "%|r", degsec, "fps", "lin" };  // unit strings matching these will get replaced by the corresponding bitmap graphic below
+static std::string unitmapnames[21] = {  // unit strings matching these will get replaced by the bitmap graphic below
+    "us", "scr", "0/1", "%", "ohm", "eye", "ang", "deg", "mph", "rpm", "psi",
+    "atm", "g/s", "adc", "pix", "min", "%/s", "%|r", "d/s", "fps", "lin" };
 static constexpr uint8_t unitmaps[21][13] = {  // 13x7-pixel bitmaps for unit strings. required when string is over 2 characters
     { 0x00, 0x00, 0x00, 0x40, 0x7e, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x12, },  // us - b/c the font's lowercase mu character doesn't work
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x20, 0x7f, 0x00, 0x7f, 0x02, 0x04, },  // up/down arrows to indicate multiple choices. right-aligned to fit longer string values
@@ -103,25 +99,30 @@ volatile float fps = 0.0;
 // int pushclock, drawclock, idleclock;
 volatile bool reset_request = false;
 
-SemaphoreHandle_t drawnbuf_sem;  // points to the buffer ready to send to the screen  // StaticSemaphore_t push_semaphorebuf_sem;
+// screen buffering scheme:   (so we can have a respectable framerate despite our screen hardware being a [slow] synchronous serial interface)
+//  * there are 2 buffers (easel and drawn), each equal to the resolution * color depth of the screen
+//  * there are 2 tasks (draw and push) running simultaneously on different cores. these tasks use semaphores to politely claim their needed buffers during use
+//  * draw task paints new content onto the easel buffer. it does include logic to erase previous content before drawing new (rather than just blasting out new content & expecting every pixel to get re-drawn like a regular computer)
+//  * push task actually sends updated pixel data to the screen. it checks the easel buffer against the drawn buffer, sending only those pixels that have changed
+//  * IF there were enough memory for a 3rd buffer, then push could operate on the previous frame while draw task is drawing the next, for true simultaneous 2-core operation
 SemaphoreHandle_t easelbuf_sem;  // points to the buffer currently being drawn on  // StaticSemaphore_t draw_semaphorebuf_sem;
+SemaphoreHandle_t drawnbuf_sem;  // points to the buffer which is a copy of the current screen contents  // StaticSemaphore_t push_semaphorebuf_sem;
+// SemaphoreHandle_t drawbuf_sem;  // *would* point to a third buffer which is ready to send to the screen, except the esp doesn't *quite* have enough memory for a 3rd buffer
 static void push_task(void *parameter);
 static void draw_task(void *parameter);
 void semaphore_setup() {
-    ezread.squintf("Semaphores init");
+    ezread.squintf(ezread.highlightcolor, "Semaphores init\n");
     drawnbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
     easelbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t draw_semaphorebuf_sem;
-    if (drawnbuf_sem == NULL || easelbuf_sem == NULL) ezread.squintf(" creation failed");
+    if (drawnbuf_sem == NULL || easelbuf_sem == NULL) ezread.squintf("  creation failed\n");
     else {
         xSemaphoreGive(drawnbuf_sem);
         xSemaphoreGive(easelbuf_sem);
     }
-    ezread.squintf("\n");
 }
 LGFX_Sprite* sprptr;
 std::string nulstr = "";
 std::string* nulstrptr = &nulstr;
-
 class Display {
   private:
     NeopixelStrip* neo;
@@ -148,9 +149,8 @@ class Display {
       : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
     void init_framebuffers(int _sprwidth, int _sprheight) {
         int sprsize[2] = { _sprwidth, _sprheight };
-        ezread.squintf(" %dx buffers ", num_bufs);
         lcd.setColorDepth(sprite_color_depth);
-        for (int i = 0; i < num_bufs; i++) framebuf[i].setColorDepth(8);  // color_depth_t::rgb332_1Byte = 8  optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+        for (int i = 0; i < num_bufs; i++) framebuf[i].setColorDepth(sprite_color_depth);  // color_depth_t::rgb332_1Byte = 8  optionally set colour depth to 8 or 16 bits, default is 16 if not specified
         auto framewidth = sprsize[Horz];
         auto frameheight = sprsize[Vert];
         bool fail = false;
@@ -172,14 +172,13 @@ class Display {
                 for (int i = 0; !fail && i < num_bufs; ++i) {
                     fail = !framebuf[i].createSprite(framewidth, frameheight);
                 }
-                if (fail) {
-                    lcd.print("failed\n");
-                }
-                else using_psram = true;
+                if (!fail) using_psram = true;
+                // else lcd.print("failed\n");
             }
             else using_psram = true;
         }
-        ezread.squintf("(%dx%d) in %sram\n", framewidth, frameheight, using_psram ? "ps" : "native ");
+        if (fail) ezread.squintf("  failed to\n");
+        ezread.squintf("  init %dx framebuffers (%dx%d) in %sram\n", num_bufs, framewidth, frameheight, using_psram ? "ps" : "native ");
     }
     void init() {  // init() is necessary after any power interruption
         lcd.setColorDepth(8);
@@ -192,7 +191,7 @@ class Display {
     }    
     void setup() {  // setup() only happens once at system boot
         if (!display_enabled) return;
-        ezread.squintf("Display..");  //
+        ezread.squintf(ezread.highlightcolor, "Display ..\n");  //
         lcd.init();
         #ifdef BOARD_HAS_PSRAM
         // lcd.setAttribute(PSRAM_ENABLE, true);  // enable use of PSRAM - (this is only relevant for TFT_eSPI display library)
@@ -667,16 +666,9 @@ class Display {
             drawval(15, maf_gps, maf_min_gps, maf_max_gps);
             draw_ascii(16, motormodecard[gas.motormode]);
             draw_ascii(17, motormodecard[brake.motormode]);
-            
-            // draw_ascii(18, motormodecard[steer.motormode]);
-            // drawval(19, looptimer.uptime());
-            // for (int line=20; line<=21; line++) draw_eraseval(line);
-            
-            draw_truth(18, bootbutton_val);
-            draw_truth(19, ezread.spam_active);
-            drawval(20, ezread.avg_spamrate_cps);
-            drawval(21, ezread.window_accum_char);
-
+            draw_ascii(18, motormodecard[steer.motormode]);
+            drawval(19, looptimer.uptime());
+            for (int line=20; line<=21; line++) draw_eraseval(line);
             drawval(22, governor, 0.0f, 100.0f, NAN, 1);
             drawval(23, steer.steer_safe_pc, 0.0f, 100.0f, NAN, 1);
         }
@@ -772,7 +764,7 @@ class Display {
             draw_truth(20, gas.cruise_pid_enabled, binstyl::Enabled);
             draw_ascii(21, cruiseschemecard[gas.cruise_adjust_scheme]);
             draw_truth(22, cruise_brake, binstyl::Yes);
-            draw_ascii(23, modecard[default_drive_mode]);
+            draw_ascii(23, modecard[run.preferred_drivemode()]);
         }
         else if (datapage == PgBPID) {
             drange = brake.us[AbsMin]-brake.us[AbsMax];
@@ -841,12 +833,7 @@ class Display {
             draw_temp(loc::TempWheelRL, 13);
             draw_temp(loc::TempWheelRR, 14);
             draw_temp(loc::TempBrake, 15);
-            draw_truth(16, ezread.spam_active);
-            drawval(17, ezread.avg_spamrate_cps);
-            drawval(18, ezread.window_accum_char);
-            drawval(19, bootbutton.dummyprintcount);
-            // for (int line=20; line<=20; line++) draw_eraseval(line);
-            draw_truth(20, ezread.ezread_serial_console_enabled, binstyl::True);
+            for (int line=16; line<=20; line++) draw_eraseval(line);
             drawval(21, tunetest);  // drawval(21, tunetest, -100.0, 100.0, NAN, 3);
             drawval(22, wheeldifferr);
             draw_truth(23, dont_take_temperatures, binstyl::True);
@@ -865,7 +852,7 @@ class Display {
             draw_truth(22, cal_brakemode, binstyl::Enabled);
             draw_truth(23, cal_gasmode, binstyl::Enabled);
         }
-        else if (datapage == PgNeo) {
+        else if (datapage == PgDiag) {            
             for (int line=9; line<=18; line++) draw_eraseval(line);
             draw_ascii(19, pcbaglowcard[neo->pcbaglow]);
             draw_truth(20, flashdemo, binstyl::On);
@@ -882,7 +869,11 @@ class Display {
             drawval(14, touch->touch_pt(1), 0, disp_height_pix);
             drawval(15, encoder.accel_factor(), 1, encoder.accel_max());
             drawval(16, encoder.spinrate(), 0.0, encoder.spinrate_max());
-            for (int line=17; line<=21; line++) draw_eraseval(line);
+            draw_truth(17, ezread.spam_active);
+            drawval(18, ezread.avg_spamrate_cps);
+            drawval(19, ezread.window_accum_char);
+            drawval(20, bootbutton.dummyprintcount);
+            draw_truth(21, ezread.ezread_serial_console_enabled, binstyl::True);
             drawval(22, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
             draw_ascii(23, uicontextcard[ui_app]);
         }
@@ -1142,7 +1133,7 @@ class Tuner {
             else if (sel == 11) gas.set_cruise_pid_ena(tune(id));
             else if (sel == 12) gas.set_cruise_scheme(tune(gas.cruise_adjust_scheme, id, 0, NumCruiseSchemes-1, true));
             else if (sel == 13) tune(&cruise_brake, id);
-            else if (sel == 14) tune(&default_drive_mode, id, Fly, Cruise, true);
+            else if (sel == 14) run.set_preferred_drivemode(tune(run.preferred_drivemode(), id, Fly, Cruise, true));
         }
         else if (datapage == PgBPID) {
             if (sel == 11) brake.pid_dom->set_sampletime(tune(brake.pid_dom->sampletime(), id, 1000));
@@ -1169,8 +1160,7 @@ class Tuner {
             else if (sel == 14) gas.set_cruise_tunings(NAN, NAN, tune(gas.cruisepid.kd(), id, 0.0f, NAN));
         }
         else if (datapage == PgTemp) {
-            if (sel == 11) tune(&ezread.ezread_serial_console_enabled, id);
-            else if (sel == 12) tune(&tunetest, id);
+            if (sel == 12) tune(&tunetest, id);
             else if (sel == 13) tune(&wheeldifferr, id);
             else if (sel == 14) dont_take_temperatures = tune(id);
         }
@@ -1188,7 +1178,7 @@ class Tuner {
             else if (sel == 13) cal_brakemode_request = tune(id);
             else if (sel == 14) cal_gasmode_request = tune(id);
         }
-        else if (datapage == PgNeo) {
+        else if (datapage == PgDiag) {
             if (sel == 10) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, GlowNumModes - 1, true));
             else if (sel == 11) neo->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 12) neo->sleepmode_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
@@ -1197,8 +1187,9 @@ class Tuner {
             else if (sel == 14) tune(&ui_app, id, 0, NumContextsUI-1, true);
         }
         else if (datapage == PgUI) {
-            // if (sel == 12) encoder.set_reverse_encoder(tune(encoder.rev_spin_dir));
-            if (sel == 13) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize));            
+            // if (sel == 11) encoder.set_reverse_encoder(tune(encoder.rev_spin_dir));
+            if (sel == 12) tune(&ezread.ezread_serial_console_enabled, id);
+            else if (sel == 13) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize));            
             else if (sel == 14) tune(&ui_app, id, 0, NumContextsUI-1, true);
         }
         id = 0;

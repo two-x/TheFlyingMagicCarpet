@@ -449,7 +449,7 @@ class ThrottleControl : public ServoMotor {
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
-        ezread.squintf("Throttle servo (p%d), pid %s\n", pin, pid_enabled ? "ena" : "dis");
+        ezread.squintf(ezread.highlightcolor, "Throttle servo (p%d), pid %s\n", pin, pid_enabled ? "ena" : "dis");
         si[OpMin] = 58.0f;
         si[Parked] = 57.0f;
         si[OpMax] = 158.0f;
@@ -496,7 +496,7 @@ class ThrottleControl : public ServoMotor {
                 running_max_pc = trigger_vert_pc;    // update our value for the furthest trigger read thusfar during the push
             }
         }
-        else ezread.printf(RED, "err: invalid cruise scheme=%d\n", cruise_adjust_scheme);  // leaving thr_targ unchanged
+        else ezread.printf(ezread.madcolor, "err: invalid cruise scheme=%d\n", cruise_adjust_scheme);  // leaving thr_targ unchanged
         return thr_targ;
     }
     float cruise_logic(float thr_targ) {
@@ -539,7 +539,7 @@ class ThrottleControl : public ServoMotor {
             else throttle_target_pc = _idle_pc;  // If in deadband or being pushed down, we want idle
         }
         else {
-            ezread.squintf(RED, "err: invalid gas motor mode=%d\n", motormode);  // ignition.panic_request(ReqOn);
+            ezread.squintf(ezread.madcolor, "err: invalid gas motor mode=%d\n", motormode);  // ignition.panic_request(ReqOn);
             return;
         }
         
@@ -704,7 +704,7 @@ class BrakeControl : public JagMotor {
         return brake_tempsens_exists;
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, ThrottleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
-        ezread.squintf("Brake (p%d) pid %s, feedback: %s\n", pin, pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
+        ezread.squintf(ezread.highlightcolor, "Brake (p%d) pid %s, feedback: %s\n", pin, pid_enabled ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         pid_timeout = 40000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
         JagMotor::setup(_hotrc, _speedo, _batt);
@@ -755,7 +755,7 @@ class BrakeControl : public JagMotor {
             
             if (overtemp_shutoff_brake) {  // here the brakemotor is shut off if overtemp. also in diag class the engine is stopped
                 if (motor_heat > tempsens->opmax(loc::TempBrake)) {
-                    if (!printed_error) ezread.squintf(RED, "err: brake motor overheating. stop motor\n");
+                    if (!printed_error) ezread.squintf(ezread.madcolor, "err: brake motor overheating. stop motor\n");
                     printed_error = true;
                     setmode(Halt, false);        // stop the brake motor // pc[Out] = pc[Stop];  // setmode(ParkMotor, false);
                     // ignition.request(ReqOff);  // request kill ignition  // commented this out b/c is already in diag brake check
@@ -939,10 +939,10 @@ class BrakeControl : public JagMotor {
                 _mode = OpenLoop;      // can't use loops, drop to openloop instead
             }
             else if (_mode == AutoHold || (_mode == AutoStop && !panicstop)) {    // todo: rethink these scenarios 
-                ezread.squintf(ORG, "warn: autobrake unavailable in openloop\n");
+                ezread.squintf(ezread.sadcolor, "warn: autobrake unavailable in openloop\n");
                 return;  // keep current mode
             }
-            else if (_mode == AutoStop) ezread.squintf(ORG, "warn: performing blind panic stop maneuver\n");
+            else if (_mode == AutoStop) ezread.squintf(ezread.sadcolor, "warn: performing blind panic stop maneuver\n");
             else if (_mode == Release) {
                 _mode = Halt;
                 mode_forced = true;
@@ -994,13 +994,13 @@ class BrakeControl : public JagMotor {
     bool parked() {
         if (feedback_enabled[PositionFB]) return brkpos->parked();
         if (feedback_enabled[PressureFB]) return pressure->released();  // pressure doesn't have a parked() function yet
-        ezread.squintf(ORG, "warn: brake unaware if parked w/o sensors\n");
+        ezread.squintf(ezread.sadcolor, "warn: brake unaware if parked w/o sensors\n");
         return false;  // really without sensors we have no idea if we're parked. Print an error message
     }
     bool released() {
         if (feedback_enabled[PositionFB]) return brkpos->released();
         if (feedback_enabled[PressureFB]) return pressure->released();  // pressure doesn't have a parked() function yet
-        ezread.squintf(ORG, "warn: brake unaware if released w/o sensors\n");
+        ezread.squintf(ezread.sadcolor, "warn: brake unaware if released w/o sensors\n");
         return false;  // really without sensors we have no idea if we're released. Print an error message
     }
     float sensmin() { return (dominantsens == PressureFB) ? pressure->opmin() : brkpos->opmin(); }
@@ -1024,7 +1024,7 @@ class SteeringControl : public JagMotor {
     }
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         set_out_changerate_pcps(350.0);
-        ezread.squintf("Steering motor {p%d)\n", pin);
+        ezread.squintf(ezread.highlightcolor, "Steering motor {p%d)\n", pin);
         JagMotor::setup(_hotrc, _speedo, _batt);
     }
     void update() {

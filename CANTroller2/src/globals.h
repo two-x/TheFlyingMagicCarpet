@@ -81,7 +81,7 @@ enum sw_presses { SwNone=0, SwShort=1, SwLong=2 };
 enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, CruiseMode=10, Calibrate=11, Starting=12, AutoPID=13, NumMotorModes=14 };
 enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
 enum openloopmodes { MedianPoint=0, AutoRelease=1, AutoRelHoldable=2, NumOpenLoopModes=3 };
-enum datapages { PgRun=0, PgHrc=1, PgSens=2, PgPuls=3, PgPWMs=4, PgIdle=5, PgMotr=6, PgBPID=7, PgGPID=8, PgCPID=9, PgTemp=10, PgSim=11, PgNeo=12, PgUI=13, NumDataPages=14 };
+enum datapages { PgRun=0, PgHrc=1, PgSens=2, PgPuls=3, PgPWMs=4, PgIdle=5, PgMotr=6, PgBPID=7, PgGPID=8, PgCPID=9, PgTemp=10, PgSim=11, PgDiag=12, PgUI=13, NumDataPages=14 };
 enum diag_val { DiagVal=0, DiagMin=1, DiagMax=2, DiagMargin=3, NumDiagVals=4 };
 enum joydirs { HrcRt=-2, HrcDn=-1, HrcCent=0, HrcUp=1, HrcLt=2, HrcPlus=3, HrcMinus=4 };
 enum panel_apps { EZReadUI=0, MuleChassisUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel
@@ -169,7 +169,6 @@ bool require_hotrc_powercycle = true; // refuse to enter drive modes until the c
 bool force_hotrc_button_filter = false; // always force button filtration for all actions. otherwise unfiltered presses are allowed for safety events (ie ignition or starter kill), in case of radio interference
 bool ezread_suppress_spam = true;       // activates ezread feature to suppress data coming into the console too fast (to prevent overrun crashes)
 bool panic_on_boot_after_crash = true;  // causes bootmanager to do a panic on boot if car was in a drive state when reset 
-int default_drive_mode = Cruise;         // from hold mode, enter cruise or fly mode by default?
 
 // global tunable variables
 int operational_framerate_limit_fps = 100;  // max display frame rate to enforce while driving whenever limit_framerate == true
@@ -499,7 +498,7 @@ class EZReadConsole {
     std::string textlines[bufferSize];
     int newest_content = bufferSize, current_index = 0, offset = 0;
     uint8_t linecolors[num_lines], color, usecolor;
-    uint8_t defaultcolor = LGRY, sadcolor = ORG, happycolor = LGRN, highlightcolor = DCYN;    // std::vector<std::string> textlines; // Ring buffer array
+    uint8_t defaultcolor = LGRY, happycolor = LGRN, sadcolor = ORG, madcolor = RED, announcecolor = LPUR, highlightcolor = DCYN;    // std::vector<std::string> textlines; // Ring buffer array
     bool spam_active = false, spam_notice_shown = false;
     float avg_spamrate_cps = 0.0f, window_accum_char = 0.0f;  // variables to dynamically manage moving average
     void update() {

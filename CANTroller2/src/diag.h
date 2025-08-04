@@ -71,7 +71,6 @@ class DiagRuntime {
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
           steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition) {}
     void setup() {
-        ezread.squintf("Diagnostic engine:");
         for (int i=0; i<NumErrTypes; i++)
             for (int j=0; j<NumTelemetryFull; j++) {
                 err_sens[i][j] = err_last[i][j] = false; // Initialize sensor error flags to false
@@ -101,7 +100,7 @@ class DiagRuntime {
         register_device(_TempWhRR, tempsens->ptr(loc::TempWheelRR), tempsens->opmin_ptr(loc::TempWheelRR), tempsens->opmax_ptr(loc::TempWheelRR), tempsens->margin_ptr(loc::TempWheelRR));
         // register_bool_device(_Ignition, ignition->signal_ptr());
         // register_bool_device(_Starter, starter->signal_ptr());
-        ezread.squintf(" monitoring %d devices\n", total_registered);
+        ezread.squintf(ezread.highlightcolor, "Diag engine .. monitoring %d devices\n", total_registered);
     }
     void update() {
         if (first_boot) {  // don't run too soon before sensors get initialized etc.
@@ -274,7 +273,7 @@ class DiagRuntime {
         if (overtemp_shutoff_wheel) {
             if (wheel_err_range) {
                 ignition->request(ReqOff);  // ignition->panic_request(ReqOff);  // not sure if this was intentional? commenting out
-                if (!printed_error_wheel) ezread.squintf(RED, "err: wheel temp out of range. stop engine\n");
+                if (!printed_error_wheel) ezread.squintf(ezread.madcolor, "err: wheel temp out of range. stop engine\n");
                 printed_error_wheel = true;
             }
             else printed_error_wheel = false;
@@ -282,7 +281,7 @@ class DiagRuntime {
         if (overtemp_shutoff_engine) {
             if (err_sens[ErrRange][_TempEng]) {
                 ignition->request(ReqOff);
-                if (!printed_error_eng) ezread.squintf(RED, "err: engine temp out of range. stop engine\n");
+                if (!printed_error_eng) ezread.squintf(ezread.madcolor, "err: engine temp out of range. stop engine\n");
                 printed_error_eng = true;
             }
             else printed_error_eng = false;
@@ -291,7 +290,7 @@ class DiagRuntime {
             if (err_sens[ErrRange][_TempBrake]) {
                 // brake->setmode(Halt);        // stop the brake actuator  // commented b/c is done in brake class
                 ignition->request(ReqOff);  // kill the engine
-                if (!printed_error_brake) ezread.squintf(RED, "err: brakemotor temp out of range. stop engine\n");
+                if (!printed_error_brake) ezread.squintf(ezread.madcolor, "err: brakemotor temp out of range. stop engine\n");
                 printed_error_brake = true;
             }
             else printed_error_brake = false;
@@ -639,6 +638,7 @@ class BootMonitor {
     void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, int sec = -1) {
         task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;
         if (sec >= 0) timeout_sec = sec;
+        ezread.squintf(ezread.highlightcolor, "Boot manager.. \n");
         psram_setup();
         myprefs->begin("FlyByWire", false);
         read_bootstatus();
@@ -648,7 +648,6 @@ class BootMonitor {
         print_chip_info();
         // print_partition_table();
         if (!watchdog_enabled) return;
-        ezread.squintf("Boot manager.. \n");
         esp_task_wdt_init(timeout_sec, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
         esp_task_wdt_add(NULL);
     }
@@ -672,7 +671,7 @@ class BootMonitor {
     int flash_read(std::string flashid, uint32_t def=1234567) {  // reads a uint value at the indicated flash slot. returns -1 on error
         uint32_t ret = (int)myprefs->getUInt(flashid.c_str(), def);
         if (ret == 1234567) {
-            ezread.squintf("Err: no flash id \"%s\"\n", flashid.c_str());
+            ezread.squintf(ezread.madcolor, "err: no flash id \"%s\"\n", flashid.c_str());
             return -1;
         }
         return (int)ret;
@@ -699,14 +698,15 @@ class BootMonitor {
         uptime_recorded = uptime_new;
     }
     void print_postmortem() {
-        ezread.squintf("Bootcount: %d (%d/%d). Last lost power\n  while %s%s in %s mode,\n  after ", 
-          bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str(), panic_postmortem ? " and panicking" : "", modecard[runmode_postmortem].c_str());
+        ezread.squintf("  bootcount: %d (%d/%d). Last lost power\n  while %s%s in %s mode,\n", 
+          bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str(),
+          panic_postmortem ? " and panicking" : "", modecard[runmode_postmortem].c_str());
         int last_uptime = (int)myprefs->getUInt("uptime", 0);
         if (last_uptime > 0) {
-            ezread.squintf("just over %d min uptime\n", last_uptime);
+            ezread.squintf("    after just over %d min uptime\n", last_uptime);
             write_uptime();
         }
-        else ezread.squintf("under 1 min uptime\n");
+        else ezread.squintf("    within the 1st minute of uptime\n");
     }
     void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
         if (print_task_stack_usage && highWaterTimer.expireset()) {
@@ -724,7 +724,7 @@ class BootMonitor {
     void panic_on_crash() {
         // if ((codestatus_postmortem != StDriving && codestatus_postmortem != StStopped)|| !crash_driving_recovery) return;  // crash_driving_recovery
         if (!panic_on_boot_after_crash || ((codestatus_postmortem != StDriving) && !was_panicked)) return;
-        ezread.squintf(ORG, "warn: panic condition %sstarted after crash detect\n", was_panicked ? "re" : "");
+        ezread.squintf(ezread.sadcolor, "warn: panic condition %sstarted after crash detect\n", was_panicked ? "re" : "");
         ignition.panic_request(ReqOn);
         // boot_to_runmode = runmode_postmortem;  // disabling ability to recover to previous runmode after crash
         // if (runmode_postmortem == Cruise) boot_to_runmode = Fly; // disabling ability to recover to previous runmode after crash
@@ -734,12 +734,11 @@ class BootMonitor {
         // gas.(brake.pc[Stop]);  // brake.pid_targ_pc(brake.pc[Stop]);
     }
     void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-on-esp32-with-psram#
-        ezread.squintf("PSRAM.. ");
         #ifndef BOARD_HAS_PSRAM
-        ezread.squintf("support is currently disabled\n");
+        ezread.squintf("  PSRAM support is currently disabled\n");
         return;
         #endif
-        ezread.squintf("is %s, size %d B\n", psramInit() ? "correctly initialized" : "not available", ESP.getFreePsram());
+        ezread.squintf("  PSRAM is %s, size %d B\n", psramInit() ? "correctly initialized" : "not available", ESP.getFreePsram());
         // int available_PSRAM_size = ESP.getFreePsram();
         // Serial.println((String)"  PSRAM Size available (bytes): " + available_PSRAM_size);
         // int *array_int = (int *) ps_malloc(1000 * sizeof(int)); // Create an integer array of 1000

@@ -36,7 +36,7 @@ class Potentiometer {
     Potentiometer() = delete; // must have a pin defined
     sens _senstype = sens::none;
     void setup() {
-        ezread.squintf("Potentiometer init\n");
+        ezread.squintf(ezread.highlightcolor, "Potentiometer init\n");
         set_pin(_pin, INPUT);
         _activity_ref = _pc;
     }
@@ -267,13 +267,8 @@ class Transducer : public Device {
     // }
     virtual void print_config(bool header=true, bool ranges=true) {
         if (header) {
-            Serial.printf("%s %s", _long_name.c_str(), transtypecard[_transtype].c_str());
-            ezread.printf("%s", _long_name.c_str()); 
-            if (_pin < 255 && _pin >= 0) {
-                Serial.printf(", pin %d", _pin);
-                ezread.printf(" (p%d)", _pin);
-            }
-            ezread.squintf(": %.2lf %s = %.2lf %s = %.2lf %%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
+            ezread.squintf(ezread.highlightcolor, "%s (p%d):\n", _long_name.c_str(), _pin);  // , transtypecard[_transtype].c_str());
+            ezread.squintf("  val = %.2lf %s = %.2lf %s = %.2lf %%\n", _si.val(), _si_units.c_str(), _native.val(), _native_units.c_str(), pc()); 
         }
         if (ranges) {
             ezread.squintf("  op: %.2lf - %.2lf %s (%.2lf - %.2lf %s)\n", _opmin, _opmax, _si_units.c_str(), _opmin_native, _opmax_native, _native_units.c_str());
@@ -285,7 +280,7 @@ class Transducer : public Device {
         if (_convmethod == AbsLimMap) ret = map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
         else if (_convmethod == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
         else if (_convmethod == LinearMath) ret = _boffset + _mfactor * arg_native; // ezread.squintf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
-        else ezread.squintf(RED, "err: %s from_native convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_native, _native.min(), _native.max());
+        else ezread.squintf(ezread.madcolor, "err: %s from_native convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_native, _native.min(), _native.max());
         cleanzero(&ret, float_conversion_zero);   // if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // reject any stupidly small near-zero values
         return ret;
     }
@@ -294,7 +289,7 @@ class Transducer : public Device {
         if (_convmethod == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
         else if (_convmethod == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
         else if ((_convmethod == LinearMath) && !iszero(_mfactor)) ret = (arg_si - _boffset) / _mfactor;
-        else ezread.squintf(RED, "err: %s to_native can't convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_si, _si.min(), _si.max());
+        else ezread.squintf(ezread.madcolor, "err: %s to_native can't convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_si, _si.min(), _si.max());
         cleanzero(&ret, float_conversion_zero);
         return ret;
     }
@@ -452,7 +447,7 @@ class Sensor : public Transducer {
         // set_si(_si.val + touch.fdelta);  // I would think this should look something like this (needs some coding on the other side to support)
     }
     virtual float read_sensor() {
-        ezread.squintf(RED, "err: %s does not have an overridden read_sensor() function\n", _short_name.c_str());
+        ezread.squintf(ezread.madcolor, "err: %s does not have an overridden read_sensor() function\n", _short_name.c_str());
         return NAN;
     }
     virtual void set_val_from_pin() {
@@ -508,7 +503,7 @@ class I2CSensor : public Sensor {
     // }
     void print_on_boot(bool detected, bool responding) {
         // if (header) Transducer::print_config(true, false);
-        ezread.squintf("%s sensor (i2c 0x%02x) %sdetected\n", _long_name.c_str(), addr, _detected ? "" : "not ");
+        ezread.squintf(ezread.highlightcolor, "%s sensor (i2c 0x%02x) %sdetected\n", _long_name.c_str(), addr, _detected ? "" : "not ");
         if (detected) {
             if (responding) {
                 // ezread.squintf(", responding properly\n");
@@ -517,7 +512,7 @@ class I2CSensor : public Sensor {
                 set_source(src::Pin); // sensor working
             }
             else {
-                ezread.squintf(ORG, "  no response\n");  // begin communication with air flow sensor) over I2C 
+                ezread.squintf(ezread.sadcolor, "  no response\n");  // begin communication with air flow sensor) over I2C 
                 set_source(src::Fixed); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
             }
         }
@@ -924,7 +919,7 @@ class PulseSensor : public Sensor {
     // overload the normal function so we can also include us calculations 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
         if ((!isnan(arg_min) && iszero(arg_min)) || (!isnan(arg_max) && iszero(arg_max))) {
-            ezread.squintf(RED, "Err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
+            ezread.squintf(ezread.madcolor, "Err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
             return;  // we can't accept 0 Hz for opmin
         }
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
@@ -1101,7 +1096,7 @@ class ServoMotor2 : public Transducer {
     float lastoutput, max_out_change_rate_pcps = 800.0;
     int _pin, _freq;
     virtual float write_sensor() {  // note: should be marked 'override' but compiler says it doesn't override anything...?
-        ezread.squintf(RED, "Err: %s does not have an overridden write_sensor() function\n", _short_name.c_str());
+        ezread.squintf(ezread.madcolor, "Err: %s does not have an overridden write_sensor() function\n", _short_name.c_str());
         return NAN;
     }
     void changerate_limiter() {
@@ -1389,35 +1384,29 @@ class RMTInput {  // note: for some reason if we ever stop reading our rmt objec
     rmt_channel_t channel_;
     gpio_num_t gpio_;
     int pulse_width, pulse_width_last;
-    float scale_factor = 0.625;
+    float scale_factor = 0.625f;
     RingbufHandle_t rb_;
 };
 class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
     bool _verbose = false;  // causes console print whenever an unfiltered switch event is queried externally, thus canceling the in-progress filtering
-    float ema_alpha = 0.065;           // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+    float ema_alpha = 0.065f;           // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
     float pc[NumAxes][NumValues];      // values range from -100% to 100% are all derived or auto-assigned
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
-        // vals for hotrc v2 (with gloss black "HotRC" sticker/receiver)
         {  969, 1473, 1977, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
         { 1080, 1583, 2087, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2, // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
         { 1200, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2, // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
         { 1300, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2, // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        // vals for hotrc v1 (with matte black "HotRC" sticker/receiver)
-        // {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        // { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        // { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        // { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        // note: opmin/opmax range should be set to be just smaller than the actual measured limits. this way it will reach all the way to 100%
+        // note: opmin/opmax range should be set to be just smaller than the actual measured range, to prevent out-of-range errors. this way it will reach all the way to 100%
         //   margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
-    float spike_us[NumAxes] = { 1500.0, 1500.0 };  // [Horz/Vert]  // added
-    float ema_us[NumAxes] = { 1500.0, 1500.0 };    // [Horz/Vert]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
-    float absmin_us = 880;
-    float absmax_us = 2091;
-    float deadband_pc, deadband_us = 15.0f;  // size of each side of the center deadband in us.  pc value is derived
-    float margin_us = 13;    // all [Margin] values above are derived from this by calling derive()
-    float failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
-    float failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
+    float spike_us[NumAxes] = { 1500.0f, 1500.0f };  // [Horz/Vert]  // added
+    float ema_us[NumAxes] = { 1500.0f, 1500.0f };    // [Horz/Vert]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
+    float absmin_us = 880.0f;
+    float absmax_us = 2091.0f;
+    float deadband_pc, deadband_us = 20.0f;  // size of each side of the center deadband in us.  pc value is derived  // was 15
+    float margin_us = 15.0f;    // all [Margin] values above are derived from this by calling derive()  // was 12
+    float failsafe_us = 880.0f; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
+    float failsafe_margin_us = 100.0f; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
   private:
     Simulator* sim;
     Potentiometer* pot;
@@ -1438,7 +1427,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
   public:
     Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) { derive(); }
     void setup() {
-        ezread.squintf("Hotrc init.. starting rmt..\n");
+        ezread.squintf(ezread.highlightcolor, "Hotrc init.. starting rmt..\n");
         for (int axis=Horz; axis<=Ch4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
     }
     void derive() {
@@ -1509,8 +1498,8 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         for (int ch = Ch3; ch <= Ch4; ch++)
             if ((achan == ch) || (achan == NumChans)) _sw_event_filt[ch] = _sw_event_unfilt[ch] = _sw_pending[ch] = false;
     }
-    int sim_button_time() { return (int)simBtnTimer.elapsed(); }  // returns time since last simulated ch4 button press. to help prevent phantom starter turnon
-    int ch4_button_time() { return (int)ch4BtnTimer.elapsed(); }  // returns time since last ch4 button press. to help prevent phantom starter turnon
+    int sim_button_last_ms() { return simBtnTimer.elapsed() / 1000; }  // returns time since last simulated ch4 button press. to help prevent phantom starter turnon
+    int ch4_button_last_ms() { return ch4BtnTimer.elapsed() / 1000; }  // returns time since last actual ch4 button press. to help prevent phantom starter turnon
   private:
     // new implementation of handler for hotrc buttons which rejects spurious values which could cause false events (re: phantom starter bug)
     // seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
@@ -1536,7 +1525,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
                 }
             }
             else {  // otherwise if the new read value is equal to the previous valid value
-                if (_sw_pending[ch]) ezread.squintf(ORG, "warn: hotrc Ch%d spurious reading detect\n", (ch == Ch3) ? 3 : 4 ); // if there was an active pending value change, but the value has returned to the original valid value before the timer expired  // _verbose &&
+                if (_sw_pending[ch]) ezread.squintf(ezread.sadcolor, "warn: hotrc Ch%d spurious reading detect\n", (ch == Ch3) ? 3 : 4 ); // if there was an active pending value change, but the value has returned to the original valid value before the timer expired  // _verbose &&
                 _sw_pending[ch] = false;          // in case of in-progress filtration, that is canceled due to the value has returned to previous valid value before timer expired
             }
         }
