@@ -42,7 +42,7 @@ static SteeringControl steer(steer_pwm_pin, 2, 50);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
 
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
-    ezread.squintf("  using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
+    // ezread.squintf("  using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");  // already printed during detection in temperature class
     if (running_on_devboard) return;      // override settings if running on the real car
     looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
     encoder_reverse = true;
@@ -213,7 +213,7 @@ void initialize_boot() {                        // set up those straggler pins w
     delay(3000);   //  3000 is enough at 921600. Any less of a delay causes us to miss the first few lines of output
     ezread.setup();        // start the onscreen terminal
     ezread.squintf(ezread.announcecolor, "Magic carpet setup begin ..\n");
-    ezread.squintf(ezread.highlightcolor, "Serial console is started\n");  //  Serial.printf("Serial console is started\n");
+    ezread.squintf(ezread.highlightcolor, "EZread and serial consoles are started\n");  //  Serial.printf("Serial console is started\n");
     test_console_throughput();
     syspower.print_bootstatus();
     basicsw.print_bootstatus();

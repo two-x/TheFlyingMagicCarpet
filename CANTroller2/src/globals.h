@@ -577,7 +577,7 @@ class EZReadConsole {
             this->printf("%s", blank.c_str());
             linecolors[i] = defaultcolor;
         }
-        this->printf(highlightcolor, "Welcome to EZ-Read console\n");
+        // this->printf(highlightcolor, "Welcome to EZ-Read console\n");
         dirty = true;
     }
     void printf(const char* format, ...) {  // for if we're called with same arguments as printf would take

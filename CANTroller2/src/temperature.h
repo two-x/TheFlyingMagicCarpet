@@ -1,5 +1,7 @@
 #pragma once
 #include <vector>
+#include <string>  // used when printing out addresses
+#include <iostream>  // used when printing out addresses
 #include <DallasTemperature.h>
 
 enum class loc { TempAmbient=0, TempEngine, TempWheelFL, TempWheelFR, TempWheelRL, TempWheelRR, TempBrake, NumTempLocations };  // , SorenDev0, SorenDev1, };
@@ -35,8 +37,8 @@ public:
     void request_temperature() {
         // Request temperature from sensor
         if (!_tempsensebus->requestTemperaturesByAddress(_address.data())) {
-            ezread.squintf("  failed temp request from sensor addr:\n");
-            print_address();
+            ezread.squintf(ezread.madcolor, "err: temp fail request from 0x%s\n", addr_hex_string());
+            // print_address();
             // ezread.squintf("\n");
         }
     }
@@ -50,8 +52,9 @@ public:
     float read_temperature() {
         float temp = _tempsensebus->getTempF(_address.data());
         if (temp == DEVICE_DISCONNECTED_F) {
-            ezread.squintf("  disconnected device %s w/ addr:\n", location_to_string(_location));
-            print_address();
+            // ezread.squintf("  disconnected device %s w/ addr:\n", location_to_string(_location));
+            ezread.squintf(ezread.madcolor, "err: disconnected sensor %s at 0x%s\n", location_to_string(_location), addr_hex_string());
+            // print_address();
             // ezread.squintf("\n");
             return DEVICE_DISCONNECTED_F;
         } 
@@ -82,15 +85,26 @@ public:
     }
     
     void print_address(bool known=false) const {
+        std::string str = "  0x";
         ezread.squintf("  0x");
         for(uint8_t i = 0; i < _address.size(); i++) ezread.squintf("%02x", _address[i]);
         ezread.squintf("\n");
     }
+    
+    std::string addr_hex_string(bool known=false) const {
+        std::string str;
+        for (uint8_t i = 0; i < _address.size(); i++) {  // str += std::format("{:02x}", _address[i]);  // ezread.squintf("%02x", _address[i]);
+            char buf[3];
+            snprintf(buf, sizeof(buf), "%02x", _address[i]);
+            str += buf;
+        }
+        return str;
+    }
 
     void print_sensor_info() const {
-        ezread.squintf("  assigned %s addr: ", location_to_string(_location).c_str());
-        print_address();
-        ezread.squintf("\n");
+        ezread.squintf("  assigned %s to 0x%s\n", location_to_string(_location).c_str(), addr_hex_string());
+        // print_address();
+        // ezread.squintf("\n");
     }
     static std::string location_to_string(loc location) {
         switch(location) {
@@ -199,10 +213,9 @@ private:
             }
             if (!brake_assigned && (brakemotor_type_detected != Nil)) {
                 sensors.emplace(loc::TempBrake, TemperatureSensor(loc::TempBrake, detected_address, &tempsensebus));
-                Serial.printf("  detected %s brake sensor addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
-                ezread.printf("  %s brake addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
-                sensors.at(loc::TempBrake).print_address();
-                ezread.squintf("\n");
+                ezread.squintf("  detected %s brake at 0x%s\n", brakemotor_type_to_string(brakemotor_type_detected).c_str(), sensors.at(loc::TempBrake).addr_hex_string());
+                // sensors.at(loc::TempBrake).print_address();
+                // ezread.squintf("\n");
                 brake_assigned = true;
             }
             continue;
@@ -226,19 +239,17 @@ private:
                     // The sensor doesn't exist yet, so create it and add it to the map
                     sensors.emplace(location, TemperatureSensor(location, *detected_address_it, &tempsensebus));
                     // Print the sensor address for debugging purposes
-                    ezread.printf("  known %s addr: \n", TemperatureSensor::location_to_string(known_address.first).c_str());
-                    sensors.at(known_address.first).print_address();
-                    ezread.squintf("\n");
+                    ezread.squintf("  known %s at 0x%s\n", TemperatureSensor::location_to_string(known_address.first).c_str(), sensors.at(known_address.first).addr_hex_string());
+                    // sensors.at(known_address.first).print_address();
+                    // ezread.squintf("\n");
                 }
                 else {
                     // The sensor already exists, so just update its address
                     sensor_it->second.set_address(*detected_address_it);
                     // Print the updated sensor address for debugging purposes
-                    ezread.squintf("  updated sensor addr: ");
-                    sensor_it->second.print_address();
-
-                    sensor_it->second.set_lims();
-
+                    ezread.squintf("  updated addr 0x%s\n", sensor_it->second.addr_hex_string());
+                    // sensor_it->second.print_address();
+                    // sensor_it->second.set_lims();
                 }
             }
             else {
@@ -263,10 +274,10 @@ private:
                 }
                 if (it != all_locations.end()) {
                     // The sensor doesn't exist yet, so create it and add it to the map and print the sensor address
-                    ezread.printf("  unknown addr: \n");  // ezread.printf("  unknown addr: ");
                     sensors.emplace(*it, TemperatureSensor(*it, detected_address, &tempsensebus));
-                    sensors.at(*it).print_address();
-                    ezread.squintf("\n");
+                    ezread.printf("  unknown sensor at 0x%s\n", sensors.at(*it).addr_hex_string());  // ezread.printf("  unknown addr: ");
+                    // sensors.at(*it).print_address();
+                    // ezread.squintf("\n");
                 }
             }
         }
@@ -335,7 +346,7 @@ public:
             // Request temperature for each sensor, this will make the is_ready() method work
             request_temperatures();
         }
-        ezread.squintf("  detected %s context\n", vehicle_detected ? "on-vehicle" : "dev-board");
+        ezread.squintf("  vehicle %sdetected. using %s config.\n", vehicle_detected ? "" : "not ", vehicle_detected ? "on-car" : "devboard");
         return vehicle_detected;
     }
 

@@ -698,15 +698,15 @@ class BootMonitor {
         uptime_recorded = uptime_new;
     }
     void print_postmortem() {
-        ezread.squintf("  bootcount: %d (%d/%d). Last lost power\n  while %s%s in %s mode,\n", 
+        ezread.squintf("  bootcount: %d (%d/%d). Last lost power\n   while %s%s in %s mode,\n", 
           bootcount, bootcount-crashcount, crashcount, codestatuscard[codestatus_postmortem].c_str(),
           panic_postmortem ? " and panicking" : "", modecard[runmode_postmortem].c_str());
         int last_uptime = (int)myprefs->getUInt("uptime", 0);
         if (last_uptime > 0) {
-            ezread.squintf("    after just over %d min uptime\n", last_uptime);
+            ezread.squintf("   after just over %d min uptime.\n", last_uptime);
             write_uptime();
         }
-        else ezread.squintf("    within the 1st minute of uptime\n");
+        else ezread.squintf("    within the 1st minute of uptime.\n");
     }
     void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
         if (print_task_stack_usage && highWaterTimer.expireset()) {
@@ -735,10 +735,10 @@ class BootMonitor {
     }
     void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-on-esp32-with-psram#
         #ifndef BOARD_HAS_PSRAM
-        ezread.squintf("  PSRAM support is currently disabled\n");
+        ezread.squintf("  psram support is currently disabled.\n");
         return;
         #endif
-        ezread.squintf("  PSRAM is %s, size %d B\n", psramInit() ? "correctly initialized" : "not available", ESP.getFreePsram());
+        ezread.squintf("  psram is %s, size %d B\n", psramInit() ? "correctly initialized" : "not available", ESP.getFreePsram());
         // int available_PSRAM_size = ESP.getFreePsram();
         // Serial.println((String)"  PSRAM Size available (bytes): " + available_PSRAM_size);
         // int *array_int = (int *) ps_malloc(1000 * sizeof(int)); // Create an integer array of 1000
@@ -768,25 +768,25 @@ class BootMonitor {
         esp_chip_info(&chip_info);
         unsigned major_rev = chip_info.revision / 100;
         unsigned minor_rev = chip_info.revision % 100;
-        ezread.squintf("MCU: detect %s v%d.%d %d-core, ", CONFIG_IDF_TARGET, major_rev, minor_rev, chip_info.cores);
-        if (esp_flash_get_size(NULL, &flash_size) != ESP_OK) ezread.squintf("fail flash detect\n");
-        else ezread.squintf("%" PRIu32 "MB %s flash\n", flash_size / (uint32_t)(1024 * 1024),
-          (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "emb" : "ext");  // embedded or external
-        ezread.squintf("  w/ %s%s%s%s.", 
+        ezread.squintf("  mcu detect: %s v%d.%d %d-core,\n", CONFIG_IDF_TARGET, major_rev, minor_rev, chip_info.cores);
+        ezread.squintf("   w/ %s%s%s%s.\n", 
           (chip_info.features & CHIP_FEATURE_WIFI_BGN) ? "WiFi/" : "",
           (chip_info.features & CHIP_FEATURE_BT) ? "BT" : "",
           (chip_info.features & CHIP_FEATURE_BLE) ? "BLE" : "",
           (chip_info.features & CHIP_FEATURE_IEEE802154) ? ", 802.15.4 (Zigbee/Thread)" : "");
-        ezread.squintf(" heap: %" PRIu32 " B free (min)\n", esp_get_minimum_free_heap_size());
+        if (esp_flash_get_size(NULL, &flash_size) != ESP_OK) ezread.squintf(ezread.sadcolor, "   flash detection failed.\n");
+        else ezread.squintf("   detected %" PRIu32 "MB %s flash.\n", flash_size / (uint32_t)(1024 * 1024),
+          (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");  // embedded or external
+        ezread.squintf("  heap free: %" PRIu32 " B (min).\n", esp_get_minimum_free_heap_size());
     }
 };
 #if RUN_TESTS
     #include "unittests.h"
     void run_tests() {
-        Serial.printf("Tests running..");
+        ezread.squintf(ezread.highlightcolor, "Unit tests running ..\n");
         delay(5000);
         test_Param();
-        Serial.printf("Tests complete\n");
+        ezread.squintf("  complete.\n");
         for(;;); // loop forever
     }
 #else
