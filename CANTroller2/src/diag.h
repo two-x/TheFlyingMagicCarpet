@@ -706,7 +706,7 @@ class BootMonitor {
             ezread.squintf("   after just over %d min uptime.\n", last_uptime);
             write_uptime();
         }
-        else ezread.squintf("    within the 1st minute of uptime.\n");
+        else ezread.squintf("   within the 1st minute of uptime.\n");
     }
     void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
         if (print_task_stack_usage && highWaterTimer.expireset()) {

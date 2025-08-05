@@ -37,7 +37,7 @@ public:
     void request_temperature() {
         // Request temperature from sensor
         if (!_tempsensebus->requestTemperaturesByAddress(_address.data())) {
-            ezread.squintf(ezread.madcolor, "err: temp fail request from 0x%s\n", addr_hex_string());
+            ezread.squintf(ezread.madcolor, "err: temp fail request from 0x%s\n", addr_hex_string().c_str());
             // print_address();
             // ezread.squintf("\n");
         }
@@ -53,7 +53,7 @@ public:
         float temp = _tempsensebus->getTempF(_address.data());
         if (temp == DEVICE_DISCONNECTED_F) {
             // ezread.squintf("  disconnected device %s w/ addr:\n", location_to_string(_location));
-            ezread.squintf(ezread.madcolor, "err: disconnected sensor %s at 0x%s\n", location_to_string(_location), addr_hex_string());
+            ezread.squintf(ezread.madcolor, "err: disconnected sensor %s at 0x%s\n", location_to_string(_location), addr_hex_string().c_str());
             // print_address();
             // ezread.squintf("\n");
             return DEVICE_DISCONNECTED_F;
@@ -102,7 +102,7 @@ public:
     }
 
     void print_sensor_info() const {
-        ezread.squintf("  assigned %s to 0x%s\n", location_to_string(_location).c_str(), addr_hex_string());
+        ezread.squintf("  assigned %s to 0x%s\n", location_to_string(_location).c_str(), addr_hex_string().c_str());
         // print_address();
         // ezread.squintf("\n");
     }
@@ -154,6 +154,7 @@ private:
     bool brake_assigned;
     unsigned long last_read_request_time;
     int sensor_index;
+    int lost_sensors = 0;
     State _state;
     
     OneWire one_wire_bus;
@@ -193,7 +194,6 @@ private:
 
     // Assigns known addresses to Sensors. The sensors will have locations like engine or ambient
     void assign_known_addresses() {
-        int lost_sensors = 0;
         DeviceAddress thomson_brake_address = {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2};
         DeviceAddress mfs_brake_address = {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc};
         DeviceAddress gmw_brake_address = {0x28, 0xf0, 0x03, 0xb6, 0x5c, 0x21, 0x01, 0x21};
@@ -213,7 +213,7 @@ private:
             }
             if (!brake_assigned && (brakemotor_type_detected != Nil)) {
                 sensors.emplace(loc::TempBrake, TemperatureSensor(loc::TempBrake, detected_address, &tempsensebus));
-                ezread.squintf("  detected %s brake at 0x%s\n", brakemotor_type_to_string(brakemotor_type_detected).c_str(), sensors.at(loc::TempBrake).addr_hex_string());
+                ezread.squintf("  detected %s brake at 0x%s\n", brakemotor_type_to_string(brakemotor_type_detected).c_str(), sensors.at(loc::TempBrake).addr_hex_string().c_str());
                 // sensors.at(loc::TempBrake).print_address();
                 // ezread.squintf("\n");
                 brake_assigned = true;
@@ -239,7 +239,7 @@ private:
                     // The sensor doesn't exist yet, so create it and add it to the map
                     sensors.emplace(location, TemperatureSensor(location, *detected_address_it, &tempsensebus));
                     // Print the sensor address for debugging purposes
-                    ezread.squintf("  known %s at 0x%s\n", TemperatureSensor::location_to_string(known_address.first).c_str(), sensors.at(known_address.first).addr_hex_string());
+                    ezread.squintf("  known %s at 0x%s\n", TemperatureSensor::location_to_string(known_address.first).c_str(), sensors.at(known_address.first).addr_hex_string().c_str());
                     // sensors.at(known_address.first).print_address();
                     // ezread.squintf("\n");
                 }
@@ -247,7 +247,7 @@ private:
                     // The sensor already exists, so just update its address
                     sensor_it->second.set_address(*detected_address_it);
                     // Print the updated sensor address for debugging purposes
-                    ezread.squintf("  updated addr 0x%s\n", sensor_it->second.addr_hex_string());
+                    ezread.squintf("  updated addr 0x%s\n", sensor_it->second.addr_hex_string().c_str());
                     // sensor_it->second.print_address();
                     // sensor_it->second.set_lims();
                 }
@@ -258,7 +258,6 @@ private:
                 // ezread.squintf("  known sensor %s not detected\n", TemperatureSensor::location_to_string(known_address.first).c_str());
             }
         }
-        if (lost_sensors) ezread.squintf("  did not detect %d known sensor(s)\n", lost_sensors);
         vehicle_detected = detected(loc::TempAmbient);
     }
 
@@ -275,7 +274,8 @@ private:
                 if (it != all_locations.end()) {
                     // The sensor doesn't exist yet, so create it and add it to the map and print the sensor address
                     sensors.emplace(*it, TemperatureSensor(*it, detected_address, &tempsensebus));
-                    ezread.printf("  unknown sensor at 0x%s\n", sensors.at(*it).addr_hex_string());  // ezread.printf("  unknown addr: ");
+                    ezread.squintf("  unknown sensor at 0x%s ..\n", sensors.at(*it).addr_hex_string().c_str());  // ezread.squintf("  unknown addr: ");
+                    ezread.squintf("    assigned to %s loation.at 0x%s\n", TemperatureSensor::location_to_string(*it).c_str());
                     // sensors.at(*it).print_address();
                     // ezread.squintf("\n");
                 }
@@ -334,7 +334,6 @@ public:
                     tempsensebus.setResolution(detected_addresses[i].data(), temperature_precision);
                 }
             }
-
             // Assign known addresses to the sensors they belong to
             assign_known_addresses();
 
@@ -342,7 +341,7 @@ public:
             assign_remaining_addresses();
 
             // assign_categories();
-
+            if (lost_sensors) ezread.squintf("  did not detect %d known sensor(s)\n", lost_sensors);
             // Request temperature for each sensor, this will make the is_ready() method work
             request_temperatures();
         }
