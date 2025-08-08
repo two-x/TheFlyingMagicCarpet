@@ -53,7 +53,7 @@ public:
         float temp = _tempsensebus->getTempF(_address.data());
         if (temp == DEVICE_DISCONNECTED_F) {
             // ezread.squintf("  disconnected device %s w/ addr:\n", location_to_string(_location));
-            ezread.squintf(ezread.madcolor, "err: disconnected sensor %s at 0x%s\n", location_to_string(_location), addr_hex_string().c_str());
+            ezread.squintf(ezread.madcolor, "err: disconnected temp sensor %s\n  at addr: 0x%s\n", location_to_string(_location), addr_hex_string().c_str());
             // print_address();
             // ezread.squintf("\n");
             return DEVICE_DISCONNECTED_F;
@@ -83,15 +83,7 @@ public:
         for (int i=0; i<NumMotorVals; i++) if (i != Filt) degf[i] = &temp_lims_f[category][i];  // degf[(int)sens][Filt] = &_temperature;
         degf[Filt] = &_temperature;
     }
-    
-    void print_address(bool known=false) const {
-        std::string str = "  0x";
-        ezread.squintf("  0x");
-        for(uint8_t i = 0; i < _address.size(); i++) ezread.squintf("%02x", _address[i]);
-        ezread.squintf("\n");
-    }
-    
-    std::string addr_hex_string(bool known=false) const {
+    std::string addr_hex_string() const {
         std::string str;
         for (uint8_t i = 0; i < _address.size(); i++) {  // str += std::format("{:02x}", _address[i]);  // ezread.squintf("%02x", _address[i]);
             char buf[3];
@@ -275,7 +267,7 @@ private:
                     // The sensor doesn't exist yet, so create it and add it to the map and print the sensor address
                     sensors.emplace(*it, TemperatureSensor(*it, detected_address, &tempsensebus));
                     ezread.squintf("  unknown sensor at 0x%s ..\n", sensors.at(*it).addr_hex_string().c_str());  // ezread.squintf("  unknown addr: ");
-                    ezread.squintf("    assigned to %s loation.at 0x%s\n", TemperatureSensor::location_to_string(*it).c_str());
+                    ezread.squintf("    assigned as %s sensor.\n", TemperatureSensor::location_to_string(*it).c_str());
                     // sensors.at(*it).print_address();
                     // ezread.squintf("\n");
                 }
