@@ -246,26 +246,23 @@ void NeopixelStrip::fevpush(int _idiot, uint push_off, bool push_val) {  // flas
     fevents[_idiot][page] |= (push_val << (push_off - 32 * page));
 }
 void NeopixelStrip::flashdemo_ena(bool ena) {
-    ezread.squintf("flashdemo_ena(ena=%s)\n", ena ? "true" : "false");
-
     flashdemo = ena;
     if (flashdemo) {
-        // for (int i=1; i<=6; i++) setflash(i, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
-        setflash(4, 8, 8, 8, 20);            // brightness toggle in a continuous squarewave
-        setflash(5, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
-        setflash(6, 2, 5, 5, 0, 0);          // two short black pulses
+        for (int i=1; i<=6; i++) setflash(i, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
+        // setflash(4, 8, 8, 8, 20);            // brightness toggle in a continuous squarewave
+        // setflash(5, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
+        // setflash(6, 2, 5, 5, 0, 0);          // two short black pulses
     }
     else {                                   // cancel any current blink programs on these leds
-        // for (int i=1; i<=6; i++) setflash(i, 0);
-        setflash(4, 0);
-        setflash(5, 0);
-        setflash(6, 0);
+        for (int i=1; i<=6; i++) setflash(i, 0);
+        // setflash(4, 0);
+        // setflash(5, 0);
+        // setflash(6, 0);
     }
 }
 void NeopixelStrip::update_idiot(int _idiot) {
     cidiot[_idiot][clast] = cidiot[_idiot][cnow];                                                          // remember previous color
     cidiot[_idiot][cnow] = fset[_idiot][onoff] ? cidiot[_idiot][con] : cidiot[_idiot][coff];               // set color to con or coff depending on state of idiotlight
-    // check this out: possibly an issue.
     if (fset[_idiot][fcount]) if (fevpop(_idiot, nowepoch)) cidiot[_idiot][cnow] = cidiot[_idiot][cflash]; // if flashing, override with the flash color
 }
 void NeopixelStrip::update_pcba_glow() {
@@ -393,7 +390,6 @@ class IdiotLights {
     static constexpr int row_count = 12;
     static constexpr int row_height = 11;
     static constexpr int iconcount = 36;  // number of boolean values included on the screen panel (not the neopixels) 
-// this is where we set the idiot lights
     bool* vals[iconcount] = {  // arranged here as 6 bool pointers per line of code
         // row 1 onscreen.  the 1st 7 of these are true hazard lights (lit only on error), also copied onto the last 7 neopixel idiot lights
         &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, &panicstop,
