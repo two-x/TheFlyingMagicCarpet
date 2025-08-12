@@ -45,6 +45,9 @@ public:
 
     void resetFlashColors() {
         flashColorCount = 0;
+        for (uint8_t i = 0; i < NumTelemetryIdiots; i++) {
+            flashColors[i] = BLACK;
+        }
     }
 
     bool hasFlashColors() {
@@ -57,7 +60,7 @@ public:
     }
 
     RgbColor getFlashColor(float time) {
-        // 6 second cycle, mostly solid color with brief flashes
+        // 6 second cycle with alternating pattern every 350ms
         float cycle_time = fmod(time, 6.0f);  // 6 second cycle
         
         // Count non-black colors and build array of indices
@@ -74,20 +77,18 @@ public:
             return solidColor;  // No flash colors, return solid color
         }
         
-        // Timeline: 0-1000ms: solid, 1001-1350ms: flash1, 1351-2350ms: solid, 2351-2700ms: flash2, etc.
-        // Each flash: 1s wait + 350ms flash = 1350ms per flash color
+        // Pattern: t=0ms flash1, t=350ms solid, t=750ms flash2, t=1100ms solid, etc.
+        // Each segment is 350ms, alternating between flash colors and solid
+        uint32_t segment = (uint32_t)(cycle_time * 1000) / 350;  // Which 350ms segment (0-16 in 6s)
         
-        for (uint8_t i = 0; i < nonBlackCount; i++) {
-            float start_time = 1.0f + (i * 1.35f);  // 1s + i*1.35s
-            float end_time = start_time + 0.35f;    // +350ms flash duration
-            
-            if (cycle_time >= start_time && cycle_time < end_time) {
-                return flashColors[nonBlackIndices[i]];
-            }
+        if (segment % 2 == 0) {
+            // Even segments (0, 2, 4, ...): show flash colors
+            uint8_t flash_index = (segment / 2) % nonBlackCount;
+            return flashColors[nonBlackIndices[flash_index]];
+        } else {
+            // Odd segments (1, 3, 5, ...): show solid color
+            return solidColor;
         }
-        
-        // Default: show solid color
-        return solidColor;
     }
 };
 
@@ -283,11 +284,20 @@ public:
     void setIdiotLightSolidOnMode(int idiot_index, bool on) {
         if (idiot_index < 0 || idiot_index >= idiot_light_led_count) return;
         idiotlights[idiot_index].solidOnMode = on;
+        if (on == false) {
+            setIdiotLightResetFlashColors(idiot_index);
+        }
     }
 
     void setIdiotLightFlashColor(int idiot_index, uint8_t colorIndex, RgbColor color) {
         if (idiot_index >= 0 && idiot_index < idiot_light_led_count) {
             idiotlights[idiot_index].setFlashColor(colorIndex, color);
+        }
+    }
+
+    void setIdiotLightResetFlashColors(int idiot_index) {
+        if (idiot_index >= 0 && idiot_index < idiot_light_led_count) {
+            idiotlights[idiot_index].resetFlashColors();
         }
     }
 
