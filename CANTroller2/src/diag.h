@@ -196,7 +196,6 @@ class DiagRuntime {
                     registered_errcount[t]++;
         }
     }
-// this is where we set the blinks
     void set_idiot_blinks() {  // adds blink code to lost and range err neopixels corresponing to the lowest numbered failing sensor
         for (int t=ErrLost; t<=ErrRange; t++) {
             most_critical_sensor[t] = _None;
