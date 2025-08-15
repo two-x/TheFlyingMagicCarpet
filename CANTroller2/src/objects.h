@@ -1,6 +1,27 @@
 // objects.h : contains instantiations of major system components, and global functions
 #pragma once
 #include "globals.h"
+<<<<<<< HEAD
+=======
+
+class SysPower {
+  public:
+    int _pin;
+    bool _val = HIGH, _notval = LOW;  // _notval is meant for idiot light
+    SysPower(int pin) : _pin(pin) { set_pin(_pin, OUTPUT, _val); }
+    void set(bool val) {
+        _val = val || keep_system_powered;
+        _notval = !_val;
+        write_pin(_pin, _val);
+    }
+    void print_bootstatus() { ezread.squintf(ezread.highlightcolor, "Syspower (p%d) is: %s\n", _pin, _val ? "on" : "off"); }
+    bool val() { return _val; }
+    bool notval() { return _notval; }
+    bool* val_ptr() { return &_val; }
+    bool* notval_ptr() { return &_notval; }
+};
+static SysPower syspower(syspower_pin);
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
 #include "i2cbus.h"
 #include "sensors.h"
 static Preferences prefs;  // Persistent config storage
@@ -13,20 +34,21 @@ static TemperatureSensorManager tempsens(onewire_pin);
 static CarBattery mulebatt(mulebatt_pin);
 static PressureSensor pressure(pressure_pin);
 static BrakePositionSensor brkpos(brake_pos_pin);
-static Speedometer speedo(speedo_pin, 0.5);  // 0.5x because there are 2 magnets
-static Tachometer tach(tach_pin, 8.0);  // 8.0x frequency divider
+static Speedometer speedo(speedo_pin, 2.0f);  // mult-by-2 because there are 2 magnets per turn
+static Tachometer tach(tach_pin, 0.125f);  // divide-by-8 due to external frequency divider
 static I2C i2c(i2c_sda_pin, i2c_scl_pin);
 static AirVeloSensor airvelo(&i2c);
 static MAPSensor mapsens(&i2c);
-static ThrottleControl gas(gas_pwm_pin, 52);
-static BrakeControl brake(brake_pwm_pin, 50);
-static SteeringControl steer(steer_pwm_pin, 50);
+static ThrottleControl gas(gas_pwm_pin, 0, 50);
+static BrakeControl brake(brake_pwm_pin, 1, 50);
+static SteeringControl steer(steer_pwm_pin, 2, 50);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
 
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
-    ezread.squintf("Using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");
+    // ezread.squintf("  using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");  // already printed during detection in temperature class
     if (running_on_devboard) return;      // override settings if running on the real car
     looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
+    encoder_reverse = true;
     touch_reticles = false;
     // console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
     wifi_client_mode = false;       // Should wifi be in client or access point mode?
@@ -61,21 +83,25 @@ void sim_setup() {
     // sim.set_can_sim(sens::basicsw, running_on_devboard);
     // for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
     // sim.set_potmap(sens::none);        
+    ezread.squintf(ezread.highlightcolor, "Simulator: registered %d devices\n", sim.registered_device_count());
 }
+<<<<<<< HEAD
 void set_syspower(bool setting) {
     syspower = setting | keep_system_powered;
     not_syspower = !syspower;
     write_pin(syspower_pin, syspower);
 }
+=======
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
 // RTOS task that updates temp sensors in a separate task
 void tempsens_task(void *parameter) {
     while (true) {
-        while (runmode == LOWPOWER) vTaskDelay(pdMS_TO_TICKS(1000));
+        while (runmode == LowPower) vTaskDelay(pdMS_TO_TICKS(1000));
         if (!dont_take_temperatures) tempsens.update_temperatures();
         if (sim.potmapping(sens::engtemp)) {
-            TemperatureSensor *engine_sensor = tempsens.get_sensor(loc::ENGINE);
+            TemperatureSensor *engine_sensor = tempsens.get_sensor(loc::TempEngine);
             if (engine_sensor != nullptr) {
-                engine_sensor->set_temperature(pot.mapToRange(tempsens.opmin(loc::ENGINE), tempsens.opmax(loc::ENGINE)));  // temp_sensor_min_f, temp_sensor_max_f));
+                engine_sensor->set_temperature(pot.mapToRange(tempsens.opmin(loc::TempEngine), tempsens.opmax(loc::TempEngine)));  // temp_sensor_min_f, temp_sensor_max_f));
             }
         }
         vTaskDelay(pdMS_TO_TICKS(1000)); // Delay for a second to avoid updating the sensors too frequently
@@ -92,8 +118,8 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
     float new_map = mapsens.val();
     if (std::isnan(_ambient)) {
         if (new_velo == maf_velo_last && new_map == maf_map_last) return maf_gps;  // if no new sensor readings, don't recalculate the same value
-        temp = tempsens.val(loc::AMBIENT);
-        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::BRAKE);
+        temp = tempsens.val(loc::TempAmbient);
+        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::TempBrake);
         if (std::isnan(temp)) return NAN;  // Avoid crashing due to trying to read absent sensor
     }
     maf_velo_last = new_velo;
@@ -101,7 +127,7 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
     float T = 0.556 * (temp - 32.0) + 273.15;  // in K.  This converts from degF to K
     float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
     float v = 0.447 * (std::isnan(_airvelo) ? new_velo : _airvelo); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
-    float Ain2 = 3.1415926;  // in in2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
+    float Ain2 = M_PI;  // in in2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
     float P = 101325.0 * (std::isnan(_map) ? new_map : _map);  // in Pa   101325 Pa/atm  1 Pa = 1 J/m3
     float maf = v * Ain2 * P * 1000.0 / (R * T * 1550);  // mass air flow in grams per second (g/s)   (1000 g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
     if (std::abs(maf) < 0.001) maf = 0;
@@ -111,14 +137,15 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
 // RTOS task that updates map and airflow sensors, and mass airflow calculation
 void maf_task(void *parameter) {
     while (true) {
-        mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
-        vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
-        airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
-        maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+        if (i2c.detected(I2CMAP) && i2c.detected(I2CAirVelo)) {
+            mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
+            vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
+            airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
+            maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+        }
         vTaskDelay(pdMS_TO_TICKS(95)); // Delay for a second to avoid updating the sensors too frequently
     }
 }
-
 class ToggleSwitch {
   public:
     bool val = LOW;  // pin low means val high
@@ -128,9 +155,8 @@ class ToggleSwitch {
     sens attached_sensor = sens::none;
     void readswpin() {
         last = val;
-        do {
-            val = digitalRead(pin);   // !value because electrical signal is active low
-        } while (val == digitalRead(pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
+        do val = digitalRead(pin);   // !value because electrical signal is active low
+        while (val == digitalRead(pin)); // basicmodesw pin has a tiny (70ns) window in which it could get invalid low values, so read it twice to be sure
     }
   public:
     ToggleSwitch(int _pin, sens _sens=sens::none) : pin(_pin), attached_sensor(_sens) {}
@@ -140,7 +166,7 @@ class ToggleSwitch {
     }
     void update() {
         if ((attached_sensor == sens::none) || !sim.simulating(attached_sensor)) readswpin();
-        if (last != val) kick_inactivity_timer(HUTogSw);
+        if (last != val) kick_inactivity_timer(HuTogSw);
     }
 };
 // the basic mode switch puts either a pullup or pulldown onto the serial tx pin. so to read it we must turn off the serial console, read the pin, then turn the console back on
@@ -152,19 +178,21 @@ class BasicModeSwitch : public ToggleSwitch {
         set_pin(pin, INPUT);
         val = digitalRead(pin);
         in_basicmode = val;
-        // readswpin();
-        if (last != val) kick_inactivity_timer(HUTogSw);
+        if (last != val) kick_inactivity_timer(HuTogSw);
     }
+    void print_bootstatus() { ezread.squintf(ezread.highlightcolor, "Basic switch (p%d) read: %s\n", pin, in_basicmode ? "high" : "low"); }  // can't print during setup() due to sharing pin w/ serial console
     void reread() {
         if (sim.simulating(attached_sensor)) return;
-        if (runmode == FLY || runmode == HOLD || runmode == CRUISE) return;
+        if (runmode == Fly || runmode == Hold || runmode == Cruise) return;
         if (console_enabled) {
             // delay(200);  // give time for serial to print everything in its buffer
+            Serial.flush();  // empty serial buffer before closing port
             Serial.end();  // close serial console to prevent crashes due to error printing
         }
         read();
         if (console_enabled) {
-            Serial.begin(921600);  // 9600/19200/28800/57600/115200/230400/460800/921600;  // restart serial console to prevent crashes due to error printing
+            Serial.begin(serial_monitor_baudrate);  // 9600/19200/28800/57600/115200/230400/460800/921600;  // restart serial console to prevent crashes due to error printing
+            // Serial.begin(115200);  // restart serial console to prevent crashes due to error printing
             // delay(1500);  // note we will miss console messages for a bit surrounding a read, unless we add back these delays
         }
     }
@@ -173,7 +201,7 @@ static BasicModeSwitch basicsw(tx_basic_pin);
 
 void test_console_throughput() {
     int step = 0, bits = 0;
-    ezread.squintf("Speed test:  ");
+    Serial.printf("  test: ");
     Timer testtimer{1000000};  //, chartimer{100000};
     while (!testtimer.expired()) {
         Serial.printf("\b \b \b \b \b%s", (step == 0) ? "-" : ((step == 1) ? "\\" : "/"));  // ezread console can not yet support backspaces
@@ -181,21 +209,36 @@ void test_console_throughput() {
         ++step %= 3;
         bits += 10 * 8;
     }
-    ezread.squintf("\b%ld baud\n", bits);
+    Serial.printf("\b%ld baud\n", bits);
+    ezread.printf("  tested %ld baud\n", bits);
 }
-void initialize_pins_and_console() {                        // set up those straggler pins which aren't taken care of inside class objects
+void initialize_boot() {                        // set up those straggler pins which aren't taken care of inside class objects
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);                   // deasserting unused cs line ensures available spi bus
-    set_pin(syspower_pin, OUTPUT, syspower);
-    set_pin(choke_pin, INPUT_PULLUP);                       // avoid undefined inputs
+    set_pin(free_pin, INPUT_PULLUP);                       // avoid undefined inputs
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
-    basicsw.read();
-    Serial.begin(921600); // 9600/19200/28800/57600/115200/230400/460800/921600 // open console serial port (will reassign tx pin as output)
-    delay(1200);          // 1200 use for 115200 baud // this is needed to allow the uart to initialize and the screen board enough time after a cold boot
-    ezread.squintf(LPUR, "\n** Setup begin **\n");
-    ezread.squintf("  Serial console started. ");
+    Serial.flush();       // ensure serial buffer is fully printed out before closing the port
+    Serial.end();         // close serial console port. serial doesn't work w/o this. maybe b/c the esp bootloader uses 115200 & we don't?
+    basicsw.read();       // read the basic switch. the serial port must be fully stopped
+    Serial.begin(serial_monitor_baudrate); // 9600/19200/28800/57600/115200/230400/460800/921600 // open console serial port (will reassign tx pin as output)
+    delay(3000);   //  3000 is enough at 921600. Any less of a delay causes us to miss the first few lines of output
+    ezread.setup();        // start the onscreen terminal
+    ezread.squintf(ezread.announcecolor, "Magic carpet setup begin ..\n");
+    ezread.squintf(ezread.highlightcolor, "EZread and serial consoles are started\n");  //  Serial.printf("Serial console is started\n");
     test_console_throughput();
-    ezread.squintf("Syspower is %s, basicsw read: %s\n", syspower ? "on" : "off", in_basicmode ? "high" : "low");    
+    syspower.print_bootstatus();
+    basicsw.print_bootstatus();
+}
+void finalize_boot() {
+    ezread.squintf("%s", console_enabled ? "" : "Stopping console during runtime\n");  // ezread.squintf(ezread.announcecolor, "** Setup done **\n");
+    std::fflush(stdout);  // ensure immediate output
+    if (!console_enabled) {
+        delay(200);           // give time for serial to print everything in its buffer
+        Serial.flush();       // ensure serial buffer is fully printed out before closing the port
+        Serial.end();         // close serial console to prevent crashes due to error printing
+    }
+    ezread.printf(ezread.announcecolor, "Magic carpet is booted!\n");
+    ezread.end_bootgraceperiod();
 }
 void stop_console() {
     ezread.squintf("%s", console_enabled ? "" : "Stopping console during runtime\n");
@@ -209,222 +252,185 @@ void stop_console() {
 }
 class Ignition {
   private:
-    int ign_req = REQ_NA, panic_req = REQ_NA, pin;
+    int ign_req = ReqNA, panic_req = ReqNA, pin;
     bool paniclast, booted = false;
     Timer panicTimer{15000000};  // how long should a panic stop last?  we can't stay mad forever
   public:
     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
-    // bool panicstop = false;                 // initialize NOT in panic, but with an active panic request, this puts us in panic mode with timer set properly etc.
     Ignition(int _pin) : pin(_pin) {}
     void setup() {  // must run after diag recovery function, to ensure initial ign value is asserted correctly
+        ezread.squintf(ezread.highlightcolor, "Ignition (p%d) handler init\n", pin);
         bool pin_initial_val = LOW;
         if (!booted) {
-            if (ign_req == REQ_ON) pin_initial_val = HIGH;
+            if (ign_req == ReqOn) pin_initial_val = HIGH;
             else pin_initial_val = LOW;        
             set_pin(pin, OUTPUT, pin_initial_val);
         }
         booted = true;
-        ign_req = REQ_NA;
+        ign_req = ReqNA;
     }
-    void request(int req) { ign_req = req; }
+    void request(int req) { ign_req = req;
+        ezread.squintf("ign req %s\n", requestcard[req].c_str());
+    } // ezread.squintf("new ign request %s\n", requestcard[ign_req].c_str());
     void panic_request(int req) { panic_req = req; }
     void update() {  // Run once each main loop
-        if (runmode == LOWPOWER) return;
-        if (panic_req == REQ_TOG) panic_req = !panicstop;
-        if (ign_req == REQ_TOG) ign_req = !signal;
-        // else if (request == signal) request = REQ_NA;  // With this line, it ignores requests to go to state it's already in, i.e. won't do unnecessary pin write
-        if (speedo.stopped() || panicTimer.expired()) panic_req = REQ_OFF;  // Cancel panic stop if car is stopped
-        if (!speedo.stopped() && (runmode == FLY || runmode == CRUISE || runmode == HOLD)) {
-            if (signal && ign_req == REQ_OFF) panic_req = REQ_ON;  // ignition cut while driving causes panic stop
-            if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_req = REQ_ON;
+        static bool ign_last = LOW;
+        if (runmode == LowPower) return;
+        if (panic_req == ReqTog) panic_req = !panicstop;
+        if (ign_req == ReqTog) ign_req = !signal;
+        if (speedo.stopped() || panicTimer.expired()) panic_req = ReqOff;  // Cancel panic stop if car is stopped
+        if (!speedo.stopped() && (runmode == Fly || runmode == Cruise || runmode == Hold)) {
+            if (signal && ign_req == ReqOff) panic_req = ReqOn;  // ignition cut while driving causes panic stop
+            if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_req = ReqOn;
         }
-        if (panic_req != REQ_NA) {
-            panicstop = (panic_req == REQ_ON) ? true : false;    // ezread.squintf("panic=%d\n", panicstop);
+        if (panic_req != ReqNA) {
+            panicstop = (panic_req == ReqOn) ? true : false;    // ezread.squintf("panic=%d\n", panicstop);
             if (panicstop != paniclast) {
                 prefs.putUInt("panicstop", (uint32_t)panicstop);  // this is read at boot, see diag.h
                 if (panicstop) panicTimer.reset();
             }
         }
         paniclast = panicstop;
-        if (panicstop) ign_req = REQ_OFF;  // panic stop causes ignition cut
-        if (ign_req != REQ_NA && runmode != LOWPOWER) {
-            signal = (bool)ign_req;
+        if (panicstop) ign_req = ReqOff;  // panic stop causes ignition cut
+        if (ign_req != ReqNA && runmode != LowPower) {
+            signal = (ign_req == ReqOn) ? HIGH : LOW;
             write_pin(pin, signal);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
         }
-        panic_req = ign_req = REQ_NA;  // cancel outstanding requests
+        panic_req = ign_req = ReqNA;  // cancel outstanding requests
+        ign_last = signal;
     }
 };
+<<<<<<< HEAD
+=======
+static Ignition ignition(ignition_pin);
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
 class Starter {
   private:
-    int pushbrake_timeout = 4000000;
-    int run_timeout = 2000000;
-    int turnoff_timeout = 100000;
-    Timer starterTimer, twoclicktimer{2000000};  // If remotely-started starting event is left on for this long, end it automatically
+    bool verbose = false;  // set true to get console reports about all changes in request value
+    std::string startreqcard[NumStartReq] = { "unknwn", "class", "hotrc", "touch", "runmod" };
     int lastbrakemode, lastgasmode, pin;
-  public:
+    Timer starterTimer, twoclicktimer{2000000}, brakeTimer{4000000};  // if remotely-started starting event is left on for this long, end it automatically
+    int req_source_timeout_ms = 5000;  // request to turn on starter will fail if no activity occurred within this time on any valid ReqOn source
+    Timer simBtnTimer, hotrcBtnTimer;  // keep track of last activity on all possible sources of ReqOn, to serve as a safety net preventing phantom starts
+    void check_for_external_tampering() {   // in case an external bug could be turning on the starter instead of us    
+        bool pin_now = read_pin(pin);       // get current value of pin to do the following check
+        if (motor != pin_now) {             // check if someone changed the motor value or started driving our pin
+            ezread.printf(ezread.madcolor, "err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
+            turnoff();                  // stop the motor either way
+            ignition.panic_request(ReqOn);  // request panic will kill the ignition just in case it did start up
+        }
+    }
+    void turnon(int code=-1) {  // function to start the motor.  code argument is so we can determine which internal function call got us here
+        if ((requestor == StartHotrc) && (hotrc.ch4_button_last_ms() > req_source_timeout_ms))  // don't start without recent activity on the particular requestor source used
+            ezread.printf(ezread.madcolor, "err: starter reqOn by Hrc.%d, %dms ago\n", code, hotrc.ch4_button_last_ms());
+        else if ((requestor == StartTouch) && (hotrc.sim_button_last_ms() > req_source_timeout_ms))  // don't start without recent activity on the particular requestor source used
+            ezread.printf(ezread.madcolor, "err: starter reqOn by Sim.%d, %dms ago\n", code, hotrc.sim_button_last_ms());
+        else if ((requestor != StartHotrc) && (requestor != StartTouch)) ezread.printf(ezread.madcolor, "err: bad start requestor %s (code=%d)\n", startreqcard[requestor].c_str(), code); // don't start if origin of request is invalid
+        else if (code == -1) ezread.printf(ezread.madcolor, "err: starter ReqOn w/o given code call\n");  // don't start if a code wasn't given when called
+        else {  // if no error checks were triggered then go ahead and start
+            ezread.printf("starter turnon by %s.%d\n", startreqcard[requestor].c_str(), code);  // maybe use ezread.squintf instead? (prints to both screen and console)
+            if (push_gas_when_starting && check_brake_before_starting) gas.setmode(Starting);  // give it some gas if we're allowed to, unless brake wasn't checked (due to risk of lurching forward)
+            starterTimer.set((int64_t)(run_timeout * 1000000.0));  // if left on the starter will turn off automatically after X seconds
+            motor = HIGH;                                          // ensure starter variable always reflects the starter status regardless who is driving it
+            write_pin(pin, motor);                                 // and start the motor
+        }
+        request(ReqNA, StartClass);  // cancel the starter on request which we have serviced (or properly ignored if it was erroneous)
+    }
+    void turnoff() {              // function to stop the motor
+        if (verbose) ezread.printf("starter turnoff by %s\n", startreqcard[requestor].c_str());
+        motor = LOW;                                           // we will turn it off
+        write_pin(pin, motor);                                 // begin driving the pin low voltage
+        request(ReqNA, StartClass);                            // cancel current request
+    }  // if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
+public:
     Starter(int _pin) : pin(_pin) {}
-    bool motor = LOW;             // set by handler only. Reflects current state of starter signal (does not indicate source)
-    int now_req = REQ_NA, last_req = REQ_NA;
-    bool req_active = false, commit = false;
+    int now_req = ReqNA, requestor = StartClass;
+    bool req_active = false, one_click_done = false, motor = LOW;    // motor is the current state of starter voltage. set in this class only
+    float run_timeout = 3.5, run_lolimit = 1.0, run_hilimit = 10.0;  // in seconds
     void setup() {
-        ezread.squintf("Starter.. output-only supported\n");
-        set_pin(pin, OUTPUT);  // set pin as output
+        ezread.squintf(ezread.highlightcolor, "Starter (p%d) handler init\n", pin);
+        set_pin(pin, OUTPUT);                                  // set pin as output
     }
-    void request(int req) { now_req = req; }  // squintf("r:%d n:%d\n", req, now_req);}
-    void turnon() {
-        ezread.printf("starter turnon.. ");  // ezread.squintf("starter turn on motor\n");
-        lastgasmode = gas.motormode;      // remember incumbent gas setting
-        gas.setmode(Starting);            // give it some gas
-        starterTimer.set((int64_t)run_timeout);  // if left on the starter will turn off automatically after X seconds
-        motor = HIGH;    // ensure starter variable always reflects the starter status regardless who is driving it
-        write_pin(pin, motor);           // and start the motor
-        now_req = REQ_NA;                 // we have serviced starter-on request, so cancel it
+    void request(int _req, int _requestor=StartUnknown) {  // this is the only valid way to change the current request now_req, internally or externally
+        static int last_req = ReqNA;  // for detecting external settings of now_req
+        if (now_req != last_req) ezread.printf(ezread.madcolor, "err: detected starter req value abuse!\n"); // report now_req was apparently set by somewhere besides this function
+        else if ((_requestor < 0) || (_requestor >= NumStartReq)) ezread.printf(ezread.madcolor, "err: invalid start requestor=%d\n", _requestor); // prevent crash if requestor value passed is out of range
+        else {  // if no errors happened then accept the request
+            if (verbose && ((_req != last_req) || (_requestor != StartClass))) ezread.printf("new starter %s request from %s\n", requestcard[_req].c_str(), startreqcard[_requestor].c_str());  // report all request activity
+            if (_req == ReqTog) _req = motor ? ReqOff : ReqOn;  // translate a toggle request to a drive request opposite to the current drive state
+            now_req = _req;
+            requestor = _requestor;
+            last_req = now_req;
+        }  // squintf("r:%d n:%d\n", req, now_req);}
     }
-    void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = REQ_OFF, REQ_ON, or REQ_TOG
-        if (runmode == LOWPOWER) return;
-        // if (now_req != NA) squintf("m:%d r:%d\n", motor, now_req);
-        if (now_req == REQ_TOG) now_req = motor ? REQ_OFF : REQ_ON;  // translate a toggle request to a drive request opposite to the current drive state
-        if (two_click_starter && now_req == REQ_ON && !commit) {
-            if (last_req != REQ_ON || twoclicktimer.expired()) { // if this is a new request, or if the previous request expired, start a new two click timer
-                twoclicktimer.reset();
-                last_req = now_req;
-                now_req = REQ_NA;
-                if (brake.motormode != AutoHold) {   // if we haven't yet told the brake to hold down
-                    ezread.printf("autobrake.. ");
-                    lastbrakemode = brake.motormode; // remember incumbent brake setting
-                    brake.setmode(AutoHold);         // tell the brake to hold
-                    starterTimer.set((int64_t)pushbrake_timeout);   // start a timer to time box that action
-                }
-            } else {
-                commit = true;
-                last_req = REQ_NA;
+    void update() {  // starter drive handler logic.  Outside code interacts with handler by calling request(XX) = ReqOff, ReqOn, or ReqTog
+        static int last_req_2click = ReqNA;
+        if (runmode == LowPower) return;  // bypass all this processing and sensor reads, etc. when we're in powerdown mode
+        check_for_external_tampering();
+        req_active = (now_req != ReqNA);                          // for idiot light display
+        if (motor && ((now_req == ReqOff) || starterTimer.expired())) turnoff(); // stop the motor if we're being asked to, or if it was left on too long
+        if (two_click_starter && (requestor == StartHotrc)) {     // if 2 clicks are required to start (only applies to hotrc)
+            if (now_req == ReqOn && last_req_2click != ReqOn) {   // if we got a new on request
+                if (!one_click_done) {                            // if this is the 1st click
+                    twoclicktimer.reset();                        // start a timer for opportunity to accept 2nd click
+                    request(ReqNA, StartClass);                   // cancel the turnon request
+                }                                                 // otherwise if 2nd click then the turnon request remains active
+                one_click_done = !one_click_done;                 // toggle next click will be the opposite of this one
             }
+            if (twoclicktimer.expired()) {
+                if (one_click_done) ezread.printf(ezread.sadcolor, "warn: starter requires 2-clicks\n");
+                one_click_done = false;  // cancel 2click sequence if too much time elapsed since last click
+            }
+            last_req_2click = now_req;   // allows us to detect when request first goes to on
         }
-        if (brake.feedback == _None && now_req == REQ_ON) now_req = REQ_NA;  // never run the starter if brake is in openloop mode
-        req_active = (now_req != REQ_NA);                   // for display
-        if (motor && ((now_req == REQ_OFF) || starterTimer.expired()))  {  // if we're driving the motor but need to stop or in the process of stopping
-            ezread.printf("turnoff\n");
-            motor = LOW;             // we will turn it off
-            write_pin(pin, motor);  // begin driving the pin low voltage
-            if (gas.motormode == Starting) gas.setmode(lastgasmode);  // put the throttle back to doing whatever it was doing before
-            now_req = REQ_NA;
-        }
-        // if (sim.simulating(sens::starter)) motor = pin_outputting;  // if simulating starter, there's no external influence
-        if (motor || now_req != REQ_ON) {  // if starter is already being driven, or we aren't being tasked to drive it
-            now_req = REQ_NA;          // cancel any requests
-            return;                    // and ditch
+        if (motor || now_req != ReqOn) { // if starter is already being driven, or we aren't being tasked to drive it
+            request(ReqNA, StartClass);  // cancel any requests
+            return;                      // and ditch
         }  // from here on, we can assume the starter is off and we are supposed to turn it on
-        if (!check_brake_before_starting) {
-            turnon();
-            commit = false;
-            return;
+        if (brake.autoholding) {         // if brake is successfully holding
+            turnon(0);                   // start the car   // ezread.printf("0 turnon(): if brake.autoholding\n");
+            return;                      // and then ditch out
         }
-        if (brake.autoholding || !brake_before_starting) {  // if the brake is being held down, or if we don't care whether it is
-            turnon();
-            commit = false;
-            return;                           // if the brake was right we have started driving the starter
-        }  // from here on, we can assume the brake isn't being held on, which is in the way of our task to begin driving the starter
-        if (starterTimer.expired()) {  // if we've waited long enough for the damn brake
-            ezread.printf("cancel - no brake\n");
-            if (brake.motormode == AutoHold) brake.setmode(lastbrakemode);  // put the brake back to doing whatever it was doing before, unless it's already been changed
-            now_req = REQ_NA;  // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
-            commit = false;
-        }  // otherwise we're still waiting for the brake to push. the starter turn-on request remains intact
+        if (brake_before_starting) {        // if we must apply brakes before starting
+            if (brake.feedback == _None) {  // check if brake is running in openloop mode (we can't control an autohold)
+                ezread.printf(ezread.sadcolor, "warn: starter can't use openloop brake\n");
+                request(ReqNA, StartClass); // cancel turn on request
+                return;                     // and then ditch out
+            }
+            else if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
+                ezread.printf("starter autobraking..\n");
+                brake.setmode(AutoHold);             // tell the brake to hold
+                brakeTimer.reset();                  // start a timer to time box the application of brake
+                return;                              // ditch out and wait for brake to push, leaving on request active
+            }
+        }
+        else if (!check_brake_before_starting) {  // if we don't need to apply the brake nor even check for it
+            turnon(1);    // start the car    // ezread.printf("1 turnon(): !check_brake_before_starting)\n");
+            return;      // and then ditch out
+        }
+        if (brakeTimer.expired()) {                      // waited long enough for the brake to push
+            if (!check_brake_before_starting) turnon(2);  // if no need to check whether brake succeeded, then start the car  // ezread.printf("2 turnon(): !check_brake_before_starting)\n");
+            else {                                       // if we were supposed to apply the brakes and also check they got pushed
+                ezread.printf(ezread.sadcolor, "warn: cant start, no brake\n");
+                request(ReqNA, StartClass);              // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
+            }
+        }  // otherwise we're still waiting for the brake to push, meanwhile the starter turn-on request remains intact
     }
-    // src source() { return pin_outputting ? src::CALC : src::PIN; }
 };
-static Ignition ignition(ignition_pin);
-static Starter starter(starter_pin);
-
-class FuelPump {  // drives power to the fuel pump when the engine is turning
-  public:
-    float off_v = 0.0, on_min_v = 8.0, on_max_v = 12.0, _volts = 0.0, turnon_rpm = 50.0, duty, pwm_period = 25000;  // used for software pwm timing
-    int adc = 0, now_req = REQ_NA;
-    bool _status = LOW, _status_inverse = HIGH, pump_last = LOW, sw_pwm_out_now = LOW;
-    void request(int req) { now_req = req; }  // squintf("r:%d n:%d\n", req, now_req);}
-  private:
-    bool variable_speed_output = false;  // this interferes with the gas servo pwm when enabled
-    bool use_software_pwm = false;  // avoids using hardware resources for variable output, we can fake it with a timer
-    Timer fuelTimer;
-    int timeout = 25000, pin, ledc_channel, pwm_frequency = 42, pwm_resolution = 8;  // for if hardware pwm is used. timeout is not tunable
-    void writepin() {
-        if (variable_speed_output) {
-            if (use_software_pwm) {
-                if (duty > 99.5) write_pin(pin, HIGH);
-                else if (duty < 0.5) write_pin(pin, LOW);
-                else if (fuelTimer.expired()) {
-                    sw_pwm_out_now = !sw_pwm_out_now;
-                    timeout = (int)(duty * pwm_period / 100.0);
-                    if (!sw_pwm_out_now) timeout = (int)pwm_period - timeout;
-                    write_pin(pin, sw_pwm_out_now);
-                    fuelTimer.set(timeout);
-                }
-            }
-            else ledcWrite(ledc_channel, adc);
-        }
-        else write_pin(pin, _status);
-    }
-  public:
-    FuelPump(int _pin) : pin(_pin) {}
-    void update() {
-        if (runmode == LOWPOWER) return;
-        static bool autoreq, autoreq_last;  // true if engine conditions warrant fuel pump to turn on
-        if (!fuelpump_supported || !captouch) {
-            _status = HIGH;  // to keep idiot light off when unused
-            _status_inverse = !_status;  // for idiot light
-            return;
-        }
-        float tachnow = tach.val();
-        pump_last = _status;
-        if (now_req == REQ_TOG) now_req = _status ? REQ_NA : REQ_ON;
-        autoreq_last = autoreq;
-        autoreq = starter.motor || (ignition.signal && (tachnow >= turnon_rpm));
-        if (autoreq && !autoreq_last) now_req = REQ_NA;  // if engine needs on/off, previous manual requests are canceled
-        if (now_req == REQ_ON) _volts = on_max_v;  // if manually turned on
-        else if (autoreq) _volts = map(gas.pc[OUT], gas.pc[OPMIN], gas.pc[OPMAX], on_min_v, on_max_v);  // if engine needs fuel
-        else _volts = off_v;  // turn off fuel
-        _volts = constrain(_volts, off_v, on_max_v);
-        adc = map((int)_volts, 0, (int)on_max_v, 0, 255);
-        duty = 100.0 * _volts / on_max_v;
-        _status = (_volts >= on_min_v);
-        _status_inverse = !_status;  // for idiot light
-        writepin();
-    }
-    void setup() {
-        if (!fuelpump_supported || !captouch) return;  // if resistive touchscreen, then pin is needed for chip select
-        ezread.squintf("Fuel pump.. ");
-        if (variable_speed_output) {
-            if (use_software_pwm) {
-                set_pin(pin, OUTPUT);  // initialize_pin
-                fuelTimer.set(timeout);  // start the timer in case we are doing software pwm
-                ezread.squintf("using software pwm\n");
-            }
-            else {
-                int ledc_channel = analogGetChannel(pin);
-                if (ledcSetup(ledc_channel, pwm_frequency, pwm_resolution) == 0) ezread.squintf("failed to configure ");
-                else {
-                    ezread.squintf("using ");
-                    ledcAttachPin(pin, ledc_channel);
-                }
-                ezread.squintf("ledc ch %d, %d bit at %d Hz\n", ledc_channel, pwm_resolution, pwm_frequency);
-            }
-        }
-        else {
-            set_pin(pin, OUTPUT);  // initialize_pin
-            ezread.squintf("using digital drive\n");
-        }
-    }
-    bool status() { return _status; }
-    bool* status_inverse_ptr() { return &_status_inverse; }
-    float volts() { return _volts; }
-};
+<<<<<<< HEAD
 
 static FuelPump fuelpump(tp_cs_fuel_pin);
+=======
+static Starter starter(starter_pin);
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
 #include "diag.h"
 static LoopTimer looptimer;
 static BootMonitor watchdog(&prefs, &looptimer);
 static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition);
+<<<<<<< HEAD
 #include "web.h"
+=======
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
 #include "tftsetup.h"
 #include "inputs.h"
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);
@@ -437,9 +443,11 @@ class BootButton : public MomentarySwitch {
   protected:
     void actions();  // function prototyhpe. see full definition below
   public:
+    int dummyprintcount = 0;
     BootButton(int apin) : MomentarySwitch(apin, false) {}
     void update() {
         MomentarySwitch::update();
+        bootbutton_val = val();
         actions();
     }
 };
@@ -449,13 +457,20 @@ static BootButton bootbutton(boot_sw_pin);
 #include "display.h"
 
 void BootButton::actions() {  // temporary (?) functionality added for development convenience
-    if (longpress()) autosaver_request = REQ_TOG;  // screen.auto_saver(!auto_saver_enabled);
+    // if (val()) ezread.printf("long ass print %d\n", ++dummyprintcount); return;  // useful for debugging ezread spam suppression feature
+    if (longpress()) autosaver_request = ReqTog;  // screen.auto_saver(!auto_saver_enabled);
     if (shortpress()) {
-        if (auto_saver_enabled) panel.change_saver();
+        if (runmode == LowPower) sleep_request = ReqOff;
+        else if (auto_saver_enabled) panel.change_saver();
         else {
             sim.toggle();
-            Timer printtimer;
+            // below trying to debug mulebatt error bit having same addr as nowtouch
             ezread.squintf("addr: batt:%08X touch:%08X\n", &sensidiots[_MuleBatt], &nowtouch);
+            Timer printtimer;
+<<<<<<< HEAD
+            ezread.squintf("addr: batt:%08X touch:%08X\n", &sensidiots[_MuleBatt], &nowtouch);
+=======
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
             for (int i=0; i<NumTelemetryFull; i++) {
                 ezread.squintf("%02d: %08X %s\n", i, &sensidiots[i], diag.err_sens_card[i].c_str());            
             }
@@ -463,4 +478,23 @@ void BootButton::actions() {  // temporary (?) functionality added for developme
             ezread.squintf("%ld us\n", printtimer.elapsed());
         }  // ezread.printf("%s:%.2lf%s=%.2lf%s=%.2lf%%", pressure._short_name.c_str(), pressure.val(), pressure._si_units.c_str(), pressure.native(), pressure._native_units.c_str(), pressure.pc());
     }
+<<<<<<< HEAD
 }
+=======
+}
+class CoolingFan {  // new class to serve as thermostat for vehicle radiator fan, in the inevitable eventuality that our current Engine Guardian system finally breaks
+  private:
+    int _pin = -1;  // uses the pin and transistor circuit existing onboard originally intended for the vehicle fuel pump
+  public:
+    int dummyprintcount = 0;
+    CoolingFan(int pin) : _pin(pin) {}
+    void setup() {
+        ezread.squintf(ezread.highlightcolor, "Cooling fan: init vehicle engine thermostat\n");
+    }
+    void update() {
+        // read engine temp
+        // turn on cooling fan as needed
+    }
+};
+static CoolingFan fan(fan_tp_cs_pin);  // uses the pin and transistor circuit existing onboard originally intended for the vehicle fuel pump
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f

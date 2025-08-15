@@ -2,9 +2,9 @@
 #include <Arduino.h>
 
 #define disp_apppanel_x 150
-#define disp_apppanel_y 48
+#define disp_apppanel_y 43  // was 48
 #define disp_apppanel_w (disp_width_pix - disp_apppanel_x)  // 156
-#define disp_apppanel_h (disp_height_pix - disp_apppanel_y)  // 192
+#define disp_apppanel_h (disp_height_pix - disp_apppanel_y)  // 197  // was 192
 #define disp_simbuttons_x 164
 #define disp_simbuttons_y 48
 #define disp_simbuttons_w (disp_width_pix - disp_simbuttons_x)  // 156
@@ -12,10 +12,10 @@
 #define disp_font_height 8
 #define disp_font_width 6
 int simgriddir[4][3] = {
-    { JOY_PLUS,  JOY_PLUS,  JOY_PLUS,  },
-    { JOY_MINUS, JOY_MINUS, JOY_MINUS, },
-    { JOY_PLUS,  JOY_UP,    JOY_RT,    },
-    { JOY_MINUS, JOY_DN,    JOY_LT,    },
+    { HrcPlus,  HrcPlus,  HrcPlus,  },
+    { HrcMinus, HrcMinus, HrcMinus, },
+    { HrcPlus,  HrcUp,    HrcRt,    },
+    { HrcMinus, HrcDn,    HrcLt,    },
 };
 std::string simgrid[4][3] = {
     { "psi", "rpm", "mph" },
@@ -23,11 +23,9 @@ std::string simgrid[4][3] = {
     { "pos", "joy", "joy" },
     { "pos", "joy", "joy" },
 };
-
 volatile bool _is_running;
 static constexpr int SHIFTSIZE = 8;
 volatile bool flip = 0;
-volatile int refresh_limit = 1111; // 11111; // 16666; // = 60 Hz,   11111 = 90 Hz
 volatile int screen_refresh_time;
 LGFX lcd;
 static constexpr int num_bufs = 2;
@@ -40,15 +38,15 @@ class CollisionsSaver {
     viewport* vp;
     ball_info_t* balls;
     ball_info_t* a;
-    static constexpr bool touchball_invisible = true;
+    static constexpr bool touchball_invisible = false;
     static constexpr int touchball_r = 15;
     static constexpr int BALL_MAX = 35;  // 256
     LGFX_Sprite* sprite;
     ball_info_t _balls[2][BALL_MAX], touchball = { 100, 100, 0, 0, touchball_r << SHIFTSIZE, 10, GRN };
     int _ball_count = 0, _myfps = 0, ball_thismax, ball_count = 0, myfps = 0, frame_count = 0;
     int _width, _height, touchx, touchy, lastx, lasty, sec, psec, ball_create_rate = 3200, _loop_count = 0;
-    float ball_radius_base = 4.5 / 235.0;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
-    float ball_radius_modifier = 2.6 / 235.0;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
+    float ball_radius_base = 4.5f / 235.0f;  // 7 pixels radius / 125x100 sprite = about 5 pix per 235 sides sum
+    float ball_radius_modifier = 2.6f / 235.0f;  // 4 pixels radius / 125x100 sprite = about 3 pix per...
     uint8_t ball_redoubler_rate = 0x18;  // originally 0x07
     int8_t sqrme, slices = 8, ball_gravity_x = 0, ball_gravity_y = 16;  // ball_gravity = 16;  // originally 0 with suggestion of 4
     CollisionsSaver() {}
@@ -181,13 +179,17 @@ class CollisionsSaver {
         return new_round;
     }
   public:
+<<<<<<< HEAD
     void touch(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
         // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
+=======
+    void touch(LGFX_Sprite* spr, int x, int y) {  // you can create a new phantom ball and bash around the other balls w/ it
+        touchnow = true;
+        touchx = map(x, vp->x, vp->x + vp->w, 0, vp->w);
+        touchy = map(y, vp->y, vp->y + vp->h, 0, vp->h);
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
         lastx = touchball.x;
         lasty = touchball.y;
-        touchx = x;
-        touchy = y;
-        touchnow = true;
         touchball.x = constrain(touchx, touchball_r, vp->w - touchball_r) << SHIFTSIZE;
         touchball.y = constrain(touchy, touchball_r, vp->h - touchball_r) << SHIFTSIZE;
         touchball.dx = (touchball.x - lastx) / 2;
@@ -269,11 +271,20 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
     }
     void touchwrite(LGFX_Sprite* spr, int x, int y) {  // you can draw colorful lines on the screensaver
         // pencolor = (cycle == 1) ? rando_color() : hsv_to_rgb<uint8_t>(penhue, (uint8_t)pensat, 200 + rn(56));
+<<<<<<< HEAD
         spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
     }
     void touchadjust(int x, int y) {  // you can draw colorful lines on the screensaver
         season = map(y, 0, disp_height_pix, 0, 3);
         precess = map(x, 0, disp_width_pix, 0, 9);
+=======
+        spr->fillCircle(x, y, 20 * scaler, pencolor);
+        // spr->fillCircle(x + vp->x, y + vp->y, 20 * scaler, pencolor);
+    }
+    void touchadjust(int x, int y) {  // you can draw colorful lines on the screensaver
+        season = map(y, vp->y, vp->y + vp->h, 0, 3);
+        precess = map(x, vp->x, vp->x + vp->w, 0, 9);
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
     }
     void pot_timing() {
         if (!pot_controls_animation_timeout) return;
@@ -328,7 +339,7 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         static Timer pentimer{110000};
         if (cycle != 2) {
             if (pentimer.expireset()) {
-                if (season == 1 && season == 3) {
+                if (season == 1 || season == 3) {
                     pensat += (float)pensatdir * 1.5;
                     if (pensat > 255.0) {
                         pensat = 255;
@@ -372,10 +383,10 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
             wcball = hsv_to_rgb<uint8_t>(hue, 127 + (spothue >> (season + 5)), 200 + rn(56));
             wctip = wclast;
         }
-        if (plast[VERT] != point[VERT]) im = (float)(plast[HORZ] - point[HORZ]) / (float)(plast[VERT] - point[VERT]);
-        sprite->fillCircle(plast[HORZ] + vp->x, plast[VERT] + vp->y, 3, wcball);
+        if (plast[Vert] != point[Vert]) im = (float)(plast[Horz] - point[Horz]) / (float)(plast[Vert] - point[Vert]);
+        sprite->fillCircle(plast[Horz] + vp->x, plast[Vert] + vp->y, 3, wcball);
         for (int h=-4; h<=4; h++)
-            sprite->drawGradientLine(point[HORZ] + vp->x, point[VERT] + vp->y, plast[HORZ] + vp->x + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[VERT] + vp->y + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wctip, wcball);
+            sprite->drawGradientLine(point[Horz] + vp->x, point[Vert] + vp->y, plast[Horz] + vp->x + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[Vert] + vp->y + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wctip, wcball);
         wclast = wcball;
     }
     void run_ellipses() {
@@ -387,7 +398,7 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         brt = 120 + rn(136);
         for (int i = 0; i < 6 + rn(20); i++) {
             c = hsv_to_rgb<uint8_t>(hue + mult * i, sat, brt);
-            sprite->drawEllipse(point[HORZ] + vp->x, point[VERT] + vp->y, scaler * d[0] - i, scaler * d[1] + i, c);
+            sprite->drawEllipse(point[Horz] + vp->x, point[Vert] + vp->y, scaler * d[0] - i, scaler * d[1] + i, c);
         }
     }
     void run_rings() {
@@ -423,12 +434,12 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         else if (!(precess % 2)) c2 = hsv_to_rgb<uint8_t>(hue, sat, std::abs(brt-10));
         else c2 = BLK;  // Serial.printf("%3.0f%3.0f%3.0f (%3.0f%3.0f%3.0f) (%3.0f%3.0f%3.0f)\n", (float)(hue/655.35), (float)(sat/2.56), (float)(brt/2.56), 100*(float)((c >> 11) & 0x1f)/(float)0x1f, 100*(float)((c >> 5) & 0x3f)/(float)0x3f, 100*(float)(c & 0x1f)/(float)0x1f, 100*(float)((c2 >> 11) & 0x1f)/(float)0x1f, 100*(float)((c2 >> 5) & 0x3f)/(float)0x3f, 100*(float)(c2 & 0x1f)/(float)0x1f);
         for (int xo = -1; xo <= 1; xo += 2) {
-            sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler, c);
-            sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y + xo, d * scaler, c);
-            sprite->drawCircle(point[HORZ] + vp->x + xo, point[VERT] + vp->y, d * scaler, c);
+            sprite->drawCircle(point[Horz] + vp->x, point[Vert] + vp->y, d * scaler, c);
+            sprite->drawCircle(point[Horz] + vp->x, point[Vert] + vp->y + xo, d * scaler, c);
+            sprite->drawCircle(point[Horz] + vp->x + xo, point[Vert] + vp->y, d * scaler, c);
         }
         for (int edge = -1; edge <= 1; edge += 2)
-            sprite->drawCircle(point[HORZ] + vp->x, point[VERT] + vp->y, d * scaler + edge, c2);
+            sprite->drawCircle(point[Horz] + vp->x, point[Vert] + vp->y, d * scaler + edge, c2);
     }
     void run_dots() {
         int total_punches = 12, p[2], stars = 0, r, myshape = rn(season + precess);
@@ -489,32 +500,32 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         boxminsize = 2 * boxrad + 5;
         boxsize[longer] = boxminsize + rn(vp->w - boxminsize);
         boxsize[!longer] = boxminsize + rn(boxsize[longer] >> 2);  // cheesy attempt to work around crazy-values bug
-        point[HORZ] = rn(vp->w) - (boxsize[HORZ] >> 1);
-        point[VERT] = rn(vp->h) - (boxsize[VERT] >> 1);
-        for (int axis=HORZ; axis<=VERT; axis++) {
+        point[Horz] = rn(vp->w) - (boxsize[Horz] >> 1);
+        point[Vert] = rn(vp->h) - (boxsize[Vert] >> 1);
+        for (int axis=Horz; axis<=Vert; axis++) {
             if (point[axis] < 0) {
                 boxsize[axis] += point[axis];
                 point[axis] = -boxrad;
             }
         }
-        if (point[HORZ] + boxsize[HORZ] > vp->w) boxsize[HORZ] = (vp->w + boxrad - point[HORZ]);
-        if (point[VERT] + boxsize[VERT] > vp->h) boxsize[VERT] = (vp->h + boxrad - point[VERT]);
+        if (point[Horz] + boxsize[Horz] > vp->w) boxsize[Horz] = (vp->w + boxrad - point[Horz]);
+        if (point[Vert] + boxsize[Vert] > vp->h) boxsize[Vert] = (vp->h + boxrad - point[Vert]);
         int shells = 1 + (rn(5) != 0) ? 1 + rn(4) : 0;
-        int steps[2] = { boxsize[HORZ] / (shells + 1), boxsize[VERT] / (shells + 1) };
+        int steps[2] = { boxsize[Horz] / (shells + 1), boxsize[Vert] / (shells + 1) };
         // this crashes it
         // if (precess > 5 && !rn(2)) shells = boxsize[!longer] >> 1;
         // else shells = (int)(rn(5) > 0);
-        // int steps[2] = { boxsize[HORZ] / shells, boxsize[VERT] / shells };
+        // int steps[2] = { boxsize[Horz] / shells, boxsize[Vert] / shells };
         for (int mat=0; mat<shells; mat++) {
             if (season == 0) boxcolor = rando_color();
             else if (season == 1) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)rn(65535), rn(256), rn(256));
             else if (season == 2) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(2) * 32767 + rn(512)) % 65535), 100 + rn(106), 255);
             else if (season == 3) boxcolor = hsv_to_rgb<uint8_t>((uint16_t)((spothue + rn(1024)) % 65535), 150 + rn(56), 255);
-            for (int axis=HORZ; axis<=VERT; axis++) {
+            for (int axis=Horz; axis<=Vert; axis++) {
                 boxsize[axis] -= steps[axis];
                 point[axis] += (steps[axis] >> 1);
             }
-            sprite->fillSmoothRoundRect(point[HORZ] + vp->x, point[VERT] + vp->y, boxsize[HORZ], boxsize[VERT], boxrad, boxcolor);  // Change colors as needed
+            sprite->fillSmoothRoundRect(point[Horz] + vp->x, point[Vert] + vp->y, boxsize[Horz], boxsize[Vert], boxrad, boxcolor);  // Change colors as needed
         }
     }
     void run_ascii() {
@@ -524,27 +535,27 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         sprite->setTextDatum(textdatum_t::middle_center);
         sprite->setFont(&fonts::Font4);
         for (int star = 0; star < 4; star++) {
-            point[HORZ] = rn(vp->w);
-            point[VERT] = rn(vp->h);
+            point[Horz] = rn(vp->w);
+            point[Vert] = rn(vp->h);
             if (precess > 4) {
-                hue = (vp->h * (int)(season > 1)) - point[VERT] * 65535 / vp->h;
-                sat = point[HORZ] * -255 / vp->w;
+                hue = (vp->h * (int)(season > 1)) - point[Vert] * 65535 / vp->h;
+                sat = point[Horz] * -255 / vp->w;
             }
             else {
-                hue = (vp->w * (int)(season == 0 || season == 2)) - point[HORZ] * 65535 / vp->w;
-                sat = point[VERT] * -255 / vp->h;
+                hue = (vp->w * (int)(season == 0 || season == 2)) - point[Horz] * 65535 / vp->w;
+                sat = point[Vert] * -255 / vp->h;
             }
             sat = map(sat, 0, 255, 20, 255);
-            for (int axis=HORZ; axis <= VERT; axis++) offset[axis] += (float)rn(100) / 100;
-            final[HORZ] = (point[HORZ] + ((season < 3) ? (int)(offset[HORZ]) : 0)) % vp->w + vp->x;
-            final[VERT] = (point[VERT] + ((season > 0) ? (int)(offset[VERT]) : 0)) % vp->h + vp->y;
+            for (int axis=Horz; axis <= Vert; axis++) offset[axis] += (float)rn(100) / 100;
+            final[Horz] = (point[Horz] + ((season < 3) ? (int)(offset[Horz]) : 0)) % vp->w + vp->x;
+            final[Vert] = (point[Vert] + ((season > 0) ? (int)(offset[Vert]) : 0)) % vp->h + vp->y;
             std::string letter = std::string(1, static_cast<char>(0x21 + rn(0x5d)));
             uint8_t c = hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue < (32767 / (season+1))) + rn(56));
             sprite->setTextColor(BLK);  // allows subliminal messaging
-            sprite->drawString(letter.c_str(), final[HORZ] + 1, final[VERT] + 1);  // these will not work at extreme sides
-            sprite->drawString(letter.c_str(), final[HORZ] - 1, final[VERT] - 1);  // these will not work at extreme sides
+            sprite->drawString(letter.c_str(), final[Horz] + 1, final[Vert] + 1);  // these will not work at extreme sides
+            sprite->drawString(letter.c_str(), final[Horz] - 1, final[Vert] - 1);  // these will not work at extreme sides
             sprite->setTextColor(hsv_to_rgb<uint8_t>(hue, sat, 150 + 50 * (spothue > 32767) + rn(56)));
-            sprite->drawString(letter.c_str(), final[HORZ], final[VERT]);
+            sprite->drawString(letter.c_str(), final[Horz], final[Vert]);
         }
     }
     void run_worm() {
@@ -570,9 +581,9 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         }
         else if (wormstripe) brt = 0;
         c = hsv_to_rgb<uint8_t>(penhue, sat, brt);
-        int wormposmax[2] = { (vp->w - wormd[HORZ]) / 2, (vp->h - wormd[VERT]) / 2 };
+        int wormposmax[2] = { (vp->w - wormd[Horz]) / 2, (vp->h - wormd[Vert]) / 2 };
         if (movetimer.expireset()) {
-            for (int axis = HORZ; axis <= VERT; axis++) {
+            for (int axis = Horz; axis <= Vert; axis++) {
                 wormpos[axis] += (wormvel[axis] >> 6) * wormsign[axis];
                 if ((wormpos[axis] * wormsign[axis]) >> shifter >= wormposmax[axis] + 2) {
                     wormpos[axis] = (wormsign[axis] * wormposmax[axis]) << shifter;
@@ -582,28 +593,30 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
                 }
             }
         }
-        for (int axis = HORZ; axis <= VERT; axis++)
+        for (int axis = Horz; axis <= Vert; axis++)
             if (rn(3) == 0) wormd[axis] = constrain(wormd[axis] + rn(3) - 1, wormdmin, wormdmax);
         if (wormtimer.expireset())
-            for (int axis = HORZ; axis <= VERT; axis++)
+            for (int axis = Horz; axis <= Vert; axis++)
                 wormvel[axis] = constrain(wormvel[axis] + rn(255) - 127, 0, wormvelmax);
         for (int xo1 = -1; xo1 <= 1; xo1 += 2) {
-            point[HORZ] = (vp->w / 2) + (wormpos[HORZ] >> shifter) + vp->x + xo1;
-            point[VERT] = (vp->h / 2) + (wormpos[VERT] >> shifter) + vp->y + xo1;
+            point[Horz] = (vp->w / 2) + (wormpos[Horz] >> shifter) + vp->x + xo1;
+            point[Vert] = (vp->h / 2) + (wormpos[Vert] >> shifter) + vp->y + xo1;
             for (int xo2 = -1; xo2 <= 1; xo2 += 2) {
-                sprite->drawEllipse(point[HORZ], point[VERT], wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
-                sprite->drawEllipse(point[HORZ] + xo2, point[VERT] + xo2, wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
-                sprite->drawEllipse(point[HORZ] + xo2, point[VERT], wormd[HORZ] * scaler, wormd[VERT] * scaler, c);
+                sprite->drawEllipse(point[Horz], point[Vert], wormd[Horz] * scaler, wormd[Vert] * scaler, c);
+                sprite->drawEllipse(point[Horz] + xo2, point[Vert] + xo2, wormd[Horz] * scaler, wormd[Vert] * scaler, c);
+                sprite->drawEllipse(point[Horz] + xo2, point[Vert], wormd[Horz] * scaler, wormd[Vert] * scaler, c);
             }
         }
     }
     void the_eraser() {
+        static bool seizure = false;
+        static Timer seizuretimer{10000000};
         int eraser_velo_min = 3, eraser_velo_max = 7;
         static int erpos[2] = { 0, 0 }, eraser_velo_sign[2] = { 1, 1 }, eraser_rad = 14;
         static int eraser_velo[2] = { rn(eraser_velo_max), rn(eraser_velo_max) };
-        if ((cycle != 0) && has_eraser) {
+        if ((cycle != 0) && has_eraser && !seizure) {
             int erpos_max[2] = {(vp->w - eraser_rad) / 2, (vp->h - eraser_rad) / 2};
-            for (int axis = HORZ; axis <= VERT; axis++) {
+            for (int axis = Horz; axis <= Vert; axis++) {
                 erpos[axis] += eraser_velo[axis] * eraser_velo_sign[axis];
                 if (erpos[axis] * eraser_velo_sign[axis] >= erpos_max[axis] + 5) {
                     erpos[axis] = eraser_velo_sign[axis] * erpos_max[axis];
@@ -613,7 +626,11 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
                     eraser_rad = constrain((int)(eraser_rad + rn(5) - 2), 22, 40);
                 }
             }
-            sprite->fillCircle((vp->w / 2) + erpos[HORZ] + vp->x, (vp->h / 2) + erpos[VERT] + vp->y, eraser_rad * scaler, BLK);
+            sprite->fillCircle((vp->w / 2) + erpos[Horz] + vp->x, (vp->h / 2) + erpos[Vert] + vp->y, eraser_rad * scaler, BLK);
+        }
+        if (seizuretimer.expired()) {
+            seizure = !seizure;
+            seizuretimer.set(200000 + 300000 * rn(seizure ? 4 : 10));
         }
         if (lucktimer.expired())  {
             lotto = !lotto;
@@ -628,8 +645,8 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
     }
     void drawsprite() {
         static int rotate = -1;
-        point[HORZ] = rn(vp->w);
-        point[VERT] = rn(vp->h);
+        point[Horz] = rn(vp->w);
+        point[Vert] = rn(vp->h);
         if (shape == Rotate) ++rotate %= NumSaverShapes;
         else rotate = shape;
         update_pen();
@@ -641,7 +658,7 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         else if (rotate == Ascii) run_ascii();
         else if (rotate == Worm) run_worm();
         the_eraser();
-        for (int axis = HORZ; axis <= VERT; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
+        for (int axis = Horz; axis <= Vert; axis++) plast[axis] = point[axis];  // erlast[axis] = erpos[axis];
     }
 };
 class EZReadDrawer {  // never has any terminal application been easier on the eyes
@@ -649,22 +666,12 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
     bool dirty = true;
     std::string drawnow; // Ring buffer array
   private:
-    int _main_x, pix_margin = 2, font_height = 6, linelength, scrollbar_width = 3;
+    static const int row_padding_pix = 1;
+    int _main_x, pix_margin = 2, linelength, scrollbar_width = 3, font_height = 6 + row_padding_pix;  // add one extra line between lines for readability
     LGFX* mylcd;
     LGFX_Sprite* nowspr_ptr;
     viewport* vp;
     EZReadConsole* ez;
-    int chars_to_fit_pix(LGFX_Sprite* spr, std::string& str, int pix) {
-        int totalwidth = 0, charcount = 0;
-        for (size_t i = 0; i < str.length(); ++i) {
-            std::string ch(1, str[i]); // Create a string with the single character
-            int charwidth = spr->textWidth(ch.c_str()); // Measure the width of the next character
-            if (totalwidth + charwidth > pix) break; // Stop if adding the next character exceeds the maximum width
-            totalwidth += charwidth;
-            charcount++;
-        }
-        return charcount;
-    }
     void draw_scrollbar(LGFX_Sprite* spr, uint8_t color) {  // this runs but is not finished and doesn't do anything
         int cent = (int)((float)vp->h * 0.125) - 6;
         for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
@@ -682,44 +689,32 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
         // for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
     }
     void draw(LGFX_Sprite* spr) {
-        draw_scrollbar(spr, LGRY);
-        int botline = (ez->current_index - ez->offset - (int)ez->textlines[ez->current_index].empty() + ez->bufferSize) % ez->bufferSize;
+        draw_scrollbar(spr, LGRY);  // currently draws just a very skinny blank column a few pixels wide at the left side 
         spr->fillSprite(BLK);
         spr->setTextWrap(false);
-        // int strsize = std::min((int)linelength, (int)textlines[nowindex].length());
-        spr->setFont(&fonts::Font0);  // spr->setFont(&fonts::Org_01);
-        spr->setTextDatum(textdatum_t::top_left);
-        spr->setTextColor(ez->linecolors[botline]);
-        std::string nowline = ez->textlines[botline];
-        int chopit = chars_to_fit_pix(spr, nowline, vp->w);
-        bool toobig = (chopit < nowline.length());
-        if (toobig) {
-            spr->setCursor(_main_x, vp->y + vp->h - 18);
-            nowline = ez->textlines[botline].substr(0, chopit);
-            spr->print(nowline.c_str());
-            nowline = ez->textlines[botline].substr(chopit);
-        }
-        spr->setCursor(_main_x, vp->y + vp->h - 9);
-        spr->print(nowline.c_str());
-        int bottom_extent = vp->y + vp->h - 9 * (1 + (int)toobig);
-        // spr->drawFastHLine(vp->x + 3, bottom_extent, vp->w - 6, LGRY);  // separator for the newest line at the bottom will be printed larger and span 2 lines
         spr->setFont(&fonts::TomThumb);
-        for (int line=1; line<ez->num_lines; line++) {
-            int backindex = (botline + ez->bufferSize - line) % ez->bufferSize;
-            spr->setCursor(_main_x, bottom_extent - line * (font_height + pix_margin));
-            // if (nowindex >= highlighted_lines) spr->setTextColor(MYEL);
-            int strsize = std::min((int)linelength, (int)ez->textlines[backindex].length());
-            spr->setTextColor(ez->linecolors[backindex]);
-            spr->print(ez->textlines[backindex].c_str());
+        spr->setTextDatum(textdatum_t::top_left);
+        int max_lines = 1 + (vp->h + 4 + row_padding_pix) / font_height;  // this math is probably wrong in general case, i found workable constants iteratively. must debug if window size changes
+        if (max_lines <= 0) return;
+        int max_offset = ez->has_wrapped ? ez->bufferSize - 1 : ez->current_index;  // clamp offset to available history
+        int safe_offset = constrain(ez->offset, 0, max_offset);
+        int newest_line = (ez->current_index - safe_offset + ez->bufferSize) % ez->bufferSize; // start from the newest visible line (working backward)
+        for (int i = max_lines - 1; i >= 0; --i) {
+            int idx = (newest_line - (max_lines - 1 - i) + ez->bufferSize) % ez->bufferSize;
+            std::string& nowline = ez->textlines[idx];
+            if (nowline.empty()) continue;
+            int y = vp->y + i * font_height;
+            spr->setTextColor(ez->linecolors[idx]);
+            spr->setCursor(_main_x, y);
+            spr->print(nowline.c_str());
         }
-        dirty = false;
     }
   public:
     void setup(viewport* _vp) {
-        ez->setup();
+        // ez->setup();
         vp = _vp;
         _main_x = _vp->x + scrollbar_width + pix_margin;
-        linelength = (int)(vp->w / disp_font_width);
+        linelength = (int)(vp->w / disp_font_width);  // needs update to handle tomthumb font ??  seems to work ok tho
     }
     void update(LGFX_Sprite* spr, bool force=false) {
         if (ez->offsettimer.expired()) {
@@ -742,24 +737,20 @@ class PanelAppManager {
     Simulator* sim;
     Touchscreen* touch;
     EZReadDrawer* ezdraw;
-    int nowsaver = Eraser, still_running = 0, touchp[2], dispfps, corner[2], oldfps = 0, ui_context_last = MuleChassisUI;
+    int nowsaver = Eraser, still_running = 0, touchp[2], dispfps, corner[2], oldfps = 0, ui_app_last = MuleChassisUI;
     Timer fps_timer, fps_timer2{250000};
     float myfps = 0.0;
     int64_t fps_mark;
     bool simulating_last = false, mule_drawn = false, dirty = true;
     void draw_simbutton(LGFX_Sprite* spr, int cntr_x, int cntr_y, int dir, uint8_t color) {
-        if (dir == JOY_PLUS)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32x32x8, BLK);
-        else if (dir == JOY_MINUS) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32x32x8, BLK);
-        else if (dir == JOY_UP) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_up_32x32x8, BLK);
-        else if (dir == JOY_DN) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, BLK);
-        else if (dir == JOY_LT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, BLK);
-        else if (dir == JOY_RT) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, BLK);
+        if (dir == HrcPlus)  spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_plus_32x32x8, BLK);
+        else if (dir == HrcMinus) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_minus_32x32x8, BLK);
+        else if (dir == HrcUp) spr->pushImage(cntr_x-16, cntr_y-16, 32, 32, blue_up_32x32x8, BLK);
+        else if (dir == HrcDn) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 180, 1, 1, 32, 32, blue_up_32x32x8, BLK);
+        else if (dir == HrcLt) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 270, 1, 1, 32, 32, blue_up_32x32x8, BLK);
+        else if (dir == HrcRt) spr->pushImageRotateZoom(cntr_x, cntr_y, 16, 16, 90, 1, 1, 32, 32, blue_up_32x32x8, BLK);
     }
-    void draw_simbuttons(LGFX_Sprite* spr, bool create) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
-        if (!create) {
-            spr->fillSprite(BLK);
-            return;
-        }
+    void draw_simbuttons(LGFX_Sprite* spr) {  // draw grid of buttons to simulate sensors. If create is true it draws buttons, if false it erases them
         spr->setTextDatum(textdatum_t::middle_center);
         bool do_draw;
         for (int row = 0; row < arraysize(simgrid); row++) {
@@ -836,9 +827,16 @@ class PanelAppManager {
         if (swipe == DirLeft) changeit--;  // swipe left for previous animation
         else if (swipe == DirRight) changeit++;  // swipe right for next animation
 
+<<<<<<< HEAD
         // temporary alternate touch method since swiping is broken
         if (touch->doubletap()) changeit++;
 
+=======
+        if (touch->doubletap()) { // temporary alternate touch method since swiping is broken
+            if (touch->touch_pt(Horz) >= (disp_width_pix >> 1)) changeit++; // doubletap on right half to cycle fwd
+            else changeit--;                                                // or on left half to cycle back
+        }
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
         if (bootbutton.shortpress()) changeit++;  // boot button also cycles, always forward
         return changeit;
     }
@@ -857,6 +855,7 @@ class PanelAppManager {
         changeit = constrain(changeit, DirRev, DirFwd);
         if (nowsaver == Collisions) {  // if on ball saver
             change_saver();  // switch to eraser saver
+<<<<<<< HEAD
             eSaver.change_pattern((changeit == DirFwd) ? 0 : eSaver.num_shapes - 1);  // go to first or last pattern
             return;
         }
@@ -869,6 +868,20 @@ class PanelAppManager {
         else eSaver.change_pattern(-3);  // still_running = 0;
     }
     void change_saver() {  // pass non-negative value for a specific pattern, -1 for cycle, -2 for random
+=======
+            eSaver.change_pattern((changeit == DirFwd) ? 0 : eSaver.num_shapes - 1);  // go to first or last erasersaver pattern
+            return;
+        }
+        if (changeit == DirFwd) {  // go forward one animation
+            if (eSaver.shape == eSaver.num_shapes - 1) change_saver();  // going past the last erasersaver pattern changes to ball saver
+            else eSaver.change_pattern(-1);  // erasersaver goes to next pattern
+            return;
+        }  // else go back one animation (below)
+        if (eSaver.shape == 0) change_saver();  // requesting to go below 1st erasersaver pattern switches to ball saver
+        else eSaver.change_pattern(-3);  // erasersaver goes back one pattern
+    }
+    void change_saver() {  // switch back and forth between ball saver / eraser saver
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
         still_running = 1;
@@ -893,17 +906,24 @@ class PanelAppManager {
         anim_reset_request = false;
     }
     float update(LGFX_Sprite* spr, bool argdirty=false) {
+<<<<<<< HEAD
         if ((ui_context_last != ScreensaverUI) && (ui_context == ScreensaverUI)) cycle_anim(DirFwd);  // next saver.  ptrsaver->reset();
         if (ui_context_last != ui_context) dirty = true;
+=======
+        if ((ui_app_last != ScreensaverUI) && (ui_app == ScreensaverUI)) cycle_anim(DirFwd);  // next saver.  ptrsaver->reset();
+        if (ui_app_last != ui_app) dirty = true;
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
         if (argdirty) dirty = true;
-        ui_context_last = ui_context;
+        ui_app_last = ui_app;
         if (anim_reset_request) reset();
         spr->setClipRect(vp.x, vp.y, vp.w, vp.h);
-        if (dirty) {
+        if (!sim->enabled() && simulating_last) dirty = true;  // if we just left the simulator erase everything to get rid of the simulator buttons
+        if (dirty) {  // clear the screen
             spr->fillSprite(BLK);
             mule_drawn = false;
             ezdraw->dirty = true;
         }
+<<<<<<< HEAD
         if (ui_context == EZReadUI) ezdraw->update(spr);
         else if (ui_context == MuleChassisUI) draw_mule(spr);
         else if (ui_context == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
@@ -916,18 +936,29 @@ class PanelAppManager {
             else if (nowsaver == Collisions) {
                 still_running = cSaver.update(spr, &vp);  // if ((bool)still_running) 
                 if (touch->held()) cSaver.touch(spr, touch->touch_pt(HORZ), touch->touch_pt(VERT));
+=======
+        bool touch_valid = (touch->touched() && (touch->landed_pt(Horz) >= vp.x) && (touch->landed_pt(Vert) >= vp.y) && 
+                           (touch->landed_pt(Horz) < vp.x + vp.w) && (touch->landed_pt(Vert) < vp.y + vp.h));
+        if (ui_app == EZReadUI) ezdraw->update(spr);
+        else if (ui_app == MuleChassisUI) draw_mule(spr);
+        else if (ui_app == ScreensaverUI) {  // With timer == 16666 drawing dots, avg=8k, peak=17k.  balls, avg 2.7k, peak 9k after 20sec
+            // mule_drawn = false;  // With max refresh drawing dots, avg=14k, peak=28k.  balls, avg 6k, peak 8k after 20sec
+            if (nowsaver == Eraser) {
+                still_running = eSaver.update(spr, &vp);
+                if (touch_valid && touch->tap()) eSaver.touchadjust(touch->touch_pt(Horz), touch->touch_pt(Vert));
+                else if (touch_valid && touch->held()) eSaver.touchwrite(spr, touch->touch_pt(Horz), touch->touch_pt(Vert)); 
+            }
+            else if (nowsaver == Collisions) {
+                still_running = cSaver.update(spr, &vp);  // if ((bool)still_running) 
+                if (touch_valid && touch->held()) cSaver.touch(spr, touch->touch_pt(Horz), touch->touch_pt(Vert));
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
             }
             if (!still_running) change_saver();
             else cycle_anim(check_cycle_req());
             display_fps(spr);
         }
-        spr->clearClipRect();
-        if (sim->enabled()) draw_simbuttons(spr, sim->enabled());  // if we just entered simulator draw the simulator buttons, or if we just left erase them
-        else if (simulating_last) {
-            spr->fillRect(vp.x, vp.y, vp.w, vp.h, BLK);
-            dirty = true;
-            mule_drawn = false;
-        }
+        spr->clearClipRect();        
+        if (sim->enabled()) draw_simbuttons(spr);  // if simulating draw the buttons over the bg content
         simulating_last = sim->enabled();
         dirty = false;
         calc_fps();

@@ -1,4 +1,10 @@
 #pragma once
+// platformio includes necessary for web function:
+//   ottowinter/ESPAsyncWebServer-esphome ;@^3.1.0
+//   links2004/WebSockets                 ;@^2.4.1
+//   ayushsharma82/ElegantOTA             ;@^3.1.0
+//   bblanchon/ArduinoJson                ;@^6.21.5
+//   esphome/AsyncTCP-esphome             ;@^2.1.1
 
 // set up our flash filesystem
 #define FORMAT_LITTLEFS_IF_FAILED true
@@ -234,13 +240,13 @@ class WebManager {
         return String("rgb(") + String(random(256)) + "," + String(random(256)) + "," + String(random(256)) + ")";  // Generate a random RGB color
     }
     void update() {
-        if (runmode == LOWPOWER) return;
+        if (runmode == LowPower) return;
         if (!wifi_web_supported) web_disabled = true;
         if (web_disabled) return;
         if (!web_started) setup();
-        wifi.enable(syspower);
-        if (syspower) server.update();
-        // if (<activity in web page is detected>) kick_inactivity_timer(HUWeb);  // evidence of user activity
+        wifi.enable(syspower.val());
+        if (syspower.val()) server.update();
+        // if (<activity in web page is detected>) kick_inactivity_timer(HuWeb);  // evidence of user activity
     }
 };
 #endif  // end of if wifi/web is enabled

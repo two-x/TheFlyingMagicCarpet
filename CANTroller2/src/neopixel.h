@@ -27,15 +27,24 @@ class NeopixelStrip {
   public:
     bool sleepmode = false;
     int pcbaglow = GlowSimple;
+<<<<<<< HEAD
     static const int numhearts = 2;  // number of heartbeat leds in the strip before the idiotlights
     static const int idiotcount = striplength - numhearts;  // number of idiotlights after the heartbeat leds
+=======
+    static const int heartcount = 2;  // number of heartbeat leds in the strip before the idiotlights
+    static const int idiotcount = striplength - heartcount - 1;  // number of idiotlights after the heartbeat leds
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
     NeopixelStrip(int argpin) : pin(argpin) {}
     void setup();  // (bool viewcontext=NITE);
     void setbright(float bright_pc);
     void setsat(float sat_pc);
     void set_heartcolor(uint8_t newcolor);
     void heartcolor_override(uint8_t color);
+<<<<<<< HEAD
     void setBoolState(int _idiot, bool state);
+=======
+    void setlogic(int _idiot, bool state);
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
     void setflash(int _idiot, int count, int pulseh=1, int pulsel=1, int onbrit=-1, uint32_t color=0);
     void update();
     void flashdemo_ena(bool ena);
@@ -48,6 +57,7 @@ class NeopixelStrip {
     static const uint fevresolution = 128;
     static const uint fevpages = 4;  // fevresolution / 32;  <- but if I use that math instead, seg fault
     bool heartcolor_change = true;
+<<<<<<< HEAD
     uint8_t lobright = 5, hibright = 100, heartbeat_lo_brightness = 2, heartcolor16 = 0x00, csat[idiotcount];  // blackened heart
     uint8_t heartbright[2] = { 22, 85 }, heartlobright[2] = { 2, 18 }, heartbeat_brightness[2], heartbeat_brightness_last[2]; // brightness during fadeouts
     uint32_t fcbase[idiotcount];
@@ -56,7 +66,19 @@ class NeopixelStrip {
     int pin = -1, fevcurrpage = 0; int fevfilled = 0; int nowtime_us, nowepoch, fquantum_us = 50000;  // time resolution of flashes
     int fevents[idiotcount][fevpages], fset[idiotcount][fnumset];
     neorgb_t neostrip[striplength], cidiot[idiotcount][cnumcolors], heartbeatColor, heartbeatNow[2];
+=======
+    float lobright_idiot = 0.0f, hibright_idiot = 100.0f;
+    uint8_t csat[idiotcount];  // idiot brightnesses for each logic level lo and hi
+    float hibright_heart[2] = { 100.0f, 100.0f }, lobright_heart[2] = { 25.0f, 25.0f };  // [LED0/LED1] min and max brightness for each heartbeat led
+    uint32_t fcbase[idiotcount];
+    float neobright_last[2];
+    Timer heartbeatTimer{10000}, flashTimer;
+    int pin = -1, fevcurrpage = 0, fevfilled = 0, nowtime_us, nowepoch, fquantum_us = 50000;  // time resolution of flashes
+    int fevents[idiotcount][fevpages], fset[idiotcount][fnumset];
+    neorgb_t neostrip[striplength], cidiot[idiotcount][cnumcolors], heartcolorbase, heartcolornow[2];
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
     uint16_t chue[idiotcount];
+    // private methods
     void recolor_idiots(int argidiot=-1);
     uint32_t recolor(uint32_t index, float bright_pc, float sat_pc);
     neorgb_t recolor(neorgb_t index, float bright_pc, float sat_pc);
@@ -74,8 +96,13 @@ class NeopixelStrip {
     void heartsine_update();
     void knightrider();
 };
+<<<<<<< HEAD
 void NeopixelStrip::setBoolState(int _idiot, bool state) { fset[_idiot][onoff] = state; }
 void NeopixelStrip::setsat(float sat_pc) { neosat = sat_pc; recolor_idiots(-1); }
+=======
+void NeopixelStrip::setlogic(int _idiot, bool state) { fset[_idiot][onoff] = state; }
+void NeopixelStrip::setsat(float sat_pc) { neosat = sat_pc; }
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
 uint32_t NeopixelStrip::idiot_neo_color(int _idiot) { return color_to_888(cidiot[_idiot][cnow]); }
 uint16_t NeopixelStrip::get_hue(neorgb_t rgb) { return static_cast<uint16_t>(((HslColor)rgb).H * 65535); }  // Convert hue from float [0.0, 1.0] to 16-bit integer [0, 65535]
 uint8_t NeopixelStrip::get_sat(neorgb_t rgb) { return static_cast<uint8_t>(((HslColor)rgb).S * 255); } // Convert saturation from float [0.0, 1.0] to 16-bit integer [0, 65535]
@@ -94,15 +121,21 @@ uint32_t NeopixelStrip::recolor(uint32_t orig888, float bright_pc=100.0, float s
     return hsv_to_rgb<uint32_t>(get_hue(orig), newsat, newbrite);
 }
 void NeopixelStrip::recolor_idiots(int _idiot) {  // call w/ -1 to recolor all idiots
+<<<<<<< HEAD
     int start = ((_idiot >= 0) ? _idiot : 0) + numhearts;
     int end = ((_idiot >= 0) ? _idiot + 1 : idiotcount) + numhearts;
+=======
+    int start = ((_idiot >= 0) ? _idiot : 0) + heartcount;
+    int end = ((_idiot >= 0) ? _idiot + 1 : idiotcount) + heartcount;
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
     for (int i = start; i < end; i++) {  // uint8_t sat = std::min((uint8_t)(csat[_idiot] * 256.0 / 100.0), (uint8_t)(neosat * 256.0 / 100.0));
-        cidiot[i][con] = recolor(cidiot[i][cnormal], (float)hibright, neosat);
-        cidiot[i][coff] = recolor(cidiot[i][cnormal], (float)lobright, neosat);
+        cidiot[i][con] = recolor(cidiot[i][cnormal], hibright_idiot, neosat);
+        cidiot[i][coff] = recolor(cidiot[i][cnormal], lobright_idiot, neosat);
         if (fset[i][fcount]) set_fcolor(i);
     }
 }
 void NeopixelStrip::refresh(bool force) {
+<<<<<<< HEAD
     neoobj.SetPixelColor(0, heartbeatNow[0]);
     neoobj.SetPixelColor(1, heartbeatNow[1]);
     neoobj.SetPixelColor(2, heartbeatNow[0]);
@@ -116,31 +149,68 @@ void NeopixelStrip::setup() {    // (bool viewcontext) {
     neoobj.Begin();
     if (!running_on_devboard) setbright(100.0);
     ezread.squintf("refresh.. ");
+=======
+    neoobj.SetPixelColor(0, heartcolornow[0]);
+    neoobj.SetPixelColor(1, heartcolornow[1]);
+    neoobj.SetPixelColor(2, heartcolornow[0]);
+    for (int i=0; i<idiotcount; i++)
+        neoobj.SetPixelColor(i + heartcount + 1, recolor(cidiot[i][cnormal], fset[i][onoff] ? hibright_idiot : lobright_idiot, neosat));
+    neoobj.Show();
+}
+void NeopixelStrip::setup() {
+    ezread.squintf(ezread.highlightcolor, "Neopixels (p%d)..\n", pin);
+    set_pcba_glow(GlowSine);
+    neoobj.Begin();
+    // ezread.squintf("  refreshed\n");
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
     flashTimer.set(fquantum_us * (int)fevresolution);
     refresh();
-    ezread.squintf("\n");
 }
 void NeopixelStrip::setbright(float bright_pc) {  // a way to specify brightness level as a percent
+<<<<<<< HEAD
     static int lomultiplier = 3;
+=======
+    static float lomultiplier = 3.0f;
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
     bool neo_heartbeat_variable_brightness = false;  // If false then brightness control only affect idiotlights
     neobright = bright_pc;
-    hibright = neobright;  // hibright = (uint8_t)((255.0 * neobright) / 100.0);
-    lobright = std::max(3, (hibright / lomultiplier) / lomultiplier);
+
+    // // trying to debug edit acceleration
+    // if (!iszero(neobright)) neobright = (float)((int)(neobright * 10)) / 10.0;
+
+    hibright_idiot = neobright;  // hibright_idiot = (uint8_t)((255.0 * neobright) / 100.0);
+    lobright_idiot = std::max(3.0f, hibright_idiot / lomultiplier);
     if (neo_heartbeat_variable_brightness) {  // note this is broken, it will always make both heartbeat leds be same brightness
+<<<<<<< HEAD
         for (int i=0; i<numhearts; i++) {
             heartbright[0] = hibright;  // (uint8_t)((float)hibright * 0.75);
             heartlobright[0] = lobright;
         }
     }
     recolor_idiots(-1);
+=======
+        for (int i=0; i<heartcount; i++) {
+            hibright_heart[0] = hibright_idiot;  // (uint8_t)((float)hibright * 0.75);
+            lobright_heart[0] = lobright_idiot;
+        }
+    }
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
 }
 void NeopixelStrip::set_heartcolor(uint8_t _newcolor) {
     uint8_t newcolor = _newcolor;
+    static uint16_t heartcolor332 = 0x00;
     if (heartbeat_override_color != 0x00) newcolor = heartbeat_override_color;
+<<<<<<< HEAD
     if (heartcolor16 != newcolor) {
         heartcolor_change = true;
         heartcolor16 = newcolor;
         heartbeatColor = color_to_neo(newcolor);
+=======
+    if (heartcolor332 != newcolor) {
+        heartcolor_change = true;
+        heartcolor332 = newcolor;
+        heartcolorbase = color_to_neo(newcolor);
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
     }
 }
 void NeopixelStrip::set_pcba_glow(int mode) {  // call with -1 argument to set glow mode to flashed value
@@ -148,6 +218,7 @@ void NeopixelStrip::set_pcba_glow(int mode) {  // call with -1 argument to set g
     if (newmode == -1) newmode = watchdog.flash_read("glowmode", GlowSimple);
     if (newmode == -1) newmode = GlowSimple;
     if (newmode == pcbaglow) return;
+<<<<<<< HEAD
     pcbaglow = mode;
     if (mode != -1) watchdog.flash_forcewrite("glowmode", pcbaglow);
     heartbeatNow[0] = heartbeatNow[1] = color_to_neo(BLK);  // set both leds to black to start
@@ -173,19 +244,55 @@ void NeopixelStrip::heartbeat_update() {
     for (int i=0; i<numhearts; i++) {
         if (heartcolor_change || (std::abs(heartbeat_brightness[i] - (int)neobright_last[i]) > 1)) {
             heartbeatNow[i] = recolor(heartbeatColor, (float)heartbeat_brightness[i]);  // heartbeatNow = dimmer(desaturate(heartbeatColor, desat_of_ten), heartbeat_brightness);
+=======
+    pcbaglow = newmode;
+    if (mode != -1) watchdog.flash_forcewrite("glowmode", pcbaglow);
+    heartcolornow[0] = heartcolornow[1] = color_to_neo(BLK);  // set both leds to black to start
+}
+void NeopixelStrip::heartbeat_update() {
+    static int state = 0, brt[2], brt_last[2], ekg[4] = {250000, 240000, 620000, 2000000};
+    static bool highpulse = true;
+    static Timer fadeTimer{38000};
+    if (heartbeatTimer.expired()) {
+        highpulse = !highpulse;
+        ++state %= arraysize(ekg);
+        heartbeatTimer.set(ekg[state]);
+        if (highpulse) for (int i=0; i<heartcount; i++) brt[i] = (int)hibright_heart[i];
+        else fadeTimer.reset();
+    }
+    else if (!highpulse) {
+        for (int i=0; i<heartcount; i++) {
+            brt_last[i] = brt[i];
+            if (fadeTimer.expired()) brt[i] = lobright_heart[i];
+            else brt[i] = (int)(lobright_heart[i] + std::max(0.0f, (hibright_heart[i] - lobright_heart[i]) * (float)(1.0 - ((state == 1) ? 1.5 : 1.0) * fadeTimer.elapsed() / fadeTimer.timeout())));
+            if (brt[i] > brt_last[i]) brt[i] = brt_last[i];
+        }
+    }
+    for (int i=0; i<heartcount; i++) {
+        if (heartcolor_change || (std::abs(brt[i] - (int)neobright_last[i]) > 1)) {
+            heartcolornow[i] = recolor(heartcolorbase, (float)brt[i]);  // heartcolor = dimmer(desaturate(heartcolorbase, desat_of_ten), brt);
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
             heartcolor_change = false;
-            neobright_last[i] = (float)heartbeat_brightness[i];
+            neobright_last[i] = (float)brt[i];
         }
     }
 }
 void NeopixelStrip::heartxfade_update() {}
 void NeopixelStrip::heartsine_update() {
+<<<<<<< HEAD
     static const float min_brightness = 50.0f;  // in percent
     float phase = M_PI * 2.0f * (float)heartbeatTimer.elapsed() / 3250000.0f;  // denominator here is the period of the pulse in us, adjustable
     heartbeatNow[0] = recolor(heartbeatColor, min_brightness + (100.0f - min_brightness) * (1.0f + (float)std::sin(phase)) / 2.0f);
     heartbeatNow[1] = recolor(heartbeatColor, min_brightness + (100.0f - min_brightness) * (1.0f + (float)std::cos(phase)) / 2.0f);
 }
 
+=======
+    // static const float min_brightness = 50.0f;  // in percent
+    float phase = M_PI * 2.0f * (float)heartbeatTimer.elapsed() / 2850000.0f;  // denominator here is the period of the pulse in us, adjustable
+    heartcolornow[0] = recolor(heartcolorbase, lobright_heart[0] + (hibright_heart[0] - lobright_heart[0]) * (1.0f + (float)std::cos(phase)) / 2.0f);
+    heartcolornow[1] = recolor(heartcolorbase, lobright_heart[1] + (hibright_heart[1] - lobright_heart[1]) * (1.0f + (float)std::sin(phase)) / 2.0f);
+}
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
 bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolstate) {
     if (_idiot >= idiotcount) return false;
     fset[_idiot][onoff] = startboolstate;
@@ -193,12 +300,11 @@ bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolst
     cidiot[_idiot][clast] = color_to_neo((uint32_t)0);
     if (use_tft_colors_for_neo) cidiot[_idiot][cnormal] = color_to_neo(color332);
     else cidiot[_idiot][cnormal] = color_to_neo((hsv_to_rgb<uint32_t>((uint16_t)(_idiot * 65563.0 / idiotcount), 255, 255)));
-    setBoolState(_idiot, startboolstate);
+    setlogic(_idiot, startboolstate);
     for (int pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
     recolor_idiots(_idiot);
     return true;
 }
-
 // setflash() : Call this to add a blink sequence to one of the idiot lights which will repeat indefinitely in cycles
 //              Cycles are chopped into 128 definable segments of 50 ms each, for a total of 6.4 sec
 //   _idiot = which idiot light
@@ -227,9 +333,9 @@ void NeopixelStrip::setflash(int _idiot, int count, int pulseh, int pulsel, int 
     filled = fevresolution;  // filled = fevresolution / reps; }
 }
 void NeopixelStrip::set_fcolor(int _idiot) {  // flashing event : recolor idiotlight to flash pattern value
-    int brite = (fset[_idiot][fonbrit] >= 0) ? fset[_idiot][fonbrit] : hibright;
-    if (!fcbase[_idiot]) cidiot[_idiot][cflash] = cidiot[_idiot][cnormal];
-    else cidiot[_idiot][cflash] = fcbase[_idiot];
+    int brite = (fset[_idiot][fonbrit] >= 0) ? fset[_idiot][fonbrit] : hibright_idiot;  // 
+    if (!fcbase[_idiot]) cidiot[_idiot][cflash] = cidiot[_idiot][cnormal];  // set the flash color to the normal base color if the flash base color is black,
+    else cidiot[_idiot][cflash] = fcbase[_idiot];                           // otherwise set it to the flash base color
     cidiot[_idiot][cflash] = recolor(cidiot[_idiot][cflash], (float)brite, neosat);
 }
 bool NeopixelStrip::fevpop(int _idiot, uint pop_off) {  // flashing event : pop a flash sequence bit out from the data page
@@ -243,11 +349,13 @@ void NeopixelStrip::fevpush(int _idiot, uint push_off, bool push_val) {  // flas
 void NeopixelStrip::flashdemo_ena(bool ena) {
     flashdemo = ena;
     if (flashdemo) {
-        setflash(4, 8, 8, 8, 20);  // brightness toggle in a continuous squarewave
-        setflash(5, 3, 1, 2, 100, 0xffffff);      // three super-quick bright white flashes
-        setflash(6, 2, 5, 5, 0, 0);    // two short black pulses
+        // for (int i=1; i<=6; i++) setflash(i, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
+        setflash(4, 8, 8, 8, 20);            // brightness toggle in a continuous squarewave
+        setflash(5, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
+        setflash(6, 2, 5, 5, 0, 0);          // two short black pulses
     }
-    else {
+    else {                                   // cancel any current blink programs on these leds
+        // for (int i=1; i<=6; i++) setflash(i, 0);
         setflash(4, 0);
         setflash(5, 0);
         setflash(6, 0);
@@ -262,15 +370,28 @@ void NeopixelStrip::update_idiot(int _idiot) {
 void NeopixelStrip::update_pcba_glow() {
     if (pcbaglow == GlowOff) return;
     set_heartcolor(colorcard[runmode]);
+<<<<<<< HEAD
     if (pcbaglow == GlowSimple) heartbeatNow[0] = heartbeatNow[1] = heartbeatColor;
+=======
+    if (pcbaglow == GlowSimple) heartcolornow[0] = heartcolornow[1] = heartcolorbase;
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
     else if (pcbaglow == GlowHeart) heartbeat_update();  // Update our beating heart
     else if (pcbaglow == GlowXFade) heartxfade_update();
     else if (pcbaglow == GlowSine) heartsine_update();
 }
 void NeopixelStrip::update() {
     static int runmode_last;
-    if (runmode != runmode_last) sleepmode_ena(runmode == LOWPOWER);
+    if (runmode != runmode_last) sleepmode_ena(runmode == LowPower);
     runmode_last = runmode;
+
+    // trying to debug edit acceleration
+    // with recent changes to tune() I had to move the setter function for these here,
+    // instead of inline in the tuner like it was, to make edit acceleration work
+    static float neobright_last, neosat_last;
+    if ((neobright != neobright_last) || (neosat != neosat_last)) recolor_idiots(-1);
+    neobright_last = neobright;
+    neosat_last = neosat;
+    
     if (sleepmode) {
         knightrider();
         return;
@@ -282,12 +403,19 @@ void NeopixelStrip::update() {
     refresh();
     flashTimer.expireset();
 }
+int NeopixelStrip::num_neo_idiots() { return idiotcount; }
 void NeopixelStrip::sleepmode_ena(bool ena) {
     if (!ena && sleepmode) refresh(true);
     sleepmode = ena;
+    if (sleepmode) {  // ezread.squintf("sleeping rm:%d (0x%02x)\n", runmode, colorcard[runmode]);
+        set_heartcolor(colorcard[runmode]);
+        update_pcba_glow();
+        refresh();
+    }
 }
 void NeopixelStrip::knightrider() {
     static Timer knighttimer{150000};
+<<<<<<< HEAD
     static int posn = 2, direction = 1, first = numhearts;        // 1 for right, -1 for left
     const int trail = 4;             // Length of the fading trail
     const uint32_t knightcolor = 0xff0000;  // Red color
@@ -299,23 +427,39 @@ void NeopixelStrip::knightrider() {
             direction = -direction;  // Reverse direction at the ends
             posn = max(first, min(striplength - 1, posn));  // Clamp position within bounds
         }
+=======
+    static int tail = 4, posn = heartcount - 1, first = heartcount - 1, dir = 1; // dir=1 for right, dir=-1 for left
+    static const float maxspeed = 20.0, minspeed = 100.0;  // fastest and slowest speed (milliseconds per step)
+    static const uint32_t color = 0xff0000;                // red color
+    float speed = maxspeed + (minspeed - maxspeed) * (float)posn / (striplength - 1); // Calculate the speed based on the position (decelerates as it moves)
+    if (knighttimer.expireset()) {      // if (knighttimer.elapsed((int)moveInterval)) {
+        posn += dir;                    // move the bright point
+        if (posn <= first || posn >= striplength - 1) dir = -dir;   // reverse direction at the ends
+        posn = constrain(posn, first, striplength - 1);             // clamp position within bounds
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
     }
-    for (int i = first; i < striplength; i++)  neoobj.SetPixelColor(i, color_to_neo((uint32_t)0));   // Clear the strip   
-    neoobj.SetPixelColor(posn, color_to_neo(recolor(knightcolor, neobright)));  // Set the bright point
-    for (int i = first+1; i <= trail; i++) {  // Set the trailing effect
-        int trailposn = posn - i * direction;
-        if (trailposn >= first && trailposn < striplength) {
-            float trailBrightness = 100.0 * (trail - i) / trail;
-            neoobj.SetPixelColor(trailposn, color_to_neo(recolor(knightcolor, neobright * trailBrightness / 100.0)));
-        }
+    for (int i=first; i<striplength; i++) neoobj.SetPixelColor(i, color_to_neo(BLK));  // clear the strip   
+    neoobj.SetPixelColor(posn, color_to_neo(recolor(color, neobright)));         // set the bright point
+    for (int i=1; i<=tail; i++) {   // set the trailing effect
+        int tailpos = posn - i * dir;
+        if (tailpos >= first && tailpos < striplength)
+            neoobj.SetPixelColor(tailpos, color_to_neo(recolor(color, neobright * (100.0 * (tail - i) / tail) / 100.0)));
     }
     neoobj.Show(); // Show the updated strip
 }
-// void NeopixelStrip::knightrider() {
+
+//     for (int i = 1; i <= tail; i++) {  // Set the tailing effect
+//         int tailposn = posn - i * direction;
+//         if (tailposn >= 0 && tailposn < striplength) {
+//             neoobj.SetPixelColor(tailposn, color_to_neo(recolor(basecolor, neobright * (tail - i) / trail)));
+//         }
+//     }
+
+// void NeopixelStrip::knightrider() {  // this is a [buggy] attempt to make knight rider appear smooth and analog
 //     static Timer knighttimer{15000};
 //     static float posn = 0.0f;
 //     static int direction = 1;        // 1 for right, -1 for left
-//     const int trail = 4;             // Length of the fading trail
+//     const int tail = 4;             // Length of the fading tail
 //     const uint32_t basecolor = 0xff0000;  // Red color
 //     const float maxspeed = 20.0;     // Fastest speed (ms per step)
 //     const float minspeed = 100.0;    // Slowest speed (ms per step)
@@ -348,10 +492,10 @@ void NeopixelStrip::knightrider() {
 //     if (iposn + direction >= 0 && iposn + direction < striplength) {
 //         neoobj.SetPixelColor(iposn + direction, color_to_neo(dimcolor));
 //     }
-//     for (int i = 1; i <= trail; i++) {  // Set the trailing effect
-//         int trailposn = posn - i * direction;
-//         if (trailposn >= 0 && trailposn < striplength) {
-//             neoobj.SetPixelColor(trailposn, color_to_neo(recolor(basecolor, neobright * (trail - i) / trail)));
+//     for (int i = 1; i <= tail; i++) {  // Set the tailing effect
+//         int tailposn = posn - i * direction;
+//         if (tailposn >= 0 && tailposn < striplength) {
+//             neoobj.SetPixelColor(tailposn, color_to_neo(recolor(basecolor, neobright * (tail - i) / trail)));
 //         }
 //     }
 //     neoobj.Show(); // Show the updated strip
@@ -362,21 +506,31 @@ void NeopixelStrip::knightrider() {
 // float NeopixelStrip::minelement(float r, float g, float b) { return (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b); } // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
 
 class IdiotLights {
-//   private: bool fixed_one = true, fixed_zero = false; bool* _one = &fixed_one; bool* _zero = &fixed_zero;
   public:
     static constexpr int row_count = 12;
     static constexpr int row_height = 11;
     static constexpr int iconcount = 36;  // number of boolean values included on the screen panel (not the neopixels) 
+<<<<<<< HEAD
     bool* vals[iconcount] = {  // 6 per line
         &diag.err_sens_alarm[LOST], &diag.err_sens_alarm[RANGE], &diag.err_sens[RANGE][_TempEng], &wheeltemperr, hotrc.radiolost_ptr(), &panicstop, // &diag.err_sens[RANGE][_TempWheel]
         &shutting_down, &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting, &car_hasnt_moved, 
         &starter.motor, fuelpump.status_inverse_ptr(), &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(), // fuelpump.status_inverse_ptr(), speedo.pin_inactive_ptr(), tach.pin_inactive_ptr(),
         &nowtouch, &ts_tapped, &ts_doubletapped, encoder.activity_ptr(), &running_on_devboard, &not_syspower,  //  touch.tap_ptr(), touch.doubletap_ptr(), bootbutton.ptr(), sim.enabled_ptr(), &encoder.enc_a, 
+=======
+    bool* vals[iconcount] = {  // arranged here as 6 bool pointers per line of code
+        // row 1 onscreen.  the 1st 7 of these are true hazard lights (lit only on error), also copied onto the last 7 neopixel idiot lights
+        &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, &panicstop,
+        hotrc.radiolost_ptr(), hotrc.radiolost_untested_ptr(), &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting,
+        // row 2 onscreen.  these are all just informational values
+        &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(),
+        &nowtouch, &ts_tapped, &ts_doubletapped, encoder.activity_ptr(), &running_on_devboard, syspower.notval_ptr(),
+        // row 3 onscreen.  this row has one light per actuator or sensor, lit when there's any kind of error w/ that device
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
-        &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],  // &sensidiots[_MuleBatt]
-    };  // , &encoder.enc_b, &starter.req_active, &web_disabled, &powering_up
-        // _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _one, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero, _zero,
+        &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],
+    };
     uint8_t icon[iconcount][11] = {
+<<<<<<< HEAD
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // "S" w/ crossout symbol
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x78, 0x70, 0x59, 0x4d, 0x07, 0x0f, },  // "S" w/ double arrow
         { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x10, 0x10, 0x77, 0x65, 0x07, },  // "En" w/ degree symbol
@@ -432,29 +586,89 @@ class IdiotLights {
      // { 0x3e, 0x41, 0x1c, 0x22, 0x08, 0x7c, 0x08, 0x22, 0x1c, 0x41, 0x3e, },  // X w/ waves
      // { 0x63, 0x36, 0x1c, 0x36, 0x63, 0x14, 0x08, 0x22, 0x1c, 0x41, 0x3e, },  // wifi symbol w/ X
     std::string letters[iconcount] = {
+=======
+        { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // "S" w/ crossout symbol       // &diag.err_sens_alarm[ErrLost]
+        { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x78, 0x70, 0x59, 0x4d, 0x07, 0x0f, },  // "S" w/ double arrow          // &diag.err_sens_alarm[ErrRange]
+        { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x10, 0x10, 0x77, 0x65, 0x07, },  // "En" w/ degree symbol        // &diag.err_sens[ErrRange][_TempEng]
+        { 0x7f, 0x49, 0x49, 0x36, 0x36, 0x00, 0x78, 0x10, 0x37, 0x25, 0x07, },  // "Br" w/ degree symbol        // &diag.err_sens[ErrRange][_TempBrake]
+        { 0x7f, 0x30, 0x18, 0x30, 0x7f, 0x00, 0x7e, 0x10, 0x77, 0x65, 0x07, },  // "Wh" w/ degree symbol        // &wheeltemperr  // &diag.err_sens[ErrRange][_TempWheel]
+        { 0x7f, 0x7f, 0x09, 0x09, 0x77, 0x16, 0x70, 0x60, 0x00, 0x6f, 0x6f, },  // "Pn!"                        // &panicstop
+        { 0x7a, 0x7f, 0x4f, 0x17, 0x06, 0x00, 0x22, 0x1c, 0x00, 0x41, 0x3e, },  // hotrc w/ radio waves         // hotrc.radiolost_ptr()
+        { 0x7a, 0x7f, 0x4f, 0x17, 0x06, 0x00, 0x02, 0x03, 0x51, 0x5d, 0x06, },  // hotrc w/ "?"                 // hotrc.radiolost_untested_ptr()
+        { 0x3e, 0x63, 0x41, 0x7d, 0x7d, 0x55, 0x55, 0x5d, 0x49, 0x63, 0x3e, },  // circle-"P"                   // &parking
+        { 0x3e, 0x49, 0x1c, 0x00, 0x6e, 0x6b, 0x3b, 0x00, 0x1c, 0x49, 0x3e, },  // brake assembly w/ "S"        // &brake.autostopping
+        { 0x3e, 0x49, 0x1c, 0x00, 0x7f, 0x18, 0x7f, 0x00, 0x1c, 0x49, 0x3e, },  // brake assembly w/ "H"        // &brake.autoholding
+        { 0x08, 0x1c, 0x36, 0x00, 0x3e, 0x63, 0x63, 0x00, 0x36, 0x1c, 0x08, },  // "<C>"                        // &cruise_adjusting
+        { 0x3d, 0x43, 0x07, 0x00, 0x3e, 0x63, 0x55, 0x49, 0x55, 0x63, 0x3e, },  // rotation arrow w/ X wheel    // &car_hasnt_moved
+        { 0x3e, 0x41, 0x7f, 0x7b, 0x7b, 0x7b, 0x3e, 0x1c, 0x7f, 0x55, 0x7f, },  // motor w/ spur gear           // &starter.motor
+        { 0x7c, 0x46, 0x7f, 0x7f, 0x33, 0x12, 0x12, 0x12, 0x1e, 0x12, 0x0c, },  // linear actuator or schlong   // &brake.posn_pid_active
+        { 0x7f, 0x49, 0x49, 0x36, 0x00, 0x63, 0x14, 0x1c, 0x36, 0x22, 0x3e, },  // "B" w/ open loop             // &brake.no_feedback
+        { 0x63, 0x63, 0x63, 0x63, 0x77, 0x3e, 0x1c, 0x00, 0x6e, 0x6b, 0x3b, },  // "S" magnet w/ zap            // speedo.pin_level_ptr()
+        { 0x63, 0x63, 0x63, 0x63, 0x77, 0x3e, 0x1c, 0x00, 0x06, 0x7e, 0x06, },  // "T" magnet w/ zap            // tach.pin_level_ptr()
+        { 0x78, 0x7c, 0x7f, 0x7f, 0x7c, 0x7c, 0x1c, 0x0c, 0x0c, 0x0c, 0x0c, },  // finger                       // &nowtouch
+        { 0x00, 0x00, 0x00, 0x1c, 0x3e, 0x3e, 0x3e, 0x1c, 0x00, 0x00, 0x00, },  // one dot                      // &ts_tapped  // touch.tap_ptr()
+        { 0x1c, 0x3e, 0x3e, 0x3e, 0x1c, 0x00, 0x1c, 0x3e, 0x3e, 0x3e, 0x1c, },  // two dots                     // &ts_doubletapped  // touch.doubletap_ptr()
+        { 0x0e, 0x1d, 0x7d, 0x7d, 0x1d, 0x0e, 0x00, 0x7f, 0x6b, 0x6b, 0x63, },  // encoder "E"                  // encoder.activity_ptr()
+        { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },  // "DEV"                        // &running_on_devboard
+        { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },  // power on/off symbol          // syspower.notval_ptr()  // &powering_up
+        { 0x3e, 0x63, 0x7b, 0x00, 0x7e, 0x13, 0x7e, 0x00, 0x6e, 0x6b, 0x3b, },  // "GAS"                        // &sensidiots[_Throttle]
+        { 0x3e, 0x49, 0x08, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x08, 0x49, 0x3e, },  // brakes or tie fighter        // &sensidiots[_BrakeMotor]
+        { 0x00, 0x1c, 0x26, 0x45, 0x49, 0x79, 0x49, 0x45, 0x26, 0x1c, 0x00, },  // steering wheel               // &sensidiots[_SteerMotor]
+        { 0x00, 0x00, 0x00, 0x72, 0x7f, 0x7f, 0x4f, 0x03, 0x06, 0x00, 0x00, },  // hotrc                        // &sensidiots[_HotRC]
+        { 0x60, 0x66, 0x06, 0x10, 0x30, 0x63, 0x43, 0x00, 0x6e, 0x6b, 0x3b, },  // gauge "S"                    // &sensidiots[_Speedo]
+        { 0x60, 0x66, 0x06, 0x10, 0x30, 0x63, 0x43, 0x00, 0x06, 0x7e, 0x06, },  // gauge "T"                    // &sensidiots[_Tach]
+        { 0x42, 0x24, 0x2f, 0x44, 0x42, 0x20, 0x22, 0x44, 0x4f, 0x24, 0x22, },  // pressure waves               // &sensidiots[_BrakePres]
+        { 0x7e, 0x42, 0x46, 0x42, 0x4e, 0x42, 0x46, 0x42, 0x4e, 0x42, 0x7e, },  // ruler                        // &sensidiots[_BrakePosn]
+        { 0x02, 0x07, 0x35, 0x77, 0x7a, 0x1c, 0x0e, 0x1f, 0x13, 0x06, 0x04, },  // thermometer                  // &sensidiots[_Temps]
+        { 0x7e, 0x77, 0x63, 0x77, 0x7e, 0x7e, 0x7e, 0x77, 0x77, 0x77, 0x7e, },  // car battery                  // &diag.battrangeerr  // &sensidiots[_MuleBatt] <-- is the same value as &nowtouch (wtf)
+        { 0x7f, 0x6b, 0x6b, 0x00, 0x03, 0x7f, 0x03, 0x00, 0x3e, 0x63, 0x63, },  // "ETC"                        // &sensidiots[_Other]
+        { 0x2a, 0x2a, 0x2a, 0x7f, 0x7d, 0x7f, 0x7f, 0x7f, 0x2a, 0x2a, 0x2a, },  // chip                         // &sensidiots[_GPIO]
+    };
+     // { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // "SHD..."                     // &shutting_down
+     // { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },  // boot                         // bootbutton.ptr()
+     // { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },  // "SIM"                        // sim.enabled_ptr()
+     // { 0x4c, 0x2a, 0x19, 0x00, 0x63, 0x63, 0x63, 0x63, 0x77, 0x3e, 0x1c, },  // [original] magnet w/ zap     // speedo.pin_level_ptr()  // speedo.pin_inactive_ptr()  // tach.pin_inactive_ptr(),
+     // { 0x36, 0x1c, 0x36, 0x00, 0x22, 0x1c, 0x00, 0x22, 0x1c, 0x41, 0x3e, },  // wifi symbol w/ X             // 
+     // { 0x63, 0x36, 0x1c, 0x36, 0x63, 0x14, 0x08, 0x22, 0x1c, 0x41, 0x3e, },  // wifi symbol w/ X alt         // 
+     // { 0x3e, 0x41, 0x1c, 0x22, 0x08, 0x7c, 0x08, 0x22, 0x1c, 0x41, 0x3e, },  // X w/ waves                   // 
+     // { 0x7f, 0x19, 0x6e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x3e, 0x23, 0x7e, },  // "REQ"                        // &starter.req_active
+     // { 0x7a, 0x7f, 0x4f, 0x17, 0x06, 0x00, 0x02, 0x5b, 0x59, 0x0f, 0x06, },  // hotrc w/ "?" (orig)          // hotrc.radiolost_untested_ptr()
+     // { 0x10, 0x18, 0x68, 0x78, 0x10, 0x78, 0x68, 0x18, 0x12, 0x07, 0x7f, },  // carpet at stop sign          // &parking
+     // { 0x2a, 0x2a, 0x7f, 0x61, 0x7f, 0x43, 0x5b, 0x43, 0x7f, 0x2a, 0x2a, },  // sensor - chip w/ "IO"        // &sensidiots[_GPIO]
+     // { 0x0f, 0x05, 0x75, 0x15, 0x35, 0x15, 0x37, 0x15, 0x32, 0x10, 0x30, },  // sensor - piston w/ ruler     // &sensidiots[_BrakePres]
+     // { 0x08, 0x00, 0x3a, 0x18, 0x29, 0x40, 0x01, 0x00, 0x5a, 0x54, 0x64, },  // sensor - gauge "S"           // &sensidiots[_Speedo]
+     // { 0x08, 0x00, 0x3a, 0x18, 0x29, 0x40, 0x01, 0x00, 0x0a, 0x78, 0x08, },  // sensor - gauge "T"           // &sensidiots[_Tach]
+     // { 0x08, 0x00, 0x3a, 0x18, 0x29, 0x40, 0x71, 0x10, 0x22, 0x10, 0x78, },  // gauge "M"                    // 
+     // { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7e, 0x0b, 0x09, 0x0b, 0x7e, },  // encoder "A"                  // &encoder.enc_a
+     // { 0x0e, 0x1d, 0x7d, 0x1d, 0x0e, 0x00, 0x7f, 0x49, 0x49, 0x7f, 0x36, },  // encoder "B"                  // &encoder.enc_b
+     // { 0x02, 0x07, 0x32, 0x78, 0x78, 0x30, 0x00, 0x06, 0x0f, 0x0f, 0x06, },  // balls                        // 
+     // { 0x40, 0x7e, 0x79, 0x79, 0x79, 0x7e, 0x48, 0x38, 0x61, 0x3f, 0x86, },  // fuel                         // 
+     // { 0x3e, 0x63, 0x41, 0x63, 0x36, 0x1c, 0x1c, 0x36, 0x22, 0x63, 0x41, },  // open loop                    // &brake.no_feedback
+
+    std::string letters[iconcount] = { // text is used if the bitmap array starts with 0xff (ie never). safe to assume they're all outdated
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
         "SL", "SR", "\xf7""E", "\xf7""W", "RC", "P\x13", "SI", "Pk", "AS", "AH", "Aj", "HM",  // 12 per row 
         "St", "FP", "Pn", "NF", "SM", "TM", "Bt", "NT", "eA", "WD", "Dv", "Pw",
         "Th", "Br", "St", "RC", "Sp", "Tc", "Pr", "Ps", "Tm", "Bt", "Ot", "IO",
     };
+<<<<<<< HEAD
     uint8_t color[2][iconcount] = {
      // Colors gradiated for 12 per row, avoiding the dimmest stretch of the blue spectrum
         // { 0x82, 0xa2, 0xc1, 0xcc, 0xd0, 0xb4, 0x74, 0x14, 0x1a, 0x16, 0x0e, 0x0a,  // these are brighter dim versions
+=======
+    uint8_t color[2][iconcount] = { // each row gradiated across the hue sprectrum, avoiding the dimmest stretch of the blue range
+>>>>>>> b850c686854e554d2b234daaaaadd64e4498af2f
         { 0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01,
           0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01,
-          0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01, },
+          0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01, },  // off (dim) colors (gradiated 12 per row)
         { 0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b,  
           0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b, 
-          0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b, }
+          0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b, }  // on (bright) colors (gradiated 12 per row)
     };
-    //  // Colors gradiated for 11 per row
-    //  // { 0xa9, 0xad, 0xb1, 0xb5, 0x95, 0x55, 0x5a, 0x32, 0x2a, 0x66, 0xa6,  // these are brighter dim versions
-    //     { 0x60, 0x64, 0x68, 0x6c, 0x2c, 0x51, 0x2d, 0x09, 0x06, 0x45, 0x65,
-    //       0x60, 0x64, 0x68, 0x6c, 0x2c, 0x51, 0x2d, 0x09, 0x06, 0x45, 0x65,
-    //       0x60, 0x64, 0x68, 0x6c, 0x2c, 0x51, 0x2d, 0x09, 0x06, 0x45, 0x65, },
-    //     { 0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb,
-    //       0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb,
-    //       0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb, }
-    // };
+    // 0x82, 0xa2, 0xc1, 0xcc, 0xd0, 0xb4, 0x74, 0x14, 0x1a, 0x16, 0x0e, 0x0a,  // brighter off (dim) colors (gradiated 12 per row)
+    // 0xa9, 0xad, 0xb1, 0xb5, 0x95, 0x55, 0x5a, 0x32, 0x2a, 0x66, 0xa6,        // brighter off (dim) colors (gradiated 11 per row)
+    // 0x60, 0x64, 0x68, 0x6c, 0x2c, 0x51, 0x2d, 0x09, 0x06, 0x45, 0x65,        // off (dim) colors (gradiated 11 per row)
+    // 0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb,        // on (bright) colors (gradiated 11 per row)
     bool last[iconcount];
     uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
     uint8_t idiot_hue_offset = 240;
@@ -463,9 +677,9 @@ class IdiotLights {
     }
     void setup(NeopixelStrip* _neo) {
         myneo = _neo;
-        // int n = new_idiot(&(err_sens_alarm[LOST]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
-        for (int i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[ON][i], val(i));
-        ezread.squintf("Idiot lights set up %d icons & %d neopix hazards\n", iconcount, myneo->idiotcount);
+        // int n = new_idiot(&(err_sens_alarm[ErrLost]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
+        for (int i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[On][i], val(i));
+        ezread.squintf(ezread.highlightcolor, "Idiot lights: %d icons & %d neopix hazards\n", iconcount, myneo->idiotcount);
     }
     int num_idiots() { return iconcount; }
     bool val(int index) { return *(vals[index]); }
@@ -476,12 +690,11 @@ class IdiotLights {
         for (int i=0; i<iconcount; i++) {
             int division = row_count;
             uint32_t color32 = hsv_to_rgb<uint32_t>((65535 * (uint16_t)(i % division) / division + idiot_hue_offset), idiot_saturation, 255);  // , 0, 220);
-            color[ON][i] = color_to_332(color32);  // 5957 = 2^16/11
+            color[On][i] = color_to_332(color32);  // 5957 = 2^16/11
         }
     }
 };
-
-// class IdiotLight {  // defunct: currently not using individual instances for each idiot light. i couldn't get it to work
+// class IdiotLight {  // defunct: currently not using individual instances for each idiot light. would be much better but i couldn't make it work
 //     public:
 //     bool* val = nullptr;
 //     char letters[3] = "--";

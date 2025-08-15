@@ -1,46 +1,45 @@
 #pragma once
 #include <vector>
+#include <string>  // used when printing out addresses
+#include <iostream>  // used when printing out addresses
 #include <DallasTemperature.h>
 
-enum class loc { AMBIENT=0, ENGINE, WHEEL_FL, WHEEL_FR, WHEEL_RL, WHEEL_RR, BRAKE, NUM_LOCATIONS };  // , SOREN_DEV0, SOREN_DEV1, };
+enum class loc { TempAmbient=0, TempEngine, TempWheelFL, TempWheelFR, TempWheelRL, TempWheelRR, TempBrake, NumTempLocations };  // , SorenDev0, SorenDev1, };
 enum temp_categories { CatUnknown=0, CatAmbient=1, CatEngine=2, CatWheel=3, CatBrake=4, NumTempCategories=5 };  // 
-enum brakemotor_types { NIL=-1, Thomson=0, LAE=1 };
+enum brakemotor_types { Nil=-1, Thomson=0, MotorFactoryStore=1, GoMotorWorld=2, NumBrakeMotorTypes=3 };
     
-float temp_lims_f[NumTempCategories][NUM_MOTORVALS] {
+float temp_lims_f[NumTempCategories][NumMotorVals] {
     // changed opmin values all to 40 to avoid idiot lights. engine opmin was 125, wheel was 50, brake was 45
-    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatUnknown] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
-    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatAmbient] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
-    {  40.0, 178.0, 205.0, 218.0, NAN, -67.0, 257.0, 2.0 },  //  [CatEngine] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
-    {  40.0,  77.0, 135.0, 145.0, NAN, -67.0, 257.0, 2.0 },  //   [CatWheel] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN] (applies to all wheels)
-    {  45.0,  77.0, 125.0, 135.0, NAN, -67.0, 257.0, 2.0 },  //   [CatBrake] [OPMIN/CENT/OPMAX/ALARM/FILT/ABSMIN/ABSMAX/MARGIN]
-};  // float* degf[(int)loc::NUM_LOCATIONS][NUM_MOTORVALS];
+    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatUnknown] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatAmbient] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0, 178.0, 205.0, 218.0, NAN, -67.0, 257.0, 2.0 },  //  [CatEngine] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0,  77.0, 170.0, 145.0, NAN, -67.0, 257.0, 2.0 },  //   [CatWheel] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin] (applies to all wheels)
+    {  45.0,  77.0, 125.0, 135.0, NAN, -67.0, 257.0, 2.0 },  //   [CatBrake] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+};  // float* degf[(int)loc::NumTempLocations][NumMotorVals];
 
 class TemperatureSensor {
 public:
     // Replace DeviceAddress with std::array<uint8_t, 8>
     using DeviceAddress = std::array<uint8_t, 8>;
-
 private:
     loc _location;
     DeviceAddress _address;
     float _temperature;
     DallasTemperature* _tempsensebus;
     int category = CatUnknown;
-
-    
 public:
     TemperatureSensor(loc location, const DeviceAddress& address, DallasTemperature* tempsensebus)
    : _location(location), _address(address), _tempsensebus(tempsensebus), _temperature(-999) {}
 
     TemperatureSensor() = delete; // always create with a pointer to the tempsensorbus
-    float* degf[NUM_MOTORVALS] = { nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr };
+    float* degf[NumMotorVals] = { nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr };
 
     void request_temperature() {
         // Request temperature from sensor
         if (!_tempsensebus->requestTemperaturesByAddress(_address.data())) {
-            ezread.squintf("  failed temp request from sensor addr ");
-            print_address();
-            ezread.squintf("\n");
+            ezread.squintf(ezread.madcolor, "err: temp fail request from 0x%s\n", addr_hex_string().c_str());
+            // print_address();
+            // ezread.squintf("\n");
         }
     }
 
@@ -53,13 +52,14 @@ public:
     float read_temperature() {
         float temp = _tempsensebus->getTempF(_address.data());
         if (temp == DEVICE_DISCONNECTED_F) {
-            ezread.squintf("  disconnected device %s w/ addr: ", location_to_string(_location));
-            print_address();
-            ezread.squintf("\n");
+            // ezread.squintf("  disconnected device %s w/ addr:\n", location_to_string(_location));
+            ezread.squintf(ezread.madcolor, "err: disconnected temp sensor %s\n  at addr: 0x%s\n", location_to_string(_location), addr_hex_string().c_str());
+            // print_address();
+            // ezread.squintf("\n");
             return DEVICE_DISCONNECTED_F;
         } 
         _temperature = temp;
-        // *degf[FILT] = _temperature;
+        // *degf[Filt] = _temperature;
         return _temperature;
     }
 
@@ -75,55 +75,57 @@ public:
         _address = address;
     }
     void set_lims() {
-        if (_location == loc::AMBIENT) category = CatAmbient;
-        else if (_location == loc::ENGINE) category = CatEngine;
-        else if (_location == loc::BRAKE) category = CatBrake;
-        else if (_location == loc::WHEEL_FL || _location == loc::WHEEL_FR || _location == loc::WHEEL_RL || _location == loc::WHEEL_RR ) category = CatWheel;
+        if (_location == loc::TempAmbient) category = CatAmbient;
+        else if (_location == loc::TempEngine) category = CatEngine;
+        else if (_location == loc::TempBrake) category = CatBrake;
+        else if (_location == loc::TempWheelFL || _location == loc::TempWheelFR || _location == loc::TempWheelRL || _location == loc::TempWheelRR ) category = CatWheel;
         else category = CatUnknown;
-        for (int i=0; i<NUM_MOTORVALS; i++) if (i != FILT) degf[i] = &temp_lims_f[category][i];  // degf[(int)sens][FILT] = &_temperature;
-        degf[FILT] = &_temperature;
+        for (int i=0; i<NumMotorVals; i++) if (i != Filt) degf[i] = &temp_lims_f[category][i];  // degf[(int)sens][Filt] = &_temperature;
+        degf[Filt] = &_temperature;
     }
-    
-    void print_address() const {
-        ezread.squintf("0x");
-        for(uint8_t i = 0; i < _address.size(); i++) ezread.squintf("%02x", _address[i]);
-        ezread.squintf("\n");
+    std::string addr_hex_string() const {
+        std::string str;
+        for (uint8_t i = 0; i < _address.size(); i++) {  // str += std::format("{:02x}", _address[i]);  // ezread.squintf("%02x", _address[i]);
+            char buf[3];
+            snprintf(buf, sizeof(buf), "%02x", _address[i]);
+            str += buf;
+        }
+        return str;
     }
 
     void print_sensor_info() const {
-        ezread.squintf("  loc: %s, assigned addr ", location_to_string(_location).c_str());
-        print_address();
-        ezread.squintf("\n");
+        ezread.squintf("  assigned %s to 0x%s\n", location_to_string(_location).c_str(), addr_hex_string().c_str());
+        // print_address();
+        // ezread.squintf("\n");
     }
-
     static std::string location_to_string(loc location) {
         switch(location) {
-            case loc::AMBIENT: return "ambient";
-            case loc::ENGINE: return "engine";
-            case loc::WHEEL_FL: return "wheel_fl";
-            case loc::WHEEL_FR: return "wheel_fr";
-            case loc::WHEEL_RL: return "wheel_rl";
-            case loc::WHEEL_RR: return "wheel_rr";
-            case loc::BRAKE: return "brakemotor";
+            case loc::TempAmbient: return "ambient";
+            case loc::TempEngine: return "engine";
+            case loc::TempWheelFL: return "wheel_fl";
+            case loc::TempWheelFR: return "wheel_fr";
+            case loc::TempWheelRL: return "wheel_rl";
+            case loc::TempWheelRR: return "wheel_rr";
+            case loc::TempBrake: return "brakemotor";
             default: return "unknown";
         }
     }
     float val() { return _temperature; }
-    float opmin() { return *degf[OPMIN]; }
-    float opmax() { return *degf[OPMAX]; }
-    float absmin() { return *degf[ABSMIN]; }
-    float absmax() { return *degf[ABSMAX]; }
-    float alarm() { return *degf[ALARM]; }
-    float margin() { return *degf[MARGIN]; }
-    float cent() { return *degf[CENT]; }
+    float opmin() { return *degf[OpMin]; }
+    float opmax() { return *degf[OpMax]; }
+    float absmin() { return *degf[AbsMin]; }
+    float absmax() { return *degf[AbsMax]; }
+    float alarm() { return *degf[Alarm]; }
+    float margin() { return *degf[Margin]; }
+    float cent() { return *degf[Cent]; }
     float* ptr() { return &_temperature; }
-    float* opmin_ptr() { return degf[OPMIN]; }
-    float* opmax_ptr() { return degf[OPMAX]; }
-    float* absmin_ptr() { return degf[ABSMIN]; }
-    float* absmax_ptr() { return degf[ABSMAX]; }
-    float* alarm_ptr() { return degf[ALARM]; }
-    float* margin_ptr() { return degf[MARGIN]; }
-    float* cent_ptr() { return degf[CENT]; }
+    float* opmin_ptr() { return degf[OpMin]; }
+    float* opmax_ptr() { return degf[OpMax]; }
+    float* absmin_ptr() { return degf[AbsMin]; }
+    float* absmax_ptr() { return degf[AbsMax]; }
+    float* alarm_ptr() { return degf[Alarm]; }
+    float* margin_ptr() { return degf[Margin]; }
+    float* cent_ptr() { return degf[Cent]; }
 };
 
 
@@ -135,7 +137,7 @@ public:
         READY_TO_READ
     };
     bool vehicle_detected = true;
-    int brakemotor_type_detected = NIL;  // default value
+    int brakemotor_type_detected = Nil;  // default value
     int temperature_precision = 11;  // 9-12 bit resolution
     int detected_devices_ct = 0;
 private:
@@ -144,6 +146,7 @@ private:
     bool brake_assigned;
     unsigned long last_read_request_time;
     int sensor_index;
+    int lost_sensors = 0;
     State _state;
     
     OneWire one_wire_bus;
@@ -151,54 +154,60 @@ private:
 
     std::vector<DeviceAddress> detected_addresses;
     std::vector<loc> all_locations = {
-        loc::ENGINE,
-        loc::AMBIENT,
-        loc::WHEEL_FL,
-        loc::WHEEL_FR,
-        loc::WHEEL_RL,
-        loc::WHEEL_RR,
-        loc::BRAKE,
+        loc::TempEngine,
+        loc::TempAmbient,
+        loc::TempWheelFL,
+        loc::TempWheelFR,
+        loc::TempWheelRL,
+        loc::TempWheelRR,
+        loc::TempBrake,
     };
-    std::map<loc, DeviceAddress> known_addresses = {
-        {loc::ENGINE, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},
-        {loc::AMBIENT, {0x28, 0x53, 0x57, 0xad, 0x5c, 0x21, 0x01, 0x02}},
-        {loc::WHEEL_FL, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},
-        {loc::WHEEL_FR, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},
-        {loc::WHEEL_RL, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},
-        {loc::WHEEL_RR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}},
-        {loc::BRAKE, {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}},
+    std::map<loc, DeviceAddress> known_addresses = {  // these are the (default?) sensor addresses
+        {loc::TempEngine, {0x28, 0x1a, 0x27, 0x90, 0x5c, 0x21, 0x01, 0x59}},  // mule engine sensor
+        {loc::TempAmbient, {0x28, 0x53, 0x57, 0xad, 0x5c, 0x21, 0x01, 0x02}},  // sensor glued to the the control box
+        {loc::TempWheelFL, {0x28, 0x55, 0x42, 0x8f, 0x5c, 0x21, 0x01, 0x69}},  // these are the sensors on the car
+        {loc::TempWheelFR, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},  // these are the sensors on the car
+        {loc::TempWheelRL, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},  // these are the sensors on the car
+        {loc::TempWheelRR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}},  // these are the sensors on the car
+        {loc::TempBrake, {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}},  // ?
         
-        // Attn Bobby!
-        // Todo: The BRAKE sensor above might be either of two sensor addresses, depending on which motor is installed.
-        // Actually we'd like to use this fact to autodetect which motor is installed, that can inform other parts of 
-        // the code. But whichever of the two is detected should be assigned to the loc::BRAKE location.
-        // Here are the two addresses:
-        // Thomson Motor: {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e}
-        //     LAE Motor: {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc}
+        // {0x28, 0x53, 0x57, 0xad, 0x5c, 0x21, 0x01, 0x02}  // sensor glued to the the control box
+        // {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e}  // sensor on soren's breadboard
+        // {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}  // Thomson (2023) motor (?) confirm this
+        // {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc}  // MotorFactoryStore (2024) motor
+        // {0x28, 0xf0, 0x03, 0xb6, 0x5c, 0x21, 0x01, 0x21}  // GoMotorWorld (2025) motor
+
+        // A different sensor is glued to each motor, so address depends which one is installed.
+        // Use this fact to autodetect the motor, assign it to the loc::TempBrake location ...
+        // so we can load the appropriate calibrations, etc.
     };
 
     std::map<loc, TemperatureSensor> sensors;
 
     // Assigns known addresses to Sensors. The sensors will have locations like engine or ambient
     void assign_known_addresses() {
-        int lost_sensors = 0;
-        DeviceAddress thomson_brake_address = {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e};
-        DeviceAddress lae_brake_address = {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc};
+        DeviceAddress thomson_brake_address = {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2};
+        DeviceAddress mfs_brake_address = {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc};
+        DeviceAddress gmw_brake_address = {0x28, 0xf0, 0x03, 0xb6, 0x5c, 0x21, 0x01, 0x21};
+        
         bool brake_assigned = false;
 
         // First handle brake sensors
         for (auto& detected_address : detected_addresses) {
             if (std::equal(detected_address.begin(), detected_address.end(), thomson_brake_address.begin())) {
-                 brakemotor_type_detected = Thomson;  // default value
+                 brakemotor_type_detected = Thomson;
             }
-            else if (std::equal(detected_address.begin(), detected_address.end(), lae_brake_address.begin())) {
-                brakemotor_type_detected = LAE;  // default value
+            else if (std::equal(detected_address.begin(), detected_address.end(), mfs_brake_address.begin())) {
+                brakemotor_type_detected = MotorFactoryStore;
             }
-            if (!brake_assigned && (brakemotor_type_detected != NIL)) {
-                sensors.emplace(loc::BRAKE, TemperatureSensor(loc::BRAKE, detected_address, &tempsensebus));
-                Serial.printf("  detected %s brake sensor addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
-                ezread.printf("  %s brake addr: ", brakemotor_type_to_string(brakemotor_type_detected).c_str());
-                sensors.at(loc::BRAKE).print_address();
+            else if (std::equal(detected_address.begin(), detected_address.end(), gmw_brake_address.begin())) {
+                brakemotor_type_detected = GoMotorWorld;
+            }
+            if (!brake_assigned && (brakemotor_type_detected != Nil)) {
+                sensors.emplace(loc::TempBrake, TemperatureSensor(loc::TempBrake, detected_address, &tempsensebus));
+                ezread.squintf("  detected %s brake at 0x%s\n", brakemotor_type_to_string(brakemotor_type_detected).c_str(), sensors.at(loc::TempBrake).addr_hex_string().c_str());
+                // sensors.at(loc::TempBrake).print_address();
+                // ezread.squintf("\n");
                 brake_assigned = true;
             }
             continue;
@@ -206,7 +215,7 @@ private:
 
         // Then handle other sensors
         for (auto& known_address : known_addresses) {
-            if (known_address.first == loc::BRAKE) continue; // Skip brake because it's already handled
+            if (known_address.first == loc::TempBrake) continue; // Skip brake because it's already handled
 
             // check to see if we have a known address that wasn't detected, print a warning if yes
             auto detected_address_it = std::find_if(detected_addresses.begin(), detected_addresses.end(), [&](const DeviceAddress& detected_address) {
@@ -222,27 +231,26 @@ private:
                     // The sensor doesn't exist yet, so create it and add it to the map
                     sensors.emplace(location, TemperatureSensor(location, *detected_address_it, &tempsensebus));
                     // Print the sensor address for debugging purposes
-                    Serial.printf("  known sensor %s addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
-                    ezread.printf("  known %s @ addr: ", TemperatureSensor::location_to_string(known_address.first).c_str());
-                    sensors.at(known_address.first).print_address();
-                } else {
+                    ezread.squintf("  known %s at 0x%s\n", TemperatureSensor::location_to_string(known_address.first).c_str(), sensors.at(known_address.first).addr_hex_string().c_str());
+                    // sensors.at(known_address.first).print_address();
+                    // ezread.squintf("\n");
+                }
+                else {
                     // The sensor already exists, so just update its address
                     sensor_it->second.set_address(*detected_address_it);
                     // Print the updated sensor address for debugging purposes
-                    ezread.squintf("  updated sensor addr: ");
-                    sensor_it->second.print_address();
-
-                    sensor_it->second.set_lims();
-
+                    ezread.squintf("  updated addr 0x%s\n", sensor_it->second.addr_hex_string().c_str());
+                    // sensor_it->second.print_address();
+                    // sensor_it->second.set_lims();
                 }
-            } else {
+            }
+            else {
                 lost_sensors++;
                 // The known address was not detected, so log a warning message
                 // ezread.squintf("  known sensor %s not detected\n", TemperatureSensor::location_to_string(known_address.first).c_str());
             }
         }
-        if (lost_sensors) ezread.squintf("  did not detect %d known sensor(s)\n", lost_sensors);
-        vehicle_detected = detected(loc::AMBIENT);
+        vehicle_detected = detected(loc::TempAmbient);
     }
 
     // Assign remaining addresses to any unassigned locations, in order of the locations enum
@@ -257,11 +265,11 @@ private:
                 }
                 if (it != all_locations.end()) {
                     // The sensor doesn't exist yet, so create it and add it to the map and print the sensor address
-                    Serial.printf("  detected unknown sensor addr: ");
-                    ezread.printf("  unknown addr: ");
                     sensors.emplace(*it, TemperatureSensor(*it, detected_address, &tempsensebus));
-                    sensors.at(*it).print_address();
-                    ezread.squintf("\n");
+                    ezread.squintf("  unknown sensor at 0x%s ..\n", sensors.at(*it).addr_hex_string().c_str());  // ezread.squintf("  unknown addr: ");
+                    ezread.squintf("    assigned as %s sensor.\n", TemperatureSensor::location_to_string(*it).c_str());
+                    // sensors.at(*it).print_address();
+                    // ezread.squintf("\n");
                 }
             }
         }
@@ -269,20 +277,20 @@ private:
     // void assign_category(*TemperatureSensor sens, int temp_category) {
     //     auto sensor_it = sensors.find(sens);
     //     if (sensor_it == sensors.end()) {
-    //             for (int i=0; i<NUM_MOTORVALS; i++) {  // if (i != FILT) degf[(int)sens][i] = &temp_lims_f[temp_category][i];
-    //         if (i != FILT) degf[i] = &temp_lims_f[temp_category][i];  // degf[(int)sens][FILT] = &_temperature;
+    //             for (int i=0; i<NumMotorVals; i++) {  // if (i != Filt) degf[(int)sens][i] = &temp_lims_f[temp_category][i];
+    //         if (i != Filt) degf[i] = &temp_lims_f[temp_category][i];  // degf[(int)sens][Filt] = &_temperature;
     //     }
-    //     degf[FILT] = &_temperature;
+    //     degf[Filt] = &_temperature;
     //     }
     // }
     // void assign_categories() {
-    //     for (loc i=AMBIENT; i<NUM_LOCATIONS; i = (loc)((int)i + 1)) {
+    //     for (loc i=TempAmbient; i<NumTempLocations; i = (loc)((int)i + 1)) {
     //         auto it = sensors.find(i);
     //         if (it != sensors.end()) {
-    //             if (i == AMBIENT) assign_category(&it->second, CatAmbient);
-    //             else if (i == ENGINE) assign_category(&it->second, CatEngine);
-    //             else if (i == BRAKE) assign_category(&it->second, CatBrake);
-    //             else if (i == WHEEL_FL || i == WHEEL_FR || i == WHEEL_RL || i == WHEEL_RR ) assign_category(&it->second, CatWheel);
+    //             if (i == TempAmbient) assign_category(&it->second, CatAmbient);
+    //             else if (i == TempEngine) assign_category(&it->second, CatEngine);
+    //             else if (i == TempBrake) assign_category(&it->second, CatBrake);
+    //             else if (i == TempWheelFL || i == TempWheelFR || i == TempWheelRL || i == TempWheelRR ) assign_category(&it->second, CatWheel);
     //             else assign_category(&it->second, CatUnknown);
     //         }                
     //         else {
@@ -293,9 +301,10 @@ private:
     // }
     static std::string brakemotor_type_to_string(int motortype) {
         switch(motortype) {
-            case NIL: return "undetected";
+            case Nil: return "undetected";
             case Thomson: return "Thomson";
-            case LAE: return "LAE";
+            case MotorFactoryStore: return "MFS";
+            case GoMotorWorld: return "GMW";
             default: return "undetected";
         }
     }
@@ -303,18 +312,13 @@ private:
 public:
     TemperatureSensorManager(uint8_t _onewire_pin) : one_wire_bus(_onewire_pin), tempsensebus(&one_wire_bus),  last_read_request_time(0), sensor_index(0), _state(State::CONVERTING) {}
     bool setup() {
-        ezread.squintf("Temp sensors:");
-        
         tempsensebus.setWaitForConversion(false);
         tempsensebus.setCheckForConversion(true);
         tempsensebus.begin();
         detected_devices_ct = tempsensebus.getDeviceCount();
         detected_addresses.resize(detected_devices_ct);
-        ezread.squintf(" parasitic %s. found %d device(s):\n", (tempsensebus.isParasitePowerMode()) ? "on" : "off", detected_devices_ct);  // , DEC);
-        if (detected_devices_ct == 0) {
-            // ezread.squintf("  no devices detected\n");
-            vehicle_detected = false;
-        }
+        ezread.squintf(ezread.highlightcolor, "Temp sensors (p%d).. found %d devices:\n", onewire_pin, detected_devices_ct);  // ezread.squintf(" parasitic %s.", (tempsensebus.isParasitePowerMode()) ? "on" : "off");
+        if (detected_devices_ct == 0) vehicle_detected = false;
         else {
             // find all detected devices and set their temperature precision
             for (int i = 0; i < detected_devices_ct; i++) {
@@ -322,7 +326,6 @@ public:
                     tempsensebus.setResolution(detected_addresses[i].data(), temperature_precision);
                 }
             }
-
             // Assign known addresses to the sensors they belong to
             assign_known_addresses();
 
@@ -330,11 +333,11 @@ public:
             assign_remaining_addresses();
 
             // assign_categories();
-
+            if (lost_sensors) ezread.squintf("  did not detect %d known sensor(s)\n", lost_sensors);
             // Request temperature for each sensor, this will make the is_ready() method work
             request_temperatures();
         }
-        ezread.squintf("  detected %s context\n", vehicle_detected ? "on-vehicle" : "dev-board");
+        ezread.squintf("  vehicle %sdetected. using %s config.\n", vehicle_detected ? "" : "not ", vehicle_detected ? "on-car" : "devboard");
         return vehicle_detected;
     }
 
@@ -374,7 +377,8 @@ public:
                 set_state(State::CONVERTING);
                 last_read_request_time = millis();
             }
-        } else if (millis() - last_read_request_time >= tempsensebus.millisToWaitForConversion(tempsensebus.getResolution())) {
+        }
+        else if (millis() - last_read_request_time >= tempsensebus.millisToWaitForConversion(tempsensebus.getResolution())) {
             // Enough time has passed since the last conversion request, so check if conversions are complete
             update_state();
         }
@@ -423,17 +427,17 @@ public:
         TemperatureSensor* sens = get_sensor(locat);  // ambient
         return (bool)sens; 
     }
-    int locint(loc locat = loc::NUM_LOCATIONS) {
+    int locint(loc locat = loc::NumTempLocations) {
         return static_cast<int>(locat);
     }
     int errclass(loc locat) {
-        if (locat == loc::AMBIENT || locat == loc::ENGINE) return static_cast<int>(locat);
-        return static_cast<int>(loc::WHEEL_FL);  // All wheels use this error class
+        if (locat == loc::TempAmbient || locat == loc::TempEngine) return static_cast<int>(locat);
+        return static_cast<int>(loc::TempWheelFL);  // All wheels use this error class
     }
     int errclass(int locat) { return errclass(static_cast<loc>(locat)); }
     float val(int locat) { return val(static_cast<loc>(locat)); }
     bool detected(int locat) { return detected(static_cast<loc>(locat)); }
-    src source() { return src::PIN; }
+    src source() { return src::Pin; }
     int brake_type() { return brakemotor_type_detected; }
 
     float opmin(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->opmin(); }

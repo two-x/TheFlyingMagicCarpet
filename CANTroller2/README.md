@@ -89,4 +89,6 @@ SD interface (not yet implemented) is integrated with touchscreen module. We hop
 1. [dope rgb332 color picker](<https://roger-random.github.io/RGB332_color_wheel_three.js>)
 1. [named colors](<https://wiki.tcl-lang.org/page/Colors+with+Names>)
 1. [font0 character map (use right-side map)](<https://learn.adafruit.com/assets/103682>)
+1. [TomThumb font info page](<https://robey.lag.net/2010/01/23/tiny-monospace-font.html>)
+1. [TomThumb font character map](<https://fontstruct.com/fontstructions/show/1656341/tom-thumb>)
 1. [SD card formatter](<https://www.sdcard.org/downloads/formatter/>)
