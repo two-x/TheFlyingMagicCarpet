@@ -676,7 +676,7 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
         // for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
     }
     void draw(LGFX_Sprite* spr) {
-        draw_scrollbar(spr, LGRY);  // currently draws just a very skinny blank column a few pixels wide at the left side
+        draw_scrollbar(spr, LGRY);  // currently draws just a very skinny blank column a few pixels wide at the left side 
         spr->fillSprite(BLK);
         spr->setTextWrap(false);
         spr->setFont(&fonts::TomThumb);

@@ -381,26 +381,6 @@ class ThrottleControl : public ServoMotor {
     using ServoMotor::ServoMotor;
     // ThrottleControl(int _pin, int _freq) { pin = _pin; freq = _freq; };
     float tach_last, throttle_target_pc; //, max_throttle_angular_velocity_pcps;
-    // float si[NumMotorVals] = { 88.8, NAN, 5.0f, 69.0f, NAN, 0.0f, 180, 1.0f };  // standard si-unit values [OpMin/Parked/OpMax/Out/Govern/AbsMin/AbsMax/Margin]
-    
-    // us[OpMin] = 1365.0f;
-    // us[Parked] = 1340.0f;
-    // us[OpMax] = 2475.0f;
-    // us[Margin] = 30.0f;
-    
-    // float us[NumMotorVals] = { 1365.0f, 1340.0f, 2475.0f, NAN, NAN, 0.0f, 180, 1.0f };  // standard si-unit values [OpMin/Parked/OpMax/Out/Govern/AbsMin/AbsMax/Margin]
- 
-    // * with servo at center position (1500 us pulsewidth) mount the servo horn inline with center of the servo body's long dimension. this is 90 deg. CW from here are higher angles and CCW are lower angles
-    // * for best linearity, adjust the servo-carb linkage length so the carb throttle is at halfway point when the servo is at the 90 degree center position
-    // * calibration:
-    //   1. mount hardware as described above, go to cal mode and enable the pot gas control. view the PWMs datapage
-    //   2. turn servo using the pot to find the us pulsewidth values for opmin (closed), opmax (open), and parked angles
-    //   3. use these values to initialize the us[OpMin], us[OpMax], and us[Parked] values
-    //   4. if increasing pulsewidths moves servo CCW then set reverse = true
-    //   5. note also the reported angular value to see how accurate they are. if not, fix the conversions (currently a map statement)
-
-    // * set operational angular range (OpMin/OpMax), margin (Margin) and parking angle (Parked) here.
-
     float linearizer_exponent = 3.75f;
     float cruise_linearizer_exponent = 1.05f;
     float trigger_vert_pc = 0.0f;
@@ -447,13 +427,27 @@ class ThrottleControl : public ServoMotor {
             QPID::pmod::onerr, QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout);
         update_cruise_pid();  // conditionally correct the cruise pid settings above
     }
+    // Throttle calibration notes:
+    // * with servo at center position (1500 us pulsewidth) mount the servo horn inline with center of the servo body's long dimension. this is 90 deg. CW from here are higher angles and CCW are lower angles
+    // * for best linearity, adjust the servo-carb linkage length so the carb throttle is at halfway point when the servo is at the 90 degree center position
+    // * calibration:
+    //   1. mount hardware as described above, go to cal mode and enable the pot gas control. view the PWMs datapage
+    //   2. turn servo using the pot to find the us pulsewidth values for opmin (closed), opmax (open), and parked angles
+    //   3. use these values to initialize the us[OpMin], us[OpMax], and us[Parked] values
+    //   4. if increasing pulsewidths moves servo CCW then set reverse = true
+    //   5. note also the reported angular value to see how accurate they are. if not, fix the conversions (currently a map statement)
+    // * set operational angular range (OpMin/OpMax), margin (Margin) and parking angle (Parked) in setup() function, in degree units (si)
+    //
+    // (old) us[OpMin] = 1365.0f;  us[Parked] = 1340.0f;  us[OpMax] = 2475.0f;  us[Margin] = 30.0f;
+    // (old) float si[NumMotorVals] = { 88.8, NAN, 5.0f, 69.0f, NAN, 0.0f, 180, 1.0f };  // standard si-unit values [OpMin/Parked/OpMax/Out/Govern/AbsMin/AbsMax/Margin]
+    // (old) float us[NumMotorVals] = { 1365.0f, 1340.0f, 2475.0f, NAN, NAN, 0.0f, 180, 1.0f };  // standard si-unit values [OpMin/Parked/OpMax/Out/Govern/AbsMin/AbsMax/Margin]
+
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
         ezread.squintf(ezread.highlightcolor, "Throttle servo (p%d), pid %s\n", pin, pid_enabled ? "ena" : "dis");
-        si[OpMin] = 58.0f;
-        si[Parked] = 57.0f;
-        si[OpMax] = 158.0f;
-        si[Out] = 69.0f;
+        si[OpMin] = si[Out] = 66.3f;
+        si[Parked] = 55.0f;
+        si[OpMax] = 165.0f;
         si[Govern] = NAN;
         si[AbsMin] = 0.0f;
         si[AbsMax] = 180.0f;
