@@ -7,16 +7,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     int _joydir, _oldmode = LowPower;
     bool _joy_has_been_centered = false, _we_just_switched_modes = true, _stoppedholdtimer_active = false;
     Timer _gestureFlyTimer{500000};    // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
-    void cleanup_state_variables() {  // update certain runmode-specific internal state variables when changing mode, partly to keep idiot lights accurate
-        if (_oldmode == Basic);
-        else if (_oldmode == LowPower);
-        else if (_oldmode == Standby) shutting_down = false;
-        else if (_oldmode == Stall);
-        else if (_oldmode == Hold) _joy_has_been_centered = false;  // starter.request(ReqOff);  // Stop any in-progress startings
-        else if (_oldmode == Fly) car_hasnt_moved = false;
-        else if (_oldmode == Cruise) cruise_adjusting = car_hasnt_moved = _stoppedholdtimer_active = false;
-        else if (_oldmode == Cal) cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;
-    }
   public:
     bool display_reset_requested = false;  // set these for the display to poll and take action, since we don't have access to that object, but it has access to us
     RunModeManager() {}
@@ -37,13 +27,14 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         _we_just_switched_modes = (runmode != _oldmode);  // has our runmode been changed?
         if (_we_just_switched_modes) {
-            if (runmode != Standby) autosaver_request = ReqOff;
+            calmode_request = autosaver_request = ReqOff;
             if (starter.motor && runmode != Hold && _oldmode != Stall) starter.request(ReqOff, StartRunmode); // the only mode transition the starter motor may remain running thru is stall -> hold
             gas.setmode(run_motor_mode[runmode][_Throttle]);
             brake.setmode(run_motor_mode[runmode][_BrakeMotor]);
             steer.setmode(run_motor_mode[runmode][_SteerMotor]);
             watchdog.set_codestatus();
-            cleanup_state_variables();
+            shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = car_hasnt_moved = false;  // clean up previous runmode values
+            _stoppedholdtimer_active = cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
         }
         _oldmode = runmode;
         if (runmode != LowPower) {  // common to almost all the modes, so i put it here
@@ -85,7 +76,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             sleep_request = ReqNA;
             powering_up = false;  // three state variables to track entry/exit phases of lowpower mode
             powering_down = true; // during this time we blackout the screen (should be done in display.h)
-            autosaver_request = ReqOff;
             pwrchange_timer.reset();  // give some time for screen to blackout
         }
         else if (powering_down && pwrchange_timer.expired()) {  // blackout time is over, now go to sleep
@@ -116,7 +106,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             shutting_down = !powering_up;   // if waking up from sleep standby is already complete
             powering_up = false;
             ignition.request(ReqOff);
-            calmode_request = autosaver_request = ReqOff;  // = basicmode_request 
             stopcar_timer.reset();
             sleep_request = ReqNA;
             user_inactivity_timer.set(_lowpower_delay_min * 60 * 1000000);
@@ -144,19 +133,12 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (brake.motormode != run_motor_mode[runmode][_BrakeMotor]) brake.setmode(run_motor_mode[runmode][_BrakeMotor]); // take back the brake after failed attempt to start
             if (gas.motormode != run_motor_mode[runmode][_Throttle]) gas.setmode(run_motor_mode[runmode][_Throttle]); // take back the gas after failed attempt to start
         }
-        //
-        // !! Hoping this restructuring of the following if clauses might actually fix the phantom starter bug !!
-        //    // Here is the old code:
-        //    if (starter.motor && hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());  // turn off starter if any Ch4 event occurred
-        //    else if (!starter.motor && hotrc.sw_event_filt(Ch4)) starter.request(ReqOn, hotrc.last_ch4_source());  // turn on starter if a stable, filtered Ch4 event occurred
-        //
         if (starter.motor) {  // if starter is running
             if (hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());  // turn off starter if any Ch4 event occurred. Note keep this if separate, as it will reset the sw event
         } 
         else {  // if starter is not running
             if (hotrc.sw_event_filt(Ch4)) starter.request(ReqOn, hotrc.last_ch4_source());  // turn on starter if a stable, filtered Ch4 event occurred. Note keep this if separate, as it will reset the sw event
         }
-        // if (starter.motor || !tach.stopped()) runmode = Hold;  // If we started the car, enter hold mode once starter is released
         if (!tach.stopped()) runmode = Hold;  // If we started the car, enter hold mode once starter is released
     }
     void run_holdMode(bool recovering=false) {  // recovering argument is only used by the [experimental & optional] boot monitor feature to resume previous drive state after a system crash
@@ -166,11 +148,11 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             ch4_function_timer.reset();  // constantly reset timer to prevent Ch4 buttonn from changing drivemode until after starter motor is stopped
             if (hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());  // a Ch4 event turns off the starter.  Note keep this if separate, as it will reset the sw event
         }
-        if (ch4_function_timer.expired()) {  // unless starter motor was recently turned off
+        if (ch4_function_timer.expired()) {  // if the starter motor has been off for long enough
             if (hotrc.sw_event_filt(Ch4)) tog_preferred_drivemode();  // a Ch4 event will select the preferred drivemode.  Note keep this if separate, as it will reset the sw event
         }
-        if (hotrc.joydir(Vert) != HrcUp) _joy_has_been_centered = true;  // mark joystick at or below center, now pushing up will go to fly mode
-        else if (_joy_has_been_centered && !starter.motor) {  // else if user is pushing up, trying to drive, and starter not running, and trigger was previously centered (prerequisites to drive)
+        if (hotrc.joydir(Vert) != HrcUp) _joy_has_been_centered = true;  // if not pushing up, set this flag. now pushing up will go to fly mode
+        else if (_joy_has_been_centered && !starter.motor) {  // if pushing up (trying to drive), and starter not running, and trigger was previously centered (prerequisites to drive)
             bool radio_problem = false;
             if (!sim.simulating(sens::joy)) {  // when using the hotrc remote there are a few checks we gotta make for safety
                 if (hotrc.radiolost_untested() && require_hotrc_powercycle) radio_problem = true;

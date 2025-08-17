@@ -393,7 +393,8 @@ class ThrottleControl : public ServoMotor {
     float idle_temp_f = NAN;  // temperature determined for purpose of calculating boost. will prefer engine temp sensor but has fallback options 
     QPID pid, cruisepid;
     int throttle_ctrl_mode = OpenLoop;   // set default ctrl behavior. should gas servo use the rpm-sensing pid? values: ActivePID or OpenLoop
-    bool pid_enabled, cruise_pid_enabled, cruise_trigger_released = false;  // if servo higher pulsewidth turns ccw, then do reverse=true
+    bool pid_enabled, cruise_pid_enabled;  // if servo higher pulsewidth turns ccw, then do reverse=true   // cruise_trigger_released = false; 
+    bool just_started_cruise_session = true;
     int cruise_adjust_scheme = HoldTime, motormode = Parked;  // not tunable  // pid_status = OpenLoop, cruise_pid_status = OpenLoop,
     float* deg = si;             // our standard si value is degrees of rotation "deg". Create reference so si and deg are interchangeable
     float pc_to_rpm(float _pc) { return map(_pc, 0.0f, 100.0f, tach->idle(), tach->opmax()); }
@@ -495,8 +496,13 @@ class ThrottleControl : public ServoMotor {
     }
     float cruise_logic(float thr_targ) {
         int joydir = hotrc->joydir(Vert);                           // read vertical joystick direction
-        if ((joydir == HrcCent) || !cruise_trigger_released) {     // if joystick is at center, or hasn't yet been to center since entering cruise mode
-            if (joydir == HrcCent) cruise_trigger_released = true; // if joystick is at center, flag that it has been to center since first entering cruise mode
+        if (just_started_cruise_session) {                          // run once at start of each session to set cruise control values
+            cruise_adjusting = false;                               // initialize value of cruise_adjusting for this session
+            if (cruise_pid_enabled) cruisepid.set_output(thr_targ);  // if this is the end of an adjustment, update pid out to current gas tgt
+            if (cruise_pid_enabled) thr_targ = cruisepid.compute(); // if running on pid and not adjusting, use the pid math to drive thr_targ
+            just_started_cruise_session = false;                    // if (joydir == HrcCent) cruise_trigger_released = true; // if joystick is at center, flag that it has been to center since first entering cruise mode
+        }
+        if (joydir == HrcCent) {     // if joystick is at center, or this is the first loop of our session  //  || !cruise_trigger_released
             if (cruise_pid_enabled && cruise_adjusting) cruisepid.set_output(thr_targ);  // if this is the end of an adjustment, update pid out to current gas tgt
             cruise_adjusting = false;                               // flag that no cruise adjustment is in progress. (resumes pid ctrl of thrtarg, if running pid)
             if (cruise_pid_enabled) thr_targ = cruisepid.compute(); // if running on pid and not adjusting, use the pid math to drive thr_targ
@@ -561,7 +567,7 @@ class ThrottleControl : public ServoMotor {
         else if (_mode == ActivePID) set_pid_ena(true);
         else if (_mode == OpenLoop) set_pid_ena(false);
         else if (_mode == CruiseMode) {           // upon entering cruise mode ...
-            cruise_trigger_released = false;  // flag that the trigger could be off center upon entering cruise mode, so we don't interpret that as an adjustment in progress
+            just_started_cruise_session = true;  // flag that the trigger could be off center upon entering cruise mode, so we don't interpret that as an adjustment in progress // cruise_trigger_released = false;  
             update_cruise_pid();  // update the cruise pid adjustments to the current settings, and its variables to the current state, for a smooth transition into cruise mode
             throttle_target_pc = pid_enabled ? tach->val() : pc[Out]; // set throttle target to its current state, for a smooth transition into cruise mode
         }
@@ -584,7 +590,7 @@ class ThrottleControl : public ServoMotor {
         cruisepid.set_target(speedo->val()); // set pid loop speed target to current speed
         cruisepid.set_output(pid_enabled ? tach->val() : pc[Out]); // set pid output to current value appropriate to current gas pid status
         cruisepid.set_tunings(cruise_kp[pid_enabled], cruise_ki[pid_enabled], cruise_kd[pid_enabled]);
-        cruisepid.reset();
+        // cruisepid.reset();  // causes problems ... check into what this actually does
     }
     void set_cruise_pid_ena(bool new_cruise_pid_ena) {   // run w/o arguments each loop to enforce configuration limitations, or call with an argument to enable/disable pid and update. do not change pid_enabled anywhere else!
         bool cruise_pid_ena_last = cruise_pid_enabled;
@@ -653,8 +659,7 @@ class BrakeControl : public JagMotor {
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
     int dominantsens_last = HybridFB, last_external_mode_request = Halt;
-    Timer stopcar_timer{10000000}, interval_timer{1000000}, motor_park_timer{4000000}, motorheat_timer{500000}, blindaction_timer{3000000};
-    bool stopped_last = false;
+    Timer stopcar_timer{8000000}, interval_timer{250000}, motor_park_timer{4000000}, motorheat_timer{500000}, blindaction_timer{3000000};
     void set_dominant_sensor(float _hybrid_ratio) {
         if (feedback == PressureFB || feedback == PositionFB) dominantsens = feedback;
         else if (std::isnan(_hybrid_ratio)) return;  // dominantsens = NoneFB;
@@ -831,22 +836,26 @@ class BrakeControl : public JagMotor {
         return target_pc;  // this is openloop (blind trigger) control scheme
     }
     void carstop(bool panic_support=true) {  // autogenerates motor target values with the goal of stopping the car
+        static bool stopped_last = false;
         bool panic = panic_support && panicstop;
         bool stopped_now = speedo->stopped();
-        if (stopped_last && !stopped_now) stopcar_timer.reset();
+        if (stopped_last && !stopped_now) stopcar_timer.reset();  // if car just started moving, start a timer to timebox our autostop attempt
         stopped_last = stopped_now;
-        if (feedback == NoneFB) {  // to panic stop without any feedback, we just push as hard as we can for a couple seconds then stop
-            autostopping = !stopped_now && panic && !blindaction_timer.expired();
-            if (!autostopping) return;
-            pc[Out] = pc[OpMax];  // note this is dangerous in that it could mechanically break stuff. if running open loop avoid panicstops
-            return;
-        }
-        autostopping = !stopped_now && !stopcar_timer.expired();
+        
+        // First determine if we really ought to be stopping the car, and set the autostopping flag
+        autostopping = !stopped_now && !stopcar_timer.expired();  // if car is moving and we are trying to stop it, this status flag is set
+        if (feedback == NoneFB) autostopping = autostopping && panic && !blindaction_timer.expired();  // to panic stop without any feedback, we just push as hard as we can for a couple seconds then stop
         // ezread.squintf("as:%d st:%d ex:%d\n", autostopping, stopped_now, stopcar_timer.expired());
-        if (!autostopping) return;
-        if (interval_timer.expireset()) set_target(std::min(100.0f, target_pc + panic ? pressure->panic_increment_pc() : pressure->hold_increment_pc()));
-        else set_target(std::max(target_pc, panic ? pressure->panic_initial_pc() : pressure->hold_initial_pc()));
-        pc[Out] = calc_loop_out();
+        
+        // If indeed autostopping, apply ever-increasing brakes until stopped
+        if (autostopping) {  // if car is stopped or our timer expired, skip autostop action below
+            if (feedback == NoneFB) pc[Out] = pc[OpMax];  // note this is dangerous in that it could mechanically break stuff. if running open loop avoid panicstops
+            else {  // if autostopping while using brake feedback of any kind
+                if (interval_timer.expireset()) set_target(std::min(pressure->opmax(), target_pc + panic ? pressure->panic_increment_pc() : pressure->hold_increment_pc()));  // gradually increase brake pressure on regular intervals until car stops
+                else set_target(std::max(target_pc, panic ? pressure->panic_initial_pc() : pressure->hold_initial_pc()));  // initially set pressure target to baseline value, then hold it constant in between intervals
+                pc[Out] = calc_loop_out();
+            }
+        }
     }
     bool goto_fixed_point(float tgt_point, bool at_position) {  // goes to a fixed position (hopefully) or pressure (if posn is unavailable) then stops.  useful for parking and releasing modes
         // active_sensor = (enabled_sensor == PressureFB) ? PressureFB : PositionFB;  // use posn sensor for this unless we are specifically forcing pressure only
@@ -871,21 +880,24 @@ class BrakeControl : public JagMotor {
         set_hybrid_ratio();
         read_sensors();
 
+        // AutoHold will initially stop the car (if moving) or apply decent brake pressure (if not), then thereafter ensure it stays stopped while in this mode
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
-            carstop(false);
-            autoholding = !autostopping && (pressure->pc() >= pressure->hold_initial_pc() - pressure->margin_pc());  // this needs to be tested  // if (!speedo->stopped()) {            
+            set_target(std::max(target_pc, pressure->hold_initial_pc()));  // set target to a decent amount of pressure
+            carstop(false);  // stop the car if moving (will set autostopping flag correspondingly). this may increase the pressure target, but not decrease
+            autoholding = !autostopping;  // set flag
             // ezread.squintf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->val(), pressure->hold_initial_psi, pressure->margin_psi);
-            if (autoholding) pc[Out] = pc[Stop];
-            else if (!autostopping) {
-                set_target(std::max(target_pc, pressure->hold_initial_pc()));
-                pc[Out] = calc_loop_out();
-            }
+            
+            // TODO !! Needs better logic to overpower back-force slip of new motor!
+            pc[Out] = calc_loop_out();   // if (autoholding) pc[Out] = pc[Stop];  // kills power to motor while car is stopped. 
         }
+
+        // AutoStop will try to stop the car by closing throttle and applying steadily increasing brakes. When stopped or timeout, mode changes to  then ensure it stays stopped while in this mode
         else if (motormode == AutoStop) {  // autostop: if car is moving, apply initial pressure plus incremental pressure every few seconds until it stops or timeout expires, then stop motor and cancel mode
             // ezread.printf("gas debug: mmode=%s, eval=%d\n", motormodecard[motormode].c_str(), (int)((run_motor_mode[runmode][_Throttle] == ParkMotor)));
             throttle->setmode((run_motor_mode[runmode][_Throttle] == ParkMotor) ? ParkMotor : Idle);  // Stop pushing the gas, will help us stop the car better
-            carstop(true);
+            carstop(true);  // this will set the autostopping flag as appropriate, and set increasing brake pressure target if so
             if (!autostopping) setmode(Halt, false);  // After AutoStop mode stops the car or times out, then stop driving the motor
+            pc[Out] = calc_loop_out();
         }
         else if (motormode == Halt) {
             pc[Out] = pc[Stop];
