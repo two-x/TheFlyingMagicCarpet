@@ -730,17 +730,17 @@ class PressureSensor : public AnalogSensor {
         //     * put this value in the set_oplim_native() call below (2nd argument)
         // 12-13) finalize the position sensor values - see the cal procedure in the BrakePositionSensor class for these steps  
 
-        float min_adc = 682.0;  // from step #2 above  // 682 to 713  (earlier i was seeing 662 min. hmm)
+        float min_adc = 650.0;  // from step #2 above  // 650 to 713  (earlier i was seeing 662 min. hmm)
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
         float b = -1.0 * min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
         set_abslim_native(0.0, (float)adcrange_adc);  // set native abslims after m and b are set.  si abslims will autocalc
-        set_oplim_native(min_adc, 2200.0);            // from step #3 above  // set this after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
+        set_oplim_native(min_adc, 2176.0);            // from step #3 above  // set this after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
         set_oplim(0.0, NAN);  // now set just the si oplim to exactly zero. This will cause native oplims to autocalc such that any small errors don't cause our si oplim to be nonzero
         // set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
         // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
         set_ema_alpha(0.03);   // from step #1 above  // 2024 was 0.055
-        set_margin(2.5);       // max acceptible error when checking psi levels
+        set_margin(12.5);       // max acceptible error when checking psi levels
         hold_initial = 120.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
         hold_increment = 3.0;  // incremental pressure added periodically when auto stopping (adc count 0-4095)
         panic_initial = 155.0; // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
@@ -793,14 +793,17 @@ class BrakePositionSensor : public AnalogSensor {
             //
             // 1) (w/o linkage, in cal mode), measure inches from housing end to piston end at both motor extremes (1.22, 7.26) on 250719 w/ gmw1 motor. this can also be done on the bench
             // 2) (w/o linkage, in cal mode), get corresponding bkakposn adc values from datapage, at motor extremes (1885, 2933) on 250719 w/ gmw1 motor. this can also be done on the bench
-            // 3a) (on car w/o linkage, in cal mode) measure pedal travel w/ foot in inches (precision noncritical), to approximate operational range (2.25) on 250719 w/ gmw1 motor
+            // 3a) (on car w/o linkage, in cal mode) we will find position op limits:
+            //     * w/pedal released get opmax inches.
+            //     * watch pressure as you push brake as hard as you can w/ foot, note this pressure
+            //     * In cal mode use actuator to push brake to the same pressure. The corresponding brake positionis its op minimum
             // 3b) (math) add a buffer, like 0.75" to the approximate range b/c motor can pull harder, and for chain slack (3.0) 250719 w/ gmw1 motor
             // 3c) (math) center this range within the abslim range above, to get approximate opmin & opmax (2.73, 5.73) on 250719 w/ gmw1 motor
             // 4) (math) determine fake zeropoint value to midpoint of oprange above (4.23) on 250719 w/ gmw1 motor
             // 5) compile in these results as follows (instead of values being used currently) and upload:
             //    set_abslim(1.22, 7.26, false);        // from step #1
             //    set_abslim_native(1885, 2933, false); // from step #2
-            //    set_oplim(2.73, 5.73);                // from step #3c
+            //    set_oplim(2.73, 5.95);                // from step #3c
             //    _zeropoint = 4.23;                    // from step #4
             // 6) (on car w/o linkage, in cal mode), set the motor so datapage value matches the approximate opmax value from step #3c
             // 7) if necessary, adjust the shim block under the actuator housing so the unit has minimal clearance to it when pedal is fully depressed and linkage is tight
@@ -815,7 +818,7 @@ class BrakePositionSensor : public AnalogSensor {
 
             set_abslim(1.22, 7.26, false);        // from step #1   // need false argument to prevent autocalculation
             set_abslim_native(1885, 2933, false); // from step #2   // need false argument to prevent autocalculation
-            set_oplim(2.73, 5.73);                // from step #13  !! 250720 not yet finalized! (do step 13)
+            set_oplim(1.22, 5.8f);                // from step #13  !! 250720 not yet finalized! (do step 13)
             _zeropoint = 4.07;                    // from step #12c
 
             // don't also set native oplims as they will autocalc from oplims setting
