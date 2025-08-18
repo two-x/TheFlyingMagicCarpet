@@ -746,6 +746,9 @@ class PressureSensor : public AnalogSensor {
     }
     bool parked() { return (std::abs(val() - _opmin) <= _margin); }  // is tha brake motor parked?
     float parkpos() { return _opmin; }
+    float zeropoint_pc() { return to_pc(_zeropoint); }
+    float parkpos_pc() { return to_pc(_opmax); }
+
 };
 // BrakePositionSensor represents a linear position sensor for measuring brake pedal position
 // extends AnalogSensor for handling analog pin reading and conversion.
@@ -823,6 +826,8 @@ class BrakePositionSensor : public AnalogSensor {
     }
     bool parked() { return (std::abs(val() - _opmax) <= _margin); }  // is tha brake motor parked?
     float parkpos() { return _opmax; }
+    float parkpos_pc() { return to_pc(_opmax); }
+    float zeropoint_pc() { return to_pc(_zeropoint); }
 };
 // class PulseSensor are hall-effect based magnetic field sensors where the value is based on magnetic pulse timing of a rotational Source (eg tachometer, speedometer)
 class PulseSensor : public Sensor {

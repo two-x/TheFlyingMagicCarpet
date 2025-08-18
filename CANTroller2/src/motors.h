@@ -576,6 +576,7 @@ class ThrottleControl : public ServoMotor {
     }
     void update_pid() {  // must call whenever governor or tach limits are changed
         if (pid_enabled) pid.set_limits(&pc[OpMin], &pc[Govern]);  // pid.reset();
+        pid.set_output(pid_enabled ? tach->val() : pc[Out]); // set pid output to current value appropriate to current gas pid status
     }
     void set_cruise_tunings(float a_kp=NAN, float a_ki=NAN, float a_kd=NAN) {  // for external tuner to calibrate the cruise pid coefficients. helper function needed to remember the edited settings independently for whether gas pid is open or closed loop
         if (!std::isnan(a_kp)) cruise_kp[pid_enabled] = a_kp;  // remember these calibrated settings as specific to the current state of the gas pid 
@@ -653,8 +654,8 @@ class BrakeControl : public JagMotor {
     float press_kp = 0.8;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float press_ki = 2.1;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_kd = 0.0;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    float posn_kp = 80.0;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float posn_ki = 35.5;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float posn_kp = 40.0;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float posn_ki = 75.5;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_kd = 0.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     float _autostop_smooth_initial_pc = 60.0;  // default initial applied braking to auto-stop or auto-hold the car (in percent of op range)
     float _autostop_smooth_increment_pc = 2.5;  // default additional braking added periodically when auto stopping (in percent of op range)
@@ -683,6 +684,7 @@ class BrakeControl : public JagMotor {
     bool feedback_enabled[NumBrakeSens];
     int dominantsens, motormode = Halt, oldmode = Halt;  // not tunable
     int openloop_mode = AutoRelHoldable;  // if true, when in openloop the brakes release when trigger released. otherwise, control with thrigger using halfway point scheme
+    int _fixed_target_mode = NA;  // allows brake in loop modes to stay in loop when releasing or parking motor
     bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == PositionFB);
     QPID pids[NumBrakeSens];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     QPID* pid_dom = &(pids[PositionFB]);  // AnalogSensor sensed[2];
@@ -692,7 +694,8 @@ class BrakeControl : public JagMotor {
     bool autostopping = false, autoholding = false;
     float target_si[NumBrakeSens];  // this value is the posn and pressure (and hybrid combined) target settings, or fed into pid to calculate setting if pid enabled, in si units appropriate to each sensor
     float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, target_pc, pid_err_pc;
-    float combined_read_pc, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
+    float combined_read_pc, target_margin_pc = 2.0f, hybrid_out_ratio = 1.0, hybrid_out_ratio_pc = 100.0;
+    float _fixed_release_speed = -50.0f;  // rate an openloop pedal release will travel
     float motor_heat = NAN, motor_heatloss_rate = 3.0, motor_max_loaded_heatup_rate = 1.5, motor_max_unloaded_heatup_rate = 0.3;  // deg F per timer timeout
     float open_loop_attenuation_pc = 75.0, thresh_loop_attenuation_pc = 45.0, thresh_loop_hysteresis_pc = 2.0;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
     void derive() {  // to-do below: need stop/hold values for posn only operation!
@@ -815,27 +818,28 @@ class BrakeControl : public JagMotor {
             if (err > 0.0) return thresh_loop_attenuation_pc * throttle->idle_pc();
             return thresh_loop_attenuation_pc * pc[OpMax];
         }
-        else {  // if ActivePID
+        else if (motormode == ActivePID) {  // if ActivePID
             return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // if (motormode == ActivePID) combine pid outputs weighted by the multiplier
         }
         // else return pc[Stop];  // this should not happen, maybe print an error message
     }
     float calc_open_out() {
+        float new_out = pc[Out];
         if (openloop_mode == AutoRelHoldable) {  // AutoRelHoldable: releases brake whenever trigger is released, and presses brake when trigger pulled to max. anywhere in between stops brake movement
             if (hotrc->pc[Vert][Filt] <= hotrc->pc[Vert][OpMin] + hotrc->pc[Vert][Margin])
-                set_target(open_loop_attenuation_pc * pc[OpMax] / 100.0);
-            else if (hotrc->joydir() == HrcDn) set_target(pc[Stop]);
-            else set_target(pc[OpMin]);
+                new_out = open_loop_attenuation_pc * pc[OpMax] / 100.0;
+            else if (hotrc->joydir() == HrcDn) new_out = pc[Stop];
+            else new_out = pc[OpMin];
         }
         else if (openloop_mode == AutoRelease) {  // AutoRelease: releases brake whenever trigger is released, and presses brake proportional to trigger push. must hold trigger steady to stop brakes where they are
-            if (hotrc->joydir() == HrcDn) set_target(open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[Stop], pc[OpMax]) / 100.0);
-            else set_target(pc[OpMin]);
+            if (hotrc->joydir() == HrcDn) new_out = open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[Stop], pc[OpMax]) / 100.0;
+            else new_out = pc[OpMin];
         }
         else if (openloop_mode == MedianPoint) {  // Median: holds brake when trigger is released, or if pulled to exactly halfway point. trigger pulls over or under halfway either proportionally apply or release the brake
-            if (hotrc->joydir() == HrcDn) set_target(open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[OpMin], pc[OpMax]) / 100.0);
-            else set_target(pc[Stop]);
+            if (hotrc->joydir() == HrcDn) new_out = open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[OpMin], pc[OpMax]) / 100.0;
+            else new_out = pc[Stop];
         }
-        return target_pc;  // this is openloop (blind trigger) control scheme
+        return new_out;  // this is openloop (blind trigger) control scheme
     }
     void carstop(bool panic_support=true) {  // autogenerates motor target values with the goal of stopping the car
         static bool stopped_last = false, autostopping_last = false;
@@ -846,43 +850,43 @@ class BrakeControl : public JagMotor {
         
         // First determine if we really ought to be stopping the car, and set the autostopping flag
         autostopping = !stopped_now && !stopcar_timer.expired();  // if car is moving and we are trying to stop it, this status flag is set
-        if (feedback == NoneFB) autostopping = autostopping && panic && !blindaction_timer.expired();  // to panic stop without any feedback, we just push as hard as we can for a couple seconds then stop
+        if (!pid_enabled) autostopping = autostopping && panic && !blindaction_timer.expired();  // to panic stop without any feedback, we just push as hard as we can for a couple seconds then stop
         // ezread.squintf("as:%d st:%d ex:%d\n", autostopping, stopped_now, stopcar_timer.expired());
         
         // If indeed autostopping, apply ever-increasing brakes until stopped
         if (autostopping) {  // if car is stopped or our timer expired, skip autostop action below
-            if (feedback == NoneFB) set_target(pc[OpMax]);  // note this is dangerous in that it could mechanically break stuff. if running open loop avoid panicstops
+            if (!pid_enabled) pc[Out] = pc[OpMax];  // note this is dangerous in that it could mechanically break stuff. if running open loop avoid panicstops
             else {  // if autostopping while using brake feedback of any kind
                 bool fast = panic || stopped_now;
                 if (interval_timer.expireset()) set_target(std::min(pressure->opmax(), target_pc + fast ? _autostop_fast_increment_pc : _autostop_smooth_increment_pc));  // gradually increase brake pressure on regular intervals until car stops
                 else set_target(std::max(target_pc, fast ? _autostop_fast_initial_pc : _autostop_smooth_initial_pc));  // initially set pressure target to baseline value, then hold it constant in between intervals
             }
         }
-        else if (autostopping_last) set_target(pc[Stop]);  // when autostopping effort ends, stop the motor
+        else if (autostopping_last) {
+            if (!pid_enabled) pc[Out] = pc[Stop];
+            else set_target(pc[Stop]);  // when autostopping effort ends, stop the motor
+        }
+        if (pid_enabled) pc[Out] = calc_loop_out();
         autostopping_last = autostopping;
     }
-    bool goto_fixed_point(float tgt_point, bool at_position) {  // goes to a fixed position (hopefully) or pressure (if posn is unavailable) then stops.  useful for parking and releasing modes
+    bool goto_fixed_position(float tgt_position, bool at_position) {  // goes to a fixed position (hopefully) or pressure (if posn is unavailable) then stops.  useful for parking and releasing modes
         // active_sensor = (enabled_sensor == PressureFB) ? PressureFB : PositionFB;  // use posn sensor for this unless we are specifically forcing pressure only
-        bool in_progress;
-        if (feedback == NoneFB) {  // if running w/o feedback, let's blindly release the brake for a few seconds then halt it
-            in_progress = (!blindaction_timer.expired());
-            if (in_progress) pc[Out] = pc[OpMin];
-            else setmode(Halt, false); 
-            return in_progress;
+        if (motormode == PropLoop || motormode == ActivePID) {
+            set_target(tgt_position);
+            return (std::abs(target_pc - combined_read_pc <= target_margin_pc));
         }
-        in_progress = (!at_position && !motor_park_timer.expired());
-        if (in_progress) set_target(tgt_point);
-        else setmode(Halt, false);
-        pc[Out] = calc_loop_out();
+        bool in_progress;
+        if (feedback == NoneFB) in_progress = (!blindaction_timer.expired());  // if running w/o feedback, let's blindly release the brake for a few seconds then halt it
+        else in_progress = ((brkpos->pc() < tgt_position) && !motor_park_timer.expired());
+        if (in_progress) pc[Out] = _fixed_release_speed;
+        else setmode(Halt, false); 
         return in_progress;
     }
     void set_output() {  // sets pc[Out] in whatever way is right for the current motor mode
-        if (motormode == OpenLoop) {  // in open loop, push trigger out less than 1/2way, motor extends (release brake), or more than halfway to retract (push brake), w/ speed proportional to distance from halfway point 
-            pc[Out] = calc_open_out();
-            return;  // open loop should skip calculating hybrid ratio, so just return
+        if (!(motormode == OpenLoop || feedback == NoneFB)) {  // open loop should skip calculating hybrid ratio
+            set_hybrid_ratio();
+            read_sensors();
         }
-        set_hybrid_ratio();
-        read_sensors();
 
         // AutoHold will initially stop the car (if moving) or apply decent brake pressure (if not), then thereafter ensure it stays stopped while in this mode
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
@@ -892,8 +896,8 @@ class BrakeControl : public JagMotor {
             // TODO !! May need better logic to overpower back-force slip of new motor!
 
             // ezread.squintf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->val(), pressure->hold_initial_psi, pressure->margin_psi);            
-            if (feedback == NoneFB) pc[Out] = target_pc;  
-            else pc[Out] = calc_loop_out();   // if (autoholding) pc[Out] = pc[Stop];  // kills power to motor while car is stopped. 
+            // if (feedback == NoneFB) pc[Out] = target_pc;  else
+            pc[Out] = calc_loop_out();   // if (autoholding) pc[Out] = pc[Stop];  // kills power to motor while car is stopped. 
         }
 
         // AutoStop will try to stop the car by closing throttle and applying steadily increasing brakes. When stopped or timeout, mode changes to  then ensure it stays stopped while in this mode
@@ -914,15 +918,26 @@ class BrakeControl : public JagMotor {
             else if (_joydir == HrcDn) pc[Out] = map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][OpMin], hotrc->pc[Vert][Cent], pc[OpMin], pc[Stop]);
             else pc[Out] = pc[Stop];
         }
-        else if (motormode == Release) {
-            releasing = goto_fixed_point(brkpos->zeropoint_pc(), released());
+        else if (motormode == Release) {  // this will not get entered if using loop control. instead target is set in setmode function
+            releasing = goto_fixed_position(brkpos->zeropoint_pc(), brkpos->released());
+            // if (feedback == NoneFB) pc[Out] = target_pc; else
+            // pc[Out] = calc_loop_out();   // if (autoholding) pc[Out] = pc[Stop];  // kills power to motor while car is stopped. 
         }
-        else if (motormode == ParkMotor) {
-            parking = goto_fixed_point(0.0, parked());
+        else if (motormode == ParkMotor) {  // this will not get entered if using loop control. instead target is set in setmode function
+            parking = goto_fixed_position(brkpos->parkpos_pc(), brkpos->parked());  // will set target to parked position
+            // if (feedback == NoneFB) pc[Out] = target_pc;  else
+            // pc[Out] = calc_loop_out();   // if (autoholding) pc[Out] = pc[Stop];  // kills power to motor while car is stopped. 
+        }
+        else if (motormode == OpenLoop) {  // in open loop, push trigger out less than 1/2way, motor extends (release brake), or more than halfway to retract (push brake), w/ speed proportional to distance from halfway point 
+            pc[Out] = calc_open_out();
         }
         else if ((motormode == PropLoop) || (motormode == ActivePID)) {
-            if (hotrc->joydir(Vert) != HrcDn) set_target(pc[Stop]);  // let off the brake
-            else set_target(map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
+            if (_fixed_target_mode == Release) releasing = goto_fixed_position(brkpos->zeropoint_pc(), brkpos->released());
+            else if (_fixed_target_mode == ParkMotor) parking = goto_fixed_position(brkpos->parkpos_pc(), brkpos->parked());
+            else {  // when dynamically driving
+                if (hotrc->joydir(Vert) != HrcDn) set_target(pc[Stop]);  // let off the brake
+                else set_target(map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], 0.0, 100.0));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
+            }
             pc[Out] = calc_loop_out();
         }
     }
@@ -943,20 +958,27 @@ class BrakeControl : public JagMotor {
     void setmode(int _mode, bool external_request=true) {  // external_request set to false when calling from inside the class (to remember what the outside world wants the mode to be)   
         bool mode_forced = false;                                                 // note whether requested mode was overriden
         int save_mode_request = _mode;
+        if ((motormode == PropLoop) || (motormode == ActivePID)) {
+            if (_mode == Release || _mode == ParkMotor) {
+                _fixed_target_mode = _mode;  // tells loop to target a fixed braking lavel instead of user control. Avoids stopping pid
+                return;  // skip the mode change, we are just using new targets
+            }
+            else if (_mode != motormode || _fixed_target_mode == NA) _fixed_target_mode = motormode;  // remove special target mode, back to dynamic control
+        }
         if (feedback == NoneFB) {                                                 // if there is no feedback
+            if (_mode == AutoStop && panicstop) ezread.squintf(ezread.sadcolor, "warn: performing blind panic stop maneuver\n");
+            else if (_mode == AutoHold || _mode == AutoStop) {    // todo: rethink these scenarios 
+                ezread.squintf(ezread.sadcolor, "warn: autobrake unavailable in openloop\n");
+                return;  // keep current mode
+            }
+            else if (_mode == Release || _mode == ParkMotor) {
+                _mode = Halt;  // TODO: should have a timer way to release/park w/o sensors
+                mode_forced = true;
+            }
             if (_mode == ActivePID || _mode == PropLoop) { 
                 // preforce_drivemode = _mode;                                       // remember our requested drive mode before demoting to openloop mode, so we can restore it if settings changed
                 mode_forced = true;
                 _mode = OpenLoop;      // can't use loops, drop to openloop instead
-            }
-            else if (_mode == AutoHold || (_mode == AutoStop && !panicstop)) {    // todo: rethink these scenarios 
-                ezread.squintf(ezread.sadcolor, "warn: autobrake unavailable in openloop\n");
-                return;  // keep current mode
-            }
-            else if (_mode == AutoStop) ezread.squintf(ezread.sadcolor, "warn: performing blind panic stop maneuver\n");
-            else if (_mode == Release) {
-                _mode = Halt;
-                mode_forced = true;
             }
             // else if (_mode == Release || _mode == ParkMotor) _mode = Halt;   // in openloop we lose some safeties, only use if necessary 
         }
@@ -966,6 +988,7 @@ class BrakeControl : public JagMotor {
         if (_mode == motormode) return;
         if (external_request) last_external_mode_request = save_mode_request;  // remember what the outside world actually asked for, in case we override it but later wish to go back
         autostopping = autoholding = cal_brakemode = parking = releasing = false;        
+        if ((motormode == PropLoop) || (motormode == ActivePID)) _fixed_target_mode = _mode;  // cancel any fixed target condition
         interval_timer.reset();
         stopcar_timer.reset();
         blindaction_timer.reset();
