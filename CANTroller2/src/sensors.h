@@ -683,7 +683,6 @@ class PressureSensor : public AnalogSensor {
     sens _senstype = sens::pressure;
     // int opmin_adc, opmax_adc, absmin_adc, absmax_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
     // Soren 230920: reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
-    float hold_initial, hold_increment, panic_initial, panic_increment;  // , _margin_psi, _zeropoint_psi;
     PressureSensor(int arg_pin) : AnalogSensor(arg_pin) {
         _long_name = "BrkPressure";
         _short_name = "presur";
@@ -730,7 +729,7 @@ class PressureSensor : public AnalogSensor {
         //     * put this value in the set_oplim_native() call below (2nd argument)
         // 12-13) finalize the position sensor values - see the cal procedure in the BrakePositionSensor class for these steps  
 
-        float min_adc = 650.0;  // from step #2 above  // 650 to 713  (earlier i was seeing 662 min. hmm)
+        float min_adc = 650.0;  // from step #2 above. max value set in function call below  // 650 to 713  (earlier i was seeing 662 min. hmm)
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
         float b = -1.0 * min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
@@ -740,19 +739,11 @@ class PressureSensor : public AnalogSensor {
         // set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
         // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
         set_ema_alpha(0.03);   // from step #1 above  // 2024 was 0.055
-        set_margin(12.5);       // max acceptible error when checking psi levels
-        hold_initial = 120.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
-        hold_increment = 3.0;  // incremental pressure added periodically when auto stopping (adc count 0-4095)
-        panic_initial = 155.0; // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
-        panic_increment = 5.0; // incremental pressure added periodically when auto stopping (adc count 0-4095)
+        set_margin(50.0);       // max acceptible error when checking psi levels
         _zeropoint = from_native(686);   // tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
         set_native(_opmin_native);
         print_config();
     }
-    float hold_initial_pc() { return to_pc(hold_initial); }  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
-    float hold_increment_pc() { return to_pc(hold_increment); }  // incremental pressure added periodically when auto stopping (adc count 0-4095)
-    float panic_initial_pc() { return to_pc(panic_initial); }  // pressure initially applied when brakes are hit to auto-stop the car (adc count 0-4095)
-    float panic_increment_pc() { return to_pc(panic_increment); }  // incremental pressure added periodically when auto stopping (adc count 0-4095)
     bool parked() { return (std::abs(val() - _opmin) <= _margin); }  // is tha brake motor parked?
     float parkpos() { return _opmin; }
 };
@@ -962,7 +953,7 @@ class Tachometer : public PulseSensor {
     sens _senstype = sens::tach;
     float _calfactor = 1.0;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
     float _governmax_rpm;
-    float _idle = 300.0, _idle_cold = 425.0, _idle_hot = 225.0;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer
+    float _idle = 590.0, _idle_cold = 680.0, _idle_hot = 500.0;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer
     // float _calfactor = 0.25;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
     Tachometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {  // where actual_hz = pulses_hz * freqfactor (due to external circuitry or magnet arrangement)
         _long_name = "Tachometer";
@@ -989,8 +980,8 @@ class Tachometer : public PulseSensor {
         set_oplim(0.0, 3600.0);  // aka redline,  Max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         _governmax_rpm = _opmax * governor / 100.0;
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        set_margin(10.0);
-        set_si(50.0);
+        set_margin(15.0);
+        set_si(0.0);
         _us = hz_to_us(_native.val());
         print_config();
     }

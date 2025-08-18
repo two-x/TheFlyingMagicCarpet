@@ -656,6 +656,11 @@ class BrakeControl : public JagMotor {
     float posn_kp = 80.0;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float posn_ki = 35.5;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_kd = 0.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    float _autostop_smooth_initial_pc = 60.0;  // default initial applied braking to auto-stop or auto-hold the car (in percent of op range)
+    float _autostop_smooth_increment_pc = 2.5;  // default additional braking added periodically when auto stopping (in percent of op range)
+    float _autostop_fast_initial_pc = 65.0; // same as above but for fast-braking (during panic or when stopped)
+    float _autostop_fast_increment_pc = 4.0; // same as above but for fast-braking (during panic or when stopped)
+    float _autohold_initial_pc = 70.0;  // braking to apply when autoholding if car is stopped 
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
     int dominantsens_last = HybridFB, last_external_mode_request = Halt;
@@ -773,13 +778,13 @@ class BrakeControl : public JagMotor {
         if (feedback == NoneFB) return NAN;
         if (feedback == PressureFB) return 1.0;
         if (feedback == PositionFB) return 0.0;
-        float pressure_ratio = pressure->pc() / 100.0;  // (pressure_val - pressure->opmin()) / (pressure->opmax() - pressure->opmin());  // calculate ratio of output to range
+        float pressure_ratio = pressure_val / 100.0;  // (pressure_val - pressure->opmin()) / (pressure->opmax() - pressure->opmin());  // calculate ratio of output to range
         if (pressure_ratio >= brake_pid_trans_threshold_hi) return 1.0;  // at pressure above hi threshold, pressure has 100% influence
         if (pressure_ratio <= brake_pid_trans_threshold_lo) return 0.0;  // at pressure below lo threshold, position has 100% influence
         return 0.5 + 0.5 * sin(hybrid_math_coeff * (pressure_ratio - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
     }
     void set_hybrid_ratio() {
-        float temp = calc_hybrid_ratio(pressure->val());
+        float temp = calc_hybrid_ratio(pressure->pc());
         if (!isnan(temp)) {
             hybrid_out_ratio = temp;  // calculate pressure vs. position multiplier based on the sensed values
             hybrid_out_ratio_pc = 100.0 * hybrid_out_ratio;  // for display
@@ -803,19 +808,16 @@ class BrakeControl : public JagMotor {
         else if (feedback == HybridFB) combined_read_pc = get_hybrid_brake_pc(pressure->pc(), brkpos->pc());
         else combined_read_pc = NAN;
     }
-    float calc_prop_loop_out() {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
-        float err = (combined_read_pc - target_pc);
-        if (std::abs(err) < thresh_loop_hysteresis_pc) return pc[Stop];
-        if (err > 0.0) return thresh_loop_attenuation_pc * throttle->idle_pc();
-        return thresh_loop_attenuation_pc * pc[OpMax];
-    }
-    // float calc_prop_loop_out() {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
-    //     float err = (combined_read_pc - target_pc);
-    //     return pc[OpMin] + pc[OpMax] * err / (pc[OpMax]);
-    // }
     float calc_loop_out() {  // returns motor output percent calculated based on current target_pc or target[] values, in a way consistent w/ current config
-        if (motormode == PropLoop) return calc_prop_loop_out();  // || motormode == AutoHold  may make sense, to allow honoring of which loop type during autoholding
-        else return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // if (motormode == ActivePID) combine pid outputs weighted by the multiplier
+        if (motormode == PropLoop) {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
+            float err = (combined_read_pc - target_pc);
+            if (std::abs(err) < thresh_loop_hysteresis_pc) return pc[Stop];
+            if (err > 0.0) return thresh_loop_attenuation_pc * throttle->idle_pc();
+            return thresh_loop_attenuation_pc * pc[OpMax];
+        }
+        else {  // if ActivePID
+            return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // if (motormode == ActivePID) combine pid outputs weighted by the multiplier
+        }
         // else return pc[Stop];  // this should not happen, maybe print an error message
     }
     float calc_open_out() {
@@ -829,14 +831,14 @@ class BrakeControl : public JagMotor {
             if (hotrc->joydir() == HrcDn) set_target(open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[Stop], pc[OpMax]) / 100.0);
             else set_target(pc[OpMin]);
         }
-        else {  // Median: holds brake when trigger is released, or if pulled to exactly halfway point. trigger pulls over or under halfway either proportionally apply or release the brake
+        else if (openloop_mode == MedianPoint) {  // Median: holds brake when trigger is released, or if pulled to exactly halfway point. trigger pulls over or under halfway either proportionally apply or release the brake
             if (hotrc->joydir() == HrcDn) set_target(open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[OpMin], pc[OpMax]) / 100.0);
             else set_target(pc[Stop]);
         }
         return target_pc;  // this is openloop (blind trigger) control scheme
     }
     void carstop(bool panic_support=true) {  // autogenerates motor target values with the goal of stopping the car
-        static bool stopped_last = false;
+        static bool stopped_last = false, autostopping_last = false;
         bool panic = panic_support && panicstop;
         bool stopped_now = speedo->stopped();
         if (stopped_last && !stopped_now) stopcar_timer.reset();  // if car just started moving, start a timer to timebox our autostop attempt
@@ -849,13 +851,15 @@ class BrakeControl : public JagMotor {
         
         // If indeed autostopping, apply ever-increasing brakes until stopped
         if (autostopping) {  // if car is stopped or our timer expired, skip autostop action below
-            if (feedback == NoneFB) pc[Out] = pc[OpMax];  // note this is dangerous in that it could mechanically break stuff. if running open loop avoid panicstops
+            if (feedback == NoneFB) set_target(pc[OpMax]);  // note this is dangerous in that it could mechanically break stuff. if running open loop avoid panicstops
             else {  // if autostopping while using brake feedback of any kind
-                if (interval_timer.expireset()) set_target(std::min(pressure->opmax(), target_pc + panic ? pressure->panic_increment_pc() : pressure->hold_increment_pc()));  // gradually increase brake pressure on regular intervals until car stops
-                else set_target(std::max(target_pc, panic ? pressure->panic_initial_pc() : pressure->hold_initial_pc()));  // initially set pressure target to baseline value, then hold it constant in between intervals
-                pc[Out] = calc_loop_out();
+                bool fast = panic || stopped_now;
+                if (interval_timer.expireset()) set_target(std::min(pressure->opmax(), target_pc + fast ? _autostop_fast_increment_pc : _autostop_smooth_increment_pc));  // gradually increase brake pressure on regular intervals until car stops
+                else set_target(std::max(target_pc, fast ? _autostop_fast_initial_pc : _autostop_smooth_initial_pc));  // initially set pressure target to baseline value, then hold it constant in between intervals
             }
         }
+        else if (autostopping_last) set_target(pc[Stop]);  // when autostopping effort ends, stop the motor
+        autostopping_last = autostopping;
     }
     bool goto_fixed_point(float tgt_point, bool at_position) {  // goes to a fixed position (hopefully) or pressure (if posn is unavailable) then stops.  useful for parking and releasing modes
         // active_sensor = (enabled_sensor == PressureFB) ? PressureFB : PositionFB;  // use posn sensor for this unless we are specifically forcing pressure only
@@ -882,13 +886,14 @@ class BrakeControl : public JagMotor {
 
         // AutoHold will initially stop the car (if moving) or apply decent brake pressure (if not), then thereafter ensure it stays stopped while in this mode
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
-            set_target(std::max(target_pc, pressure->hold_initial_pc()));  // set target to a decent amount of pressure
             carstop(false);  // stop the car if moving (will set autostopping flag correspondingly). this may increase the pressure target, but not decrease
             autoholding = !autostopping;  // set flag
-            // ezread.squintf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->val(), pressure->hold_initial_psi, pressure->margin_psi);
-            
-            // TODO !! Needs better logic to overpower back-force slip of new motor!
-            pc[Out] = calc_loop_out();   // if (autoholding) pc[Out] = pc[Stop];  // kills power to motor while car is stopped. 
+            if (autoholding) set_target(std::max(target_pc, _autohold_initial_pc));  // set target to a decent amount of pressure
+            // TODO !! May need better logic to overpower back-force slip of new motor!
+
+            // ezread.squintf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->val(), pressure->hold_initial_psi, pressure->margin_psi);            
+            if (feedback == NoneFB) pc[Out] = target_pc;  
+            else pc[Out] = calc_loop_out();   // if (autoholding) pc[Out] = pc[Stop];  // kills power to motor while car is stopped. 
         }
 
         // AutoStop will try to stop the car by closing throttle and applying steadily increasing brakes. When stopped or timeout, mode changes to  then ensure it stays stopped while in this mode
