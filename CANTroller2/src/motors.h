@@ -658,11 +658,11 @@ class BrakeControl : public JagMotor {
     // full range averages (max):  pos = .05 in/update  press:  15 psi/update
     // double these due to each sensor covers its whole range mostly during when it's dominant:  pos: 0.1 in/update  press: 30 psi/update
     // start point for tuning: all coefficients should add to about this value for expected sane performance   
-    float press_kp = 100.0;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float press_ki = 200.0;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float press_kp = 0.54;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float press_ki = 0.22;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_kd = 0.0;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    float posn_kp = 35.0;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float posn_ki = 15.0;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float posn_kp = 30.3;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float posn_ki = 8.0;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_kd = 0.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     float _autostop_smooth_initial_pc = 60.0;  // default initial applied braking to auto-stop or auto-hold the car (in percent of op range)
     float _autostop_smooth_increment_pc = 2.5;  // default additional braking added periodically when auto stopping (in percent of op range)
