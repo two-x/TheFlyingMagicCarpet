@@ -730,6 +730,7 @@ class PressureSensor : public AnalogSensor {
         // 12-13) finalize the position sensor values - see the cal procedure in the BrakePositionSensor class for these steps  
 
         float min_adc = 650.0;  // from step #2 above. max value set in function call below  // 650 to 713  (earlier i was seeing 662 min. hmm)
+        float noise_margin = 45.0;  // how much the min value can jump to above the number above due to noise
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
         float b = -1.0 * min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
@@ -739,8 +740,8 @@ class PressureSensor : public AnalogSensor {
         // set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
         // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
         set_ema_alpha(0.03);   // from step #1 above  // 2024 was 0.055
-        set_margin(50.0);       // max acceptible error when checking psi levels
-        _zeropoint = from_native(686);   // tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
+        set_margin(noise_margin);       // max acceptible error when checking psi levels
+        _zeropoint = from_native(min_adc + noise_margin / 2.0f);   // tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
         set_native(_opmin_native);
         print_config();
     }
@@ -812,14 +813,14 @@ class BrakePositionSensor : public AnalogSensor {
 
             set_abslim(1.22, 7.26, false);        // from step #1   // need false argument to prevent autocalculation
             set_abslim_native(1885, 2933, false); // from step #2   // need false argument to prevent autocalculation
-            set_oplim(1.22, 5.8f);                // from step #13  !! 250720 not yet finalized! (do step 13)
-            _zeropoint = 4.07;                    // from step #12c
+            set_oplim(1.22, 5.9f);                // from step #13  !! 250720 not yet finalized! (do step 13)
+            _zeropoint = 5.25;                    // from step #12c
 
             // don't also set native oplims as they will autocalc from oplims setting
             // set_oplim_native(1445, 1923);  // 240609 1445 (2.68in) is full push, and 1923 (4.5in) is park position (with simple quicklink +carabeener linkage)
         #endif
         set_ema_alpha(0.35);
-        set_margin(0.35);  // TODO: add description
+        set_margin(0.2);  // TODO: add description
         // _mfactor = (_absmax - _absmin) / (float)(_absmax_adc - _absmin_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
         // _boffset = -2.69;  //  979 adc * 0.00372 in/adc - 0.95 in = -2.69 in
         print_config();

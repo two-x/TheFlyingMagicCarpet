@@ -367,9 +367,9 @@ class ThrottleControl : public ServoMotor {
     Tachometer* tach;
     Potentiometer* pot;
     TemperatureSensorManager* tempsens;
-    float gas_kp = 0.013f;             // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
-    float gas_ki = 0.050f;             // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
-    float gas_kd = 0.000f;             // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
+    float gas_kp = 0.13f;             // PID proportional coefficient (gas) How much to open throttle for each unit of difference between measured and desired RPM  (unitless range 0-1)
+    float gas_ki = 0.50f;             // PID integral frequency factor (gas). How much more to open throttle for each unit time trying to reach desired RPM  (in 1/us (mhz), range 0-1)
+    float gas_kd = 0.00f;             // PID derivative time factor (gas). How much to dampen sudden throttle changes due to P and I infuences (in us, range 0-1)
     float cruise_kp[2] = { 2.33f,  5.57f }; // [GasOpen/GasPID] PID proportional coefficient (cruise) How many RPM for each unit of difference between measured and desired car speed  (unitless range 0-1)
     float cruise_ki[2] = { 1.06f, 11.00f }; // [GasOpen/GasPID] PID integral frequency factor (cruise). How many more RPM for each unit time trying to reach desired car speed  (in 1/us (mhz), range 0-1)
     float cruise_kd[2] = { 0.00f,  0.00f }; // [GasOpen/GasPID] PID derivative time factor (cruise). How much to dampen sudden RPM changes due to P and I infuences (in us, range 0-1)
@@ -650,18 +650,26 @@ class BrakeControl : public JagMotor {
     PressureSensor* pressure;
     ThrottleControl* throttle;
     TemperatureSensorManager* tempsens;
-    float brakemotor_duty_spec_pc = 10.0;  // = 25.0; // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
-    float press_kp = 0.8;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float press_ki = 2.1;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+
+    // Notes on tuning coefficients:
+    // these apply 33 times per second. so scale to have reasonable change versus entire range
+    // full range:  pos: about 5 inch    press: about 1500 psi
+    // arbitrary decide we expect a full range action to take max 3 seconds, then that's about 100 updates
+    // full range averages (max):  pos = .05 in/update  press:  15 psi/update
+    // double these due to each sensor covers its whole range mostly during when it's dominant:  pos: 0.1 in/update  press: 30 psi/update
+    // start point for tuning: all coefficients should add to about this value for expected sane performance   
+    float press_kp = 100.0;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float press_ki = 200.0;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_kd = 0.0;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    float posn_kp = 40.0;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float posn_ki = 75.5;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float posn_kp = 35.0;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float posn_ki = 15.0;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_kd = 0.0;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     float _autostop_smooth_initial_pc = 60.0;  // default initial applied braking to auto-stop or auto-hold the car (in percent of op range)
     float _autostop_smooth_increment_pc = 2.5;  // default additional braking added periodically when auto stopping (in percent of op range)
     float _autostop_fast_initial_pc = 65.0; // same as above but for fast-braking (during panic or when stopped)
     float _autostop_fast_increment_pc = 4.0; // same as above but for fast-braking (during panic or when stopped)
-    float _autohold_initial_pc = 70.0;  // braking to apply when autoholding if car is stopped 
+    float _autohold_initial_pc = 100.0;  // braking to apply when autoholding if car is stopped 
+    float brakemotor_duty_spec_pc = 10.0;  // = 25.0; // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
     float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     float heat_math_offset, motor_heat_min = 75.0, motor_heat_max = 200.0;
     int dominantsens_last = HybridFB, last_external_mode_request = Halt;
@@ -864,7 +872,10 @@ class BrakeControl : public JagMotor {
         }
         else if (autostopping_last) {
             if (!pid_enabled) pc[Out] = pc[Stop];
-            else set_target(pc[Stop]);  // when autostopping effort ends, stop the motor
+            else {
+                set_target(pc[Stop]);  // when autostopping effort ends, stop the motor
+                ezread.squintf("autostop session ended, stopping brake motor");
+            }
         }
         if (pid_enabled) pc[Out] = calc_loop_out();
         autostopping_last = autostopping;
@@ -891,8 +902,8 @@ class BrakeControl : public JagMotor {
         // AutoHold will initially stop the car (if moving) or apply decent brake pressure (if not), then thereafter ensure it stays stopped while in this mode
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
             carstop(false);  // stop the car if moving (will set autostopping flag correspondingly). this may increase the pressure target, but not decrease
-            autoholding = !autostopping;  // set flag
-            if (autoholding) set_target(std::max(target_pc, _autohold_initial_pc));  // set target to a decent amount of pressure
+            if (!autostopping) set_target(std::max(target_pc, _autohold_initial_pc));  // set target to a decent amount of pressure
+            autoholding = !autostopping && (get_hybrid_brake_pc(pressure->pc(), brkpos->pc()) >= _autohold_initial_pc);  // set flag
             // TODO !! May need better logic to overpower back-force slip of new motor!
 
             // ezread.squintf("as:%d ah:%d f:%lf, h:%lf, m:%lf\n", autostopping, autoholding, pressure->val(), pressure->hold_initial_psi, pressure->margin_psi);            
