@@ -1232,7 +1232,7 @@ static NeopixelStrip neo(neopixel_pin);
 static IdiotLights idiots;
 static Touchscreen touch;
 static Display screen(&neo, &neo2, &touch, &idiots, &sim);
-static Tuner tuner(&screen, &neo, &touch);
+static Tuner tuner(&screen, &neo, &neo2, &touch);
 bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickType_t waittime=portMAX_DELAY) {   // pdMS_TO_TICKS(1)
     if (xSemaphoreTake(*sem1, waittime) == pdTRUE) {  // try to take 1st semaphore, and if successful ...
         if (xSemaphoreTake(*sem2, waittime) == pdTRUE) return pdTRUE;  // try to take 2nd semaphore, and if successful, return true
