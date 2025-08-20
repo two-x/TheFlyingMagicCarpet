@@ -1054,12 +1054,13 @@ class Tuner {
   private:
     Display* screen;
     NeopixelStrip* neo;
+    NeopixelStrip2* neo2;
     Touchscreen* touch;
     Timer tuningAbandonmentTimer{45000000};  // this times out edit mode after a a long period of inactivity
     Timer tuningEditTimer{50000};  // control frequency of polling for new edits
     int datapage_last;
   public:
-    Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
+    Tuner(Display* _screen, NeopixelStrip* _neo, NeopixelStrip2* _neo2, Touchscreen* _touch) : screen(_screen), neo2(_neo2), neo(_neo), touch(_touch) {}
     int id, id_encoder = 0;  // idelta is integer edit value accelerated, and is used for all tuning edits regardless if int float or bool
     int rdelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
     void update() {
