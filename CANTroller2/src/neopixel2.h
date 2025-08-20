@@ -4,7 +4,7 @@
 #include "globals.h" 
 #define neorgb_t RgbColor  // RgbwColor
 #define striplength 10
-#define idiot_light_offset 3  // Offset for idiot lights in the strip, after the heartbeat LEDs
+#define idiot_light_led_offset 3  // Offset for idiot lights in the strip, after the heartbeat LEDs
 #define idiot_light_led_count 7  // Number of idiot lights after the heartbeat leds
 #define runmode_lights_animation_duration_ms 6000
 #define idiot_lights_animation_duration_ms 6000
