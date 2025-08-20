@@ -3,10 +3,8 @@
 #include <NeoPixelAnimator.h>
 #include "globals.h" 
 #define neorgb_t RgbColor  // RgbwColor
-// #define striplength 10
-#define striplength 9 // wtf dan's dev board has 9 LEDs, not 10
-// #define idiot_light_offset 3  // Offset for idiot lights in the strip, after the heartbeat LEDs
-#define idiot_light_led_offset 2  // For Dan's dev board neopixel, the first two LEDs are the heartbeat LEDs, then the idiot lights start
+#define striplength 10
+#define idiot_light_offset 3  // Offset for idiot lights in the strip, after the heartbeat LEDs
 #define idiot_light_led_count 7  // Number of idiot lights after the heartbeat leds
 #define runmode_lights_animation_duration_ms 6000
 #define idiot_lights_animation_duration_ms 6000
