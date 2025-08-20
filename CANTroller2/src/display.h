@@ -1210,7 +1210,7 @@ class Tuner {
         }
         else if (datapage == PgDiag) {
             if (sel == 10) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, GlowNumModes - 1, true));
-            else if (sel == 11) neo->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
+            else if (sel == 11) neo2->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 12) neo->sleepmode_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 13) tune(&neobright, id, 0.0, 100.0);  // with recent changes to tune() I had to move the setter function for
             else if (sel == 14) tune(&neosat, id, 0.0, 100.0);     //  these into the neopix update function, or acceleration wouldn't work

@@ -307,6 +307,29 @@ public:
         // Don't delete neoobj since it points to global neoobj
     }
 
+    void flashdemo_ena(bool ena) {
+        flashdemo = ena;
+        if (flashdemo) {
+            idiotlights[0].warningMode = true;
+            idiotlights[1].panicMode = true;
+            idiotlights[4].warningMode = true;
+            // idiotlights[4].warningFlashColor = RgbColor(255, 0, 0);
+            // for (int i=1; i<=6; i++) setflash(i, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
+            // setflash(4, 8, 8, 8, 20);            // brightness toggle in a continuous squarewave
+            // setflash(5, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
+            // setflash(6, 2, 5, 5, 0, 0);          // two short black pulses
+        }
+        else {                                   // cancel any current blink programs on these leds
+            idiotlights[0].warningMode = false;
+            idiotlights[1].panicMode = false;
+            idiotlights[4].warningMode = false;
+            // for (int i=1; i<=6; i++) setflash(i, 0);
+            // setflash(4, 0);
+            // setflash(5, 0);
+            // setflash(6, 0);
+        }
+    }
+
     void update() {
         static Timer update_timer{20000}; // 20000us = 20ms update at most every 20ms.
         if (update_timer.expireset()) {
