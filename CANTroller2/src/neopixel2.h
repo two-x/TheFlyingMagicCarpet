@@ -141,10 +141,10 @@ private:
                         // First second: 3 rapid pulses
                         float pulse_phase = fmod(cycle_time * 3.0f, 1.0f);  // 3 pulses per second
                         bool flash_on = pulse_phase < 0.5f;  // 50% duty cycle per pulse
-                        neoobj.SetPixelColor(idiotlights[i].led, flash_on ? RgbColor(255, 255, 255) : BLACK);
+                        neoobj.SetPixelColor(idiotlights[i].led, flash_on ? RgbColor(255, 255, 255) : idiotlights[i].solidColor);
                     } else {
                         // Next 2 seconds: break (off)
-                        neoobj.SetPixelColor(idiotlights[i].led, BLACK);
+                        neoobj.SetPixelColor(idiotlights[i].led, idiotlights[i].solidColor);
                     }
                 } else if (idiotlights[i].solidOnMode) {
                     if (idiotlights[i].hasFlashColors()) {

@@ -112,13 +112,13 @@ enum brakeextra { NumBrakeSens=2 };
 enum telemetry_idiots {                              // list of transducers which have onscreen idiotlights showing status
     _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
     _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are mission-critical actuators, driven by us.  note: these enums are also used to index global runmode:motormode array 
-    _Speedo=3, _Tach=4, _BrakePres=5, _BrakePosn=6,  // these transducers are mission-critical sensors, we read from
-    _HotRC=7, _Temps=8, _Other=9, _GPIO=10,          // these are actually groups of multiple sensors (see below)
-    NumTelemetryIdiots=11,                           // size of the list of values with idiot lights
+    _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7,  // these transducers are mission-critical sensors, we read from
+    _Temps=8, _MuleBatt=9, _Other=10, _GPIO=11,          // these are actually groups of multiple sensors (see below)
+    NumTelemetryIdiots=12,                           // size of the list of values with idiot lights
 };
 enum telemetry_full {                                                                                 // complete list expanding sensor groups
-    _HotRCHorz=11, _HotRCVert=12, _HotRCCh3=13, _HotRCCh4=14,                                         // _HotRC sensor group
-    _MuleBatt=15, _AirVelo=16, _MAP=17, _Pot=18,                                                      // _Other sensor group
+    _HotRCHorz=12, _HotRCVert=13, _HotRCCh3=14, _HotRCCh4=15,                                         // _HotRC sensor group
+    _AirVelo=16, _MAP=17, _Pot=18,                                                      // _Other sensor group
     _TempEng=19, _TempWhFL=20, _TempWhFR=21, _TempWhRL=22, _TempWhRR=23, _TempBrake=24, _TempAmb=25,  // _Temps sensor group
     _Ignition=26, _Starter=27, _BasicSw=28,                                                           // _GPIO signal group (with simple boolean values)
     _TempWheel=29,                                                                                    // flag for any wheel temp out of range
