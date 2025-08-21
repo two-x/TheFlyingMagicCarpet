@@ -937,11 +937,9 @@ class PulseSensor : public Sensor {
         _stop_timer.set(_absmax_us);
     }
     // float last_read_time() { return _last_read_time_us; }
-    // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
-    bool stopped() {
-        // if (bootbutton_val) ezread.squintf("puls.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), _opmin, _margin, (int)(std::abs(val() - _opmin) <= _margin));
-        return (std::abs(val() - _opmin) <= _margin);  // Note due to weird float math stuff, can not just check if tach == 0.0
-    }
+    bool stopped() { return iszero(val()); }
+    // old: bool stopped() { return (std::abs(val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    // older:  bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     bool* pin_inactive_ptr() { return &_pin_inactive; }
     bool* pin_level_ptr() { return &_pin_level; }
     float absmin_us() { return _absmin_us; }
@@ -1046,12 +1044,6 @@ class Speedometer : public PulseSensor {
         _us = hz_to_us(_native.val());
         // _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
         print_config();
-    }
-    bool stopped() {
-        bool joe = bootbutton_val;
-        if (joe) 
-          ezread.squintf("spd.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d, j%d\n", val(), _opmin, _margin, (int)(std::abs(val() - _opmin) <= _margin), (int)joe);  // spam catcher fails on this, w/o bootbutton condition, but not with!
-        return PulseSensor::stopped();
     }
 };
 

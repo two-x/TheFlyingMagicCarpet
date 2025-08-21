@@ -33,7 +33,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(run_motor_mode[runmode][_BrakeMotor]);
             steer.setmode(run_motor_mode[runmode][_SteerMotor]);
             watchdog.set_codestatus();
-            shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = car_hasnt_moved = false;  // clean up previous runmode values
+            shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = false;  // clean up previous runmode values
             _stoppedholdtimer_active = cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
         }
         _oldmode = runmode;

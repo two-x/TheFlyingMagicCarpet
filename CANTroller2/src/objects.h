@@ -45,7 +45,6 @@ void set_board_defaults() {          // true for dev boards, false for printed b
     // ezread.squintf("  using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");  // already printed during detection in temperature class
     if (running_on_devboard) return;      // override settings if running on the real car
     looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
-    encoder_reverse = true;
     touch_reticles = false;
     // console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
     wifi_client_mode = false;       // Should wifi be in client or access point mode?

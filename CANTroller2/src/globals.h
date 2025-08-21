@@ -162,7 +162,6 @@ bool overtemp_shutoff_wheel = true;  // should a wheel temp beyond opmax cause e
 bool throttle_linearize_trigger = true;  // should trigger values be linearized for gas determination?
 bool throttle_linearize_cruise = false;  // should trigger values be linearized when in cruise mode?
 // bool stall_mode_timeout = true;    // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
-bool encoder_reverse = false;         // should clockwise encoder twists indicate decreases instead of an increases?
 bool throttle_pid_default = false;    // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool cruise_pid_default = true;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool require_hotrc_powercycle = true; // refuse to enter drive modes until the code has verified functionality of radiolost detection
