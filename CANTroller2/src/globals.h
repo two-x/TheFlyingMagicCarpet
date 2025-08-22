@@ -190,7 +190,7 @@ float governor = 95.0f;                 // software governor will only allow thi
 int run_motor_mode[NumRunModes][3] = {   // Array of which motor mode the gas/brake/steer get set to upon entering each runmode
     { ParkMotor, ParkMotor, OpenLoop },  // Basic mode    (_Throttle/_BrakeMotor/_SteerMotor)
     { ParkMotor, ParkMotor, Halt },      // LowPower mode (_Throttle/_BrakeMotor/_SteerMotor)
-    { ParkMotor, AutoStop, OpenLoop },   // Standby mode  (_Throttle/_BrakeMotor/_SteerMotor)
+    { ParkMotor, Halt, OpenLoop },       // Standby mode  (_Throttle/_BrakeMotor/_SteerMotor)
     { OpenLoop, ActivePID, OpenLoop },   // Stall mode    (_Throttle/_BrakeMotor/_SteerMotor)
     { AutoPID, AutoHold, OpenLoop },     // Hold mode     (_Throttle/_BrakeMotor/_SteerMotor)
     { AutoPID, ActivePID, OpenLoop },    // Fly mode      (_Throttle/_BrakeMotor/_SteerMotor)
@@ -248,7 +248,7 @@ int ts_swipedir = DirNone;  // touchscreen
 // bool nowtouch2 = false;
 bool captouch = true;
 float loop_avg_us;
-bool sensidiots[11];  // array holds an error flag for each critical sensor or sensor group 
+bool sensidiots[NumTelemetryIdiots];  // array holds an error flag for each critical sensor or sensor group 
 int ui_app = EZReadUI, ui_app_default = EZReadUI;
 bool panicstop = false;
 

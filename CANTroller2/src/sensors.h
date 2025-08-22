@@ -814,7 +814,7 @@ class BrakePositionSensor : public AnalogSensor {
             set_abslim(1.22, 7.26, false);        // from step #1   // need false argument to prevent autocalculation
             set_abslim_native(1885, 2933, false); // from step #2   // need false argument to prevent autocalculation
             set_oplim(1.22, 5.9f);                // from step #13  !! 250720 not yet finalized! (do step 13)
-            _zeropoint = 5.25;                    // from step #12c
+            _zeropoint = 5.7;                    // from step #12c
 
             // don't also set native oplims as they will autocalc from oplims setting
             // set_oplim_native(1445, 1923);  // 240609 1445 (2.68in) is full push, and 1923 (4.5in) is park position (with simple quicklink +carabeener linkage)

@@ -829,7 +829,10 @@ class BrakeControl : public JagMotor {
         else if (motormode == ActivePID) {  // if ActivePID
             return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // if (motormode == ActivePID) combine pid outputs weighted by the multiplier
         }
-        // else return pc[Stop];  // this should not happen, maybe print an error message
+        else {
+            ezread.squintf(ezread.madcolor, "err: brake calc out invalid motormode\n");
+            return pc[Out];  // this should not happen, maybe print an error message
+        }
     }
     float calc_open_out() {
         float new_out = pc[Out];

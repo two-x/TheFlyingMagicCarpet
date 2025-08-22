@@ -102,24 +102,37 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_standbyMode() { // In standby mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         static Timer stopcar_timer{5000000}; // spend this long trying to stop the car and parking motors before halting actuators 
+        static Timer parkmotors_timer{2000000}; // spend this long trying to park the motors before halting them
+        static bool stopcar_phase;
         if (_we_just_switched_modes) {              
             shutting_down = !powering_up;   // if waking up from sleep standby is already complete
-            powering_up = false;
+            stopcar_phase = true;  // !speedo.stopped();
             ignition.request(ReqOff);
             stopcar_timer.reset();
             sleep_request = ReqNA;
             user_inactivity_timer.set(_lowpower_delay_min * 60 * 1000000);
         }
-        else if (shutting_down) {  // first we need to stop the car and release brakes and gas before shutting down
-            if (stopcar_timer.expired()) shutting_down = false;
-            if (brake.motormode != AutoStop) {  // brake autostop mode will have dropped to Halt mode once complete, check for that
-                if (brake.parked()) shutting_down = false;
-                else brake.setmode(ParkMotor);
+        if (shutting_down) {
+            if (stopcar_phase) {
+                if (speedo.stopped() || stopcar_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
+                    if (stopcar_timer.expired()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to stop car\n");
+                    stopcar_phase = false;  // move on to parkmotor phase
+                    parkmotors_timer.reset();
+                }
+                else if (brake.motormode != AutoStop) brake.setmode(AutoStop);
+            }
+            else {  // we are in park motor phase
+                if (brkpos.parked() || parkmotors_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
+                    if (parkmotors_timer.expired()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to park brake\n");
+                    shutting_down = false;  // done shutting down
+                    brake.setmode(Halt);
+                }
+                else if (brake.motormode != ParkMotor) brake.setmode(ParkMotor);
             }
         }
-        else {  // if initial window for parking motors & stopping car is complete
-            steer.setmode(Halt);  // disable steering, in case it was left on while we were panic stopping
-            brake.setmode(Halt);
+        else {
+            if (steer.motormode != Halt) steer.setmode(Halt);
+            if (brake.motormode != Halt) brake.setmode(Halt);
             if (hotrc.sw_event_filt(Ch4) || user_inactivity_timer.expired() || sleep_request == ReqTog || sleep_request == ReqOn) runmode = LowPower;
             if (calmode_request) runmode = Cal;  // if fully shut down and cal mode requested, go to cal mode
             if (auto_saver_enabled) if (encoder.button.shortpress()) autosaver_request = ReqOff;
