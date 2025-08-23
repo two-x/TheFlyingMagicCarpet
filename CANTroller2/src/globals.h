@@ -188,7 +188,7 @@ int i2c_frequency = 400000;             // in kHz. standard freqs are: 100k, 400
 float governor = 95.0f;                 // software governor will only allow this percent of full-open throttle (percent 0-100)
 
 int run_motor_mode[NumRunModes][3] = {   // Array of which motor mode the gas/brake/steer get set to upon entering each runmode
-    { ParkMotor, ParkMotor, OpenLoop },  // Basic mode    (_Throttle/_BrakeMotor/_SteerMotor)
+    { Halt, Halt, OpenLoop },  // Basic mode    (_Throttle/_BrakeMotor/_SteerMotor)
     { ParkMotor, ParkMotor, Halt },      // LowPower mode (_Throttle/_BrakeMotor/_SteerMotor)
     { ParkMotor, Halt, OpenLoop },       // Standby mode  (_Throttle/_BrakeMotor/_SteerMotor)
     { OpenLoop, ActivePID, OpenLoop },   // Stall mode    (_Throttle/_BrakeMotor/_SteerMotor)

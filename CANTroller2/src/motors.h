@@ -826,12 +826,12 @@ class BrakeControl : public JagMotor {
             if (err > 0.0) return thresh_loop_attenuation_pc * throttle->idle_pc();
             return thresh_loop_attenuation_pc * pc[OpMax];
         }
-        else if (motormode == ActivePID) {  // if ActivePID
+        else if (motormode == ActivePID) {  //  if ActivePID
             return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // if (motormode == ActivePID) combine pid outputs weighted by the multiplier
         }
         else {
             ezread.squintf(ezread.madcolor, "err: brake calc out invalid motormode\n");
-            return pc[Out];  // this should not happen, maybe print an error message
+            return pc[Stop];  // this should not happen, maybe print an error message
         }
     }
     float calc_open_out() {
@@ -880,7 +880,7 @@ class BrakeControl : public JagMotor {
                 ezread.squintf("autostop session ended, stopping brake motor");
             }
         }
-        if (pid_enabled) pc[Out] = calc_loop_out();
+        // if (pid_enabled) pc[Out] = calc_loop_out();
         autostopping_last = autostopping;
     }
     bool goto_fixed_position(float tgt_position, bool at_position) {  // goes to a fixed position (hopefully) or pressure (if posn is unavailable) then stops.  useful for parking and releasing modes
