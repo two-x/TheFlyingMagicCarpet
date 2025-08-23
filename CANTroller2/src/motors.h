@@ -1064,7 +1064,7 @@ class SteeringControl : public JagMotor {
   public:
     using JagMotor::JagMotor;
     int motormode = Halt, oldmode = Halt;
-    float steer_safe_pc = 72.0;  // this percent is taken off full steering power when driving full speed (linearly applied)
+    float steer_safe_pc = 25.0;  // this percent is taken off full steering power when driving full speed (linearly applied)
     void set_out_changerate_pcps(float newrate) {
         max_out_changerate_pcps = newrate;
         // max_out_changerate_pcps = 100.0 * max_out_changerate_degps / (si[OpMax] - si[OpMin]);
