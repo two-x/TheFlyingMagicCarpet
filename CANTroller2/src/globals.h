@@ -163,11 +163,12 @@ bool throttle_linearize_trigger = true;  // should trigger values be linearized 
 bool throttle_linearize_cruise = false;  // should trigger values be linearized when in cruise mode?
 // bool stall_mode_timeout = true;    // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
 bool throttle_pid_default = false;    // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
-bool cruise_pid_default = true;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
+bool cruise_pid_default = false;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool require_hotrc_powercycle = true; // refuse to enter drive modes until the code has verified functionality of radiolost detection
 bool force_hotrc_button_filter = false; // always force button filtration for all actions. otherwise unfiltered presses are allowed for safety events (ie ignition or starter kill), in case of radio interference
 bool ezread_suppress_spam = true;       // activates ezread feature to suppress data coming into the console too fast (to prevent overrun crashes)
 bool panic_on_boot_after_crash = true;  // causes bootmanager to do a panic on boot if car was in a drive state when reset 
+bool untested_hotrc_kills_ignition = true;
 
 // global tunable variables
 int operational_framerate_limit_fps = 100;  // max display frame rate to enforce while driving whenever limit_framerate == true
@@ -177,7 +178,7 @@ constexpr int unlikely_int = -92935762; // random ass unlikely value for detecti
 int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;    // when looptime_print == 1, will linefeed after printing loops taking > this value. set to 0 linefeeds all prints
 float flycruise_vert_margin_pc = 3.0f;  // margin of error (in percent) for determining hard brake value for dropping out of cruise mode
-float cruise_holdtime_attenuator_pc = 20.0f; // adjustment rate multiplier for cruise HoldTime mode
+float cruise_holdtime_attenuator_pc = 10.0f; // adjustment rate multiplier for cruise HoldTime mode
 float cruise_onepull_attenuator_pc = 14.0f;  // adjustment rate multiplier for cruise OnePull mode
 float maf_min_gps = 0.0;                // in grams per second
 float maf_max_gps = 50.0f;              // i just made this number up as i have no idea what's normal for MAF

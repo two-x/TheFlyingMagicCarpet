@@ -35,10 +35,12 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             watchdog.set_codestatus();
             shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = false;  // clean up previous runmode values
             _stoppedholdtimer_active = cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
+            ezread.squintf("runmode %s -> %s\n", modecard[_oldmode], modecard[runmode]);
         }
         _oldmode = runmode;
         if (runmode != LowPower) {  // common to almost all the modes, so i put it here
             if (ignition.signal) {  // if ignition is on
+                if (untested_hotrc_kills_ignition && hotrc.radiolost_untested()) ignition.request(ReqOff);
                 if (hotrc.sw_event_unfilt(Ch3)) ignition.request(ReqOff);  // any Ch3 event turns it off. if ign is turned off while the car is moving, this leads to panic stop. Note keep this if separate, as it will reset the sw event
             }
             else {  // if ignition is off
