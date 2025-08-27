@@ -19,6 +19,7 @@ static const uint8_t idiot_light_colors[] = {0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4,
 
 class IdiotLight {
 private:
+    bool _verbose = false;
 public:
     uint8_t led;
     bool solidOnMode = false;
@@ -32,7 +33,7 @@ public:
         for (uint8_t i = 0; i < NumTelemetryIdiots; i++) {
             flashColors[i] = BLACK;
         }
-        ezread.squintf("IdiotLight created on LED %d with base color %d\n", led, solidColor);
+        if (_verbose) ezread.squintf("IdiotLight created on LED %d with base color %d\n", led, solidColor);
     }
 
     void setFlashColor(uint8_t index, RgbColor color) {
@@ -102,6 +103,7 @@ class NeopixelStrip2 {
 private:
     int last_runmode = -1;
     RgbColor runmode_color = RgbColor(0, 0, 0);
+    bool _verbose = false;
 
     void startRunmodeAnimation() {
         // Start the runmode/backlight pulse animation
@@ -247,7 +249,7 @@ public:
             uint8_t led = i + idiot_light_led_offset;  // Set LED index for each idiot light
             idiotlights[i].led = led;
             idiotlights[i].solidColor = color_to_neo(idiot_light_colors[i]);
-            ezread.squintf("IdiotLight %d initialized with LED %d and color %d\n", i, idiotlights[i].led, idiotlights[i].solidColor);
+            if (_verbose) ezread.squintf("IdiotLight %d initialized with LED %d and color %d\n", i, idiotlights[i].led, idiotlights[i].solidColor);
             neoobj.SetPixelColor(idiotlights[i].led, idiotlights[i].solidColor);
         }
         neoobj.Show();
@@ -334,7 +336,7 @@ public:
         static Timer update_timer{20000}; // 20000us = 20ms update at most every 20ms.
         if (update_timer.expireset()) {
             if (last_runmode == -1 || last_runmode != runmode) {
-                ezread.squintf("neopixel2 detected runmode change: %d->%d\n", last_runmode, runmode);
+                if (_verbose) ezread.squintf("neopixel2 detected runmode change: %d->%d\n", last_runmode, runmode);
                 last_runmode = runmode;
                 runmode_color = color_to_neo(colorcard[last_runmode]);
 
