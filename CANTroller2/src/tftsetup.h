@@ -21,7 +21,7 @@
 // #define CONFIG_WIFI_LWIP_ALLOCATION_FROM_SPIRAM_FIRST
 // #define CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY
 
-// Custom settings for ESP32 LovyanGFX library - all chinese commentary has been translated
+// Custom settings for ESP32 LovyanGFX library - all japanese commentary has been translated
 // The original setting is the same as the original setting, and the LGFX_Device is a derivative of the original creation.
 
 // Soren notes from Espressif site:  The SPI Master driver allows multiple Devices to be connected on a same SPI bus (sharing 
@@ -123,7 +123,7 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.pin_sclk        = spi_sclk_pin;   // SCLK pin number
             cfg.pin_mosi        = spi_mosi_pin;   // MOSI pin number
             cfg.pin_miso        = spi_miso_pin;   // MISO pin number
-            cfg.pin_cs          = tp_cs_fuel_pin; // CS pin number
+            cfg.pin_cs          = tp_cs_pin;      // CS pin number
             _res_touch_instance.config(cfg);
             _panel_instance.setTouch(&_res_touch_instance);  // Place the touch screen on the panel.
         }

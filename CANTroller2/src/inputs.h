@@ -2,7 +2,11 @@
 #include "FunctionalInterrupt.h"
 class MomentarySwitch {
   private:
+<<<<<<< HEAD
     int _sw_action = swNONE;               // flag for encoder handler to know an encoder switch action needs to be handled
+=======
+    int _sw_action = SwNone;               // flag for encoder handler to know an encoder switch action needs to be handled
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
     bool _timer_active = false;            // flag to prevent re-handling long presses if the sw is just kept down
     bool _suppress_click = false;          // flag to prevent a short click on switch release after successful long press
     bool activity_timer_keepalive = true;  // will activity on this switch be considered that the user is active?
@@ -15,8 +19,8 @@ class MomentarySwitch {
     void set_pin(int pin) { _pin = pin; }
     void update() {
         // read and interpret encoder switch activity. encoder rotation is handled in interrupt routine
-        // encoder handler routines should act whenever encoder_sw_action is swSHORT or swLONG, setting it back to
-        // swNONE once handled. When handling press, if encoder_long_clicked is nonzero then press is a long press
+        // encoder handler routines should act whenever encoder_sw_action is SwShort or SwLong, setting it back to
+        // SwNone once handled. When handling press, if encoder_long_clicked is nonzero then press is a long press
         bool myread = _val;
         do {
             myread = !digitalRead(_pin);       // !value because electrical signal is active low
@@ -24,20 +28,28 @@ class MomentarySwitch {
 
         if (myread) {     // if encoder sw is being pressed (switch is active low)
             if (!_val) {  // if the press just occurred
+<<<<<<< HEAD
                 if (activity_timer_keepalive) kick_inactivity_timer(HUMomDown);  // evidence of user activity
+=======
+                if (activity_timer_keepalive) kick_inactivity_timer(HuMomDown);  // evidence of user activity
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
                 _longpressTimer.reset();  // start a press timer
                 _timer_active = true;     // flag to indicate timing for a possible long press
             }
             else if (_timer_active && _longpressTimer.expired()) {  // if press time exceeds long press threshold
+<<<<<<< HEAD
                 _sw_action = swLONG;    // set flag to handle the long press event. note, routine handling press should clear this
+=======
+                _sw_action = SwLong;    // set flag to handle the long press event. note, routine handling press should clear this
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
                 _timer_active = false;  // keeps us from entering this logic again until after next sw release (to prevent repeated long presses)
                 _suppress_click = true; // prevents the switch release after a long press from causing a short press
             }
         }
         else {  // if encoder sw is not being pressed
             if (_val) {
-                if (activity_timer_keepalive) kick_inactivity_timer(HUMomUp);  // evidence of user activity
-                if(!_suppress_click) _sw_action = swSHORT;  // if the switch was just released, a short press occurred, which must be handled
+                if (activity_timer_keepalive) kick_inactivity_timer(HuMomUp);  // evidence of user activity
+                if(!_suppress_click) _sw_action = SwShort;  // if the switch was just released, a short press occurred, which must be handled
             }
             _timer_active = false;   // allows detection of next long press event
             _suppress_click = false; // end click suppression
@@ -46,31 +58,31 @@ class MomentarySwitch {
     }
     int press_event(bool autoreset = true) {
         int ret = _sw_action;
-        if (autoreset) _sw_action = swNONE;
+        if (autoreset) _sw_action = SwNone;
         return ret;
     }
     bool longpress(bool autoreset=true) {  // code may call this to check for long press and if so act upon it. Resets the long press if asserted
-        bool ret = (_sw_action == swLONG);
-        if (ret && autoreset) _sw_action = swNONE;
+        bool ret = (_sw_action == SwLong);
+        if (ret && autoreset) _sw_action = SwNone;
         return ret;
     }
     bool shortpress(bool autoreset=true) {  // code may call this to check for short press and if so act upon it. Resets the long press if asserted
-        bool ret = (_sw_action == swSHORT);
-        if (ret && autoreset) _sw_action = swNONE;
+        bool ret = (_sw_action == SwShort);
+        if (ret && autoreset) _sw_action = SwNone;
         return ret;
     }
     void setup(int pin=-1) {
         if (pin != -1) _pin = pin;
         pinMode(_pin, INPUT_PULLUP);
     }
-    void press_reset() { _sw_action = swNONE; }
+    void press_reset() { _sw_action = SwNone; }
     bool val() { return _val; }
     bool* ptr() { return &_val; }
     void setLongPressTimer(int t) { _longpressTimer.set(t); }
 };
 class Encoder {
   private:
-    enum _inputs { ENC_A=0, ENC_B=1 };
+    enum _inputs { EncA=0, EncB=1 };
     Timer activitytimer{300000};
     // using panasonic-type encoder (16 detents/spin, 1 transition per detent)
     // 800us: soren's best, maybe glitched, 15000us: uncomfortably fast, 40000us: regular twist, 800000us: eeeextra slow
@@ -78,7 +90,11 @@ class Encoder {
     volatile int _spintime_isr_us = 100000;  // time elapsed between last two detents
     volatile int isr_time_now;
     volatile int isr_time_last;
+<<<<<<< HEAD
     volatile int _bounce_lock = ENC_B;           // which of the encoder A or B inputs is currently untrustworthy due to bouncing 
+=======
+    volatile int _bounce_lock = EncB;           // which of the encoder A or B inputs is currently untrustworthy due to bouncing 
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
     static const int _bounce_expire_us = 10000;  // need to let bounce lock expire to reliably catch turn events in either direction on direction reversals
     volatile int _delta = 0;                     // keeps track of un-handled rotary clicks of the encoder. positive for CW clicks, Negative for CCW. 
     int _a_pin, _b_pin, _sw_pin, _state = 0, _spintime_us = 1000000;  // how many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
@@ -96,7 +112,7 @@ class Encoder {
     void IRAM_ATTR _a_isr() {                         // A isr has been triggered by A signal rise or fall transition. A will now be bouncing for a while and can't be trusted
         isr_time_now = esp_timer_get_time();          // put some flavor in your flav
         int elapsed = isr_time_now - isr_time_last;   // note time elapsed since last valid event on A isr. might be invalid for use by outside code if this is a bounce   
-        if (_bounce_lock == Encoder::ENC_A) {         // if A isr is bounce locked, B isr hasn't yet triggered since our last trigger
+        if (_bounce_lock == Encoder::EncA) {         // if A isr is bounce locked, B isr hasn't yet triggered since our last trigger
             if (elapsed <= _bounce_expire_us) return; // if it's not yet been long enough since the initial transition we assume this is a bounce and just bail
             val_a_isr = digitalRead(_a_pin);          // otherwise since B isr hasn't triggered, we are reversing direction and must update our own value
         }
@@ -104,11 +120,11 @@ class Encoder {
         _spintime_isr_us = elapsed;                   // save elapsed time since last trigger, to calculate spin rate
         isr_time_last = isr_time_now;                 // reset spin rate timer for next time
         _delta += (val_a_isr == val_b_isr) ? -1 : 1;  // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
-        _bounce_lock = Encoder::ENC_A;                // bounce lock this isr to avoid retriggering, and unlock the B isr
+        _bounce_lock = Encoder::EncA;                // bounce lock this isr to avoid retriggering, and unlock the B isr
     }
     #else                                                    // eg soren's dev board encoder
     void IRAM_ATTR _a_isr() {                                // A isr has been triggered by A signal rise or fall transition. A will now bounce for a while and can't be trusted
-        if (_bounce_lock == Encoder::ENC_A) return;          // if A isr is bounce locked then bail
+        if (_bounce_lock == Encoder::EncA) return;          // if A isr is bounce locked then bail
         if (!val_a_isr) {                                    // if the A signal is now low (i.e. recent B isr read A pin as high)
             isr_time_now = esp_timer_get_time();             // put some flavor in your flav
             _spintime_isr_us = isr_time_now - isr_time_last; // save elapsed time since last trigger, to calculate spin rate
@@ -116,16 +132,20 @@ class Encoder {
             val_b_isr = !digitalRead(_b_pin);                // Get a clean reading of the B signal
             _delta += val_b_isr ? -1 : 1;                    // increment delta for each CW event and vice versa. handler in code may reset delta to 0 as it sees fit
         }
-        _bounce_lock = Encoder::ENC_A;                       // bounce lock this isr to avoid retriggering, and unlock the B isr
+        _bounce_lock = Encoder::EncA;                       // bounce lock this isr to avoid retriggering, and unlock the B isr
     }
     #endif
     void IRAM_ATTR _b_isr() {                        // B isr has been triggered by B signal rise or fall transition. B will now bounce for a while and can't be trusted
-        if (_bounce_lock == Encoder::ENC_B) return;  // if B isr is bounce locked then bail
+        if (_bounce_lock == Encoder::EncB) return;  // if B isr is bounce locked then bail
         val_a_isr = !digitalRead(_a_pin);            // get a clean reading of A signal, forecasting it will invert
-        _bounce_lock = Encoder::ENC_B;               // bounce lock this isr to avoid retriggering, and unlock the A isr
+        _bounce_lock = Encoder::EncB;               // bounce lock this isr to avoid retriggering, and unlock the A isr
     }
     Timer twisttimer{500000};        // set to the max amount of time you can reliably expect to see w/o any detents turned in between rapid twists
+<<<<<<< HEAD
     float _spinrate, _spinrate_max;  // , spinrate_accel_thresh;  // in Hz
+=======
+    float _spinrate, _spinrate_max;  // spinrate_accel_thresh;  // in Hz
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
     int _accel_factor = 1;
   public:
     MomentarySwitch button;
@@ -136,7 +156,7 @@ class Encoder {
     Encoder() = delete;           // must be instantiated with pins
     
     void setup() {
-        ezread.squintf("Encoder setup..\n");
+        ezread.squintf("Encoder init\n");
         set_pin(_a_pin, INPUT_PULLUP);
         set_pin(_b_pin, INPUT_PULLUP);
         button.setup();
@@ -161,7 +181,11 @@ class Encoder {
         if (_spintime_isr_us != time_last) {
             div_time = _spintime_isr_us;
             #if EncoderPanasonicType  // these encoders have half the transitions/interrupts for the same amount of turn 
+<<<<<<< HEAD
             div_time >> 1;            // because it takes 2 detents to get 1 A interrupt w/ these encoders, each detent took half the time
+=======
+            div_time >> 1;            // because it takes 2 detents to get 1 A interrupt w/ these encoders, ie each detent took half the time
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
             #endif
             if (!twist_in_progress || (div_time < best_time_this_twist)) best_time_this_twist = div_time;
             twist_in_progress = true;
@@ -182,10 +206,10 @@ class Encoder {
         button.update();
         enc_a = !digitalRead(_a_pin);
         enc_b = !digitalRead(_b_pin);
-        // if (runmode == LOWPOWER || runmode == STANDBY) {
+        // if (runmode == LowPower || runmode == Standby) {
         //     if (button.shortpress(false)) {
-        //         sleep_request = REQ_OFF;
-        //         autosaver_request = REQ_OFF;
+        //         sleep_request = ReqOff;
+        //         autosaver_request = ReqOff;
         //     }
         // }
         if (_delta != delta_last) activitytimer.reset();
@@ -196,15 +220,25 @@ class Encoder {
     bool* activity_ptr() { return &activity; }
     int rotation(bool accel=true) {  // returns detents spun since last call, accelerated by spin rate or not
         int d = _delta;
+<<<<<<< HEAD
         _delta = 0;  // our responsibility to reset this flag after handling events
         if (d) kick_inactivity_timer(HUEncTurn);  // evidence of user activity
+=======
+        _delta = 0;  // our responsibility to reset this flag after queries
+        if (d) kick_inactivity_timer(HuEncTurn);  // register evidence of user activity
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         if (accel) d *= _accel_factor;
         return d;
     }
-    int rotdirection() {  // returns 0 if unspun, or -1 or 1 if spun, depending on which direction
+    int rotdirection() {  // returns 0 if unspun, -1 if spun CCW, or 1 if spun CW
         int d = _delta;
+<<<<<<< HEAD
         _delta = 0;       // our responsibility to reset this flag after handling events
         if (d) kick_inactivity_timer(HUEncTurn);  // evidence of user activity
+=======
+        _delta = 0;       // our responsibility to reset this flag after queries
+        if (d) kick_inactivity_timer(HuEncTurn);  // register evidence of user activity
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         return constrain(d, -1, 1);
     }
     // void rezero() { _delta = 0; }  // handling code needs to call to rezero after reading rotations
@@ -219,7 +253,11 @@ class Encoder {
 // * panels supported: i2c capacitive or spi resistive touchscreen, autodetected based on i2c address of captouch panel
 // * calibration: values of corners[][][] array must be edited for optimized location accuracy (for cap and res types)
 // * filtering: rejects short spurious false touches or losses of touch (needed for use through plastic box lid)
+<<<<<<< HEAD
 // * methods supported:
+=======
+// * external methods supported:
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
 //    touched()     : returns true if a touch is in progress, otherwise false
 //    touch_pt(xy)  : returns coordinate of the point currently or most recently touched, along the given axis.  value is held until the next touch event begins
 //    landed_pt(xy) : returns coordinate of the initial touch point of the current or most recent touch event, along the given axis.  value is held until the next touch event begins
@@ -228,20 +266,35 @@ class Encoder {
 //    swipe()       : returns the dominant orthogonal direction of any valid swipe event detected, or otherwise DirNone.  a valid swipe is a touch that's dragged far enough then released soon enough.  querying or staleness timeout resets to DirNone 
 //    held()        : returns true if an in-progress touch persists until valid taps and swipes are no longer possible, without experiencing any.  resets to false upon release
 //    longpress()   : returns true if an in-progress touch persists long enough without significant drag.  resets to false upon release or query, and won't retrigger during the same touch event
+<<<<<<< HEAD
 //    drag_axis(xy) : returns orthogonal distance dragged in pixels along the given axis, of the current or most recent touch event.  doesn't reset until the next touch event begins
 //    drag_dist()   : returns diagonal distance dragged in pixels, of the current or most recent touch event.  doesn't reset until the next touch event begins
 //    get_delta()   : (for editing)  returns a value which goes 0 -> 1 upon touch, and continues to increment at an exponentially increasing rate (up to a max) as long as the touch persists. value becomes 0 on release or after query (query preserves acceleration)
 //    onrepeat()    : (for editing)  returns true periodically on fixed intervals while a touch event persists.  resets to false on release, or when queried (until the next interval)
 
+=======
+//    drag()        : returns diagonal distance dragged in pixels, of the current or most recent touch event.  doesn't reset until the next touch event begins
+//    drag(xy)      : returns orthogonal distance dragged in pixels along the given axis, of the current or most recent touch event.  doesn't reset until the next touch event begins
+//    get_delta()   : (for editing)  returns a value which goes 0 -> 1 upon touch, and continues to increment at an exponentially increasing rate (up to a max) as long as the touch persists. value becomes 0 on release or after query (query preserves acceleration)
+//    onrepeat()    : (for editing)  returns true periodically on fixed intervals while a touch event persists.  resets to false on release, or when queried (until the next interval)
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
 class Touchscreen {
   private:
     I2C* _i2c;
     LGFX* _tft;
+<<<<<<< HEAD
     int corners[2][2][2] = { { { -25, -3549 }, { 185, 3839 } },  // [restouch][HORZ/VERT][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
                              { { -100, 319 },  { 0, 174 } } };   // [captouch][HORZ/VERT][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
     bool longpress_possible = true, recent_tap = false, doubletap_possible = false;  // ts_tapped = false, ts_doubletapped = false, ts_longpressed = false;
     bool lasttouch = false, printEnabled = true, swipe_possible = true;  // , nowtouch = false, nowtouch2 = false;
     int fd_exponent = 0, fd_exponent_max = 6, tlast_x, tlast_y, keyrepeats = 0;
+=======
+    int corners[2][2][2] = { { { -25, -3549 }, { 185, 3839 } },  // [restouch][Horz/Vert][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
+                             { { -100, 319 },  { 0, 174 } } };   // [captouch][Horz/Vert][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
+    bool longpress_possible = true, recent_tap = false, doubletap_possible = false;  // ts_tapped = false, ts_doubletapped = false, ts_longpressed = false;
+    bool lasttouch = false, printEnabled = true, swipe_possible = true;  // , nowtouch = false, nowtouch2 = false;
+    int fd_exponent = 0, fd_exponent_max = 14, tlast_x, tlast_y, keyrepeats = 0;
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
     float fd = (float)(1 << fd_exponent);  // float delta
 
     // timing requirements: 1) sense < filter < (twotap & repeat & accel).  2) (twotap & swipe) < longpress < press. 
@@ -261,7 +314,11 @@ class Touchscreen {
     // lcd.setTouch(touch_cal_data);
     void get_touch_debounced() {  // this updates nowtouch, rejecting any spurious touch or un-touch blips shorter than filterTimer timeout
         static bool filtertimer_active;
+<<<<<<< HEAD
         uint8_t count = _tft->getTouch(&(raw[HORZ]), &(raw[VERT]));
+=======
+        uint8_t count = _tft->getTouch(&(raw[Horz]), &(raw[Vert]));
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         bool triggered = (count > 0);
         // Serial.printf("n:%d t:%d\n", nowtouch, touch_triggered);
         if (nowtouch != triggered) {            // if the hardware returned opposite our current filtered state, get triggered
@@ -276,6 +333,7 @@ class Touchscreen {
         }
         else filtertimer_active = false;      // cancel our trigger, and be ready to retrigger
     }
+<<<<<<< HEAD
     bool ontouch() { return nowtouch && !lasttouch; }  // returns true only if touch is new for this update cycle. only reliable if called internally, otherwise use tap()
     void update_swipe() {  // determines if there's a valid swipe, saved to variable
         int _dragged[2] = { drag_axis(HORZ), drag_axis(VERT) };
@@ -284,6 +342,22 @@ class Touchscreen {
         else if (_axis == HORZ) ts_swipedir = (_dragged[HORZ] > 0) ? DirRight : DirLeft;
         else ts_swipedir = (_dragged[VERT] > 0) ? DirUp : DirDown;
         ts_swiped = (ts_swipedir != DirNone);  // for idiot light
+=======
+    int drag_axis(int axis) {  // for internal use only. returns pixels dragged along a given axis since start of current drag event. result is vertically flipped so up is positive
+        int ret = tft_touch[axis] - landed[axis];
+        if (axis == Vert) ret *= -1;  //  if (axis == (flip_the_screen ? Horz : Vert)) ret *= -1;
+        return ret;
+    }
+    bool ontouch() { return nowtouch && !lasttouch; }  // returns true only if touch is new for this update cycle. only reliable if called internally, otherwise use tap()
+    bool onrelease() { return !nowtouch && lasttouch; }  // returns true only if release is new for this update cycle. only reliable if called internally, otherwise use tap()
+    void update_swipe() {  // determines if there's a valid swipe, saved to variable
+        int _dragged[2] = { drag(Horz), drag(Vert) };
+        int _axis = (std::abs(_dragged[Horz]) > std::abs(_dragged[Vert])) ? Horz : Vert;  // was swipe mostly horizontal or mostly vertical
+        if (!swipe_possible || (std::abs(_dragged[_axis] < swipe_min))) ts_swipedir = DirNone;  // catch if swipe doesn't qualify
+        else if (_axis == Horz) ts_swipedir = (_dragged[Horz] > 0) ? DirRight : DirLeft;
+        else ts_swipedir = (_dragged[Vert] > 0) ? DirUp : DirDown;
+        ts_swiped = (ts_swipedir != DirNone);  // for debug idiot light
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
     }
   public:
     static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
@@ -296,6 +370,7 @@ class Touchscreen {
         if (!display_enabled) return;
         _tft = tft;
         _i2c = i2c;
+<<<<<<< HEAD
         disp_size[HORZ] = disp_width_pix;
         disp_size[VERT] = disp_height_pix;
         captouch = (i2c->detected(i2c_touch));
@@ -309,11 +384,30 @@ class Touchscreen {
     // bool* touched_ptr() { return &nowtouch; }
     int touch_x() { return tft_touch[HORZ]; }
     int touch_y() { return tft_touch[VERT]; }
+=======
+        disp_size[Horz] = disp_width_pix;
+        disp_size[Vert] = disp_height_pix;
+        captouch = (i2c->detected(I2CTouch));
+        Serial.printf("Touchscreen.. %s panel", (captouch) ? "detected captouch" : "using resistive");
+        if (   (senseTimer.timeout() >= filterTimer.timeout()) || (filterTimer.timeout() >= twotapTimer.timeout())  // checks all the timeouts are in length order
+            || (filterTimer.timeout() >= repeat_timeout)       || (filterTimer.timeout() >= accel_timeout)
+            || (twotapTimer.timeout() >= longpress_timeout)    || (swipe_timeout >= longpress_timeout)
+            || (longpress_timeout >= pressTimer.timeout()) )   ezread.squintf(RED, "err: invalid touchscreen timings\n");
+        Serial.printf("\n");
+    }
+    // bool* touched_ptr() { return &nowtouch; }
+    int touch_x() { return tft_touch[Horz]; }
+    int touch_y() { return tft_touch[Vert]; }
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
     int touch_pt(int axis) { return tft_touch[axis]; }  // returns coordinate along given axis of last-read touch point (in pixels)
     int landed_pt(int axis) { return landed[axis]; }    // returns coordinate along given axis of the initial touch point for latest touch event (in pixels)
     bool touched() { return nowtouch; }  // returns whether a touch is currently in progress
     bool held() { return (nowtouch && twotapTimer.expired() && !ts_tapped && !ts_doubletapped); } // true if press is held longer than the double-tap validity timeout
     bool onrepeat() {  // if touch is held down, this will return true periodically on consistent key repeat intervals like a pc keyboard
+<<<<<<< HEAD
+=======
+        if (ontouch()) return true;
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         if (!nowtouch || (pressTimer.elapsed() / repeat_timeout <= keyrepeats)) return false;
         keyrepeats++;
         return true;
@@ -323,6 +417,7 @@ class Touchscreen {
         if (reset) idelta = 0;
         return ret;
     }
+<<<<<<< HEAD
     int drag_axis(int axis) {  // returns pixels dragged along a given axis since start of current drag event. result is vertically flipped so up is positive
         if (!nowtouch) return 0;  // return 0 if not being touched. indistinguishable from fixed press
         int ret = tft_touch[axis] - landed[axis];
@@ -333,6 +428,15 @@ class Touchscreen {
         if (!nowtouch) return 0;  // return 0 if not being touched. indistinguishable from fixed press
         float _dragged[2] = { (float)drag_axis(HORZ), (float)drag_axis(VERT) };
         return (int)(std::sqrt(_dragged[HORZ] * _dragged[HORZ] + _dragged[VERT] * _dragged[VERT]));  // pythagorean theorem
+=======
+    // w/o argument, returns diagonal distance of an in-progress drag since its start.
+    // w/ a valid axis as argument, returns orthoganal distance dragged along the given axis. result is vertically flipped so up is positive
+    int drag(int axis=-1) {
+        if (!nowtouch) return 0;  // return 0 if not being touched. indistinguishable from fixed press
+        if (axis == Horz || axis == Vert) return drag_axis(axis);  // if a valid axis given
+        float _dragged[2] = { (float)drag_axis(Horz), (float)drag_axis(Vert) };
+        return (int)(std::sqrt(_dragged[Horz] * _dragged[Horz] + _dragged[Vert] * _dragged[Vert]));  // pythagorean theorem
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
     }
     int swipe(bool reset=true) {  // returns direction of any valid orthogonal tinder-type swipe, otherwise 0 for no swipe
         int ret = ts_swipedir;
@@ -361,7 +465,11 @@ class Touchscreen {
     // bool* doubletap_ptr() { return &ts_doubletapped; }  // for idiot light
     // bool* longpress_ptr() { return &ts_longpressed; }
     void update() {
+<<<<<<< HEAD
         if (captouch && _i2c->not_my_turn(i2c_touch)) return;             // if (captouch && _i2c->not_my_turn(i2c_touch)) return;
+=======
+        if (captouch && _i2c->not_my_turn(I2CTouch)) return;             // if (captouch && _i2c->not_my_turn(I2CTouch)) return;
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         if (senseTimer.expireset()) {
             get_touch_debounced();
             if (nowtouch) process_touched();
@@ -378,22 +486,36 @@ class Touchscreen {
     }  // Serial.printf("%s", nowtouch ? "+" : "-");
   private:
     void process_touched() {  // executes on update whenever screen is being touched (nowtouch == true)
+<<<<<<< HEAD
         kick_inactivity_timer(HUTouch);  // register evidence of user activity to prevent going to sleep
         for (int axis=HORZ; axis<=VERT; axis++) {
             // if (captouch) tft_touch[axis] = raw[axis];  // disp_width - 1 - raw[HORZ];
+=======
+        kick_inactivity_timer(HuTouch);  // register evidence of user activity to prevent going to sleep
+        for (int axis=Horz; axis<=Vert; axis++) {
+            // if (captouch) tft_touch[axis] = raw[axis];  // disp_width - 1 - raw[Horz];
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
             tft_touch[axis] = map(raw[axis], corners[captouch][axis][tsmin], corners[captouch][axis][tsmax], 0, disp_size[axis]);
             tft_touch[axis] = constrain(tft_touch[axis], 0, disp_size[axis] - 1);
             if (flip_the_screen) tft_touch[axis] = disp_size[axis] - tft_touch[axis];
         }
         if (!lasttouch) {                      // if this touch only just now started
+<<<<<<< HEAD
             for (int axis=HORZ; axis<=VERT; axis++) landed[axis] = tft_touch[axis];
+=======
+            for (int axis=Horz; axis<=Vert; axis++) landed[axis] = tft_touch[axis];
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
             pressTimer.reset();  // start press timer for timing events and event stale-ness
             swipe_possible = longpress_possible = true;
             doubletap_possible = recent_tap;  // if there was just a tap, flag the current touch might be a double tap
         }
         else {            // if this touch is continuing from previous loop(s)
             if (longpress_possible && (pressTimer.elapsed() >= longpress_timeout)) {
+<<<<<<< HEAD
                 if (drag_dist() <= drag_dist_min) ts_longpressed = true;
+=======
+                if (drag() <= drag_dist_min) ts_longpressed = true;
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
                 longpress_possible = false;  // prevent a later longpress event in case drag returns to the original spot
             }
             if (pressTimer.elapsed() > swipe_timeout) swipe_possible = false;  // prevent meandering drags from being considered swipes
@@ -415,7 +537,11 @@ class Touchscreen {
             if (pressTimer.elapsed() < longpress_timeout) {      // if press duration was in short-press range
                 if (doubletap_possible) ts_doubletapped = true;  // if there was a previous recent tap when pressed, we have a valid double tap
                 else {
+<<<<<<< HEAD
                     recent_tap = true;        // otherwise we have a valid single tap
+=======
+                    recent_tap = true;        // otherwise we have a potentially valid single tap
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
                     twotapTimer.reset();      // begin timeout again to wait for a second tap
                 }
                 update_swipe();
@@ -425,6 +551,7 @@ class Touchscreen {
             keyrepeats = 0;
         }
         if (twotapTimer.expired()) {
+<<<<<<< HEAD
             ts_tapped = recent_tap;  // if no double tap happened, then recent tap becomes valid single tap
             recent_tap = doubletap_possible = false;
         }
@@ -449,37 +576,73 @@ class Touchscreen {
             else if (tunctrl == SELECT) {
                 if (ontouch()) increment_sel = true;
                 else if (longpress()) tunctrl = OFF;
+=======
+            ts_tapped = recent_tap;  // if no double tap happened in time, then recent short press becomes valid single tap
+            recent_tap = doubletap_possible = false;
+        }
+        // for (int axis=Horz; axis<=Vert; axis++) tft_touch[axis] = landed[axis] = -1;  // set coordinates to illegal value
+    }
+    void process_ui() {  // takes actions when screen objects are manipulated by touch
+        // tbox : section screen into 6x5 cells, with touched cell encoded as a hex byte with 1st nibble = col and 2nd nibble = row, ie 0x32 means cell at 4th col and 3rd row
+        uint16_t tbox = (constrain((landed[Horz] - touch_margin_h_pix) / touch_cell_h_pix, 0, 5) << 4) | constrain((landed[Vert]) / touch_cell_v_pix, 0, 4);
+        
+        // ezread.squintf("n%dl%dv%d q%02x tx:%3d ty:%3d e%d x%d\r", nowtouch, lasttouch, landed_coordinates_valid, tbox, tft_touch[0], tft_touch[1], fd, (int)fd_exponent);
+        // std::cout << "n" << nowtouch << " e" << fd << " x" << fd_exponent << "\r";
+        if (tbox == 0x00 && onrepeat()) increment_datapage = true;  // PAG btn: displayed dataset page can also be changed outside of simulator  // trying to prevent ghost touches we experience occasionally
+        else if (tbox == 0x01) {  // SEL btn: longpress to enter/exit select mode. if selecting, shortpress to cycle thru the data
+            if (tunctrl == Select && ontouch()) increment_sel = true; // in Select mode each new touch moves to the next selection
+            else if (tunctrl == Edit && ontouch()) tunctrl = Select;  // in Edit mode touch to drop back to Select mode
+            else if (longpress()) {  // long press toggles between Off and Select mode
+                if (tunctrl == Off) tunctrl = Select;
+                else if (tunctrl == Select) tunctrl = Off;
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
             }
+            else if (tunctrl == Select && ontouch()) increment_sel = true;  // each short touch moves to the next selection
         }
-        else if (tbox == 0x02) {  // pressed the increase value button, for real-time tuning of variables
-            if (tunctrl == SELECT) tunctrl = EDIT;  // if just entering edit mode, don't change the value yet
-            else if (tunctrl == EDIT) idelta = id;  // if in edit mode, increase the value
+        else if (tbox == 0x02) {  // + btn: to increase value being edited. for real-time tuning of variables
+            if (tunctrl == Select) tunctrl = Edit;  // if just entering edit mode, don't change the value yet
+            else if (tunctrl == Edit) idelta = id;  // if in edit mode, increase the value
         }
+<<<<<<< HEAD
         else if (tbox == 0x03) {  // pressed the decrease value button, for real-time tuning of variables
             if (tunctrl == SELECT) tunctrl = EDIT;   // if just entering edit mode, don't change the value yet
             else if (tunctrl == EDIT) idelta = -id;  // if in edit mode, decrease the value
+=======
+        else if (tbox == 0x03) {  // - btn: to increase value being edited. for real-time tuning of variables
+            if (tunctrl == Select) tunctrl = Edit;   // if just entering edit mode, don't change the value yet
+            else if (tunctrl == Edit) idelta = -id;  // if in edit mode, decrease the value
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         }
-        else if (tbox == 0x04 && longpress()) autosaver_request = REQ_ON;  // start fullscreen screensaver.  This button may be hijacked for a more useful function
+        else if (tbox == 0x04 && longpress()) autosaver_request = ReqOn;  // start fullscreen screensaver.  This button may be hijacked for a more useful function
         else if (tbox == 0x20 && longpress()) calmode_request = true;
         else if (tbox == 0x21) ezread.lookback(tune(ezread.offset, id, 0, ezread.bufferSize));  // fast scroll
         else if (tbox == 0x22 && onrepeat()) ezread.lookback(ezread.offset + 1);  // step scroll
         else if (tbox == 0x23 && onrepeat()) ezread.lookback(ezread.offset - 1);  // step scroll
         else if (tbox == 0x24) ezread.lookback(tune(ezread.offset, -id, 0, ezread.bufferSize));  // fast scroll
+<<<<<<< HEAD
         else if (tbox == 0x30 && longpress()) sim.toggle();  // pressed the simulation mode toggle. Needs long-press  // fuelpump.request(REQ_TOG);
+=======
+        else if (tbox == 0x30 && longpress()) sim.toggle();  // pressed the simulation mode toggle. Needs long-press
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         else if (tbox == 0x31) pressure.sim_si(tune(pressure.val(), id, pressure.opmin(), pressure.opmax()));  // pressed the increase brake pressure button
         else if (tbox == 0x32) pressure.sim_si(tune(pressure.val(), -id, pressure.opmin(), pressure.opmax()));
         else if (tbox == 0x33) brkpos.sim_si(tune(brkpos.val(), id, brkpos.opmin(), brkpos.opmax()));
         else if (tbox == 0x34) brkpos.sim_si(tune(brkpos.val(), -id, brkpos.opmin(), brkpos.opmax()));
-        else if (tbox == 0x40 && longpress()) hotrc.sim_button_press(CH4);  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
+        else if (tbox == 0x40 && longpress()) hotrc.sim_button_press(Ch4);  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
         else if (tbox == 0x41) tach.sim_si(tune(tach.val(), id, tach.opmin(), tach.opmax()));
         else if (tbox == 0x42) tach.sim_si(tune(tach.val(), -id, tach.opmin(), tach.opmax()));
-        else if (tbox == 0x43 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        else if (tbox == 0x44 && sim.simulating(sens::joy)) tune(&hotrc.pc[VERT][FILT], -id, hotrc.pc[VERT][OPMIN], hotrc.pc[VERT][OPMAX]);
-        else if (tbox == 0x50 && longpress()) ignition.request(REQ_TOG);
+        else if (tbox == 0x43 && sim.simulating(sens::joy)) tune(&hotrc.pc[Vert][Filt], id, hotrc.pc[Vert][OpMin], hotrc.pc[Vert][OpMax]);
+        else if (tbox == 0x44 && sim.simulating(sens::joy)) tune(&hotrc.pc[Vert][Filt], -id, hotrc.pc[Vert][OpMin], hotrc.pc[Vert][OpMax]);
+        else if (tbox == 0x50 && longpress()) ignition.request(ReqTog);
         else if (tbox == 0x51) speedo.sim_si(tune(speedo.val(), id, speedo.opmin(), speedo.opmax()));
         else if (tbox == 0x52) speedo.sim_si(tune(speedo.val(), -id, speedo.opmin(), speedo.opmax()));
+<<<<<<< HEAD
         else if (tbox == 0x53 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
         else if (tbox == 0x54 && sim.simulating(sens::joy)) tune(&hotrc.pc[HORZ][FILT], -id, hotrc.pc[HORZ][OPMIN], hotrc.pc[HORZ][OPMAX]);
+=======
+        else if (tbox == 0x53 && sim.simulating(sens::joy)) tune(&hotrc.pc[Horz][Filt], id, hotrc.pc[Horz][OpMin], hotrc.pc[Horz][OpMax]);
+        else if (tbox == 0x54 && sim.simulating(sens::joy)) tune(&hotrc.pc[Horz][Filt], -id, hotrc.pc[Horz][OpMin], hotrc.pc[Horz][OpMax]);
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
     }
     void printTouchInfo() {
         static bool last1tap, last2tap, lastlongtap;
@@ -488,14 +651,25 @@ class Touchscreen {
         if (!last2tap && ts_doubletapped) ezread.squintf("ts: double-tap\n");
         if (!lastlongtap && ts_longpressed) ezread.squintf("ts: longpress\n");
         if (lastswipe != ts_swipedir) ezread.squintf("ts: swipe=%d\n", ts_swipedir);
+<<<<<<< HEAD
         if (lastdragx != drag_axis(HORZ) || lastdragy != drag_axis(VERT)) ezread.squintf("ts: drag %+3d,%+3d d:%+3d\n", drag_axis(HORZ), drag_axis(VERT), drag_dist());
+=======
+        if (lastdragx != drag(Horz) || lastdragy != drag(Vert)) ezread.squintf("ts: drag %+3d,%+3d d:%+3d\n", drag(Horz), drag(Vert), drag());
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         last1tap = ts_tapped;
         last2tap = ts_doubletapped;
         lastlongtap = ts_longpressed;
         lastswipe = ts_swipedir;
+<<<<<<< HEAD
         lastx = tft_touch[HORZ];
         lasty = tft_touch[VERT];
         lastdragx = drag_axis(HORZ);
         lastdragy = drag_axis(VERT);
+=======
+        lastx = tft_touch[Horz];
+        lasty = tft_touch[Vert];
+        lastdragx = drag(Horz);
+        lastdragy = drag(Vert);
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
     }
 };

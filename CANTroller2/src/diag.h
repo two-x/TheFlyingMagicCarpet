@@ -26,25 +26,25 @@ class DiagRuntime {
     int64_t times[2][entries];
     // two sets of large arrays for storage of log data. when one fills up it jumps to the other, so the first might be written to an sd card
     float tel[2][NumTelemetryFull][entries];  // array for telemetry of all sensors for given timestamp
-    int index = 0, dic = 0, runmode;  // start with dictionary 0
+    int index = 0, dic = 0, total_registered = 0, runmode;  // start with dictionary 0
     Timer logTimer{100000};  // microseconds per logged reading
     Timer errTimer{175000};
     Timer speedoTimer{2500000}, tachTimer{2500000};  // how much time within which we expect the car will move after hitting the gas
   public:
     // diag tunable values
     int err_margin_adc = 5;
-    uint32_t errstatus[NUM_ERR_TYPES] = { 0x00, 0x00, 0x00 };  // keeps current error status in efficient hex words
-    std::string err_type_card[NUM_ERR_TYPES] = { "Lost", "Rang", "Warn" };  // this needs to match err_type enum   // , "Cal", "Warn", "Crit", "Info" };
+    uint errstatus[NumErrTypes] = { 0x00, 0x00, 0x00 };  // keeps current error status in efficient hex words
+    std::string err_type_card[NumErrTypes] = { "Lost", "Rang", "Warn" };  // this needs to match err_type enum   // , "Lost", "Range", "Warn"
     std::string err_sens_card[NumTelemetryFull+3] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA, None, and Hybrid tacked on the end.  access these names using ascii_name() function
         "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HotRC",
         "Temps", "Other", "GPIO", "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4", "Batery",
         "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR",
-        "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP", "TmpWhl",
+        "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "TmpWhl",
         "NA", "None", "Hybrid",
     };
     // "Throtl", "BkMotr", "Steer", "Speedo", "Tach", "BkPres", "BkPosn", "HrcHrz", "HrcVrt", "HrcCh3",
     // "HrcCh4", "Batery", "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR",
-    // "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "FuelP",
+    // "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS",
     // "NA", "None", "Hybrid",
     std::string ascii_name(int sensor) {
         if (sensor == _NA) return err_sens_card[NumTelemetryFull];
@@ -53,54 +53,61 @@ class DiagRuntime {
         return err_sens_card[NumTelemetryFull];        
     }
     // diag non-tunable values
-    // bool temp_err[NumTempCategories];  // [AMBIENT/ENGINE/WHEEL/BRAKE]
-    bool err_sens_alarm[NUM_ERR_TYPES] = { false, false, false, };  //  [LOST/RANGE/WARN]
-    int err_sens_fails[NUM_ERR_TYPES] = { 0, 0, 0, };
-    bool err_sens[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE/WARN] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
-    bool err_last[NUM_ERR_TYPES][NumTelemetryFull]; //  [LOST/RANGE/WARN] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
+    // bool temp_err[NumTempCategories];  // [CatAmbient/CatEngine/CatWheel/CatBrake]
+    bool err_sens_alarm[NumErrTypes] = { false, false, false, };  //  [ErrLost/ErrRange/ErrWarn]
+    int err_sens_fails[NumErrTypes] = { 0, 0, 0, };
+    bool err_sens[NumErrTypes][NumTelemetryFull]; //  [ErrLost/ErrRange/ErrWarn] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
+    bool err_last[NumErrTypes][NumTelemetryFull]; //  [ErrLost/ErrRange/ErrWarn] [_HotRCHorz/_HotRCVert/_HotRCCh3/_HotRCCh4/_Pressure/_BrkPos/_Tach/_Speedo/_AirVelo/_MAP/_TempEng/_MuleBatt/_BasicSw/_Starter]   // sens::opt_t::NUM_SENSORS]
     // Device* devices[NumTelemetryFull];
-    int registered_errcount[NUM_ERR_TYPES];
+    int registered_errcount[NumErrTypes];
     float* devices[NumTelemetryFull][NumDiagVals];  //
     bool registered[NumTelemetryFull];
     float violating_value[NumTelemetryFull];
-    uint8_t most_critical_sensor[NUM_ERR_TYPES];
-    uint8_t most_critical_last[NUM_ERR_TYPES];
+    uint8_t most_critical_sensor[NumErrTypes];
+    uint8_t most_critical_last[NumErrTypes];
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
         Tachometer* a_tach, Speedometer* a_speedo, ThrottleControl* a_gas, BrakeControl* a_brake, SteeringControl* a_steer, 
         CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, Ignition* a_ignition)
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
           steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition) {}
     void setup() {
-        for (int i=0; i<NUM_ERR_TYPES; i++)
+        ezread.squintf("Diagnostic engine:");
+        for (int i=0; i<NumErrTypes; i++)
             for (int j=0; j<NumTelemetryFull; j++) {
                 err_sens[i][j] = err_last[i][j] = false; // Initialize sensor error flags to false
             }
         for (int j=0; j<NumTelemetryFull; j++) registered[j] = false;
+<<<<<<< HEAD
         register_device(_Throttle, &gas->si[OUT], &gas->si[PARKED], &gas->si[OPMAX], &gas->si[MARGIN]);
         register_device(_BrakeMotor, &brake->si[OUT], &brake->si[OPMIN], &brake->si[OPMAX], &brake->si[MARGIN]);
         register_device(_SteerMotor, &steer->si[OUT], &steer->si[OPMIN], &steer->si[OPMAX], &steer->si[MARGIN]);
+=======
+        register_device(_Throttle, &gas->si[Out], &gas->si[Parked], &gas->si[OpMax], &gas->si[Margin]);
+        register_device(_BrakeMotor, &brake->si[Out], &brake->si[OpMin], &brake->si[OpMax], &brake->si[Margin]);
+        register_device(_SteerMotor, &steer->si[Out], &steer->si[OpMin], &steer->si[OpMax], &steer->si[Margin]);
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         register_device(_Speedo, speedo->ptr(), speedo->opmin_ptr(), speedo->opmax_ptr(), speedo->margin_ptr());
         register_device(_Tach, tach->ptr(), tach->opmin_ptr(), tach->opmax_ptr(), tach->margin_ptr());
         register_device(_BrakePres, pressure->ptr(), pressure->opmin_ptr(), pressure->opmax_ptr(), pressure->margin_ptr());
         register_device(_BrakePosn, brkpos->ptr(), brkpos->opmin_ptr(), brkpos->opmax_ptr(), brkpos->margin_ptr());
-        register_device(_HotRCHorz, &hotrc->pc[HORZ][FILT], &hotrc->pc[HORZ][OPMIN], &hotrc->pc[HORZ][OPMAX], &hotrc->pc[HORZ][MARGIN]);
-        register_device(_HotRCVert, &hotrc->pc[VERT][FILT], &hotrc->pc[VERT][OPMIN], &hotrc->pc[VERT][OPMAX], &hotrc->pc[VERT][MARGIN]);
-        register_device(_HotRCCh3, &hotrc->pc[CH3][FILT], &hotrc->pc[CH3][OPMIN], &hotrc->pc[CH3][OPMAX], &hotrc->pc[CH3][MARGIN]);
-        register_device(_HotRCCh4, &hotrc->pc[CH4][FILT], &hotrc->pc[CH4][OPMIN], &hotrc->pc[CH4][OPMAX], &hotrc->pc[CH4][MARGIN]);
+        register_device(_HotRCHorz, &hotrc->us[Horz][Filt], &hotrc->us[Horz][OpMin], &hotrc->us[Horz][OpMax], &hotrc->us[Horz][Margin]);
+        register_device(_HotRCVert, &hotrc->us[Vert][Filt], &hotrc->us[Vert][OpMin], &hotrc->us[Vert][OpMax], &hotrc->us[Vert][Margin]);
+        register_device(_HotRCCh3, &hotrc->us[Ch3][Raw], &hotrc->us[Ch3][OpMin], &hotrc->us[Ch3][OpMax], &hotrc->us[Ch3][Margin]);
+        register_device(_HotRCCh4, &hotrc->us[Ch4][Raw], &hotrc->us[Ch4][OpMin], &hotrc->us[Ch4][OpMax], &hotrc->us[Ch4][Margin]);
         register_device(_MuleBatt, mulebatt->ptr(), mulebatt->opmin_ptr(), mulebatt->opmax_ptr(), mulebatt->margin_ptr());
         register_device(_AirVelo, airvelo->ptr(), airvelo->opmin_ptr(), airvelo->opmax_ptr(), airvelo->margin_ptr());
         register_device(_MAP, mapsens->ptr(), mapsens->opmin_ptr(), mapsens->opmax_ptr(), mapsens->margin_ptr());
         register_device(_Pot, pot->ptr(), pot->opmin_ptr(), pot->opmax_ptr(), pot->margin_ptr());
-        register_device(_TempEng, tempsens->ptr(loc::ENGINE), tempsens->opmin_ptr(loc::ENGINE), tempsens->opmax_ptr(loc::ENGINE), tempsens->margin_ptr(loc::ENGINE));
-        register_device(_TempAmb, tempsens->ptr(loc::AMBIENT), tempsens->opmin_ptr(loc::AMBIENT), tempsens->opmax_ptr(loc::AMBIENT), tempsens->margin_ptr(loc::AMBIENT));
-        register_device(_TempBrake, tempsens->ptr(loc::BRAKE), tempsens->opmin_ptr(loc::BRAKE), tempsens->opmax_ptr(loc::BRAKE), tempsens->margin_ptr(loc::BRAKE));
-        register_device(_TempWhFL, tempsens->ptr(loc::WHEEL_FL), tempsens->opmin_ptr(loc::WHEEL_FL), tempsens->opmax_ptr(loc::WHEEL_FL), tempsens->margin_ptr(loc::WHEEL_FL));
-        register_device(_TempWhFR, tempsens->ptr(loc::WHEEL_FR), tempsens->opmin_ptr(loc::WHEEL_FR), tempsens->opmax_ptr(loc::WHEEL_FR), tempsens->margin_ptr(loc::WHEEL_FR));
-        register_device(_TempWhRL, tempsens->ptr(loc::WHEEL_RL), tempsens->opmin_ptr(loc::WHEEL_RL), tempsens->opmax_ptr(loc::WHEEL_RL), tempsens->margin_ptr(loc::WHEEL_RL));
-        register_device(_TempWhRR, tempsens->ptr(loc::WHEEL_RR), tempsens->opmin_ptr(loc::WHEEL_RR), tempsens->opmax_ptr(loc::WHEEL_RR), tempsens->margin_ptr(loc::WHEEL_RR));
+        register_device(_TempEng, tempsens->ptr(loc::TempEngine), tempsens->opmin_ptr(loc::TempEngine), tempsens->opmax_ptr(loc::TempEngine), tempsens->margin_ptr(loc::TempEngine));
+        register_device(_TempAmb, tempsens->ptr(loc::TempAmbient), tempsens->opmin_ptr(loc::TempAmbient), tempsens->opmax_ptr(loc::TempAmbient), tempsens->margin_ptr(loc::TempAmbient));
+        register_device(_TempBrake, tempsens->ptr(loc::TempBrake), tempsens->opmin_ptr(loc::TempBrake), tempsens->opmax_ptr(loc::TempBrake), tempsens->margin_ptr(loc::TempBrake));
+        register_device(_TempWhFL, tempsens->ptr(loc::TempWheelFL), tempsens->opmin_ptr(loc::TempWheelFL), tempsens->opmax_ptr(loc::TempWheelFL), tempsens->margin_ptr(loc::TempWheelFL));
+        register_device(_TempWhFR, tempsens->ptr(loc::TempWheelFR), tempsens->opmin_ptr(loc::TempWheelFR), tempsens->opmax_ptr(loc::TempWheelFR), tempsens->margin_ptr(loc::TempWheelFR));
+        register_device(_TempWhRL, tempsens->ptr(loc::TempWheelRL), tempsens->opmin_ptr(loc::TempWheelRL), tempsens->opmax_ptr(loc::TempWheelRL), tempsens->margin_ptr(loc::TempWheelRL));
+        register_device(_TempWhRR, tempsens->ptr(loc::TempWheelRR), tempsens->opmin_ptr(loc::TempWheelRR), tempsens->opmax_ptr(loc::TempWheelRR), tempsens->margin_ptr(loc::TempWheelRR));
         // register_bool_device(_Ignition, ignition->signal_ptr());
         // register_bool_device(_Starter, starter->signal_ptr());
-        // register_bool_device(_FuelPump, fuelpump->signal_ptr());
+        ezread.squintf(" monitoring %d devices\n", total_registered);
     }
     void update() {
         if (first_boot) {  // don't run too soon before sensors get initialized etc.
@@ -108,7 +115,7 @@ class DiagRuntime {
             errTimer.reset();
             return;
         }
-        if (runmode == LOWPOWER) return;
+        if (runmode == LowPower) return;
         if (errTimer.expireset()) {
             // Auto-Diagnostic  :   Check for worrisome oddities and dubious circumstances. Report any suspicious findings
             // This section should become a real time self-diagnostic system, to look for anything that doesn't seem right and display an
@@ -120,15 +127,15 @@ class DiagRuntime {
             checkrange(_Pot);
             checkrange(_Throttle);
             checkrange(_SteerMotor);
-            // setflag(_Throttle, RANGE, gas->pc[OUT] < gas->pc[PARKED] || gas->pc[OUT] > gas->pc[OPMAX]);
-            // setflag(_SteerMotor, RANGE, steer->pc[OUT] < steer->pc[OPMIN] || steer->pc[OUT] > steer->pc[OPMAX]);
-            // setflag(_Ignition, LOST, !ignition->signal && !tach->stopped());  // Not really "LOST", but lost isn't meaningful for ignition really anyway
+            // setflag(_Throttle, ErrRange, gas->pc[Out] < gas->pc[Parked] || gas->pc[Out] > gas->pc[OpMax]);
+            // setflag(_SteerMotor, ErrRange, steer->pc[Out] < steer->pc[OpMin] || steer->pc[Out] > steer->pc[OpMax]);
+            // setflag(_Ignition, ErrLost, !ignition->signal && !tach->stopped());  // Not really "ErrLost", but lost isn't meaningful for ignition really anyway
             BatteryFailure();            
             BrakeFailure();            
             HotRCFailure();
             SpeedoFailure();
             TachFailure();
-            // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LOWPOWER));
+            // err_sens[VALUE][_SysPower] = (!syspower && (run.mode != LowPower));
             set_sensorgroups();
             set_sensidiots();
 
@@ -136,7 +143,7 @@ class DiagRuntime {
             set_idiot_blinks();
             report_changes();  // detect and report changes in any error values
             dump_errorcode_update();
-            // for (int i=0; i<NUM_ERR_TYPES; i++)
+            // for (int i=0; i<NumErrTypes; i++)
             //     for (int j=0; j<NumTelemetryFull; j++)
             // // ezread.squintf ("\n");
             // make_log_entry();
@@ -151,6 +158,7 @@ class DiagRuntime {
         devices[_enumname][DiagMax] = _max;
         devices[_enumname][DiagMargin] = _margin;
         registered[_enumname] = true;
+        total_registered++;
     }
     void update_status_words() {}
     void setflag(int device, int errtype, bool stat) {  // this sets the error flag in err_sens[type] array, and if device is registered, also in the status words
@@ -158,42 +166,51 @@ class DiagRuntime {
         errstatus[errtype] = (errstatus[errtype] & ~(1 << device)) | ((stat && registered[device]) << device);  // replaces the device's error bit in status word with updated value
     }
     void checkrange(int _sens, bool extra_condition = true) {
-        bool last_rangerr = err_sens[RANGE][_sens];
+        bool last_rangerr = err_sens[ErrRange][_sens];
         bool rangerr = extra_condition && ((*devices[_sens][DiagVal] < *devices[_sens][DiagMin] - *devices[_sens][DiagMargin]) || (*devices[_sens][DiagVal] > *devices[_sens][DiagMax] + *devices[_sens][DiagMargin]));
         if (rangerr != last_rangerr) {
-            setflag(_sens, RANGE, rangerr);
+            setflag(_sens, ErrRange, rangerr);
             violating_value[_sens] = *devices[_sens][DiagVal];  
         }
     }
     void set_sensorgroups() {
-        for (int typ=0; typ<NUM_ERR_TYPES; typ++) {
+        for (int typ=0; typ<NumErrTypes; typ++) {
             setflag(_HotRC, typ, err_sens[typ][_HotRCHorz] || err_sens[typ][_HotRCVert] || err_sens[typ][_HotRCCh3] || err_sens[typ][_HotRCCh4]);
-            setflag(_GPIO, typ, err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter] || err_sens[typ][_FuelPump]);
+            setflag(_GPIO, typ, err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter]);
             setflag(_Other, typ, err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot]);  // || err_sens[typ][_MuleBatt]
             setflag(_TempWheel, typ, err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL] || err_sens[typ][_TempWhRR]);
             setflag(_Temps, typ, err_sens[typ][_TempEng] || err_sens[typ][_TempWheel] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb]);
         }
+        // adding this workaround for the mulebatt errors, which should have been included in the _Other group above,
+        // but as you can see above I had to comment it out b/c of the confounding fact that err_sens[ErrRange][_MuleBatt]
+        // for some reason has the same mem address as the global nowtouch flag (!!)
+        setflag(_Other, ErrWarn, err_sens[ErrWarn][_Other] || err_sens[ErrWarn][_MuleBatt]);
+        setflag(_Other, ErrLost, err_sens[ErrLost][_Other] || err_sens[ErrLost][_MuleBatt]);
+        setflag(_Other, ErrRange, err_sens[ErrRange][_Other] || battrangeerr);
+        // end of cheesy workaround
     }
     void set_sensidiots() {
         for (int err=0; err<=_GPIO; err++) {
             sensidiots[err] = false;
-            for (int typ=0; typ<NUM_ERR_TYPES; typ++) sensidiots[err] = sensidiots[err] || err_sens[typ][err];
+            for (int typ=0; typ<NumErrTypes; typ++) sensidiots[err] |= err_sens[typ][err];
         }
     }
     void count_errors() {
-        for (int t=LOST; t<=WARN; t++) {
+        for (int t=ErrLost; t<=ErrWarn; t++) {
             registered_errcount[t] = 0;
-            for (int j=0; j<NumTelemetryFull; j++) if (registered[j] && err_sens[t][j]) registered_errcount[t]++;
+            for (int j=0; j<NumTelemetryFull; j++)
+                if (registered[j] && err_sens[t][j])
+                    registered_errcount[t]++;
         }
     }
     void set_idiot_blinks() {  // adds blink code to lost and range err neopixels corresponing to the lowest numbered failing sensor
-        for (int t=LOST; t<=RANGE; t++) {
+        for (int t=ErrLost; t<=ErrRange; t++) {
             most_critical_sensor[t] = _None;
             err_sens_alarm[t] = false;
             err_sens_fails[t] = 0;
             for (int s=0; s<NumTelemetryIdiots; s++)
                 if (err_sens[t][s]) {
-                    if (most_critical_sensor[t] = _None) most_critical_sensor[t] = s;
+                    if (most_critical_sensor[t] == _None) most_critical_sensor[t] = s;
                     err_sens_alarm[t] = true;
                     err_sens_fails[t]++;
                 }
@@ -201,7 +218,7 @@ class DiagRuntime {
     }
     void report_changes() {
         if (!print_error_changes) return;
-        for (int i=0; i<NUM_ERR_TYPES; i++) {
+        for (int i=0; i<NumErrTypes; i++) {
             bool printheader1 = false, printheader2 = false, printed = false;
             for (int j=0; j<NumTelemetryFull; j++) {
                 if (report_error_changes && (err_sens[i][j] && !err_last[i][j]) && registered[j]) {
@@ -243,124 +260,149 @@ class DiagRuntime {
         // checkrange(_MuleBatt);
     }
     void TempFailure() {
+        static bool printed_error_wheel = false, printed_error_eng = false, printed_error_brake = false;
         for (int sen=_TempEng; sen<=_TempAmb; sen++) {
             checkrange(sen);
-            // bypassing LOST check because it's giving false positive for all 7 sensors on the car, even tho they are reading fine. FIX!
-            // setflag(i, LOST, !tempsens->detected(i));
+            // bypassing ErrLost check because it's giving false positive for all 7 sensors on the car, even tho they are reading fine. FIX!
+            // setflag(i, ErrLost, !tempsens->detected(i));
         }
-        bool wheelerr = false;
+        bool wheel_err_range = false, wheel_err_other = false;
         int minwheel = 400, maxwheel = -400;
         for (int sen=_TempWhFL; sen<=_TempWhRR; sen++) {
             if (*devices[sen][DiagVal] < minwheel) minwheel = *devices[sen][DiagVal];
             if (*devices[sen][DiagVal] > maxwheel) maxwheel = *devices[sen][DiagVal];
-            for (int typ=0; typ<NUM_ERR_TYPES; typ++) if (err_sens[typ][sen]) wheelerr = true;
+            if (err_sens[ErrRange][sen]) wheel_err_range = true;
+            for (int typ=0; typ<NumErrTypes; typ++)
+                if ((typ != ErrRange) && err_sens[typ][sen]) wheel_err_other = true;
+            
         }
-        wheeltemperr = wheelerr || ((maxwheel - minwheel) > wheeldifferr);  // set global wheel temp idiot light to include all wheel temp errors
+        wheeltemperr = wheel_err_range || wheel_err_other || ((maxwheel - minwheel) > wheeldifferr);  // set global wheel temp idiot light to include all wheel temp errors
+        if (overtemp_shutoff_wheel) {
+            if (wheel_err_range) {
+                ignition->request(ReqOff);  // ignition->panic_request(ReqOff);  // not sure if this was intentional? commenting out
+                if (!printed_error_wheel) ezread.squintf(RED, "err: wheel temp out of range. stop engine\n");
+                printed_error_wheel = true;
+            }
+            else printed_error_wheel = false;
+        }
+        if (overtemp_shutoff_engine) {
+            if (err_sens[ErrRange][_TempEng]) {
+                ignition->request(ReqOff);
+                if (!printed_error_eng) ezread.squintf(RED, "err: engine temp out of range. stop engine\n");
+                printed_error_eng = true;
+            }
+            else printed_error_eng = false;
+        }
+        if (overtemp_shutoff_brake) {  // here the engine is shut off. also in brake motor class the brake motor is stopped
+            if (err_sens[ErrRange][_TempBrake]) {
+                // brake->setmode(Halt);        // stop the brake actuator  // commented b/c is done in brake class
+                ignition->request(ReqOff);  // kill the engine
+                if (!printed_error_brake) ezread.squintf(RED, "err: brakemotor temp out of range. stop engine\n");
+                printed_error_brake = true;
+            }
+            else printed_error_brake = false;
+        }
     }
     // Brakes:   checks if any sensor the brake is expecting to use in its current mode are posting errors
     void BrakeFailure() {  // checks if posn is not changing while pressure is changing and motor is moving (assuming not near max brake)
         static float pressure_last_pc;
         static float brkpos_last_pc;
         static float motor_last_pc;
-        if ((std::abs(brake->pc[OUT]) > brake->pc[MARGIN]) && (std::abs(motor_last_pc) > brake->pc[MARGIN]) && (signbit(brake->pc[OUT]) == signbit(motor_last_pc))) {  // if brake motor is moving
+        if ((std::abs(brake->pc[Out]) > brake->pc[Margin]) && (std::abs(motor_last_pc) > brake->pc[Margin]) && (signbit(brake->pc[Out]) == signbit(motor_last_pc))) {  // if brake motor is moving
             if (pressure->pc() <= 80.0) {  // if not near the max pressure (where position changes very little)
-                setflag(_BrakePosn, LOST, ((std::abs(pressure->pc() - pressure_last_pc) > pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if pressure value is changing but position isn't, then set flag otherwise clear
+                setflag(_BrakePosn, ErrLost, ((std::abs(pressure->pc() - pressure_last_pc) > pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if pressure value is changing but position isn't, then set flag otherwise clear
                 
                 // Skipping to avoid annoying warnings. check this!
-                // setflag(_BrakePosn, WARN, (brake->feedback == HybridFB) && (signbit(brkpos->pc()) != signbit(pressure->pc())) && (signbit(brkpos->pc()) != signbit(brake->pc[OUT])));  // if motor and pressure are consistent with moving one direction but position is changing the opposite way  // rewmove the (brake->feedback == HybridFB) && term?
+                // setflag(_BrakePosn, ErrWarn, (brake->feedback == HybridFB) && (signbit(brkpos->pc()) != signbit(pressure->pc())) && (signbit(brkpos->pc()) != signbit(brake->pc[Out])));  // if motor and pressure are consistent with moving one direction but position is changing the opposite way  // rewmove the (brake->feedback == HybridFB) && term?
             }
             if (brkpos->pc() >= 20.0) {  // if not near the min braking full extension (where pressure changes very little) 
-                setflag(_BrakePres, LOST, ((std::abs(brkpos->pc() - brkpos_last_pc) > brkpos->margin_pc()) && (std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc())));  // if position value is changing but pressure isn't, then set flag otherwise clear
-                setflag(_BrakePres, WARN, (brake->feedback == HybridFB) && (signbit(pressure->pc()) != signbit(brkpos->pc())) && (signbit(pressure->pc()) != signbit(brake->pc[OUT])));  // if motor and position are consistent with moving one direction but pressure is changing the opposite way
+                setflag(_BrakePres, ErrLost, ((std::abs(brkpos->pc() - brkpos_last_pc) > brkpos->margin_pc()) && (std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc())));  // if position value is changing but pressure isn't, then set flag otherwise clear
+                setflag(_BrakePres, ErrWarn, (brake->feedback == HybridFB) && (signbit(pressure->pc()) != signbit(brkpos->pc())) && (signbit(pressure->pc()) != signbit(brake->pc[Out])));  // if motor and position are consistent with moving one direction but pressure is changing the opposite way
             }
             
             // Skipping this b/c it is triggering and I don't care. Really should figure out what's going on
-            // setflag(_BrakeMotor, LOST, ((std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if neither sensor is changing, set motor lost flag
+            // setflag(_BrakeMotor, ErrLost, ((std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if neither sensor is changing, set motor lost flag
         }
         checkrange(_BrakeMotor);
         checkrange(_BrakePosn);
         checkrange(_BrakePres);
-        // setflag(_BrakeMotor, RANGE, brake->pc[OUT] < brake->pc[OPMIN] - brake->pc[MARGIN] || brake->pc[OUT] > brake->pc[OPMAX] + brake->pc[MARGIN]);
-        // setflag(_BrakePosn, RANGE, (brkpos->pc() > 100.0 + brkpos->margin_pc()) || (brkpos->pc() < 0.0 - brkpos->margin_pc()));  // if position reading is outside oprange, set flag
-        // setflag(_BrakePres, RANGE, (pressure->pc() > 100.0 + pressure->margin_pc()) || (pressure->pc() < 0.0 - pressure->margin_pc()));  // if pressure reading is outside oprange, set flag
+        // setflag(_BrakeMotor, ErrRange, brake->pc[Out] < brake->pc[OpMin] - brake->pc[Margin] || brake->pc[Out] > brake->pc[OpMax] + brake->pc[Margin]);
+        // setflag(_BrakePosn, ErrRange, (brkpos->pc() > 100.0 + brkpos->margin_pc()) || (brkpos->pc() < 0.0 - brkpos->margin_pc()));  // if position reading is outside oprange, set flag
+        // setflag(_BrakePres, ErrRange, (pressure->pc() > 100.0 + pressure->margin_pc()) || (pressure->pc() < 0.0 - pressure->margin_pc()));  // if pressure reading is outside oprange, set flag
         bool found_err = false;
-        if ((brake->feedback != _BrakePres) && (err_sens[LOST][_BrakePosn] || err_sens[RANGE][_BrakePosn])) found_err = true;
-        if ((brake->feedback != _BrakePosn) && (err_sens[LOST][_BrakePres] || err_sens[RANGE][_BrakePres])) found_err = true;
-        setflag(_BrakeMotor, WARN, found_err);
+        if (brake->feedback_enabled[PressureFB] && (err_sens[ErrLost][_BrakePosn] || err_sens[ErrRange][_BrakePosn])) found_err = true;
+        if (brake->feedback_enabled[PositionFB] && (err_sens[ErrLost][_BrakePres] || err_sens[ErrRange][_BrakePres])) found_err = true;
+        setflag(_BrakeMotor, ErrWarn, found_err);
         pressure_last_pc = pressure->pc();
         brkpos_last_pc = brkpos->pc();
-        motor_last_pc = brake->pc[OUT];
+        motor_last_pc = brake->pc[Out];
     }
     void SpeedoFailure() {  // checks if speedo isn't zero when stopped, or doesn't increase when we drive
         static bool gunning_it, gunning_last = true;
         static float baseline_speed;
         bool fail = false;
         // commented this b/c 
-        // if (runmode == STANDBY) {  // || runmode == HOLD  // check that the speed is zero when stopped
+        // if (runmode == Standby) {  // || runmode == Hold  // check that the speed is zero when stopped
         //     // if (gunning_last) speedoTimer.reset();       // if we just stopped driving, allow time for car to stop
         //     // else if (speedoTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
         //     fail = (baseline_speed > speedo->margin());  // when stopped the speedo reading should be zero, otherwise fail
         //     baseline_speed = speedo->val();         // store the speed value when we are stopped
         //     // }
         // }
-        gunning_it = (gas->pc[OUT] > 20.0 && (runmode == FLY || runmode == CRUISE));
+        gunning_it = (gas->pc[Out] > 20.0 && (runmode == Fly || runmode == Cruise));
         if (gunning_it) {                                                             // if we're attempting to drive
             if (!gunning_last) speedoTimer.reset();                     // delay our speed comparison so car can accelerate
             else if (speedoTimer.expired()) fail = (speedo->val() - baseline_speed < speedo->margin());  // the car should be moving by now
         }
         gunning_last = gunning_it;
-        setflag(_Speedo, LOST, fail);
+        setflag(_Speedo, ErrLost, fail);
         checkrange(_Speedo);
-        // setflag(_Speedo, RANGE, speedo->val() < speedo->opmin() || speedo->val() > speedo->opmax());
+        // setflag(_Speedo, ErrRange, speedo->val() < speedo->opmin() || speedo->val() > speedo->opmax());
     }
     void TachFailure() {  // checks if tach isn't low when throttle is released, or doesn't increase when we gun it
         static bool running_it, running_last = true;
         static float baseline_rpm;
         bool fail = false;
-        if (runmode == STANDBY) {  // || runmode == STALL  // check that the speed is zero when stopped
+        if (runmode == Standby) {  // || runmode == Stall  // check that the speed is zero when stopped
             // if (running_last) tachTimer.reset();       // if we just stopped driving, allow time for car to stop
             // else if (tachTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
             fail = (baseline_rpm > tach->margin());  // when stopped the speedo reading should be zero, otherwise fail
             baseline_rpm = tach->val();         // store the speed value when we are stopped
             // }
         }
-        running_it = (gas->pc[OUT] > 20.0 && (runmode == FLY || runmode == CRUISE));
+        running_it = (gas->pc[Out] > 20.0 && (runmode == Fly || runmode == Cruise));
         if (running_it) {                                               // if we're attempting to drive
             if (!running_last) tachTimer.reset();                     // delay our rpm comparison so car can respond
             else if (tachTimer.expired()) fail = (tach->val() - baseline_rpm < tach->margin());  // the car should be moving by now
         }
         running_last = running_it;
-        setflag(_Tach, LOST, fail);
+        setflag(_Tach, ErrLost, fail);
         checkrange(_Tach);
-        // setflag(_Tach, RANGE, tach->val() < tach->opmin() || tach->val() > tach->opmax());
+        // setflag(_Tach, ErrRange, tach->val() < tach->opmin() || tach->val() > tach->opmax());
     }
     void HotRCFailure() {
-        for (int ch = HORZ; ch <= CH4; ch++) {
+        for (int ch = Horz; ch <= Ch4; ch++) {
             int errindex;
-            if (ch == HORZ) errindex = _HotRCHorz;
-            else if (ch == VERT) errindex = _HotRCVert;
-            else if (ch == CH3) errindex = _HotRCCh3;
-            else if (ch == CH4) errindex = _HotRCCh4;
-            checkrange(_HotRCHorz, !hotrc->radiolost());
-            checkrange(_HotRCVert, !hotrc->radiolost());
-            checkrange(_HotRCCh3, !hotrc->radiolost());
-            checkrange(_HotRCCh4, !hotrc->radiolost());
-            // setflag(errindex, RANGE, !hotrc->radiolost() && ((hotrc->us[ch][FILT] < hotrc->us[ch][OPMIN] - hotrc->us[ch][MARGIN]) 
-            //                         || (hotrc->us[ch][FILT] > hotrc->us[ch][OPMAX] + hotrc->us[ch][MARGIN])));  // && ch != VERT
-            setflag(errindex, LOST, !hotrc->radiolost() && ((hotrc->us[ch][FILT] < hotrc->absmin_us - hotrc->us[ch][MARGIN])
-                                    || (hotrc->us[ch][FILT] > hotrc->absmax_us + hotrc->us[ch][MARGIN])));
-            // err_sens[RANGE][_HotRCVert] = (hotrc->us[VERT][RAW] < hotrc->failsafe_us - hotrc->us[ch][MARGIN])
-            //     || ((hotrc->us[VERT][RAW] < hotrc->us[VERT][OPMIN] - halfMARGIN) && (hotrc->us[VERT][RAW] > hotrc->failsafe_us + hotrc->us[ch][MARGIN]));
+            if (ch == Horz)      { errindex = _HotRCHorz; checkrange(_HotRCHorz, !hotrc->radiolost()); }
+            else if (ch == Vert) { errindex = _HotRCVert; checkrange(_HotRCVert, !hotrc->radiolost()); }
+            else if (ch == Ch3)  { errindex = _HotRCCh3;  checkrange(_HotRCCh3, !hotrc->radiolost());  }
+            else if (ch == Ch4)  { errindex = _HotRCCh4;  checkrange(_HotRCCh4, !hotrc->radiolost());  }
+            // setflag(errindex, ErrRange, !hotrc->radiolost() && ((hotrc->us[ch][Filt] < hotrc->us[ch][OpMin] - hotrc->us[ch][Margin]) 
+            //                         || (hotrc->us[ch][Filt] > hotrc->us[ch][OpMax] + hotrc->us[ch][Margin])));  // && ch != Vert
+            setflag(errindex, ErrLost, !hotrc->radiolost() && ((hotrc->us[ch][Filt] < hotrc->absmin_us - hotrc->us[ch][Margin])
+                                    || (hotrc->us[ch][Filt] > hotrc->absmax_us + hotrc->us[ch][Margin])));
+            // err_sens[ErrRange][_HotRCVert] = (hotrc->us[Vert][RAW] < hotrc->failsafe_us - hotrc->us[ch][Margin])
+            //     || ((hotrc->us[Vert][RAW] < hotrc->us[Vert][OpMin] - halfMargin) && (hotrc->us[Vert][RAW] > hotrc->failsafe_us + hotrc->us[ch][Margin]));
         }
     }
     void dump_errorcode_update() {
         if (!print_error_changes) return;
-        static uint32_t status_last[NUM_ERR_TYPES];
+        static uint32_t status_last[NumErrTypes];
         bool do_print = false;
         uint8_t color = NON;
         uint32_t now, was;
         int errdiffs = 0, errtotal = 0;
-        for (int e=0; e<NUM_ERR_TYPES; e++) {
+        for (int e=0; e<NumErrTypes; e++) {
             if (errstatus[e] != status_last[e]) do_print = true;
             now = errstatus[e];
             was = status_last[e];
@@ -388,21 +430,21 @@ class DiagRuntime {
             if (!errdiffs) do_print = false;
         }
         if (do_print) {
-            ezread.squintf(color, "errs %d(%+d) L%x R%x W%x\n", errtotal, errdiffs, errstatus[LOST], errstatus[RANGE], errstatus[WARN]);
+            ezread.squintf(color, "errs %d(%+d) L%x R%x W%x\n", errtotal, errdiffs, errstatus[ErrLost], errstatus[ErrRange], errstatus[ErrWarn]);
         }
     }
     void make_log_entry() {
         if (logTimer.expireset()) {
             times[dic][index] = esp_timer_get_time();
-            tel[dic][_Throttle][index] = gas->pc[OUT];
-            tel[dic][_BrakeMotor][index] = brake->pc[OUT];
-            tel[dic][_SteerMotor][index] = steer->pc[OUT];
+            tel[dic][_Throttle][index] = gas->pc[Out];
+            tel[dic][_BrakeMotor][index] = brake->pc[Out];
+            tel[dic][_SteerMotor][index] = steer->pc[Out];
             tel[dic][_BrakePres][index] = pressure->val();
             tel[dic][_BrakePosn][index] = brkpos->val();
             tel[dic][_Speedo][index] = speedo->val();
             tel[dic][_Tach][index] = tach->val();
-            // tel[dic][_HotRCHorz][index] = hotrc->pc[HORZ][FILT];
-            // tel[dic][_HotRCVert][index] = hotrc->pc[VERT][FILT];
+            // tel[dic][_HotRCHorz][index] = hotrc->pc[Horz][Filt];
+            // tel[dic][_HotRCVert][index] = hotrc->pc[Vert][Filt];
             // tel[dic][_MuleBatt][index] = mulebatt->val();
             // tel[dic][_AirVelo][index] = airvelo->val(); 
             // tel[dic][_MAP][index] = mapsens->val();
@@ -473,25 +515,25 @@ class DiagRuntime {
 // 1. Detect  brake chain is not connected (evidenced by change in brake position without expected pressure changes)
 // 2. Detect obstruction, motor failure, or inaccurate position. Evidenced by motor instructed to move but position not changing even when pressure is low.
 // 3. Detet brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
-// retract_effective_max_us = volt[STOP] + duty_pc * (volt[OPMAX] - volt[STOP]);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
+// retract_effective_max_us = volt[Stop] + duty_pc * (volt[OpMax] - volt[Stop]);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
 
 class LoopTimer {
   public:
-    LoopTimer() {}
+    LoopTimer() { setup(); }
     // Loop timing related
     Timer loop_timer{1000000};  // how long the previous main loop took to run (in us)
     int loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
     float loop_sum_s, loopfreq_hz;
     int looptimes_us[20];
     bool loop_dirty[20];
-    int64_t loop_cout_mark_us, boot_mark;
+    int64_t loop_cout_mark_us, boot_mark_us;
     int loop_cout_us = 0, loop_peak_us = 0, loop_now = 0;;
     static constexpr int loop_history = 100;
     int loop_periods_us[loop_history];
     // std::vector<std::string> loop_names(20);
     std::string loop_names[20];
     void setup() {  // Run once at end of setup()
-        boot_mark = esp_timer_get_time();
+        boot_mark_us = esp_timer_get_time();
         if (looptime_print) {
             for (int x=1; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
             loop_names[0] = std::string("top");
@@ -521,7 +563,7 @@ class LoopTimer {
         return (float)loop_recentsum/(float)loop_history;
     }
     void update() {  // Call once each loop at the very end
-        if (runmode == LOWPOWER) return;
+        if (runmode == LowPower) return;
         int thisloop = (int)loop_timer.elapsed();
         loop_avg_us = calc_avg(loop_now, thisloop);
         loop_periods_us[loop_now] = thisloop;  // us since beginning of this loop
@@ -547,8 +589,11 @@ class LoopTimer {
         ++loop_now %= loop_history;
         loopno++;  // I like to count how many loops
     }
+    int uptime_us() {  // returns uptime since last reset in microseconds
+        return esp_timer_get_time() - boot_mark_us;
+    }
     float uptime() {  // returns uptime since last reset in minutes
-        return (float)((esp_timer_get_time() - boot_mark)) / (60.0 * 1000000.0);
+        return (float)((esp_timer_get_time() - boot_mark_us)) / (60.0 * 1000000.0);
     }
 };
 class BootMonitor {
@@ -560,7 +605,7 @@ class BootMonitor {
     LoopTimer* myloop;
     std::string codestatuscard[NumCodeStatuses] = { "confused", "asleep", "booting", "parked", "stopped", "panicking", "in basicmode", "driving" };
     Timer highWaterTimer{30000000};
-    TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4; TaskHandle_t* task5;
+    TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4;
     UBaseType_t highWaterBytes;
     bool wrote_panic, wrote_ign, was_panicked = false;
     void flash_codestatus(int _stat) {
@@ -582,32 +627,32 @@ class BootMonitor {
         wrote_ign = ignition.signal;
     }
   public:
-    int boot_to_runmode = STANDBY;
+    // int boot_to_runmode = Standby;    // disabling ability to recover to previous runmode after crash
     BootMonitor(Preferences* _prefs, LoopTimer* _loop) : myprefs(_prefs), myloop(_loop) {}
     void set_codestatus() {
         flash_runmode();
         flash_panicstop();
         flash_ignition();
-        int dowrite = Confused;
-        if (panicstop) dowrite = Panicking;
-        if (runmode == BASIC) dowrite = InBasic;
-        else if (runmode == LOWPOWER) dowrite = Asleep;
-        else if (runmode == FLY || runmode == CRUISE) dowrite = Driving;
-        else if (runmode == HOLD || runmode == STALL) dowrite = Stopped;
-        else if (runmode == STANDBY) dowrite = Parked;
+        int dowrite = StConfused;
+        if (panicstop) dowrite = StPanicking;
+        if (runmode == Basic) dowrite = StInBasic;
+        else if (runmode == LowPower) dowrite = StAsleep;
+        else if (runmode == Fly || runmode == Cruise) dowrite = StDriving;
+        else if (runmode == Hold || runmode == Stall) dowrite = StStopped;
+        else if (runmode == Standby) dowrite = StParked;
         flash_codestatus(dowrite);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
     }
-    void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, TaskHandle_t* t5, int sec = -1) {
-        task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;  task5 = t5;
+    void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, int sec = -1) {
+        task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;
         if (sec >= 0) timeout_sec = sec;
         psram_setup();
         myprefs->begin("FlyByWire", false);
         read_bootstatus();
-        flash_codestatus(Booting);
+        flash_codestatus(StBooting);
         print_postmortem();
-        recover_status();
+        panic_on_crash();
         print_chip_info();
-        print_partition_table();
+        // print_partition_table();
         if (!watchdog_enabled) return;
         ezread.squintf("Boot manager.. \n");
         esp_task_wdt_init(timeout_sec, true);  // see https://github.com/espressif/esp-idf/blob/master/examples/system/task_watchdog/main/task_watchdog_example_main.c
@@ -623,9 +668,20 @@ class BootMonitor {
     }
     void update() {
         pet();
-        if (codestatus == Booting) set_codestatus();  // we are not booting any more
+        if (codestatus == StBooting) set_codestatus();  // we are not booting any more
         write_uptime();
-        print_high_water(task1, task2, task3, task4, task5);
+        print_high_water(task1, task2, task3, task4);
+    }
+    void flash_forcewrite(const char* flashid, uint32_t val) {  // force writes a uint value to indicated flashed value. external code must be responsible here to not write unnecessarily!
+        myprefs->putUInt(flashid, val);
+    }
+    int flash_read(std::string flashid, uint32_t def=1234567) {  // reads a uint value at the indicated flash slot. returns -1 on error
+        uint32_t ret = (int)myprefs->getUInt(flashid.c_str(), def);
+        if (ret == 1234567) {
+            ezread.squintf("Err: no flash id \"%s\"\n", flashid.c_str());
+            return -1;
+        }
+        return (int)ret;
     }
     void flash_forcewrite(const char* flashid, uint32_t val) {  // force writes a uint value to indicated flashed value. external code must be responsible here to not write unnecessarily!
         myprefs->putUInt(flashid, val);
@@ -642,14 +698,14 @@ class BootMonitor {
     void read_bootstatus() {
         bootcount = (int)myprefs->getUInt("bootcount", 0) + 1;
         myprefs->putUInt("bootcount", (uint32_t)bootcount);
-        codestatus_postmortem = (int)myprefs->getUInt("codestatus", Confused);
+        codestatus_postmortem = (int)myprefs->getUInt("codestatus", StConfused);
         ign_postmortem = (int)myprefs->getUInt("ignition", (uint32_t)HIGH);
         panic_postmortem = (int)myprefs->getUInt("panicstop", (uint32_t)HIGH);
-        runmode_postmortem = (int)myprefs->getUInt("runmode", (uint32_t)FLY);
+        runmode_postmortem = (int)myprefs->getUInt("runmode", (uint32_t)Fly);
         crashcount = (int)myprefs->getUInt("crashcount", 0);
         if (codestatus_postmortem != Parked) crashcount++;
         myprefs->putUInt("crashcount", (uint32_t)crashcount);
-        wrote_panic = (codestatus_postmortem == Panicking);
+        wrote_panic = (codestatus_postmortem == StPanicking);
     }
     void write_uptime() {
         float get_uptime = myloop->uptime();
@@ -669,34 +725,30 @@ class BootMonitor {
         }
         else ezread.squintf("under 1 min uptime\n");
     }
-    void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4, xTaskHandle* t5) {
+    void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
         if (print_task_stack_usage && highWaterTimer.expireset()) {
             ezread.squintf("mem minfree(B): heap:%d", xPortGetMinimumEverFreeHeapSize());            
             highWaterBytes = uxTaskGetStackHighWaterMark(*t1) * sizeof(StackType_t);
             ezread.squintf(" temptask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t2) * sizeof(StackType_t);
-            ezread.squintf(", webtask:%d", highWaterBytes);
-            highWaterBytes = uxTaskGetStackHighWaterMark(*t3) * sizeof(StackType_t);
             ezread.squintf(", drawtask:%d", highWaterBytes);
-            highWaterBytes = uxTaskGetStackHighWaterMark(*t4) * sizeof(StackType_t);
+            highWaterBytes = uxTaskGetStackHighWaterMark(*t3) * sizeof(StackType_t);
             ezread.squintf(", pushtask:%d", highWaterBytes);
-            highWaterBytes = uxTaskGetStackHighWaterMark(*t5) * sizeof(StackType_t);
+            highWaterBytes = uxTaskGetStackHighWaterMark(*t4) * sizeof(StackType_t);
             ezread.squintf(", maftask:%d\n", highWaterBytes);
         }
     }
-    void recover_status() {
-        if ((codestatus_postmortem != Driving && codestatus_postmortem != Stopped) || !crash_driving_recovery) return;
-        if (was_panicked) {
-            ezread.squintf("  Continuing to panic..\n");
-            ignition.panic_request(REQ_ON);
-            return;
-        }
-        boot_to_runmode = runmode_postmortem;
-        if (runmode_postmortem == CRUISE) boot_to_runmode = FLY;
-        else if (runmode_postmortem == CAL) boot_to_runmode = STANDBY;        
-        ezread.squintf("  Resuming %s run mode w/ ignition %s..\n", modecard[boot_to_runmode], ign_postmortem ? "on" : "off");
-        ignition.request(ign_postmortem ? REQ_ON : REQ_OFF);
-        // gas.(brake.pc[STOP]);  // brake.pid_targ_pc(brake.pc[STOP]);
+    void panic_on_crash() {
+        // if ((codestatus_postmortem != StDriving && codestatus_postmortem != StStopped)|| !crash_driving_recovery) return;  // crash_driving_recovery
+        if (!panic_on_boot_after_crash || ((codestatus_postmortem != StDriving) && !was_panicked)) return;
+        ezread.squintf(ORG, "warn: panic condition %sstarted after crash detect\n", was_panicked ? "re" : "");
+        ignition.panic_request(ReqOn);
+        // boot_to_runmode = runmode_postmortem;  // disabling ability to recover to previous runmode after crash
+        // if (runmode_postmortem == Cruise) boot_to_runmode = Fly; // disabling ability to recover to previous runmode after crash
+        // else if (runmode_postmortem == Cal) boot_to_runmode = Standby; // disabling ability to recover to previous runmode after crash
+        // ezread.squintf("  Resuming %s run mode w/ ignition %s..\n", modecard[boot_to_runmode], ign_postmortem ? "on" : "off"); // disabling ability to recover to previous runmode after crash
+        // ignition.request(ign_postmortem ? ReqOn : ReqOff);  // this is ludicrous! commented out!
+        // gas.(brake.pc[Stop]);  // brake.pid_targ_pc(brake.pc[Stop]);
     }
     void psram_setup() {  // see https://www.upesy.com/blogs/tutorials/get-more-ram-on-esp32-with-psram#
         ezread.squintf("PSRAM.. ");
@@ -718,7 +770,7 @@ class BootMonitor {
     }
     void print_partition_table() {  // warning: this could hang/crash if no "coredump" labeled partition is found
         if (!running_on_devboard) return;
-        ezread.squintf("\nPartition Typ SubT  Address SizeByte   kB\n");
+        ezread.squintf("Partition Typ SubT  Address SizeByte   kB\n");
         esp_partition_iterator_t iterator = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, NULL);
         const esp_partition_t *partition;
         while ((partition = esp_partition_get(iterator)) != NULL) {
@@ -734,10 +786,10 @@ class BootMonitor {
         esp_chip_info(&chip_info);
         unsigned major_rev = chip_info.revision / 100;
         unsigned minor_rev = chip_info.revision % 100;
-        ezread.squintf("  detected %s v%d.%d %d-core, ", CONFIG_IDF_TARGET, major_rev, minor_rev, chip_info.cores);
-        if(esp_flash_get_size(NULL, &flash_size) != ESP_OK) Serial.printf("(fail flash detect)\n");
+        ezread.squintf("MCU: detect %s v%d.%d %d-core, ", CONFIG_IDF_TARGET, major_rev, minor_rev, chip_info.cores);
+        if (esp_flash_get_size(NULL, &flash_size) != ESP_OK) ezread.squintf("fail flash detect\n");
         else ezread.squintf("%" PRIu32 "MB %s flash\n", flash_size / (uint32_t)(1024 * 1024),
-          (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "emb." : "ext.");  // embedded or external
+          (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "emb" : "ext");  // embedded or external
         ezread.squintf("  w/ %s%s%s%s.", 
           (chip_info.features & CHIP_FEATURE_WIFI_BGN) ? "WiFi/" : "",
           (chip_info.features & CHIP_FEATURE_BT) ? "BT" : "",
@@ -749,10 +801,10 @@ class BootMonitor {
 #if RUN_TESTS
     #include "unittests.h"
     void run_tests() {
-        Serial.printf("Running tests...\n");
+        Serial.printf("Tests running..");
         delay(5000);
         test_Param();
-        Serial.printf("Tests complete.\n");
+        Serial.printf("Tests complete\n");
         for(;;); // loop forever
     }
 #else

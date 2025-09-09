@@ -12,10 +12,10 @@
 // this enum class represent the components which can be simulated (sensor). It's int type under the covers, so it can be used as an index
 // typedef int opt_t;
 enum si_native_convmethods { LinearMath=0, AbsLimMap=1, OpLimMap=2 };
-enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, airvelo=6, mapsens=7, engtemp=8, mulebatt=9, starter=10, basicsw=11, NUM_SENSORS=12 };  //, ignition, syspower };  // , NUM_SENSORS, err_flag };
-enum class src : int { UNDEF=0, FIXED=1, PIN=2, SIM=3, POT=4, CALC=5 };
+enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, airvelo=6, mapsens=7, engtemp=8, mulebatt=9, starter=10, basicsw=11, NumSensors=12 };  //, ignition, syspower };  // , NumSensors, err_flag };
+enum class src : int { Undef=0, Fixed=1, Pin=2, Sim=3, Pot=4, Calc=5 };
 
-int sources[static_cast<int>(sens::NUM_SENSORS)] = { static_cast<int>(src::UNDEF) };
+int sources[static_cast<int>(sens::NumSensors)] = { static_cast<int>(src::Undef) };
 
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
@@ -36,7 +36,7 @@ class Potentiometer {
     Potentiometer() = delete; // must have a pin defined
     sens _senstype = sens::none;
     void setup() {
-        ezread.squintf("Pot setup..\n");
+        ezread.squintf("Potentiometer init\n");
         set_pin(_pin, INPUT);
         _activity_ref = _pc;
     }
@@ -49,7 +49,7 @@ class Potentiometer {
             // Serial.printf("r: %.6lf f: %.6lf\n", _raw, _pc);
             if (std::abs(_pc - _activity_ref) > _margin_pc) {
                 // ezread.squintf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
-                kick_inactivity_timer(HUPot);  // evidence of user activity
+                kick_inactivity_timer(HuPot);  // evidence of user activity
                 _activity_ref = _pc;
                 // ezread.squintf("r2:%lf\n", _activity_ref);
             }
@@ -158,9 +158,11 @@ class Device {
     // which types of sources are possible for this device?
     int _pin;
     bool _enabled = true;
+    int val_refresh_period = 5000;  // minimum delay between value updates, just to be efficient w/ processing. (overload this per device)
+    Timer valrefreshtimer;
     Potentiometer* _pot; // to pull input from the pot if we're in simulation mode
-    src _source = src::UNDEF;
-    bool _can_source[6] = { true, true, false, true, false, false };  // [UNDEF/FIXED/PIN/SIM/POT/CALC]
+    src _source = src::Undef;
+    bool _can_source[6] = { true, true, false, true, false, false };  // [Undef/Fixed/Pin/Sim/Pot/Calc]
     // source handling functions (should be overridden in child classes as needed)
     virtual void set_val_from_undef() {}
     virtual void set_val_from_fixed() {}
@@ -177,8 +179,10 @@ class Device {
     Timer timer;  // can be used for external purposes
     sens _senstype = sens::none;
     Device() = delete; // should always be created with a pin
-    // note: should we start in PIN mode?
-    Device(int arg_pin) : _pin(arg_pin) {}
+    // note: should we start in Pin mode?
+    Device(int arg_pin) : _pin(arg_pin) {
+        valrefreshtimer.set(val_refresh_period);
+    }
     bool can_source(src arg_source) { return _can_source[static_cast<int>(arg_source)]; }
     bool set_source(src arg_source) {
         if (_can_source[static_cast<int>(arg_source)]) {
@@ -190,15 +194,18 @@ class Device {
         return false;
     }
     void update() {  // I changed case statement into if statements and now is 10 lines long instead of 28.  case sucks like that
-        if (runmode == LOWPOWER || !_enabled) return; // do nothing if in lowpower mode or this device is disabled
-        if (_source == src::UNDEF) set_val_from_undef();
-        else if (_source == src::FIXED) set_val_from_fixed();
-        else if (_source == src::PIN) set_val_from_pin();
-        else if (_source == src::SIM) set_val_from_sim();
-        else if (_source == src::POT) set_val_from_pot();
-        else if (_source == src::CALC) set_val_from_calc();
-        else ezread.squintf("invalid Device source: %d\n", _source);
-        set_val_common();
+        if (valrefreshtimer.expired()) {
+            valrefreshtimer.set(val_refresh_period);  // allows for dynamic adjustment of update period as needed each device
+            if (runmode == LowPower || !_enabled) return; // do nothing if in lowpower mode or this device is disabled
+            if (_source == src::Undef) set_val_from_undef();
+            else if (_source == src::Fixed) set_val_from_fixed();
+            else if (_source == src::Pin) set_val_from_pin();
+            else if (_source == src::Sim) set_val_from_sim();
+            else if (_source == src::Pot) set_val_from_pot();
+            else if (_source == src::Calc) set_val_from_calc();
+            else ezread.squintf("invalid Device source: %d\n", _source);
+            set_val_common();
+        }
     }
     void attach_pot(Potentiometer &pot_arg) {
         _pot = &pot_arg;
@@ -210,8 +217,8 @@ class Device {
     bool enabled() { return _enabled; }
 };
 
-enum class TransDir : int { REV=0, FWD=1, NumTransDir=2 }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
-enum TransType { ActuatorType=0, SensorType=1, NumTransType=2 }; // possible dir values. REV means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
+enum class TransDir : int { Rev=0, Fwd=1, NumTransDir=2 }; // possible dir values. Rev means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
+enum TransType { ActuatorType=0, SensorType=1, NumTransType=2 }; // possible dir values. Rev means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
 std::string transtypecard[NumTransType] = { "actuator", "sensor" };
 std::string transdircard[(int)TransDir::NumTransDir] = { "rev", "fwd" };
 
@@ -243,7 +250,7 @@ class Transducer : public Device {
     float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;
     int _transtype, _convmethod = LinearMath;  // the default method
     Param _si, _native;
-    TransDir _dir = TransDir::FWD;
+    TransDir _dir = TransDir::Fwd;
   public:
     // operator float() { return _si.val(); }
     Transducer(int arg_pin) : Device(arg_pin) {
@@ -261,7 +268,7 @@ class Transducer : public Device {
     virtual void print_config(bool header=true, bool ranges=true) {
         if (header) {
             Serial.printf("%s %s", _long_name.c_str(), transtypecard[_transtype].c_str());
-            ezread.printf("%s", _short_name.c_str()); 
+            ezread.printf("%s", _long_name.c_str()); 
             if (_pin < 255 && _pin >= 0) {
                 Serial.printf(", pin %d", _pin);
                 ezread.printf(" (p%d)", _pin);
@@ -278,7 +285,11 @@ class Transducer : public Device {
         if (_convmethod == AbsLimMap) ret = map(arg_native, _native.min(), _native.max(), _si.min(), _si.max());
         else if (_convmethod == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
         else if (_convmethod == LinearMath) ret = _boffset + _mfactor * arg_native; // ezread.squintf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
+<<<<<<< HEAD
         else ezread.squintf("Err: %s from_native convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_native, _native.min(), _native.max());
+=======
+        else ezread.squintf(RED, "err: %s from_native convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_native, _native.min(), _native.max());
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         cleanzero(&ret, float_conversion_zero);   // if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // reject any stupidly small near-zero values
         return ret;
     }
@@ -287,19 +298,31 @@ class Transducer : public Device {
         if (_convmethod == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
         else if (_convmethod == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
         else if ((_convmethod == LinearMath) && !iszero(_mfactor)) ret = (arg_si - _boffset) / _mfactor;
+<<<<<<< HEAD
         else ezread.squintf("Err: %s to_native can't convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_si, _si.min(), _si.max());
+=======
+        else ezread.squintf(RED, "err: %s to_native can't convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_si, _si.min(), _si.max());
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         cleanzero(&ret, float_conversion_zero);
         return ret;
     }
     virtual float to_pc(float arg_si) {  // convert an absolute si value to percent form.  note this honors the _dir setting
         if (std::isnan(arg_si)) return NAN;
+<<<<<<< HEAD
         float ret = map(arg_si, _opmin, _opmax, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD));
+=======
+        float ret = map(arg_si, _opmin, _opmax, 100.0 * (_dir == TransDir::Rev), 100.0 * (_dir == TransDir::Fwd));
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         cleanzero(&ret, float_conversion_zero);
         return ret;
     }
     virtual float from_pc(float arg_pc) {  // convert an absolute percent value to si unit form.  note this honors the _dir setting
         if (std::isnan(arg_pc)) return NAN;
+<<<<<<< HEAD
         float ret = map(arg_pc, 100.0 * (_dir == TransDir::REV), 100.0 * (_dir == TransDir::FWD), _opmin, _opmax);
+=======
+        float ret = map(arg_pc, 100.0 * (_dir == TransDir::Rev), 100.0 * (_dir == TransDir::Fwd), _opmin, _opmax);
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         cleanzero(&ret, float_conversion_zero);
         return ret;
     }
@@ -369,7 +392,11 @@ class Transducer : public Device {
         return set_si(from_pc(arg_val_pc), also_set_raw);
     }
     bool sim_si(float arg_val_si, bool also_set_raw=true) {
+<<<<<<< HEAD
         if (_source != src::SIM && _source != src::POT) return false;
+=======
+        if (_source != src::Sim && _source != src::Pot) return false;
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
         if (!_si.set(arg_val_si)) return false;
         if (also_set_raw) _si_raw = _si.val();
         _native.set(to_native(_si.val()));
@@ -412,7 +439,6 @@ class Transducer : public Device {
     float* margin_ptr() { return &_margin; }
     float* zeropoint_ptr() { return &_zeropoint; }
 };
-
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
 // 
 // Sensor class notes:  Some definitions (240522 soren)
@@ -433,7 +459,6 @@ class Sensor : public Transducer {
             _first_filter_run = false;
             return;  // Serial.printf("x");
         }  // Serial.printf("+ (%.4lf)", _si_raw);
-        
         set_si(ema_filt(_si_raw, _si.val(), _ema_alpha), false);
     }
     virtual void set_val_from_undef() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
@@ -447,7 +472,7 @@ class Sensor : public Transducer {
         // set_si(_si.val + touch.fdelta);  // I would think this should look something like this (needs some coding on the other side to support)
     }
     virtual float read_sensor() {
-        ezread.squintf("Err: %s does not have an overridden read_sensor() function\n", _short_name.c_str());
+        ezread.squintf(RED, "err: %s does not have an overridden read_sensor() function\n", _short_name.c_str());
         return NAN;
     }
     virtual void set_val_from_pin() {
@@ -458,7 +483,7 @@ class Sensor : public Transducer {
         set_si(_pot->mapToRange(_opmin, _opmax));  // as currently written, the pot will spoof both si and native raw values in addition to the filtered si value.  do we want this?
     }
     // virtual void update_si_limits() { _val_filt.set_limits(_si.min_shptr(), _si.max_shptr()); } // make sure our filtered value has the same limits as our regular value
-    void update_source() { if (_source == src::PIN) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
+    void update_source() { if (_source == src::Pin) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
   public:
     Sensor(int pin) : Transducer(pin) {
         _long_name = "Unknown";
@@ -466,7 +491,7 @@ class Sensor : public Transducer {
     }  
     virtual void setup() {
         _transtype = SensorType;
-        if (!_detected) set_source(src::FIXED);
+        if (!_detected) set_source(src::Fixed);
         Transducer::setup();
     }
     void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
@@ -479,7 +504,11 @@ class Sensor : public Transducer {
 //     TemperatureSensorManager* _tempsens;
 //   public:
 //     void setup() {
+<<<<<<< HEAD
 //         set_can_source(src::POT, true);
+=======
+//         set_can_source(src::Pot, true);
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
 //     }
 // };
 
@@ -503,34 +532,34 @@ class I2CSensor : public Sensor {
     // }
     void print_on_boot(bool detected, bool responding) {
         // if (header) Transducer::print_config(true, false);
-        ezread.squintf("  %s sensor %sdetected", _short_name.c_str(), _detected ? "" : "not ");
+        ezread.squintf("%s sensor (i2c 0x%02x) %sdetected\n", _long_name.c_str(), addr, _detected ? "" : "not ");
         if (detected) {
             if (responding) {
                 // ezread.squintf(", responding properly\n");
                 float readval = read_sensor();  // _sensor.readPressure(ATM);
-                ezread.squintf(" and reading %.4f %s\n", readval, _si_units.c_str());
-                set_source(src::PIN); // sensor working
+                ezread.squintf("  reading %.4f %s\n", readval, _si_units.c_str());
+                set_source(src::Pin); // sensor working
             }
             else {
-                ezread.squintf(", not responding\n");  // begin communication with air flow sensor) over I2C 
-                set_source(src::FIXED); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
+                ezread.squintf(ORG, "  no response\n");  // begin communication with air flow sensor) over I2C 
+                set_source(src::Fixed); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
             }
         }
         else {
             ezread.squintf("\n");
-            set_source(src::FIXED); // don't even have a device at all..
+            set_source(src::Fixed); // don't even have a device at all..
         }
     }
   public:
     uint8_t addr;
     I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor(-1), _i2c(i2c_arg), addr(i2c_address_arg) {
-        _long_name = "Unknown I2C";
+        _long_name = "Unknown i2c sensor";
         _short_name = "unki2c";
-        set_can_source(src::PIN, true);
+        set_can_source(src::Pin, true);
     }
     I2CSensor() = delete;
     virtual void setup() {
-        set_can_source(src::POT, true);
+        set_can_source(src::Pot, true);
         _detected = _i2c->detected_by_addr(addr);
         if (!_detected || !_responding) _enabled = false;
         print_on_boot(_detected, _responding);
@@ -545,9 +574,9 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     Timer airveloTimer{85000};
   public:
     float read_sensor() {
-        if (!_i2c->detected(i2c_airvelo)) return NAN;
+        if (!_i2c->detected(I2CAirVelo)) return NAN;
         // if (force) goodreading = _sensor.readMilesPerHour();
-        else if (!_i2c->not_my_turn(i2c_airvelo)) {
+        else if (!_i2c->not_my_turn(I2CAirVelo)) {
             if (airveloTimer.expireset()) goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
         }
         // ezread.squintf("a:%.3lf\n", goodreading);
@@ -556,7 +585,7 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     static constexpr uint8_t addr = 0x28;
     sens _senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        _long_name = "Manifold Air Velocity";
+        _long_name = "Air velocity";
         _short_name = "airvel";
         _native_units = "mph";
         _si_units = "mph";
@@ -564,7 +593,7 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     AirVeloSensor() = delete;
 
     void set_val_common() {
-        if (_i2c->i2cbaton == i2c_airvelo) _i2c->pass_i2c_baton();
+        if (_i2c->i2cbaton == I2CAirVelo) _i2c->pass_i2c_baton();
     }
     void setup() {  // ezread.squintf("%s..", _long_name.c_str());
         set_conversions(1.0, 0.0);
@@ -586,10 +615,10 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     int mapread_timeout = 100000, mapretry_timeout = 10000;
   public:
     float read_sensor() {
-        // ezread.squintf("det m:%d\n", _i2c->detected(i2c_map));
-        if (!_i2c->detected(i2c_map)) return NAN;
+        // ezread.squintf("det m:%d\n", _i2c->detected(I2CMAP));
+        if (!_i2c->detected(I2CMAP)) return NAN;
         // if (force) goodreading = _sensor.readPressure(ATM, false);
-        else if (!_i2c->not_my_turn(i2c_map)) {
+        else if (!_i2c->not_my_turn(I2CMAP)) {
             if (mapreadTimer.expired()) {
                 float temp = _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
                 if (!std::isnan(temp)) {
@@ -605,14 +634,14 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     static constexpr uint8_t addr = 0x18;  // note: would all MAPSensors have the same address?  ANS: yes by default, or an alternate fixed addr can be hardware-selected by hooking a pin low or something
     sens _senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        _long_name = "Manifold Air Pressure";
+        _long_name = "MAP";
         _short_name = "map";
         _native_units = "atm";
         _si_units = "atm";
     }
     MAPSensor() = delete;
     void set_val_common() {
-        if (_i2c->i2cbaton == i2c_map) _i2c->pass_i2c_baton();
+        if (_i2c->i2cbaton == I2CMAP) _i2c->pass_i2c_baton();
     }
     void setup() {
         set_conversions(1.0, 0.0);
@@ -635,16 +664,16 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
     }
   public:
     AnalogSensor(int arg_pin) : Sensor(arg_pin) {
-        _long_name = "Unknown Analog";
+        _long_name = "Unknown analog";
         _short_name = "analog";
         _native_units = "adc";
     }
     virtual void setup() {  // child classes call this before setting limits
         Sensor::setup();
         set_pin(_pin, INPUT);
-        set_can_source(src::PIN, true);
-        set_can_source(src::POT, true);
-        set_source(src::PIN);
+        set_can_source(src::Pin, true);
+        set_can_source(src::Pot, true);
+        set_source(src::Pin);
         set_abslim_native(0.0, (float)adcrange_adc, false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
     }
 };
@@ -652,7 +681,7 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
   public:
     sens _senstype = sens::mulebatt;
     CarBattery(int arg_pin) : AnalogSensor(arg_pin) {
-        _long_name = "Vehicle Battery Voltage";
+        _long_name = "Battery";
         _short_name = "mulbat";
         _native_units = "adc";
         _si_units = "V";
@@ -665,7 +694,7 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
         set_oplim(10.7, 14.8);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
         set_si(11.5);  // initialize value, just set to generic rest voltage of a lead-acid battery
         set_ema_alpha(0.005);
-        set_can_source(src::POT, true);
+        set_can_source(src::Pot, true);
         print_config();
     }
     void set_val_from_sim() { set_si(12.0); }  // what exactly is going on here? maybe an attempt to prevent always showing battery errors on dev boards?
@@ -685,7 +714,7 @@ class PressureSensor : public AnalogSensor {
     // Soren 230920: reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
     float hold_initial, hold_increment, panic_initial, panic_increment;  // , _margin_psi, _zeropoint_psi;
     PressureSensor(int arg_pin) : AnalogSensor(arg_pin) {
-        _long_name = "Brake Pressure";
+        _long_name = "BrkPressure";
         _short_name = "presur";
         _native_units = "adc";
         _si_units = "psi";
@@ -714,7 +743,7 @@ class PressureSensor : public AnalogSensor {
         // * point just before pressure begins to rise from 0 (zeropoint):  posn = 3.63 in, pres = 0 psi (618 adc)
         // * max i can push w/ foot:  posn = 2.32 in (1352 adc), pres = 313 psi (2172 adc)
 
-        float min_adc = 670.0;  // reduced to be below zeropoint, was 684.0. temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
+        float min_adc = 635.0;  // reduced to be below zeropoint, was 684.0. temporarily hold this key value for use in mfactor/boffset calculations and op limit settings below (which must happen in that order) 
         float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
         float b = -1.0 * min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
@@ -723,7 +752,7 @@ class PressureSensor : public AnalogSensor {
         set_oplim(0.0, NAN);  // now set just the si oplim to exactly zero. This will cause native oplims to autocalc such that any small errors don't cause our si oplim to be nonzero
         // set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
         // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
-        set_ema_alpha(0.15);
+        set_ema_alpha(0.055);
         set_margin(2.5);       // max acceptible error when checking psi levels
         hold_initial = 135.0;  // pressure applied when brakes are hit to auto-stop or auto-hold the car (adc count 0-4095)
         hold_increment = 3.0;  // incremental pressure added periodically when auto stopping (adc count 0-4095)
@@ -740,14 +769,13 @@ class PressureSensor : public AnalogSensor {
     bool parked() { return (std::abs(val() - _opmin) <= _margin); }  // is tha brake motor parked?
     float parkpos() { return _opmin; }
 };
-// BrakePositionSensor represents a linear position sensor
-// for measuring brake position (TODO which position? pad? pedal?)
+// BrakePositionSensor represents a linear position sensor for measuring brake pedal position
 // extends AnalogSensor for handling analog pin reading and conversion.
 class BrakePositionSensor : public AnalogSensor {
   public:
     sens _senstype = sens::brkpos;
     BrakePositionSensor(int arg_pin) : AnalogSensor(arg_pin) {
-        _long_name = "Brake Position";
+        _long_name = "BrkPosition";
         _short_name = "brkpos";
         _native_units = "adc";
         _si_units = "in";
@@ -756,15 +784,15 @@ class BrakePositionSensor : public AnalogSensor {
     void setup() {
         AnalogSensor::setup();
         // ezread.squintf("%s..\n", _long_name.c_str());
-        _dir = TransDir::REV;  // causes percent conversions to use inverted scale 
+        _dir = TransDir::Rev;  // causes percent conversions to use inverted scale 
         _convmethod = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
         #if BrakeThomson
             set_abslim(0.968, 8.875, false);  // tuned 240809 pre-bm24. measured from housing end to piston end. (pin hole is 0.343 back from the piston end)
             set_abslim_native(1035, 3102, false);  // tuned 240809 pre-bm24
             set_oplim(0.506, 4.234)  // 4.624  //tuned 230602 - best position to park the actuator out of the way so we can use the pedal (in)
             _zeropoint = 3.17;  // tuned 230602 - brake position value corresponding to the point where fluid PSI hits zero (in)
-        #else  // if LAE motor
-            // 240513 cal data LAE actuator:  measured to tip of piston
+        #else  // if MotorFactoryStore motor
+            // 240513 cal data MotorFactoryStore actuator:  measured to tip of piston
             // fully retracted 0.95 in, Vpot = 0.83 V (1179 adc), fully extended 8.85 in (), Vpot = 2.5 V (3103 adc)
             // calc (2.5 - 0.83) / 3.3 = 0.506 . 0.506 * 4096 = 2072 . (8.85 - 0.95) / 2072 = .00381 in/adc or 262 adc/in
             
@@ -773,7 +801,7 @@ class BrakePositionSensor : public AnalogSensor {
             set_abslim_native(1885, 3100, false);  // tuned 240513 - don't remember if values read from screen or calculated.  need to redo
             set_abslim(4.33, 8.84, false);  // tuned 240513 - actuator inches measured
             set_oplim(4.52, 6.00); 
-             // 240609 determined opmin on vehicle, with LAE motor connected w/ quicklink + carabeener
+             // 240609 determined opmin on vehicle, with MotorFactoryStore motor connected w/ quicklink + carabeener
             _zeropoint = 5.87;  // 240609 3.65in, 1707 adc - inches Brake position value corresponding to the point where fluid PSI hits zero (in)
 
             // don't also set native oplims as they will autocalc from oplims setting
@@ -792,13 +820,16 @@ class BrakePositionSensor : public AnalogSensor {
 class PulseSensor : public Sensor {
   protected:
     // volatile int64_t timestamp_last_us;  // _stop_timeout_us = 1250000;  // time after last magnet pulse when we can assume the engine is stopped (in us)
-    Timer _stop_timer;
+    Timer _stop_timer, _pulsecount_timer{1000000};
     bool _low_pulse = true, _pin_level, _pin_inactive = false;
-    float _us, _freqdiv = 1.0, _idle = 600.0, _idle_cold = 750.0, _idle_hot = 500.0;  // an external ripple counter divides pulse stream frequency by this, we need to compensate
+    float _us, _freqfactor = 1.0;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
+    // float _calfactor = 1.0;   // a tunable/calibratable factor same as the above, where if <1 gives fewer si-units/pulse-hz and vice versa.         also, the worst weight-loss scam in miami
     Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
     volatile int64_t _isr_us = 0;
     volatile int64_t _isr_time_last_us = 0;
     volatile int64_t _isr_time_current_us = 0;
+    volatile int _pulse_count = 0;  // record pulses occurring for debug/monitoring pulse activity
+    int _pulses_per_sec = 0;
     // volatile float _isr_us;
     // we maintain our min and max pulse period, for each pulse sensor
     // absmax_us is the reciprocal of our native absmin value in MHz. once max_us has elapsed since the last pulse our si sets to zero
@@ -816,6 +847,7 @@ class PulseSensor : public Sensor {
         _stop_timer.reset();
         _isr_time_last_us = _isr_time_current_us;
         _isr_us = time_us;
+        _pulse_count++;
     }
     void set_pin_inactive() {
         static bool pinlevel_last;
@@ -844,24 +876,23 @@ class PulseSensor : public Sensor {
         _si_raw = from_native(new_native);
         calculate_ema(); // filtered values are kept in si format
         _pin_level = read_pin(_pin);  // _pin_level = !_pin_level;
+        if (_pulsecount_timer.expireset()) {
+            _pulses_per_sec = _pulse_count;  // pulses_per_sec can be used for monitoring/debugging;
+            _pulse_count = 0;
+        }
     }
-    float us_to_hz(float arg_us) {
-        if (iszero(arg_us) || std::isnan(arg_us)) return 0.0;  // zero is a special value meaning we timed out
-        return 1000000.0 / arg_us;
+    float us_to_hz(float arg) {
+        if (iszero(arg) || std::isnan(arg)) return 0.0;  // zero is a special value meaning we timed out
+        return 1000000.0 / arg;
         // ezread.squintf("Err: %s us_to_hz() reciprocal of zero\n", _short_name.c_str());
         // return absmax();
     }
-    float hz_to_us(float arg_hz) {
-        if (iszero(arg_hz) || std::isnan(arg_hz)) return 0.0;  // zero is a special value meaning we timed out
-        return 1000000.0 / arg_hz;
-        // ezread.squintf("Err: %s hz_to_us() reciprocal of zero\n", _short_name.c_str());
-        // return _absmax_us;
-    }
+    float hz_to_us(float arg) { return us_to_hz(arg); }  // funny that the same math converts in either direction
   public:
     std::string _uber_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
 
-    PulseSensor(int arg_pin, float arg_freqdiv=1.0) : Sensor(arg_pin), _freqdiv(arg_freqdiv) {
-        _long_name = "Unknown Hall-Effect";
+    PulseSensor(int arg_pin, float arg_freqfactor=1.0) : Sensor(arg_pin), _freqfactor(arg_freqfactor) {
+        _long_name = "Unknown hall-effect";
         _short_name = "pulsen";
         _native_units = "Hz";
     }
@@ -874,7 +905,7 @@ class PulseSensor : public Sensor {
     // overload the normal function so we can also include us calculations 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
         if ((!isnan(arg_min) && iszero(arg_min)) || (!isnan(arg_max) && iszero(arg_max))) {
-            ezread.squintf("Err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
+            ezread.squintf(RED, "Err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
             return;  // we can't accept 0 Hz for opmin
         }
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
@@ -885,67 +916,97 @@ class PulseSensor : public Sensor {
     virtual void setup() {
         Sensor::setup();
         set_pin(_pin, INPUT_PULLUP);
-        set_can_source(src::PIN, true);
-        set_source(src::PIN);
+        set_can_source(src::Pin, true);
+        set_source(src::Pin);
         attachInterrupt(digitalPinToInterrupt(_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
-        set_can_source(src::POT, true);
+        set_can_source(src::Pot, true);
         _stop_timer.set(_absmax_us);
     }
     // float last_read_time() { return _last_read_time_us; }
     // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
-    bool stopped() { return (std::abs(val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    bool stopped() {
+        // if (bootbutton_val) ezread.squintf("puls.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), _opmin, _margin, (int)(std::abs(val() - _opmin) <= _margin));
+        return (std::abs(val() - _opmin) <= _margin);  // Note due to weird float math stuff, can not just check if tach == 0.0
+    }
     bool* pin_inactive_ptr() { return &_pin_inactive; }
     bool* pin_level_ptr() { return &_pin_level; }
     float absmin_us() { return _absmin_us; }
     float absmax_us() { return _absmax_us; }
     float absmin_ms() { return _absmin_us / 1000.0; }
     float absmax_ms() { return _absmax_us / 1000.0; }
-    float idle() { return _idle; }
-    float* idle_ptr() { return &_idle; }
-    void set_idle(float newidle) { _idle = constrain(newidle, _opmin, _opmax); }
     float us() { return _us; }
     float ms() { return _us / 1000.0; }
+    int alt_native() { return _pulses_per_sec; };  // returns pulse freq in hz based on count, rather than conversion (just a check to debug) (only updates once per second)
 };
 // Tachometer represents a magnetic pulse measurement of the engine rotation
 // it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
 class Tachometer : public PulseSensor {
   public:
     sens _senstype = sens::tach;
-    Tachometer(int arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {
+    float _calfactor = 1.0;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
+    float _governmax_rpm;
+    float _idle = 300.0, _idle_cold = 425.0, _idle_hot = 225.0;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer
+    // float _calfactor = 0.25;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
+    Tachometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {  // where actual_hz = pulses_hz * freqfactor (due to external circuitry or magnet arrangement)
         _long_name = "Tachometer";
         _short_name = "tach";
         _si_units = "rpm";
     }
     Tachometer() = delete;
+    float calc_mfactor() { return 60.0 * _calfactor / _freqfactor; }  // 1 Hz = 1 pulse/sec * 60 sec/min * 1.0 / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
+    // float calc_mfactor() { return 60.0 * _calfactor / _freqfactor; }  // 1 Hz = 1 pulse/sec * 60 sec/min * 0.25 / 0.125 pulse/rot = 120 rot/min, (so 120 rpm/Hz)
     void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
         PulseSensor::setup();
-        float m = 60.0 * _freqdiv;  // 1 Hz = 1 pulse/sec * 8 rot/pulse * 60 sec/min = 480 rot/min, (so 480 rpm/Hz)
-        set_conversions(m, 0.0);
-        set_abslim(0.0, 4500.0);  // the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
+        // note the max pulse freq at the mcu pin is max-rpm/m , or:  pinmax hz = 4500 rpm * (1/480) hz/rpm = 9.375 hz  (max freq at pin)
+        // bc of the divider max freq in the wire is max-pin-hz/freqfactor , or:  wiremax hz = 9.375 hz / 0.125 = 75 hz  (max freq in wire)
+        // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=220nF (round up)
+
+        // now we find our final rpm reading seems to be about 4x what it should. until we figure out the root cause, i'm adding a cal factor to compensate it
+        float mfact = calc_mfactor();
+        // mfact = 60.0 / _freqfactor;  // 1 Hz = 1 pulse/sec * 60 sec/min / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
+        set_conversions(mfact, 0.0);
+        set_abslim(0.0, 4800.0);  // estimating the highest rpm we could conceivably ever see from the engine. but may lower b/c the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
         // do i need this line?
         // set_abslim_native(us_to_hz(6000), NAN, false);  // for pulse sensor, set absmin_native to define the stop timeout period. Less Hz means more us which slows our detection of being stopped
         
-        set_oplim(0.0, 3600.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        set_oplim(0.0, 3600.0);  // aka redline,  Max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        _governmax_rpm = _opmax * governor / 100.0;
         set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(10.0);
         set_si(50.0);
         _us = hz_to_us(_native.val());
         print_config();
     }
-    // float idle() { return _idle; }
-    // float* idle_ptr() { return &_idle; }
+    void set_val_from_pin() {
+        PulseSensor::set_val_from_pin();
+        _governmax_rpm = _opmax * governor / 100.0;
+    }
+    float idle() { return _idle; }
+    float* idle_ptr() { return &_idle; }
     float idle_cold() { return _idle_cold; }
     float idle_hot() { return _idle_hot; }
+    float governmax() { return _governmax_rpm; }
+    float* governmax_ptr() { return &_governmax_rpm; }
+    void set_idle(float newidle) { _idle = constrain(newidle, _opmin, _opmax); }
     void set_idlecold(float newidlecold) { _idle_cold = constrain(newidlecold, _idle_hot + 1.0, _opmax); }
     void set_idlehot(float newidlehot) { _idle_hot = constrain(newidlehot, _opmin, _idle_cold - 1.0); }
+    // bool stopped() {
+    //     if (bootbutton_val) 
+    //       ezread.squintf("tac.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), _opmin, _margin, (int)(std::abs(val() - _opmin) <= _margin));  // spam catcher works on this, (w/o bootbutton condition)
+    //     return PulseSensor::stopped();
+    // }
 };
 
 // Speedometer represents a magnetic pulse measurement of the enginge rotation
 // it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to MPH
+
+// ~ 200ms pulses according to datapage when wheel was turning steady 3.3s per rotation, should have been 1.65s pulses! So, suspect super noisy.
+// also that 220ms was not steady in the slightest, jumped continuously from ~100ms to ~380ms.
+// at higher rpm wheel went faster but was reporting max 20mph when wheel maybe at jogging speed (could be similar 4x calfactor like tach?)
 class Speedometer : public PulseSensor {
   public:
     sens _senstype = sens::speedo;
-    Speedometer(int arg_pin, float arg_freqdiv) : PulseSensor(arg_pin, arg_freqdiv) {
+    Speedometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {
         _long_name = "Speedometer";
         _short_name = "speedo";
         _si_units = "mph";
@@ -954,9 +1015,12 @@ class Speedometer : public PulseSensor {
     void setup() {
         PulseSensor::setup();
         // ezread.squintf("%s..\n", _long_name.c_str());
-        float m = 3600.0 * 20 * M_PI * _freqdiv / (2 * 12 * 5280);  // 1 Hz = 1 pulse/sec * 3600 sec/hr * 1/2 whlrot/pulse * 20*pi in/whlrot * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.8 mph per Hz)
-        set_conversions(m, 0.0);
-        set_abslim(0.0, 25.0);  // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
+        float mfact = 3600.0 * 20 * M_PI / (_freqfactor * 12 * 5280); // 1 Hz = 1 pulse/sec * 3600 sec/hr * 20*pi in/whlrot * 1/2 whlrot/pulse * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.785 mph/Hz)
+        // note the max pulse freq is max-mph/m , or:  pinmax hz = 20 mph * (1 / 1.785) hz/mph = 11.2 hz  (max freq at pin and in wire)
+        // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=1uF
+
+        set_conversions(mfact, 0.0);
+        set_abslim(0.0, 20.0);  // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
 
         // do i need this line?
         // set_abslim_native(us_to_hz(10000), NAN, false);  // for pulse sensor, set absmin_native to define the stop timeout period. Less Hz means more us which slows our detection of being stopped
@@ -966,8 +1030,14 @@ class Speedometer : public PulseSensor {
         set_margin(0.2);
         // set_si(50.0);
         _us = hz_to_us(_native.val());
-        _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
+        // _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
         print_config();
+    }
+    bool stopped() {
+        bool joe = bootbutton_val;
+        if (joe) 
+          ezread.squintf("spd.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d, j%d\n", val(), _opmin, _margin, (int)(std::abs(val() - _opmin) <= _margin), (int)joe);  // spam catcher fails on this, w/o bootbutton condition, but not with!
+        return PulseSensor::stopped();
     }
 };
 
@@ -986,7 +1056,7 @@ class RCChannel : public Sensor {  // class for each channel of the hotrc
     }
   public:
     RCChannel(int arg_pin) : Sensor(arg_pin) {
-        _long_name = "RC Channel";
+        _long_name = "RC channel";
         _short_name = "rcchan";
         _native_units = "us";
         _si_units = "%";
@@ -995,8 +1065,8 @@ class RCChannel : public Sensor {  // class for each channel of the hotrc
     virtual void setup() {
         Sensor::setup();
         set_pin(_pin, INPUT);
-        set_can_source(src::PIN, true);
-        set_source(src::PIN);
+        set_can_source(src::Pin, true);
+        set_source(src::Pin);
     }
 };
 class RCToggle : public RCChannel {};
@@ -1012,14 +1082,14 @@ class ServoMotor2 : public Transducer {
     float lastoutput, max_out_change_rate_pcps = 800.0;
     int _pin, _freq;
     virtual float write_sensor() {  // note: should be marked 'override' but compiler says it doesn't override anything...?
-        ezread.squintf("Err: %s does not have an overridden write_sensor() function\n", _short_name.c_str());
+        ezread.squintf(RED, "Err: %s does not have an overridden write_sensor() function\n", _short_name.c_str());
         return NAN;
     }
     void changerate_limiter() {
         float max_out_change_pc = max_out_change_rate_pcps * outchangetimer.elapsed() / 1000000.0;
         outchangetimer.reset();
         set_si(constrain(_si.val(), lastoutput - max_out_change_pc, lastoutput + max_out_change_pc));
-        // lastoutput = pc[OUT];  // note: you must set lastoutput = pc[OUT]
+        // lastoutput = pc[Out];  // note: you must set lastoutput = pc[Out]
     }
   public:
     // ServoMotor(int pin, int freq) : Transducer<float, float>(pin) {
@@ -1064,13 +1134,13 @@ class ThrottleServo2 : public ServoMotor2 {
     Param governor_pc, idle_si, idletemp_f;
     float max_throttle_angular_velocity_pcps;  // Software governor will only allow this percent of full-open throttle (percent 0-100)
     
-    // float idle_si[NUM_MOTORVALS] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OPMIN(hot)/-/OPMAX(cold)/OUT/-/ABSMIN/ABSMAX/MARGIN]
-    // float idletemp_f[NUM_MOTORVALS] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OPMIN/-/OPMAX/OUT/-/ABSMIN/ABSMAX/MARGIN]
+    // float idle_si[NumMotorVals] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OpMin(hot)/-/OpMax(cold)/Out/-/AbsMin/AbsMax/Margin]
+    // float idletemp_f[NumMotorVals] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OpMin/-/OpMax/Out/-/AbsMin/AbsMax/Margin]
     float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
     float starting_pc = 25.0;                          // percent throttle to open to while starting the car
   public:
     ThrottleServo2(int pin, int freq) : ServoMotor2(pin, freq) {
-        _dir = TransDir::FWD;  // if your servo goes CCW with increasing pulsewidths, change to REV
+        _dir = TransDir::Fwd;  // if your servo goes CCW with increasing pulsewidths, change to Rev
         _long_name = "Throttle servo";
         _short_name = "throtl";
         _si_units = "deg";
@@ -1111,6 +1181,9 @@ class SteerMotor2 : public Jaguar {
 // simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
 // note: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,
 //       we can simplify the logic here a lot.
+
+// Simulator class: manager class for the simulator settings and status. Note simulation values are not assigned here
+//   appropriately, the objects for each simulated transducer would s  objects to sensorather, a simulation management object.
 class Simulator {
   private:
     // note: if we only simulated devices, we could keep track of simulability in the Device class. We could keep the default source in Device the same way.
@@ -1119,12 +1192,13 @@ class Simulator {
     typedef std::tuple<bool, Device*, src> simulable_t;
     std::map<sens, simulable_t> _devices; // a collection of simulatable components
     bool _enabled = false; // keep track of whether the simulator is running or not
+    int _registered_device_count = 0;
     sens _potmap; // keep track of which component is getting info from the pot
     Potentiometer& _pot;
     Preferences* _myprefs;
   public:
     Simulator(Potentiometer& pot_arg, Preferences* myprefs) : _pot(pot_arg), _myprefs(myprefs) {
-        for (int sensor = (int)sens::none + 1; sensor < (int)sens::NUM_SENSORS; sensor++) set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
+        for (int sensor = (int)sens::none + 1; sensor < (int)sens::NumSensors; sensor++) set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
         set_potmap(); // set initial pot map
     }  // syspower, ignition removed, as they are not sensors or even inputs
 
@@ -1135,7 +1209,7 @@ class Simulator {
             if (can_sim && _potmap != deviceEntry.first) {  // if the device can be simulated and isn't being mapped from the potentiometer
                 Device *d = std::get<1>(deviceEntry.second);
                 if (d != nullptr) {  // if the device exists... (note: the nullptr checks here and below exist so that we can work with boolean components as well as Devices, for backwards compatability)
-                    if (enableSimulation) d->set_source(src::SIM);  // if we're enabling the simulation, set the device's source to the simulator
+                    if (enableSimulation) d->set_source(src::Sim);  // if we're enabling the simulation, set the device's source to the simulator
                     else {                                          // otherwise, set it to its default mode
                         src default_mode = std::get<2>(deviceEntry.second);
                         d->set_source(default_mode);
@@ -1157,12 +1231,13 @@ class Simulator {
         if (kv != _devices.end()) {
             can_sim = std::get<0>(kv->second); // if an entry for the component already existed, preserve its simulatability status
             if (can_sim) { // if simulability has already been enabled...
-                if (arg_sensor == _potmap) d.set_source(src::POT); // ...and the pot is supposed to map to this component, thenset the input source for the associated Device to read from the pot
-                else if (_enabled) d.set_source(src::SIM); // ...or otherwise if the pot isn't mapping to this component, but the simulator is running, then set the input source for the associated Device to take values from the simulator
+                if (arg_sensor == _potmap) d.set_source(src::Pot); // ...and the pot is supposed to map to this component, thenset the input source for the associated Device to read from the pot
+                else if (_enabled) d.set_source(src::Sim); // ...or otherwise if the pot isn't mapping to this component, but the simulator is running, then set the input source for the associated Device to take values from the simulator
             }
         }
-        if (d.can_source(src::POT)) d.attach_pot(_pot); // if this device can be mapped from the pot, connect it to pot input
+        if (d.can_source(src::Pot)) d.attach_pot(_pot); // if this device can be mapped from the pot, connect it to pot input
         _devices[arg_sensor] = simulable_t(can_sim, &d, default_mode); // store info for this component
+        _registered_device_count++;
     }
     
     bool can_sim(sens arg_sensor) {  // check if a component can be simulated (by either the touchscreen or the pot)
@@ -1171,7 +1246,7 @@ class Simulator {
         return false; // couldn't find component, so there's no way we can simulate it
     }
     // bool touchable(sens arg_sensor) {
-    //     return can_sim(arg_sensor) && (sources[static_cast<int>(arg_sensor)] == static_cast<int>(src::TOUCH));
+    //     return can_sim(arg_sensor) && (sources[static_cast<int>(arg_sensor)] == static_cast<int>(src::Touch));
     // }
   private:
     void set_can_sim_nosave(sens arg_sensor, bool can_sim) {  // set a device so simulator will include it when enabled. does not write to flash
@@ -1179,20 +1254,20 @@ class Simulator {
         if (kv != _devices.end()) { // if an entry for this component already exists, check if the new simulatability status is different from the old
             bool old_can_sim = std::get<0>(kv->second);
             if (can_sim != old_can_sim) { // if the simulation status has changed, we need to update the input source for the component
-                src default_mode = src::UNDEF;
+                src default_mode = src::Undef;
                 Device *d = std::get<1>(kv->second);
                 if (d != nullptr) { // if there is no associated Device with this component then input handling is done in the main code
                     default_mode = std::get<2>(kv->second); // preserve the stored default controller mode
                     if (can_sim) { // if we just enabled simulatability...
-                        if (arg_sensor == _potmap) d->set_source(src::POT); // if the pot is supposed to map to this component, then set the input source for the associated Device to read from the pot
-                        else if (_enabled) d->set_source(src::SIM); // otherwise if the simulator is running, then set the input source for the associated Device to read from the simulator
+                        if (arg_sensor == _potmap) d->set_source(src::Pot); // if the pot is supposed to map to this component, then set the input source for the associated Device to read from the pot
+                        else if (_enabled) d->set_source(src::Sim); // otherwise if the simulator is running, then set the input source for the associated Device to read from the simulator
                     }
                     else d->set_source(default_mode); // we disabled simulation for this component, set it back to its default input source
                 }
                 kv->second = simulable_t(can_sim, d, default_mode); // update the entry with the new simulatability status
             }
         }
-        else _devices[arg_sensor] = simulable_t(can_sim, nullptr, src::UNDEF); // add a new entry with the simulatability status for this component
+        else _devices[arg_sensor] = simulable_t(can_sim, nullptr, src::Undef); // add a new entry with the simulatability status for this component
     }
   public:
     void set_can_sim(sens arg_sensor, bool can_sim) {  // this wrapper function sets a device as able to be simulated, then store to flash
@@ -1202,12 +1277,12 @@ class Simulator {
     void set_can_sim(sens arg_sensor, int can_sim) { set_can_sim(arg_sensor, (can_sim > 0)); } // allows interpreting -1 as 0, convenient for our tuner etc.
     void save_cansim() {  // compress can_sim status of all devices into a 32 bit int, and save it to flash
         uint32_t simword = 0;
-        for (int s=1; s<(int)sens::NUM_SENSORS; s++) simword = simword | ((uint32_t)can_sim((sens)s) << s);
+        for (int s=1; s<(int)sens::NumSensors; s++) simword = simword | ((uint32_t)can_sim((sens)s) << s);
         _myprefs->putUInt("cansim", simword);
     }
     void recall_cansim() {  // pull 32 bit int containing can_sim status of all devices from previous flash save, and set all devices accordingly
         uint32_t simword = _myprefs->getUInt("cansim", 0);
-        for (int s=1; s<(int)sens::NUM_SENSORS; s++) set_can_sim_nosave((sens)s, (bool)((simword >> s) & 1));
+        for (int s=1; s<(int)sens::NumSensors; s++) set_can_sim_nosave((sens)s, (bool)((simword >> s) & 1));
     }
     // set the component to be overridden by the pot (the pot can only override one component at a time)
     void set_potmap(sens arg_sensor) {
@@ -1217,7 +1292,7 @@ class Simulator {
                 Device *d = std::get<1>(kv->second);
                 if (d != nullptr) { // if we were mapping to a component with an associated Device...
                     bool _can_sim = std::get<0>(kv->second);
-                    if (_enabled && _can_sim) d->set_source(src::SIM); // ...and the simulator is on, and we're able to be simulated, then set the input source to the simulator
+                    if (_enabled && _can_sim) d->set_source(src::Sim); // ...and the simulator is on, and we're able to be simulated, then set the input source to the simulator
                     else { // (otherwise either the simulator is off or we aren't allowing simulation for this component)
                         src default_mode = std::get<2>(kv->second);
                         d->set_source(default_mode); // then set the input source for the component to its default
@@ -1228,11 +1303,11 @@ class Simulator {
             if (kv != _devices.end()) {
                 Device *d = std::get<1>(kv->second);
                 if (d != nullptr ) { // if  we're mapping to a component with an associated device, we need to change the input source to the pot
-                    if (d->can_source(src::POT)) { // ...and we're allowed to map to this component...
+                    if (d->can_source(src::Pot)) { // ...and we're allowed to map to this component...
                         bool _can_sim = std::get<0>(kv->second);
-                        if (_can_sim) d->set_source(src::POT); // if we allow simulation for this componenent, then set its input source to the pot
+                        if (_can_sim) d->set_source(src::Pot); // if we allow simulation for this componenent, then set its input source to the pot
                     }
-                    else ezread.squintf("invalid pot map selected: %d/n", arg_sensor);
+                    else ezread.squintf("invalid pot map: %d\n", arg_sensor);
                 }
             }
             _potmap = arg_sensor;
@@ -1246,10 +1321,15 @@ class Simulator {
     int potmap() { return static_cast<int>(_potmap); }  // query which sensor is being potmapped
     bool enabled() { return _enabled; }
     bool* enabled_ptr() { return &_enabled; }
+    int registered_device_count() { return _registered_device_count; }
 };
 
 // rmtinput is used by hotrc class below
+<<<<<<< HEAD
 class RMTInput {
+=======
+class RMTInput {  // note: for some reason if we ever stop reading our rmt objects, the code fails and floods the console w/ rmt failures :(
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
   public:
     RMTInput(rmt_channel_t channel, gpio_num_t gpio) {
         channel_ = channel;
@@ -1299,82 +1379,85 @@ class RMTInput {
 };
 class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
-    float ema_alpha = 0.065;  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
-    float pc[NUM_AXES][NUM_VALUS];           // values range from -100% to 100% are all derived or auto-assigned
-    float us[NUM_CHANS][NUM_VALUS] = {
-        // vals for hotrc v1 (with matte black "HotRC" sticker/receiver)
-        // {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        // { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        // { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        // { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
+    bool _verbose = false;  // causes console print whenever an unfiltered switch event is queried externally, thus canceling the in-progress filtering
+    float ema_alpha = 0.065;           // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+    float pc[NumAxes][NumValues];      // values range from -100% to 100% are all derived or auto-assigned
+    float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
         // vals for hotrc v2 (with gloss black "HotRC" sticker/receiver)
+        {  969, 1473, 1977, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        { 1080, 1583, 2087, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2, // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        { 1200, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2, // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        { 1300, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2, // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        // vals for hotrc v1 (with matte black "HotRC" sticker/receiver)
+        // {  971, 1470, 1968, 0, 1500, 0, 0, 0 },     // 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        // { 1081, 1580, 2078, 0, 1500, 0, 0, 0 },     // 1000+80+1, 1500+80,  2000+80-2,  // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        // { 1151, 1500, 1848, 0, 1500, 0, 0, 0 },     // 1000+150+1,   1500, 2000-150-2,  // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        // { 1251, 1500, 1748, 0, 1500, 0, 0, 0 }, };  // 1000+250+1,   1500, 2000-250-2,  // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
         // note: opmin/opmax range should be set to be just smaller than the actual measured limits. this way it will reach all the way to 100%
-        //       margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
-        {  973, 1477, 1975, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [HORZ] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        { 1081, 1577, 2085, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2,  // [VERT] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        { 1202, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2,  // [CH3] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-        { 1304, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2,  // [CH4] [OPMIN/CENT/OPMAX/RAW/FILT/DBBOT/DBTOP/MARGIN]
-    float ema_us[NUM_AXES] = { 1500.0, 1500.0 };  // [HORZ/VERT]
+        //   margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
+    float spike_us[NumAxes] = { 1500.0, 1500.0 };  // [Horz/Vert]  // added
+    float ema_us[NumAxes] = { 1500.0, 1500.0 };    // [Horz/Vert]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
     float absmin_us = 880;
     float absmax_us = 2091;
-    float deadband_us = 15;  // all [DBBOT] and [DBTOP] values above are derived from this by calling derive()
-    float margin_us = 13;    // all [MARGIN] values above are derived from this by calling derive()
+    float deadband_pc, deadband_us = 15.0f;  // size of each side of the center deadband in us.  pc value is derived
+    float margin_us = 13;    // all [Margin] values above are derived from this by calling derive()
     float failsafe_us = 880; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     float failsafe_margin_us = 100; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
   private:
     Simulator* sim;
     Potentiometer* pot;
-    static const int failsafe_timeout = 15000;
-    Timer failsafe_timer;  // how long to receive failsafe pulse value continuously before recognizing radio is lost. To prevent false positives
-    bool _radiolost = true;
-    bool sw[NUM_CHANS] = { 1, 1, 0, 0 };  // index[2]=CH3, index[3]=CH4 and using [0] and [1] indices for LAST values of ch3 and ch4 respectively
-    bool _sw_event[NUM_CHANS];  // first 2 indices are unused.  what a tragic waste
-    RMTInput rmt[NUM_CHANS] = {
-        RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_h_pin)),  // hotrc[HORZ]
-        RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_v_pin)),  // hotrc[VERT]
-        RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[CH3]
-        RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[CH4]
+    bool _radiolost = true, _radiolost_untested = true;  // has any radiolost condition been detected since boot?  allows us to verify radiolost works before driving 
+    bool _sw_val[NumChans] = { 0, 0, 0, 0 }; // switch "value" is whether the pulsewidth is above (1) or below (0) the center value.  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
+    bool _sw_last[NumChans] = { 0, 0, 0, 0 };  // stores the previous switch value
+    bool _sw_pending[NumChans] = { 0, 0, 0, 0 }; // keeps whether a new value is pending, waiting for validity timeout.  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
+    bool _sw_event_unfilt[NumChans] = { 0, 0, 0, 0 };  // stores if a yet-unserviced switch "event" has occurred (event is whenever switch value changes)
+    bool _sw_event_filt[NumChans] = { 0, 0, 0, 0 };  // stores if a stable and filtered switch event has occurred
+    int _last_ch4_source = StartUnknown;
+    RMTInput rmt[NumChans] = {
+        RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_h_pin)),  // hotrc[Horz]
+        RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_v_pin)),  // hotrc[Vert]
+        RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[Ch3]
+        RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[Ch4]
     };
-    bool spike_signbit;
-    int spike_length, this_delta, interpolated_slope, loopindex, previndex, spike_cliff[NUM_AXES];
-    int spike_threshold[NUM_AXES] = { 6, 6 };
-    int prespike_index[NUM_AXES] = { -1, -1 };
-    int index[NUM_AXES] = { 1, 1 };  // index is the oldest values are popped from then new incoming values pushed in to the LIFO
-    static const int depth = 9;  // more depth will reject longer spikes at the expense of controller delay
-    int raw_history[NUM_AXES][depth], filt_history[NUM_AXES][depth];  // Values before and after filtering.
+    Timer simBtnTimer, ch4BtnTimer;  // keep track of last activity on all possible sources of ReqOn, to serve as a safety net preventing phantom starts
   public:
     Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) { derive(); }
     void setup() {
-        ezread.squintf("Hotrc init.. Starting rmt..\n");
-        for (int axis=HORZ; axis<=CH4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
-        failsafe_timer.set(failsafe_timeout); 
+        ezread.squintf("Hotrc init.. starting rmt..\n");
+        for (int axis=Horz; axis<=Ch4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
     }
     void derive() {
         float m_factor;
-        for (int axis=HORZ; axis<=VERT; axis++) {
-            us[axis][DBBOT] = us[axis][CENT] - deadband_us;
-            us[axis][DBTOP] = us[axis][CENT] + deadband_us;
-            us[axis][MARGIN] = margin_us;
-            pc[axis][OPMIN] = -100.0;
-            pc[axis][CENT] = 0.0;
-            pc[axis][OPMAX] = 100.0;
-            m_factor = (pc[axis][OPMAX] - pc[axis][OPMIN]) / (float)(us[axis][OPMAX] - us[axis][OPMIN]);
-            pc[axis][DBBOT] = pc[axis][CENT] - deadband_us * m_factor;
-            pc[axis][DBTOP] = pc[axis][CENT] + deadband_us * m_factor;
-            pc[axis][MARGIN] = margin_us * m_factor;
+        for (int axis=Horz; axis<=Vert; axis++) {
+            us[axis][Margin] = margin_us;
+            pc[axis][OpMin] = -100.0;
+            pc[axis][Cent] = 0.0;
+            pc[axis][OpMax] = 100.0;
+            pc[axis][Margin] = map(margin_us, us[axis][OpMin], us[axis][OpMax], pc[axis][OpMin], pc[axis][OpMax]);
+            set_deadband_us(deadband_us);  // run this to force derivation of deadband_pc value
         }
+    }
+    void set_deadband_us(float val) {
+        deadband_us = constrain(val, 0.0f, us[Horz][OpMax] - us[Horz][Cent]);  // using Horz for this b/c it's the same for either axis
+        deadband_pc = us_to_pc(Horz, val);  // convert in order to derive pc deadband value
+    }
+    void set(float* member, float val) {  // generic setter for any member floats. basically makes sure to rerun derive() after
+        *member = val;
+        derive();
+    }
+    void set(float* member, int val) {  // generic setter that takes integer value term
+        *member = (float)val;
+        derive();
     }
     void update() {
         radiolost_update();
         toggles_update();
-        // if (runmode == LOWPOWER) return;  // causes rmt errors
         direction_update();
     }
-    void toggles_reset() {  // shouldn't be necessary to reset events due to sw_event(ch) auto-resets when read
-        for (int ch = CH3; ch <= CH4; ch++) _sw_event[ch] = false;
-    }
     bool radiolost() { return _radiolost; }
+    bool radiolost_untested() { return _radiolost_untested; }
     bool* radiolost_ptr() { return &_radiolost; }
+<<<<<<< HEAD
     bool sw_event(int ch) {  // returns if there's an event on the given channel then resets that channel
         bool retval = _sw_event[ch];
         _sw_event[ch] = false;
@@ -1404,17 +1487,82 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
                 kick_inactivity_timer(HURCTog);  // evidence of user activity
             }
             sw[chan - 2] = sw[chan];  // chan-2 index is used to store previous value for each toggle
+=======
+    bool* radiolost_untested_ptr() { return &_radiolost_untested; }
+    int joydir(int axis = Vert) {
+        if (sim->simulating(sens::joy) && (std::abs(pc[axis][Filt]) < us_to_pc(axis, margin_us))) return JoyCent;  // allows some needed slop around centerpoint when simulating, or you can never center it
+        if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? JoyUp : (pc[axis][Filt] < pc[axis][Cent]) ? JoyDn : JoyCent;
+        return (pc[axis][Filt] > pc[axis][Cent]) ? JoyRt : (pc[axis][Filt] < pc[axis][Cent]) ? JoyLt : JoyCent;
+    }  // return (pc[axis][Filt] > pc[axis][Cent]) ? ((axis == Vert) ? JoyUp : JoyRt) : (pc[axis][Filt] < pc[axis][Cent]) ? ((axis == Vert) ? JoyDn : JoyLt) : JoyCent;
+    void sim_button_press(int chan) {
+        _sw_event_filt[chan] = true;
+        if (chan == Ch4) {
+            simBtnTimer.reset();  // so we can know time since last sim button press, to help prevent phantom starter events
+            _last_ch4_source = StartTouch;  // also to help phantom starter events
         }
     }
-    float us_to_pc(int axis, float _us, bool deadbands=false) {
-        if (deadbands) {
-            if (_us >= us[axis][DBTOP]) return map(_us, us[axis][DBTOP], us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-            if (_us <= us[axis][DBBOT]) return map(_us, us[axis][DBBOT], us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);
-            return pc[axis][CENT];
+    bool sw_event_filt(int ch, bool autoreset=true) {  // returns if a stable & filtered event occurred on the given channel then resets that channel (unless told not to)
+        bool retval = _sw_event_filt[ch];
+        if (retval) {
+            _sw_last[ch] = _sw_val[ch];  // commit current reading to official switch value
+            if (autoreset) reset_toggle(ch);  // if there is an event, reset all channel events and in-progress pending events
+            if (_verbose) ezread.squintf("hotrc filt btn event serviced\n");
         }
-        if (_us >= us[axis][CENT]) return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMAX], pc[axis][CENT], pc[axis][OPMAX]);
-        return map((float)_us, (float)us[axis][CENT], (float)us[axis][OPMIN], pc[axis][CENT], pc[axis][OPMIN]);    
+        return retval;
     }
+    bool sw_event_unfilt(int ch, bool autoreset=true) {  // returns if any event occurred on the given channel. note: calling this cancels any in-progress event filtering
+        if (force_hotrc_button_filter) return sw_event_filt(ch, autoreset); // if use of button event filter is forced for all contexts, use the filtered event function instead
+        bool retval = _sw_event_unfilt[ch] || _sw_event_filt[ch];
+        if (retval) {
+            _sw_last[ch] = _sw_val[ch];  // commit current reading to official switch value
+            if (autoreset) reset_toggle(ch);  // if there is an event, reset all channel events and in-progress pending events
+            if (_verbose) ezread.squintf("hotrc unfilt btn event serviced\n");
+        }
+        return retval;
+    }
+    int last_ch4_source() { return _last_ch4_source; }
+    void reset_toggle(int achan=NumChans) {  // resets events and pending events on the given channel, or all channels by default
+        for (int ch = Ch3; ch <= Ch4; ch++)
+            if ((achan == ch) || (achan == NumChans)) _sw_event_filt[ch] = _sw_event_unfilt[ch] = _sw_pending[ch] = false;
+    }
+    int sim_button_time() { return (int)simBtnTimer.elapsed(); }  // returns time since last simulated ch4 button press. to help prevent phantom starter turnon
+    int ch4_button_time() { return (int)ch4BtnTimer.elapsed(); }  // returns time since last ch4 button press. to help prevent phantom starter turnon
+  private:
+    // new implementation of handler for hotrc buttons which rejects spurious values which could cause false events (re: phantom starter bug)
+    // seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
+    void toggles_update() {  // note, below the toggletimer[] indices are each 2 less than those of their corresponding switches (avoids creating 2 extra Timer instances)
+        static Timer toggletimer[NumChans-2] = { 60000, 60000 }; // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
+        for (int ch = Ch3; ch <= Ch4; ch++) {                    // do once for each digital channel
+            us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true)); // read the newest pulsewidth in us
+            _sw_val[ch] = (us[ch][Raw] >= us[ch][Cent]);         // determine the sw value just read (if new reading is below or above the center frequency)
+            if (_sw_val[ch] != _sw_last[ch]) {                   // if new read value differs from prev valid value ...
+                if (!_sw_pending[ch]) {
+                    _sw_pending[ch] = _sw_event_unfilt[ch] = true; // if we don't already have a new pending value change, flag an unfiltered event occurred, and we have a potential filtered value change, 
+                    toggletimer[ch-2].reset();        // set us up for filtering the next value change
+                }
+                else if (toggletimer[ch-2].expired()) { // if we do have a switch pending, and the validity timer expires. until the timer runs out all new readings must also differ from prev valid value, for the pending value to commit
+                    _sw_last[ch] = _sw_val[ch];                    // commit the new value  (may be unnecessary since this also happens in the sw_event_xxx() functions)
+                    _sw_event_filt[ch] = true;                     // flag that a filtered switch event occurred, detectable by external code and reset outside this function
+                    kick_inactivity_timer(HuRCTog);                // register that human activity occurred
+                    _sw_pending[ch] = false;                       // reset pending state
+                    if (ch == Ch4) {                               // special mechanisms for ch4 to help prevent phantom starter events
+                        ch4BtnTimer.reset();                       // so we can know time since last ch4 button press
+                        _last_ch4_source = StartHotrc;             // also to help phantom starter events
+                    }
+                }
+            }
+            else {  // otherwise if the new read value is equal to the previous valid value
+                if (_sw_pending[ch]) ezread.squintf(ORG, "warn: hotrc Ch%d spurious reading detect\n", (ch == Ch3) ? 3 : 4 ); // if there was an active pending value change, but the value has returned to the original valid value before the timer expired  // _verbose &&
+                _sw_pending[ch] = false;          // in case of in-progress filtration, that is canceled due to the value has returned to previous valid value before timer expired
+            }
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
+        }
+    }
+    float us_to_pc(int axis, float _us) {
+        if (_us >= us[axis][Cent]) return map(_us, us[axis][Cent], us[axis][OpMax], pc[axis][Cent], pc[axis][OpMax]);
+        return map(_us, us[axis][Cent], us[axis][OpMin], pc[axis][Cent], pc[axis][OpMin]);    
+    }
+<<<<<<< HEAD
     void direction_update() {
         if (sim->simulating(sens::joy)) {
             if (sim->potmapping(sens::joy)) pc[HORZ][FILT] = pot->mapToRange(pc[HORZ][OPMIN], pc[HORZ][OPMAX]);  // overwrite horz value if potmapping
@@ -1436,45 +1584,92 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         if (us[VERT][FILT] > failsafe_us + failsafe_margin_us) {
             failsafe_timer.reset();
             _radiolost = false;
-        }
-        else if (failsafe_timer.expired()) _radiolost = true;
-        return _radiolost;
+=======
+    float remove_deadbands_us(int axis, float _us) {
+        if (_us > us[axis][Cent] + deadband_us) return map(_us, us[axis][Cent] + deadband_us, us[axis][OpMax], us[axis][Cent], us[axis][OpMax]);
+        else if (_us < us[axis][Cent] - deadband_us) return map(_us, us[axis][Cent] - deadband_us, us[axis][OpMin], us[axis][Cent], us[axis][OpMin]);
+        return us[axis][Cent];
     }
-    // spike filter pushes new hotrc readings into a LIFO ring buffer, replaces any well-defined spikes with values 
-    // interpolated from before and after the spike. also smoothes out abrupt value changes that don't recover later
-    float spike_filter (int axis, float new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
-        previndex = (depth + index[axis] - 1) % depth;         // previndex is where the incoming new value will be stored
-        this_delta = new_val - filt_history[axis][previndex];  // value change since last reading
-        if (std::abs(this_delta) > spike_cliff[axis]) {  // if new value is a cliff edge (start or end of a spike)
-            if (prespike_index[axis] == -1) {            // if this cliff edge is the start of a new spike
-                prespike_index[axis] = previndex;        // save index of last good value just before the cliff
-                spike_signbit = signbit(this_delta);     // save the direction of the cliff
+    void direction_update() {
+        for (int axis = Horz; axis <= Vert; axis++) {                // read and filter incoming pwm pulses to update our raw values
+            us[axis][Raw] = (float)(rmt[axis].readPulseWidth(true)); // don't stop reading rmt values or crash can occur in rmt library, floods the serial console
+            pc[axis][Raw] = us_to_pc(axis, us[axis][Raw]);
+        }
+        if (sim->simulating(sens::joy)) {                            // if simulating, let the simulator write the Filt values
+            if (sim->potmapping(sens::joy)) pc[Horz][Filt] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]); // except if potmapping then write the Horz Filt value
+        }
+        else for (int axis = Horz; axis <= Vert; axis++) {                      // filter the raw values to create filt values
+            spike_us[axis] = spike_filter(axis, us[axis][Raw]);                 // apply spike filter on raw reading
+            ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha);   // apply ema filter on spike filter output
+            us[axis][Filt] = remove_deadbands_us(axis, ema_us[axis]); // enforce deadbands (in within them), otherwise scale the non-deadbanded range to full range
+            if (_radiolost) pc[axis][Filt] = pc[axis][Cent];          // if radio lost set pc value to Center value for sanity, but not us value b/c useful for debug
+            else {                                                              // otherwise if radio is not lost
+                pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]);                // convert filtered us value to percent
+                if (std::abs(pc[axis][Filt] - pc[axis][Cent]) > deadband_pc)    // and if we're not within the deadband
+                    kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig); // then register evidence of user activity
+            }
+        }
+        for (int axis = Horz; axis <= Vert; axis++)                             // always constrain the pc filt values
+            pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
+    }
+    bool radiolost_update() {  // note: member variables _radiolost and _radiolost_untested must be initialized to true on boot
+        static Timer failsafe_timer{15000};  // values must remain in range for this long after changing or after boot, before being valid (to reject spurious readings)
+        static bool nowlost_last = _radiolost;
+        bool nowlost = (us[Vert][Raw] <= failsafe_us + failsafe_margin_us);  // is the newest reading in the failsafe range?
+        if (nowlost != nowlost_last) failsafe_timer.reset();   // start timer if change in state detected
+        if (failsafe_timer.expired()) {  // if the current reading has remained stable throughout timer duration
+            _radiolost = nowlost;        // make the current reading official
+            if (_radiolost) _radiolost_untested = false;  // on first valid detection of radiolost, flag radiolost detection is known to work
+>>>>>>> a4c7c86fe901189dceda042489ec57cfb4e01c49
+        }
+        nowlost_last = nowlost;  // remember current reading for comparison on next loop
+        return _radiolost;       // return the official status
+    }
+    // spike_filter() : I wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals coming
+    // from the hotrc, where often the incoming values change suddenly then (usually) quickly jump back by the same amount. 
+    // This works by pushing new hotrc readings into a LIFO ring buffer, and replacing any well-defined spikes with values 
+    // interpolated from before and after the spike, thereby erasing any spikes that recover fast enough.
+    // Also if a detected cliff edge (potential spike) doesn't recover in time, it will smooth out the transition linearly.
+    // The cost of this is our readings are delayed by a number of readings (equal to the maximum erasable spike duration).
+    static const int lifodepth = 9;  // more depth will reject longer spikes at the expense of increased controller delay
+    int spike_length, interp_slope, loopindex, filthist[NumAxes][lifodepth], rawhist[NumAxes][lifodepth];
+    int prespike_index[NumAxes] = { -1, -1 }, lifoindex[NumAxes] = { 1, 1 };
+    float spike_filter(int axis, float new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
+        static bool spike_signbit;
+        static int this_delta, previndex, spike_cliff[NumAxes], spike_threshold[NumAxes] = { 6, 6 };
+        previndex = (lifodepth + lifoindex[axis] - 1) % lifodepth; // previndex is where the incoming new value will be stored
+        this_delta = new_val - filthist[axis][previndex];          // value change since last reading
+        if (std::abs(this_delta) > spike_cliff[axis]) {            // if new value is a cliff edge (start or end of a spike)
+            if (prespike_index[axis] == -1) {                      // if this cliff edge is the start of a new spike
+                prespike_index[axis] = previndex;                  // save index of last good value just before the cliff
+                spike_signbit = signbit(this_delta);               // save the direction of the cliff
             }
             else if (spike_signbit == signbit(this_delta)) {  // if this cliff edge deepens an in-progress spike (or more likely the change is valid)
-                inject_interpolations(axis, previndex, filt_history[axis][previndex]);  // smoothly grade the values from before the last cliff to previous value
-                prespike_index[axis] = previndex;  // consider this cliff edge the start of the spike instead
+                inject_interpolations(axis, previndex, filthist[axis][previndex]);  // smooth out the values between the last cliff & previous value
+                prespike_index[axis] = previndex;                                   // consider this cliff edge the start of the spike instead
             }
-            else {  // if this cliff edge is a recovery of an in-progress spike
-                inject_interpolations(axis, index[axis], new_val);  // fill in the spiked values with interpolated values
-                prespike_index[axis] = -1;  // cancel the current spike
+            else {                                                      // if this cliff edge is a recovery of an in-progress spike
+                inject_interpolations(axis, lifoindex[axis], new_val);  // fill in the spiked values with interpolated values
+                prespike_index[axis] = -1;                              // cancel the current spike
             }
         }
-        else if (prespike_index[axis] == index[axis]) {  // if a current spike lasted thru our whole buffer
-            inject_interpolations (axis, previndex, filt_history[axis][previndex]);  // smoothly grade the whole buffer
-            prespike_index[axis] = -1;  // cancel the current spike
+        else if (prespike_index[axis] == lifoindex[axis]) {                     // if a current spike lasted thru our whole buffer
+            inject_interpolations(axis, previndex, filthist[axis][previndex]);  // smoothly grade the whole buffer
+            prespike_index[axis] = -1;                                          // cancel the current spike
         }
-        float returnval = filt_history[axis][index[axis]];  // save the incumbent value at current index (oldest value) into buffer
-        filt_history[axis][index[axis]] = new_val;
-        raw_history[axis][index[axis]] = new_val;
-        ++(index[axis]) %= depth;  // update index for next time
-        return returnval;          // return the saved old value
+        float returnval = filthist[axis][lifoindex[axis]];  // save the incumbent value at current index (oldest value) into buffer
+        filthist[axis][lifoindex[axis]] = new_val;
+        rawhist[axis][lifoindex[axis]] = new_val;
+        ++(lifoindex[axis]) %= lifodepth;  // update index for next time
+        return returnval;                  // return the value coming out of the buffer
     }
-    void inject_interpolations(int axis, int endspike_index, float endspike_val) {  // replaces values between indexes with linear interpolated values
-        spike_length = ((depth + endspike_index - prespike_index[axis]) % depth) - 1;  // equal to the spiking values count plus one
+    void inject_interpolations(int axis, int endspike_index, float endspike_val) {  // replaces values between indexes w/ linear interpolated values
+        spike_length = ((lifodepth + endspike_index - prespike_index[axis]) % lifodepth) - 1;  // equal to the spiking values count plus one
         if (!spike_length) return;  // two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
-        interpolated_slope = (endspike_val - filt_history[axis][prespike_index[axis]]) / spike_length;
+        interp_slope = (endspike_val - filthist[axis][prespike_index[axis]]) / spike_length;
         loopindex = 0;
         while (++loopindex <= spike_length)
-            filt_history[axis][(prespike_index[axis] + loopindex) % depth] = filt_history[axis][prespike_index[axis]] + loopindex * interpolated_slope;
+            filthist[axis][(prespike_index[axis] + loopindex) % lifodepth] = filthist[axis][prespike_index[axis]] + loopindex * interp_slope;
     }
+    int next_unfilt_rawval (int axis) { return rawhist[axis][lifoindex[axis]]; }  // helps to debug the filter from outside the class
 };
