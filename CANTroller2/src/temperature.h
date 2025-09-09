@@ -14,7 +14,7 @@ float temp_lims_f[NumTempCategories][NumMotorVals] {
     {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatAmbient] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
     {  40.0, 178.0, 205.0, 218.0, NAN, -67.0, 257.0, 2.0 },  //  [CatEngine] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
     {  40.0,  77.0, 170.0, 145.0, NAN, -67.0, 257.0, 2.0 },  //   [CatWheel] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin] (applies to all wheels)
-    {  45.0,  77.0, 125.0, 135.0, NAN, -67.0, 257.0, 2.0 },  //   [CatBrake] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  45.0,  77.0, 115.0, 125.0, NAN, -67.0, 257.0, 2.0 },  //   [CatBrake] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
 };  // float* degf[(int)loc::NumTempLocations][NumMotorVals];
 
 class TemperatureSensor {

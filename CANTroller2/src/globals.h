@@ -127,15 +127,15 @@ enum telemetry_full {                                                           
 
 // global configuration settings - these settings are initialized for devboard use. if actual vehicle is detected
 //                                  at boot, then are overwritten as appropriate in set_board_defaults() function
-bool autostop_disabled = false;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
+bool disable_automatic_braking = true;      // temporary measure to keep brake behaving until we get it debugged. Eventually should be false
 bool allow_rolling_start = true;     // are we lenient that it's ok to go to fly mode if the car is already moving? may be a smart prerequisite, may be us putting obstacles in our way
 bool flip_the_screen = false;        // did you mount your screen upside-down?
 bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
 bool use_i2c_baton = false;          // use soren's custom homemade semaphores to prevent i2c bus collisions?
 bool limit_framerate = true;         // set to true to enforce a cap on screen frame draws during operational modes, otherwise draw as fast as we can. fullscreen screensaver ignores this, always balls-out
-bool brake_before_starting = true;   // if true, the starter motor attempts to apply the brake pedal before turning on the starter motor
-bool check_brake_before_starting = true;  // if true, the starter motor won't turn on until or unless it senses the brake pressure is enough. otherwise then after a timeout it will start anyway
+bool brake_before_starting = false;   // if true, the starter motor attempts to apply the brake pedal before turning on the starter motor
+bool check_brake_before_starting = false;  // if true, the starter motor won't turn on until or unless it senses the brake pressure is enough. otherwise then after a timeout it will start anyway
 bool push_gas_when_starting = false;  // will help start esp when engine is cold, in lieu of choke access, however if it lurches then disable. automatically disables if brake check is disabled
 bool two_click_starter = false;      // to start the starter requires two requests within a timeframe
 bool watchdog_enabled = false;       // enable the esp's built-in watchdog circuit, it will reset us if it doesn't get pet often enough (to prevent infinite hangs). disabled cuz it seems to mess with the hotrc (?)
@@ -190,7 +190,7 @@ float governor = 95.0f;                 // software governor will only allow thi
 
 int run_motor_mode[NumRunModes][3] = {   // Array of which motor mode the gas/brake/steer get set to upon entering each runmode
     { Halt, Halt, OpenLoop },  // Basic mode    (_Throttle/_BrakeMotor/_SteerMotor)
-    { ParkMotor, ParkMotor, Halt },      // LowPower mode (_Throttle/_BrakeMotor/_SteerMotor)
+    { Halt, Halt, Halt },      // LowPower mode (_Throttle/_BrakeMotor/_SteerMotor)
     { ParkMotor, Halt, OpenLoop },       // Standby mode  (_Throttle/_BrakeMotor/_SteerMotor)
     { OpenLoop, ActivePID, OpenLoop },   // Stall mode    (_Throttle/_BrakeMotor/_SteerMotor)
     { AutoPID, AutoHold, OpenLoop },     // Hold mode     (_Throttle/_BrakeMotor/_SteerMotor)

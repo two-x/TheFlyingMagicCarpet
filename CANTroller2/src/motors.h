@@ -999,6 +999,10 @@ class BrakeControl : public JagMotor {
         if (external_request) last_external_mode_request = save_mode_request;  // remember what the outside world actually asked for, in case we override it but later wish to go back
         autostopping = autoholding = cal_brakemode = parking = releasing = false;        
         if ((motormode == PropLoop) || (motormode == ActivePID)) _fixed_target_mode = _mode;  // cancel any fixed target condition
+        
+        if ((_mode == Release) || (_mode == ParkMotor)) _mode = Halt;
+        if ((_mode == AutoHold) || (_mode == AutoStop)) _mode = ActivePID;
+        
         interval_timer.reset();
         stopcar_timer.reset();
         blindaction_timer.reset();
