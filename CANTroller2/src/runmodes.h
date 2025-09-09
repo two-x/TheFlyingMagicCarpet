@@ -116,6 +116,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (stopcar_phase) {
                 if (speedo.stopped() || stopcar_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
                     if (stopcar_timer.expired()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to stop car\n");
+                    
                     stopcar_phase = false;  // move on to parkmotor phase
                     parkmotors_timer.reset();
                 }
