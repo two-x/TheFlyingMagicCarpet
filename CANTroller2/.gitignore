@@ -9,3 +9,9 @@ CarpetLightCode/.pio/build/project.checksum
 .vscode/c_cpp_properties.json
 .vscode/launch.json
  ../CarpetLightCode/.vscode/*
+**/.pio/
+**/build/
+*.elf
+*.bin
+*.map
+!firmware_artifacts/
