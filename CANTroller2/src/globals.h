@@ -319,6 +319,36 @@ bool linearizer(float* in_pc_ptr, float ex) {  // returns true if transformation
     return true;             // indicate transformation successfully applied
 }
 
+// code to capture compile-time git related info coming from our script
+#ifdef GIT_ENABLED
+    #ifndef GIT_SHA
+        #define GIT_SHA "unknown"
+    #endif
+    #ifndef GIT_BRANCH
+        #define GIT_BRANCH "unknown"
+    #endif
+    #ifndef BUILD_TIME_UTC
+        #define BUILD_TIME_UTC "unknown"
+    #endif
+    #ifndef GIT_DIRTY
+        #define GIT_DIRTY 0    // numeric macro 0/1
+    #endif
+    #ifndef GIT_ERROR
+        #define GIT_ERROR 0    // numeric macro 0/1
+    #endif
+    static const std::string kBuildSha       = std::string(GIT_SHA);
+    static const std::string kBuildBranch    = std::string(GIT_BRANCH);
+    static const std::string kBuildBuiltUtc  = std::string(BUILD_TIME_UTC);
+    static constexpr bool    kBuildDirty     = (GIT_DIRTY != 0);
+    static constexpr bool    kBuildGitError  = (GIT_ERROR != 0);
+    // handy accessors
+    // static inline const std::string& build_sha()       { return kBuildSha; }
+    // static inline const std::string& build_branch()    { return kBuildBranch; }
+    // static inline const std::string& build_built_utc() { return kBuildBuiltUtc; }
+    static inline bool build_dirty()     { return kBuildDirty; }
+    static inline bool build_git_error() { return kBuildGitError; }
+#endif
+
 // Timer objects are prolific in every corner of the code and thus this is global
 class Timer {  // !!! beware, this 54-bit microsecond timer overflows after every 571 years
   protected:

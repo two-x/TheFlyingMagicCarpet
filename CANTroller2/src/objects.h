@@ -200,6 +200,21 @@ void test_console_throughput() {
     Serial.printf("\b%ld baud\n", bits);
     ezread.printf("  tested %ld baud\n", bits);
 }
+
+#ifdef GIT_ENABLED
+static inline void print_git_info() {
+    if (build_git_error()) ezread.squintf(ezread.madcolor, "err: git data unknown due to git errors\n");
+    else ezread.squintf("Git sha=%s (%s) branch=%s\n", kBuildSha.c_str(), (build_dirty()) ? "dirty" : " clean", kBuildBranch.c_str());
+    ezread.squintf("  utc: %s\n", kBuildBuiltUtc.c_str());
+    
+    // std::string line = "Git sha=" + kBuildSha +
+    //     " dirty=" + std::to_string(kBuildDirty ? 1 : 0) +
+    //     " branch=" + kBuildBranch +
+    //     " built=" + kBuildBuiltUtc;  // + " err=" + std::to_string(kBuildGitError ? 1 : 0);
+    // ezread.squintf("%s\n", line.c_str());  // out.println(line.c_str());
+}
+#endif
+
 void initialize_boot() {                        // set up those straggler pins which aren't taken care of inside class objects
     set_pin(sdcard_cs_pin, OUTPUT, HIGH);                   // deasserting unused cs line ensures available spi bus
     set_pin(free_pin, INPUT_PULLUP);                       // avoid undefined inputs
@@ -214,6 +229,9 @@ void initialize_boot() {                        // set up those straggler pins w
     ezread.squintf(ezread.announcecolor, "Magic carpet setup begin ..\n");
     ezread.squintf(ezread.highlightcolor, "EZread and serial consoles are started\n");  //  Serial.printf("Serial console is started\n");
     test_console_throughput();
+    #ifdef GIT_ENABLED
+    print_git_info();
+    #endif
     syspower.print_bootstatus();
     basicsw.print_bootstatus();
 }
