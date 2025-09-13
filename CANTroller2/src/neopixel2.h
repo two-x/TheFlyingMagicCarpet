@@ -336,7 +336,8 @@ public:
         static Timer update_timer{20000}; // 20000us = 20ms update at most every 20ms.
         if (update_timer.expireset()) {
             if (last_runmode == -1 || last_runmode != runmode) {
-                if (_verbose) ezread.squintf("neopixel2 detected runmode change: %d->%d\n", last_runmode, runmode);
+                // commented next line b/c for some reason _verbose becomes true and it runs (even tho it's set false)  wtf!
+                // if (_verbose) ezread.squintf("neopixel2 detected runmode change: %d->%d\n", last_runmode, runmode);
                 last_runmode = runmode;
                 runmode_color = color_to_neo(colorcard[last_runmode]);
 

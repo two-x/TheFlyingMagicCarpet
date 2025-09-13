@@ -1567,49 +1567,45 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     }
     // spike_filter() : I wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals coming
     // from the hotrc, where often the incoming values change suddenly then (usually) quickly jump back by the same amount. 
-    // This works by pushing new hotrc readings into a LIFO ring buffer, and replacing any well-defined spikes with values 
+    // This works by pushing new hotrc readings into a FIFO ring buffer, and replacing any well-defined spikes with values 
     // interpolated from before and after the spike, thereby erasing any spikes that recover fast enough.
     // Also if a detected cliff edge (potential spike) doesn't recover in time, it will smooth out the transition linearly.
     // The cost of this is our readings are delayed by a number of readings (equal to the maximum erasable spike duration).
-    static const int lifodepth = 9;  // more depth will reject longer spikes at the expense of increased controller delay
-    int spike_length, interp_slope, loopindex, filthist[NumAxes][lifodepth], rawhist[NumAxes][lifodepth];
-    int prespike_index[NumAxes] = { -1, -1 }, lifoindex[NumAxes] = { 1, 1 };
-    float spike_filter(int axis, float new_val) {  // pushes next val in, massages any detected spikes, returns filtered past value
+    static const int ringdepth = 9;  // more depth will reject longer spikes at the expense of increased controller delay
+    int ringbuf[NumAxes][ringdepth], prespike_idx[NumAxes] = { -1, -1 }, ringidx[NumAxes] = { 1, 1 };  // prespike of -1 means no current spike
+    float spike_filter(int axis, float new_val) {  // pass a fresh reading in, will return a filtered reading to use instead
         static bool spike_signbit;
-        static int this_delta, previndex, spike_cliff[NumAxes], spike_threshold[NumAxes] = { 6, 6 };
-        previndex = (lifodepth + lifoindex[axis] - 1) % lifodepth; // previndex is where the incoming new value will be stored
-        this_delta = new_val - filthist[axis][previndex];          // value change since last reading
-        if (std::abs(this_delta) > spike_cliff[axis]) {            // if new value is a cliff edge (start or end of a spike)
-            if (prespike_index[axis] == -1) {                      // if this cliff edge is the start of a new spike
-                prespike_index[axis] = previndex;                  // save index of last good value just before the cliff
-                spike_signbit = signbit(this_delta);               // save the direction of the cliff
+        static int this_delta, previdx, spike_cliff[NumAxes] = { 6, 6 };  // spike_cliff is min diff of consecutive values to count as a spike
+        previdx = (ringdepth + ringidx[axis] - 1) % ringdepth; // previdx is where the incoming new value will be stored
+        this_delta = new_val - ringbuf[axis][previdx];         // value change since last reading
+        if (std::abs(this_delta) > spike_cliff[axis]) {        // if new value is a cliff edge (start or end of a spike)
+            if (prespike_idx[axis] == -1) {                    // if this cliff edge is the start of a new spike
+                prespike_idx[axis] = previdx;                  // save idx of last good value just before the cliff
+                spike_signbit = signbit(this_delta);           // save the direction of the cliff
             }
-            else if (spike_signbit == signbit(this_delta)) {  // if this cliff edge deepens an in-progress spike (or more likely the change is valid)
-                inject_interpolations(axis, previndex, filthist[axis][previndex]);  // smooth out the values between the last cliff & previous value
-                prespike_index[axis] = previndex;                                   // consider this cliff edge the start of the spike instead
+            else if (spike_signbit == signbit(this_delta)) {  // if this cliff edge deepens an in-progress spike, or is a continuance of a valid rapid change
+                inject_interpolations(axis, previdx, ringbuf[axis][previdx]); // smooth out the values between the last cliff & previous value
+                prespike_idx[axis] = previdx;                                 // consider this cliff edge the start of the spike instead
             }
-            else {                                                      // if this cliff edge is a recovery of an in-progress spike
-                inject_interpolations(axis, lifoindex[axis], new_val);  // fill in the spiked values with interpolated values
-                prespike_index[axis] = -1;                              // cancel the current spike
+            else {                                                   // if this cliff edge is a recovery of an in-progress spike
+                inject_interpolations(axis, ringidx[axis], new_val); // fill in the spiked value section with interpolated values
+                prespike_idx[axis] = -1;                             // cancel the current spike
             }
         }
-        else if (prespike_index[axis] == lifoindex[axis]) {                     // if a current spike lasted thru our whole buffer
-            inject_interpolations(axis, previndex, filthist[axis][previndex]);  // smoothly grade the whole buffer
-            prespike_index[axis] = -1;                                          // cancel the current spike
+        else if (prespike_idx[axis] == ringidx[axis]) {                   // if the whole buffer cycled before the current spike recovered
+            inject_interpolations(axis, previdx, ringbuf[axis][previdx]); // smoothly grade the whole buffer
+            prespike_idx[axis] = -1;                                      // cancel the current spike
         }
-        float returnval = filthist[axis][lifoindex[axis]];  // save the incumbent value at current index (oldest value) into buffer
-        filthist[axis][lifoindex[axis]] = new_val;
-        rawhist[axis][lifoindex[axis]] = new_val;
-        ++(lifoindex[axis]) %= lifodepth;  // update index for next time
-        return returnval;                  // return the value coming out of the buffer
+        float returnval = ringbuf[axis][ringidx[axis]]; // pull the incumbent value at current (oldest) index for return
+        ringbuf[axis][ringidx[axis]] = new_val;         // save the newest reading into same location
+        ++(ringidx[axis]) %= ringdepth;                 // advance the index (with wraparound) for next time
+        return returnval;                               // return the value, now with any spikes removed or smoothed by the filter
     }
-    void inject_interpolations(int axis, int endspike_index, float endspike_val) {  // replaces values between indexes w/ linear interpolated values
-        spike_length = ((lifodepth + endspike_index - prespike_index[axis]) % lifodepth) - 1;  // equal to the spiking values count plus one
+    void inject_interpolations(int axis, int endspike_idx, float endspike_val) {  // replaces values between indices w/ linear interpolated values
+        int spike_length = ((ringdepth + endspike_idx - prespike_idx[axis]) % ringdepth) - 1;  // equal to the spiking values count plus one
         if (!spike_length) return;  // two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
-        interp_slope = (endspike_val - filthist[axis][prespike_index[axis]]) / spike_length;
-        loopindex = 0;
-        while (++loopindex <= spike_length)
-            filthist[axis][(prespike_index[axis] + loopindex) % lifodepth] = filthist[axis][prespike_index[axis]] + loopindex * interp_slope;
+        int interp_slope = (endspike_val - ringbuf[axis][prespike_idx[axis]]) / spike_length;
+        for (int idx=1; idx<=spike_length; idx++)  // fill specified section of the buffer with interpolated values
+            ringbuf[axis][(prespike_idx[axis] + idx) % ringdepth] = ringbuf[axis][prespike_idx[axis]] + idx * interp_slope;
     }
-    int next_unfilt_rawval (int axis) { return rawhist[axis][lifoindex[axis]]; }  // helps to debug the filter from outside the class
 };
