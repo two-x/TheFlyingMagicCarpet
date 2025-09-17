@@ -834,22 +834,23 @@ class BrakePositionSensor : public AnalogSensor {
 class PulseSensor : public Sensor {
   protected:
     // volatile int64_t timestamp_last_us;  // _stop_timeout_us = 1250000;  // time after last magnet pulse when we can assume the engine is stopped (in us)
-    Timer _stop_timer, _pulsecount_timer{1000000};
+    Timer _pulsecount_timer{1000000};
     bool _low_pulse = true, _pin_level, _pin_inactive = false;
-    float _us, _freqfactor = 1.0;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
-    // float _calfactor = 1.0;   // a tunable/calibratable factor same as the above, where if <1 gives fewer si-units/pulse-hz and vice versa.         also, the worst weight-loss scam in miami
+    float _freqfactor = 1.0;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
+    // float _calfactor = 1.0;   // a tunable/calibratable factor same as the above, where if <1 gives fewer si-units/pulse-hz and vice versa.         also, most popular weight-loss plan in miami
     Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
     volatile int64_t _isr_us = 0;
     volatile int64_t _isr_time_last_us = 0;
     volatile int64_t _isr_time_current_us = 0;
     volatile int _pulse_count = 0;  // record pulses occurring for debug/monitoring pulse activity
     int _pulses_per_sec = 0;
-    // volatile float _isr_us;
+
     // we maintain our min and max pulse period, for each pulse sensor
-    // absmax_us is the reciprocal of our native absmin value in MHz. once max_us has elapsed since the last pulse our si sets to zero
-    // absmin_us is the reciprocal of our native absmax value in MHz. any pulse received within min_us of the previous pulse is ignored
-    float _absmax_us = 1500000, _absmin_us = 6500; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency.  max is chosen just arbitrarily
-    volatile int64_t _absmin_us_64 = (int64_t)_absmin_us;
+    // absmin_us is calculated based on absmax_native (Hz) using overloaded set_abslim_native() function
+    // absmax_us is our stop timeout, and not based on absmin_native (Hz). It must be set using set_abmax_us() function
+    float _us, _absmax_us = 1500000, _absmin_us; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency.  max is chosen just arbitrarily
+    int64_t _absmin_us_64;  // so the isr doesn't have to cast type. Set in the set_abslims_us() function.
+
     // shadows a hall sensor being triggered by a passing magnet once per pulley turn. The ISR calls
     // esp_timer_get_time() on every pulse to know the time since the previous pulse. I tested this on the bench up
     // to about 0.750 mph which is as fast as I can move the magnet with my hand, and it works.
@@ -858,7 +859,6 @@ class PulseSensor : public Sensor {
         _isr_time_current_us = esp_timer_get_time();
         int64_t time_us = _isr_time_current_us - _isr_time_last_us;
         if (time_us < _absmin_us_64) return;  // ignore spurious triggers or bounces
-        _stop_timer.reset();
         _isr_time_last_us = _isr_time_current_us;
         _isr_us = time_us;
         _pulse_count++;
@@ -873,21 +873,21 @@ class PulseSensor : public Sensor {
         pinlevel_last = _pin_level;
     }
     void set_val_from_pin() {
-        float new_native = _native.val();  // initialize our return value to the current native value
-        if (_stop_timer.expired()) {
+        float new_native = _native.val();
+        if ((esp_timer_get_time() - _isr_time_last_us) >= _absmax_us) {  // if last pulse seen is more than absmax ago
             _us = NAN;  // indicate out-of-range pulse period
             new_native = 0.0;  // call this 0 Hz
         }
         else {
             float _isr_buf_us = static_cast<float>(_isr_us);  // copy delta value (in case another interrupt happens during handling)
-            if (_isr_buf_us >= _absmin_us) {
+            if (_isr_buf_us >= _absmin_us) {  // if the pulse isn't too soon after the last one (possible bounce)
                 _us = _isr_buf_us;
-                new_native = us_to_hz(_isr_buf_us);  // otherwise if the pulse isn't too soon after the last one (possible bounce) then convert as a valid reading
+                new_native = us_to_hz(_isr_buf_us);  // convert us reading to native hz value as a valid reading
             }
         }
-        set_pin_inactive();
+        set_pin_inactive();  // for idiot light showing pulse activity
         set_native(new_native);  // too-short pulse times are presumably bounces and are ignored, keeping the existing native value
-        _si_raw = from_native(new_native);
+        // _si_raw = from_native(new_native);  // commenting since set_native() above will do this by default
         calculate_ema(); // filtered values are kept in si format
         _pin_level = read_pin(_pin);  // _pin_level = !_pin_level;
         if (_pulsecount_timer.expireset()) {
@@ -916,17 +916,20 @@ class PulseSensor : public Sensor {
         if (ranges) ezread.squintf("  pulse = %.0lf %s, abs: %.0lf-%.0lf %s\n", _us, _uber_native_units.c_str(), _absmin_us, _absmax_us, _uber_native_units.c_str());
     }
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
-    // overload the normal function so we can also include us calculations 
-    void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // overload the normal function so we can also include us calculations 
-        if ((!isnan(arg_min) && iszero(arg_min)) || (!isnan(arg_max) && iszero(arg_max))) {
-            ezread.squintf(ezread.madcolor, "Err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
-            return;  // we can't accept 0 Hz for opmin
+    // Overload the normal function so we can also include absmin_us calculation. Note absmax_us is set with a separate function 
+    void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // use calc_si = false to avoid recalculating si value
+        if ((!std::isnan(arg_min) && iszero(arg_min)) || (!std::isnan(arg_max) && iszero(arg_max))) {
+            ezread.squintf(ezread.madcolor, "err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
+            return;  // we can't accept 0 Hz for either absmin or absmax
         }
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
-        _absmax_us = 1000000.0 / _native.min();  // also set us limits from here, converting Hz to us. note min/max are swapped
-        _absmin_us = 1000000.0 / _native.max();  // also set us limits from here, converting Hz to us. note min/max are swapped
-        _absmin_us_64 = (int)_absmin_us;         // make an int copy for the isr to use conveniently
+        if (!std::isnan(arg_max)) {  // now we set absmin_us to match absmax_native (hz). absmax_us is set in its own function
+            _absmin_us = hz_to_us(_native.max());  // also set us limits from here, converting Hz to us. note min/max are swapped
+            _absmin_us_64 = (int64_t)_absmin_us;       // make an int copy for the isr to use conveniently
+        }
     }
+    // this function allows direct setting of the stop timeout value (pulse-to-pulse time at which sensor will be considered stopped)
+    void set_absmax_us(float arg_max) { _absmax_us = arg_max; }
     virtual void setup() {
         Sensor::setup();
         set_pin(_pin, INPUT_PULLUP);
@@ -934,7 +937,6 @@ class PulseSensor : public Sensor {
         set_source(src::Pin);
         attachInterrupt(digitalPinToInterrupt(_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
         set_can_source(src::Pot, true);
-        _stop_timer.set(_absmax_us);
     }
     // float last_read_time() { return _last_read_time_us; }
     bool stopped() { return iszero(val()); }
@@ -944,10 +946,10 @@ class PulseSensor : public Sensor {
     bool* pin_level_ptr() { return &_pin_level; }
     float absmin_us() { return _absmin_us; }
     float absmax_us() { return _absmax_us; }
-    float absmin_ms() { return _absmin_us / 1000.0; }
-    float absmax_ms() { return _absmax_us / 1000.0; }
+    float absmin_ms() { return _absmin_us / 1000.0f; }
+    float absmax_ms() { return _absmax_us / 1000.0f; }
     float us() { return _us; }
-    float ms() { return _us / 1000.0; }
+    float ms() { return _us / 1000.0f; }
     int alt_native() { return _pulses_per_sec; };  // returns pulse freq in hz based on count, rather than conversion (just a check to debug) (only updates once per second)
 };
 // Tachometer represents a magnetic pulse measurement of the engine rotation
@@ -976,16 +978,14 @@ class Tachometer : public PulseSensor {
         // now we find our final rpm reading seems to be about 4x what it should. until we figure out the root cause, i'm adding a cal factor to compensate it
         float mfact = calc_mfactor();
         // mfact = 60.0 / _freqfactor;  // 1 Hz = 1 pulse/sec * 60 sec/min / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
-        set_conversions(mfact, 0.0);
-        set_abslim(0.0, 4800.0);  // estimating the highest rpm we could conceivably ever see from the engine. but may lower b/c the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
-        // do i need this line?
-        // set_abslim_native(us_to_hz(6000), NAN, false);  // for pulse sensor, set absmin_native to define the stop timeout period. Less Hz means more us which slows our detection of being stopped
-        
-        set_oplim(0.0, 3600.0);  // aka redline,  Max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        set_conversions(mfact, 0.0f);
+        set_abslim(0.0f, 4800.0f);  // estimating the highest rpm we could conceivably ever see from the engine. but may lower b/c the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
+        set_absmax_us(430000.0f);  // this sets the max pulse-to-pulse period to be considered as stopped.
+        set_oplim(0.0f, 3600.0f);  // aka redline,  Max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         _governmax_rpm = _opmax * governor / 100.0;
-        set_ema_alpha(0.015);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        set_margin(15.0);
-        set_si(0.0);
+        set_ema_alpha(0.015f);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        set_margin(15.0f);
+        set_si(0.0f);
         _us = hz_to_us(_native.val());
         print_config();
     }
@@ -1026,20 +1026,16 @@ class Speedometer : public PulseSensor {
     Speedometer() = delete;
     void setup() {
         PulseSensor::setup();
-        // ezread.squintf("%s..\n", _long_name.c_str());
         float mfact = 3600.0 * 20 * M_PI / (_freqfactor * 12 * 5280); // 1 Hz = 1 pulse/sec * 3600 sec/hr * 20*pi in/whlrot * 1/2 whlrot/pulse * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.785 mph/Hz)
         // note the max pulse freq is max-mph/m , or:  pinmax hz = 20 mph * (1 / 1.785) hz/mph = 11.2 hz  (max freq at pin and in wire)
         // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=1uF
 
-        set_conversions(mfact, 0.0);
-        set_abslim(0.0, 20.0);  // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
-
-        // do i need this line?
-        // set_abslim_native(us_to_hz(10000), NAN, false);  // for pulse sensor, set absmin_native to define the stop timeout period. Less Hz means more us which slows our detection of being stopped
-
-        set_oplim(0.0, 15.0);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
-        set_ema_alpha(0.003);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        set_margin(0.2);
+        set_conversions(mfact, 0.0f);
+        set_abslim(0.0f, 18.0f);  // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
+        set_absmax_us(1300000.0f);  // this sets the max pulse-to-pulse period to be considered as stopped.
+        set_oplim(0.0f, 15.0f);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        set_ema_alpha(0.003f);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        set_margin(0.2f);
         // set_si(50.0);
         _us = hz_to_us(_native.val());
         // _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)

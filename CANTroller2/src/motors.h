@@ -247,7 +247,7 @@ class ServoMotor {
     Hotrc* hotrc;
     Speedometer* speedo;
     Servo* motor;
-    int pid_timeout = 30000;  // if too high, servo performance is choppy
+    int pid_timeout = 50000;  // if too high, servo performance is choppy
     float lastoutput;
     Timer pid_timer, outchangetimer;
     int pin, freq, timerno;
