@@ -668,10 +668,10 @@ class BootMonitor {
     void flash_forcewrite(const char* flashid, uint32_t val) {  // force writes a uint value to indicated flashed value. external code must be responsible here to not write unnecessarily!
         myprefs->putUInt(flashid, val);
     }
-    int flash_read(std::string flashid, uint32_t def=1234567) {  // reads a uint value at the indicated flash slot. returns -1 on error
+    int flash_read(std::string flashid, uint32_t def=unlikely_int) {  // reads a uint value at the indicated flash slot. returns -1 on error
         uint32_t ret = (int)myprefs->getUInt(flashid.c_str(), def);
-        if (ret == 1234567) {
-            ezread.squintf(ezread.madcolor, "err: no flash id \"%s\"\n", flashid.c_str());
+        if (ret == unlikely_int) {
+            ezread.squintf(ezread.sadcolor, "warn: no flash id \"%s\"\n", flashid.c_str());
             return -1;
         }
         return (int)ret;

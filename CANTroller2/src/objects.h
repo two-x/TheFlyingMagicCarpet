@@ -265,9 +265,7 @@ class Ignition {
         booted = true;
         ign_req = ReqNA;
     }
-    void request(int req) { ign_req = req;
-        ezread.squintf("ign req %s\n", requestcard[req].c_str());
-    } // ezread.squintf("new ign request %s\n", requestcard[ign_req].c_str());
+    void request(int req) { ign_req = req; }  // ezread.squintf("ign req %s\n", requestcard[req].c_str());
     void panic_request(int req) { panic_req = req; }
     void update() {  // Run once each main loop
         static bool ign_last = LOW;

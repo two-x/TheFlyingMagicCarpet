@@ -12,6 +12,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     RunModeManager() {}
     void setup() {
         ezread.squintf(ezread.highlightcolor, "Runmode state machine init\n");
+        set_preferred_drivemode();        // read preferred drivemode from flash
         runmode = Standby;  // our first mode upon boot  // disabling ability to recover to previous runmode after crash:  runmode = watchdog.boot_to_runmode;
     }  // we don't really need to set up anything, unless we need to recover to a specific runmode after crash
     int update() {
@@ -35,12 +36,12 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             watchdog.set_codestatus();
             shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = false;  // clean up previous runmode values
             _stoppedholdtimer_active = cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
-            ezread.squintf("runmode %s -> %s\n", modecard[_oldmode], modecard[runmode]);
+            // ezread.squintf("runmode %s -> %s\n", modecard[_oldmode].c_str(), modecard[runmode].c_str());
         }
         _oldmode = runmode;
         if (runmode != LowPower) {  // common to almost all the modes, so i put it here
             if (ignition.signal) {  // if ignition is on
-                if (untested_hotrc_kills_ignition && hotrc.radiolost_untested()) ignition.request(ReqOff);
+                if (untested_hotrc_kills_ign && hotrc.radiolost_untested()) ignition.request(ReqOff);
                 if (hotrc.sw_event_unfilt(Ch3)) ignition.request(ReqOff);  // any Ch3 event turns it off. if ign is turned off while the car is moving, this leads to panic stop. Note keep this if separate, as it will reset the sw event
             }
             else {  // if ignition is off
@@ -61,8 +62,15 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     int preferred_drivemode() { return _preferred_drivemode; }       // returns the current preferred drivemode
     int* preferred_drivemode_ptr() { return &_preferred_drivemode; } // returns pointer to the current preferred drivemode
     void tog_preferred_drivemode() { set_preferred_drivemode((_preferred_drivemode == Cruise) ? Fly : Cruise); } // toggles the preferred drivemode Fly <-> Cruise
-    void set_preferred_drivemode(int new_drivemode) {                // sets the preferred drivemode to the given mode (Fly or Cruise)
-        if ((new_drivemode == Cruise) || (new_drivemode == Fly)) _preferred_drivemode = new_drivemode;
+    void set_preferred_drivemode(int new_drivemode=-1) {          // sets the preferred drivemode to the given mode (Fly or Cruise). Run w/o arguments to set to value stored in flash
+        int old_drivemode = _preferred_drivemode;                 // used to help us avoid unnecessary flash writes
+        if (new_drivemode == -1) {                                // if no new drivemode was given
+            int newread = watchdog.flash_read("pref_drivemode");  // get stored flash value if present, otherwise -1
+            if (newread == -1) old_drivemode = -1;                // if no flash content found, we will force a flash write
+            else new_drivemode = newread;
+        }
+        if ((new_drivemode == Cruise) || (new_drivemode == Fly)) _preferred_drivemode = new_drivemode;  // if valid then make official
+        if (_preferred_drivemode != old_drivemode) watchdog.flash_forcewrite("pref_drivemode", (uint32_t)_preferred_drivemode);  // if value changed or flash read failed, write new value to flash
     }
   private:
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
@@ -163,7 +171,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             ch4_function_timer.reset();  // constantly reset timer to prevent Ch4 buttonn from changing drivemode until after starter motor is stopped
             if (hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());  // a Ch4 event turns off the starter.  Note keep this if separate, as it will reset the sw event
         }
-        if (ch4_function_timer.expired()) {  // if the starter motor has been off for long enough
+        if (holdmode_ch4_drivetoggle && ch4_function_timer.expired()) {  // if the starter motor has been off for long enough
             if (hotrc.sw_event_filt(Ch4)) tog_preferred_drivemode();  // a Ch4 event will select the preferred drivemode.  Note keep this if separate, as it will reset the sw event
         }
         if (hotrc.joydir(Vert) != HrcUp) _joy_has_been_centered = true;  // if not pushing up, set this flag. now pushing up will go to fly mode

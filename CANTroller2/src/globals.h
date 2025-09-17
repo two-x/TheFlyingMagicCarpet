@@ -168,7 +168,8 @@ bool require_hotrc_powercycle = true; // refuse to enter drive modes until the c
 bool force_hotrc_button_filter = false; // always force button filtration for all actions. otherwise unfiltered presses are allowed for safety events (ie ignition or starter kill), in case of radio interference
 bool ezread_suppress_spam = true;       // activates ezread feature to suppress data coming into the console too fast (to prevent overrun crashes)
 bool panic_on_boot_after_crash = true;  // causes bootmanager to do a panic on boot if car was in a drive state when reset 
-bool untested_hotrc_kills_ignition = true;
+bool untested_hotrc_kills_ign = true;
+bool holdmode_ch4_drivetoggle = false;  // should a ch4 press in hold mode toggle the preferred drivemode, assuming starter is off?
 
 // global tunable variables
 int operational_framerate_limit_fps = 100;  // max display frame rate to enforce while driving whenever limit_framerate == true
