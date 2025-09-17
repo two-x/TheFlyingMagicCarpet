@@ -72,6 +72,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if ((new_drivemode == Cruise) || (new_drivemode == Fly)) _preferred_drivemode = new_drivemode;  // if valid then make official
         if (_preferred_drivemode != old_drivemode) watchdog.flash_forcewrite("pref_drivemode", (uint32_t)_preferred_drivemode);  // if value changed or flash read failed, write new value to flash
     }
+    void tog_current_drivemode() {
+        tog_preferred_drivemode();
+        runmode = _preferred_drivemode;
+    }
   private:
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
         if (_we_just_switched_modes) powering_up = false;  // basicmode_request =  to cover unlikely edge case where basic mode switch is enabled during wakeup from lowpower mode
@@ -193,7 +197,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         else if (speedo.stopped() && hotrc.joydir() != HrcUp) runmode = Hold;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[Vert][Filt] <= hotrc.pc[Vert][Cent]
         if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = Hold;   // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
-        if (hotrc.sw_event_filt(Ch4)) runmode = Cruise;                        // enter cruise mode by pressing hrc ch4 button
+        if (hotrc.sw_event_filt(Ch4)) tog_current_drivemode();                 // hrc ch4 button press switches drivemodes
     }
     void run_cruiseMode() {
         static Timer stoppedholdtimer{4000000};  // how long after coming to a stop should we drop to hold mode?
@@ -208,7 +212,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         else if (speedo.stopped()) {
             if (hotrc.joydir() == HrcDn) runmode = Hold;  // go to Hold Mode if we have slowed to a stop after previously moving  // && hotrc.pc[Vert][Filt] <= hotrc.pc[Vert][Cent]
-            else if (hotrc.joydir() != HrcUp) {  // unless attempting to increase cruise speed, when stopped drop to hold after a short timeout
+            else if (hotrc.joydir() == HrcUp) _stoppedholdtimer_active = false;  // if trying to go cancel any impending holdmode timeout
+            else {  // unless attempting to increase cruise speed, when stopped drop to hold after a short timeout
                 if (!_stoppedholdtimer_active) {
                     stoppedholdtimer.reset();
                     _stoppedholdtimer_active = true;
@@ -216,9 +221,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 else if (stoppedholdtimer.expired()) runmode = Hold;
             }
         }  // if (hotrc.joydir(Vert) == HrcDn && !cruise_speed_lowerable) runmode = Fly;
-        if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = Hold;        // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
-        if (hotrc.sw_event_filt(Ch4)) runmode = Fly;                  // go to fly mode if hotrc ch4 button pushed
-        // // if joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
+        else _stoppedholdtimer_active = false;  // cancel any impending holdmode timeout
+        if (!sim.simulating(sens::joy) && hotrc.radiolost()) runmode = Hold;   // radio must be good to fly, this should already be handled elsewhere but another check can't hurt
+        if (hotrc.sw_event_filt(Ch4)) tog_current_drivemode();                 // hrc ch4 button press switches drivemodes
+        // if joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
         if (!cruise_brake) {  // no need for this feature if cruise includes braking
             if (hotrc.pc[Vert][Filt] > hotrc.pc[Vert][OpMin] + flycruise_vert_margin_pc) _gestureFlyTimer.reset();  // keep resetting timer if joystick not at bottom
             else if (_gestureFlyTimer.expired()) runmode = Fly;  // new gesture to drop to fly mode is hold the brake all the way down for more than X ms
