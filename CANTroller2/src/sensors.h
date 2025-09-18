@@ -1417,6 +1417,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     void setup() {
         ezread.squintf(ezread.highlightcolor, "Hotrc init.. starting rmt..\n");
         for (int axis=Horz; axis<=Ch4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
+        toggles_init();  // initialize toggles to prevent spurious sw events on boot
     }
     void derive() {
         float m_factor;
@@ -1472,7 +1473,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         return retval;
     }
     bool sw_event_unfilt(int ch, bool autoreset=true) {  // returns if any event occurred on the given channel. note: calling this cancels any in-progress event filtering
-        if (force_hotrc_button_filter) return sw_event_filt(ch, autoreset); // if use of button event filter is forced for all contexts, use the filtered event function instead
+        // if (force_hotrc_button_filter) return sw_event_filt(ch, autoreset); // if use of button event filter is forced for all contexts, use the filtered event function instead
         bool retval = _sw_event_unfilt[ch] || _sw_event_filt[ch];
         if (retval) {
             _sw_last[ch] = _sw_val[ch];  // commit current reading to official switch value
@@ -1489,13 +1490,22 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     int sim_button_last_ms() { return simBtnTimer.elapsed() / 1000; }  // returns time since last simulated ch4 button press. to help prevent phantom starter turnon
     int ch4_button_last_ms() { return ch4BtnTimer.elapsed() / 1000; }  // returns time since last actual ch4 button press. to help prevent phantom starter turnon
   private:
+    bool toggle_read(int chan) {  // it is critical to read both toggles on every loop to prevent rmt overflow errors
+        us[chan][Raw] = (float)(rmt[chan].readPulseWidth(true));  // read the newest pulsewidth in us
+        return (us[chan][Raw] >= us[chan][Cent]);                 // return if reading is below or above the center frequency
+    }
+    void toggles_init() {  // initialize stored switch values to newly read values, to prevent spurious switch events. run on boot and any time radio becomes lost or un-lost
+        for (int ch = Ch3; ch <= Ch4; ch++) {
+            _sw_val[ch] = _sw_last[ch] = toggle_read(ch);  // set both last and val to newly read value
+            _sw_pending[ch] = _sw_event_filt[ch] = _sw_event_unfilt[ch] = false;
+        }
+    }
     // new implementation of handler for hotrc buttons which rejects spurious values which could cause false events (re: phantom starter bug)
     // seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
     void toggles_update() {  // note, below the toggletimer[] indices are each 2 less than those of their corresponding switches (avoids creating 2 extra Timer instances)
         static Timer toggletimer[NumChans-2] = { 60000, 60000 }; // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
         for (int ch = Ch3; ch <= Ch4; ch++) {                    // do once for each digital channel
-            us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true)); // read the newest pulsewidth in us
-            _sw_val[ch] = (us[ch][Raw] >= us[ch][Cent]);         // determine the sw value just read (if new reading is below or above the center frequency)
+            _sw_val[ch] = toggle_read(ch);                       // read new sw value
             if (_sw_val[ch] != _sw_last[ch]) {                   // if new read value differs from prev valid value ...
                 if (!_sw_pending[ch]) {
                     _sw_pending[ch] = _sw_event_unfilt[ch] = true; // if we don't already have a new pending value change, flag an unfiltered event occurred, and we have a potential filtered value change, 
@@ -1510,10 +1520,10 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
                         ch4BtnTimer.reset();                       // so we can know time since last ch4 button press
                         _last_ch4_source = StartHotrc;             // also to help phantom starter events
                     }
-                }
+                }  // ezread.squintf("Hrc Ch%d l:%d v:%d p:%d f:%d u:%d\n", (ch == Ch3) ? 3 : 4, (int)_sw_last[ch], (int)_sw_val[ch], (int)_sw_pending[ch], _sw_event_filt[ch], _sw_event_unfilt[ch]);
             }
             else {  // otherwise if the new read value is equal to the previous valid value
-                if (_sw_pending[ch]) ezread.squintf(ezread.sadcolor, "warn: hotrc Ch%d spurious reading detect\n", (ch == Ch3) ? 3 : 4 ); // if there was an active pending value change, but the value has returned to the original valid value before the timer expired  // _verbose &&
+                if (_sw_pending[ch]) ezread.squintf(ezread.sadcolor, "warn: hotrc Ch%d spurious reading detect\n", (ch == Ch3) ? 3 : 4); // if there was an active pending value change, but the value has returned to the original valid value before the timer expired  // _verbose &&
                 _sw_pending[ch] = false;          // in case of in-progress filtration, that is canceled due to the value has returned to previous valid value before timer expired
             }
         }
@@ -1550,14 +1560,15 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
     }
     bool radiolost_update() {  // note: member variables _radiolost and _radiolost_untested must be initialized to true on boot
-        static Timer failsafe_timer{15000};  // values must remain in range for this long after changing or after boot, before being valid (to reject spurious readings)
+        static bool first_run = true;  // to prevent radiolost_untested logic from thinking the initialized radiolost=true means it was tested
         static bool nowlost_last = _radiolost;
         bool nowlost = (us[Vert][Raw] <= failsafe_us + failsafe_margin_us);  // is the newest reading in the failsafe range?
-        if (nowlost != nowlost_last) failsafe_timer.reset();   // start timer if change in state detected
-        if (failsafe_timer.expired()) {  // if the current reading has remained stable throughout timer duration
+        if (nowlost != nowlost_last) {
             _radiolost = nowlost;        // make the current reading official
-            if (_radiolost) _radiolost_untested = false;  // on first valid detection of radiolost, flag radiolost detection is known to work
+            toggles_init();           // when radio comes in or out, re-initialize toggles to prevent spurious sw events
         }
+        if (nowlost && !first_run) _radiolost_untested = false;  // on first valid detection of radiolost, flag radiolost detection is known to work
+        first_run = false;
         nowlost_last = nowlost;  // remember current reading for comparison on next loop
         return _radiolost;       // return the official status
     }

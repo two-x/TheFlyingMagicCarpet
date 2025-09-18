@@ -164,11 +164,10 @@ bool throttle_linearize_cruise = false;  // should trigger values be linearized 
 // bool stall_mode_timeout = true;    // should stall mode time out after a while, to mitigate potential safety issues w/ ghost starter bug
 bool throttle_pid_default = false;    // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
 bool cruise_pid_default = false;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
-bool require_hotrc_powercycle = true; // refuse to enter drive modes until the code has verified functionality of radiolost detection
-bool force_hotrc_button_filter = false; // always force button filtration for all actions. otherwise unfiltered presses are allowed for safety events (ie ignition or starter kill), in case of radio interference
+// bool force_hotrc_button_filter = false; // always force button filtration for all actions. otherwise unfiltered presses are allowed for safety events (ie ignition or starter kill), in case of radio interference
 bool ezread_suppress_spam = true;       // activates ezread feature to suppress data coming into the console too fast (to prevent overrun crashes)
 bool panic_on_boot_after_crash = true;  // causes bootmanager to do a panic on boot if car was in a drive state when reset 
-bool untested_hotrc_kills_ign = true;
+bool require_radiolost_test = true;     // should we refuse ignition to be on if radiolost feature hasn't been tested
 bool holdmode_ch4_drivetoggle = false;  // should a ch4 press in hold mode toggle the preferred drivemode, assuming starter is off?
 
 // global tunable variables
@@ -253,6 +252,7 @@ float loop_avg_us;
 bool sensidiots[NumTelemetryIdiots];  // array holds an error flag for each critical sensor or sensor group 
 int ui_app = EZReadUI, ui_app_default = EZReadUI;
 bool panicstop = false;
+bool bootup_complete = false;
 
 constexpr float float_zero = 0.000069f;  // minimum required float precision. use for comparisons & zero checking
 inline bool iszero(float num, float margin=NAN) noexcept {  // safe check for if a float is effectively zero (avoid hyperprecision errors)
@@ -512,7 +512,7 @@ void kick_inactivity_timer(int source=-1) {
 #include <stdarg.h>
 class EZReadConsole {
   private:  // behavior parameters for ezread's data spam suppression feature
-    int spam_enable_thresh_cps = 2500;  // threshold data rate (avg over window) beyond which begins spam suppression
+    int spam_enable_thresh_cps = 3500;  // threshold data rate (avg over window) beyond which begins spam suppression
     int spam_disable_thresh_cps = 650;  // threshold data rate (avg over window) below which ends spam suppression
     int spam_window_us = 200000;  // console history epoch over which to calculate average data rate into buffer
     Timer passthrutimer{300000};  // during suppressing spam, allow one print call to slip thru this often

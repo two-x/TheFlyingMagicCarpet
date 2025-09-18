@@ -245,6 +245,7 @@ void finalize_boot() {
     }
     ezread.printf(ezread.announcecolor, "Magic carpet is booted!\n");
     ezread.end_bootgraceperiod();
+    bootup_complete = true;
 }
 class Ignition {
   private:

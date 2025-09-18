@@ -37,7 +37,7 @@ static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = 
     { "TachPuls", "Tach Raw", "TcAltRaw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpAltRaw", "SpeedRaw", "   Speed", __________, __________, "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", },  // PgPuls
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PgPWMs
     { "Gas Mode", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PgIdle
-    { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "BkEnaPID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", "GasEnPID", "CrEnaPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PgMotr    
+    { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "BrakePID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", " Gas PID", "CruisPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PgMotr    
     { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PgBPID
     { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PgGPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "GasEnPID", "CrEnaPID", "Lineariz", "Exponent", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
