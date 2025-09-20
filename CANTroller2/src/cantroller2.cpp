@@ -33,8 +33,7 @@ void setup() {             // runs once automatically immediately upon boot
     brake.setup(&hotrc, &speedo, &mulebatt, &pressure, &brkpos, &gas, &tempsens);
     steer.setup(&hotrc, &speedo, &mulebatt);
     sim_setup();           // simulator initialize devices and pot map
-    neo2.setup();
-    neo2.test_pattern();
+    neo2.setup();          // init neopixels
     neo.setup();           // set up external neopixel strip for idiot lights visible in daylight from top of carpet
     idiots.setup(&neo);    // assign same idiot light variable associations and colors to neopixels as on screen  
     diag.setup();          // initialize diagnostic engine

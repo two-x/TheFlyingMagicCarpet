@@ -451,7 +451,7 @@ const uint8_t MPNK = 0xeb;  // we need all shades of pink
 const uint8_t LPNK = 0xf3;  // especially light pink, the champagne of pinks
 const uint8_t NON  = 0x45;  // used as default value when color is unspecified
 
-uint8_t colorcard[NumRunModes] = { MGT, BLK, RED, ORG, YEL, GRN, TEAL, WHT };
+uint8_t colorcard[NumRunModes] = { MGT, DGRY, RED, ORG, YEL, GRN, TEAL, WHT };
 
 // kick_inactivity_timer() function to call whenever human activity occurs, for accurate inactivity timeout feature
 //   integer argument encodes which source of human activity has kicked the timer. Here are the codes:

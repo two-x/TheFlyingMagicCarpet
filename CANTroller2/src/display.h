@@ -29,7 +29,7 @@ std::string pcbaglowcard[GlowNumModes] = { "off", "simple", "heart", "xfade", "s
 static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NumDataPages] = { "Run ", "Hrc ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "Diag", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 10, 10, 11, 11, 10, 5, 11, 9, 7, 12, 4, 10, 12 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 10, 10, 11, 11, 10, 5, 11, 9, 7, 12, 4, 11, 12 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PgRun
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PgHrc
@@ -43,7 +43,7 @@ static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = 
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "GasEnPID", "CrEnaPID", "Lineariz", "Exponent", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
     { __________, __________, __________, __________, "   HotRC", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PgSim
-    { __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, "PcbaGlow", "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", },  // PgDiag
+    { __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", },  // PgDiag
     { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", " EZ Spam", "EZAvgRat", "EZSpamBf", "EZDumbCt", "EZSerial", "EZScroll", "PanelApp", },  // PgUI
 };
 static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  // note these will be right-aligned
@@ -59,7 +59,7 @@ static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  //
     { "mph", "mph", "%|r", "%|r", "%|r",   "%",    "", "0/1", "0/1", "0/1",    "",   "%",    "",  "Hz",   "s", },  // PgCPID
     { "deg", "deg", "deg", "deg", "deg", "deg", "deg", "0/1",    "",    "",    "",    "",    "", "deg", "0/1", },  // PgTemp
     {    "",    "",    "",    "", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "scr", "0/1", "0/1", },  // PgSim
-    {    "",    "",    "",    "",    "",    "",    "",    "",    "",    "", "scr", "0/1", "eye",   "%",   "%", },  // PgDiag
+    {    "",    "",    "",    "",    "",    "",    "",    "",    "",    "",    "", "0/1", "eye",   "%",   "%", },  // PgDiag
     {  "us",  "us", "fps", "scr", "pix", "pix",   "x",  "Hz", "0/1",  "Hz",  "ch", "lin", "0/1", "lin", "scr", },  // PgUI
 };
 static std::string unitmapnames[21] = {  // unit strings matching these will get replaced by the bitmap graphic below
@@ -883,8 +883,8 @@ class Display {
             draw_truth(23, cal_gasmode, binstyl::Enabled);
         }
         else if (datapage == PgDiag) {            
-            for (int line=9; line<=18; line++) draw_eraseval(line);
-            draw_ascii(19, pcbaglowcard[neo->pcbaglow]);
+            for (int line=9; line<=19; line++) draw_eraseval(line);
+            // draw_ascii(19, pcbaglowcard[neo->pcbaglow]);
             draw_truth(20, flashdemo, binstyl::On);
             draw_truth(21, neo->sleepmode, binstyl::On);
             drawval(22, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, unlikely_int, 3);
@@ -1210,8 +1210,8 @@ class Tuner {
             else if (sel == 14) cal_gasmode_request = tune(id);
         }
         else if (datapage == PgDiag) {
-            if (sel == 10) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, GlowNumModes - 1, true));
-            else if (sel == 11) neo2->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
+            // if (sel == 10) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, GlowNumModes - 1, true));
+            if (sel == 11) neo2->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 12) neo->sleepmode_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 13) tune(&neobright, id, 0.0, 100.0);  // with recent changes to tune() I had to move the setter function for
             else if (sel == 14) tune(&neosat, id, 0.0, 100.0);     //  these into the neopix update function, or acceleration wouldn't work

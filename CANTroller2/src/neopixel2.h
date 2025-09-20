@@ -99,40 +99,57 @@ IdiotLight idiotlights[idiot_light_led_count] = {
     IdiotLight(0, RgbColor(0))
 };
 
+#include <NeoPixelBus.h>
+#include <NeoPixelAnimator.h>
+
 class NeopixelStrip2 {
 private:
+    enum anim { AnimRunmode=0, AnimIdiots=1, AnimCylon=2, NumAnims=3 };  // so humans can tell which animation we're talking about
+
     int last_runmode = -1;
     RgbColor runmode_color = RgbColor(0, 0, 0);
     bool _verbose = false;
+    float progressCylonAnim = 0.0f;
+    float progressRunmodeAnim = 0.0f;
+    float progressIdiotsAnim = 0.0f;
 
+    RgbColor chg_pix_brightness(float new_brt) {
+        return RgbColor(this->runmode_color.R * new_brt, this->runmode_color.G * new_brt, this->runmode_color.B * new_brt);
+    }
     void startRunmodeAnimation() {
         // Start the runmode/backlight pulse animation
-        neoanimator.StartAnimation(0, runmode_lights_animation_duration_ms, [this](const AnimationParam& param) {
-            // Calculate sine wave brightness (0.0 to 1.0)
-            float sine_brightness = (sin(param.progress * 2 * PI) + 1.0f) / 2.0f;  // Sine wave from 0 to 1
+        neoanimator.StartAnimation(AnimRunmode, runmode_lights_animation_duration_ms, [this](const AnimationParam& param) {
+            float lowpower_dimfactor = 0.3f;
+
+            float wave_brightness = (cos(param.progress * 2 * PI) + 1.1f) / 2.2f;  // Cosine wave from 0.1 to 1
+            if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended
+            RgbColor pulse_color = chg_pix_brightness(wave_brightness);
             
-            // Apply brightness to target color
-            RgbColor pulse_color = RgbColor(
-                this->runmode_color.R * sine_brightness,
-                this->runmode_color.G * sine_brightness,
-                this->runmode_color.B * sine_brightness
-            );
+            neoobj.SetPixelColor(0, pulse_color);  // Set the esp on-board & box backlight pixels to the cos wave (they are both pixel 0)
+
+            wave_brightness = (sin(param.progress * 2 * PI) + 1.1f) / 2.2f;  // Sine wave from 0.1 to 1
+            if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended
+            pulse_color = chg_pix_brightness(wave_brightness);
             
-            // Set pixels 0-2 to the pulsed color
-            for (int i = 0; i < 3; i++) {
-                neoobj.SetPixelColor(i, pulse_color);
-            }
-            
+            // Set the pcba backlight and external strip "mode" pixels (leftmost on the idiotlight strip) to the sin wave
+            neoobj.SetPixelColor(1, pulse_color);  // Set pcba backlight pixels to the sin wave 
+            if (runmode != LowPower) neoobj.SetPixelColor(2, pulse_color);  // in sleep mode this one does the cylon effect
+
             // Restart animation when it completes for continuous loop
-            if (param.progress >= 1.0f) {
-                this->startRunmodeAnimation();
-            }
+            //
+            // !! This creates a bottomless recursion which will cause a stack overflow! Removing
+            // if (param.progress >= 1.0f) {
+            //     this->startRunmodeAnimation();  
+            // }
+            //
+            // Instead allow the update function to access the animation progress and restart accordingly
+            this->progressRunmodeAnim = param.progress;
         });
     }
 
     void startIdiotLightsAnimation() {
         // Start the idiot lights animation that loops through each light
-        neoanimator.StartAnimation(1, idiot_lights_animation_duration_ms, [this](const AnimationParam& param) {
+        neoanimator.StartAnimation(AnimIdiots, idiot_lights_animation_duration_ms, [this](const AnimationParam& param) {
             // Loop through idiot lights - for now just iterate, do nothing
             for (int i = 0; i < idiot_light_led_count; i++) {
                 if (idiotlights[i].criticalAlertMode) {
@@ -165,18 +182,26 @@ private:
             }
             
             // Restart animation when it completes for continuous loop
-            if (param.progress >= 1.0f) {
-                this->startIdiotLightsAnimation();
-            }
+            //
+            // !! This creates a bottomless recursion which will cause a stack overflow! Removing
+            // if (param.progress >= 1.0f) {
+            //     this->startIdiotLightsAnimation();  
+            // }
+            //
+            // Instead allow the update function to access the animation progress and restart accordingly
+            this->progressIdiotsAnim = param.progress;
         });
     }
 
     void startCylonAnimation() {
         // Cylon animation: red LED bouncing back and forth with trailing effect
-        neoanimator.StartAnimation(2, 2000, [this](const AnimationParam& param) {
+        neoanimator.StartAnimation(AnimCylon, 2000, [this](const AnimationParam& param) {
+            int effect_offset = 2;  // cylon should not extend to the pixels in the control box
+            int effect_length = striplength - effect_offset;  // adjust the effective striplength accordingly
+
             // Clear all LEDs first
-            for (int i = 0; i < striplength; i++) {
-                neoobj.SetPixelColor(i, BLACK);
+            for (int i = 0; i < effect_length; i++) {
+                neoobj.SetPixelColor(i + effect_offset, BLACK);
             }
             
             // Calculate position (0 to striplength-1 and back)
@@ -185,17 +210,17 @@ private:
             
             if (cycle_progress <= 1.0f) {
                 // Moving forward (0 to striplength-1)
-                position = cycle_progress * (striplength - 1);
+                position = cycle_progress * (effect_length - 1);
             } else {
                 // Moving backward (striplength-1 to 0)
-                position = (2.0f - cycle_progress) * (striplength - 1);
+                position = (2.0f - cycle_progress) * (effect_length - 1);
             }
             
             int main_pos = (int)position;
             
             // Main LED (brightest)
-            if (main_pos >= 0 && main_pos < striplength) {
-                neoobj.SetPixelColor(main_pos, RgbColor(255, 0, 0));
+            if (main_pos >= 0 && main_pos < effect_length) {
+                neoobj.SetPixelColor(main_pos + effect_offset, RgbColor(255, 0, 0));
             }
             
             // Trailing effect - dimmer LEDs behind the main one
@@ -212,15 +237,20 @@ private:
                     trail_pos = main_pos + trail;
                 }
                 
-                if (trail_pos >= 0 && trail_pos < striplength) {
-                    neoobj.SetPixelColor(trail_pos, RgbColor(trail_brightness, 0, 0));
+                if (trail_pos >= 0 && trail_pos < effect_length) {
+                    neoobj.SetPixelColor(trail_pos + effect_offset, RgbColor(trail_brightness, 0, 0));
                 }
             }
             
             // Restart animation when it completes for continuous loop
-            if (param.progress >= 1.0f) {
-                this->startCylonAnimation();
-            }
+            //
+            // !! This creates a bottomless recursion which will cause a stack overflow! Removing
+            // if (param.progress >= 1.0f) {
+            //     this->startCylonAnimation();  
+            // }
+            //
+            // Instead allow the update function to access the animation progress and restart accordingly
+            this->progressCylonAnim = param.progress;
         });
     }
 
@@ -253,6 +283,8 @@ public:
             neoobj.SetPixelColor(idiotlights[i].led, idiotlights[i].solidColor);
         }
         neoobj.Show();
+
+        // test_pattern();   // removing bootup test pattern
 
         // demo mode for testing:
         // idiotlights[0].warningMode = true;
@@ -333,7 +365,8 @@ public:
     }
 
     void update() {
-        static Timer update_timer{20000}; // 20000us = 20ms update at most every 20ms.
+        static Timer update_timer{25000}; // 25000us = 25ms update is 40 fps, fast enough to look smooth i think
+
         if (update_timer.expireset()) {
             if (last_runmode == -1 || last_runmode != runmode) {
                 // commented next line b/c for some reason _verbose becomes true and it runs (even tho it's set false)  wtf!
@@ -342,15 +375,20 @@ public:
                 runmode_color = color_to_neo(colorcard[last_runmode]);
 
                 if (runmode == LowPower) {
-                    neoanimator.StopAnimation(0);
-                    neoanimator.StopAnimation(1);
+                    neoanimator.StopAnimation(AnimIdiots);
                     startCylonAnimation();
                 } else {
-                    neoanimator.StopAnimation(2);
-                    startRunmodeAnimation();
+                    neoanimator.StopAnimation(AnimCylon);
                     startIdiotLightsAnimation();
                 }
             }
+            
+            // restart animations when they finish so they cycle indefinitely
+            // (this replaces the previous recursive approach where animations cycled themselves)
+            //
+            if (progressRunmodeAnim >= 1.0f) startRunmodeAnimation();
+            if (runmode == LowPower) { if (progressCylonAnim >= 1.0f) startCylonAnimation(); }
+            else if (progressIdiotsAnim >= 1.0f) startIdiotLightsAnimation();
 
             neoanimator.UpdateAnimations();
             neoobj.Show();
