@@ -105,13 +105,9 @@ IdiotLight idiotlights[idiot_light_led_count] = {
 class NeopixelStrip2 {
 private:
     enum anim { AnimRunmode=0, AnimIdiots=1, AnimCylon=2, NumAnims=3 };  // so humans can tell which animation we're talking about
-
-    int last_runmode = -1;
     RgbColor runmode_color = RgbColor(0, 0, 0);
     bool _verbose = false;
-    float progressCylonAnim = 0.0f;
-    float progressRunmodeAnim = 0.0f;
-    float progressIdiotsAnim = 0.0f;
+    float progressAnim[NumAnims] = { 0.0f, 0.0f, 0.0f };
 
     RgbColor chg_pix_brightness(float new_brt) {
         return RgbColor(this->runmode_color.R * new_brt, this->runmode_color.G * new_brt, this->runmode_color.B * new_brt);
@@ -135,15 +131,16 @@ private:
             neoobj.SetPixelColor(1, pulse_color);  // Set pcba backlight pixels to the sin wave 
             if (runmode != LowPower) neoobj.SetPixelColor(2, pulse_color);  // in sleep mode this one does the cylon effect
 
-            // Restart animation when it completes for continuous loop
-            //
             // !! This creates a bottomless recursion which will cause a stack overflow! Removing
+            //
+            // // Restart animation when it completes for continuous loop
             // if (param.progress >= 1.0f) {
             //     this->startRunmodeAnimation();  
             // }
             //
             // Instead allow the update function to access the animation progress and restart accordingly
-            this->progressRunmodeAnim = param.progress;
+            //   Same change is also made to the other 2 animations below
+            this->progressAnim[AnimRunmode] = param.progress;
         });
     }
 
@@ -180,16 +177,7 @@ private:
                     neoobj.SetPixelColor(idiotlights[i].led, BLACK);
                 }
             }
-            
-            // Restart animation when it completes for continuous loop
-            //
-            // !! This creates a bottomless recursion which will cause a stack overflow! Removing
-            // if (param.progress >= 1.0f) {
-            //     this->startIdiotLightsAnimation();  
-            // }
-            //
-            // Instead allow the update function to access the animation progress and restart accordingly
-            this->progressIdiotsAnim = param.progress;
+            this->progressAnim[AnimIdiots] = param.progress;
         });
     }
 
@@ -241,16 +229,7 @@ private:
                     neoobj.SetPixelColor(trail_pos + effect_offset, RgbColor(trail_brightness, 0, 0));
                 }
             }
-            
-            // Restart animation when it completes for continuous loop
-            //
-            // !! This creates a bottomless recursion which will cause a stack overflow! Removing
-            // if (param.progress >= 1.0f) {
-            //     this->startCylonAnimation();  
-            // }
-            //
-            // Instead allow the update function to access the animation progress and restart accordingly
-            this->progressCylonAnim = param.progress;
+            this->progressAnim[AnimCylon] = param.progress;
         });
     }
 
@@ -365,15 +344,17 @@ public:
     }
 
     void update() {
-        static Timer update_timer{25000}; // 25000us = 25ms update is 40 fps, fast enough to look smooth i think
+        static Timer update_timer{20000}; // 20000us = 20ms update is 50 fps, fast enough to look smooth i think
+        static int last_runmode = -1;
 
         if (update_timer.expireset()) {
             if (last_runmode == -1 || last_runmode != runmode) {
                 // commented next line b/c for some reason _verbose becomes true and it runs (even tho it's set false)  wtf!
                 // if (_verbose) ezread.squintf("neopixel2 detected runmode change: %d->%d\n", last_runmode, runmode);
+                
+                runmode_color = color_to_neo(colorcard[runmode]);
                 last_runmode = runmode;
-                runmode_color = color_to_neo(colorcard[last_runmode]);
-
+                
                 if (runmode == LowPower) {
                     neoanimator.StopAnimation(AnimIdiots);
                     startCylonAnimation();
@@ -386,9 +367,9 @@ public:
             // restart animations when they finish so they cycle indefinitely
             // (this replaces the previous recursive approach where animations cycled themselves)
             //
-            if (progressRunmodeAnim >= 1.0f) startRunmodeAnimation();
-            if (runmode == LowPower) { if (progressCylonAnim >= 1.0f) startCylonAnimation(); }
-            else if (progressIdiotsAnim >= 1.0f) startIdiotLightsAnimation();
+            if (progressAnim[AnimRunmode] >= 1.0f) startRunmodeAnimation();
+            if (runmode == LowPower) { if (progressAnim[AnimCylon] >= 1.0f) startCylonAnimation(); }
+            else if (progressAnim[AnimIdiots] >= 1.0f) startIdiotLightsAnimation();
 
             neoanimator.UpdateAnimations();
             neoobj.Show();
