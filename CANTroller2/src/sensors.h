@@ -1443,9 +1443,9 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         derive();
     }
     void update() {
-        radiolost_update();
         toggles_update();
         direction_update();
+        radiolost_update();  // must come after direction_update(), so there's an accurate read value for us[Vert][Raw]
     }
     bool radiolost() { return _radiolost; }
     bool radiolost_untested() { return _radiolost_untested; }
@@ -1559,18 +1559,12 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         for (int axis = Horz; axis <= Vert; axis++)                             // always constrain the pc filt values
             pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
     }
-    bool radiolost_update() {  // note: member variables _radiolost and _radiolost_untested must be initialized to true on boot
-        static bool first_run = true;  // to prevent radiolost_untested logic from thinking the initialized radiolost=true means it was tested
-        static bool nowlost_last = _radiolost;
-        bool nowlost = (us[Vert][Raw] <= failsafe_us + failsafe_margin_us);  // is the newest reading in the failsafe range?
-        if (nowlost != nowlost_last) {
-            _radiolost = nowlost;        // make the current reading official
-            toggles_init();           // when radio comes in or out, re-initialize toggles to prevent spurious sw events
-        }
-        if (nowlost && !first_run) _radiolost_untested = false;  // on first valid detection of radiolost, flag radiolost detection is known to work
-        first_run = false;
-        nowlost_last = nowlost;  // remember current reading for comparison on next loop
-        return _radiolost;       // return the official status
+    void radiolost_update() { // must run this *after* direction_update(), to ensure a valid just-read us[Vert][Raw] 
+        static bool lost_last = _radiolost; // note: member variables _radiolost and _radiolost_untested must be initialized to true on boot
+        _radiolost = (us[Vert][Raw] <= failsafe_us + failsafe_margin_us);  // is the newest reading in the failsafe range?
+        if (_radiolost != lost_last) toggles_init(); // when radio comes in or out, re-initialize toggles to prevent spurious sw events
+        if (_radiolost) _radiolost_untested = false;  // on first valid detection of radiolost, flag radiolost detection is known to work
+        lost_last = _radiolost;  // remember current reading for comparison on next loop
     }
     // spike_filter() : I wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals coming
     // from the hotrc, where often the incoming values change suddenly then (usually) quickly jump back by the same amount. 
