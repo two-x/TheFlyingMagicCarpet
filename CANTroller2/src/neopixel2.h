@@ -117,13 +117,13 @@ private:
         neoanimator.StartAnimation(AnimRunmode, runmode_lights_animation_duration_ms, [this](const AnimationParam& param) {
             float lowpower_dimfactor = 0.3f;
 
-            float wave_brightness = (cos(param.progress * 2 * PI) + 1.1f) / 2.2f;  // Cosine wave from 0.1 to 1
+            float wave_brightness = ((cos(param.progress * 2 * PI) + 1.0f) * 0.45f) + 0.1f;  // Cosine wave from 0.1 to 1
             if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended
             RgbColor pulse_color = chg_pix_brightness(wave_brightness);
             
             neoobj.SetPixelColor(0, pulse_color);  // Set the esp on-board & box backlight pixels to the cos wave (they are both pixel 0)
 
-            wave_brightness = (sin(param.progress * 2 * PI) + 1.1f) / 2.2f;  // Sine wave from 0.1 to 1
+            wave_brightness = ((sin(param.progress * 2 * PI) + 1.0f) * 0.45f) + 0.1f;  // Sine wave from 0.1 to 1
             if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended
             pulse_color = chg_pix_brightness(wave_brightness);
             
