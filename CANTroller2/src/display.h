@@ -44,7 +44,7 @@ static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = 
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
     { __________, __________, __________, __________, "   HotRC", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PgSim
     { __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", },  // PgDiag
-    { "Loop Avg", "LoopPeak", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", " EZ Spam", "EZAvgRat", "EZSpamBf", "EZDumbCt", "EZSerial", "EZScroll", "PanelApp", },  // PgUI
+    { "Loop Avg", "LoopPeak", "Loop Max", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", " EZ Spam", "EZAvgRat", "EZSpamBf", "EZSerial", "EZScroll", "PanelApp", },  // PgUI
 };
 static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  // note these will be right-aligned
     { "psi",  "in",   "V",   "%", "mph", "atm", "g/s", "scr", "scr", "scr", "min",    "",    "",   "%",   "%", },  // PgRun
@@ -60,7 +60,7 @@ static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  //
     { "deg", "deg", "deg", "deg", "deg", "deg", "deg", "0/1",    "",    "",    "",    "",    "", "deg", "0/1", },  // PgTemp
     {    "",    "",    "",    "", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "scr", "0/1", "0/1", },  // PgSim
     {    "",    "",    "",    "",    "",    "",    "",    "",    "",    "",    "", "0/1", "eye",   "%",   "%", },  // PgDiag
-    {  "us",  "us", "fps", "scr", "pix", "pix",   "x",  "Hz", "0/1",  "Hz",  "ch", "lin", "0/1", "lin", "scr", },  // PgUI
+    {  "us",  "us",  "ms", "fps", "scr", "pix", "pix",   "x",  "Hz", "0/1",  "Hz",  "ch", "0/1", "lin", "scr", },  // PgUI
 };
 static std::string unitmapnames[21] = {  // unit strings matching these will get replaced by the bitmap graphic below
     "us", "scr", "0/1", "%", "ohm", "eye", "ang", "deg", "mph", "rpm", "psi",
@@ -893,16 +893,17 @@ class Display {
         else if (datapage == PgUI) {
             drawval(9, loop_avg_us);
             drawval(10, looptimer.loop_peak_us);
-            drawval(11, fps);
-            draw_ascii(12, activitiescard[last_activity]);
-            drawval(13, touch->touch_pt(0), 0, disp_width_pix);
-            drawval(14, touch->touch_pt(1), 0, disp_height_pix);
-            drawval(15, encoder.accel_factor(), 1, encoder.accel_max());
-            drawval(16, encoder.spinrate(), 0.0, encoder.spinrate_max());
-            draw_truth(17, ezread.spam_active);
-            drawval(18, ezread.avg_spamrate_cps);
-            drawval(19, ezread.window_accum_char);
-            drawval(20, bootbutton.dummyprintcount);
+            drawval(11, looptimer.loop_max_ms);
+            drawval(12, fps);
+            draw_ascii(13, activitiescard[last_activity]);
+            drawval(14, touch->touch_pt(0), 0, disp_width_pix);
+            drawval(15, touch->touch_pt(1), 0, disp_height_pix);
+            drawval(16, encoder.accel_factor(), 1, encoder.accel_max());
+            drawval(17, encoder.spinrate(), 0.0, encoder.spinrate_max());
+            draw_truth(18, ezread.spam_active);
+            drawval(19, ezread.avg_spamrate_cps);
+            drawval(20, ezread.window_accum_char);
+            // drawval(20, bootbutton.dummyprintcount);
             draw_truth(21, ezread.ezread_serial_console_enabled, binstyl::True);
             drawval(22, ezread.offset, 0, ezread.bufferSize);  //  - ezread.num_lines);
             draw_ascii(23, uicontextcard[ui_app]);

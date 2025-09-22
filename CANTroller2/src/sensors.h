@@ -1378,7 +1378,8 @@ class RMTInput {  // note: for some reason if we ever stop reading our rmt objec
 class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
     bool _verbose = false;  // causes console print whenever an unfiltered switch event is queried externally, thus canceling the in-progress filtering
-    float ema_alpha = 0.065f;           // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
+    float absmin_us = 880.0f;  // min configurable pulsewidth for the hotrc
+    float absmax_us = 2120.0f; // max configurable pulsewidth for the hotrc
     float pc[NumAxes][NumValues];      // values range from -100% to 100% are all derived or auto-assigned
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
         {  969, 1473, 1977, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
@@ -1387,18 +1388,17 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         { 1300, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2, // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
         // note: opmin/opmax range should be set to be just smaller than the actual measured range, to prevent out-of-range errors. this way it will reach all the way to 100%
         //   margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
-    float spike_us[NumAxes] = { 1500.0f, 1500.0f };  // [Horz/Vert]  // added
-    float ema_us[NumAxes] = { 1500.0f, 1500.0f };    // [Horz/Vert]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
-    float absmin_us = 880.0f;
-    float absmax_us = 2091.0f;
     float deadband_pc, deadband_us = 20.0f;  // size of each side of the center deadband in us.  pc value is derived  // was 15
     float margin_us = 15.0f;    // all [Margin] values above are derived from this by calling derive()  // was 12
     float failsafe_us = 880.0f; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     float failsafe_margin_us = 100.0f; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
+    float ema_alpha = 0.065f;          // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1).
   private:
     Simulator* sim;
     Potentiometer* pot;
     bool _radiolost = true, _radiolost_untested = true;  // has any radiolost condition been detected since boot?  allows us to verify radiolost works before driving 
+    float spike_us[NumAxes] = { us[Horz][Filt], us[Vert][Filt] };  // [Horz/Vert]  // added
+    float ema_us[NumAxes] = { us[Horz][Filt], us[Vert][Filt] };    // [Horz/Vert]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
     bool _sw_val[NumChans] = { 0, 0, 0, 0 }; // switch "value" is whether the pulsewidth is above (1) or below (0) the center value.  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
     bool _sw_last[NumChans] = { 0, 0, 0, 0 };  // stores the previous switch value
     bool _sw_pending[NumChans] = { 0, 0, 0, 0 }; // keeps whether a new value is pending, waiting for validity timeout.  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
@@ -1412,6 +1412,24 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[Ch4]
     };
     Timer simBtnTimer, ch4BtnTimer;  // keep track of last activity on all possible sources of ReqOn, to serve as a safety net preventing phantom starts
+    float us_to_pc(int axis, float _us) {
+        if (_us >= us[axis][Cent]) return map(_us, us[axis][Cent], us[axis][OpMax], pc[axis][Cent], pc[axis][OpMax]);
+        return map(_us, us[axis][Cent], us[axis][OpMin], pc[axis][Cent], pc[axis][OpMin]);    
+    }
+    void derive() {  // need to run this upon objct creation, and again whenever any tunable parameter is changed
+        for (int ch=0; ch<NumChans; ch++) {                      // derive us values for all 4 channels
+            us[ch][OpMin] = std::max(us[ch][OpMin], absmin_us);  // ensure any oplimit tuning stays in abs range
+            us[ch][OpMax] = std::min(us[ch][OpMax], absmax_us);
+            us[ch][Margin] = margin_us;                          // same margin value is ultimately used on all channels
+        }
+        for (int axis=Horz; axis<=Vert; axis++) {  // derive pc values for the 2 analog directional axes
+            pc[axis][OpMin] = -100.0;
+            pc[axis][Cent] = 0.0;
+            pc[axis][OpMax] = 100.0;
+            pc[axis][Margin] = us_to_pc(axis, us[axis][Margin]);
+        }
+        set_deadband_us(deadband_us);  // set deadband to itself, b/c the setter forces derivation of percent value
+    }
   public:
     Hotrc(Simulator* _sim, Potentiometer* _pot) : sim(_sim), pot(_pot) { derive(); }
     void setup() {
@@ -1419,16 +1437,13 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         for (int axis=Horz; axis<=Ch4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
         toggles_init();  // initialize toggles to prevent spurious sw events on boot
     }
-    void derive() {
-        float m_factor;
-        for (int axis=Horz; axis<=Vert; axis++) {
-            us[axis][Margin] = margin_us;
-            pc[axis][OpMin] = -100.0;
-            pc[axis][Cent] = 0.0;
-            pc[axis][OpMax] = 100.0;
-            pc[axis][Margin] = map(margin_us, us[axis][OpMin], us[axis][OpMax], pc[axis][OpMin], pc[axis][OpMax]);
-            set_deadband_us(deadband_us);  // run this to force derivation of deadband_pc value
-        }
+    void update() {  // run this in each loop
+        // static Timer read_timer{5000};  // critical to continuously read rmt values out fast enough to avoid buffer overflow
+        // if (read_timer.expireset()) {
+        read_all_channels();        // read new raw pwm values from rmt buffer. critical to do this continually, fast enough to avoid rmt buffer overflow 
+        radiolost_update();         // determine if the radio receiver detects good signal
+        toggles_update();           // handle button presses on the digital channels
+        direction_update();         // update directional values from the analog channels
     }
     void set_deadband_us(float val) {
         deadband_us = constrain(val, 0.0f, us[Horz][OpMax] - us[Horz][Cent]);  // using Horz for this b/c it's the same for either axis
@@ -1438,19 +1453,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         *member = val;
         derive();
     }
-    void set(float* member, int val) {  // generic setter that takes integer value term
-        *member = (float)val;
-        derive();
-    }
-    void update() {
-        toggles_update();
-        direction_update();
-        radiolost_update();  // must come after direction_update(), so there's an accurate read value for us[Vert][Raw]
-    }
-    bool radiolost() { return _radiolost; }
-    bool radiolost_untested() { return _radiolost_untested; }
-    bool* radiolost_ptr() { return &_radiolost; }
-    bool* radiolost_untested_ptr() { return &_radiolost_untested; }
+    void set(float* member, int val) { set(member, static_cast<float>(val)); }  // to accept int arguments too
     int joydir(int axis = Vert) {
         if (sim->simulating(sens::joy) && (std::abs(pc[axis][Filt]) < us_to_pc(axis, margin_us))) return HrcCent;  // allows some needed slop around centerpoint when simulating, or you can never center it
         if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? HrcUp : (pc[axis][Filt] < pc[axis][Cent]) ? HrcDn : HrcCent;
@@ -1463,59 +1466,65 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             _last_ch4_source = StartTouch;  // also to help phantom starter events
         }
     }
-    bool sw_event_filt(int ch, bool autoreset=true) {  // returns if a stable & filtered event occurred on the given channel then resets that channel (unless told not to)
+    bool sw_event_filt(int ch) {  // returns if a stable & filtered event occurred on the given channel, and if so, resets that channel
         bool retval = _sw_event_filt[ch];
         if (retval) {
-            _sw_last[ch] = _sw_val[ch];  // commit current reading to official switch value
-            if (autoreset) reset_toggle(ch);  // if there is an event, reset all channel events and in-progress pending events
+            toggle_reset(ch);  // if there is an event, reset all channel events and in-progress pending events
             if (_verbose) ezread.squintf("hotrc filt btn event serviced\n");
         }
         return retval;
     }
-    bool sw_event_unfilt(int ch, bool autoreset=true) {  // returns if any event occurred on the given channel. note: calling this cancels any in-progress event filtering
-        // if (force_hotrc_button_filter) return sw_event_filt(ch, autoreset); // if use of button event filter is forced for all contexts, use the filtered event function instead
+    bool sw_event_unfilt(int ch) {  // returns if any event occurred on the given channel, and if so, resets that channel. note: calling this cancels any in-progress event filtering
         bool retval = _sw_event_unfilt[ch] || _sw_event_filt[ch];
         if (retval) {
-            _sw_last[ch] = _sw_val[ch];  // commit current reading to official switch value
-            if (autoreset) reset_toggle(ch);  // if there is an event, reset all channel events and in-progress pending events
+            toggle_reset(ch);  // if there is an event, reset all channel events and in-progress pending events
             if (_verbose) ezread.squintf("hotrc unfilt btn event serviced\n");
         }
         return retval;
     }
+    bool radiolost() { return _radiolost; }
+    bool radiolost_untested() { return _radiolost_untested; }
+    bool* radiolost_ptr() { return &_radiolost; }
+    bool* radiolost_untested_ptr() { return &_radiolost_untested; }
     int last_ch4_source() { return _last_ch4_source; }
-    void reset_toggle(int achan=NumChans) {  // resets events and pending events on the given channel, or all channels by default
-        for (int ch = Ch3; ch <= Ch4; ch++)
-            if ((achan == ch) || (achan == NumChans)) _sw_event_filt[ch] = _sw_event_unfilt[ch] = _sw_pending[ch] = false;
-    }
     int sim_button_last_ms() { return simBtnTimer.elapsed() / 1000; }  // returns time since last simulated ch4 button press. to help prevent phantom starter turnon
     int ch4_button_last_ms() { return ch4BtnTimer.elapsed() / 1000; }  // returns time since last actual ch4 button press. to help prevent phantom starter turnon
   private:
-    bool toggle_read(int chan) {  // it is critical to read both toggles on every loop to prevent rmt overflow errors
-        us[chan][Raw] = (float)(rmt[chan].readPulseWidth(true));  // read the newest pulsewidth in us
-        return (us[chan][Raw] >= us[chan][Cent]);                 // return if reading is below or above the center frequency
+    void read_all_channels() {
+        for (int ch = 0; ch < NumChans; ch++)
+            us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true));
+
+        for (int ch = Horz; ch <= Vert; ch++)  // update analog percent value from us read value
+            pc[ch][Raw] = us_to_pc(ch, us[ch][Raw]);
+        
+        for (int ch = Ch3; ch <= Ch4; ch++)    // is reading below or above the center frequency
+            _sw_val[ch] = (us[ch][Raw] >= us[ch][Cent]);
     }
-    void toggles_init() {  // initialize stored switch values to newly read values, to prevent spurious switch events. run on boot and any time radio becomes lost or un-lost
-        for (int ch = Ch3; ch <= Ch4; ch++) {
-            _sw_val[ch] = _sw_last[ch] = toggle_read(ch);  // set both last and val to newly read value
-            _sw_pending[ch] = _sw_event_filt[ch] = _sw_event_unfilt[ch] = false;
-        }
+    void toggle_reset(int ch) {  // resets events and pending events on the given channel
+        _sw_val[ch] = _sw_last[ch] = us[ch][Raw];  // set both last and val to fresh read value
+        _sw_event_filt[ch] = _sw_event_unfilt[ch] = _sw_pending[ch] = false;
     }
-    // new implementation of handler for hotrc buttons which rejects spurious values which could cause false events (re: phantom starter bug)
-    // seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
-    void toggles_update() {  // note, below the toggletimer[] indices are each 2 less than those of their corresponding switches (avoids creating 2 extra Timer instances)
-        static Timer toggletimer[NumChans-2] = { 60000, 60000 }; // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
+    void toggles_init() {  // initialize stored switch values to newest read values, to prevent spurious switch events. run on boot and any time radio becomes lost or un-lost
+        for (int ch = Ch3; ch <= Ch4; ch++) toggle_reset(ch);
+    }
+    // hotrc digital button handler which rejects spurious values which could cause false events (re: phantom starter bug)
+    //   seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
+    void toggles_update() {  // note, below the two timer[] indices are each 2 less than those of their corresponding switches (avoids creating 2 extra Timer instances)
+        static Timer filttimer[NumChans-2] = { 60000, 60000 }; // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
+        static Timer expiretimer[NumChans-2] = { 1500000 }; // to cancel events if they have become stale on a human timescale
         for (int ch = Ch3; ch <= Ch4; ch++) {                    // do once for each digital channel
-            _sw_val[ch] = toggle_read(ch);                       // read new sw value
+            if (_sw_event_unfilt[ch] && expiretimer[ch-2].expired()) toggle_reset(ch); // cancel any super stale existing events (shouldn't happen)
             if (_sw_val[ch] != _sw_last[ch]) {                   // if new read value differs from prev valid value ...
                 if (!_sw_pending[ch]) {
                     _sw_pending[ch] = _sw_event_unfilt[ch] = true; // if we don't already have a new pending value change, flag an unfiltered event occurred, and we have a potential filtered value change, 
-                    toggletimer[ch-2].reset();        // set us up for filtering the next value change
+                    filttimer[ch-2].reset();                       // set us up for filtering the next value change
+                    expiretimer[ch-2].reset();                     // start expiration timer for this new event
                 }
-                else if (toggletimer[ch-2].expired()) { // if we do have a switch pending, and the validity timer expires. until the timer runs out all new readings must also differ from prev valid value, for the pending value to commit
+                else if (filttimer[ch-2].expired()) { // if we do have a switch pending, and the validity timer expires. until the timer runs out all new readings must also differ from prev valid value, for the pending value to commit
                     _sw_last[ch] = _sw_val[ch];                    // commit the new value  (may be unnecessary since this also happens in the sw_event_xxx() functions)
                     _sw_event_filt[ch] = true;                     // flag that a filtered switch event occurred, detectable by external code and reset outside this function
-                    kick_inactivity_timer(HuRCTog);                // register that human activity occurred
                     _sw_pending[ch] = false;                       // reset pending state
+                    kick_inactivity_timer(HuRCTog);                // register that human activity occurred
                     if (ch == Ch4) {                               // special mechanisms for ch4 to help prevent phantom starter events
                         ch4BtnTimer.reset();                       // so we can know time since last ch4 button press
                         _last_ch4_source = StartHotrc;             // also to help phantom starter events
@@ -1528,20 +1537,12 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             }
         }
     }
-    float us_to_pc(int axis, float _us) {
-        if (_us >= us[axis][Cent]) return map(_us, us[axis][Cent], us[axis][OpMax], pc[axis][Cent], pc[axis][OpMax]);
-        return map(_us, us[axis][Cent], us[axis][OpMin], pc[axis][Cent], pc[axis][OpMin]);    
-    }
     float remove_deadbands_us(int axis, float _us) {
         if (_us > us[axis][Cent] + deadband_us) return map(_us, us[axis][Cent] + deadband_us, us[axis][OpMax], us[axis][Cent], us[axis][OpMax]);
         else if (_us < us[axis][Cent] - deadband_us) return map(_us, us[axis][Cent] - deadband_us, us[axis][OpMin], us[axis][Cent], us[axis][OpMin]);
         return us[axis][Cent];
     }
     void direction_update() {
-        for (int axis = Horz; axis <= Vert; axis++) {                // read and filter incoming pwm pulses to update our raw values
-            us[axis][Raw] = (float)(rmt[axis].readPulseWidth(true)); // don't stop reading rmt values or crash can occur in rmt library, floods the serial console
-            pc[axis][Raw] = us_to_pc(axis, us[axis][Raw]);
-        }
         if (sim->simulating(sens::joy)) {                            // if simulating, let the simulator write the Filt values
             if (sim->potmapping(sens::joy)) pc[Horz][Filt] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]); // except if potmapping then write the Horz Filt value
         }
@@ -1559,8 +1560,8 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         for (int axis = Horz; axis <= Vert; axis++)                             // always constrain the pc filt values
             pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
     }
-    void radiolost_update() { // must run this *after* direction_update(), to ensure a valid just-read us[Vert][Raw] 
-        static bool lost_last = _radiolost; // note: member variables _radiolost and _radiolost_untested must be initialized to true on boot
+    void radiolost_update() {  // note: must initialize _radiolost & _radiolost_untested to true, and don't run before reading us[Vert][Raw]
+        static bool lost_last = _radiolost;
         _radiolost = (us[Vert][Raw] <= failsafe_us + failsafe_margin_us);  // is the newest reading in the failsafe range?
         if (_radiolost != lost_last) toggles_init(); // when radio comes in or out, re-initialize toggles to prevent spurious sw events
         if (_radiolost) _radiolost_untested = false;  // on first valid detection of radiolost, flag radiolost detection is known to work

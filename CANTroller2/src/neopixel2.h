@@ -115,7 +115,7 @@ private:
     void startRunmodeAnimation() {
         // Start the runmode/backlight pulse animation
         neoanimator.StartAnimation(AnimRunmode, runmode_lights_animation_duration_ms, [this](const AnimationParam& param) {
-            float lowpower_dimfactor = 0.3f;
+            float lowpower_dimfactor = 0.15f;
 
             float wave_brightness = ((cos(param.progress * 2 * PI) + 1.0f) * 0.45f) + 0.1f;  // Cosine wave from 0.1 to 1
             if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended

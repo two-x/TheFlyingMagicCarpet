@@ -117,7 +117,7 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
     float v = 0.447 * (std::isnan(_airvelo) ? new_velo : _airvelo); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
     float Ain2 = M_PI;  // in in2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
     float P = 101325.0 * (std::isnan(_map) ? new_map : _map);  // in Pa   101325 Pa/atm  1 Pa = 1 J/m3
-    float maf = v * Ain2 * P * 1000.0 / (R * T * 1550);  // mass air flow in grams per second (g/s)   (1000 g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
+    float maf = v * Ain2 * P * 1000.0 / (R * T * 1550);  // mas\\s air flow in grams per second (g/s)   (1000 g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
     if (std::abs(maf) < 0.001) maf = 0;
     // ezread.squintf("maf: %.3lf\n", maf);
     return maf;
@@ -413,7 +413,7 @@ static Starter starter(starter_pin);
 #include "diag.h"
 static LoopTimer looptimer;
 static BootMonitor watchdog(&prefs, &looptimer);
-static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition);
+static DiagRuntime diag(&hotrc, &tempsens, &pressure, &brkpos, &tach, &speedo, &gas, &brake, &steer, &mulebatt, &airvelo, &mapsens, &pot, &ignition, &looptimer);
 #include "tftsetup.h"
 #include "inputs.h"
 static Encoder encoder(encoder_a_pin, encoder_b_pin, encoder_sw_pin);

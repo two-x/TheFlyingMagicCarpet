@@ -5,6 +5,100 @@
 #include <iostream>
 #include <iomanip>  // For formatting console loop timing string output
 
+class LoopTimer {
+  public:
+    LoopTimer() { setup(); }
+    float max_allowable_looptime_ms = 50.0;
+    // Loop timing related
+    Timer loop_timer{1000000};  // how long the previous main loop took to run (in us)
+    int loopno = 1, loopindex = 0, loop_recentsum = 0;
+    int loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
+    float loop_sum_s, loopfreq_hz;
+    int looptimes_us[20];
+    bool loop_dirty[20];
+    int64_t loop_cout_mark_us, boot_mark_us;
+    int loop_cout_us = 0, loop_peak_us = 0, loop_now = 0;
+    float loop_max_ms = 0.0f;
+    static constexpr int loop_history = 100;
+    int loop_periods_us[loop_history];
+    // std::vector<std::string> loop_names(20);
+    std::string loop_names[20];
+    void setup() {  // Run once at end of setup()
+        boot_mark_us = esp_timer_get_time();
+        if (looptime_print) {
+            for (int x=1; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
+            loop_names[0] = std::string("top");
+            loop_dirty[0] = false;
+            loopindex = 1;
+            looptimes_us[0] = esp_timer_get_time();
+        }
+        loop_timer.reset();  // start timer to measure the first loop
+    }
+    void mark(std::string loopname = std::string("")) {  // Add marks wherever you want in the main loop, set looptime_print true, will report times between all adjacent marks
+        if (looptime_print) {
+            if (loop_dirty[loopindex]) {
+                loop_names[loopindex] = loopname;  // names[index], name);
+                loop_dirty[loopindex] = false;
+            }
+            looptimes_us[loopindex] = esp_timer_get_time();
+            loopindex++;
+        }
+    }
+    float calc_avg(int _loop_now, int _thisloop) {
+        if (_loop_now == loop_history + 2) {
+            loop_recentsum = _thisloop;
+            for (int l = 0; l <= loop_history; l++)
+                loop_recentsum += loop_periods_us[(_loop_now + l) % loop_history];
+        }
+        else loop_recentsum += _thisloop - loop_periods_us[loop_now];
+        return (float)loop_recentsum/(float)loop_history;
+    }
+    void update() {  // Call once each loop at the very end
+        if (runmode == LowPower) return;
+        int thisloop = (int)loop_timer.elapsed();
+        loop_avg_us = calc_avg(loop_now, thisloop);
+        loop_periods_us[loop_now] = thisloop;  // us since beginning of this loop
+        loop_timer.reset();
+        loop_sum_s += (float)loop_periods_us[loop_now] / 1000000;
+        // ema_filt(loop_periods_us[loop_now], &loop_avg_us, 0.01);
+        if (loop_avg_us > 1) loopfreq_hz = 1000000/loop_avg_us;
+        loop_peak_us = 0;
+        for (int i=0; i<loop_history; i++) if (loop_peak_us < loop_periods_us[i]) loop_peak_us = loop_periods_us[i]; 
+        if (looptime_print) {  // note: convert cout to ezread.squintf
+            loop_cout_mark_us = esp_timer_get_time();
+            std::cout << std::fixed << std::setprecision(0);
+            std::cout << "\r" << (int)loop_sum_s << "s #" << loopno;  //  << " av:" << std::setw(5) << (int)(loop_avg_us);  //  << " av:" << std::setw(3) << loop_avg_ms 
+            std::cout << " : " << std::setw(5) << loop_periods_us[loop_now] << " (" << std::setw(5) << loop_periods_us[loop_now]-loop_cout_us << ")us ";  // << " avg:" << loop_avg_us;  //  " us:" << esp_timer_get_time() << 
+            for (int x=1; x<loopindex; x++)
+                std::cout << std::setw(3) << loop_names[x] << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
+            std::cout << " cout:" << std::setw(5) << loop_cout_us;
+            if (loop_periods_us[loop_now]-loop_cout_us > looptime_linefeed_threshold || !looptime_linefeed_threshold) std::cout << std::endl;
+            loop_cout_us = (int)(esp_timer_get_time() - loop_cout_mark_us);
+            loopindex = 0;
+            mark("top");
+        }
+        ++loop_now %= loop_history;
+        loopno++;  // I like to count how many loops
+        update_maxloop(thisloop);
+    }
+    void update_maxloop(int thisloop) { // logic so we can know our max ever looptime since bootup and subsequent inits settled out
+        static Timer initbuffer_timer{5000000};  // time after cantroller setup() has finished, after which is considered steady state runtime (to allow for objects to finish initializations etc)
+        // static int steady_report_printed = false;
+        if (!bootup_complete) initbuffer_timer.reset();
+        if (initbuffer_timer.expired()) {
+            if ((float)thisloop > loop_max_ms * 1000.0) loop_max_ms = (float)thisloop / 1000.0;
+            // if (!steady_report_printed) ezread.squintf(YEL, "loop: steady runtime reached at %d sec\n", (int)(esp_timer_get_time() / 1000000));
+            // steady_report_printed = true;
+        }
+    }
+    int uptime_us() {  // returns uptime since last reset in microseconds
+        return esp_timer_get_time() - boot_mark_us;
+    }
+    float uptime() {  // returns uptime since last reset in minutes
+        return (float)((esp_timer_get_time() - boot_mark_us)) / (60.0 * 1000000.0);
+    }
+};
+
 class DiagRuntime {
   private:
     bool report_error_changes = true, first_boot = true;
@@ -22,6 +116,7 @@ class DiagRuntime {
     MAPSensor* mapsens;
     Potentiometer* pot;
     Ignition* ignition;
+    LoopTimer* looptimer;
     static constexpr int entries = 100;  // size of log buffers
     int64_t times[2][entries];
     // two sets of large arrays for storage of log data. when one fills up it jumps to the other, so the first might be written to an sd card
@@ -67,9 +162,9 @@ class DiagRuntime {
     uint8_t most_critical_last[NumErrTypes];
     DiagRuntime (Hotrc* a_hotrc, TemperatureSensorManager* a_temp, PressureSensor* a_pressure, BrakePositionSensor* a_brkpos,
         Tachometer* a_tach, Speedometer* a_speedo, ThrottleControl* a_gas, BrakeControl* a_brake, SteeringControl* a_steer, 
-        CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, Ignition* a_ignition)
+        CarBattery* a_mulebatt, AirVeloSensor* a_airvelo, MAPSensor* a_mapsens, Potentiometer* a_pot, Ignition* a_ignition, LoopTimer* a_looptimer)
         : hotrc(a_hotrc), tempsens(a_temp), pressure(a_pressure), brkpos(a_brkpos), tach(a_tach), speedo(a_speedo), gas(a_gas), brake(a_brake), 
-          steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition) {}
+          steer(a_steer), mulebatt(a_mulebatt), airvelo(a_airvelo), mapsens(a_mapsens), pot(a_pot), ignition(a_ignition), looptimer(a_looptimer) {}
     void setup() {
         for (int i=0; i<NumErrTypes; i++)
             for (int j=0; j<NumTelemetryFull; j++) {
@@ -134,6 +229,8 @@ class DiagRuntime {
 
             count_errors();
             set_idiot_blinks();
+            LooptimeError();
+
             report_changes();  // detect and report changes in any error values
             dump_errorcode_update();
             // for (int i=0; i<NumErrTypes; i++)
@@ -388,6 +485,14 @@ class DiagRuntime {
             //     || ((hotrc->us[Vert][RAW] < hotrc->us[Vert][OpMin] - halfMargin) && (hotrc->us[Vert][RAW] > hotrc->failsafe_us + hotrc->us[ch][Margin]));
         }
     }
+    void LooptimeError() {
+        static float loop_record_ms = looptimer->loop_max_ms;
+        if (looptimer->loop_max_ms > loop_record_ms) {
+            loop_record_ms = looptimer->loop_max_ms;
+            if (looptimer->loop_max_ms > looptimer->max_allowable_looptime_ms)
+                ezread.squintf(ezread.madcolor, "err: detected loop time of %d ms\n", (int)loop_record_ms);
+        }
+    }
     void dump_errorcode_update() {
         if (!print_error_changes) return;
         static uint32_t status_last[NumErrTypes];
@@ -510,85 +615,6 @@ class DiagRuntime {
 // 3. Detet brake hydraulics failure or inaccurate pressure. Evidenced by normal positional change not causing expected increase in pressure.
 // retract_effective_max_us = volt[Stop] + duty_pc * (volt[OpMax] - volt[Stop]);  // Stores instantaneous calculated value of the effective maximum pulsewidth after attenuation
 
-class LoopTimer {
-  public:
-    LoopTimer() { setup(); }
-    // Loop timing related
-    Timer loop_timer{1000000};  // how long the previous main loop took to run (in us)
-    int loopno = 1, loopindex = 0, loop_recentsum = 0, loop_scale_min_us = 0, loop_scale_avg_max_us = 2500, loop_scale_peak_max_us = 25000;
-    float loop_sum_s, loopfreq_hz;
-    int looptimes_us[20];
-    bool loop_dirty[20];
-    int64_t loop_cout_mark_us, boot_mark_us;
-    int loop_cout_us = 0, loop_peak_us = 0, loop_now = 0;;
-    static constexpr int loop_history = 100;
-    int loop_periods_us[loop_history];
-    // std::vector<std::string> loop_names(20);
-    std::string loop_names[20];
-    void setup() {  // Run once at end of setup()
-        boot_mark_us = esp_timer_get_time();
-        if (looptime_print) {
-            for (int x=1; x<arraysize(loop_dirty); x++) loop_dirty[x] = true;
-            loop_names[0] = std::string("top");
-            loop_dirty[0] = false;
-            loopindex = 1;
-            looptimes_us[0] = esp_timer_get_time();
-        }
-        loop_timer.reset();  // start timer to measure the first loop
-    }
-    void mark(std::string loopname = std::string("")) {  // Add marks wherever you want in the main loop, set looptime_print true, will report times between all adjacent marks
-        if (looptime_print) {
-            if (loop_dirty[loopindex]) {
-                loop_names[loopindex] = loopname;  // names[index], name);
-                loop_dirty[loopindex] = false;
-            }
-            looptimes_us[loopindex] = esp_timer_get_time();
-            loopindex++;
-        }
-    }
-    float calc_avg(int _loop_now, int _thisloop) {
-        if (_loop_now == loop_history + 2) {
-            loop_recentsum = _thisloop;
-            for (int l = 0; l <= loop_history; l++)
-                loop_recentsum += loop_periods_us[(_loop_now + l) % loop_history];
-        }
-        else loop_recentsum += _thisloop - loop_periods_us[loop_now];
-        return (float)loop_recentsum/(float)loop_history;
-    }
-    void update() {  // Call once each loop at the very end
-        if (runmode == LowPower) return;
-        int thisloop = (int)loop_timer.elapsed();
-        loop_avg_us = calc_avg(loop_now, thisloop);
-        loop_periods_us[loop_now] = thisloop;  // us since beginning of this loop
-        loop_timer.reset();
-        loop_sum_s += (float)loop_periods_us[loop_now] / 1000000;
-        // ema_filt(loop_periods_us[loop_now], &loop_avg_us, 0.01);
-        if (loop_avg_us > 1) loopfreq_hz = 1000000/loop_avg_us;
-        loop_peak_us = 0;
-        for (int i=0; i<loop_history; i++) if (loop_peak_us < loop_periods_us[i]) loop_peak_us = loop_periods_us[i]; 
-        if (looptime_print) {  // note: convert cout to ezread.squintf
-            loop_cout_mark_us = esp_timer_get_time();
-            std::cout << std::fixed << std::setprecision(0);
-            std::cout << "\r" << (int)loop_sum_s << "s #" << loopno;  //  << " av:" << std::setw(5) << (int)(loop_avg_us);  //  << " av:" << std::setw(3) << loop_avg_ms 
-            std::cout << " : " << std::setw(5) << loop_periods_us[loop_now] << " (" << std::setw(5) << loop_periods_us[loop_now]-loop_cout_us << ")us ";  // << " avg:" << loop_avg_us;  //  " us:" << esp_timer_get_time() << 
-            for (int x=1; x<loopindex; x++)
-                std::cout << std::setw(3) << loop_names[x] << ":" << std::setw(5) << looptimes_us[x]-looptimes_us[x-1] << " ";
-            std::cout << " cout:" << std::setw(5) << loop_cout_us;
-            if (loop_periods_us[loop_now]-loop_cout_us > looptime_linefeed_threshold || !looptime_linefeed_threshold) std::cout << std::endl;
-            loop_cout_us = (int)(esp_timer_get_time() - loop_cout_mark_us);
-            loopindex = 0;
-            mark("top");
-        }
-        ++loop_now %= loop_history;
-        loopno++;  // I like to count how many loops
-    }
-    int uptime_us() {  // returns uptime since last reset in microseconds
-        return esp_timer_get_time() - boot_mark_us;
-    }
-    float uptime() {  // returns uptime since last reset in minutes
-        return (float)((esp_timer_get_time() - boot_mark_us)) / (60.0 * 1000000.0);
-    }
-};
 class BootMonitor {
   private:
     int timeout_sec = 10, runmode_now, wrote_runmode = 500, wrote_status = 500, crashcount = 0, bootcount;     // variable to track total number of boots of this code build
