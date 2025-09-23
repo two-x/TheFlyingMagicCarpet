@@ -1418,9 +1418,9 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     }
     void derive() {  // need to run this upon objct creation, and again whenever any tunable parameter is changed
         for (int ch=0; ch<NumChans; ch++) {                      // derive us values for all 4 channels
-            us[ch][OpMin] = std::max(us[ch][OpMin], absmin_us);  // ensure any oplimit tuning stays in abs range
-            us[ch][OpMax] = std::min(us[ch][OpMax], absmax_us);
             us[ch][Margin] = margin_us;                          // same margin value is ultimately used on all channels
+            us[ch][OpMin] = constrain(us[ch][OpMin], absmin_us, us[ch][Cent] - us[ch][Margin]);  // ensure any oplimit tuning stays in sensible range
+            us[ch][OpMax] = constrain(us[ch][OpMax], us[ch][Cent] + us[ch][Margin], absmax_us);
         }
         for (int axis=Horz; axis<=Vert; axis++) {  // derive pc values for the 2 analog directional axes
             pc[axis][OpMin] = -100.0;
@@ -1435,6 +1435,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     void setup() {
         ezread.squintf(ezread.highlightcolor, "Hotrc init.. starting rmt..\n");
         for (int axis=Horz; axis<=Ch4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
+        read_all_channels();  // must read values before init toggles below
         toggles_init();  // initialize toggles to prevent spurious sw events on boot
     }
     void update() {  // run this in each loop
@@ -1501,7 +1502,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             _sw_val[ch] = (us[ch][Raw] >= us[ch][Cent]);
     }
     void toggle_reset(int ch) {  // resets events and pending events on the given channel
-        _sw_val[ch] = _sw_last[ch] = us[ch][Raw];  // set both last and val to fresh read value
+        _sw_val[ch] = _sw_last[ch] = (us[ch][Raw] >= us[ch][Cent]);  // set both last and val based on last read value
         _sw_event_filt[ch] = _sw_event_unfilt[ch] = _sw_pending[ch] = false;
     }
     void toggles_init() {  // initialize stored switch values to newest read values, to prevent spurious switch events. run on boot and any time radio becomes lost or un-lost
@@ -1521,7 +1522,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
                     expiretimer[ch-2].reset();                     // start expiration timer for this new event
                 }
                 else if (filttimer[ch-2].expired()) { // if we do have a switch pending, and the validity timer expires. until the timer runs out all new readings must also differ from prev valid value, for the pending value to commit
-                    _sw_last[ch] = _sw_val[ch];                    // commit the new value  (may be unnecessary since this also happens in the sw_event_xxx() functions)
+                    _sw_last[ch] = _sw_val[ch];                    // commit the new value
                     _sw_event_filt[ch] = true;                     // flag that a filtered switch event occurred, detectable by external code and reset outside this function
                     _sw_pending[ch] = false;                       // reset pending state
                     kick_inactivity_timer(HuRCTog);                // register that human activity occurred
@@ -1560,11 +1561,11 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         for (int axis = Horz; axis <= Vert; axis++)                             // always constrain the pc filt values
             pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
     }
-    void radiolost_update() {  // note: must initialize _radiolost & _radiolost_untested to true, and don't run before reading us[Vert][Raw]
+    void radiolost_update() {  // note: must initialize _radiolost & _radiolost_untested to true, and must run after reading us[Vert][Raw]
         static bool lost_last = _radiolost;
         _radiolost = (us[Vert][Raw] <= failsafe_us + failsafe_margin_us);  // is the newest reading in the failsafe range?
         if (_radiolost != lost_last) toggles_init(); // when radio comes in or out, re-initialize toggles to prevent spurious sw events
-        if (_radiolost) _radiolost_untested = false;  // on first valid detection of radiolost, flag radiolost detection is known to work
+        if (_radiolost) _radiolost_untested = false;  // on first valid detection of radiolost, radiolost detection is known to work
         lost_last = _radiolost;  // remember current reading for comparison on next loop
     }
     // spike_filter() : I wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals coming
