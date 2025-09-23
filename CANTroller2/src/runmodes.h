@@ -55,7 +55,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (!sim.simulating(sens::joy)) {  // when using the radio to drive (rather than simulator)
                 if (hotrc.radiolost_untested() && require_radiolost_test) kill_ign = true;
                 if (hotrc.radiolost()) kill_ign = true;
-                if (kill_ign) ezread.squintf(ezread.sadcolor, "warn: ignition requires working & tested radio\n");
+                if (kill_ign) ezread.squintf(ezread.madcolor, "err: ignition kill due to radio error [run]\n");
             }
             if (hotrc.sw_event_unfilt(Ch3)) kill_ign = true; // any Ch3 event turns ign off
             if (kill_ign) {
@@ -156,9 +156,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (brake.motormode != Halt) brake.setmode(Halt);
             if (user_inactivity_timer.expired() || sleep_request == ReqTog || sleep_request == ReqOn) runmode = LowPower;
             if (hotrc.sw_event_filt(Ch4)) runmode = LowPower;  // ch4 press puts system to sleep.  ensure switch event check is in its own if statement
-            if (!hotrc.radiolost_untested() && !hotrc.radiolost()) {   // if conditions are right then check for ignition switch
-                if (hotrc.sw_event_filt(Ch3)) ignition.request(ReqOn); // ch3 press turns on ignition, will land us in stall mode
-            }                                                          // do not combine these if statements into one
+            if (hotrc.sw_event_filt(Ch3)) { 
+                if (!hotrc.radiolost_untested() && !hotrc.radiolost()) ignition.request(ReqOn); // turn on ignition, will land us in stall mode
+                else ezread.squintf(ezread.sadcolor, "warn: ignition requires tested radio\n");
+            }
             if (calmode_request) runmode = Cal;  // if fully shut down and cal mode requested, go to cal mode
             if (auto_saver_enabled) if (encoder.button.shortpress()) autosaver_request = ReqOff;
             if (user_inactivity_timer.elapsed() > _screensaver_delay_min * 60 * 1000000) autosaver_request = ReqOn;

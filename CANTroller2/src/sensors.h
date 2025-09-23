@@ -1377,7 +1377,7 @@ class RMTInput {  // note: for some reason if we ever stop reading our rmt objec
 };
 class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
-    bool _verbose = false;  // causes console print whenever an unfiltered switch event is queried externally, thus canceling the in-progress filtering
+    bool _verbose = true;  // causes console print whenever an unfiltered switch event is queried externally, thus canceling the in-progress filtering
     float absmin_us = 880.0f;  // min configurable pulsewidth for the hotrc
     float absmax_us = 2120.0f; // max configurable pulsewidth for the hotrc
     float pc[NumAxes][NumValues];      // values range from -100% to 100% are all derived or auto-assigned
@@ -1396,20 +1396,17 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
   private:
     Simulator* sim;
     Potentiometer* pot;
-    bool _radiolost = true, _radiolost_untested = true;  // has any radiolost condition been detected since boot?  allows us to verify radiolost works before driving 
-    float spike_us[NumAxes] = { us[Horz][Filt], us[Vert][Filt] };  // [Horz/Vert]  // added
-    float ema_us[NumAxes] = { us[Horz][Filt], us[Vert][Filt] };    // [Horz/Vert]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
-    bool _sw_val[NumChans] = { 0, 0, 0, 0 }; // switch "value" is whether the pulsewidth is above (1) or below (0) the center value.  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
-    bool _sw_last[NumChans] = { 0, 0, 0, 0 };  // stores the previous switch value
-    bool _sw_pending[NumChans] = { 0, 0, 0, 0 }; // keeps whether a new value is pending, waiting for validity timeout.  index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
-    bool _sw_event_unfilt[NumChans] = { 0, 0, 0, 0 };  // stores if a yet-unserviced switch "event" has occurred (event is whenever switch value changes)
-    bool _sw_event_filt[NumChans] = { 0, 0, 0, 0 };  // stores if a stable and filtered switch event has occurred
-    int _last_ch4_source = StartUnknown;
+    bool _radiolost = true, _radiolost_untested = true; // has any radiolost condition been detected since boot?  allows us to verify radiolost works before driving 
+    float spike_us[NumAxes] = { us[Horz][Filt], us[Vert][Filt] }; // [Horz/Vert]  // added
+    float ema_us[NumAxes] = { us[Horz][Filt], us[Vert][Filt] }; // [Horz/Vert]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
+    bool _sw_last[NumChans], _sw_val[NumChans]; // whether pulsewidth is above center. note: index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
+    bool _sw_pending[NumChans], _sw_event_unfilt[NumChans], _sw_event_filt[NumChans]; // track unfilt events, filt events, and pending filt events
+    int _last_ch4_source = StartUnknown;  // part of debugging phantom starts
     RMTInput rmt[NumChans] = {
         RMTInput(RMT_CHANNEL_4, gpio_num_t(hotrc_ch1_h_pin)),  // hotrc[Horz]
         RMTInput(RMT_CHANNEL_5, gpio_num_t(hotrc_ch2_v_pin)),  // hotrc[Vert]
-        RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),  // hotrc[Ch3]
-        RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),  // hotrc[Ch4]
+        RMTInput(RMT_CHANNEL_6, gpio_num_t(hotrc_ch3_pin)),    // hotrc[Ch3]
+        RMTInput(RMT_CHANNEL_7, gpio_num_t(hotrc_ch4_pin)),    // hotrc[Ch4]
     };
     Timer simBtnTimer, ch4BtnTimer;  // keep track of last activity on all possible sources of ReqOn, to serve as a safety net preventing phantom starts
     float us_to_pc(int axis, float _us) {
@@ -1585,18 +1582,21 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     // Also if a detected cliff edge (potential spike) doesn't recover in time, it will smooth out the transition linearly.
     // The cost of this is our readings are delayed by a number of readings (equal to the maximum erasable spike duration).
     static const int ringdepth = 9;  // more depth will reject longer spikes at the expense of increased controller delay
-    int ringbuf[NumAxes][ringdepth], prespike_idx[NumAxes] = { -1, -1 }, ringidx[NumAxes] = { 1, 1 };  // prespike of -1 means no current spike
+    float ringbuf[NumAxes][ringdepth];
+    int prespike_idx[NumAxes] = { -1, -1 }, ringidx[NumAxes] = { 1, 1 };  // prespike of -1 means no current spike
     float spike_filter(int axis, float new_val) {  // pass a fresh reading in, will return a filtered reading to use instead
-        static bool spike_signbit;
-        static int this_delta, previdx, spike_cliff[NumAxes] = { 6, 6 };  // spike_cliff is min diff of consecutive values to count as a spike
-        previdx = (ringdepth + ringidx[axis] - 1) % ringdepth; // previdx is where the incoming new value will be stored
-        this_delta = new_val - ringbuf[axis][previdx];         // value change since last reading
+        static int num_calls[NumAxes] = { 0, 0 };  // track #function calls, to mitigate the initially-empty ring buffer 
+        static bool spike_signbit[NumAxes];
+        float spike_cliff[NumAxes] = { 6.0f, 6.0f };  // spike_cliff is min diff of consecutive values to count as a spike
+        int previdx = (ringdepth + ringidx[axis] - 1) % ringdepth; // previdx is where the incoming new value will be stored
+        if (++num_calls[axis] <= ringdepth) ringbuf[axis][previdx] = new_val;  // until buf is filled, fake the values
+        float this_delta = new_val - ringbuf[axis][previdx];   // value change since last reading
         if (std::abs(this_delta) > spike_cliff[axis]) {        // if new value is a cliff edge (start or end of a spike)
             if (prespike_idx[axis] == -1) {                    // if this cliff edge is the start of a new spike
                 prespike_idx[axis] = previdx;                  // save idx of last good value just before the cliff
-                spike_signbit = signbit(this_delta);           // save the direction of the cliff
+                spike_signbit[axis] = std::signbit(this_delta);     // save the direction of the cliff
             }
-            else if (spike_signbit == signbit(this_delta)) {  // if this cliff edge deepens an in-progress spike, or is a continuance of a valid rapid change
+            else if (spike_signbit[axis] == std::signbit(this_delta)) {  // if this cliff edge deepens an in-progress spike, or is a continuance of a valid rapid change
                 inject_interpolations(axis, previdx, ringbuf[axis][previdx]); // smooth out the values between the last cliff & previous value
                 prespike_idx[axis] = previdx;                                 // consider this cliff edge the start of the spike instead
             }
@@ -1616,8 +1616,8 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     }
     void inject_interpolations(int axis, int endspike_idx, float endspike_val) {  // replaces values between indices w/ linear interpolated values
         int spike_length = ((ringdepth + endspike_idx - prespike_idx[axis]) % ringdepth) - 1;  // equal to the spiking values count plus one
-        if (!spike_length) return;  // two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
-        int interp_slope = (endspike_val - ringbuf[axis][prespike_idx[axis]]) / spike_length;
+        if (spike_length <= 0) return;  // two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
+        float interp_slope = (endspike_val - ringbuf[axis][prespike_idx[axis]]) / spike_length;
         for (int idx=1; idx<=spike_length; idx++)  // fill specified section of the buffer with interpolated values
             ringbuf[axis][(prespike_idx[axis] + idx) % ringdepth] = ringbuf[axis][prespike_idx[axis]] + idx * interp_slope;
     }
