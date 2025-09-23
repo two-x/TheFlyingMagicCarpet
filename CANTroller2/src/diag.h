@@ -54,7 +54,7 @@ class LoopTimer {
         return (float)loop_recentsum/(float)loop_history;
     }
     void update() {  // Call once each loop at the very end
-        if (runmode == LowPower) return;
+        // if (runmode == LowPower) return;
         int thisloop = (int)loop_timer.elapsed();
         loop_avg_us = calc_avg(loop_now, thisloop);
         loop_periods_us[loop_now] = thisloop;  // us since beginning of this loop
@@ -490,7 +490,7 @@ class DiagRuntime {
         if (looptimer->loop_max_ms > loop_record_ms) {
             loop_record_ms = looptimer->loop_max_ms;
             if (looptimer->loop_max_ms > looptimer->max_allowable_looptime_ms)
-                ezread.squintf(ezread.madcolor, "err: detected loop time of %d ms\n", (int)loop_record_ms);
+                ezread.squintf(ezread.madcolor, "err: detect loop time of %d ms (max %d ms)\n", (int)loop_record_ms, (int)looptimer->max_allowable_looptime_ms);
         }
     }
     void dump_errorcode_update() {

@@ -1435,16 +1435,14 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     void setup() {
         ezread.squintf(ezread.highlightcolor, "Hotrc init.. starting rmt..\n");
         for (int axis=Horz; axis<=Ch4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
-        read_all_channels();  // must read values before init toggles below
-        toggles_init();  // initialize toggles to prevent spurious sw events on boot
+        read_all_channels();  // must read values before initializing toggles below
+        toggles_init();       // initialize toggles to prevent spurious sw events on boot
     }
-    void update() {  // run this in each loop
-        // static Timer read_timer{5000};  // critical to continuously read rmt values out fast enough to avoid buffer overflow
-        // if (read_timer.expireset()) {
-        read_all_channels();        // read new raw pwm values from rmt buffer. critical to do this continually, fast enough to avoid rmt buffer overflow 
-        radiolost_update();         // determine if the radio receiver detects good signal
-        toggles_update();           // handle button presses on the digital channels
-        direction_update();         // update directional values from the analog channels
+    void update() {          // run this in each loop
+        read_all_channels(); // read new raw pwm values from rmt buffer. critical to do this continually, fast enough to avoid rmt buffer overflow 
+        radiolost_update();  // determine if the radio receiver detects good signal
+        toggles_update();    // handle button presses on the digital channels
+        direction_update();  // update directional values from the analog channels
     }
     void set_deadband_us(float val) {
         deadband_us = constrain(val, 0.0f, us[Horz][OpMax] - us[Horz][Cent]);  // using Horz for this b/c it's the same for either axis
@@ -1471,7 +1469,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         bool retval = _sw_event_filt[ch];
         if (retval) {
             toggle_reset(ch);  // if there is an event, reset all channel events and in-progress pending events
-            if (_verbose) ezread.squintf("hotrc filt btn event serviced\n");
+            if (_verbose) ezread.squintf("hotrc: ch%d filt event serviced\n", ch+1);
         }
         return retval;
     }
@@ -1479,7 +1477,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         bool retval = _sw_event_unfilt[ch] || _sw_event_filt[ch];
         if (retval) {
             toggle_reset(ch);  // if there is an event, reset all channel events and in-progress pending events
-            if (_verbose) ezread.squintf("hotrc unfilt btn event serviced\n");
+            if (_verbose) ezread.squintf("hotrc: ch%d unfilt event serviced\n", ch+1);
         }
         return retval;
     }
@@ -1492,14 +1490,17 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     int ch4_button_last_ms() { return ch4BtnTimer.elapsed() / 1000; }  // returns time since last actual ch4 button press. to help prevent phantom starter turnon
   private:
     void read_all_channels() {
-        for (int ch = 0; ch < NumChans; ch++)
-            us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true));
-
-        for (int ch = Horz; ch <= Vert; ch++)  // update analog percent value from us read value
-            pc[ch][Raw] = us_to_pc(ch, us[ch][Raw]);
-        
-        for (int ch = Ch3; ch <= Ch4; ch++)    // is reading below or above the center frequency
-            _sw_val[ch] = (us[ch][Raw] >= us[ch][Cent]);
+        static bool old_val[NumChans];                            // for debug. note on first time thru old_val is meaningless, may cause a print
+        for (int ch = Horz; ch <= Vert; ch++) {                   // analog channels
+            us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true));  // read channel
+            pc[ch][Raw] = us_to_pc(ch, us[ch][Raw]);              // update analog percent value from us read value
+        }
+        for (int ch = Ch3; ch <= Ch4; ch++) {                     // digital channels
+            us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true));  // read channel
+            _sw_val[ch] = (us[ch][Raw] >= us[ch][Cent]);          // set switch value based on new reading
+            if (_verbose && _sw_val[ch] != old_val[ch]) ezread.squintf("hotrc: read ch%d toggle %d->%d\n", ch+1, (int)old_val[ch], (int)_sw_val[ch]);
+            old_val[ch] = _sw_val[ch];
+        }
     }
     void toggle_reset(int ch) {  // resets events and pending events on the given channel
         _sw_val[ch] = _sw_last[ch] = (us[ch][Raw] >= us[ch][Cent]);  // set both last and val based on last read value
@@ -1511,54 +1512,63 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     // hotrc digital button handler which rejects spurious values which could cause false events (re: phantom starter bug)
     //   seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
     void toggles_update() {  // note, below the two timer[] indices are each 2 less than those of their corresponding switches (avoids creating 2 extra Timer instances)
-        static Timer filttimer[NumChans-2] = { 60000, 60000 }; // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
-        static Timer expiretimer[NumChans-2] = { 1500000 }; // to cancel events if they have become stale on a human timescale
-        for (int ch = Ch3; ch <= Ch4; ch++) {                    // do once for each digital channel
-            if (_sw_event_unfilt[ch] && expiretimer[ch-2].expired()) toggle_reset(ch); // cancel any super stale existing events (shouldn't happen)
-            if (_sw_val[ch] != _sw_last[ch]) {                   // if new read value differs from prev valid value ...
+        static Timer filttimer[NumChans-2] = { 60000, 60000 };       // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
+        static Timer expiretimer[NumChans-2] = { 1500000, 1500000 }; // to cancel events if they have become stale on a human timescale
+        for (int ch = Ch3; ch <= Ch4; ch++) {                        // do once for each digital channel
+            if (_sw_event_unfilt[ch] && expiretimer[ch-2].expired()) {
+                toggle_reset(ch);                                    // cancel any super stale existing events (shouldn't happen)
+                if (_verbose) ezread.squintf("hotrc: expired ch%d event\n", ch+1);
+            }
+            if (_sw_val[ch] != _sw_last[ch]) {         // if new read value differs from prev valid value ...
                 if (!_sw_pending[ch]) {
                     _sw_pending[ch] = _sw_event_unfilt[ch] = true; // if we don't already have a new pending value change, flag an unfiltered event occurred, and we have a potential filtered value change, 
-                    filttimer[ch-2].reset();                       // set us up for filtering the next value change
-                    expiretimer[ch-2].reset();                     // start expiration timer for this new event
+                    if (_verbose) ezread.squintf("hotrc: new ch%d unfilt event\n", ch+1);
+                    filttimer[ch-2].reset();           // set us up for filtering the next value change
+                    expiretimer[ch-2].reset();         // start expiration timer for this new event
                 }
-                else if (filttimer[ch-2].expired()) { // if we do have a switch pending, and the validity timer expires. until the timer runs out all new readings must also differ from prev valid value, for the pending value to commit
-                    _sw_last[ch] = _sw_val[ch];                    // commit the new value
-                    _sw_event_filt[ch] = true;                     // flag that a filtered switch event occurred, detectable by external code and reset outside this function
-                    _sw_pending[ch] = false;                       // reset pending state
-                    kick_inactivity_timer(HuRCTog);                // register that human activity occurred
-                    if (ch == Ch4) {                               // special mechanisms for ch4 to help prevent phantom starter events
-                        ch4BtnTimer.reset();                       // so we can know time since last ch4 button press
-                        _last_ch4_source = StartHotrc;             // also to help phantom starter events
+                else if (filttimer[ch-2].expired()) {  // if we do have a switch pending, and the validity timer expires. until the timer runs out all new readings must also differ from prev valid value, for the pending value to commit
+                    _sw_last[ch] = _sw_val[ch];        // commit the new value
+                    _sw_event_filt[ch] = true;         // flag that a filtered switch event occurred, detectable by external code and reset outside this function
+                    if (_verbose) ezread.squintf("hotrc: new ch%d filt event\n", ch+1);
+                    _sw_pending[ch] = false;           // reset pending state
+                    kick_inactivity_timer(HuRCTog);    // register that human activity occurred
+                    if (ch == Ch4) {                   // special mechanisms for ch4 to help prevent phantom starter events
+                        ch4BtnTimer.reset();           // so we can know time since last ch4 button press
+                        _last_ch4_source = StartHotrc; // also to help phantom starter events
                     }
                 }  // ezread.squintf("Hrc Ch%d l:%d v:%d p:%d f:%d u:%d\n", (ch == Ch3) ? 3 : 4, (int)_sw_last[ch], (int)_sw_val[ch], (int)_sw_pending[ch], _sw_event_filt[ch], _sw_event_unfilt[ch]);
             }
             else {  // otherwise if the new read value is equal to the previous valid value
-                if (_sw_pending[ch]) ezread.squintf(ezread.sadcolor, "warn: hotrc Ch%d spurious reading detect\n", (ch == Ch3) ? 3 : 4); // if there was an active pending value change, but the value has returned to the original valid value before the timer expired  // _verbose &&
-                _sw_pending[ch] = false;          // in case of in-progress filtration, that is canceled due to the value has returned to previous valid value before timer expired
+                if (_sw_pending[ch]) ezread.squintf(ezread.sadcolor, "warn: hotrc ch%d spurious reading detect\n", (ch == Ch3) ? 3 : 4);
+                _sw_pending[ch] = false; // cancel any pending event due to the new value didn't hold throughout the timeout period
             }
         }
     }
-    float remove_deadbands_us(int axis, float _us) {
-        if (_us > us[axis][Cent] + deadband_us) return map(_us, us[axis][Cent] + deadband_us, us[axis][OpMax], us[axis][Cent], us[axis][OpMax]);
-        else if (_us < us[axis][Cent] - deadband_us) return map(_us, us[axis][Cent] - deadband_us, us[axis][OpMin], us[axis][Cent], us[axis][OpMin]);
-        return us[axis][Cent];
+    bool remove_deadbands_us(int axis, float* _us) {  // enforces deadbands if w/i them (return true), otherwise rescales to full range (return false)
+        bool in_deadbands = false;
+        if (*_us > us[axis][Cent] + deadband_us) *_us = map(*_us, us[axis][Cent] + deadband_us, us[axis][OpMax], us[axis][Cent], us[axis][OpMax]);
+        else if (*_us < us[axis][Cent] - deadband_us) *_us = map(*_us, us[axis][Cent] - deadband_us, us[axis][OpMin], us[axis][Cent], us[axis][OpMin]);
+        else {
+            *_us = us[axis][Cent];
+            in_deadbands = true;
+        }
+        return in_deadbands;
     }
     void direction_update() {
         if (sim->simulating(sens::joy)) {                            // if simulating, let the simulator write the Filt values
             if (sim->potmapping(sens::joy)) pc[Horz][Filt] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]); // except if potmapping then write the Horz Filt value
         }
-        else for (int axis = Horz; axis <= Vert; axis++) {                      // filter the raw values to create filt values
-            spike_us[axis] = spike_filter(axis, us[axis][Raw]);                 // apply spike filter on raw reading
-            ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha);   // apply ema filter on spike filter output
-            us[axis][Filt] = remove_deadbands_us(axis, ema_us[axis]); // enforce deadbands (in within them), otherwise scale the non-deadbanded range to full range
-            if (_radiolost) pc[axis][Filt] = pc[axis][Cent];          // if radio lost set pc value to Center value for sanity, but not us value b/c useful for debug
-            else {                                                              // otherwise if radio is not lost
-                pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]);                // convert filtered us value to percent
-                if (std::abs(pc[axis][Filt] - pc[axis][Cent]) > deadband_pc)    // and if we're not within the deadband
-                    kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig); // then register evidence of user activity
+        else for (int axis = Horz; axis <= Vert; axis++) {                    // filter the raw values to create filt values
+            spike_us[axis] = spike_filter(axis, us[axis][Raw]);               // apply spike filter on raw reading
+            us[axis][Filt] = ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha); // apply ema filter on spike filter output
+            bool in_deadbands = (remove_deadbands_us(axis, &us[axis][Filt])); // enforce/remove deadbands around center value            
+            if (_radiolost) pc[axis][Filt] = pc[axis][Cent]; // if radio lost set pc value to Center value for sanity, but not us value b/c useful for debug
+            else {                                                            // otherwise if radio is not lost
+                pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]);              // convert filtered us value to percent
+                if (!in_deadbands) kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig); // then register evidence of user activity
             }
         }
-        for (int axis = Horz; axis <= Vert; axis++)                             // always constrain the pc filt values
+        for (int axis = Horz; axis <= Vert; axis++)                           // always constrain the pc filt values
             pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
     }
     void radiolost_update() {  // note: must initialize _radiolost & _radiolost_untested to true, and must run after reading us[Vert][Raw]
