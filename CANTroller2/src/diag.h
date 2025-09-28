@@ -393,7 +393,6 @@ class DiagRuntime {
             else printed_error_brake = false;
         }
     }
-    // Brakes:   checks if any sensor the brake is expecting to use in its current mode are posting errors
     void BrakeFailure() {  // checks if posn is not changing while pressure is changing and motor is moving (assuming not near max brake)
         static float pressure_last_pc;
         static float brkpos_last_pc;
@@ -416,13 +415,17 @@ class DiagRuntime {
         checkrange(_BrakeMotor);
         checkrange(_BrakePosn);
         checkrange(_BrakePres);
-        // setflag(_BrakeMotor, ErrRange, brake->pc[Out] < brake->pc[OpMin] - brake->pc[Margin] || brake->pc[Out] > brake->pc[OpMax] + brake->pc[Margin]);
-        // setflag(_BrakePosn, ErrRange, (brkpos->pc() > 100.0 + brkpos->margin_pc()) || (brkpos->pc() < 0.0 - brkpos->margin_pc()));  // if position reading is outside oprange, set flag
-        // setflag(_BrakePres, ErrRange, (pressure->pc() > 100.0 + pressure->margin_pc()) || (pressure->pc() < 0.0 - pressure->margin_pc()));  // if pressure reading is outside oprange, set flag
-        bool found_err = false;
-        if (brake->feedback_enabled[PressureFB] && (err_sens[ErrLost][_BrakePosn] || err_sens[ErrRange][_BrakePosn])) found_err = true;
-        if (brake->feedback_enabled[PositionFB] && (err_sens[ErrLost][_BrakePres] || err_sens[ErrRange][_BrakePres])) found_err = true;
-        setflag(_BrakeMotor, ErrWarn, found_err);
+        
+        // Removing brake motor showing error due to brake sensors showing errors (redundant)
+        //
+        // // setflag(_BrakeMotor, ErrRange, brake->pc[Out] < brake->pc[OpMin] - brake->pc[Margin] || brake->pc[Out] > brake->pc[OpMax] + brake->pc[Margin]);
+        // // setflag(_BrakePosn, ErrRange, (brkpos->pc() > 100.0 + brkpos->margin_pc()) || (brkpos->pc() < 0.0 - brkpos->margin_pc()));  // if position reading is outside oprange, set flag
+        // // setflag(_BrakePres, ErrRange, (pressure->pc() > 100.0 + pressure->margin_pc()) || (pressure->pc() < 0.0 - pressure->margin_pc()));  // if pressure reading is outside oprange, set flag
+        // bool found_err = false;
+        // if (brake->feedback_enabled[PressureFB] && (err_sens[ErrLost][_BrakePosn] || err_sens[ErrRange][_BrakePosn])) found_err = true;
+        // if (brake->feedback_enabled[PositionFB] && (err_sens[ErrLost][_BrakePres] || err_sens[ErrRange][_BrakePres])) found_err = true;
+        // setflag(_BrakeMotor, ErrWarn, found_err);
+        
         pressure_last_pc = pressure->pc();
         brkpos_last_pc = brkpos->pc();
         motor_last_pc = brake->pc[Out];
