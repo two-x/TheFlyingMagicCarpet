@@ -772,7 +772,7 @@ class BrakeControl : public JagMotor {
                 if (motor_heat > tempsens->opmax(loc::TempBrake)) {
                     if (!printed_error) ezread.squintf(ezread.madcolor, "err: brake motor overheating. stop motor\n");
                     printed_error = true;
-                    setmode(Halt, false);        // stop the brake motor // pc[Out] = pc[Stop];  // setmode(ParkMotor, false);
+                    // setmode(Halt, false);  // commented b/c is done in diag (it didn't seem to work here)       // stop the brake motor // pc[Out] = pc[Stop];  // setmode(ParkMotor, false);
                     // ignition.request(ReqOff);  // request kill ignition  // commented this out b/c is already in diag brake check
                 }
                 else printed_error = false;

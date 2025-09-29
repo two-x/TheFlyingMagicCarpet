@@ -1450,7 +1450,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         derive();
     }
     void set(float* member, int val) { set(member, static_cast<float>(val)); }  // to accept int arguments too
-    int joydir(int axis = Vert) {
+    int joydir(int axis=Vert) {
         if (sim->simulating(sens::joy) && (std::abs(pc[axis][Filt]) < us_to_pc(axis, margin_us))) return HrcCent;  // allows some needed slop around centerpoint when simulating, or you can never center it
         if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? HrcUp : (pc[axis][Filt] < pc[axis][Cent]) ? HrcDn : HrcCent;
         return (pc[axis][Filt] > pc[axis][Cent]) ? HrcRt : (pc[axis][Filt] < pc[axis][Cent]) ? HrcLt : HrcCent;
@@ -1486,21 +1486,27 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     int sim_button_last_ms() { return simBtnTimer.elapsed() / 1000; }  // returns time since last simulated ch4 button press. to help prevent phantom starter turnon
     int ch4_button_last_ms() { return ch4BtnTimer.elapsed() / 1000; }  // returns time since last actual ch4 button press. to help prevent phantom starter turnon
   private:
+    void read_channel(int ch) {
+        us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true));
+    }
     void read_all_channels() {
-        static bool sw_old[NumChans];                            // for debug. note on first time thru sw_old is meaningless, may cause a print
-        for (int ch = Horz; ch <= Vert; ch++) {                   // analog channels
-            us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true));  // read channel
-            pc[ch][Raw] = us_to_pc(ch, us[ch][Raw]);              // update analog percent value from us read value
+        static bool sw_old[NumChans];  // for debug. note on first time thru sw_old is meaningless, may cause a print
+        for (int ch = Horz; ch <= Vert; ch++) {      // analog channels
+            read_channel(ch);                        // read channel
+            pc[ch][Raw] = us_to_pc(ch, us[ch][Raw]); // update analog percent value from us read value
         }
-        for (int ch = Ch3; ch <= Ch4; ch++) {                     // digital channels
-            us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true));  // read channel
-            _sw_new[ch] = (us[ch][Raw] >= us[ch][Cent]);          // set switch value based on new reading
+        for (int ch = Ch3; ch <= Ch4; ch++) {        // digital channels
+            read_channel(ch);                        // read channel
+            _sw_new[ch] = toggle_getval(ch);         // set switch value based on new reading
             if (_verbose && _sw_new[ch] != sw_old[ch]) ezread.squintf("hotrc: read ch%d toggle %d->%d\n", (ch == Ch3) ? 3 : 4, (int)sw_old[ch], (int)_sw_new[ch]);
             sw_old[ch] = _sw_new[ch];
         }
     }
+    bool toggle_getval(int ch) {
+        return (us[ch][Raw] >= us[ch][Cent]);  // pulsewidth higher than center value is considered val=1
+    }
     void toggle_reset(int ch) {  // resets events and pending events on the given channel
-        _sw_new[ch] = _sw_val[ch] = (us[ch][Raw] >= us[ch][Cent]);  // set both last and val based on last read value
+        _sw_new[ch] = _sw_val[ch] = toggle_getval(ch);  // set both last and val based on last read value
         _sw_event_filt[ch] = _sw_event_unfilt[ch] = _sw_pending[ch] = false;
     }
     void toggles_init() {  // initialize stored switch values to newest read values, to prevent spurious switch events. run on boot and any time radio becomes lost or un-lost
@@ -1512,11 +1518,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         static Timer filttimer[NumChans-2] = { 60000, 60000 };       // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
         int event_expiration_us = 1500000;                           // to cancel events if they have become stale on a human timescale
         for (int ch = Ch3; ch <= Ch4; ch++) {                        // do once for each digital channel
-            if (_sw_event_unfilt[ch] && (filttimer[ch-2].elapsed() >= event_expiration_us)) {  // is there a super stale event?
-                toggle_reset(ch);                                    // cancel it
-                if (_verbose) ezread.squintf("hotrc: expired ch%d event\n", (ch == Ch3) ? 3 : 4);
-            }
-            if (_sw_new[ch] != _sw_val[ch]) {          // if new read value differs from prev valid value ...
+            if (_sw_new[ch] != _sw_val[ch]) {     // if new read value differs from prev valid value ...
                 if (!_sw_pending[ch]) {
                     _sw_pending[ch] = _sw_event_unfilt[ch] = true; // if we don't already have a new pending value change, flag an unfiltered event occurred, and we have a potential filtered value change, 
                     if (_verbose) ezread.squintf("hotrc: new ch%d unfilt event\n", (ch == Ch3) ? 3 : 4);
@@ -1537,6 +1539,10 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             else {  // otherwise if the new read value is equal to the previous valid value
                 if (_sw_pending[ch]) ezread.squintf(ezread.sadcolor, "warn: hotrc ch%d spurious reading detect\n", (ch == Ch3) ? 3 : 4);
                 _sw_pending[ch] = false; // cancel any pending event due to the new value didn't hold throughout the timeout period
+            }
+            if (_sw_event_unfilt[ch] && (filttimer[ch-2].elapsed() >= event_expiration_us)) {  // is there a super stale event?
+                toggle_reset(ch);  // cancel it
+                if (_verbose) ezread.squintf("hotrc: expired ch%d event\n", (ch == Ch3) ? 3 : 4);
             }
         }
     }
@@ -1581,12 +1587,12 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     // Also if a detected cliff edge (potential spike) doesn't recover in time, it will smooth out the transition linearly.
     // The cost of this is our readings are delayed by a number of readings (equal to the maximum erasable spike duration).
     static const int ringdepth = 9;  // more depth will reject longer spikes at the expense of increased controller delay
-    float ringbuf[NumAxes][ringdepth];
+    float spike_cliff[NumAxes] = { 6.0f, 6.0f };  // spike_cliff is min diff of consecutive values to count as a spike
     int prespike_idx[NumAxes] = { -1, -1 }, ringidx[NumAxes] = { 1, 1 };  // prespike of -1 means no current spike
+    float ringbuf[NumAxes][ringdepth];
     float spike_filter(int axis, float new_val) {  // pass a fresh reading in, will return a filtered reading to use instead
         static int num_calls[NumAxes] = { 0, 0 };  // track #function calls, to mitigate the initially-empty ring buffer 
         static bool spike_signbit[NumAxes];
-        float spike_cliff[NumAxes] = { 6.0f, 6.0f };  // spike_cliff is min diff of consecutive values to count as a spike
         int previdx = (ringdepth + ringidx[axis] - 1) % ringdepth; // previdx is where the incoming new value will be stored
         if (++num_calls[axis] <= ringdepth) ringbuf[axis][previdx] = new_val;  // until buf is filled, fake the values
         float this_delta = new_val - ringbuf[axis][previdx];   // value change since last reading
@@ -1610,7 +1616,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         }
         float returnval = ringbuf[axis][ringidx[axis]]; // pull the incumbent value at current (oldest) index for return
         ringbuf[axis][ringidx[axis]] = new_val;         // save the newest reading into same location
-        ++ringidx[axis] %= ringdepth;                 // advance the index (with wraparound) for next time
+        ++ringidx[axis] %= ringdepth;                   // advance the index (with wraparound) for next time
         return returnval;                               // return the value, now with any spikes removed or smoothed by the filter
     }
     void inject_interpolations(int axis, int endspike_idx, float endspike_val) {  // replaces values between indices w/ linear interpolated values
