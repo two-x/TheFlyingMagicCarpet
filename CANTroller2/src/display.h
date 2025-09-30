@@ -596,8 +596,8 @@ class Display {
         else drawval(draw_index, tempsens.val(location), tempsens.opmin(location), tempsens.opmax(location));  //temp_lims_f[tempsens.errclass(location)][DISP_MIN], temp_lims_f[tempsens.errclass(location)][DISP_MAX]);
     }
     void draw_idiotbitmap(int i, int x, int y) {
-        uint8_t bg = idiots->val(i) ? idiots->color[On][i] : BLK;
-        uint8_t color = idiots->val(i) ? BLK : idiots->color[Off][i];
+        uint8_t bg = idiots->val(i) ? idiots->color(i, On) : BLK;
+        uint8_t color = idiots->val(i) ? BLK : idiots->color(i, Off);
         sprptr->drawRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, bg);
         for (int xo = 0; xo < (2 * disp_font_width - 1); xo++)
             for (int yo = 0; yo < disp_font_height - 1; yo++)
@@ -606,40 +606,40 @@ class Display {
     void draw_idiotlight(int i, int x, int y) {
         if (!idiots->val(i)) sprptr->fillRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, BLK);  // erase rectangle when turning off. need to test if this is necessary
         if (idiots->icon[i][0] == 0xff) {  // 0xff in the first byte will draw 2-letter string instead of bitmap
-            sprptr->fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, (idiots->val(i)) ? idiots->color[On][i] : BLK);
-            sprptr->setTextColor(idiots->val(i) ? BLK : idiots->color[Off][i]);  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
+            sprptr->fillRoundRect(x, y, 2 * disp_font_width + 1, disp_font_height + 1, 1, (idiots->val(i)) ? idiots->color(i, On) : BLK);
+            sprptr->setTextColor(idiots->val(i) ? BLK : idiots->color(i, Off));  // darken_color((*(idiots->lights[index])) ? BLK : DGRY)
             sprptr->setCursor(x+1, y+1);
-            sprptr->print(idiots->letters[i].c_str());
+            sprptr->print(idiots->letter_string(i).c_str());
         }
         else if (idiots->icon[i][0] != 0x88) draw_idiotbitmap(i, x, y);  // 0x88 in the first byte will skip a space
-        idiots->last[i] = idiots->val(i);
+        *idiots->lastval_ptr(i) = idiots->val(i);        // idiots->lastval[i] = idiots->val[i];
     }
     void update_idiots(bool force=false) {
         for (int i = 0; i < idiots->num_idiots(); i++) {
-            bool* ptr = idiots->ptr(i);
+            bool* val_ptr = idiots->val_ptr(i);
             if (i < neo->num_neo_idiots()) {  // the first group of displayed idiot lights are also represented by neopixels
-                neo2->setIdiotLightSolidOnMode(i, *ptr);
-                if (*ptr != idiots->last[i]) {
-                    neo->setlogic(i, *ptr);
+                neo2->setIdiotLightSolidOnMode(i, *val_ptr);
+                if (*val_ptr != idiots->lastval(i)) {
+                    neo->setlogic(i, *val_ptr);
                 }
-                if (*ptr) {
-                    if (ptr == &panicstop || ptr == &diag.err_sens[ErrRange][_TempEng] || ptr == &wheeltemperr) {
+                if (*val_ptr) {
+                    if (val_ptr == &panicstop || val_ptr == &diag.err_sens[ErrRange][_TempEng] || val_ptr == &wheeltemperr) {
                         neo->setflash(i, 3, 1, 2, 100, 0xffffff);  // add a brilliant flash to the more critical idiot lights
                         neo2->setIdiotLightCriticalAlertMode(i, true);
-                    } else if (ptr == &diag.err_sens_alarm[ErrLost] ) {
+                    } else if (val_ptr == &diag.err_sens_alarm[ErrLost] ) {
                         for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
                             if (diag.devices[sensor][ErrLost]) {
-                                neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color[1][sensor]));
+                                neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
                             } else {
                                 // Disable the flash mode for this sensor by setting it to black
                                 neo2->setIdiotLightFlashColor(i, sensor, BLACK);
                             }
                         }
                         neo->setflash(i, diag.errorcount(ErrLost), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
-                    } else if (ptr == &diag.err_sens_alarm[ErrRange]) {
+                    } else if (val_ptr == &diag.err_sens_alarm[ErrRange]) {
                         for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
                             if (diag.devices[sensor][ErrRange]) {
-                                neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color[1][sensor]));
+                                neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
                             } else {
                                 // Disable the flash mode for this sensor by setting it to black
                                 neo2->setIdiotLightFlashColor(i, sensor, BLACK);
@@ -654,8 +654,10 @@ class Display {
                     // neo2->setIdiotLightWarningBlinkColor(i, 0x000000);  // black blinks
                 }
             }
-            if (force || (*ptr != idiots->last[i])) {
-                draw_idiotlight(i, idiots_corner_x + (2 * disp_font_width + idiots_spacing_x + 1) * (i % idiots->row_count), idiots_corner_y + idiots->row_height * (int)(i / idiots->row_count));
+            if (force || (*val_ptr != idiots->lastval(i))) {
+                draw_idiotlight(i,
+                    idiots_corner_x + (2 * disp_font_width + idiots_spacing_x + 1) * (i % idiots->row_count()),
+                    idiots_corner_y + idiots->row_height() * (int)(i / idiots->row_count()));
             }
         }
         disp_idiots_dirty = false;

@@ -55,7 +55,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (!sim.simulating(sens::joy)) {  // when using the radio to drive (rather than simulator)
                 if (hotrc.radiolost_untested() && require_radiolost_test) kill_ign = true;
                 if (hotrc.radiolost()) kill_ign = true;
-                if (kill_ign) ezread.squintf(ezread.madcolor, "err: ignition kill due to radio error [run]\n");
+                if (kill_ign) ezread.squintf(ezread.madcolor, "run: ignition kill due to radio error\n");
             }
             if (hotrc.sw_event_unfilt(Ch3)) kill_ign = true; // any Ch3 event turns ign off
             if (kill_ign) {

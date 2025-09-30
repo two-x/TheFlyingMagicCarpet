@@ -386,9 +386,8 @@ void NeopixelStrip::knightrider() {
 // float NeopixelStrip::minelement(float r, float g, float b) { return (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b); } // (rgb[0] > rgb[1]) ? ((rgb[0] > rgb[2]) ? rgb[0] : rgb[2]) : ((rgb[1] > rgb[2]) ? rgb[1] : rgb[2]);  //std::max(rgb[0], rgb[1], rgb[2]);  // (color.r > color.g) ? ((color.r > color.b) ? color.r : color.b) : ((color.g > color.b) ? color.g : color.b);
 
 class IdiotLights {
-  public:
-    static constexpr int row_count = 12;
-    static constexpr int row_height = 11;
+  private:
+    NeopixelStrip* myneo;
     static constexpr int iconcount = 36;  // number of boolean values included on the screen panel (not the neopixels) 
     bool* vals[iconcount] = {  // arranged here as 6 bool pointers per line of code
         // row 1 onscreen.  the 1st 7 of these are true hazard lights (lit only on error), also copied onto the last 7 neopixel idiot lights
@@ -401,7 +400,45 @@ class IdiotLights {
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
         &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],
     };
-    uint8_t icon[iconcount][11] = {
+    bool lastvals[iconcount];
+    uint8_t colors[2][iconcount] = { // each row gradiated across the hue sprectrum, avoiding the dimmest stretch of the blue range
+        { 0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01,
+          0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01,
+          0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01, }, // [Off] (dim) colors (gradiated 12 per row)
+        { 0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b,  
+          0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b, 
+          0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b, }  // [On] (bright) colors (gradiated 12 per row)
+    };
+    // 0x82, 0xa2, 0xc1, 0xcc, 0xd0, 0xb4, 0x74, 0x14, 0x1a, 0x16, 0x0e, 0x0a,  // brighter off (dim) colors (gradiated 12 per row)
+    // 0xa9, 0xad, 0xb1, 0xb5, 0x95, 0x55, 0x5a, 0x32, 0x2a, 0x66, 0xa6,        // brighter off (dim) colors (gradiated 11 per row)
+    // 0x60, 0x64, 0x68, 0x6c, 0x2c, 0x51, 0x2d, 0x09, 0x06, 0x45, 0x65,        // off (dim) colors (gradiated 11 per row)
+    // 0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb,        // on (bright) colors (gradiated 11 per row)
+    std::string letter_strings[iconcount] = { // text is used if the bitmap array starts with 0xff (ie never). safe to assume they're all outdated
+        "SL", "SR", "\xf7""E", "\xf7""W", "RC", "P\x13", "SI", "Pk", "AS", "AH", "Aj", "HM",  // 12 per row 
+        "St", "FP", "Pn", "NF", "SM", "TM", "Bt", "NT", "eA", "WD", "Dv", "Pw",
+        "Th", "Br", "St", "RC", "Sp", "Tc", "Pr", "Ps", "Tm", "Bt", "Ot", "IO",
+    };
+  public:
+    IdiotLights() {
+        for (int i=0; i<iconcount; i++) lastvals[i] = *vals[i];
+    }
+    void setup(NeopixelStrip* _neo) {
+        myneo = _neo;
+        // int n = new_idiot(&(err_sens_alarm[ErrLost]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
+        for (int i=0; i<iconcount; i++) _neo->newIdiotLight(i, colors[On][i], *vals[i]);
+        ezread.squintf(ezread.highlightcolor, "Idiot lights: %d icons & %d neopix hazards\n", iconcount, _neo->idiotcount);
+    }
+    int row_count() { return 12; }
+    int row_height() { return 11; }
+    int num_idiots() { return iconcount; }
+    bool val(int index) { return *vals[index]; }
+    bool lastval(int index) { return lastvals[index]; }
+    bool* val_ptr(int index) { return vals[index]; }
+    bool* lastval_ptr(int index) { return &lastvals[index]; }
+    uint8_t color(int index, int state=On) { return colors[state][index]; }
+    std::string letter_string(int index) { return letter_strings[index]; }
+
+    uint8_t icon[iconcount][11] = {  // this array really shouldn't be public, needs a getter function
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // "S" w/ crossout symbol       // &diag.err_sens_alarm[ErrLost]
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x78, 0x70, 0x59, 0x4d, 0x07, 0x0f, },  // "S" w/ double arrow          // &diag.err_sens_alarm[ErrRange]
         { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x10, 0x10, 0x77, 0x65, 0x07, },  // "En" w/ degree symbol        // &diag.err_sens[ErrRange][_TempEng]
@@ -460,47 +497,15 @@ class IdiotLights {
      // { 0x40, 0x7e, 0x79, 0x79, 0x79, 0x7e, 0x48, 0x38, 0x61, 0x3f, 0x86, },  // fuel                         // 
      // { 0x3e, 0x63, 0x41, 0x63, 0x36, 0x1c, 0x1c, 0x36, 0x22, 0x63, 0x41, },  // open loop                    // &brake.no_feedback
 
-    std::string letters[iconcount] = { // text is used if the bitmap array starts with 0xff (ie never). safe to assume they're all outdated
-        "SL", "SR", "\xf7""E", "\xf7""W", "RC", "P\x13", "SI", "Pk", "AS", "AH", "Aj", "HM",  // 12 per row 
-        "St", "FP", "Pn", "NF", "SM", "TM", "Bt", "NT", "eA", "WD", "Dv", "Pw",
-        "Th", "Br", "St", "RC", "Sp", "Tc", "Pr", "Ps", "Tm", "Bt", "Ot", "IO",
-    };
-    uint8_t color[2][iconcount] = { // each row gradiated across the hue sprectrum, avoiding the dimmest stretch of the blue range
-        { 0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01,
-          0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01,
-          0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01, },  // off (dim) colors (gradiated 12 per row)
-        { 0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b,  
-          0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b, 
-          0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b, }  // on (bright) colors (gradiated 12 per row)
-    };
-    // 0x82, 0xa2, 0xc1, 0xcc, 0xd0, 0xb4, 0x74, 0x14, 0x1a, 0x16, 0x0e, 0x0a,  // brighter off (dim) colors (gradiated 12 per row)
-    // 0xa9, 0xad, 0xb1, 0xb5, 0x95, 0x55, 0x5a, 0x32, 0x2a, 0x66, 0xa6,        // brighter off (dim) colors (gradiated 11 per row)
-    // 0x60, 0x64, 0x68, 0x6c, 0x2c, 0x51, 0x2d, 0x09, 0x06, 0x45, 0x65,        // off (dim) colors (gradiated 11 per row)
-    // 0xe9, 0xf1, 0xf9, 0xfd, 0xbd, 0x5d, 0x5e, 0x5b, 0x53, 0x8b, 0xeb,        // on (bright) colors (gradiated 11 per row)
-    bool last[iconcount];
-    uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
-    uint8_t idiot_hue_offset = 240;
-    IdiotLights() {
-        for (int i=0; i<iconcount; i++) last[i] = *(vals[i]);
-    }
-    void setup(NeopixelStrip* _neo) {
-        myneo = _neo;
-        // int n = new_idiot(&(err_sens_alarm[ErrLost]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })
-        for (int i=0; i<iconcount; i++) myneo->newIdiotLight(i, color[On][i], val(i));
-        ezread.squintf(ezread.highlightcolor, "Idiot lights: %d icons & %d neopix hazards\n", iconcount, myneo->idiotcount);
-    }
-    int num_idiots() { return iconcount; }
-    bool val(int index) { return *(vals[index]); }
-    bool* ptr(int index) { return vals[index]; }
-  private:
-    NeopixelStrip* myneo;
-    void set_colors() {
-        for (int i=0; i<iconcount; i++) {
-            int division = row_count;
-            uint32_t color32 = hsv_to_rgb<uint32_t>((65535 * (uint16_t)(i % division) / division + idiot_hue_offset), idiot_saturation, 255);  // , 0, 220);
-            color[On][i] = color_to_332(color32);  // 5957 = 2^16/11
-        }
-    }
+    // uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
+    // uint8_t idiot_hue_offset = 240;
+    // void set_colors() {
+    //     for (int i=0; i<iconcount; i++) {
+    //         int division = row_count(i);
+    //         uint32_t color32 = hsv_to_rgb<uint32_t>((65535 * (uint16_t)(i % division) / division + idiot_hue_offset), idiot_saturation, 255);  // , 0, 220);
+    //         colors[On][i] = color_to_332(color32);  // 5957 = 2^16/11
+    //     }
+    // }
 };
 // class IdiotLight {  // defunct: currently not using individual instances for each idiot light. would be much better but i couldn't make it work
 //     public:
