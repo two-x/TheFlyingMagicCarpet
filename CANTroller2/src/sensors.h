@@ -1380,7 +1380,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     bool _verbose = false;  // causes console print whenever an unfiltered switch event is queried externally, thus canceling the in-progress filtering
     float absmin_us = 880.0f;  // min configurable pulsewidth for the hotrc
     float absmax_us = 2120.0f; // max configurable pulsewidth for the hotrc
-    float pc[NumAxes][NumValues];      // values range from -100% to 100% are all derived or auto-assigned
+    float pc[NumAxes][NumValues], sim_raw_pc[NumAxes]; // values range from -100% to 100%. pc[][] are all derived or auto-assigned. sim_raw_pc[] are simulated inputs set externally  
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
         {  969, 1473, 1977, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
         { 1080, 1583, 2087, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2, // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
@@ -1389,6 +1389,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         // note: opmin/opmax range should be set to be just smaller than the actual measured range, to prevent out-of-range errors. this way it will reach all the way to 100%
         //   margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
     float deadband_pc, deadband_us = 20.0f;  // size of each side of the center deadband in us.  pc value is derived  // was 15
+    float sim_deadband_pc = 7.5f;  // when simulating joystick using display buttons, allows rounding of near-zero values to zero
     float margin_us = 15.0f;    // all [Margin] values above are derived from this by calling derive()  // was 12
     float failsafe_us = 880.0f; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     float failsafe_margin_us = 100.0f; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
@@ -1451,11 +1452,10 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     }
     void set(float* member, int val) { set(member, static_cast<float>(val)); }  // to accept int arguments too
     int joydir(int axis=Vert) {
-        if (sim->simulating(sens::joy) && (std::abs(pc[axis][Filt]) < us_to_pc(axis, margin_us))) return HrcCent;  // allows some needed slop around centerpoint when simulating, or you can never center it
         if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? HrcUp : (pc[axis][Filt] < pc[axis][Cent]) ? HrcDn : HrcCent;
         return (pc[axis][Filt] > pc[axis][Cent]) ? HrcRt : (pc[axis][Filt] < pc[axis][Cent]) ? HrcLt : HrcCent;
     }  // return (pc[axis][Filt] > pc[axis][Cent]) ? ((axis == Vert) ? HrcUp : HrcRt) : (pc[axis][Filt] < pc[axis][Cent]) ? ((axis == Vert) ? HrcDn : HrcLt) : HrcCent;
-    void sim_button_press(int chan) {
+    void sim_button_press(int chan) {  // handles ch4 action button on display menu
         _sw_event_filt[chan] = true;
         if (chan == Ch4) {
             simBtnTimer.reset();  // so we can know time since last sim button press, to help prevent phantom starter events
@@ -1483,7 +1483,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     bool* radiolost_ptr() { return &_radiolost; }
     bool* radiolost_untested_ptr() { return &_radiolost_untested; }
     int last_ch4_source() { return _last_ch4_source; }
-    int sim_button_last_ms() { return simBtnTimer.elapsed() / 1000; }  // returns time since last simulated ch4 button press. to help prevent phantom starter turnon
+    int sim_button_last_ms() { return simBtnTimer.elapsed() / 1000; }  // returns time since last display menu ch4 button press. to help prevent phantom starter turnon
     int ch4_button_last_ms() { return ch4BtnTimer.elapsed() / 1000; }  // returns time since last actual ch4 button press. to help prevent phantom starter turnon
   private:
     void read_channel(int ch) {
@@ -1502,6 +1502,13 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             sw_old[ch] = _sw_new[ch];
         }
     }
+    void radiolost_update() {  // note: must initialize _radiolost & _radiolost_untested to true, and must run after reading us[Vert][Raw]
+        static bool lost_last = _radiolost;
+        _radiolost = (us[Vert][Raw] <= failsafe_us + failsafe_margin_us);  // is the newest reading in the failsafe range?
+        if (_radiolost != lost_last) toggles_init(); // when radio comes in or out, re-initialize toggles to prevent spurious sw events
+        if (_radiolost) _radiolost_untested = false;  // on first valid detection of radiolost, radiolost detection is known to work
+        lost_last = _radiolost;  // remember current reading for comparison on next loop
+    }
     bool toggle_getval(int ch) {
         return (us[ch][Raw] >= us[ch][Cent]);  // pulsewidth higher than center value is considered val=1
     }
@@ -1515,10 +1522,10 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     // hotrc digital button handler which rejects spurious values which could cause false events (re: phantom starter bug)
     //   seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
     void toggles_update() {  // note, below the two timer[] indices are each 2 less than those of their corresponding switches (avoids creating 2 extra Timer instances)
-        static Timer filttimer[NumChans-2] = { 60000, 60000 };       // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
-        int event_expiration_us = 1500000;                           // to cancel events if they have become stale on a human timescale
-        for (int ch = Ch3; ch <= Ch4; ch++) {                        // do once for each digital channel
-            if (_sw_new[ch] != _sw_val[ch]) {     // if new read value differs from prev valid value ...
+        static Timer filttimer[NumChans-2] = { 60000, 60000 }; // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
+        int event_expiration_us = 1500000;             // to cancel events if they have become stale on a human timescale
+        for (int ch = Ch3; ch <= Ch4; ch++) {          // do once for each digital channel
+            if (_sw_new[ch] != _sw_val[ch]) {          // if new read value differs from prev valid value ...
                 if (!_sw_pending[ch]) {
                     _sw_pending[ch] = _sw_event_unfilt[ch] = true; // if we don't already have a new pending value change, flag an unfiltered event occurred, and we have a potential filtered value change, 
                     if (_verbose) ezread.squintf("hotrc: new ch%d unfilt event\n", (ch == Ch3) ? 3 : 4);
@@ -1546,39 +1553,51 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             }
         }
     }
-    bool remove_deadbands_us(int axis, float* _us) {  // enforces deadbands if w/i them (return true), otherwise rescales to full range (return false)
+    // enforces deadbands if within them (returning true), otherwise rescales to full range (returning false)
+    bool remove_deadbands(float* _val, float _db, float _cent, float _min, float _max) {
         bool in_deadbands = false;
-        if (*_us > us[axis][Cent] + deadband_us) *_us = map(*_us, us[axis][Cent] + deadband_us, us[axis][OpMax], us[axis][Cent], us[axis][OpMax]);
-        else if (*_us < us[axis][Cent] - deadband_us) *_us = map(*_us, us[axis][Cent] - deadband_us, us[axis][OpMin], us[axis][Cent], us[axis][OpMin]);
-        else {
-            *_us = us[axis][Cent];
+        if (*_val > _cent + _db) *_val = map(*_val, _cent + _db, _max, _cent, _max);      // if above upper deadband, scale to full range 
+        else if (*_val < _cent - _db) *_val = map(*_val, _cent - _db, _min, _cent, _min); // if below lower deadband, scale to full range 
+        else {                                                                            // if within deadbands, set to center value
+            *_val = _cent;
             in_deadbands = true;
         }
         return in_deadbands;
     }
-    void direction_update() {
-        if (sim->simulating(sens::joy)) {                            // if simulating, let the simulator write the Filt values
-            if (sim->potmapping(sens::joy)) pc[Horz][Filt] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]); // except if potmapping then write the Horz Filt value
-        }
-        else for (int axis = Horz; axis <= Vert; axis++) {                    // filter the raw values to create filt values
-            spike_us[axis] = spike_filter(axis, us[axis][Raw]);               // apply spike filter on raw reading
-            us[axis][Filt] = ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha); // apply ema filter on spike filter output
-            bool in_deadbands = (remove_deadbands_us(axis, &us[axis][Filt])); // enforce/remove deadbands around center value            
-            if (_radiolost) pc[axis][Filt] = pc[axis][Cent]; // if radio lost set pc value to Center value for sanity, but not us value b/c useful for debug
-            else {                                                            // otherwise if radio is not lost
-                pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]);              // convert filtered us value to percent
-                if (!in_deadbands) kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig); // then register evidence of user activity
-            }
-        }
-        for (int axis = Horz; axis <= Vert; axis++)                           // always constrain the pc filt values
-            pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
+    void clean_sim_vals() {  // prevent false values when turning on simulator
+        static bool simulating_last = sim->simulating(sens::joy);
+        if (sim->simulating(sens::joy) && !simulating_last) 
+            for (int axis = Horz; axis <= Vert; axis++) sim_raw_pc[axis] = pc[axis][Filt];
+        simulating_last = sim->simulating(sens::joy);
     }
-    void radiolost_update() {  // note: must initialize _radiolost & _radiolost_untested to true, and must run after reading us[Vert][Raw]
-        static bool lost_last = _radiolost;
-        _radiolost = (us[Vert][Raw] <= failsafe_us + failsafe_margin_us);  // is the newest reading in the failsafe range?
-        if (_radiolost != lost_last) toggles_init(); // when radio comes in or out, re-initialize toggles to prevent spurious sw events
-        if (_radiolost) _radiolost_untested = false;  // on first valid detection of radiolost, radiolost detection is known to work
-        lost_last = _radiolost;  // remember current reading for comparison on next loop
+    void set_direction(int axis) {  // for radio values, do filtration and set us and pc values based on new reading
+        spike_us[axis] = spike_filter(axis, us[axis][Raw]);  // apply spike filter on raw reading
+        us[axis][Filt] = ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha); // apply ema filter on spike filter output
+        bool in_deadbands = remove_deadbands(&us[axis][Filt], deadband_us, us[axis][Cent], us[axis][OpMin], us[axis][OpMax]); // enforce deadbands
+        if (_radiolost) pc[axis][Filt] = pc[axis][Cent];     // if radio lost set pc value to Center value for sanity, but not us value b/c useful for debug
+        else {                                               // otherwise if radio is not lost
+            pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]); // convert filtered us value to percent
+            if (!in_deadbands) kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig); // then register evidence of user activity
+        }
+    }
+    void set_sim_direction(int axis) {     // when simulating, set values respecting deadbands
+        pc[axis][Filt] = sim_raw_pc[axis]; // commit externally set or potmapped sim value
+        remove_deadbands(&pc[axis][Filt], sim_deadband_pc, pc[axis][Cent], pc[axis][OpMin], pc[axis][OpMax]); // enforce sim deadbands
+    }
+    void direction_update() {
+        clean_sim_vals();
+
+        if (sim->simulating() && sim->simulating(sens::joy)) set_sim_direction(Vert);  // correctly navigate confusing sim function naming
+        else set_direction(Vert);
+
+        if (sim->simulating(sens::joy)) {
+            if (sim->potmapping(sens::joy)) sim_raw_pc[Horz] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]); // if potmapping set Horz value to the pot value
+            set_sim_direction(Horz);
+        }
+        else set_direction(Horz);
+
+        for (int axis = Horz; axis <= Vert; axis++)  // always constrain the pc filt values
+            pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]); 
     }
     // spike_filter() : I wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals coming
     // from the hotrc, where often the incoming values change suddenly then (usually) quickly jump back by the same amount. 

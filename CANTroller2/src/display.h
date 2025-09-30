@@ -29,13 +29,13 @@ std::string pcbaglowcard[GlowNumModes] = { "off", "simple", "heart", "xfade", "s
 static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NumDataPages] = { "Run ", "Hrc ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "Diag", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 10, 10, 11, 11, 10, 5, 11, 9, 7, 12, 4, 11, 12 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 12, 10, 11, 8, 10, 5, 11, 9, 7, 12, 4, 11, 12 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = {
     { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PgRun
-    { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", __________, __________, "AirVOMax", "MAP OMin", "MAP OMax", horfailsaf, "Deadband", },  // PgHrc
+    { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", "SimRaw H", "SimRaw V", __________, __________, horfailsaf, "Deadband", "SimDeadB", },  // PgHrc
     { " Pot Raw", brAk"Posn", brAk"Posn", brAk"Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PgSens
     { "TachPuls", "Tach Raw", "TcAltRaw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpAltRaw", "SpeedRaw", "   Speed", __________, __________, "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", },  // PgPuls
-    { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, __________, __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", },  // PgPWMs
+    { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", "AirVOMax", "MAP OMin", "MAP OMax", },  // PgPWMs
     { "Gas Mode", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PgIdle
     { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "BrakePID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", " Gas PID", "CruisPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PgMotr    
     { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PgBPID
@@ -48,10 +48,10 @@ static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = 
 };
 static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  // note these will be right-aligned
     { "psi",  "in",   "V",   "%", "mph", "atm", "g/s", "scr", "scr", "scr", "min",    "",    "",   "%",   "%", },  // PgRun
-    {  "us",  "us",  "us",  "us",  "us",  "us",   "%",   "%",    "",    "", "mph", "atm", "atm",  "us",  "us", },  // PgHrc
+    {  "us",  "us",  "us",  "us",  "us",  "us",   "%",   "%",   "%",   "%",    "",    "",   "us",  "us",  "%", },  // PgHrc
     { "adc", "adc",  "in",   "%", "adc", "psi",   "%", "adc",   "V",    "", "psi", "psi",  "in",  "in",  "in", },  // PgSens
     {  "ms",  "Hz",  "Hz", "rpm",  "ms",  "Hz",  "Hz", "mph",   "%",    "",    "", "rpm", "rpm", "mph", "mph", },  // PgPuls
-    { "ang",  "us",   "V",  "us",   "V",  "us",    "",    "",    "",    "",    "", "ang", "ang",  "us",   "%", },  // PgPWMs
+    { "ang",  "us",   "V",  "us",   "V",  "us",    "",    "", "ang", "ang",  "us",   "%", "mph", "atm", "atm", },  // PgPWMs
     { "scr", "rpm",   "%",   "%", "ang", "rpm",    "",    "",    "",    "",   "s",   "%",   "%", "deg", "deg", },  // PgIdle
     {   "%", "deg",   "%",    "",    "", "0/1", "scr", "scr", "0/1", "%/s", "0/1", "0/1", "scr", "0/1", "scr", },  // PgMotr
     { "scr",   "%", "psi",   "%",  "in",   "%",   "%",   "%",   "%",   "%",   "%",  "us",    "",  "Hz",   "s", },  // PgBPID
@@ -713,12 +713,12 @@ class Display {
             drawval(14, hotrc.us[Ch4][Raw], hotrc.us[Ch4][OpMin], hotrc.us[Ch4][OpMax]);
             drawval(15, hotrc.pc[Horz][Raw], hotrc.pc[Horz][OpMin], hotrc.pc[Horz][OpMax]);
             drawval(16, hotrc.pc[Vert][Raw], hotrc.pc[Vert][OpMin], hotrc.pc[Vert][OpMax]);
-            for (int line=17; line<=18; line++) draw_eraseval(line);
-            drawval(19, airvelo.opmax(), airvelo.absmin(), airvelo.absmax());
-            drawval(20, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
-            drawval(21, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
-            drawval(22, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[Vert][OpMin] - hotrc.us[Vert][Margin]);
-            drawval(23, hotrc.deadband_us, 0.0, 100.0);
+            drawval(17, hotrc.sim_raw_pc[Horz], hotrc.pc[Horz][OpMin], hotrc.pc[Horz][OpMax]);
+            drawval(18, hotrc.sim_raw_pc[Vert], hotrc.pc[Vert][OpMin], hotrc.pc[Vert][OpMax]);
+            for (int line=19; line<=20; line++) draw_eraseval(line);
+            drawval(21, hotrc.failsafe_us, hotrc.absmin_us, hotrc.us[Vert][OpMin] - hotrc.us[Vert][Margin]);
+            drawval(22, hotrc.deadband_us, 0.0f, hotrc.us[Horz][OpMax] - hotrc.us[Horz][Cent]);
+            drawval(23, hotrc.sim_deadband_pc, hotrc.pc[Horz][Cent], hotrc.pc[Horz][OpMax] - hotrc.pc[Horz][Cent]);
         }
         else if (datapage == PgSens) {
             drawval(9, pot.native(), pot.absmin_native(), pot.absmax_native());
@@ -762,11 +762,14 @@ class Display {
             drawval(12, brake.us[Out], brake.us[AbsMin], brake.us[AbsMax]);
             drawval(13, steer.volt[Out], steer.volt[OpMin], steer.volt[OpMax]);
             drawval(14, steer.us[Out], steer.us[AbsMin], steer.us[AbsMax]);
-            for (int line=15; line<=19; line++) draw_eraseval(line);
-            drawval(20, gas.si[OpMin], gas.si[AbsMin], gas.si[AbsMax]);
-            drawval(21, gas.si[OpMax], gas.si[AbsMin], gas.si[AbsMax]);
-            drawval(22, brake.us[Stop], brake.us[AbsMin], brake.us[AbsMax]);
-            drawval(23, brake.duty_fwd_pc, 0.0f, 100.0f);
+            for (int line=15; line<=16; line++) draw_eraseval(line);
+            drawval(17, gas.si[OpMin], gas.si[AbsMin], gas.si[AbsMax]);
+            drawval(18, gas.si[OpMax], gas.si[AbsMin], gas.si[AbsMax]);
+            drawval(19, brake.us[Stop], brake.us[AbsMin], brake.us[AbsMax]);
+            drawval(20, brake.duty_fwd_pc, 0.0f, 100.0f);
+            drawval(21, airvelo.opmax(), airvelo.absmin(), airvelo.absmax());
+            drawval(22, mapsens.opmin(), mapsens.absmin(), mapsens.absmax());
+            drawval(23, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
         }
         else if (datapage == PgIdle) {
             draw_ascii(9, motormodecard[gas.motormode]);
@@ -1125,11 +1128,9 @@ class Tuner {
             else if (sel == 14) tune(&steer.steer_safe_pc, id, 0.0f, 100.0f);
         }
         else if (datapage == PgHrc) {
-            if (sel == 10) airvelo.set_oplim(NAN, tune(airvelo.opmax(), id, airvelo.opmin(), airvelo.absmax()));
-            else if (sel == 11) mapsens.set_oplim(tune(mapsens.opmin(), id, mapsens.absmin(), mapsens.opmax()), NAN);
-            else if (sel == 12) mapsens.set_oplim(NAN, tune(mapsens.opmax(), id, mapsens.opmin(), mapsens.absmax()));
-            else if (sel == 13) hotrc.set(&hotrc.failsafe_us, tune(hotrc.failsafe_us, id, hotrc.absmin_us, hotrc.us[Vert][OpMin] - hotrc.us[Vert][Margin]));
-            else if (sel == 14) hotrc.set_deadband_us(tune(hotrc.deadband_us, id, 0.0f, hotrc.us[Horz][OpMax] - hotrc.us[Horz][Cent]));  // use hotrc.set function to force derive
+            if (sel == 12) hotrc.set(&hotrc.failsafe_us, tune(hotrc.failsafe_us, id, hotrc.absmin_us, hotrc.us[Vert][OpMin] - hotrc.us[Vert][Margin]));
+            else if (sel == 13) hotrc.set_deadband_us(tune(hotrc.deadband_us, id, 0.0f, hotrc.us[Horz][OpMax] - hotrc.us[Horz][Cent]));  // use hotrc.set function to force derive
+            else if (sel == 14) tune(&hotrc.sim_deadband_pc, id, 0.0f, hotrc.pc[Horz][OpMax] - hotrc.pc[Horz][Cent]);
         }
         else if (datapage == PgSens) {
             if (sel == 10) pressure.set_oplim(tune(pressure.opmin(), id, pressure.absmin(), pressure.opmax()), NAN);
@@ -1145,10 +1146,13 @@ class Tuner {
             else if (sel == 14) speedo.set_oplim(NAN, tune(speedo.opmax(), id, speedo.opmin(), speedo.absmax()));
         }                
         else if (datapage == PgPWMs) {
-            if (sel == 11) gas.set(&gas.si[OpMin], tune(gas.si[OpMin], id, gas.si[AbsMin], gas.si[OpMax]));
-            else if (sel == 12) gas.set(&gas.si[OpMax], tune(gas.si[OpMax], id, gas.si[OpMin], gas.si[AbsMax]));
-            else if (sel == 13) brake.set(&brake.us[Stop], tune(brake.us[Stop], id, brake.us[OpMin], brake.us[OpMax]));
-            else if (sel == 14) brake.set(&brake.duty_fwd_pc, tune(brake.duty_fwd_pc, id, 0.0f, 100.0f));
+            if (sel == 8) gas.set(&gas.si[OpMin], tune(gas.si[OpMin], id, gas.si[AbsMin], gas.si[OpMax]));
+            else if (sel == 9) gas.set(&gas.si[OpMax], tune(gas.si[OpMax], id, gas.si[OpMin], gas.si[AbsMax]));
+            else if (sel == 10) brake.set(&brake.us[Stop], tune(brake.us[Stop], id, brake.us[OpMin], brake.us[OpMax]));
+            else if (sel == 11) brake.set(&brake.duty_fwd_pc, tune(brake.duty_fwd_pc, id, 0.0f, 100.0f));
+            else if (sel == 12) airvelo.set_oplim(NAN, tune(airvelo.opmax(), id, airvelo.opmin(), airvelo.absmax()));
+            else if (sel == 13) mapsens.set_oplim(tune(mapsens.opmin(), id, mapsens.absmin(), mapsens.opmax()), NAN);
+            else if (sel == 14) mapsens.set_oplim(NAN, tune(mapsens.opmax(), id, mapsens.opmin(), mapsens.absmax()));
         }
         else if (datapage == PgIdle) {
             if (sel == 10) tune(&starter.run_timeout, id, starter.run_lolimit, starter.run_hilimit);

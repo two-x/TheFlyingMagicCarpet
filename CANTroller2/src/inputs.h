@@ -470,13 +470,13 @@ class Touchscreen {
         else if (tbox == 0x40 && longpress()) hotrc.sim_button_press(Ch4);  // sleep requests are handled by standby or lowpower mode, otherwise will be ignored
         else if (tbox == 0x41) tach.sim_si(tune(tach.val(), id, tach.opmin(), tach.opmax()));
         else if (tbox == 0x42) tach.sim_si(tune(tach.val(), -id, tach.opmin(), tach.opmax()));
-        else if (tbox == 0x43 && sim.simulating(sens::joy)) tune(&hotrc.pc[Vert][Filt], id, hotrc.pc[Vert][OpMin], hotrc.pc[Vert][OpMax]);
-        else if (tbox == 0x44 && sim.simulating(sens::joy)) tune(&hotrc.pc[Vert][Filt], -id, hotrc.pc[Vert][OpMin], hotrc.pc[Vert][OpMax]);
+        else if (tbox == 0x43 && sim.simulating(sens::joy)) tune(&hotrc.sim_raw_pc[Vert], id, hotrc.pc[Vert][OpMin], hotrc.pc[Vert][OpMax]);
+        else if (tbox == 0x44 && sim.simulating(sens::joy)) tune(&hotrc.sim_raw_pc[Vert], -id, hotrc.pc[Vert][OpMin], hotrc.pc[Vert][OpMax]);        
         else if (tbox == 0x50 && longpress()) ignition.request(ReqTog);
         else if (tbox == 0x51) speedo.sim_si(tune(speedo.val(), id, speedo.opmin(), speedo.opmax()));
         else if (tbox == 0x52) speedo.sim_si(tune(speedo.val(), -id, speedo.opmin(), speedo.opmax()));
-        else if (tbox == 0x53 && sim.simulating(sens::joy)) tune(&hotrc.pc[Horz][Filt], id, hotrc.pc[Horz][OpMin], hotrc.pc[Horz][OpMax]);
-        else if (tbox == 0x54 && sim.simulating(sens::joy)) tune(&hotrc.pc[Horz][Filt], -id, hotrc.pc[Horz][OpMin], hotrc.pc[Horz][OpMax]);
+        else if (tbox == 0x53 && sim.simulating(sens::joy)) tune(&hotrc.sim_raw_pc[Horz], id, hotrc.pc[Horz][OpMin], hotrc.pc[Horz][OpMax]);
+        else if (tbox == 0x54 && sim.simulating(sens::joy)) tune(&hotrc.sim_raw_pc[Horz], -id, hotrc.pc[Horz][OpMin], hotrc.pc[Horz][OpMax]);
     }
     void printTouchInfo() {
         static bool last1tap, last2tap, lastlongtap;
