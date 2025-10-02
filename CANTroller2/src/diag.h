@@ -145,7 +145,7 @@ class DiagRuntime {
         if (sensor == _NA) return err_sens_card[NumTelemetryFull];
         if (sensor == _None) return err_sens_card[NumTelemetryFull + 1];
         if (sensor == _Hybrid) return err_sens_card[NumTelemetryFull + 2];
-        return err_sens_card[NumTelemetryFull];        
+        return err_sens_card[sensor];        
     }
     // diag non-tunable values
     // bool temp_err[NumTempCategories];  // [CatAmbient/CatEngine/CatWheel/CatBrake]
@@ -316,8 +316,8 @@ class DiagRuntime {
                         ezread.squintf("!%s:", err_type_card[i].c_str());
                         printheader1 = true;
                     }
-                    Serial.printf(" %s (%.2lf)", err_sens_card[j].c_str(), violating_value[j]);
-                    ezread.printf(" %s (%.0lf)", err_sens_card[j].c_str(), violating_value[j]);
+                    Serial.printf(" %s (%.2lf)", ascii_name(j).c_str(), violating_value[j]);
+                    ezread.printf(" %s (%.0lf)", ascii_name(j).c_str(), violating_value[j]);
                     printed = true;
                 }
             }
@@ -328,8 +328,8 @@ class DiagRuntime {
                         ezread.squintf(" OK:");
                         printheader2 = true;
                     }
-                    Serial.printf(" %s (%.2lf)", err_sens_card[j].c_str(), violating_value[j]);
-                    ezread.printf(" %s (%.0lf)", err_sens_card[j].c_str(), violating_value[j]);
+                    Serial.printf(" %s (%.2lf)", ascii_name(j).c_str(), violating_value[j]);
+                    ezread.printf(" %s (%.0lf)", ascii_name(j).c_str(), violating_value[j]);
                     printed = true;
                 }
             }
@@ -393,10 +393,16 @@ class DiagRuntime {
             else printed_error_brake = false;
         }
     }
-    void BrakeFailure() {  // checks if posn is not changing while pressure is changing and motor is moving (assuming not near max brake)
-        static float pressure_last_pc;
-        static float brkpos_last_pc;
-        static float motor_last_pc;
+    void BrakeFailure() {
+        static float pressure_last_pc = pressure->pc();
+        static float brkpos_last_pc = brkpos->pc();
+        static float motor_last_pc = brake->pc[Out];
+
+        checkrange(_BrakeMotor);
+        checkrange(_BrakePosn);
+        checkrange(_BrakePres);
+
+        // checks if posn is not changing while pressure is changing and motor is moving (assuming not near max brake)
         if ((std::abs(brake->pc[Out]) > brake->pc[Margin]) && (std::abs(motor_last_pc) > brake->pc[Margin]) && (signbit(brake->pc[Out]) == signbit(motor_last_pc))) {  // if brake motor is moving
             if (pressure->pc() <= 80.0) {  // if not near the max pressure (where position changes very little)
                 setflag(_BrakePosn, ErrLost, ((std::abs(pressure->pc() - pressure_last_pc) > pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if pressure value is changing but position isn't, then set flag otherwise clear
@@ -410,17 +416,11 @@ class DiagRuntime {
             }
             
             // Skipping this b/c it is triggering and I don't care. Really should figure out what's going on
-            // setflag(_BrakeMotor, ErrLost, ((std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if neither sensor is changing, set motor lost flag
+            // // if neither sensor is changing, set motor lost flag
+            // setflag(_BrakeMotor, ErrLost, ((std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));
         }
-        checkrange(_BrakeMotor);
-        checkrange(_BrakePosn);
-        checkrange(_BrakePres);
-        
-        // Removing brake motor showing error due to brake sensors showing errors (redundant)
-        //
-        // // setflag(_BrakeMotor, ErrRange, brake->pc[Out] < brake->pc[OpMin] - brake->pc[Margin] || brake->pc[Out] > brake->pc[OpMax] + brake->pc[Margin]);
-        // // setflag(_BrakePosn, ErrRange, (brkpos->pc() > 100.0 + brkpos->margin_pc()) || (brkpos->pc() < 0.0 - brkpos->margin_pc()));  // if position reading is outside oprange, set flag
-        // // setflag(_BrakePres, ErrRange, (pressure->pc() > 100.0 + pressure->margin_pc()) || (pressure->pc() < 0.0 - pressure->margin_pc()));  // if pressure reading is outside oprange, set flag
+
+        // // cause brake motor error if any sensors being used as feedback are in error
         // bool found_err = false;
         // if (brake->feedback_enabled[PressureFB] && (err_sens[ErrLost][_BrakePosn] || err_sens[ErrRange][_BrakePosn])) found_err = true;
         // if (brake->feedback_enabled[PositionFB] && (err_sens[ErrLost][_BrakePres] || err_sens[ErrRange][_BrakePres])) found_err = true;
@@ -430,11 +430,13 @@ class DiagRuntime {
         brkpos_last_pc = brkpos->pc();
         motor_last_pc = brake->pc[Out];
     }
-    void SpeedoFailure() {  // checks if speedo isn't zero when stopped, or doesn't increase when we drive
-        static bool gunning_it, gunning_last = true;
-        static float baseline_speed;
+    void SpeedoFailure() {
+        static bool gunning_last = false;
+        static float baseline_speed = speedo->val();
         bool fail = false;
-        // commented this b/c 
+        checkrange(_Speedo);
+        // commented this b/c ... why?
+        // // checks if speedo isn't zero when stopped, or doesn't increase when we drive
         // if (runmode == Standby) {  // || runmode == Hold  // check that the speed is zero when stopped
         //     // if (gunning_last) speedoTimer.reset();       // if we just stopped driving, allow time for car to stop
         //     // else if (speedoTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
@@ -442,48 +444,52 @@ class DiagRuntime {
         //     baseline_speed = speedo->val();         // store the speed value when we are stopped
         //     // }
         // }
-        gunning_it = (gas->pc[Out] > 20.0 && (runmode == Fly || runmode == Cruise));
-        if (gunning_it) {                                                             // if we're attempting to drive
+        bool gunning_it = (gas->pc[Out] > 20.0 && (runmode == Fly || runmode == Cruise));
+        if (gunning_it) {                                               // if we're attempting to drive
             if (!gunning_last) speedoTimer.reset();                     // delay our speed comparison so car can accelerate
             else if (speedoTimer.expired()) fail = (speedo->val() - baseline_speed < speedo->margin());  // the car should be moving by now
         }
         gunning_last = gunning_it;
         setflag(_Speedo, ErrLost, fail);
-        checkrange(_Speedo);
         // setflag(_Speedo, ErrRange, speedo->val() < speedo->opmin() || speedo->val() > speedo->opmax());
     }
-    void TachFailure() {  // checks if tach isn't low when throttle is released, or doesn't increase when we gun it
-        static bool running_it, running_last = true;
-        static float baseline_rpm;
+    void TachFailure() {
+        static bool running_last = false;
+        static float baseline_rpm = tach->val();
         bool fail = false;
-        if (runmode == Standby) {  // || runmode == Stall  // check that the speed is zero when stopped
+        checkrange(_Tach);
+        
+        // check that the tach is zero when engine is killed
+        if (runmode == Standby) {  // || runmode == Stall
             // if (running_last) tachTimer.reset();       // if we just stopped driving, allow time for car to stop
             // else if (tachTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
             fail = (baseline_rpm > tach->margin());  // when stopped the speedo reading should be zero, otherwise fail
             baseline_rpm = tach->val();         // store the speed value when we are stopped
             // }
         }
-        running_it = (gas->pc[Out] > 20.0 && (runmode == Fly || runmode == Cruise));
+
+        // checks if tach isn't low when throttle is released, or doesn't increase when we gun it
+        bool running_it = (gas->pc[Out] > 20.0 && (runmode == Fly || runmode == Cruise));
         if (running_it) {                                               // if we're attempting to drive
             if (!running_last) tachTimer.reset();                     // delay our rpm comparison so car can respond
             else if (tachTimer.expired()) fail = (tach->val() - baseline_rpm < tach->margin());  // the car should be moving by now
         }
         running_last = running_it;
         setflag(_Tach, ErrLost, fail);
-        checkrange(_Tach);
         // setflag(_Tach, ErrRange, tach->val() < tach->opmin() || tach->val() > tach->opmax());
     }
     void HotRCFailure() {
         for (int ch = Horz; ch <= Ch4; ch++) {
             int errindex;
-            if (ch == Horz)      { errindex = _HotRCHorz; checkrange(_HotRCHorz, !hotrc->radiolost()); }
-            else if (ch == Vert) { errindex = _HotRCVert; checkrange(_HotRCVert, !hotrc->radiolost()); }
-            else if (ch == Ch3)  { errindex = _HotRCCh3;  checkrange(_HotRCCh3, !hotrc->radiolost());  }
-            else if (ch == Ch4)  { errindex = _HotRCCh4;  checkrange(_HotRCCh4, !hotrc->radiolost());  }
+            if (ch == Horz)      { errindex = _HotRCHorz; checkrange(_HotRCHorz, !(hotrc->radiolost() || hotrc->radiolost_untested())); }
+            else if (ch == Vert) { errindex = _HotRCVert; checkrange(_HotRCVert, !(hotrc->radiolost() || hotrc->radiolost_untested())); }
+            else if (ch == Ch3)  { errindex = _HotRCCh3;  checkrange(_HotRCCh3, !(hotrc->radiolost() || hotrc->radiolost_untested()));  }
+            else if (ch == Ch4)  { errindex = _HotRCCh4;  checkrange(_HotRCCh4, !(hotrc->radiolost() || hotrc->radiolost_untested()));  }
             // setflag(errindex, ErrRange, !hotrc->radiolost() && ((hotrc->us[ch][Filt] < hotrc->us[ch][OpMin] - hotrc->us[ch][Margin]) 
             //                         || (hotrc->us[ch][Filt] > hotrc->us[ch][OpMax] + hotrc->us[ch][Margin])));  // && ch != Vert
-            setflag(errindex, ErrLost, !hotrc->radiolost() && ((hotrc->us[ch][Filt] < hotrc->absmin_us - hotrc->us[ch][Margin])
-                                    || (hotrc->us[ch][Filt] > hotrc->absmax_us + hotrc->us[ch][Margin])));
+            setflag(errindex, ErrLost, !(hotrc->radiolost() || hotrc->radiolost_untested()) &&
+                ((hotrc->us[ch][Filt] < hotrc->absmin_us - hotrc->us[ch][Margin]) ||
+                (hotrc->us[ch][Filt] > hotrc->absmax_us + hotrc->us[ch][Margin])));
             // err_sens[ErrRange][_HotRCVert] = (hotrc->us[Vert][RAW] < hotrc->failsafe_us - hotrc->us[ch][Margin])
             //     || ((hotrc->us[Vert][RAW] < hotrc->us[Vert][OpMin] - halfMargin) && (hotrc->us[Vert][RAW] > hotrc->failsafe_us + hotrc->us[ch][Margin]));
         }

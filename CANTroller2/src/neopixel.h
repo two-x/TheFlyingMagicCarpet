@@ -419,9 +419,7 @@ class IdiotLights {
         "Th", "Br", "St", "RC", "Sp", "Tc", "Pr", "Ps", "Tm", "Bt", "Ot", "IO",
     };
   public:
-    IdiotLights() {
-        for (int i=0; i<iconcount; i++) lastvals[i] = *vals[i];
-    }
+    IdiotLights() { for (int i=0; i<iconcount; i++) lastvals[i] = *vals[i]; }
     void setup(NeopixelStrip* _neo) {
         myneo = _neo;
         // int n = new_idiot(&(err_sens_alarm[ErrLost]), "SL", { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e })

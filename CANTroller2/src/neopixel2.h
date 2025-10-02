@@ -6,16 +6,17 @@
 #define striplength 10
 #define idiot_light_led_offset 3  // Offset for idiot lights in the strip, after the heartbeat LEDs
 #define idiot_light_led_count 7  // Number of idiot lights after the heartbeat leds
-#define runmode_lights_animation_duration_ms 6000
-#define idiot_lights_animation_duration_ms 6000
+#define runmode_lights_animation_duration_ms 6400
+#define idiot_lights_animation_duration_ms 6400
 
 // Declared outside of class because https://github.com/Makuna/NeoPixelBus/wiki/FAQ-%2311
 NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(striplength, neopixel_pin);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method,
 NeoPixelAnimator neoanimator(3); // Channel 0 for runmode pulse, Channel 1 for idiot lights, Channel 2 for Cylon
 
 static const RgbColor BLACK = RgbColor(0);
-static const uint8_t idiot_light_colors[] = {0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8};
 
+// !! these are defined in idiotlights class already!
+static const uint8_t idiot_light_colors[] = {0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8};
 
 class IdiotLight {
 private:
@@ -60,7 +61,7 @@ public:
 
     RgbColor getFlashColor(float time) {
         // 6 second cycle with alternating pattern every 350ms
-        float cycle_time = fmod(time, 6.0f);  // 6 second cycle
+        float cycle_time = fmod(time, idiot_lights_animation_duration_ms * 1000.0f);
         
         // Count non-black colors and build array of indices
         uint8_t nonBlackIndices[NumTelemetryIdiots];
@@ -149,24 +150,21 @@ private:
         neoanimator.StartAnimation(AnimIdiots, idiot_lights_animation_duration_ms, [this](const AnimationParam& param) {
             // Loop through idiot lights - for now just iterate, do nothing
             for (int i = 0; i < idiot_light_led_count; i++) {
+                float time_ms = param.progress * idiot_lights_animation_duration_ms;
                 if (idiotlights[i].criticalAlertMode) {
-                    // Panic mode: 3 pulses in 1 second, then 2 second break (total 3 second cycle)
-                    float cycle_time = fmod(param.progress * (idiot_lights_animation_duration_ms / 1000.0f), 3.0f);
-                    
-                    if (cycle_time < 1.0f) {
-                        // First second: 3 rapid pulses
-                        float pulse_phase = fmod(cycle_time * 3.0f, 1.0f);  // 3 pulses per second
-                        bool flash_on = pulse_phase < 0.5f;  // 50% duty cycle per pulse
-                        neoobj.SetPixelColor(idiotlights[i].led, flash_on ? RgbColor(255, 255, 255) : idiotlights[i].solidColor);
-                    } else {
-                        // Next 2 seconds: break (off)
-                        neoobj.SetPixelColor(idiotlights[i].led, idiotlights[i].solidColor);
-                    }
+                    // critical alert mode: 3x 100ms period, 50% duty pulses per animation cycle
+                    bool flash_on;
+                    if (time_ms > 250.0) flash_on = false;
+                    else if (time_ms > 200.0) flash_on = true;
+                    else if (time_ms > 150.0) flash_on = false;
+                    else if (time_ms > 100.0) flash_on = true;
+                    else if (time_ms > 50.0) flash_on = false;
+                    else flash_on = true;                        
+                    neoobj.SetPixelColor(idiotlights[i].led, flash_on ? RgbColor(255, 255, 255) : idiotlights[i].solidColor);
                 } else if (idiotlights[i].solidOnMode) {
                     if (idiotlights[i].hasFlashColors()) {
                         // Flash mode: cycle through non-black colors with timing
-                        float time_seconds = param.progress * (idiot_lights_animation_duration_ms / 1000.0f);
-                        RgbColor flash_color = idiotlights[i].getFlashColor(time_seconds);
+                        RgbColor flash_color = idiotlights[i].getFlashColor(time_ms * 1000.0f);
                         neoobj.SetPixelColor(idiotlights[i].led, flash_color);
                     } else {
                         // Standard solid color mode
@@ -312,8 +310,8 @@ public:
         }
     }
 
-  void setIdiotLightCriticalAlertMode(int idiot_index, bool panic_mode) {
-        idiotlights[idiot_index].criticalAlertMode = panic_mode;
+  void setIdiotLightCriticalAlertMode(int idiot_index, bool ena) {
+        idiotlights[idiot_index].criticalAlertMode = ena;
     }
 
     ~NeopixelStrip2() {

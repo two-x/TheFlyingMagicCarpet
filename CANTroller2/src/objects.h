@@ -425,8 +425,8 @@ static RunModeManager run;
 class BootButton : public MomentarySwitch {
   protected:
     void actions();  // function prototyhpe. see full definition below
+    // int dummyprintcount = 0;  // useful for debugging ezread spam suppression feature
   public:
-    int dummyprintcount = 0;
     BootButton(int apin) : MomentarySwitch(apin, false) {}
     void update() {
         MomentarySwitch::update();
@@ -451,7 +451,7 @@ void BootButton::actions() {  // temporary (?) functionality added for developme
             ezread.squintf("addr: batt:%08X touch:%08X\n", &sensidiots[_MuleBatt], &nowtouch);
             Timer printtimer;
             for (int i=0; i<NumTelemetryFull; i++) {
-                ezread.squintf("%02d: %08X %s\n", i, &sensidiots[i], diag.err_sens_card[i].c_str());            
+                ezread.squintf("%02d: %08X %s\n", i, &sensidiots[i], diag.ascii_name(i).c_str());            
             }
             ezread.squintf("printed in: ");
             ezread.squintf("%ld us\n", printtimer.elapsed());
@@ -462,7 +462,6 @@ class CoolingFan {  // new class to serve as thermostat for vehicle radiator fan
   private:
     int _pin = -1;  // uses the pin and transistor circuit existing onboard originally intended for the vehicle fuel pump
   public:
-    int dummyprintcount = 0;
     CoolingFan(int pin) : _pin(pin) {}
     void setup() {
         ezread.squintf(ezread.highlightcolor, "Cooling fan: init vehicle engine thermostat\n");
