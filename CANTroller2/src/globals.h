@@ -298,6 +298,11 @@ float convert_units(float from_units, float convert_factor, bool invert, float i
 // Exponential Moving Average filter : smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
 // pass in a fresh raw value, current filtered value, and alpha factor, new filtered value is returned
 float ema_filt(float _raw, float _filt, float _alpha) {
+    if (std::isnan(_raw) || std::isnan(_filt)) {
+        Serial.printf("err: ema_filt received NAN value\n");
+        if (std::isnan(_raw)) return _filt;  // try to save the runtime value in case of spurious glitch
+        return NAN;
+    }
     _alpha = constrain(_alpha, 0.0, 1.0);
     return (_alpha * _raw) + ((1.0 - _alpha) * _filt);
 }

@@ -136,7 +136,7 @@ class Param {
         _last = _val;
         if (std::isnan(arg_val) && std::isnan(_last)) ret = false;
         else {
-            if (iszero(arg_val)) arg_val = 0.0;  // avoid stupidly low near-zero values that happens sometimes
+            cleanzero(&arg_val);  // avoid stupidly low near-zero values that happens sometimes
             if (iszero(_val - arg_val)) ret = false;
         }
         _val = arg_val;
@@ -157,7 +157,7 @@ class Device {
   protected:
     // which types of sources are possible for this device?
     int _pin;
-    bool _enabled = true;
+    // bool _enabled = true;
     int val_refresh_period = 5000;  // minimum delay between value updates, just to be efficient w/ processing. (overload this per device)
     Timer valrefreshtimer;
     Potentiometer* _pot; // to pull input from the pot if we're in simulation mode
@@ -196,7 +196,8 @@ class Device {
     void update() {  // I changed case statement into if statements and now is 10 lines long instead of 28.  case sucks like that
         if (valrefreshtimer.expired()) {
             valrefreshtimer.set(val_refresh_period);  // allows for dynamic adjustment of update period as needed each device
-            if (runmode == LowPower || !_enabled) return; // do nothing if in lowpower mode or this device is disabled
+            if (runmode == LowPower) return; // do nothing if in lowpower mode or this device is disabled
+            // if (!_enabled) return; // do nothing if in lowpower mode or this device is disabled
             if (_source == src::Undef) set_val_from_undef();
             else if (_source == src::Fixed) set_val_from_fixed();
             else if (_source == src::Pin) set_val_from_pin();
@@ -210,11 +211,11 @@ class Device {
     void attach_pot(Potentiometer &pot_arg) {
         _pot = &pot_arg;
     }
-    void set_enabled(bool arg_enable) { _enabled = arg_enable; }
+    // void set_enabled(bool arg_enable) { _enabled = arg_enable; }
     void set_can_source(src arg_source, bool is_possible) { _can_source[static_cast<int>(arg_source)] = is_possible; }
     src source() { return _source; }
     int pin() { return _pin; }
-    bool enabled() { return _enabled; }
+    // bool enabled() { return _enabled; }
 };
 
 enum class TransDir : int { Rev=0, Fwd=1, NumTransDir=2 }; // possible dir values. Rev means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
@@ -432,8 +433,8 @@ class Sensor : public Transducer {
         if (_first_filter_run) {
             set_si(_si_raw);
             _first_filter_run = false;
-            return;  // Serial.printf("x");
-        }  // Serial.printf("+ (%.4lf)", _si_raw);
+            return;
+        }
         set_si(ema_filt(_si_raw, _si.val(), _ema_alpha), false);
     }
     virtual void set_val_from_undef() {  // for example by the onscreen simulator interface. TODO: examine this functionality, it aint right
@@ -446,13 +447,12 @@ class Sensor : public Transducer {
         // sim_si(sim_val);                 // wtf is this supposed to do?
         // set_si(_si.val + touch.fdelta);  // I would think this should look something like this (needs some coding on the other side to support)
     }
-    virtual float read_sensor() {
-        ezread.squintf(ezread.madcolor, "err: %s does not have an overridden read_sensor() function\n", _short_name.c_str());
-        return NAN;
-    }
-    virtual void set_val_from_pin() {
-        _si_raw = read_sensor();  // set_native(read_sensor());
-        calculate_ema();  // sensor EMA filter
+    // virtual float read_sensor() {
+    //     ezread.squintf(ezread.madcolor, "err: %s does not have an overridden read_sensor() function\n", _short_name.c_str());
+    //     return NAN;
+    // }
+    virtual void set_val_from_pin() {  // must be overridden by children
+        set_si(NAN);
     }
     virtual void set_val_from_pot() {
         set_si(_pot->mapToRange(_opmin, _opmax));  // as currently written, the pot will spoof both si and native raw values in addition to the filtered si value.  do we want this?
@@ -466,10 +466,10 @@ class Sensor : public Transducer {
     }  
     virtual void setup() {
         _transtype = SensorType;
-        if (!_detected) set_source(src::Fixed);
+        // if (!_detected) set_source(src::Fixed);
         Transducer::setup();
     }
-    void set_ema_alpha(float arg_alpha) { _ema_alpha = arg_alpha; }
+    void set_ema_alpha(float arg_alpha) { _ema_alpha = std::fmaxf(0.0f, arg_alpha); }
     float ema_alpha() { return _ema_alpha; }
     bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
 };
@@ -491,6 +491,7 @@ class Sensor : public Transducer {
 class I2CSensor : public Sensor {
   protected:
     I2C* _i2c;
+    int _i2c_bus_index = I2CBogus;  // children must set this to identify self in calls to I2C bus class
     // implement in child classes using the appropriate i2c sensor
     // virtual void set_val_from_pot() {
     //     _si.set(_pot->mapToRange(_si.min(), _si.max()));
@@ -501,26 +502,38 @@ class I2CSensor : public Sensor {
     //     _native.set_limits(_si.min_shptr(), _si.max_shptr());  // Our two i2c sensors (airvelo & MAP) don't reveal low-level readings, so we only get si units
     //     _val_filt.set_limits(_si.min_shptr(), _si.max_shptr());
     // }
+    virtual float read_i2c_sensor() {  // childrem must override this
+        ezread.squintf(ezread.madcolor, "err: %s needs overridden read_i2c_sensor()\n", _short_name.c_str());
+        return NAN;
+    }
     void print_on_boot(bool detected, bool responding) {
         // if (header) Transducer::print_config(true, false);
         ezread.squintf(ezread.highlightcolor, "%s sensor (i2c 0x%02x) %sdetected\n", _long_name.c_str(), addr, _detected ? "" : "not ");
         if (detected) {
-            if (responding) {
-                // ezread.squintf(", responding properly\n");
-                float readval = read_sensor();  // _sensor.readPressure(ATM);
-                ezread.squintf("  reading %.4f %s\n", readval, _si_units.c_str());
-                set_source(src::Pin); // sensor working
-            }
-            else {
-                ezread.squintf(ezread.sadcolor, "  no response\n");  // begin communication with air flow sensor) over I2C 
-                set_source(src::Fixed); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
-            }
+            if (responding) ezread.squintf("  reading %.4f %s\n", read_i2c_sensor(), _si_units.c_str());
+            else ezread.squintf(ezread.sadcolor, "  no response\n");  // begin communication with air flow sensor) over I2C 
+                // set_source(src::Fixed); // sensor is detected but not working, leave it in an error state ('fixed' as in not changing)
         }
         else {
             ezread.squintf("\n");
-            set_source(src::Fixed); // don't even have a device at all..
+            // set_source(src::Fixed); // don't even have a device at all..
         }
     }
+    void set_val_from_pin() {
+        if (_i2c->not_my_turn(_i2c_bus_index)) return;
+        if (!_i2c->detected(_i2c_bus_index) || !_responding) _native.set(NAN);  // if bus/sensor failure set value to nan
+        else _native.set(read_i2c_sensor());                           // otherwise take a new native reading from the bus
+        if (_i2c->i2cbaton == _i2c_bus_index) _i2c->pass_i2c_baton();  // deal with bus semaphore, since we're done with it
+        if (std::isnan(_native.val())) set_si(NAN);                    // propagate nan native value to all values
+        else {                                                         // if reading was good
+            _si_raw = from_native(_native.val());                      // convert native to raw si value
+            calculate_ema();                                           // set si filtered value based on new raw reading
+        }
+    }
+    // example set_val_from_pin from analog sensor class
+    // if (!_native.set(static_cast<float>(analogRead(_pin)))) return;
+    // _si_raw = from_native(_native.val());
+    // calculate_ema(); // filtered values are kept in si format
   public:
     uint8_t addr;
     I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor(-1), _i2c(i2c_arg), addr(i2c_address_arg) {
@@ -529,10 +542,11 @@ class I2CSensor : public Sensor {
         set_can_source(src::Pin, true);
     }
     I2CSensor() = delete;
-    virtual void setup() {
+    virtual void setup() {  // call at the end of child setup() override functions
         set_can_source(src::Pot, true);
+        set_conversions(1.0, 0.0); // our i2c sensors so far provide si units directly.
         _detected = _i2c->detected_by_addr(addr);
-        if (!_detected || !_responding) _enabled = false;
+        // if (!_detected || !_responding) _enabled = false;
         print_on_boot(_detected, _responding);
         Sensor::setup();
     }
@@ -540,19 +554,12 @@ class I2CSensor : public Sensor {
 class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
   protected:
     FS3000 _sensor;
-    float goodreading = NAN;
-    int64_t airvelo_read_period_us = 85000;
-    Timer airveloTimer{85000};
-  public:
-    float read_sensor() {
-        if (!_i2c->detected(I2CAirVelo)) return NAN;
-        // if (force) goodreading = _sensor.readMilesPerHour();
-        else if (!_i2c->not_my_turn(I2CAirVelo)) {
-            if (airveloTimer.expireset()) goodreading = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
-        }
-        // ezread.squintf("a:%.3lf\n", goodreading);
-        return goodreading;
+    int64_t val_refresh_period = 85000;
+    int _i2c_bus_index = I2CAirVelo;  // to identify self in calls to I2C bus class
+    float read_i2c_sensor() {
+        return _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
     }
+  public:
     static constexpr uint8_t addr = 0x28;
     sens _senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
@@ -562,17 +569,11 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
         _si_units = "mph";
     }
     AirVeloSensor() = delete;
-
-    void set_val_common() {
-        if (_i2c->i2cbaton == I2CAirVelo) _i2c->pass_i2c_baton();
-    }
     void setup() {  // ezread.squintf("%s..", _long_name.c_str());
-        set_conversions(1.0, 0.0);
         set_si(0.0);  // initialize value
         set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
-        airveloTimer.set(airvelo_read_period_us);
         _responding = !_sensor.begin();
         if (_responding) _sensor.setRange(AIRFLOW_RANGE_15_MPS);
         I2CSensor::setup();
@@ -581,27 +582,12 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
 class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
   protected:
     SparkFun_MicroPressure _sensor;
-    float goodreading = NAN;
-    Timer mapreadTimer{0};
-    int mapread_timeout = 100000, mapretry_timeout = 10000;
-  public:
-    float read_sensor() {
-        // ezread.squintf("det m:%d\n", _i2c->detected(I2CMAP));
-        if (!_i2c->detected(I2CMAP)) return NAN;
-        // if (force) goodreading = _sensor.readPressure(ATM, false);
-        else if (!_i2c->not_my_turn(I2CMAP)) {
-            if (mapreadTimer.expired()) {
-                float temp = _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
-                if (!std::isnan(temp)) {
-                    goodreading = temp;
-                    mapreadTimer.set(mapread_timeout);
-                }
-                else mapreadTimer.set(mapretry_timeout);  // ezread.squintf("av:%f\n", goodreading);
-            }
-        }
-        // ezread.squintf("m:%.3lf\n", goodreading);
-        return goodreading;
+    int64_t val_refresh_period = 120000; // , mapretry_timeout = 10000;
+    int _i2c_bus_index = I2CMAP;  // to identify self in calls to I2C bus class
+    float read_i2c_sensor() {
+        return _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
     }
+  public:
     static constexpr uint8_t addr = 0x18;  // note: would all MAPSensors have the same address?  ANS: yes by default, or an alternate fixed addr can be hardware-selected by hooking a pin low or something
     sens _senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
@@ -611,23 +597,18 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
         _si_units = "atm";
     }
     MAPSensor() = delete;
-    void set_val_common() {
-        if (_i2c->i2cbaton == I2CMAP) _i2c->pass_i2c_baton();
-    }
     void setup() {
-        set_conversions(1.0, 0.0);
         set_si(1.0);  // initialize value
         set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68, 1.02);  // set in atm empirically
         set_ema_alpha(0.2);
-        mapreadTimer.set(mapread_timeout);
         _responding = !_sensor.begin();
         I2CSensor::setup();
     }
 };
 class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
   protected:
-    Timer read_timer{25000};  // adc cannot read too fast w/o errors, so give some time between readings
+    int64_t val_refresh_period = 25000; // , mapretry_timeout = 10000;
     void set_val_from_pin() {
         if (!_native.set(static_cast<float>(analogRead(_pin)))) return;
         _si_raw = from_native(_native.val());
@@ -842,14 +823,18 @@ class PulseSensor : public Sensor {
     volatile int64_t _isr_us = 0;
     volatile int64_t _isr_time_last_us = 0;
     volatile int64_t _isr_time_current_us = 0;
+    volatile int _isr_pulse_period_us = 0;
     volatile int _pulse_count = 0;  // record pulses occurring for debug/monitoring pulse activity
     int _pulses_per_sec = 0;
+    float _ema_tau_min_s = 0.001f; // in seconds. must be >0
+    float _ema_tau_max_s = 10.0f;  // in seconds
+    float _ema_tau_s = 2.5f;       // in seconds. must be >0
 
     // we maintain our min and max pulse period, for each pulse sensor
     // absmin_us is calculated based on absmax_native (Hz) using overloaded set_abslim_native() function
     // absmax_us is our stop timeout, and not based on absmin_native (Hz). It must be set using set_abmax_us() function
-    float _us, _absmax_us = 1500000, _absmin_us; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency.  max is chosen just arbitrarily
-    int64_t _absmin_us_64;  // so the isr doesn't have to cast type. Set in the set_abslims_us() function.
+    float _us, _absmin_us, _absmax_us = 1500000; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency.  max is chosen just arbitrarily
+    int64_t _absmin_us_64;  // so the isr doesn't have to cast type. 
 
     // shadows a hall sensor being triggered by a passing magnet once per pulley turn. The ISR calls
     // esp_timer_get_time() on every pulse to know the time since the previous pulse. I tested this on the bench up
@@ -863,6 +848,24 @@ class PulseSensor : public Sensor {
         _isr_us = time_us;
         _pulse_count++;
     }
+
+    // modified ema filter where filtering is smoother the less often it's called
+    float scaling_ema_filt(float raw, float filt, float dt_s) {  // tau factor (in seconds) is taken from member variable _ema_tau
+        dt_s = std::fmaxf(0.0f, dt_s);      // pretend negative times are 0
+        return filt * std::exp(-dt_s / _ema_tau_s) + raw * (1 - std::exp(-dt_s / _ema_tau_s));
+    }
+
+    // override standard ema filter so filtering is smoother the less frequently we get pulses
+    void calculate_ema() {
+        if (_first_filter_run) {  // initialization on first run works the same as in Sensor::calculate_ema()
+            set_si(_si_raw);
+            _first_filter_run = false;
+            return;
+        }
+        // insert modified scaling ema filter (above function) to replace standard ema (line below)
+        set_si(ema_filt(_si_raw, _si.val(), _ema_alpha), false);
+    }
+
     void set_pin_inactive() {
         static bool pinlevel_last;
         if (pinlevel_last != _pin_level) {
@@ -886,6 +889,8 @@ class PulseSensor : public Sensor {
             }
         }
         set_pin_inactive();  // for idiot light showing pulse activity
+
+        // !! TODO !! the line below will overwrite the filtered si value, erasing the effect of any ema filtering!
         set_native(new_native);  // too-short pulse times are presumably bounces and are ignored, keeping the existing native value
         // _si_raw = from_native(new_native);  // commenting since set_native() above will do this by default
         calculate_ema(); // filtered values are kept in si format
@@ -942,6 +947,10 @@ class PulseSensor : public Sensor {
     bool stopped() { return iszero(val()); }
     // old: bool stopped() { return (std::abs(val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     // older:  bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    void set_ema_tau(float newtau) { _ema_tau_s = constrain(newtau, _ema_tau_min_s, _ema_tau_max_s); }
+    float ema_tau() { return _ema_tau_s; }
+    float ema_tau_min() { return _ema_tau_min_s; }
+    float ema_tau_max() { return _ema_tau_max_s; }
     bool* pin_inactive_ptr() { return &_pin_inactive; }
     bool* pin_level_ptr() { return &_pin_level; }
     float absmin_us() { return _absmin_us; }
@@ -1052,10 +1061,6 @@ class Speedometer : public PulseSensor {
 // then hotrc contains four instances, one per channel, which it can manage
 class RCChannel : public Sensor {  // class for each channel of the hotrc
   protected:
-    virtual float read_sensor() {
-        // return new_native;  // too-short pulse times are presumably bounces and are ignored, keeping the existing native value
-        return NAN;
-    }
   public:
     RCChannel(int arg_pin) : Sensor(arg_pin) {
         _long_name = "RC channel";
