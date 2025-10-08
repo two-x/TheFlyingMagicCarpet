@@ -521,6 +521,17 @@ class I2CSensor : public Sensor {
             set_source(src::Fixed); // don't even have a device at all..
         }
     }
+    void set_val_from_pin() {
+        if (_i2c->not_my_turn(_i2c_bus_index)) return;
+        if (!_i2c->detected(_i2c_bus_index) || !_responding) _native.set(NAN);  // if bus/sensor failure set value to nan
+        else _native.set(read_i2c_sensor());                           // otherwise take a new native reading from the bus
+        if (_i2c->i2cbaton == _i2c_bus_index) _i2c->pass_i2c_baton();  // deal with bus semaphore, since we're done with it
+        if (std::isnan(_native.val())) set_si(NAN);                    // propagate nan native value to all values
+        else {                                                         // if reading was good
+            _si_raw = from_native(_native.val());                      // convert native to raw si value
+            calculate_ema();                                           // set si filtered value based on new raw reading
+        }
+    }
   public:
     uint8_t addr;
     I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor(-1), _i2c(i2c_arg), addr(i2c_address_arg) {
@@ -753,6 +764,33 @@ class PressureSensor : public AnalogSensor {
 };
 // BrakePositionSensor represents a linear position sensor for measuring brake pedal position
 // extends AnalogSensor for handling analog pin reading and conversion.
+//
+// WIP! 2025 Brake calibration procedure (position-related steps):   circa 250720
+//
+// 1) (w/o linkage, in cal mode), measure inches from housing end to piston end at both motor extremes (1.22, 7.26) on 250719 w/ gmw1 motor. this can also be done on the bench
+// 2) (w/o linkage, in cal mode), get corresponding bkakposn adc values from datapage, at motor extremes (1885, 2933) on 250719 w/ gmw1 motor. this can also be done on the bench
+// 3a) (on car w/o linkage, in cal mode) we will find position op limits:
+//     * w/pedal released get opmax inches.
+//     * watch pressure as you push brake as hard as you can w/ foot, note this pressure
+//     * In cal mode use actuator to push brake to the same pressure. The corresponding brake positionis its op minimum
+// 3b) (math) add a buffer, like 0.75" to the approximate range b/c motor can pull harder, and for chain slack (3.0) 250719 w/ gmw1 motor
+// 3c) (math) center this range within the abslim range above, to get approximate opmin & opmax (2.73, 5.73) on 250719 w/ gmw1 motor
+// 4) (math) determine fake zeropoint value to midpoint of oprange above (4.23) on 250719 w/ gmw1 motor
+// 5) compile in these results as follows (instead of values being used currently) and upload:
+//    set_abslim(1.22, 7.26, false);        // from step #1
+//    set_abslim_native(1885, 2933, false); // from step #2
+//    set_oplim(2.73, 5.95);                // from step #3c
+//    _zeropoint = 4.23;                    // from step #4
+// 6) (on car w/o linkage, in cal mode), set the motor so datapage value matches the approximate opmax value from step #3c
+// 7) if necessary, adjust the shim block under the actuator housing so the unit has minimal clearance to it when pedal is fully depressed and linkage is tight
+// 8) attach brake pedal linkage, make as short as possible w/ a minimum of slack while still allowing pedal to fully release
+// 9) adjust brake pressure ema alpha value, if necessary - see cal procedure in the PressureSensor class for this step
+// 10) calibrate brake pressure opmin: see cal procedure in the PressureSensor class for this step
+// 11) calibrate brake pressure opmax: see cal procedure in the PressureSensor class for this step
+// 12a) determine the pressure/position zeropoint, ie where is the point where the pressure first begins to increase from min value. (based on pressure readings while calbraking carefully)
+// 12b) read zeropoint pressure from datapage (goes in pressure class)
+// 12c) read zeropoint position from datapage in inches (4.07) on 250720 w/ gmw1 motor
+// !! 13) *NOT* complete!  (on car w/ linkage, in ?? mode) fine-tune the operational limits to final values (finish detailing this step)  
 class BrakePositionSensor : public AnalogSensor {
   public:
     sens _senstype = sens::brkpos;
@@ -765,60 +803,14 @@ class BrakePositionSensor : public AnalogSensor {
     BrakePositionSensor() = delete;
     void setup() {
         AnalogSensor::setup();
-        // ezread.squintf("%s..\n", _long_name.c_str());
         _dir = TransDir::Rev;  // causes percent conversions to use inverted scale 
         _convmethod = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
-        #if BrakeThomson
-            set_abslim(0.968, 8.875, false);  // tuned 240809 pre-bm24. measured from housing end to piston end. (pin hole is 0.343 back from the piston end)
-            set_abslim_native(1035, 3102, false);  // tuned 240809 pre-bm24
-            set_oplim(0.506, 4.234)  // 4.624  //tuned 230602 - best position to park the actuator out of the way so we can use the pedal (in)
-            _zeropoint = 3.17;  // tuned 230602 - brake position value corresponding to the point where fluid PSI hits zero (in)
-
-        // // #elsif XXX  // if MotorFactoryStore motor
-            //   // 240513 cal data MotorFactoryStore actuator:  measured to tip of piston
-            //   // fully retracted 0.95 in, Vpot = 0.83 V (1179 adc), fully extended 8.85 in (), Vpot = 2.5 V (3103 adc)
-            //   // calc (2.5 - 0.83) / 3.3 = 0.506 . 0.506 * 4096 = 2072 . (8.85 - 0.95) / 2072 = .00381 in/adc or 262 adc/in
-            //   set_abslim(4.33, 8.84, false);  // tuned 240513 - actuator inches measured
-            //   set_oplim(4.52, 6.00);
-            //   // 240609 determined opmin on vehicle, with MotorFactoryStore motor connected w/ quicklink + carabeener
-
-        #else  // if GoMotorWorld motor
- 
-            // 2025 Brake calibration procedure (position-related steps):   circa 250720
-            //
-            // 1) (w/o linkage, in cal mode), measure inches from housing end to piston end at both motor extremes (1.22, 7.26) on 250719 w/ gmw1 motor. this can also be done on the bench
-            // 2) (w/o linkage, in cal mode), get corresponding bkakposn adc values from datapage, at motor extremes (1885, 2933) on 250719 w/ gmw1 motor. this can also be done on the bench
-            // 3a) (on car w/o linkage, in cal mode) we will find position op limits:
-            //     * w/pedal released get opmax inches.
-            //     * watch pressure as you push brake as hard as you can w/ foot, note this pressure
-            //     * In cal mode use actuator to push brake to the same pressure. The corresponding brake positionis its op minimum
-            // 3b) (math) add a buffer, like 0.75" to the approximate range b/c motor can pull harder, and for chain slack (3.0) 250719 w/ gmw1 motor
-            // 3c) (math) center this range within the abslim range above, to get approximate opmin & opmax (2.73, 5.73) on 250719 w/ gmw1 motor
-            // 4) (math) determine fake zeropoint value to midpoint of oprange above (4.23) on 250719 w/ gmw1 motor
-            // 5) compile in these results as follows (instead of values being used currently) and upload:
-            //    set_abslim(1.22, 7.26, false);        // from step #1
-            //    set_abslim_native(1885, 2933, false); // from step #2
-            //    set_oplim(2.73, 5.95);                // from step #3c
-            //    _zeropoint = 4.23;                    // from step #4
-            // 6) (on car w/o linkage, in cal mode), set the motor so datapage value matches the approximate opmax value from step #3c
-            // 7) if necessary, adjust the shim block under the actuator housing so the unit has minimal clearance to it when pedal is fully depressed and linkage is tight
-            // 8) attach brake pedal linkage, make as short as possible w/ a minimum of slack while still allowing pedal to fully release
-            // 9) adjust brake pressure ema alpha value, if necessary - see cal procedure in the PressureSensor class for this step
-            // 10) calibrate brake pressure opmin: see cal procedure in the PressureSensor class for this step
-            // 11) calibrate brake pressure opmax: see cal procedure in the PressureSensor class for this step
-            // 12a) determine the pressure/position zeropoint, ie where is the point where the pressure first begins to increase from min value. (based on pressure readings while calbraking carefully)
-            // 12b) read zeropoint pressure from datapage (goes in pressure class)
-            // 12c) read zeropoint position from datapage in inches (4.07) on 250720 w/ gmw1 motor
-            // !! 13) *NOT* complete!  (on car w/ linkage, in ?? mode) fine-tune the operational limits to final values (finish detailing this step)  
-
-            set_abslim(1.22, 7.26, false);        // from step #1   // need false argument to prevent autocalculation
-            set_abslim_native(1885, 2933, false); // from step #2   // need false argument to prevent autocalculation
-            set_oplim(1.22, 5.9f);                // from step #13  !! 250720 not yet finalized! (do step 13)
-            _zeropoint = 5.7;                    // from step #12c
-
-            // don't also set native oplims as they will autocalc from oplims setting
-            // set_oplim_native(1445, 1923);  // 240609 1445 (2.68in) is full push, and 1923 (4.5in) is park position (with simple quicklink +carabeener linkage)
-        #endif
+        set_abslim(1.22, 7.26, false);        // from step #1   // need false argument to prevent autocalculation
+        set_abslim_native(1885, 2933, false); // from step #2   // need false argument to prevent autocalculation
+        set_oplim(1.22, 5.9f);                // from step #13  !! 250720 not yet finalized! (do step 13)
+        _zeropoint = 5.7;                    // from step #12c
+        // don't also set native oplims as they will autocalc from oplims setting
+        // set_oplim_native(1445, 1923);  // 240609 1445 (2.68in) is full push, and 1923 (4.5in) is park position (with simple quicklink +carabeener linkage)
         set_ema_alpha(0.35);
         set_margin(0.2);  // TODO: add description
         // _mfactor = (_absmax - _absmin) / (float)(_absmax_adc - _absmin_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
@@ -863,6 +855,24 @@ class PulseSensor : public Sensor {
         _isr_us = time_us;
         _pulse_count++;
     }
+
+    // modified ema filter where filtering is smoother the less often it's called
+    float scaling_ema_filt(float raw, float filt, float dt_s) {  // tau factor (in seconds) is taken from member variable _ema_tau
+        dt_s = std::fmaxf(0.0f, dt_s);      // pretend negative times are 0
+        return filt * std::exp(-dt_s / _ema_tau_s) + raw * (1 - std::exp(-dt_s / _ema_tau_s));
+    }
+
+    // override standard ema filter so filtering is smoother the less frequently we get pulses
+    void calculate_ema() {
+        if (_first_filter_run) {  // initialization on first run works the same as in Sensor::calculate_ema()
+            set_si(_si_raw);
+            _first_filter_run = false;
+            return;
+        }
+        // !! TODO !! insert modified scaling ema filter (above function) to replace standard ema (line below)
+        set_si(ema_filt(_si_raw, _si.val(), _ema_alpha), false);
+    }
+
     void set_pin_inactive() {
         static bool pinlevel_last;
         if (pinlevel_last != _pin_level) {
@@ -873,25 +883,22 @@ class PulseSensor : public Sensor {
         pinlevel_last = _pin_level;
     }
     void set_val_from_pin() {
-        float new_native = _native.val();
-        if ((esp_timer_get_time() - _isr_time_last_us) >= _absmax_us) {  // if last pulse seen is more than absmax ago
-            _us = NAN;  // indicate out-of-range pulse period
-            new_native = 0.0;  // call this 0 Hz
+        float _isr_buf_us = static_cast<float>(_isr_us);     // copy delta value (in case another interrupt happens during handling)
+
+        if ((esp_timer_get_time() - _isr_time_last_us) >= _absmax_us) _native.set(0.0f); // if last pulse was >absmax ago, call it 0 Hz
+        else if (_isr_buf_us < _absmin_us) _native.set(NAN); // if pulse is too soon after the last one (possible bounce), set native to nan
+        else _native.set(us_to_hz(_isr_buf_us));             // else convert valid us reading to native hz value
+        
+        _us = iszero(_native.val()) ? NAN : _isr_buf_us;     // determine us pulsewidth value
+        
+        if (!std::isnan(_native.val())) {         // if native Hz value is valid
+            _si_raw = from_native(_native.val()); // convert for valid si value
+            calculate_ema();                      // apply ema filter for valid si filt value
         }
-        else {
-            float _isr_buf_us = static_cast<float>(_isr_us);  // copy delta value (in case another interrupt happens during handling)
-            if (_isr_buf_us >= _absmin_us) {  // if the pulse isn't too soon after the last one (possible bounce)
-                _us = _isr_buf_us;
-                new_native = us_to_hz(_isr_buf_us);  // convert us reading to native hz value as a valid reading
-            }
-        }
-        set_pin_inactive();  // for idiot light showing pulse activity
-        set_native(new_native);  // too-short pulse times are presumably bounces and are ignored, keeping the existing native value
-        // _si_raw = from_native(new_native);  // commenting since set_native() above will do this by default
-        calculate_ema(); // filtered values are kept in si format
-        _pin_level = read_pin(_pin);  // _pin_level = !_pin_level;
+        _pin_level = read_pin(_pin);              // _pin_level = !_pin_level;
+        set_pin_inactive();                       // for idiot light showing pulse activity
         if (_pulsecount_timer.expireset()) {
-            _pulses_per_sec = _pulse_count;  // pulses_per_sec can be used for monitoring/debugging;
+            _pulses_per_sec = _pulse_count;       // pulses_per_sec can be used for monitoring/debugging;
             _pulse_count = 0;
         }
     }
@@ -901,9 +908,9 @@ class PulseSensor : public Sensor {
         // ezread.squintf("Err: %s us_to_hz() reciprocal of zero\n", _short_name.c_str());
         // return absmax();
     }
-    float hz_to_us(float arg) { return us_to_hz(arg); }  // funny that the same math converts in either direction
+    float hz_to_us(float arg) { return us_to_hz(arg); }  // the same math converts in either direction
   public:
-    std::string _uber_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
+    std::string _true_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
 
     PulseSensor(int arg_pin, float arg_freqfactor=1.0) : Sensor(arg_pin), _freqfactor(arg_freqfactor) {
         _long_name = "Unknown hall-effect";
@@ -913,7 +920,7 @@ class PulseSensor : public Sensor {
     PulseSensor() = delete;
     void print_config(bool header=true, bool ranges=true) {
         Transducer::print_config(header, ranges);
-        if (ranges) ezread.squintf("  pulse = %.0lf %s, abs: %.0lf-%.0lf %s\n", _us, _uber_native_units.c_str(), _absmin_us, _absmax_us, _uber_native_units.c_str());
+        if (ranges) ezread.squintf("  pulse = %.0lf %s, abs: %.0lf-%.0lf %s\n", _us, _true_native_units.c_str(), _absmin_us, _absmax_us, _true_native_units.c_str());
     }
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // Overload the normal function so we can also include absmin_us calculation. Note absmax_us is set with a separate function 
