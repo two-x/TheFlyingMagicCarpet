@@ -1,7 +1,6 @@
 #pragma once
 #include <Wire.h>   // for i2c bus support
-enum i2c_nodes : int { I2CTouch, I2CLightbox, I2CAirVelo, I2CMAP, NumI2CSlaves };  // I2CTouch, 
-// enum i2c_nodes { I2CTouch=0, I2CLightbox=1, I2CAirVelo=2, I2CMAP=3, NumI2CSlaves=4 };  // I2CTouch, 
+enum i2c_nodes : int { I2CBogus=-1, I2CTouch=0, I2CLightbox=1, I2CAirVelo=2, I2CMAP=3, NumI2CSlaves=4 };  // I2CTouch, 
 
 class I2C {
   private:
