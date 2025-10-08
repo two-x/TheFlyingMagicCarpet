@@ -439,7 +439,6 @@ public:
     float val(int locat) { return val(static_cast<loc>(locat)); }
     bool detected(int locat) { return detected(static_cast<loc>(locat)); }
     src source() { return src::Pin; }
-    int brake_type() { return brakemotor_type_detected; }
 
     float opmin(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->opmin(); }
     float opmax(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->opmax(); }
@@ -448,7 +447,6 @@ public:
     float alarm(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->alarm(); }
     float cent(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->cent(); }
     float margin(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return NAN; return sens->margin(); }
-
     float* ptr(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return nanptr; return sens->ptr(); }
     float* opmin_ptr(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return nanptr; return sens->opmin_ptr(); }
     float* opmax_ptr(loc locat) { TemperatureSensor* sens = get_sensor(locat); if (!sens) return nanptr; return sens->opmax_ptr(); }

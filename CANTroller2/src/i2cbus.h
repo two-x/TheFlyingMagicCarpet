@@ -72,9 +72,7 @@ class I2C {
         // Serial.printf("\r-%d-", i2cbaton);
     }
     bool not_my_turn(int checkdev) {
-        bool retval = (use_i2c_baton && (checkdev != i2cbaton));
-        // Serial.printf("b:%d c:%d nmt:%d\n", i2cbaton, checkdev, retval);
-        return retval;       
+        return (use_i2c_baton && (checkdev != i2cbaton));
     }
 };
 
