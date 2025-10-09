@@ -568,7 +568,8 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     void setup() {  // ezread.squintf("%s..", _long_name.c_str());
         set_si(0.0);  // initialize value
         set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
-        set_oplim(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
+        set_oplim(0.0, 27.36);  // 620/2 cm3/rot * 4800 rot/min * 60 min/hr * 1/160934 mi/cm * 1/pi * 1/((2 in * 2.54 cm/in) / 2)^2) 1/cm2  = 27.36 mi/hr (mph
+        // set_oplim(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         _responding = !_sensor.begin();
         if (_responding) _sensor.setRange(AIRFLOW_RANGE_15_MPS);
@@ -1357,7 +1358,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     bool _verbose = false;  // causes console print whenever an unfiltered switch event is queried externally, thus canceling the in-progress filtering
     float absmin_us = 880.0f;  // min configurable pulsewidth for the hotrc
     float absmax_us = 2120.0f; // max configurable pulsewidth for the hotrc
-    float pc[NumAxes][NumValues], sim_raw_pc[NumAxes]; // values range from -100% to 100%. pc[][] are all derived or auto-assigned. sim_raw_pc[] are simulated inputs set externally  
+    float pc[NumAxes][NumValues], sim_raw_pc[NumAxes]; // values range from -100% to 100%. pc[][] are all derived or auto-assigned. sim_raw_pc[] are simulated inputs
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
         {  969, 1473, 1977, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
         { 1080, 1583, 2087, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2, // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
@@ -1440,20 +1441,20 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         }
     }
     bool sw_event_filt(int ch) {  // returns if a stable & filtered event occurred on the given channel, and if so, resets that channel
-        bool retval = _sw_event_filt[ch];
-        if (retval) {
+        if (_sw_event_filt[ch]) {
             toggle_reset(ch);  // if there is an event, reset all channel events and in-progress pending events
             if (_verbose) ezread.squintf("hotrc: ch%d filt event serviced\n", (ch == Ch3) ? 3 : 4);
+            return true;
         }
-        return retval;
+        return false;
     }
     bool sw_event_unfilt(int ch) {  // returns if any event occurred on the given channel, and if so, resets that channel. note: calling this cancels any in-progress event filtering
-        bool retval = _sw_event_unfilt[ch] || _sw_event_filt[ch];
-        if (retval) {
+        if (_sw_event_unfilt[ch] || _sw_event_filt[ch]) {
             toggle_reset(ch);  // if there is an event, reset all channel events and in-progress pending events
             if (_verbose) ezread.squintf("hotrc: ch%d unfilt event serviced\n", (ch == Ch3) ? 3 : 4);
+            return true;
         }
-        return retval;
+        return false;
     }
     bool radiolost() { return _radiolost; }
     bool radiolost_untested() { return _radiolost_untested; }
@@ -1463,9 +1464,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     int sim_button_last_ms() { return simBtnTimer.elapsed() / 1000; }  // returns time since last display menu ch4 button press. to help prevent phantom starter turnon
     int ch4_button_last_ms() { return ch4BtnTimer.elapsed() / 1000; }  // returns time since last actual ch4 button press. to help prevent phantom starter turnon
   private:
-    void read_channel(int ch) {
-        us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true));
-    }
+    void read_channel(int ch) { us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true)); }
     void read_all_channels() {
         static bool sw_old[NumChans];  // for debug. note on first time thru sw_old is meaningless, may cause a print
         for (int ch = Horz; ch <= Vert; ch++) {      // analog channels
@@ -1486,15 +1485,11 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         if (_radiolost) _radiolost_untested = false;  // on first valid detection of radiolost, radiolost detection is known to work
         lost_last = _radiolost;  // remember current reading for comparison on next loop
     }
-    bool toggle_getval(int ch) {
-        return (us[ch][Raw] >= us[ch][Cent]);  // pulsewidth higher than center value is considered val=1
-    }
-    void toggle_reset(int ch) {  // resets events and pending events on the given channel
+    void toggles_init() { for (int ch=Ch3; ch<=Ch4; ch++) toggle_reset(ch); } // init switches to newest read values to prevent spurious events. run on boot & when radio gets lost or un-lost
+    bool toggle_getval(int ch) { return (us[ch][Raw] >= us[ch][Cent]); } // pulsewidth higher than center value is considered val=1
+    void toggle_reset(int ch) {                         // resets events and pending events on the given channel
         _sw_new[ch] = _sw_val[ch] = toggle_getval(ch);  // set both last and val based on last read value
-        _sw_event_filt[ch] = _sw_event_unfilt[ch] = _sw_pending[ch] = false;
-    }
-    void toggles_init() {  // initialize stored switch values to newest read values, to prevent spurious switch events. run on boot and any time radio becomes lost or un-lost
-        for (int ch = Ch3; ch <= Ch4; ch++) toggle_reset(ch);
+        _sw_event_filt[ch] = _sw_event_unfilt[ch] = _sw_pending[ch] = false;  // cancel all events
     }
     // hotrc digital button handler which rejects spurious values which could cause false events (re: phantom starter bug)
     //   seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
@@ -1551,30 +1546,26 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         spike_us[axis] = spike_filter(axis, us[axis][Raw]);  // apply spike filter on raw reading
         us[axis][Filt] = ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha); // apply ema filter on spike filter output
         bool in_deadbands = remove_deadbands(&us[axis][Filt], deadband_us, us[axis][Cent], us[axis][OpMin], us[axis][OpMax]); // enforce deadbands
-        if (_radiolost) pc[axis][Filt] = pc[axis][Cent];     // if radio lost set pc value to Center value for sanity, but not us value b/c useful for debug
+        if (_radiolost) pc[axis][Filt] = pc[axis][Cent];     // if radio lost set pc value to center for sanity, but keep us value for debug
         else {                                               // otherwise if radio is not lost
             pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]); // convert filtered us value to percent
-            if (!in_deadbands) kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig); // then register evidence of user activity
+            if (!in_deadbands) kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig); // register evidence of user activity
         }
     }
     void set_sim_direction(int axis) {     // when simulating, set values respecting deadbands
         pc[axis][Filt] = sim_raw_pc[axis]; // commit externally set or potmapped sim value
         remove_deadbands(&pc[axis][Filt], sim_deadband_pc, pc[axis][Cent], pc[axis][OpMin], pc[axis][OpMax]); // enforce sim deadbands
     }
-    void direction_update() {
-        clean_sim_vals();
-
-        if (sim->simulating() && sim->simulating(sens::joy)) set_sim_direction(Vert);  // correctly navigate confusing sim function naming
+    void direction_update() { // update all directional values based on latest read or simulated values
+        clean_sim_vals(); // prevent false values when turning on simulator
+        if (sim->simulating() && sim->simulating(sens::joy)) set_sim_direction(Vert); // correctly navigate confusing sim function naming
         else set_direction(Vert);
-
         if (sim->simulating(sens::joy)) {
-            if (sim->potmapping(sens::joy)) sim_raw_pc[Horz] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]); // if potmapping set Horz value to the pot value
+            if (sim->potmapping(sens::joy)) sim_raw_pc[Horz] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]); // if potmapping set horz to pot
             set_sim_direction(Horz);
         }
         else set_direction(Horz);
-
-        for (int axis = Horz; axis <= Vert; axis++)  // always constrain the pc filt values
-            pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]); 
+        for (int axis = Horz; axis <= Vert; axis++) pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
     }
     // spike_filter() : I wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals coming
     // from the hotrc, where often the incoming values change suddenly then (usually) quickly jump back by the same amount. 
