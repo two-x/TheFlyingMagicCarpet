@@ -121,16 +121,17 @@ private:
             float wave_brightness = ((cos(param.progress * 2 * PI) + 1.0f) * 0.45f) + 0.1f;  // Cosine wave from 0.1 to 1
             if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended
             RgbColor pulse_color = chg_pix_brightness(wave_brightness);
-            
-            neoobj.SetPixelColor(0, pulse_color);  // Set the esp on-board & box backlight pixels to the cos wave (they are both pixel 0)
+
+            // the cos signal "leads" the sin signal by 1/4 period
+            neoobj.SetPixelColor(1, pulse_color);  // pixel 1 (pcba-topside led)
 
             wave_brightness = ((sin(param.progress * 2 * PI) + 1.0f) * 0.45f) + 0.1f;  // Sine wave from 0.1 to 1
             if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended
             pulse_color = chg_pix_brightness(wave_brightness);
             
-            // Set the pcba backlight and external strip "mode" pixels (leftmost on the idiotlight strip) to the sin wave
-            neoobj.SetPixelColor(1, pulse_color);  // Set pcba backlight pixels to the sin wave 
-            if (runmode != LowPower) neoobj.SetPixelColor(2, pulse_color);  // in sleep mode this one does the cylon effect
+            // the sin signal "follows" the cos signal by 1/4 period
+            neoobj.SetPixelColor(0, pulse_color);  // pixel 0 (both pcba-bottomside led & esp-builtin led)
+            if (runmode != LowPower) neoobj.SetPixelColor(2, pulse_color);  // pixel 2 (ext-strip leftmost led): joins the cylon effect when lowpower
 
             // !! This creates a bottomless recursion which will cause a stack overflow! Removing
             //
