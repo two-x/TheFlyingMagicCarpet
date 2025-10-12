@@ -829,9 +829,13 @@ class PulseSensor : public Sensor {
 
     // modified ema filter where filtering is smoother the less often it's called
     float scaling_ema_filt(float raw, float filt, float dt, float tau) {  // dt and tau must both be in same unit of time
-        dt = std::fmaxf(0.0f, dt);      // pretend negative times are 0
-        return filt * std::exp(-dt / tau) + raw * (1 - std::exp(-dt / tau));
-    }
+        dt = std::fmaxf(0.0f, dt);                     // pretend negative times are 0
+        tau = std::fmaxf(tau, _ema_tau_min_us);        // floor tau well below your dt_min (e.g., 1e-4 s if dt>=0.055 s)
+        if (iszero(dt)) return filt;                   // no time passed
+        float alpha = dt / (tau + dt);                 // alpha = dt / (tau + dt)  ∈ (0,1)
+        // optional: alpha = std::fminf(alpha, 0.95f); // cap responsiveness after long gaps
+        return std::fmaf(alpha, (raw - filt), filt);   // filt + alpha*(raw - filt)
+    }  // return filt * std::exp(-dt / tau) + raw * (1 - std::exp(-dt / tau));  // true math but it uses expensive exponents
 
     // override standard ema filter so filtering is smoother the less frequently we get pulses
     void calculate_ema() {
