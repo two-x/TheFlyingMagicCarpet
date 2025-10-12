@@ -828,9 +828,9 @@ class PulseSensor : public Sensor {
     }
 
     // modified ema filter where filtering is smoother the less often it's called
-    float scaling_ema_filt(float raw, float filt, float dt_s, float tau_s) {
-        dt_s = std::fmaxf(0.0f, dt_s);      // pretend negative times are 0
-        return filt * std::exp(-dt_s / tau_s) + raw * (1 - std::exp(-dt_s / tau_s));
+    float scaling_ema_filt(float raw, float filt, float dt, float tau) {  // dt and tau must both be in same unit of time
+        dt = std::fmaxf(0.0f, dt);      // pretend negative times are 0
+        return filt * std::exp(-dt / tau) + raw * (1 - std::exp(-dt / tau));
     }
 
     // override standard ema filter so filtering is smoother the less frequently we get pulses
@@ -874,8 +874,9 @@ class PulseSensor : public Sensor {
         }
     }
     float us_to_hz(float arg) {
-        if (iszero(arg) || std::isnan(arg)) return 0.0;  // zero is a special value meaning we timed out
-        return 1000000.0 / arg;
+        if (iszero(arg)) return NAN;      // zero argument is an invalid value
+        if (std::isnan(arg)) return 0.0;  // if invalid argument, return zero, a special value meaning we timed out
+        return 1000000.0 / arg;           // convert units of valid value
         // ezread.squintf("Err: %s us_to_hz() reciprocal of zero\n", _short_name.c_str());
         // return absmax();
     }
