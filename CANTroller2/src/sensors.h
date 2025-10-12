@@ -431,7 +431,7 @@ class Sensor : public Transducer {
 
     void calculate_ema() { // Exponential Moving Average
         if (_first_filter_run) {
-            set_si(_si_raw);
+            set_si(_si_raw, false);
             _first_filter_run = false;
             return;
         }
@@ -804,9 +804,9 @@ class PulseSensor : public Sensor {
     volatile int _isr_pulse_period_us = 0;
     volatile int _pulse_count = 0;  // record pulses occurring for debug/monitoring pulse activity
     int _pulses_per_sec = 0;
-    float _ema_tau_min_s = 0.001f; // in seconds. must be >0
-    float _ema_tau_max_s = 10.0f;  // in seconds
-    float _ema_tau_s = 2.5f;       // in seconds. must be >0
+    float _ema_tau_min_us = 1000.0f;      // default tau min in us. must be >0
+    float _ema_tau_max_us = 10000000.0f;  // default tau max in us
+    float _ema_tau_us = 2500000.0f;       // default tau value in us. must be >0
 
     // we maintain our min and max pulse period, for each pulse sensor
     // absmin_us is calculated based on absmax_native (Hz) using overloaded set_abslim_native() function
@@ -828,20 +828,20 @@ class PulseSensor : public Sensor {
     }
 
     // modified ema filter where filtering is smoother the less often it's called
-    float scaling_ema_filt(float raw, float filt, float dt_s) {  // tau factor (in seconds) is taken from member variable _ema_tau
+    float scaling_ema_filt(float raw, float filt, float dt_s, float tau_s) {
         dt_s = std::fmaxf(0.0f, dt_s);      // pretend negative times are 0
-        return filt * std::exp(-dt_s / _ema_tau_s) + raw * (1 - std::exp(-dt_s / _ema_tau_s));
+        return filt * std::exp(-dt_s / tau_s) + raw * (1 - std::exp(-dt_s / tau_s));
     }
 
     // override standard ema filter so filtering is smoother the less frequently we get pulses
     void calculate_ema() {
         if (_first_filter_run) {  // initialization on first run works the same as in Sensor::calculate_ema()
-            set_si(_si_raw);
+            set_si(_si_raw, false);
             _first_filter_run = false;
             return;
         }
-        // !! TODO !! insert modified scaling ema filter (above function) to replace standard ema (line below)
-        set_si(ema_filt(_si_raw, _si.val(), _ema_alpha), false);
+        set_si(scaling_ema_filt(_si_raw, _si.val(), _us, _ema_tau_us), false);
+        // set_si(ema_filt(_si_raw, _si.val(), _ema_alpha), false);
     }
 
     void set_pin_inactive() {
@@ -920,10 +920,10 @@ class PulseSensor : public Sensor {
     bool stopped() { return iszero(val()); }
     // old: bool stopped() { return (std::abs(val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     // older:  bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
-    void set_ema_tau(float newtau) { _ema_tau_s = constrain(newtau, _ema_tau_min_s, _ema_tau_max_s); }
-    float ema_tau() { return _ema_tau_s; }
-    float ema_tau_min() { return _ema_tau_min_s; }
-    float ema_tau_max() { return _ema_tau_max_s; }
+    void set_ema_tau(float newtau) { _ema_tau_us = constrain(newtau, _ema_tau_min_us, _ema_tau_max_us); }
+    float ema_tau() { return _ema_tau_us; }
+    float ema_tau_min() { return _ema_tau_min_us; }
+    float ema_tau_max() { return _ema_tau_max_us; }
     bool* pin_inactive_ptr() { return &_pin_inactive; }
     bool* pin_level_ptr() { return &_pin_level; }
     float absmin_us() { return _absmin_us; }
@@ -943,6 +943,10 @@ class Tachometer : public PulseSensor {
     float _governmax_rpm;
     float _idle = 590.0, _idle_cold = 680.0, _idle_hot = 500.0;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer
     // float _calfactor = 0.25;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
+    float _ema_tau_min_us = 500.0f;     // default tau min in us. must be >0
+    float _ema_tau_max_us = 200000.0f;  // default tau max in us
+    float _ema_tau_us = 16000.0f;       // default tau value in us. must be >0
+    
     Tachometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {  // where actual_hz = pulses_hz * freqfactor (due to external circuitry or magnet arrangement)
         _long_name = "Tachometer";
         _short_name = "tach";

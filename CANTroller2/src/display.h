@@ -50,7 +50,7 @@ static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  //
     { "psi",  "in",   "V",   "%", "mph", "atm", "g/s", "scr", "scr", "scr", "min",    "",    "",   "%",   "%", },  // PgRun
     {  "us",  "us",  "us",  "us",  "us",  "us",   "%",   "%",   "%",   "%",    "",    "",   "us",  "us",  "%", },  // PgHrc
     { "adc", "adc",  "in",   "%", "adc", "psi",   "%", "adc",   "V",    "", "psi", "psi",  "in",  "in",  "in", },  // PgSens
-    {  "ms",  "Hz",  "Hz", "rpm",  "ms",  "Hz",  "Hz", "mph",   "%",    "",    "", "rpm", "rpm", "mph", "mph", },  // PgPuls
+    {  "ms",  "Hz",  "Hz", "rpm",  "ms",  "Hz",  "Hz", "mph",   "%",  "us",  "us", "rpm", "rpm", "mph", "mph", },  // PgPuls
     { "ang",  "us",   "V",  "us",   "V",  "us",    "",    "", "ang", "ang",  "us",   "%", "mph", "atm", "atm", },  // PgPWMs
     { "scr", "rpm",   "%",   "%", "ang", "rpm",    "",    "",    "",    "",   "s",   "%",   "%", "deg", "deg", },  // PgIdle
     {   "%", "deg",   "%",    "",    "", "0/1", "scr", "scr", "0/1", "%/s", "0/1", "0/1", "scr", "0/1", "scr", },  // PgMotr
