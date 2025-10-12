@@ -750,7 +750,7 @@ class Display {
             drawval(16, speedo.raw(), speedo.opmin(), speedo.opmax());
             drawval(17, speedo.pc(), 0.0, 100.0);
             drawval(18, tach.ema_tau(), tach.ema_tau_min(), tach.ema_tau_max());
-            drawval(18, speedo.ema_tau(), speedo.ema_tau_min(), speedo.ema_tau_max());
+            drawval(19, speedo.ema_tau(), speedo.ema_tau_min(), speedo.ema_tau_max());
             drawval(20, tach.opmin(), tach.absmin(), tach.absmax());
             drawval(21, tach.opmax(), tach.absmin(), tach.absmax());
             drawval(22, speedo.opmin(), speedo.absmin(), speedo.absmax());

@@ -804,10 +804,8 @@ class PulseSensor : public Sensor {
     volatile int _isr_pulse_period_us = 0;
     volatile int _pulse_count = 0;  // record pulses occurring for debug/monitoring pulse activity
     int _pulses_per_sec = 0;
-    float _ema_tau_min_us = 1000.0f;      // default tau min in us. must be >0
-    float _ema_tau_max_us = 10000000.0f;  // default tau max in us
-    float _ema_tau_us = 2500000.0f;       // default tau value in us. must be >0
-
+    float _ema_tau_min_us = 1000.0f, _ema_tau_max_us = 100000.0f, _ema_tau_us = 10000.0f;  // default ema tau parameters. all 3 must be initialized in child classes!
+    
     // we maintain our min and max pulse period, for each pulse sensor
     // absmin_us is calculated based on absmax_native (Hz) using overloaded set_abslim_native() function
     // absmax_us is our stop timeout, and not based on absmin_native (Hz). It must be set using set_abmax_us() function
@@ -944,13 +942,13 @@ class PulseSensor : public Sensor {
 class Tachometer : public PulseSensor {
   public:
     sens _senstype = sens::tach;
+    float _ema_tau_min_us = 500.0f;     // tau min in us. must be >0
+    float _ema_tau_max_us = 200000.0f;  // tau max in us
+
     float _calfactor = 1.0;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
     float _governmax_rpm;
     float _idle = 590.0, _idle_cold = 680.0, _idle_hot = 500.0;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer
     // float _calfactor = 0.25;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
-    float _ema_tau_min_us = 500.0f;     // default tau min in us. must be >0
-    float _ema_tau_max_us = 200000.0f;  // default tau max in us
-    float _ema_tau_us = 16000.0f;       // default tau value in us. must be >0
     
     Tachometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {  // where actual_hz = pulses_hz * freqfactor (due to external circuitry or magnet arrangement)
         _long_name = "Tachometer";
@@ -974,7 +972,7 @@ class Tachometer : public PulseSensor {
         set_absmax_us(430000.0f);  // this sets the max pulse-to-pulse period to be considered as stopped.
         set_oplim(0.0f, 3600.0f);  // aka redline,  Max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         _governmax_rpm = _opmax * governor / 100.0;
-        set_ema_alpha(0.015f);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        set_ema_tau(16000.0f);        // set filter tau factor
         set_margin(15.0f);
         set_si(0.0f);
         _us = hz_to_us(_native.val());
@@ -1009,6 +1007,9 @@ class Tachometer : public PulseSensor {
 class Speedometer : public PulseSensor {
   public:
     sens _senstype = sens::speedo;
+    float _ema_tau_min_us = 1000.0f; // tau min in us. must be >0
+    float _ema_tau_max_us = 1e7f;    // tau max in us
+
     Speedometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {
         _long_name = "Speedometer";
         _short_name = "speedo";
@@ -1022,10 +1023,11 @@ class Speedometer : public PulseSensor {
         // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=1uF
 
         set_conversions(mfact, 0.0f);
-        set_abslim(0.0f, 18.0f);  // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
-        set_absmax_us(1300000.0f);  // this sets the max pulse-to-pulse period to be considered as stopped.
-        set_oplim(0.0f, 15.0f);  // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
-        set_ema_alpha(0.003f);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
+        set_abslim(0.0f, 18.0f);   // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
+        set_absmax_us(1300000.0f); // this sets the max pulse-to-pulse period to be considered as stopped.
+        set_oplim(0.0f, 15.0f);    // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        set_ema_tau(2500000);      // set filter tau factor
+        // set_ema_alpha(0.003f);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(0.2f);
         // set_si(50.0);
         _us = hz_to_us(_native.val());
