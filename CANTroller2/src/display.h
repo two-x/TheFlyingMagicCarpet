@@ -626,27 +626,28 @@ class Display {
                     if (val_ptr == &panicstop || val_ptr == &diag.err_sens[ErrRange][_TempEng] || val_ptr == &wheeltemperr) {
                         neo->setflash(i, 3, 1, 2, 100, 0xffffff);  // add a brilliant flash to the more critical idiot lights
                         neo2->setIdiotLightCriticalAlertMode(i, true);
-                    } else if (val_ptr == &diag.err_sens_alarm[ErrLost] ) {
-                        for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
-                            if (diag.devices[sensor][ErrLost]) {
-                                neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
-                            } else {
-                                // Disable the flash mode for this sensor by setting it to black
-                                neo2->setIdiotLightFlashColor(i, sensor, BLACK);
-                            }
-                        }
-                        neo->setflash(i, diag.errorcount(ErrLost), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
-                    } else if (val_ptr == &diag.err_sens_alarm[ErrRange]) {
-                        for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
-                            if (diag.devices[sensor][ErrRange]) {
-                                neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
-                            } else {
-                                // Disable the flash mode for this sensor by setting it to black
-                                neo2->setIdiotLightFlashColor(i, sensor, BLACK);
-                            }
-                        }
                     }
-
+                    // else if (val_ptr == &diag.err_sens_alarm[ErrLost] ) {
+                    //     for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
+                    //         if (diag.devices[sensor][ErrLost]) {
+                    //             neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
+                    //         } else {
+                    //             // Disable the flash mode for this sensor by setting it to black
+                    //             neo2->setIdiotLightFlashColor(i, sensor, BLACK);
+                    //         }
+                    //     }
+                    //     neo->setflash(i, diag.errorcount(ErrLost), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
+                    // }
+                    // else if (val_ptr == &diag.err_sens_alarm[ErrRange]) {
+                    //     for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
+                    //         if (diag.devices[sensor][ErrRange]) {
+                    //             neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
+                    //         } else {
+                    //             // Disable the flash mode for this sensor by setting it to black
+                    //             neo2->setIdiotLightFlashColor(i, sensor, BLACK);
+                    //         }
+                    //     }
+                    // }
                 }
                 else {
                     neo->setflash(i, 0);

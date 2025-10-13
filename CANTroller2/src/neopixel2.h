@@ -181,56 +181,94 @@ private:
     }
 
     void startCylonAnimation() {
-        // Cylon animation: red LED bouncing back and forth with trailing effect
         neoanimator.StartAnimation(AnimCylon, 2000, [this](const AnimationParam& param) {
-            int effect_offset = 2;  // cylon should not extend to the pixels in the control box
-            int effect_length = striplength - effect_offset;  // adjust the effective striplength accordingly
+            const int effect_offset = 2;  // cylon should not extend to the pixels in the control box
+            const int effect_length = striplength - effect_offset;  // adjust the effective striplength accordingly
+            const int tail_length = 3;
 
-            // Clear all LEDs first
-            for (int i = 0; i < effect_length; i++) {
-                neoobj.SetPixelColor(i + effect_offset, BLACK);
-            }
-            
-            // Calculate position (0 to striplength-1 and back)
-            float cycle_progress = param.progress * 2.0f; // 0 to 2
-            float position;
-            
-            if (cycle_progress <= 1.0f) {
-                // Moving forward (0 to striplength-1)
-                position = cycle_progress * (effect_length - 1);
-            } else {
-                // Moving backward (striplength-1 to 0)
-                position = (2.0f - cycle_progress) * (effect_length - 1);
-            }
-            
-            int main_pos = (int)position;
-            
-            // Main LED (brightest)
-            if (main_pos >= 0 && main_pos < effect_length) {
-                neoobj.SetPixelColor(main_pos + effect_offset, RgbColor(255, 0, 0));
-            }
-            
-            // Trailing effect - dimmer LEDs behind the main one
-            for (int trail = 1; trail <= 3; trail++) {
-                int trail_brightness = 255 / (trail + 1);  // Diminishing brightness
-                
-                // Trail in direction opposite to movement
-                int trail_pos;
-                if (cycle_progress <= 1.0f) {
-                    // Moving forward, trail behind
-                    trail_pos = main_pos - trail;
-                } else {
-                    // Moving backward, trail behind
-                    trail_pos = main_pos + trail;
-                }
-                
-                if (trail_pos >= 0 && trail_pos < effect_length) {
-                    neoobj.SetPixelColor(trail_pos + effect_offset, RgbColor(trail_brightness, 0, 0));
-                }
+            // helper: brightness (0..1) → red with desired saturation scaling
+            auto redForB = [](float b) {
+                b = constrain(b, 0.0f, 1.0f); // b = fminf(fmaxf(b, 0.0f), 1.0f);
+                float L = 0.5f * b;          // matches RgbColor(b*255,0,0)
+                // float S = 0.5f + L;   // 0→0.5, 1→1.0
+                float S = 1.0f;
+                return RgbColor(HslColor(0.0f, S, L));
+            };
+
+            for (int i = 0; i < effect_length; i++) neoobj.SetPixelColor(i + effect_offset, BLACK);
+
+            float cycle = param.progress * 2.0f; // 0..2
+            float pos = (cycle <= 1.0f) ? cycle * (effect_length - 1)
+                                        : (2.0f - cycle) * (effect_length - 1);
+            int main_pos = (int)pos;
+
+            // main LED: b=1 → S=1.0
+            if (main_pos >= 0 && main_pos < effect_length)
+                neoobj.SetPixelColor(main_pos + effect_offset, redForB(1.0f));
+
+            // 3-pixel tail with decreasing brightness (and saturation per spec)
+            for (int trail = 1; trail <= tail_length; trail++) {
+                // float b = 1.0f - (float)(trail / (tail_length + 1));                
+                float b = 1.0f / (trail + 1);   // 1/2, 1/3, 1/4 → 0.5, 0.333, 0.25
+                int trail_pos = (cycle <= 1.0f) ? main_pos - trail : main_pos + trail;
+                if (trail_pos >= 0 && trail_pos < effect_length)
+                    neoobj.SetPixelColor(trail_pos + effect_offset, redForB(b));
             }
             this->progressAnim[AnimCylon] = param.progress;
         });
     }
+
+    // void startCylonAnimation() {
+    //     // Cylon animation: red LED bouncing back and forth with trailing effect
+    //     neoanimator.StartAnimation(AnimCylon, 2000, [this](const AnimationParam& param) {
+    //         int effect_offset = 2;  // cylon should not extend to the pixels in the control box
+    //         int effect_length = striplength - effect_offset;  // adjust the effective striplength accordingly
+
+    //         // Clear all LEDs first
+    //         for (int i = 0; i < effect_length; i++) {
+    //             neoobj.SetPixelColor(i + effect_offset, BLACK);
+    //         }
+            
+    //         // Calculate position (0 to striplength-1 and back)
+    //         float cycle_progress = param.progress * 2.0f; // 0 to 2
+    //         float position;
+            
+    //         if (cycle_progress <= 1.0f) {
+    //             // Moving forward (0 to striplength-1)
+    //             position = cycle_progress * (effect_length - 1);
+    //         } else {
+    //             // Moving backward (striplength-1 to 0)
+    //             position = (2.0f - cycle_progress) * (effect_length - 1);
+    //         }
+            
+    //         int main_pos = (int)position;
+            
+    //         // Main LED (brightest)
+    //         if (main_pos >= 0 && main_pos < effect_length) {
+    //             neoobj.SetPixelColor(main_pos + effect_offset, RgbColor(255, 0, 0));
+    //         }
+            
+    //         // Trailing effect - dimmer LEDs behind the main one
+    //         for (int trail = 1; trail <= 3; trail++) {
+    //             int trail_brightness = 255 / (trail + 1);  // Diminishing brightness
+                
+    //             // Trail in direction opposite to movement
+    //             int trail_pos;
+    //             if (cycle_progress <= 1.0f) {
+    //                 // Moving forward, trail behind
+    //                 trail_pos = main_pos - trail;
+    //             } else {
+    //                 // Moving backward, trail behind
+    //                 trail_pos = main_pos + trail;
+    //             }
+                
+    //             if (trail_pos >= 0 && trail_pos < effect_length) {
+    //                 neoobj.SetPixelColor(trail_pos + effect_offset, RgbColor(trail_brightness, 0, 0));
+    //             }
+    //         }
+    //         this->progressAnim[AnimCylon] = param.progress;
+    //     });
+    // }
 
     void clear() {
         for (int i = 0; i < striplength; i++) {
