@@ -627,27 +627,27 @@ class Display {
                         neo->setflash(i, 3, 1, 2, 100, 0xffffff);  // add a brilliant flash to the more critical idiot lights
                         neo2->setIdiotLightCriticalAlertMode(i, true);
                     }
-                    // else if (val_ptr == &diag.err_sens_alarm[ErrLost] ) {
-                    //     for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
-                    //         if (diag.devices[sensor][ErrLost]) {
-                    //             neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
-                    //         } else {
-                    //             // Disable the flash mode for this sensor by setting it to black
-                    //             neo2->setIdiotLightFlashColor(i, sensor, BLACK);
-                    //         }
-                    //     }
-                    //     neo->setflash(i, diag.errorcount(ErrLost), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
-                    // }
-                    // else if (val_ptr == &diag.err_sens_alarm[ErrRange]) {
-                    //     for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
-                    //         if (diag.devices[sensor][ErrRange]) {
-                    //             neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
-                    //         } else {
-                    //             // Disable the flash mode for this sensor by setting it to black
-                    //             neo2->setIdiotLightFlashColor(i, sensor, BLACK);
-                    //         }
-                    //     }
-                    // }
+                    else if (val_ptr == &diag.err_sens_alarm[ErrLost] ) {
+                        for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
+                            if (diag.devices[sensor][ErrLost]) {
+                                neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
+                            } else {
+                                // Disable the flash mode for this sensor by setting it to black
+                                neo2->setIdiotLightFlashColor(i, sensor, BLACK);
+                            }
+                        }
+                        neo->setflash(i, diag.errorcount(ErrLost), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
+                    }
+                    else if (val_ptr == &diag.err_sens_alarm[ErrRange]) {
+                        for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
+                            if (diag.devices[sensor][ErrRange]) {
+                                neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
+                            } else {
+                                // Disable the flash mode for this sensor by setting it to black
+                                neo2->setIdiotLightFlashColor(i, sensor, BLACK);
+                            }
+                        }
+                    }
                 }
                 else {
                     neo->setflash(i, 0);
@@ -1142,8 +1142,10 @@ class Tuner {
             else if (sel == 14) tune(brkpos.zeropoint_ptr(), id, brkpos.opmin(), brkpos.opmax());
         }
         else if (datapage == PgPuls) {
-            if (sel == 9) tach.set_ema_tau(tune(tach.ema_tau(), id, tach.ema_tau_min(), tach.ema_tau_max()));
-            else if (sel == 10) speedo.set_ema_tau(tune(speedo.ema_tau(), id, speedo.ema_tau_min(), speedo.ema_tau_max()));
+            // if (sel == 9) tach.set_ema_tau(tune(tach.ema_tau(), id, tach.ema_tau_min(), tach.ema_tau_max()));
+            // else if (sel == 10) speedo.set_ema_tau(tune(speedo.ema_tau(), id, speedo.ema_tau_min(), speedo.ema_tau_max()));
+            if (sel == 9) tune(&tach._ema_tau_us, id, tach.ema_tau_min(), tach.ema_tau_max());
+            else if (sel == 10) tune(&speedo._ema_tau_us, id, speedo.ema_tau_min(), speedo.ema_tau_max());
             else if (sel == 11) tach.set_oplim(tune(tach.opmin(), id, tach.absmin(), tach.opmax()), NAN);
             else if (sel == 12) tach.set_oplim(NAN, tune(tach.opmax(), id, tach.opmin(), tach.absmax()));
             else if (sel == 13) speedo.set_oplim(tune(speedo.opmin(), id, speedo.absmin(), speedo.opmax()), NAN);
