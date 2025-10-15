@@ -259,7 +259,14 @@ inline bool iszero(float num, float margin=NAN) noexcept {  // safe check for if
     if (std::isnan(margin)) margin = float_zero;  // assume global default margin value if nothing specific is given
     if (!std::isnan(num)) return (std::abs(num) <= margin);  // if input is valid return result
     Serial.printf("err: iszero(NAN) called\n");  // print err rather than crash. would prefer ezread if it were defined
-    return true;  // default to true if given nan, b/c more likely to best inform calls intending to prevent divzero
+    return true;  // default to true if given nan (even tho likely inaccurate), b/c likely to best inform calls intending to prevent divzero
+}
+inline bool isinfinite(float num, float margin=NAN) noexcept {  // safe check for if a float is effectively infinite (handle value explosions)
+    if (std::isnan(margin)) margin = float_zero;  // assume global default margin value if nothing specific is given
+    if (iszero(num, margin)) return false;        // prevent divzero errors
+    if (!std::isnan(num)) return (1.0f / std::abs(num) <= margin);  // if input is valid return result
+    Serial.printf("err: iszero(NAN) called\n");  // print err rather than crash. would prefer ezread if it were defined
+    return true;  // default to true if given nan, b/c likely accurate, also likely to best inform calls intending to prevent divzero
 }
 inline void cleanzero(float* num, float margin=NAN) noexcept {  // zeroes float values which are obnoxiously close to zero
     if (num && iszero(*num, margin)) *num = 0.0f;  // notes: 1) lets iszero() deal w/ nan margin, 2) checks for null pointer

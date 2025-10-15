@@ -769,21 +769,24 @@ class PulseSensor : public Sensor {
         _pulse_count++;
     }
     void set_val_from_pin() {
-        int64_t delta_buf_us = _isr_delta_us;      // copy delta value (in case another interrupt happens)
-        int64_t time_buf_us = _isr_time_last_us;   // copy last timestamp as well, for same reason
-        if (esp_timer_get_time() - time_buf_us >= (int)_absmax_us) { // if it's been too long since last pulse
-            _native.set(0.0f);                   // call the frequency 0 Hz
-            _us = NAN;                           // call the pulse period invalid
+        int64_t isr_delta_buf_us = _isr_delta_us;    // copy delta value (in case another interrupt happens)
+        int64_t isr_time_buf_us = _isr_time_last_us; // copy last timestamp as well, for same reason
+        int real_delta_us = esp_timer_get_time() - isr_time_buf_us;
+        if (real_delta_us >= (int)_absmax_us) {       // if it's been too long since last pulse
+            _us = static_cast<float>(real_delta_us);  // after isr stops allow _us to keep incrementing, for accurate si filtration
+            _native.set(0.0f);                        // call the frequency 0 Hz
         }
-        else {                                   // else if pulsewidth is valid
-            _us = static_cast<float>(delta_buf_us);                  // commit isr pulsewidth value to official value
+        else {                                          // else if pulsewidth is valid
+            _us = static_cast<float>(isr_delta_buf_us); // commit isr pulsewidth value to official value
             _native.set(us_to_hz(_us)); // convert it from us to native Hz value
         }
-        _si_raw = from_native(_native.val());    // convert native Hz to get raw si value
+        _si_raw = from_native(_native.val());    // convert native Hz to get raw si value        
 
         // TODO - if zero timeout happened should final si value jump to 0 also?  Here we are continuing to apply ema filter 
         my_set_si_w_ema();   // TODO stupid workaround b/c my run_ema override doesn't work
-        // set_si_w_ema();   // apply ema filter for si filt value
+        // set_si_w_ema();   // (orig) apply ema filter for si filt value
+        
+        if (iszero(_si.val())) _us = NAN;        // once filtered si hits zero, call pulsewidth invalid
 
         if (_pulsecount_timer.expireset()) {     // counting pulses to corroborate conversions (for debugging)
             _pulses_per_sec = _pulse_count;      // pulses_per_sec can be used for monitoring/debugging;
@@ -792,27 +795,22 @@ class PulseSensor : public Sensor {
         _pin_level = read_pin(_pin);             // for debug/display
         set_pin_inactive();                      // for idiot light showing pulse activity
     }
+
     // modified ema filter where filtering is smoother the less often it's called
     // tau value is time it takes for filter to reach 63% of the way toward a new value after a step change
     // smaller tau is more responsive, larger tau is smoother
     float scaling_ema_filt(float raw, float filt, float dt, float tau) {  // dt and tau must both be in same unit of time
-        dt = std::fmaxf(0.0f, dt);                     // pretend negative times are 0
-        
-        if (iszero(dt) || iszero(tau)) return filt;  // bypass if no time passed or we would div by zero
-        return filt * std::exp(-dt / tau) + raw * (1 - std::exp(-dt / tau));  // true math but it uses expensive exponents
-
-        // if (iszero(dt) || iszero(tau + dt)) return filt;  // bypass if no time passed or we would div by zero
-        // // optional: alpha = std::fminf(alpha, 0.95f); // cap responsiveness after long gaps
-        // float alpha = dt / (tau + dt);                 // alpha = dt / (tau + dt)  ∈ (0,1)
-        // return std::fmaf(alpha, (raw - filt), filt);   // filt + alpha*(raw - filt)
-        
+        if (std::isnan(dt) || std::isnan(tau)) return filt; // bypass if invalid values given
+        dt = std::fmaxf(0.0f, dt);                          // pretend negative times are 0
+        if (iszero(dt) || iszero(tau + dt)) return filt;    // bypass if no time passed or we would div by zero
+        // optional: alpha = std::fminf(alpha, 0.95f);      // cap responsiveness after long gaps
+        float alpha = dt / (tau + dt);                      // alpha = dt / (tau + dt)  ∈ (0,1)
+        return std::fmaf(alpha, (raw - filt), filt);        // filt + alpha*(raw - filt)
     }  // return filt * std::exp(-dt / tau) + raw * (1 - std::exp(-dt / tau));  // true math but it uses expensive exponents
 
-    // TODO - this simple override doesn't run!  
+    // TODO - this simple override doesn't run!  (so have implemented my_* functions as hacky override below)
     // override standard ema filter so filtering is smoother the less frequently we get pulses
     // float run_ema() { return scaling_ema_filt(_si_raw, _si.val(), _us, _ema_tau_us); }  // override ema calculator
-
-    // TODO - this stupid hack works around failed override above
     float my_run_ema() { return scaling_ema_filt(_si_raw, _si.val(), _us, _ema_tau_us); }
     void my_set_si_w_ema() {
         if (_first_filter_run) {
@@ -987,8 +985,8 @@ class Speedometer : public PulseSensor {
         set_absmax_us(1300000.0f); // this sets the max pulse-to-pulse period to be considered as stopped.
         set_oplim(0.0f, 15.0f);    // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         _ema_tau_min_us = 10000.0f; // TODO - why don't the initialized values above work?
-        _ema_tau_max_us = 1e7f;    // TODO - why don't the initialized values above work?
-        set_ema_tau(2500000);      // set filter tau factor
+        _ema_tau_max_us = 1e8f;    // TODO - why don't the initialized values above work?
+        set_ema_tau(5e7f);      // set filter tau factor
         // set_ema_alpha(0.003f);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(0.2f);
         set_si(0.0);
