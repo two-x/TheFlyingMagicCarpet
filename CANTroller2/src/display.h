@@ -743,11 +743,11 @@ class Display {
         else if (datapage == PgPuls) {
             drawval(9, tach.ms(), tach.absmin_ms(), tach.absmax_ms());
             drawval(10, tach.native(), tach.opmin_native(), tach.opmax_native());
-            drawval(11, tach.alt_native(), (int)tach.opmin(), (int)tach.opmax());
+            drawval(11, tach.alt_native(), tach.opmin_native(), tach.opmax_native());
             drawval(12, tach.raw(), tach.opmin(), tach.opmax());
             drawval(13, speedo.ms(), speedo.absmin_ms(), speedo.absmax_ms());
             drawval(14, speedo.native(), speedo.opmin_native(), speedo.opmax_native());
-            drawval(15, speedo.alt_native(), (int)speedo.opmin(), (int)speedo.opmax());
+            drawval(15, speedo.alt_native(), speedo.opmin_native(), speedo.opmax_native());
             drawval(16, speedo.raw(), speedo.opmin(), speedo.opmax());
             drawval(17, speedo.pc(), 0.0, 100.0);
             drawval(18, tach.ema_tau(), tach.ema_tau_min(), tach.ema_tau_max());

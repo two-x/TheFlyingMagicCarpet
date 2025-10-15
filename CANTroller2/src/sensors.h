@@ -751,7 +751,7 @@ class PulseSensor : public Sensor {
     volatile int64_t _isr_time_now_us = 0;
     volatile int _isr_pulse_period_us = 0;
     volatile int _pulse_count = 0;  // record pulses occurring for debug/monitoring pulse activity
-    int _pulses_per_sec = 0;
+    float _pulses_per_sec = 0.0f;
     float _ema_tau_min_us = 1000.0f, _ema_tau_max_us = 100000.0f;  // default ema tau parameters. must be initialized in child classes!
     
     // we maintain our min and max pulse period, for each pulse sensor
@@ -768,12 +768,15 @@ class PulseSensor : public Sensor {
         _isr_delta_us = delta_us;              // commit delta to official delta
         _pulse_count++;
     }
+    // TODO - something in the below i suspect, is causing constant "err: iszero(NAN) called" prints on serial console
     void set_val_from_pin() {
-        int64_t isr_delta_buf_us = _isr_delta_us;    // copy delta value (in case another interrupt happens)
         int64_t isr_time_buf_us = _isr_time_last_us; // copy last timestamp as well, for same reason
-        int real_delta_us = esp_timer_get_time() - isr_time_buf_us;
+        int64_t isr_delta_buf_us = _isr_delta_us;    // copy delta value (in case another interrupt happens)
+        int64_t now_us = esp_timer_get_time();       // save current time
+        float real_delta_us = static_cast<float>(now_us - isr_time_buf_us);  // calc actual time since last isr pulse
+
         if (real_delta_us >= (int)_absmax_us) {       // if it's been too long since last pulse
-            _us = static_cast<float>(real_delta_us);  // after isr stops allow _us to keep incrementing, for accurate si filtration
+            _us = real_delta_us;  // after isr stops allow _us to keep incrementing, for accurate si filtration
             _native.set(0.0f);                        // call the frequency 0 Hz
         }
         else {                                          // else if pulsewidth is valid
@@ -787,11 +790,7 @@ class PulseSensor : public Sensor {
         // set_si_w_ema();   // (orig) apply ema filter for si filt value
         
         if (iszero(_si.val())) _us = NAN;        // once filtered si hits zero, call pulsewidth invalid
-
-        if (_pulsecount_timer.expireset()) {     // counting pulses to corroborate conversions (for debugging)
-            _pulses_per_sec = _pulse_count;      // pulses_per_sec can be used for monitoring/debugging;
-            _pulse_count = 0;
-        }
+        update_pulsecount(isr_time_buf_us);
         _pin_level = read_pin(_pin);             // for debug/display
         set_pin_inactive();                      // for idiot light showing pulse activity
     }
@@ -820,7 +819,7 @@ class PulseSensor : public Sensor {
         }
         _si.set(my_run_ema());
     }
-    
+
     void set_pin_inactive() {
         static bool pinlevel_last;
         if (pinlevel_last != _pin_level) {
@@ -830,6 +829,33 @@ class PulseSensor : public Sensor {
         else if (pinactivitytimer.expired()) _pin_inactive = true;
         pinlevel_last = _pin_level;
     }
+    // calculate _pulses_per_sec based on pulsecount (incremented at each pulse in isr) upon each expiration of the 1-second _pulsecount_timer
+    // this value is used to corroborate our _us pulse delta value for debugging
+    // note that here we attempt to correct for:
+    //   1) time elapsed between the timer expiration (exactly 1 sec) and the calling of this functioned
+    //   2) time epochs at the beginning and end of each 1sec period not accounted for by pulse events occurring during the period
+    // TODO - the resulting _pulses_per_sec comes out rounded to nearest integer, not what was intended
+    // TODO - this function is overly complex, uses more variables than needed, i never bothered to go and simplify
+    void update_pulsecount(int64_t last_pulse_time_us) {
+        static int first_pulse_fraction_us = 0;
+        static int timeout = (int)_pulsecount_timer.timeout();
+        static bool zero_pulses = true;
+        if (!_pulsecount_timer.expired()) return;
+        int elapsed = (int)_pulsecount_timer.elapsed();
+        _pulsecount_timer.reset();
+        int next_first_pulse_fraction_us = elapsed - timeout;
+        int last_pulse_fraction_us = elapsed - last_pulse_time_us - next_first_pulse_fraction_us;
+        int used_by_pulses_us = timeout - first_pulse_fraction_us - last_pulse_fraction_us;
+        float pulsecount = static_cast<float>(_pulse_count);
+        float avg_pulse_us = (used_by_pulses_us + last_pulse_fraction_us + first_pulse_fraction_us) / (pulsecount + 1.0f);        
+        if (_pulse_count) zero_pulses = false;
+        if (zero_pulses) _pulses_per_sec = 0.0f;
+        else _pulses_per_sec = static_cast<float>(timeout)  / avg_pulse_us;  // pulses_per_sec can be used for monitoring/debugging;  // 
+        if (!_pulse_count) zero_pulses = true;
+        _pulse_count = 0;  // reset isr pulse counter
+        first_pulse_fraction_us = next_first_pulse_fraction_us;
+    }
+
     float us_to_hz(float arg) {
         if (iszero(arg)) return NAN;      // zero argument is an invalid value
         if (std::isnan(arg)) return 0.0;  // if invalid argument, return zero, a special value meaning we timed out
@@ -892,7 +918,7 @@ class PulseSensor : public Sensor {
     float absmax_ms() { return _absmax_us / 1000.0f; }
     float us() { return _us; }
     float ms() { return std::isnan(_us) ? NAN : _us / 1000.0f; }
-    int alt_native() { return _pulses_per_sec; };  // returns pulse freq in hz based on count, rather than conversion (just a check to debug) (only updates once per second)
+    float alt_native() { return _pulses_per_sec; };  // returns pulse freq in hz based on count, rather than conversion (just a check to debug) (only updates once per second)
 };
 // Tachometer represents a magnetic pulse measurement of the engine rotation
 // it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
