@@ -763,20 +763,25 @@ class BrakeControl : public JagMotor {
                     else if (pc[Out] > brakemotor_duty_spec_pc - pc[Margin]) added_heat += map(pc[Out], brakemotor_duty_spec_pc, 100.0, 0.0, motor_max_loaded_heatup_rate);
                     motor_heat += added_heat;
                 }
-            }
-            motor_heat = constrain(motor_heat, tempsens->absmin(loc::TempBrake), tempsens->absmax(loc::TempBrake));            
-            
+            }        
             // duty_pc is intended for us to estimate the current duty of the actuator, as a percent. for now is proportional to temp reading
-            duty_pc = map(motor_heat, motor_heat_min, motor_heat_max, 0.0, brakemotor_duty_spec_pc);  // replace this w/ ongoing estimate
-            
-            if (overtemp_shutoff_brake) {  // here the brakemotor is shut off if overtemp. also in diag class the engine is stopped
-                if (motor_heat > tempsens->opmax(loc::TempBrake)) {
-                    if (!printed_error) ezread.squintf(ezread.madcolor, "err: brake motor overheating. stop motor\n");
-                    printed_error = true;
-                    // setmode(Halt, false);  // commented b/c is done in diag (it didn't seem to work here)       // stop the brake motor // pc[Out] = pc[Stop];  // setmode(ParkMotor, false);
-                    // ignition.request(ReqOff);  // request kill ignition  // commented this out b/c is already in diag brake check
+            if (std::isnan(motor_heat)) {
+                duty_pc = NAN;
+                if (!printed_error) ezread.squintf(ezread.madcolor, "err: brake motor_heat value == NAN\n");
+                printed_error = true;        
+            }
+            else {
+                motor_heat = constrain(motor_heat, tempsens->absmin(loc::TempBrake), tempsens->absmax(loc::TempBrake));            
+                duty_pc = map(motor_heat, motor_heat_min, motor_heat_max, 0.0, brakemotor_duty_spec_pc);  // replace this w/ ongoing estimate
+                if (overtemp_shutoff_brake) {  // here the brakemotor is shut off if overtemp. also in diag class the engine is stopped
+                    if (motor_heat > tempsens->opmax(loc::TempBrake)) {
+                        if (!printed_error) ezread.squintf(ezread.madcolor, "err: brake motor overheating. stop motor\n");
+                        printed_error = true;
+                        // setmode(Halt, false);  // commented b/c is done in diag (it didn't seem to work here)       // stop the brake motor // pc[Out] = pc[Stop];  // setmode(ParkMotor, false);
+                        // ignition.request(ReqOff);  // request kill ignition  // commented this out b/c is already in diag brake check
+                    }
+                    else printed_error = false;
                 }
-                else printed_error = false;
             }
         }  // that's great to have some idea whether the motor is hot. but we need to take some actions in response
     }

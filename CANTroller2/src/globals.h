@@ -282,11 +282,14 @@ inline long constrain(long amt, long low, long high) { return (amt < low) ? low 
 inline unsigned int constrain(unsigned int amt, unsigned int low, unsigned int high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
-    if (std::isnan(x)) return NAN;  // TODO - there are consistent calls happening of map with x == NAN. Should we figure out why?
-    // else if (std::isnan(x) || std::isnan(in_min) || std::isnan(in_max) || std::isnan(out_min) || std::isnan(out_max) || iszero(in_max - in_min)) ERROR
-    else if (!iszero(in_max - in_min)) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
-    Serial.printf("err: map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
-    return out_max;  // instead of dividing by zero, return the highest valid result
+    // if (std::isnan(x)) return NAN;  // TODO - there are consistent calls happening of map with x == NAN. Should we figure out why?
+    if (std::isnan(x) || std::isnan(in_min) || std::isnan(in_max) || std::isnan(out_min) || std::isnan(out_max) || iszero(in_max - in_min)) {
+        Serial.printf("err: map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
+        if (std::isnan(x)) return NAN;
+        if (iszero(in_max - in_min)) return out_max;
+        return NAN;  // instead of dividing by zero, return the highest valid result
+    }
+    else return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
 }
 inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);

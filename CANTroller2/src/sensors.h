@@ -478,7 +478,7 @@ class I2CSensor : public Sensor {  // base class for sensors which communicate u
         if (!_i2c->detected(_i2c_bus_index) || !_responding) _native.set(NAN);  // if bus/sensor failure set value to nan
         else _native.set(read_i2c_sensor());                           // otherwise take a new native reading from the bus
         if (_i2c->i2cbaton == _i2c_bus_index) _i2c->pass_i2c_baton();  // deal with bus semaphore, since we're done with it
-        if (std::isnan(_native.val())) set_si(NAN);                    // propagate nan native value to all values
+        if (std::isnan(_native.val())) _si.set((NAN));                    // propagate nan native value to all values
         else {                                                         // if reading was good
             _si_raw = from_native(_native.val());                      // convert native to raw si value
             set_si_w_ema();                                           // set si filtered value based on new raw reading
