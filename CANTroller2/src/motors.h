@@ -176,6 +176,7 @@ class QPID {
     }
     void set_output(float a_output) {
         float oldout = _output;
+        if (std::isnan(a_output)) return;
         a_output = constrain(a_output, *_outmin, *_outmax);
         if (!iszero(_output)) {
             float ratio = a_output / _output;

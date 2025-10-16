@@ -258,18 +258,20 @@ constexpr float float_zero = 0.000069f;  // minimum required float precision. us
 inline bool iszero(float num, float margin=NAN) noexcept {  // safe check for if a float is effectively zero (avoid hyperprecision errors)
     if (std::isnan(margin)) margin = float_zero;  // assume global default margin value if nothing specific is given
     if (!std::isnan(num)) return (std::abs(num) <= margin);  // if input is valid return result
-    Serial.printf("err: iszero(NAN) called\n");  // print err rather than crash. would prefer ezread if it were defined
+    Serial.printf("err: iszero(%3.3f, %3.3f) called\n", num, margin);  // print err rather than crash. would prefer ezread if it were defined
     return true;  // default to true if given nan (even tho likely inaccurate), b/c likely to best inform calls intending to prevent divzero
 }
 inline bool isinfinite(float num, float margin=NAN) noexcept {  // safe check for if a float is effectively infinite (handle value explosions)
     if (std::isnan(margin)) margin = float_zero;  // assume global default margin value if nothing specific is given
-    if (iszero(num, margin)) return false;        // prevent divzero errors
-    if (!std::isnan(num)) return (1.0f / std::abs(num) <= margin);  // if input is valid return result
-    Serial.printf("err: iszero(NAN) called\n");  // print err rather than crash. would prefer ezread if it were defined
+    if (!std::isnan(num)) {
+        if (iszero(num, margin)) return false;        // prevent divzero errors
+        return (1.0f / std::abs(num) <= margin);  // if input is valid return result
+    }
+    Serial.printf("err: isinfinite(%3.3f, %3.3f) called\n", num, margin);  // print err rather than crash. would prefer ezread if it were defined
     return true;  // default to true if given nan, b/c likely accurate, also likely to best inform calls intending to prevent divzero
 }
 inline void cleanzero(float* num, float margin=NAN) noexcept {  // zeroes float values which are obnoxiously close to zero
-    if (num && iszero(*num, margin)) *num = 0.0f;  // notes: 1) lets iszero() deal w/ nan margin, 2) checks for null pointer
+    if (num && !std::isnan(*num) && iszero(*num, margin)) *num = 0.0f;  // notes: 1) lets iszero() deal w/ nan margin, 2) checks for null pointer
 }
 // fast macros
 #define arraysize(x) ((int)(sizeof(x) / sizeof((x)[0])))  // a macro function to determine the size of arrays 
@@ -280,8 +282,10 @@ inline long constrain(long amt, long low, long high) { return (amt < low) ? low 
 inline unsigned int constrain(unsigned int amt, unsigned int low, unsigned int high) { return (amt < low) ? low : ((amt > high) ? high : amt); }
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
-    if (!iszero(in_max - in_min)) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
-    Serial.printf("err: map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
+    if (std::isnan(x)) return NAN;  // TODO - there are consistent calls happening of map with x == NAN. Should we figure out why?
+    // else if (std::isnan(x) || std::isnan(in_min) || std::isnan(in_max) || std::isnan(out_min) || std::isnan(out_max) || iszero(in_max - in_min)) ERROR
+    else if (!iszero(in_max - in_min)) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
+    Serial.printf("err: map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
 inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
@@ -327,7 +331,7 @@ float ema_filt(float _raw, float _filt, float _alpha) {
 bool linearizer(float* in_pc_ptr, float ex) {  // returns true if transformation applied, or false if invalid args
     float in = *in_pc_ptr;   // store input value so we can mess around with it
     cleanzero(&in);          // if value is obnoxiously close to zero, set it to zero (avoid float precision bugs)
-    if (iszero(in) || ex < 1.0f) return false; // avoid ln(0) crash or potential sub-1.0 exponent crashes
+    if (std::isnan(in) || iszero(in) || ex < 1.0f) return false; // avoid ln(0) crash or potential sub-1.0 exponent crashes
     *in_pc_ptr = ((in >= 0.0f) ? 100.0f : -100.0f) * expf(ex * logf(fabsf(in) / 100.0f));  // do nerdy math
     return true;             // indicate transformation successfully applied
 }

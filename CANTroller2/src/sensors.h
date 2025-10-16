@@ -789,7 +789,7 @@ class PulseSensor : public Sensor {
         my_set_si_w_ema();   // TODO stupid workaround b/c my run_ema override doesn't work
         // set_si_w_ema();   // (orig) apply ema filter for si filt value
         
-        if (iszero(_si.val())) _us = NAN;        // once filtered si hits zero, call pulsewidth invalid
+        if (!std::isnan(_si.val()) && iszero(_si.val())) _us = NAN; // once filtered si hits zero, call pulsewidth invalid
         update_pulsecount(isr_time_buf_us);
         _pin_level = read_pin(_pin);             // for debug/display
         set_pin_inactive();                      // for idiot light showing pulse activity
@@ -857,8 +857,8 @@ class PulseSensor : public Sensor {
     }
 
     float us_to_hz(float arg) {
-        if (iszero(arg)) return NAN;      // zero argument is an invalid value
         if (std::isnan(arg)) return 0.0;  // if invalid argument, return zero, a special value meaning we timed out
+        if (iszero(arg)) return NAN;      // zero argument is an invalid value
         return 1000000.0 / arg;           // convert units of valid value
         // ezread.squintf("Err: %s us_to_hz() reciprocal of zero\n", _short_name.c_str());
         // return absmax();
@@ -903,7 +903,7 @@ class PulseSensor : public Sensor {
         set_can_source(src::Sim, true);
     }
     // float last_read_time() { return _last_read_time_us; }
-    bool stopped() { return iszero(val()); }
+    bool stopped() { return !std::isnan(val()) && iszero(val()); }
     // old: bool stopped() { return (std::abs(val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     // older:  bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     void set_ema_tau(float newtau) { _ema_tau_us = constrain(newtau, _ema_tau_min_us, _ema_tau_max_us); }
