@@ -1,6 +1,8 @@
 #pragma once
 #include <Wire.h>   // for i2c bus support
 enum i2c_nodes : int { I2CBogus=-1, I2CTouch=0, I2CLightbox=1, I2CAirVelo=2, I2CMAP=3, NumI2CSlaves=4 };  // I2CTouch, 
+std::string i2ccard[(int)NumI2CSlaves] = { "touch", "litbox", "airvel", "mapsns" };
+uint8_t known_i2c_addrs[(int)NumI2CSlaves] = { 0x38, 0x69, 0x28, 0x18 };
 
 class I2C {
   private:
@@ -35,8 +37,10 @@ class I2C {
         for (address = 1; address < 127; address++ ) {
             Wire.beginTransmission(address);
             error = Wire.endTransmission();
+            int devindex = -1;
+            for (int i=0; i<(int)NumI2CSlaves; i++) if (address == known_i2c_addrs[i]) devindex = i;
             if (error == 0) {
-                ezread.squintf("  found device addr 0x%s%x\n", (address < 16) ? "0" : "", address);
+                ezread.squintf("  found device addr 0x%s%x : %s\n", (address < 16) ? "0" : "", address, i2ccard[devindex].c_str());
                 _detaddrs[_devicecount++] = address;
             }
             else if (error==4) {

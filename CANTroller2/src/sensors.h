@@ -455,6 +455,7 @@ class Sensor : public Transducer {
 class I2CSensor : public Sensor {  // base class for sensors which communicate using i2c
   protected:
     I2C* _i2c;
+    float _default_value_si;
     int _i2c_bus_index = I2CBogus;  // children must set this to identify self in calls to I2C bus class
     virtual float read_i2c_sensor() {  // childrem must override this
         ezread.squintf(ezread.madcolor, "err: %s needs overridden read_i2c_sensor()\n", _short_name.c_str());
@@ -498,7 +499,10 @@ class I2CSensor : public Sensor {  // base class for sensors which communicate u
         _detected = _i2c->detected_by_addr(addr);
         // if (!_detected || !_responding) _enabled = false;
         print_on_boot(_detected, _responding);
-        if (!_detected || !_responding) set_source(src::Fixed);  // TODO - added to prevent continual map(NAN, ...) errors on sensors not present. review
+        if (!_detected || !_responding) {
+            set_source(src::Fixed);  // TODO - added to prevent continual map(NAN, ...) errors on sensors not present. review
+            set_si(_default_value_si);
+        }
         Sensor::setup();
     }
 };
@@ -521,6 +525,7 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     }
     AirVeloSensor() = delete;
     void setup() {  // ezread.squintf("%s..", _long_name.c_str());
+        _default_value_si = 0.0f;
         set_conversions(1.0, 0.0); // our i2c sensors so far provide si units directly.
         set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.0, 27.36);  // 620/2 cm3/rot * 4800 rot/min * 60 min/hr * 1/160934 mi/cm * 1/pi * 1/((2 in * 2.54 cm/in) / 2)^2) 1/cm2  = 27.36 mi/hr (mph
@@ -528,7 +533,7 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         _responding = !_sensor.begin();
         if (_responding) _sensor.setRange(AIRFLOW_RANGE_15_MPS);
-        set_si(0.0);  // initialize value
+        set_si(_default_value_si);  // initialize value
         I2CSensor::setup();
     }
 };
@@ -551,12 +556,13 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     }
     MAPSensor() = delete;
     void setup() {
+        _default_value_si = 1.0f;
         set_conversions(1.0, 0.0); // our i2c sensors so far provide si units directly.
         set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68, 1.02);  // set in atm empirically
         set_ema_alpha(0.2);
         _responding = !_sensor.begin();
-        set_si(1.0);  // initialize value
+        set_si(_default_value_si);  // initialize value
         I2CSensor::setup();
     }
 };

@@ -285,7 +285,10 @@ inline unsigned int constrain(unsigned int amt, unsigned int low, unsigned int h
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
     // if (std::isnan(x)) return NAN;  // TODO - there are consistent calls happening of map with x == NAN. Should we figure out why?
     if (std::isnan(x) || std::isnan(in_min) || std::isnan(in_max) || std::isnan(out_min) || std::isnan(out_max) || iszero(in_max - in_min)) {
-        Serial.printf("err: map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
+        static int64_t tlast = esp_timer_get_time();
+        int64_t now = esp_timer_get_time();
+        Serial.printf("err: %dus map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", (int)((now - tlast) / 1), x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
+        tlast = now;
         if (std::isnan(x)) return NAN;
         if (iszero(in_max - in_min)) return out_max;
         return NAN;  // instead of dividing by zero, return the highest valid result
