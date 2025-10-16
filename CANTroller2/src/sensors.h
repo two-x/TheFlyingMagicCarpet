@@ -28,7 +28,7 @@ class Potentiometer {
     float _absmin = 0.0, _absmax = 100.0;
     float _margin_pc = 5.0;
     int _pin;
-    float _pc = 50.0, _raw, _native, _activity_ref;  // values in filtered percent, raw percent, raw adc
+    float _pc, _raw, _native, _activity_ref;  // values in filtered percent, raw percent, raw adc
     Timer pot_timer{100000};  // adc cannot read too fast w/o errors, so give some time between readings
   public:
     // tune these by monitoring adc_raw and twist pot to each limit. set min at the highest value seen when turned full CCW, and vice versas for max, then trim each toward adc_midrange until you get full 0 to 100% range
@@ -258,9 +258,6 @@ class Transducer : public Device {
         // print_config(true, false);  // print header
         // if (_pin < 255) ezread.squintf(" on pin %d\n", _pin);
     }   // ezread.squintf("%s..\n", _long_name.c_str()); }
-    // virtual void tedit(float tdelta) {  // for simulator editing of the value
-    //     sim_val = constrain(_si.val() + tdelta, _opmin, _opmax);
-    // }
     virtual void print_config(bool header=true, bool ranges=true) {
         if (header) {
             ezread.squintf(ezread.highlightcolor, "%s (p%d):\n", _long_name.c_str(), _pin);  // , transtypecard[_transtype].c_str());
@@ -366,6 +363,9 @@ class Transducer : public Device {
     bool set_pc(float arg_val_pc, bool also_set_raw=true) { 
         return set_si(from_pc(arg_val_pc), also_set_raw);
     }
+    // virtual void tedit(float tdelta) {  // for simulator editing of the value
+    //     sim_val = constrain(_si.val() + tdelta, _opmin, _opmax);
+    // }
     bool sim_si(float arg_val_si, bool also_set_raw=true) {
         if (_source != src::Sim && _source != src::Pot) return false;
         if (!_si.set(arg_val_si)) return false;
@@ -494,10 +494,11 @@ class I2CSensor : public Sensor {  // base class for sensors which communicate u
     I2CSensor() = delete;
     virtual void setup() {  // call at the end of child setup() override functions
         set_can_source(src::Pot, true);
-        set_conversions(1.0, 0.0); // our i2c sensors so far provide si units directly.
+        // set_conversions(1.0, 0.0); // our i2c sensors so far provide si units directly.
         _detected = _i2c->detected_by_addr(addr);
         // if (!_detected || !_responding) _enabled = false;
         print_on_boot(_detected, _responding);
+        if (!_detected || !_responding) set_source(src::Fixed);  // TODO - added to prevent continual map(NAN, ...) errors on sensors not present. review
         Sensor::setup();
     }
 };
@@ -520,13 +521,14 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     }
     AirVeloSensor() = delete;
     void setup() {  // ezread.squintf("%s..", _long_name.c_str());
-        set_si(0.0);  // initialize value
+        set_conversions(1.0, 0.0); // our i2c sensors so far provide si units directly.
         set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.0, 27.36);  // 620/2 cm3/rot * 4800 rot/min * 60 min/hr * 1/160934 mi/cm * 1/pi * 1/((2 in * 2.54 cm/in) / 2)^2) 1/cm2  = 27.36 mi/hr (mph
         // set_oplim(0.0, 28.5);  // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * ((2 * 2.54) / 2)^2) 1/cm2 * 1/160934 mi/cm = 28.5 mi/hr (mph)            // 620/2 cm3/rot * 5000 rot/min (max) * 60 min/hr * 1/(pi * (2.85 / 2)^2) 1/cm2 * 1/160934 mi/cm = 90.58 mi/hr (mph) (?!)  
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         _responding = !_sensor.begin();
         if (_responding) _sensor.setRange(AIRFLOW_RANGE_15_MPS);
+        set_si(0.0);  // initialize value
         I2CSensor::setup();
     }
 };
@@ -549,11 +551,12 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     }
     MAPSensor() = delete;
     void setup() {
-        set_si(1.0);  // initialize value
+        set_conversions(1.0, 0.0); // our i2c sensors so far provide si units directly.
         set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68, 1.02);  // set in atm empirically
         set_ema_alpha(0.2);
         _responding = !_sensor.begin();
+        set_si(1.0);  // initialize value
         I2CSensor::setup();
     }
 };
@@ -907,6 +910,11 @@ class PulseSensor : public Sensor {
     // old: bool stopped() { return (std::abs(val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     // older:  bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     void set_ema_tau(float newtau) { _ema_tau_us = constrain(newtau, _ema_tau_min_us, _ema_tau_max_us); }
+    void set_ema_taulim(float newmin, float newmax) {
+        _ema_tau_min_us = newmin;
+        _ema_tau_max_us = newmax;
+        set_ema_tau(_ema_tau_us);  // set tau to itself in order to reconstrain it to new limits
+    }
     float ema_tau() { return _ema_tau_us; }
     float ema_tau_min() { return _ema_tau_min_us; }
     float ema_tau_max() { return _ema_tau_max_us; }
@@ -925,38 +933,26 @@ class PulseSensor : public Sensor {
 class Tachometer : public PulseSensor {
   public:
     sens _senstype = sens::tach;
-    // float _ema_tau_min_us = 500.0f;     // tau min in us. must be >0
-    // float _ema_tau_max_us = 200000.0f;  // tau max in us
-
-    float _calfactor = 1.0;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
     float _governmax_rpm;
-    float _idle = 590.0, _idle_cold = 680.0, _idle_hot = 500.0;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer
-    // float _calfactor = 0.25;  // a tunable/calibratable factor like _freqfactor, where if <1 gives fewer si-units/pulse-hz and vice versa.            also, the worst weight-loss scam in miami
-    
+    float _idle = 590.0, _idle_cold = 680.0, _idle_hot = 500.0;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer    
     Tachometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {  // where actual_hz = pulses_hz * freqfactor (due to external circuitry or magnet arrangement)
         _long_name = "Tachometer";
         _short_name = "tach";
         _si_units = "rpm";
     }
     Tachometer() = delete;
-    float calc_mfactor() { return 60.0 * _calfactor / _freqfactor; }  // 1 Hz = 1 pulse/sec * 60 sec/min * 1.0 / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
-    // float calc_mfactor() { return 60.0 * _calfactor / _freqfactor; }  // 1 Hz = 1 pulse/sec * 60 sec/min * 0.25 / 0.125 pulse/rot = 120 rot/min, (so 120 rpm/Hz)
     void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
         PulseSensor::setup();
         // note the max pulse freq at the mcu pin is max-rpm/m , or:  pinmax hz = 4500 rpm * (1/480) hz/rpm = 9.375 hz  (max freq at pin)
         // bc of the divider max freq in the wire is max-pin-hz/freqfactor , or:  wiremax hz = 9.375 hz / 0.125 = 75 hz  (max freq in wire)
         // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=220nF (round up)
-
-        // now we find our final rpm reading seems to be about 4x what it should. until we figure out the root cause, i'm adding a cal factor to compensate it
-        float mfact = calc_mfactor();
-        // mfact = 60.0 / _freqfactor;  // 1 Hz = 1 pulse/sec * 60 sec/min / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
+        float mfact = 60.0 / _freqfactor;  // 1 Hz = 1 pulse/sec * 60 sec/min / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
         set_conversions(mfact, 0.0f);
         set_abslim(0.0f, 4800.0f); // estimating the highest rpm we could conceivably ever see from the engine. but may lower b/c the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
         set_absmax_us(430000.0f);  // this sets the max pulse-to-pulse period to be considered as stopped.
         set_oplim(0.0f, 3600.0f);  // aka redline,  Max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         _governmax_rpm = _opmax * governor / 100.0;
-        _ema_tau_min_us = 500.0f;    // TODO - why don't the initialized values above work?
-        _ema_tau_max_us = 200000.0f; // TODO - why don't the initialized values above work?
+        set_ema_taulim(500.0f, 200000.0f);
         set_ema_tau(16000.0f);       // set filter tau factor
         set_margin(15.0f);
         set_si(0.0f);
@@ -992,9 +988,6 @@ class Tachometer : public PulseSensor {
 class Speedometer : public PulseSensor {
   public:
     sens _senstype = sens::speedo;
-    // float _ema_tau_min_us = 1000.0f; // tau min in us. must be >0
-    // float _ema_tau_max_us = 1e7f;    // tau max in us
-
     Speedometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {
         _long_name = "Speedometer";
         _short_name = "speedo";
@@ -1010,8 +1003,7 @@ class Speedometer : public PulseSensor {
         set_abslim(0.0f, 18.0f);   // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
         set_absmax_us(1300000.0f); // this sets the max pulse-to-pulse period to be considered as stopped.
         set_oplim(0.0f, 15.0f);    // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
-        _ema_tau_min_us = 10000.0f; // TODO - why don't the initialized values above work?
-        _ema_tau_max_us = 1e8f;    // TODO - why don't the initialized values above work?
+        set_ema_taulim(10000.0f, 1e8f);
         set_ema_tau(5e7f);      // set filter tau factor
         // set_ema_alpha(0.003f);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(0.2f);
@@ -1294,7 +1286,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         derive();
     }
     void set(float* member, int val) { set(member, static_cast<float>(val)); }  // to accept int arguments too
-    int joydir(int axis=Vert) {
+    int joydir(int axis=Vert) {  // returns current joy direction on given axis (up/dn/lt/rt) or otherwise (cent) if w/i deadbands
         if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? HrcUp : (pc[axis][Filt] < pc[axis][Cent]) ? HrcDn : HrcCent;
         return (pc[axis][Filt] > pc[axis][Cent]) ? HrcRt : (pc[axis][Filt] < pc[axis][Cent]) ? HrcLt : HrcCent;
     }  // return (pc[axis][Filt] > pc[axis][Cent]) ? ((axis == Vert) ? HrcUp : HrcRt) : (pc[axis][Filt] < pc[axis][Cent]) ? ((axis == Vert) ? HrcDn : HrcLt) : HrcCent;

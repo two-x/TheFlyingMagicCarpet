@@ -208,6 +208,7 @@ int serial_monitor_baudrate = (int)MonitorBaudrate;
 volatile int refresh_limit_us = 1000000 / operational_framerate_limit_fps; // 60 Hz -> 16666 us, 90 Hz -> 11111 us, 120 Hz -> 8333 us
 std::string modecard[NumRunModes] = { "Basic", "LowPwr", "Stndby", "Stall", "Hold", "Fly", "Cruise", "Cal" };
 std::string requestcard[NumReqs] = { "Off", "On", "Tog", "NA" };
+// std::string sensor_src_card[4] = { "Fixed", "Pin", "Sim", "Pot" };  // matches enum class src in sensors.h
 
 float permanan = NAN;
 // bool first_drive = true;                // goes false upon first entry into a drive mode after a power cycle. thereafter the car will autohold the brake in standby/stall modes (to help prevent lurching forward on remote start)

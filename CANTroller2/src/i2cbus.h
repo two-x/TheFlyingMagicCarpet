@@ -31,20 +31,20 @@ class I2C {
         if (disabled) return 0;
         Wire.begin(_sda_pin, _scl_pin, i2c_frequency);  // I2c bus needed for airflow sensor
         byte error, address;
-        ezread.squintf("  found");
         _devicecount = 0;
         for (address = 1; address < 127; address++ ) {
             Wire.beginTransmission(address);
             error = Wire.endTransmission();
             if (error == 0) {
-                ezread.squintf(" 0x%s%x,", (address < 16) ? "0" : "", address);
+                ezread.squintf("  found device addr 0x%s%x\n", (address < 16) ? "0" : "", address);
                 _detaddrs[_devicecount++] = address;
             }
-            else if (error==4) ezread.squintf(ezread.madcolor, "err: i2c addr 0x%s%x", (address < 16) ? "0" : "", address);
+            else if (error==4) {
+                ezread.squintf(ezread.madcolor, "  error device addr 0x%s%x\n", (address < 16) ? "0" : "", address);
+            }
         }
-        if (scanTimer.elapsed() > 5000000) ezread.squintf(ezread.madcolor, "err: i2c timeout & fail bus scan\n");
-        if (_devicecount == 0) ezread.squintf(ezread.madcolor, "err: i2c no devices found\n");
-        ezread.squintf("  done.\n");
+        if (scanTimer.elapsed() > 5000000) ezread.squintf(ezread.madcolor, "  err: i2c timeout & fail bus scan\n");
+        if (_devicecount == 0) ezread.squintf(ezread.sadcolor, "  no devices found\n");
         fill_det_array();
         return detected(I2CTouch);
     }

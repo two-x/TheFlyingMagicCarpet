@@ -701,6 +701,9 @@ class Display {
             draw_ascii(17, motormodecard[brake.motormode]);
             draw_ascii(18, motormodecard[steer.motormode]);
             drawval(19, looptimer.uptime());
+            // // temporary - for debugging airvelo/map source status
+            // draw_ascii(20, sensor_src_card[(int)airvelo.source()]); 
+            // draw_ascii(21, sensor_src_card[(int)mapsens.source()]); 
             for (int line=20; line<=21; line++) draw_eraseval(line);
             drawval(22, governor, 0.0f, 100.0f, NAN, 1);
             drawval(23, steer.steer_safe_pc, 0.0f, 100.0f, NAN, 1);
