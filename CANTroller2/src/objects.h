@@ -265,7 +265,7 @@ class Ignition {
         if (!newval && !panicstop) return;
         if (newval != panicstop) prefs.putUInt("panicstop", (uint32_t)panicstop);  // this is read at boot, see diag.h
         panicstop = newval;
-        if (panicstop) panicTimer.reset();
+        if (panicstop && !paniclast) panicTimer.reset();
         paniclast = panicstop;
     }
   public:
