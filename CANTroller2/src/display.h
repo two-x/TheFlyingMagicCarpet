@@ -529,7 +529,7 @@ class Display {
         }
         disp_units_dirty = false;
     }
-    void draw_selected_name(int tun_ctrl, int selection, int selected_last, int selected_last_last) {
+    void draw_selected_name(int tun_ctrl, int selection, int selection_last) {
         static int last_selected; 
         uint8_t color = LGRY;
         if (tun_ctrl == Edit) color = GRN;
@@ -939,7 +939,7 @@ class Display {
             update_idiots(disp_idiots_dirty);
             if (disp_datapage_dirty) draw_datapage(datapage, true);
             if (disp_menus_dirty) draw_menus(false);
-            if (disp_selection_dirty) draw_selected_name(tunctrl, sel, sel_last, sel_last_last);
+            if (disp_selection_dirty) draw_selected_name(tunctrl, sel, sel_last);
             if (runmode != runmode_last) disp_runmode_dirty = true;
             if (disp_values_dirty || disp_runmode_dirty || valuesRefreshTimer.expireset()) {
                 disp_datapage_values();
