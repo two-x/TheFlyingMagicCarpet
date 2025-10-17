@@ -247,9 +247,27 @@ void finalize_boot() {
 }
 class Ignition {
   private:
+    bool _verbose = true;
     int ign_req = ReqNA, panic_req = ReqNA, pin;
     bool paniclast, booted = false;
-    Timer panicTimer{15000000};  // how long should a panic stop last?  we can't stay mad forever
+    Timer panicTimer{11000000};  // how long should a panic stop last?  we can't stay mad forever
+    void set_ignition(bool newval) {
+        static bool ign_last = LOW;
+        ign_req = ReqNA;
+        if (newval && signal) return;
+        signal = newval;
+        write_pin(pin, signal);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
+        ign_last = signal;
+    }
+    void set_panicstop(bool newval) {
+        static bool paniclast = LOW;
+        panic_req = ReqNA;
+        if (!newval && !panicstop) return;
+        if (newval != panicstop) prefs.putUInt("panicstop", (uint32_t)panicstop);  // this is read at boot, see diag.h
+        panicstop = newval;
+        if (panicstop) panicTimer.reset();
+        paniclast = panicstop;
+    }
   public:
     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
     Ignition(int _pin) : pin(_pin) {}
@@ -264,33 +282,25 @@ class Ignition {
         booted = true;
         ign_req = ReqNA;
     }
-    void request(int req) { ign_req = req; }  // ezread.squintf("ign req %s\n", requestcard[req].c_str());
-    void panic_request(int req) { panic_req = req; }
+    void request(int req) {
+        ign_req = req;
+    }  // ezread.squintf("ign req %s\n", requestcard[req].c_str());
+    void panic_request(int req) {
+        panic_req = req;
+        // if (_verbose) ezread.squintf("ign2: ign=%d ir=%s pan=%d pr=%s\n", (int)signal, requestcard[ign_req].c_str(), (int)panicstop, requestcard[panic_req].c_str()); delay(1);
+    }
     void update() {  // Run once each main loop
-        static bool ign_last = LOW;
         if (runmode == LowPower) return;
         if (panic_req == ReqTog) panic_req = !panicstop;
         if (ign_req == ReqTog) ign_req = !signal;
-        if (speedo.stopped() || panicTimer.expired()) panic_req = ReqOff;  // Cancel panic stop if car is stopped
-        if (!speedo.stopped() && (runmode == Fly || runmode == Cruise || runmode == Hold)) {
+        if (!speedo.stopped()) {  //  && (runmode == Fly || runmode == Cruise || runmode == Hold)
             if (signal && ign_req == ReqOff) panic_req = ReqOn;  // ignition cut while driving causes panic stop
             if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_req = ReqOn;
         }
-        if (panic_req != ReqNA) {
-            panicstop = (panic_req == ReqOn) ? true : false;    // ezread.squintf("panic=%d\n", panicstop);
-            if (panicstop != paniclast) {
-                prefs.putUInt("panicstop", (uint32_t)panicstop);  // this is read at boot, see diag.h
-                if (panicstop) panicTimer.reset();
-            }
-        }
-        paniclast = panicstop;
+        if (panic_req != ReqNA) set_panicstop((panic_req == ReqOn) ? true : false);    // ezread.squintf("panic=%d\n", panicstop);
         if (panicstop) ign_req = ReqOff;  // panic stop causes ignition cut
-        if (ign_req != ReqNA && runmode != LowPower) {
-            signal = (ign_req == ReqOn) ? HIGH : LOW;
-            write_pin(pin, signal);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
-        }
-        panic_req = ign_req = ReqNA;  // cancel outstanding requests
-        ign_last = signal;
+        if (speedo.stopped() || panicTimer.expired()) set_panicstop(false);  // Cancel panic stop if car is stopped
+        if (ign_req != ReqNA) set_ignition((ign_req == ReqOn) ? HIGH : LOW);
     }
 };
 static Ignition ignition(ignition_pin);
@@ -305,20 +315,20 @@ class Starter {
     void check_for_external_tampering() {   // in case an external bug could be turning on the starter instead of us    
         bool pin_now = read_pin(pin);       // get current value of pin to do the following check
         if (motor != pin_now) {             // check if someone changed the motor value or started driving our pin
-            ezread.printf(ezread.madcolor, "err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
+            ezread.squintf(ezread.madcolor, "err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
             turnoff();                  // stop the motor either way
             ignition.panic_request(ReqOn);  // request panic will kill the ignition just in case it did start up
         }
     }
     void turnon(int code=-1) {  // function to start the motor.  code argument is so we can determine which internal function call got us here
         if ((requestor == StartHotrc) && (hotrc.ch4_button_last_ms() > req_source_timeout_ms))  // don't start without recent activity on the particular requestor source used
-            ezread.printf(ezread.madcolor, "err: starter reqOn by Hrc.%d, %dms ago\n", code, hotrc.ch4_button_last_ms());
+            ezread.squintf(ezread.madcolor, "err: starter reqOn by Hrc.%d, %dms ago\n", code, hotrc.ch4_button_last_ms());
         else if ((requestor == StartTouch) && (hotrc.sim_button_last_ms() > req_source_timeout_ms))  // don't start without recent activity on the particular requestor source used
-            ezread.printf(ezread.madcolor, "err: starter reqOn by Sim.%d, %dms ago\n", code, hotrc.sim_button_last_ms());
-        else if ((requestor != StartHotrc) && (requestor != StartTouch)) ezread.printf(ezread.madcolor, "err: bad start requestor %s (code=%d)\n", startreqcard[requestor].c_str(), code); // don't start if origin of request is invalid
-        else if (code == -1) ezread.printf(ezread.madcolor, "err: starter ReqOn w/o given code call\n");  // don't start if a code wasn't given when called
+            ezread.squintf(ezread.madcolor, "err: starter reqOn by Sim.%d, %dms ago\n", code, hotrc.sim_button_last_ms());
+        else if ((requestor != StartHotrc) && (requestor != StartTouch)) ezread.squintf(ezread.madcolor, "err: bad start requestor %s (code=%d)\n", startreqcard[requestor].c_str(), code); // don't start if origin of request is invalid
+        else if (code == -1) ezread.squintf(ezread.madcolor, "err: starter ReqOn w/o given code call\n");  // don't start if a code wasn't given when called
         else {  // if no error checks were triggered then go ahead and start
-            ezread.printf("starter turnon by %s.%d\n", startreqcard[requestor].c_str(), code);  // maybe use ezread.squintf instead? (prints to both screen and console)
+            ezread.squintf("starter turnon by %s.%d\n", startreqcard[requestor].c_str(), code);  // maybe use ezread.squintf instead? (prints to both screen and console)
             if (push_gas_when_starting && check_brake_before_starting) gas.setmode(Starting);  // give it some gas if we're allowed to, unless brake wasn't checked (due to risk of lurching forward)
             starterTimer.set((int64_t)(run_timeout * 1000000.0));  // if left on the starter will turn off automatically after X seconds
             motor = HIGH;                                          // ensure starter variable always reflects the starter status regardless who is driving it
@@ -327,7 +337,7 @@ class Starter {
         request(ReqNA, StartClass);  // cancel the starter on request which we have serviced (or properly ignored if it was erroneous)
     }
     void turnoff() {              // function to stop the motor
-        if (verbose) ezread.printf("starter turnoff by %s\n", startreqcard[requestor].c_str());
+        if (verbose) ezread.squintf("starter turnoff by %s\n", startreqcard[requestor].c_str());
         motor = LOW;                                           // we will turn it off
         write_pin(pin, motor);                                 // begin driving the pin low voltage
         request(ReqNA, StartClass);                            // cancel current request
@@ -343,10 +353,10 @@ public:
     }
     void request(int _req, int _requestor=StartUnknown) {  // this is the only valid way to change the current request now_req, internally or externally
         static int last_req = ReqNA;  // for detecting external settings of now_req
-        if (now_req != last_req) ezread.printf(ezread.madcolor, "err: detected starter req value abuse!\n"); // report now_req was apparently set by somewhere besides this function
-        else if ((_requestor < 0) || (_requestor >= NumStartReq)) ezread.printf(ezread.madcolor, "err: invalid start requestor=%d\n", _requestor); // prevent crash if requestor value passed is out of range
+        if (now_req != last_req) ezread.squintf(ezread.madcolor, "err: detected starter req value abuse!\n"); // report now_req was apparently set by somewhere besides this function
+        else if ((_requestor < 0) || (_requestor >= NumStartReq)) ezread.squintf(ezread.madcolor, "err: invalid start requestor=%d\n", _requestor); // prevent crash if requestor value passed is out of range
         else {  // if no errors happened then accept the request
-            if (verbose && ((_req != last_req) || (_requestor != StartClass))) ezread.printf("new starter %s request from %s\n", requestcard[_req].c_str(), startreqcard[_requestor].c_str());  // report all request activity
+            if (verbose && ((_req != last_req) || (_requestor != StartClass))) ezread.squintf("new starter %s request from %s\n", requestcard[_req].c_str(), startreqcard[_requestor].c_str());  // report all request activity
             if (_req == ReqTog) _req = motor ? ReqOff : ReqOn;  // translate a toggle request to a drive request opposite to the current drive state
             now_req = _req;
             requestor = _requestor;
@@ -368,7 +378,7 @@ public:
                 one_click_done = !one_click_done;                 // toggle next click will be the opposite of this one
             }
             if (twoclicktimer.expired()) {
-                if (one_click_done) ezread.printf(ezread.sadcolor, "warn: starter requires 2-clicks\n");
+                if (one_click_done) ezread.squintf(ezread.sadcolor, "warn: starter requires 2-clicks\n");
                 one_click_done = false;  // cancel 2click sequence if too much time elapsed since last click
             }
             last_req_2click = now_req;   // allows us to detect when request first goes to on
@@ -378,30 +388,30 @@ public:
             return;                      // and ditch
         }  // from here on, we can assume the starter is off and we are supposed to turn it on
         if (brake.autoholding) {         // if brake is successfully holding
-            turnon(0);                   // start the car   // ezread.printf("0 turnon(): if brake.autoholding\n");
+            turnon(0);                   // start the car   // ezread.squintf("0 turnon(): if brake.autoholding\n");
             return;                      // and then ditch out
         }
         if (brake_before_starting) {        // if we must apply brakes before starting
             if (brake.feedback == _None) {  // check if brake is running in openloop mode (we can't control an autohold)
-                ezread.printf(ezread.sadcolor, "warn: starter can't use openloop brake\n");
+                ezread.squintf(ezread.sadcolor, "warn: starter can't use openloop brake\n");
                 request(ReqNA, StartClass); // cancel turn on request
                 return;                     // and then ditch out
             }
             else if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
-                ezread.printf("starter autobraking..\n");
+                ezread.squintf("starter autobraking..\n");
                 brake.setmode(AutoHold);             // tell the brake to hold
                 brakeTimer.reset();                  // start a timer to time box the application of brake
                 return;                              // ditch out and wait for brake to push, leaving on request active
             }
         }
         else if (!check_brake_before_starting) {  // if we don't need to apply the brake nor even check for it
-            turnon(1);    // start the car    // ezread.printf("1 turnon(): !check_brake_before_starting)\n");
+            turnon(1);    // start the car    // ezread.squintf("1 turnon(): !check_brake_before_starting)\n");
             return;      // and then ditch out
         }
         if (brakeTimer.expired()) {                      // waited long enough for the brake to push
-            if (!check_brake_before_starting) turnon(2);  // if no need to check whether brake succeeded, then start the car  // ezread.printf("2 turnon(): !check_brake_before_starting)\n");
+            if (!check_brake_before_starting) turnon(2);  // if no need to check whether brake succeeded, then start the car  // ezread.squintf("2 turnon(): !check_brake_before_starting)\n");
             else {                                       // if we were supposed to apply the brakes and also check they got pushed
-                ezread.printf(ezread.sadcolor, "warn: cant start, no brake\n");
+                ezread.squintf(ezread.sadcolor, "warn: cant start, no brake\n");
                 request(ReqNA, StartClass);              // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward
             }
         }  // otherwise we're still waiting for the brake to push, meanwhile the starter turn-on request remains intact

@@ -1046,6 +1046,10 @@ class Speedometer : public PulseSensor {
         // _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
         PulseSensor::postsetup();
     }
+    bool stopped() { 
+        if (std::isnan(val())) return false;  // for speedometer default to false return for safety reasons
+        return iszero(val());
+    }
 };
 
 // note: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
