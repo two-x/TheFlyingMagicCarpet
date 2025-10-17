@@ -283,7 +283,7 @@ class Ignition {  // the ignition object controls the car ignition signal and th
 };
 static Ignition ignition(ignition_pin);
 
-// TODO - make sure the starter acts right if the vehicle starter is run using external switch
+// TODO - review to ensure the starter class acts right if the vehicle starter is turned on/off using external switch
 class Starter {
   private:
     std::string startreqcard[NumStartReq] = { "unknwn", "class", "hotrc", "touch", "runmod" };
@@ -322,8 +322,8 @@ class Starter {
         bool pin_now = read_pin(_pin);      // get current value of pin to do the following check
         if (motor != pin_now) {             // check if someone changed the motor value or started driving our pin
             ezread.squintf(ezread.madcolor, "err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
-            request(ReqOff, StartClass);    // request to stop motor
-            ignition.panic_request(ReqOn);  // request panic will kill the ignition just in case it did start up
+            if (motor) ignition.panic_request(ReqOn);  // in case motor did start up, request panic will kill the ignition & stop car 
+            request(ReqOff, StartClass);               // request to stop motor
         }
     }
     void verify_double_click() {
@@ -466,10 +466,9 @@ class CoolingFan {  // new class to serve as thermostat for vehicle radiator fan
   private:
     int _pin = -1;  // uses the pin and transistor circuit existing onboard originally intended for the vehicle fuel pump
   public:
-    CoolingFan(int pin) : _pin(pin) {}
-    void setup() {
-        ezread.squintf(ezread.highlightcolor, "Cooling fan: init vehicle engine thermostat\n");
-    }
+    bool signal = LOW;  // reflects current state of the fan output pin
+    CoolingFan(int pin) : _pin(pin) { set_pin(_pin, OUTPUT); }
+    void setup() { ezread.squintf(ezread.highlightcolor, "Cooling fan: init vehicle engine thermostat\n"); }
     void update() {
         // read engine temp
         // turn on cooling fan as needed
