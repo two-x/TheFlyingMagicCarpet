@@ -460,7 +460,7 @@ class DiagRuntime {
         checkrange(_Tach);
         
         // check that the tach is zero when engine is killed
-        if (runmode == Standby) {  // || runmode == Stall
+        if (runmode == Standby) {  //  || runmode == Stall  // !ignition->signal
             // if (running_last) tachTimer.reset();       // if we just stopped driving, allow time for car to stop
             // else if (tachTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
             fail = (baseline_rpm > tach->margin());  // when stopped the speedo reading should be zero, otherwise fail
