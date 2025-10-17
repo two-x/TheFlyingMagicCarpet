@@ -247,60 +247,41 @@ void finalize_boot() {
 }
 class Ignition {
   private:
-    bool _verbose = true;
-    int ign_req = ReqNA, panic_req = ReqNA, pin;
-    bool paniclast, booted = false;
+    int _pin, _ign_req = ReqNA, _panic_req = ReqNA;  // bool _verbose = true;
     Timer panicTimer{11000000};  // how long should a panic stop last?  we can't stay mad forever
     void set_ignition(bool newval) {
-        static bool ign_last = LOW;
-        ign_req = ReqNA;
-        if (newval && signal) return;
+        _ign_req = ReqNA;
         signal = newval;
-        write_pin(pin, signal);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
-        ign_last = signal;
+        write_pin(_pin, signal);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
     }
     void set_panicstop(bool newval) {
-        static bool paniclast = LOW;
-        panic_req = ReqNA;
-        if (!newval && !panicstop) return;
-        if (newval != panicstop) prefs.putUInt("panicstop", (uint32_t)panicstop);  // this is read at boot, see diag.h
+        _panic_req = ReqNA;                 // no matter what happens we will service the request
+        if (!newval && !panicstop) return;  // no need to turn panic off if it's already off, so bail
+        if (newval != panicstop) prefs.putUInt("panicstop", (uint32_t)newval);  // whenever panic state changes, update flash. this is read at boot, see diag.h
+        if (newval && !panicstop) panicTimer.reset();  // start chillout timer when turning panic state on
         panicstop = newval;
-        if (panicstop && !paniclast) panicTimer.reset();
-        paniclast = panicstop;
     }
   public:
     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
-    Ignition(int _pin) : pin(_pin) {}
+    Ignition(int pin) : _pin(pin) {}
     void setup() {  // must run after diag recovery function, to ensure initial ign value is asserted correctly
-        ezread.squintf(ezread.highlightcolor, "Ignition (p%d) handler init\n", pin);
-        bool pin_initial_val = LOW;
-        if (!booted) {
-            if (ign_req == ReqOn) pin_initial_val = HIGH;
-            else pin_initial_val = LOW;        
-            set_pin(pin, OUTPUT, pin_initial_val);
-        }
-        booted = true;
-        ign_req = ReqNA;
+        ezread.squintf(ezread.highlightcolor, "Ignition (p%d) handler init\n", _pin);
+        _ign_req = ReqNA;
     }
-    void request(int req) {
-        ign_req = req;
-    }  // ezread.squintf("ign req %s\n", requestcard[req].c_str());
-    void panic_request(int req) {
-        panic_req = req;
-        // if (_verbose) ezread.squintf("ign2: ign=%d ir=%s pan=%d pr=%s\n", (int)signal, requestcard[ign_req].c_str(), (int)panicstop, requestcard[panic_req].c_str()); delay(1);
-    }
+    void request(int req) { _ign_req = req; }  // ezread.squintf("ign req %s\n", requestcard[req].c_str());
+    void panic_request(int req) { _panic_req = req; }  // if (_verbose) ezread.squintf("ign2: ign=%d ir=%s pan=%d pr=%s\n", (int)signal, requestcard[ign_req].c_str(), (int)panicstop, requestcard[panic_req].c_str()); delay(1);
     void update() {  // Run once each main loop
         if (runmode == LowPower) return;
-        if (panic_req == ReqTog) panic_req = !panicstop;
-        if (ign_req == ReqTog) ign_req = !signal;
+        if (_panic_req == ReqTog) _panic_req = panicstop ? ReqOff : ReqOn;
+        if (_ign_req == ReqTog) _ign_req = signal ? ReqOff : ReqOn;
         if (!speedo.stopped()) {  //  && (runmode == Fly || runmode == Cruise || runmode == Hold)
-            if (signal && ign_req == ReqOff) panic_req = ReqOn;  // ignition cut while driving causes panic stop
-            if (!sim.simulating(sens::joy) && hotrc.radiolost()) panic_req = ReqOn;
+            if (signal && _ign_req == ReqOff) _panic_req = ReqOn;  // ignition cut while driving causes panic stop
+            if (!sim.simulating(sens::joy) && hotrc.radiolost()) _panic_req = ReqOn;
         }
-        if (panic_req != ReqNA) set_panicstop((panic_req == ReqOn) ? true : false);    // ezread.squintf("panic=%d\n", panicstop);
-        if (panicstop) ign_req = ReqOff;  // panic stop causes ignition cut
+        if (_panic_req != ReqNA) set_panicstop((_panic_req == ReqOn) ? true : false);    // ezread.squintf("panic=%d\n", panicstop);
+        if (panicstop) _ign_req = ReqOff;  // panic stop causes ignition cut
         if (speedo.stopped() || panicTimer.expired()) set_panicstop(false);  // Cancel panic stop if car is stopped
-        if (ign_req != ReqNA) set_ignition((ign_req == ReqOn) ? HIGH : LOW);
+        if (_ign_req != ReqNA) set_ignition((_ign_req == ReqOn) ? HIGH : LOW);
     }
 };
 static Ignition ignition(ignition_pin);
