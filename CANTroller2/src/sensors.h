@@ -12,7 +12,7 @@
 // this enum class represent the components which can be simulated (sensor). It's int type under the covers, so it can be used as an index
 // typedef int opt_t;
 enum si_native_convmethods { LinearMath=0, AbsLimMap=1, OpLimMap=2 };
-enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, airvelo=6, mapsens=7, engtemp=8, mulebatt=9, starter=10, basicsw=11, NumSensors=12 };  //, ignition, syspower };  // , NumSensors, err_flag };
+enum class sens : int { none=0, joy=1, pressure=2, brkpos=3, speedo=4, tach=5, airvelo=6, mapsens=7, mulebatt=8, engtemp=9, basicsw=10, starter=11, NumSensors=12 };  // , ignition, syspower };  // , NumSensors, err_flag };
 enum class src : int { Fixed=0, Pin=1, Sim=2, Pot=3, NumSources=4 };
 
 int sources[static_cast<int>(sens::NumSensors)] = { static_cast<int>(src::Pin) };
@@ -436,10 +436,11 @@ class Sensor : public Transducer {
         }
         _si.set(run_ema());
     }
-    virtual void set_val_from_fixed() { _si.set(_default_fixed_si); }  // if sensor set to fixed value, leave value as it is (ie do nothing)
-    virtual void set_val_from_sim() { if (std::isnan(val())) _si.set(_default_value_si); }    // TODO: need to implement value change logic here, instead of values being directly set by touchscreen class
     virtual void set_val_from_pin() { set_si(NAN); }  // must be overridden by children
-    virtual void set_val_from_pot() { _si.set(_pot->mapToRange(_opmin, _opmax)); } // pot spoofs filtered si value directly.
+    // these may be overridden by child classes
+    void set_val_from_fixed() { _si.set(_default_fixed_si); }  // if sensor set to fixed value, leave value as it is (ie do nothing)
+    void set_val_from_sim() { if (std::isnan(val())) _si.set(_default_value_si); }    // TODO: need to implement value change logic here, instead of values being directly set by touchscreen class
+    void set_val_from_pot() { _si.set(_pot->mapToRange(_opmin, _opmax)); } // pot spoofs filtered si value directly.
     void update_source() { if (_source == src::Pin) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
   public:
     Sensor(int pin) : Transducer(pin) {
@@ -459,7 +460,7 @@ class Sensor : public Transducer {
     }
     void set_ema_alpha(float arg_alpha) { _ema_alpha = std::fmaxf(0.0f, arg_alpha); }
     float ema_alpha() { return _ema_alpha; }
-    bool released() { return (std::abs(val() - _zeropoint) <= _margin); }
+    bool released() { return (std::abs(val() - zeropoint()) <= margin()); }
 };
 class I2CSensor : public Sensor {  // base class for sensors which communicate using i2c
   protected:
@@ -499,16 +500,17 @@ class I2CSensor : public Sensor {  // base class for sensors which communicate u
     I2CSensor() = delete;
     void presetup() {
         Sensor::presetup();
+        set_can_source(src::Sim, true);
+        set_can_source(src::Pot, true);
         set_conversions(1.0, 0.0); // our i2c sensors so far provide si units directly.
     }
     void postsetup() {  // call at the end of child setup() override functions
         // set_si(_default_value_si);  // initialize value
-        set_can_source(src::Pot, true);
         _detected = _i2c->detected_by_addr(addr);
         if (!_detected || !_responding) {
             // _enabled = false;
             set_source(src::Fixed);  // TODO - added to prevent continual map(NAN, ...) errors on sensors not present. review
-            set_si(_default_value_si);
+            // set_si(_default_value_si);
         }
         print_on_boot(_detected, _responding);
         Sensor::postsetup();
@@ -606,10 +608,7 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
     void postsetup() {  // child classes call this before setting limits
         set_val_from_pin();
         _detected = _last_read_valid;
-        if (!_detected) {
-            set_source(src::Fixed);
-            set_si(_default_value_si);
-        }
+        if (!_detected) set_source(src::Fixed);
         print_config();
         Sensor::postsetup();
     }
@@ -631,11 +630,11 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
     // void set_val_from_sim() { set_si(12.0, false); }  // When simulating battery, just lock it at 12V to avoid errors
     void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
         AnalogSensor::presetup();
-        _default_value_si = 12.0f;
         set_conversions(0.004075, 0.0);  // 240627 calibrated against my best multimeter: m = 0.004075
         set_abslim(0.0, 15.1);  // set abs range. dictated in this case by the max voltage a battery charger might output
         set_oplim(10.7, 14.8);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
         set_ema_alpha(0.005);
+        _default_value_si = 12.0f;
         AnalogSensor::postsetup();
     }
 };
@@ -691,24 +690,22 @@ class PressureSensor : public AnalogSensor {
     PressureSensor() = delete;
     void setup() {
         AnalogSensor::presetup();
-        float min_adc = 650.0;  // from step #2 above. max value set in function call below  // 650 to 713  (earlier i was seeing 662 min. hmm)
-        float noise_margin = 45.0;  // how much the min value can jump to above the number above due to noise
-        float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
-        float b = -1.0 * min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
+        float temp_min_adc = 650.0;  // from step #2 above. max value set in function call below  // 650 to 713  (earlier i was seeing 662 min. hmm)
+        float noise_margin_adc = 45.0;  // how much the min value can jump to above the number above due to noise
+        float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - temp_min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
+        float b = -1.0 * temp_min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
         set_abslim_native(0.0, (float)adcrange_adc);  // set native abslims after m and b are set.  si abslims will autocalc
-        set_oplim_native(min_adc, 2176.0);            // from step #3 above  // set this after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
-        set_oplim(0.0, NAN);  // now set just the si oplim to exactly zero. This will cause native oplims to autocalc such that any small errors don't cause our si oplim to be nonzero
-        // set_oplim(4.6, 350.0);  // 240605 these are the extremes seen with these settings. Is this line necessary though? (soren)
-        // ezread.squintf(" | oplim_native = %lf, %lf | ", _opmin_native, _opmax_native);
-        set_ema_alpha(0.03);   // from step #1 above  // 2024 was 0.055
-        set_margin(noise_margin);       // max acceptible error when checking psi levels
-        _zeropoint = from_native(min_adc + noise_margin / 2.0f);   // tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
+        set_oplim_native(temp_min_adc, 2176.0);  // from step #3 above  // set this after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
+        set_oplim(0.0, NAN);  // now set just the si op minimum (only) to exactly zero. This will cause native op minimum to autocalc such that any small errors don't cause our si oplim to be nonzero
+        set_ema_alpha(0.03);         // from step #1 above  // 2024 was 0.055
+        set_margin(from_native(noise_margin_adc));    // max acceptible error when checking psi levels
+        _zeropoint = from_native(opmin_native() + noise_margin_adc / 2.0f);   // tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
         _default_value_si = opmin();
-        set_native(_opmin_native);
+        // set_native(_opmin_native);
         AnalogSensor::postsetup();
     }
-    bool parked() { return (std::abs(val() - _opmin) <= _margin); }  // is tha brake motor parked?
+    bool parked() { return (std::abs(val() - opmin()) <= margin()); }  // is tha brake motor parked?
     float parkpos() { return _opmin; }
     float zeropoint_pc() { return to_pc(_zeropoint); }
     float parkpos_pc() { return to_pc(_opmax); }
@@ -760,16 +757,12 @@ class BrakePositionSensor : public AnalogSensor {
         set_abslim_native(1885, 2933, false); // from step #2   // need false argument to prevent autocalculation
         set_oplim(1.22, 5.9f);                // from step #13  !! 250720 not yet finalized! (do step 13)
         _zeropoint = 5.7;                     // from step #12 c
-        // don't also set native oplims as they will autocalc from oplims setting
-        // set_oplim_native(1445, 1923);  // 240609 1445 (2.68in) is full push, and 1923 (4.5in) is park position (with simple quicklink +carabeener linkage)
         set_ema_alpha(0.35);
-        set_margin(0.2);  // TODO: add description
-        // _mfactor = (_absmax - _absmin) / (float)(_absmax_adc - _absmin_adc);  // (8.85 in - 0.95 in) / (3103 adc - 979 adc) = 0.00372 in/adc
-        // _boffset = -2.69;  //  979 adc * 0.00372 in/adc - 0.95 in = -2.69 in
+        set_margin(0.2);  // in inches
         _default_value_si = opmax();
         AnalogSensor::postsetup();
     }
-    bool parked() { return (std::abs(val() - _opmax) <= _margin); }  // is tha brake motor parked?
+    bool parked() { return (std::abs(val() - opmax()) <= margin()); }  // is tha brake motor parked?
     float parkpos() { return _opmax; }
     float parkpos_pc() { return to_pc(_opmax); }
     float zeropoint_pc() { return to_pc(_zeropoint); }
@@ -1051,7 +1044,7 @@ class Speedometer : public PulseSensor {
         set_ema_taulim(10000.0f, 1e8f);
         set_ema_tau(5e7f);      // set filter tau factor
         // set_ema_alpha(0.003f);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
-        set_margin(0.2f);
+        set_margin(0.30f);
         // _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
         PulseSensor::postsetup();
     }

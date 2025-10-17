@@ -31,7 +31,7 @@ static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%",
 static std::string pagecard[datapages::NumDataPages] = { "Run ", "Hrc ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "Diag", "UI  " };
 static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 12, 10, 9, 8, 10, 5, 11, 9, 7, 12, 4, 11, 12 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = {
-    { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PgRun
+    { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", "BkPosSrc", "Batt Src", "Governor", stEr"Safe", },  // PgRun
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", "SimRaw H", "SimRaw V", __________, __________, horfailsaf, "Deadband", "SimDeadB", },  // PgHrc
     { " Pot Raw", brAk"Posn", brAk"Posn", brAk"Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PgSens
     { "TachPuls", "Tach Raw", "TcAltRaw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpAltRaw", "SpeedRaw", "   Speed", "Tach Tau", "SpeedTau", "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", },  // PgPuls
@@ -42,12 +42,12 @@ static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = 
     { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PgGPID
     { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "GasEnPID", "CrEnaPID", "Lineariz", "Exponent", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
-    { __________, __________, __________, __________, "   HotRC", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", "Basic Sw", " Pot Map", "CalBrake", " Cal Gas", },  // PgSim
+    { __________, __________, __________, __________, "   HotRC", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", " Battery", " Pot Map", "CalBrake", " Cal Gas", },  // PgSim
     { __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", },  // PgDiag
     { "Loop Avg", "LoopPeak", "Loop Max", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", " EZ Spam", "EZAvgRat", "EZSpamBf", "EZSerial", "EZScroll", "PanelApp", },  // PgUI
 };
 static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  // note these will be right-aligned
-    { "psi",  "in",   "V",   "%", "mph", "atm", "g/s", "scr", "scr", "scr", "min",    "",    "",   "%",   "%", },  // PgRun
+    { "psi",  "in",   "V",   "%", "mph", "atm", "g/s", "scr", "scr", "scr", "min", "scr", "scr",   "%",   "%", },  // PgRun
     {  "us",  "us",  "us",  "us",  "us",  "us",   "%",   "%",   "%",   "%",    "",    "",   "us",  "us",  "%", },  // PgHrc
     { "adc", "adc",  "in",   "%", "adc", "psi",   "%", "adc",   "V",    "", "psi", "psi",  "in",  "in",  "in", },  // PgSens
     {  "ms",  "Hz",  "Hz", "rpm",  "ms",  "Hz",  "Hz", "mph",   "%",  "us",  "us", "rpm", "rpm", "mph", "mph", },  // PgPuls
@@ -701,10 +701,12 @@ class Display {
             draw_ascii(17, motormodecard[brake.motormode]);
             draw_ascii(18, motormodecard[steer.motormode]);
             drawval(19, looptimer.uptime());
-            // // temporary - for debugging airvelo/map source status
-            // draw_ascii(20, sensor_src_card[(int)airvelo.source()]); 
-            // draw_ascii(21, sensor_src_card[(int)mapsens.source()]); 
-            for (int line=20; line<=21; line++) draw_eraseval(line);
+
+            // temporary - for debugging airvelo/map source status
+            draw_ascii(20, sensor_src_card[(int)brkpos.source()]); 
+            draw_ascii(21, sensor_src_card[(int)mulebatt.source()]); 
+            // for (int line=20; line<=21; line++) draw_eraseval(line);
+            
             drawval(22, governor, 0.0f, 100.0f, NAN, 1);
             drawval(23, steer.steer_safe_pc, 0.0f, 100.0f, NAN, 1);
         }
@@ -887,7 +889,7 @@ class Display {
             draw_truth(17, sim->can_sim(sens::tach), binstyl::Enabled);
             draw_truth(18, sim->can_sim(sens::airvelo), binstyl::Enabled);
             draw_truth(19, sim->can_sim(sens::mapsens), binstyl::Enabled);
-            draw_truth(20, sim->can_sim(sens::basicsw), binstyl::Enabled);                    
+            draw_truth(20, sim->can_sim(sens::mulebatt), binstyl::Enabled);                    
             draw_ascii(21, sensorcard[sim->potmap()]);
             draw_truth(22, cal_brakemode, binstyl::Enabled);
             draw_truth(23, cal_gasmode, binstyl::Enabled);
@@ -1220,7 +1222,7 @@ class Tuner {
             else if (sel == 8) sim.set_can_sim(sens::tach, tune(id));
             else if (sel == 9) sim.set_can_sim(sens::airvelo, tune(id));
             else if (sel == 10) sim.set_can_sim(sens::mapsens, tune(id));
-            else if (sel == 11) sim.set_can_sim(sens::basicsw, tune(id));
+            else if (sel == 11) sim.set_can_sim(sens::mulebatt, tune(id));
             else if (sel == 12) sim.set_potmap((sens)(tune((int)sim.potmap(), id, 0, (int)(sens::starter) - 1, true)));
             else if (sel == 13) cal_brakemode_request = tune(id);
             else if (sel == 14) cal_gasmode_request = tune(id);

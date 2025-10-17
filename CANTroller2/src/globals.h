@@ -287,7 +287,7 @@ inline float map(float x, float in_min, float in_max, float out_min, float out_m
     if (std::isnan(x) || std::isnan(in_min) || std::isnan(in_max) || std::isnan(out_min) || std::isnan(out_max) || iszero(in_max - in_min)) {
         static int64_t tlast = esp_timer_get_time();
         int64_t now = esp_timer_get_time();
-        Serial.printf("err: %dus map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", (int)((now - tlast) / 1), x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
+        Serial.printf("err: %6dus map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", (int)((now - tlast) / 1), x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
         tlast = now;
         if (std::isnan(x)) return NAN;
         if (iszero(in_max - in_min)) return out_max;
