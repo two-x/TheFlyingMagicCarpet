@@ -165,11 +165,11 @@ class Device {
     src _source = src::Pin;
     bool _can_source[(int)src::NumSources] = { true, true, false, false };  // [Fixed/Pin/Sim/Pot]
     // source handling functions (should be overridden in child classes as needed)
-    virtual void set_val_from_fixed() {}
-    virtual void set_val_from_pin() {}
-    virtual void set_val_from_sim() {}
-    virtual void set_val_from_pot() {}
-    virtual void update_source() {}
+    virtual void set_val_from_pin() = 0;  // =0 makes pure virtual, thus *must* be overriden somewhere down lineage
+    virtual void set_val_from_fixed() = 0;
+    virtual void set_val_from_sim() = 0;
+    virtual void set_val_from_pot() = 0;
+    virtual void update_source() = 0;
   public:
     std::string _long_name = "Unknown device";
     std::string _short_name = "device";
@@ -246,8 +246,13 @@ class Transducer : public Device {
     float _mfactor = 1.0, _boffset = 0.0, sim_val, _zeropoint, _si_raw;  // si_raw is only meaningful for sensors, not actuators. managed here because that's easier
     float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;
     int _transtype, _convmethod = LinearMath;  // the default method
+    float _default_value_si = NAN;  // must be set by child classes to a valid default value (allows simulation)
+    float _default_fixed_si = NAN;  // may be overridden by child classes. becomes value always when src == Fixed
     Param _si, _native;
     TransDir _dir = TransDir::Fwd;
+    void set_val_from_fixed() override { _si.set(_default_fixed_si); }  // if sensor set to fixed value, leave value as it is (ie do nothing)
+    void set_val_from_sim() override { if (std::isnan(val())) _si.set(_default_value_si); }    // TODO: need to implement value change logic here, instead of values being directly set by touchscreen class
+    void set_val_from_pot() override { _si.set(_pot->mapToRange(_opmin, _opmax)); } // pot spoofs filtered si value directly.
   public:
     // operator float() { return _si.val(); }
     Transducer(int arg_pin) : Device(arg_pin) {
@@ -423,11 +428,10 @@ class Transducer : public Device {
 //     "pc()": the filtered value is available scaled as a percentage of the operatioal range. it's not stored, but accessible using pc()
 class Sensor : public Transducer {
   protected:
-    float _default_value_si = NAN;  // must be set by child classes to a valid default value (allows simulation)
-    float _default_fixed_si = NAN;  // may be overridden by child classes. becomes value always when src == Fixed
     float _ema_alpha = 0.1;
     bool _first_filter_run = false;
-    float run_ema() { return ema_filt(_si_raw, _si.val(), _ema_alpha); }
+    virtual float run_ema() { return ema_filt(_si_raw, _si.val(), _ema_alpha); }
+    void update_source() override { if (_source == src::Pin) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
     void set_si_w_ema() { // Exponential Moving Average
         if (_first_filter_run) {
             _si.set(_si_raw);
@@ -436,12 +440,6 @@ class Sensor : public Transducer {
         }
         _si.set(run_ema());
     }
-    virtual void set_val_from_pin() { set_si(NAN); }  // must be overridden by children
-    // these may be overridden by child classes
-    void set_val_from_fixed() { _si.set(_default_fixed_si); }  // if sensor set to fixed value, leave value as it is (ie do nothing)
-    void set_val_from_sim() { if (std::isnan(val())) _si.set(_default_value_si); }    // TODO: need to implement value change logic here, instead of values being directly set by touchscreen class
-    void set_val_from_pot() { _si.set(_pot->mapToRange(_opmin, _opmax)); } // pot spoofs filtered si value directly.
-    void update_source() { if (_source == src::Pin) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
   public:
     Sensor(int pin) : Transducer(pin) {
         _long_name = "Unknown";
@@ -816,8 +814,7 @@ class PulseSensor : public Sensor {
         _si_raw = from_native(_native.val());    // convert native Hz to get raw si value        
 
         // TODO - if zero timeout happened should final si value jump to 0 also?  Here we are continuing to apply ema filter 
-        my_set_si_w_ema();   // TODO stupid workaround b/c my run_ema override doesn't work
-        // set_si_w_ema();   // (orig) apply ema filter for si filt value
+        set_si_w_ema();   // (orig) apply ema filter for si filt value
         
         if (!std::isnan(_si.val()) && iszero(_si.val())) _us = NAN; // once filtered si hits zero, call pulsewidth invalid
         update_pulsecount(isr_time_buf_us);
@@ -836,18 +833,10 @@ class PulseSensor : public Sensor {
         return std::fmaf(alpha, (raw - filt), filt);        // filt + alpha*(raw - filt)
     }  // return filt * std::exp(-dt / tau) + raw * (1 - std::exp(-dt / tau));  // true math but it uses expensive exponents
 
-    // TODO - this simple override doesn't run!  (so have implemented my_* functions as hacky override below)
-    // override standard ema filter so filtering is smoother the less frequently we get pulses
-    // float run_ema() { return scaling_ema_filt(_si_raw, _si.val(), _us, _ema_tau_us); }  // override ema calculator
-    float my_run_ema() { return scaling_ema_filt(_si_raw, _si.val(), _us, _ema_tau_us); }
-    void my_set_si_w_ema() {
-        if (_first_filter_run) {
-            _si.set(_si_raw);
-            _first_filter_run = false;
-            return;
-        }
-        _si.set(my_run_ema());
-    }
+    float run_ema() override {
+        // assert(false);  // will crash always.  (just wanted to ensure this override is working as expected - it is)
+        return scaling_ema_filt(_si_raw, _si.val(), _us, _ema_tau_us);
+    }  // override ema calculator
 
     void set_pin_inactive() {
         static bool pinlevel_last;

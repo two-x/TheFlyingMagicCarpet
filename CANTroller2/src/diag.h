@@ -459,7 +459,7 @@ class DiagRuntime {
         bool fail = false;
         checkrange(_Tach);
         
-        // check that the tach is zero when engine is killed
+        // check that the tach is zero when engine is killed. note ignition could be 
         if (runmode == Standby) {  //  || runmode == Stall  // !ignition->signal
             // if (running_last) tachTimer.reset();       // if we just stopped driving, allow time for car to stop
             // else if (tachTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped

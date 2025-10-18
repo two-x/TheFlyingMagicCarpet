@@ -320,11 +320,14 @@ class Starter {
     }
     void check_for_external_tampering() {   // in case an external bug could be turning on the starter instead of us    
         bool pin_now = read_pin(_pin);      // get current value of pin to do the following check
-        if (motor != pin_now) {             // check if someone changed the motor value or started driving our pin
-            ezread.squintf(ezread.madcolor, "err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
-            if (motor) ignition.panic_request(ReqOn);  // in case motor did start up, request panic will kill the ignition & stop car 
-            request(ReqOff, StartClass);               // request to stop motor
+        if (motor == pin_now) return;       // if signal matches we're good, so bail
+        // hereafter, we assume an error or external cause has changed the motor value or started driving our pin
+        ezread.squintf(ezread.madcolor, "err: starter pin/pointer abuse! p:%d != m:%d\n", (int)pin_now, (int)motor); // how do we not miss this message?
+        if (pin_now) {                      // in case motor did start up
+            ignition.panic_request(ReqOn);  // request panic will kill the ignition & stop car 
+            request(ReqOff, StartClass);    // request to stop motor
         }
+        motor = pin_now; // correct motor variable to match pin value.  TODO ensure we're not causing problems by setting motor variable outside of turnon/turnoff functions
     }
     void verify_double_click() {
         static Timer twoclicktimer{2000000};
@@ -380,7 +383,6 @@ class Starter {
             return;                                             // we're done here
         }
         // hereafter we know the motor is off and we are supposed to turn it on
-
         if (brake.autoholding) {  // if brake is successfully holding
             turnon(0);            // start the car
             return;               // finished servicing request
@@ -402,8 +404,7 @@ class Starter {
                 return;                              // ditch out and wait for brake to push, leaving on request active
             }
         }
-        // hereafter we are waiting for the brake push timer to expire, with ReqOn request active
-
+        // hereafter we are waiting for the brake push timer to expire
         if (brakeTimer.expired()) {                      // waited long enough for the brake to push
             if (!check_brake_before_starting) turnon(2); // if no need to check whether brake succeeded, then start the car
             else {                                       // if we were supposed to apply the brakes and also check they got pushed
