@@ -168,6 +168,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         sleep_request = ReqNA;
     }
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
+        static Timer kill_ign_timer{3 * 60 * 1000000};  // set an X minute timer to kill the ignition, reducing risk of phantom starter bug
+        if (_we_just_switched_modes) kill_ign_timer.reset();
         if (!starter.motor && (starter.now_req != ReqOn)) {  // if starter is not running, or in-progress request to start running
             if (brake.motormode != run_motor_mode[runmode][_BrakeMotor]) brake.setmode(run_motor_mode[runmode][_BrakeMotor]); // take back the brake after failed attempt to start
             if (gas.motormode != run_motor_mode[runmode][_Throttle]) gas.setmode(run_motor_mode[runmode][_Throttle]); // take back the gas after failed attempt to start
@@ -176,6 +178,10 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());  // turn off starter if any Ch4 event occurred. Note keep this if separate, as it will reset the sw event
         } 
         else if (hotrc.sw_event_filt(Ch4)) starter.request(ReqOn, hotrc.last_ch4_source());  // turn on starter if a stable, filtered Ch4 event occurred. Note keep this if separate, as it will reset the sw event
+        if (kill_ign_timer.expired()) {
+            ezread.squintf("stall mode %dmin ign-kill (avoid phantom start)\n", kill_ign_timer.timeout() / (60 * 1000000));
+            ignition.request(ReqOff);  // ignition kill will result in fall back to Standby mode
+        }
         if (!tach.stopped()) runmode = Hold;  // If we started the car, enter hold mode
     }
     void run_holdMode(bool recovering=false) {  // recovering argument is only used by the [experimental & optional] boot monitor feature to resume previous drive state after a system crash
