@@ -63,10 +63,7 @@ class I2C {
         static int lastsens = I2CMAP;
         // Serial.printf("%d->", i2cbaton);
         if (!use_i2c_baton) return;
-        if (i2cbaton == I2CAirVelo || i2cbaton == I2CMAP) {
-            if (captouch) i2cbaton = I2CTouch;
-            else i2cbaton = I2CLightbox;
-        } 
+        if (i2cbaton == I2CAirVelo || i2cbaton == I2CMAP) i2cbaton = I2CTouch;
         else if (i2cbaton == I2CTouch) i2cbaton = I2CLightbox;
         else if (i2cbaton == I2CLightbox) {
             if (lastsens == I2CAirVelo) i2cbaton = I2CMAP;

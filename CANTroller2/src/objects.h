@@ -476,4 +476,4 @@ class CoolingFan {  // new class to serve as thermostat for vehicle radiator fan
         // turn on cooling fan as needed
     }
 };
-static CoolingFan fan(fan_tp_cs_pin);  // uses the pin and transistor circuit existing onboard originally intended for the vehicle fuel pump
+static CoolingFan fan(fan_cs_pin);  // uses the pin and transistor circuit existing onboard originally intended for the vehicle fuel pump

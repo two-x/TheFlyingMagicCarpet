@@ -216,7 +216,7 @@ class Encoder {
 #define disp_tuning_lines 15     // lines of dynamic variables/values in dataset pages
 
 // touchscreen driver:
-// * panels supported: i2c capacitive or spi resistive touchscreen, autodetected based on i2c address of captouch panel
+// * supported panel: i2c capacitive touchscreen
 // * calibration: values of corners[][][] array must be edited for optimized location accuracy (for cap and res types)
 // * filtering: rejects short spurious false touches or losses of touch (needed for use through plastic box lid)
 // * external methods supported:
@@ -236,8 +236,7 @@ class Touchscreen {
   private:
     I2C* _i2c;
     LGFX* _tft;
-    int corners[2][2][2] = { { { -25, -3549 }, { 185, 3839 } },  // [restouch][Horz/Vert][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
-                             { { -100, 319 },  { 0, 174 } } };   // [captouch][Horz/Vert][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
+    int corners[2][2] = { { -100, 319 },  { 0, 174 } }; // [Horz/Vert][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
     bool longpress_possible = true, recent_tap = false, doubletap_possible = false;  // ts_tapped = false, ts_doubletapped = false, ts_longpressed = false;
     bool lasttouch = false, printEnabled = true, swipe_possible = true;  // , nowtouch = false, nowtouch2 = false;
     int fd_exponent = 0, fd_exponent_max = 14, tlast_x, tlast_y, keyrepeats = 0;
@@ -295,7 +294,7 @@ class Touchscreen {
     int drag_dist_min = 20;  // if a press changes location more than this many pixels, it is considered a drag not a press
     int swipe_min = 50;     // minimum travel in pixels to count as a swipe
     int idelta, id;         // id is edit amount as integer for locally made edits. idelta is edit amount as integer for passing off to tuner object.
-    bool increment_datapage = false, increment_sel = false;
+    bool increment_datapage = false, increment_sel = false, detected = false;
     Touchscreen() {}
     void setup(LGFX* tft, I2C* i2c) {
         if (!display_enabled) return;
@@ -303,8 +302,8 @@ class Touchscreen {
         _i2c = i2c;
         disp_size[Horz] = disp_width_pix;
         disp_size[Vert] = disp_height_pix;
-        captouch = (i2c->detected(I2CTouch));
-        ezread.squintf(ezread.highlightcolor, "Touchscreen.. %s panel\n", (captouch) ? "detected captouch" : "using resistive");
+        detected = i2c->detected(I2CTouch);
+        ezread.squintf(ezread.highlightcolor, "Touchscreen.. captouch panel %sdetected\n", (detected) ? "" : "not ");
         if (   (senseTimer.timeout() >= filterTimer.timeout()) || (filterTimer.timeout() >= twotapTimer.timeout())  // checks all the timeouts are in length order
             || (filterTimer.timeout() >= repeat_timeout)       || (filterTimer.timeout() >= accel_timeout)
             || (twotapTimer.timeout() >= longpress_timeout)    || (swipe_timeout >= longpress_timeout)
@@ -363,7 +362,7 @@ class Touchscreen {
     // bool* doubletap_ptr() { return &ts_doubletapped; }  // for idiot light
     // bool* longpress_ptr() { return &ts_longpressed; }
     void update() {
-        if (captouch && _i2c->not_my_turn(I2CTouch)) return;             // if (captouch && _i2c->not_my_turn(I2CTouch)) return;
+        if (_i2c->not_my_turn(I2CTouch)) return; // if (captouch && _i2c->not_my_turn(I2CTouch)) return;
         if (senseTimer.expireset()) {
             get_touch_debounced();
             if (nowtouch) process_touched();
@@ -382,8 +381,8 @@ class Touchscreen {
     void process_touched() {  // executes on update whenever screen is being touched (nowtouch == true)
         kick_inactivity_timer(HuTouch);  // register evidence of user activity to prevent going to sleep
         for (int axis=Horz; axis<=Vert; axis++) {
-            // if (captouch) tft_touch[axis] = raw[axis];  // disp_width - 1 - raw[Horz];
-            tft_touch[axis] = map(raw[axis], corners[captouch][axis][tsmin], corners[captouch][axis][tsmax], 0, disp_size[axis]);
+            // tft_touch[axis] = raw[axis];  // disp_width - 1 - raw[Horz];
+            tft_touch[axis] = map(raw[axis], corners[axis][tsmin], corners[axis][tsmax], 0, disp_size[axis]);
             tft_touch[axis] = constrain(tft_touch[axis], 0, disp_size[axis] - 1);
             if (flip_the_screen) tft_touch[axis] = disp_size[axis] - tft_touch[axis];
         }

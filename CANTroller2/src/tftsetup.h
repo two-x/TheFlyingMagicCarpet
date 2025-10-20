@@ -43,8 +43,7 @@ class LGFX : public lgfx::LGFX_Device {
     lgfx::Bus_SPI           _bus_instance;       // SPI bus instance // Prepare an instance that matches the type of bus that connects the panel.
     // lgfx::Bus_I2C        _bus_instance;       // I2C bus instance
     // lgfx::Light_PWM      _light_instance;     // Prepare an instance if backlight control is possible. (Delete if unnecessary)
-    lgfx::Touch_FT5x06      _cap_touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
-    lgfx::Touch_XPT2046     _res_touch_instance;
+    lgfx::Touch_FT5x06      _touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
   public:
     LGFX(void) {}  // Create a constructor and configure various settings here.  If you change the class name, please specify the same name for the constructor.
     void init() {
@@ -52,7 +51,7 @@ class LGFX : public lgfx::LGFX_Device {
             auto cfg = _bus_instance.config(); // Get the structure for bus settings.
             cfg.spi_host    = SPI2_HOST;       // VSPI_HOST is deprecated, use SPI2_HOST.  HSPI_HOST = SPI1_HOST or SPI3_HOST (?)
             cfg.spi_mode    = 0;               // Set SPI communication mode (0 ~ 3)
-            cfg.freq_write  = ((int)captouch + 1) * 20000000;  // 20000000 or 40000000; SPI clock when transmitting (in Hz) (max 80MHz, rounded to 80MHz divided by an integer)
+            cfg.freq_write  = 40000000;        // 40000000 for captouch unit; SPI clock when transmitting (in Hz) (max 80MHz, rounded to 80MHz divided by an integer)
             cfg.freq_read   = 16000000;        // SPI clock when receiving (in Hz)
             cfg.spi_3wire   = true;            // Set true if receiving is done using the MOSI pin.
             cfg.use_lock    = true;            // Set true to use transaction locking
@@ -85,7 +84,7 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.dummy_read_pixel = 8;        // Number of dummy read bits before pixel readout
             cfg.dummy_read_bits  = 1;        // Number of bits for dummy read before reading data other than pixels
             cfg.readable         = true;     // Set to true if data reading is possible            
-            cfg.invert           = captouch; // || !running_on_devboard);  // Set to true if the brightness and darkness of the panel is reversed.
+            cfg.invert           = true;     // Set to true if the brightness and darkness of the panel is reversed.
             cfg.dlen_16bit       = false;    // Set to true for panels that transmit data length in 16-bit units using 16-bit parallel or SPI.
             cfg.bus_shared       = true;     // Set to true when sharing the bus with the SD card (control the bus using drawJpgFile, etc.)
             // Please set the following only if the display is misaligned with a variable pixel number driver such as ST7735 or ILI9163.
@@ -93,8 +92,8 @@ class LGFX : public lgfx::LGFX_Device {
             // cfg.memory_height =   disp_width_pix;  // Maximum height supported by driver IC
             _panel_instance.config(cfg);
         }
-        if (captouch) {                           // Configure touch screen control settings. (Delete if unnecessary)
-            auto cfg = _cap_touch_instance.config();
+        {                                         // Configure touch screen control settings. (Delete if unnecessary)
+            auto cfg = _touch_instance.config();
             cfg.x_max = (int)(disp_width_pix-1);  // Maximum X value obtained from touch screen (raw value)
             cfg.y_max = (int)(disp_height_pix-1); // Maximum Y value obtained from touch screen (raw value)
             cfg.x_min           = 0;              // Minimum X value obtained from touch screen (raw value)
@@ -106,26 +105,8 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.pin_sda         = i2c_sda_pin;    // SDA pin number
             cfg.pin_scl         = i2c_scl_pin;    // SCL pin number
             cfg.freq            = i2c_frequency;  // Set I2C clock (in Hz) (was set to 400000) trying 100000 to see if we get less i2c errors
-            _cap_touch_instance.config(cfg);
-            _panel_instance.setTouch(&_cap_touch_instance);  // Place the touch screen on the panel
-        }
-        else {                                    // resistive touch instead
-            auto cfg = _res_touch_instance.config();
-            cfg.x_max = (int)(disp_height_pix-1); // Maximum X value obtained from touch screen (raw value)
-            cfg.y_max = (int)(disp_width_pix-1);  // Maximum Y value obtained from touch screen (raw value)
-            cfg.x_min           = 0;              // Minimum X value obtained from touch screen (raw value)
-            cfg.y_min           = 0;              // Minimum Y value obtained from touch screen (raw value)
-            cfg.pin_int         = touch_irq_pin;  // INT pin number
-            cfg.offset_rotation = 2;              // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-            cfg.bus_shared      = true;           // Set true if using the same bus as the screen
-            cfg.spi_host        = SPI2_HOST;      // VSPI_HOST (doesn't recognize?) Select the SPI to use (HSPI_HOST or VSPI_HOST)
-            cfg.freq            = 1000000;        // Set SPI clock
-            cfg.pin_sclk        = spi_sclk_pin;   // SCLK pin number
-            cfg.pin_mosi        = spi_mosi_pin;   // MOSI pin number
-            cfg.pin_miso        = spi_miso_pin;   // MISO pin number
-            cfg.pin_cs          = fan_tp_cs_pin;      // CS pin number
-            _res_touch_instance.config(cfg);
-            _panel_instance.setTouch(&_res_touch_instance);  // Place the touch screen on the panel.
+            _touch_instance.config(cfg);
+            _panel_instance.setTouch(&_touch_instance);  // Place the touch screen on the panel
         }
         // {  // Configure backlight control settings. (Delete if unnecessary)
         //     auto cfg = _light_instance.config();    // Gets the structure for backlight settings.
