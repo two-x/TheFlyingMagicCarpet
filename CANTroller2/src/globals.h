@@ -5,17 +5,17 @@
 #define     boot_sw_pin  0 // button0/strap1  * // input, the esp "boot" button. if more pins are needed, move encoder_sw_pin to this pin, no other signal of ours can work on this pin due to high-at-boot requirement
 #define      tft_dc_pin  1 // adc1.0            // output, assert when sending data to display chip to indicate commands vs. screen data
 #define        free_pin  2 // adc1.1          ! // full-capability pin just waiting for you to go balls-out! (was prev reserved for driving a choke servo)
-#define   sdcard_cs_pin  3 // adc1.2/strapX   * // free* except: connected to chip select for SD card controller on SPI bus. cut that trace and it's good to go
+#define     free_sd_pin  3 // adc1.2/strapX   * // free* except: connected to chip select for SD card controller on SPI bus. cut that trace and it's good to go
 #define    mulebatt_pin  4 // adc1.3            // analog input, mule battery voltage sense, full scale is 16V
 #define         pot_pin  5 // adc1.4            // analog in from 20k pot
 #define   brake_pos_pin  6 // adc1.5            // analog input, tells us linear position of brake actuator. Blue is wired to ground, POS is wired to white.
 #define    pressure_pin  7 // adc1.6            // analog input, tells us brake fluid pressure. Needs a R divider to scale max possible pressure (using foot) to 3.3V
 #define     i2c_sda_pin  8 // sda0/adc1.7       // i2c bus for airvelo/map sensors, lighting board, cap touchscreen
 #define     i2c_scl_pin  9 // qhd0/scl0/adc1.8  // i2c bus for airvelo/map sensors, lighting board, cap touchscreen
-#define      tft_cs_pin 10 // cs0/adc1.9      * // output, active low, chip select allows ILI9341 display chip use of the spi bus. can reclaim pin if tft is the only spi device (no sd card or resist. touch), if so the tft CS pin must be grounded
+#define      tft_cs_pin 10 // cs0/adc1.9      * // output, active low, chip select allows ILI9341 display use of the spi bus. can reclaim pin as tft is the only spi device, if so the tft CS pin must be grounded
 #define    spi_mosi_pin 11 // mosi0/adc2.0      // spi interface data for tft screen. also connected to now-unsuported sd card and would-be resistive touch panel
 #define    spi_sclk_pin 12 // sclk0/adc2.1      // used as spi interface clock for tft screen. also connected to now-unsuported sd card and would-be resistive touch panel
-#define    spi_miso_pin 13 // miso0/adc2.2    * // free* except: connected as data-in from now-unsuported sd card and would-be resistive touch panel. cut that trace and it's good to go
+#define   free_miso_pin 13 // miso0/adc2.2    * // free* except: connected as data-in from now-unsuported sd card and would-be resistive touch panel. cut that trace and it's good to go
 #define hotrc_ch2_v_pin 14 // qwp0/pwm0/adc2.3  // hotrc ch2 bidirectional trigger input
 #define hotrc_ch1_h_pin 15 // pwm1/adc2.4     * // hotrc ch1 thumb joystick input. can reclaim this pin and the steer_pwm pin by connecting the hotrc horz chan straight to the steering jaguar 
 #define     gas_pwm_pin 16 // pwm1/adc2.5       // output, pwm signal duty cycle controls throttle target. on Due this is the pin labeled DAC1 (where A13 is on Mega)
@@ -28,7 +28,7 @@
 #define     starter_pin 36 // sram/ospi/glitch  // input/Output (both active high), output when starter is being driven.  ability to sense externally-driven start signal is disabled in hardware
 #define        tach_pin 37 // spiram/octspi     // int Input, active high, asserted when magnet south is in range of sensor. 1 pulse per engine rotation. (no pullup) - note: maybe better on p36 because filtering should negate any effects of 80ns low pulse when certain rtc devices power on
 #define  encoder_sw_pin 38 // spiram/octspi   * // input, rotary encoder push switch, for the UI. active low (needs pullup). signal can be moved to pin 0 to free up this pin. Pin 38 is the neopixel pin on v1.1 boards
-#define      fan_cs_pin 39 // jtck/glitch     ! // output drives external 12V switch to cooling fan. note also connected to now-unsuported resistive touch panel chip select.  note possible known glitch: 80ns low pulse when certain rtc devices power on (see errata 3.11)
+#define  coolingfan_pin 39 // jtck/glitch     ! // output drives external 12V switch to cooling fan. note also connected to now-unsuported resistive touch panel chip select.  note possible known glitch: 80ns low pulse when certain rtc devices power on (see errata 3.11)
 #define   hotrc_ch4_pin 40 // jtdo              // syspower, starter, and cruise mode toggle control. hotrc ch4 pwm toggle signal
 #define   hotrc_ch3_pin 41 // jtdi              // ignition control, hotrc Ch3 PWM toggle signal
 #define   encoder_a_pin 42 // jtms              // int input, the A (aka CLK) pin of the encoder. both A and B complete a negative pulse in between detents. if A pulse goes low first, turn is CCW. (needs pullup)
@@ -61,9 +61,12 @@
 // bootstrap pins: Pin 0 must be pulled high, and pins 45 and 46 pulled low during bootup
 // glitch: pins 36 and 39 will be erroneously pulled low for ~80ns when "certain RTC peripherals power up" (ESP32 errata 3.11). can run adc_power_acquire() to work around glitch but draw ~1mA more power. avoid interrupts on these pins
 // spi bus page including DMA information: https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32s3/api-reference/peripherals/spi_master.html
-#define tft_rst_pin -1     // tft reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
-#define tft_ledk_pin -1    // output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
-#define touch_irq_pin -1   // input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - set to 255 if not used
+#define spi_miso_pin -1   // disable as tft does not talk back. note: connected as data-in from tft and now-unsuported sd card and would-be resistive touch panel. cut that trace and it's good to go
+// #define tft_cs_pin -1  // can disable as tft is the only bus node now. note, commented b/c first we must hard-wire the tft cs pin to Gnd.
+
+#define tft_rst_pin -1    // tft reset allows us to reboot the screen hardware when it crashes. Otherwise connect screen reset line to esp reset pin
+#define tft_ledk_pin -1   // output, optional PWM signal to control brightness of LCD backlight (needs modification to shield board to work)
+#define touch_irq_pin -1  // input, optional touch occurence interrupt signal (for resistive touchscreen, prevents spi bus delays) - set to 255 if not used
 // bm2023 box compatibility: steer_enc_a_pin 1, steer_enc_b_pin 2, tft_dc_pin 3, onewire_pin 19, hotrc_ch3_pin 20, hotrc_ch4_pin 21, tach_pin 36, ignition_pin 37, syspower_pin 38, encoder_b_pin 40, encoder_a_pin 41, encoder_sw_pin 42, starter_pin 45, sdcard_cs_pin 46, tp_cs_fuel_pin 47
 
 #define adcbits 12

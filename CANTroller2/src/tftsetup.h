@@ -58,7 +58,7 @@ class LGFX : public lgfx::LGFX_Device {
             cfg.dma_channel = SPI_DMA_CH_AUTO; // Set the DMA channel (0=No DMA / 1=1ch / 2=ch / SPI_DMA_CH_AUTO=automatic setting)  // Due to the ESP-IDF version upgrade, SPI_DMA_CH_AUTO is recommended for the DMA channel. 1ch or 2ch is not recommended.
             cfg.pin_sclk    = spi_sclk_pin;    // SCLK pin number
             cfg.pin_mosi    = spi_mosi_pin;    // MOSI pin number
-            cfg.pin_miso    = spi_miso_pin;    // MISO pin number
+            cfg.pin_miso    = spi_miso_pin;    // MISO pin number. Note we can reclaim this pin! (i think set to -1 in that case).
             cfg.pin_dc      = tft_dc_pin;      // Set SPI D/C pin number (-1 = disable)
             // // I2C bus settings
             // cfg.i2c_port    = 0;       // Select I2C port to use (0 or 1)
@@ -72,7 +72,7 @@ class LGFX : public lgfx::LGFX_Device {
         }
         {                                        // Configure display panel control settings.
             auto cfg = _panel_instance.config(); // Gets the structure for display panel settings.
-            cfg.pin_cs           = tft_cs_pin;   // CS pin number  (-1 = disable)
+            cfg.pin_cs           = tft_cs_pin;   // CS pin number  (-1 = disable). Note we can reclaim this pin! (set to -1 in that case).
             cfg.pin_rst          = tft_rst_pin;  // RST pin number  (-1 = disable)
             cfg.pin_busy         = -1;           // BUSY pin number (-1 = disable)
             cfg.panel_width      = (int)disp_height_pix; // Actual displayable width, default = 240

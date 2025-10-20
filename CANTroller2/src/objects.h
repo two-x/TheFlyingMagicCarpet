@@ -215,8 +215,9 @@ static inline void print_git_info() {
 #endif
 
 void initialize_boot() {                        // set up those straggler pins which aren't taken care of inside class objects
-    set_pin(sdcard_cs_pin, OUTPUT, HIGH);                   // deasserting unused cs line ensures available spi bus
-    set_pin(free_pin, INPUT_PULLUP);                       // avoid undefined inputs
+    set_pin(free_pin, INPUT_PULLUP);            // avoid undefined inputs
+    set_pin(free_miso_pin, INPUT_PULLUP);       // avoid undefined inputs
+    set_pin(free_sd_pin, OUTPUT, HIGH);         // deasserting unused cs line ensures available spi bus
     if (!USB_JTAG) set_pin(steer_enc_a_pin, INPUT_PULLUP);  // avoid voltage level contention
     if (!USB_JTAG) set_pin(steer_enc_b_pin, INPUT_PULLUP);  // avoid voltage level contention
     Serial.flush();       // ensure serial buffer is fully printed out before closing the port
@@ -470,10 +471,10 @@ class CoolingFan {  // new class to serve as thermostat for vehicle radiator fan
   public:
     bool signal = LOW;  // reflects current state of the fan output pin
     CoolingFan(int pin) : _pin(pin) { set_pin(_pin, OUTPUT); }
-    void setup() { ezread.squintf(ezread.highlightcolor, "Cooling fan: init vehicle engine thermostat\n"); }
+    void setup() { ezread.squintf(ezread.highlightcolor, "Cooling fan (p%d) engine thermostat init\n", _pin); }
     void update() {
         // read engine temp
         // turn on cooling fan as needed
     }
 };
-static CoolingFan fan(fan_cs_pin);  // uses the pin and transistor circuit existing onboard originally intended for the vehicle fuel pump
+static CoolingFan fan(coolingfan_pin);  // uses the pin and transistor circuit existing onboard originally intended for the vehicle fuel pump
