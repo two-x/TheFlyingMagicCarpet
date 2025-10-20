@@ -61,6 +61,7 @@ void sim_setup() {
     sim.register_device(sens::mapsens, mapsens, mapsens.source());
     sim.register_device(sens::tach, tach, tach.source());
     sim.register_device(sens::speedo, speedo, speedo.source());
+    sim.register_device(sens::mulebatt, mulebatt, mulebatt.source());
     sim.recall_cansim();
     sim.set_potmap();
     // sim.register_device(sens::engtemp, temp, temp.source());
