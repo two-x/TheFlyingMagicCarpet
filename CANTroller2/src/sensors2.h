@@ -45,7 +45,7 @@ class ServoMotor2 : public Transducer {
     void changerate_limiter() {
         float max_out_change_pc = max_out_change_rate_pcps * outchangetimer.elapsed() / 1000000.0;
         outchangetimer.reset();
-        set_si(constrain(_si.val(), lastoutput - max_out_change_pc, lastoutput + max_out_change_pc));
+        set_si(constrain(val(), lastoutput - max_out_change_pc, lastoutput + max_out_change_pc));
         // lastoutput = pc[Out];  // note: you must set lastoutput = pc[Out]
     }
   public:
@@ -82,7 +82,7 @@ class Jaguar : public ServoMotor2 {
     Jaguar() = delete;
     void setup() {
         set_abslim(45.0, 168.2);  //this should also set oplim to the same
-        float m = (_si.max() - _si.min()) / (_native.max() / _native.min());  // (180 - 0) / (2500 - 500) = 0.09 deg/us
+        float m = (absmax() - absmin()) / (absmax_native() / absmin_native());  // (180 - 0) / (2500 - 500) = 0.09 deg/us
         set_abslim(0.0, 180.0, false);
     }
 };
@@ -107,7 +107,7 @@ class ThrottleServo2 : public ServoMotor2 {
         _convmethod = AbsLimMap;
         set_abslim(0.0, 180.0, false);
         set_abslim_native(500.0, 2500.0, false);
-        float m = (_si.max() - _si.min()) / (_native.max() / _native.min());  // (180 - 0) / (2500 - 500) = 0.09 deg/us
+        float m = (absmax() - absmin()) / (absmax_native() / absmin_native());  // (180 - 0) / (2500 - 500) = 0.09 deg/us
         set_conversions(m, 0.0);
         governor_pc.set(95);
         idle_si.set_limits(43.0, 75.0);

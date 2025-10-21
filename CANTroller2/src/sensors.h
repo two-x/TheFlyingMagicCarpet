@@ -243,12 +243,12 @@ std::string transdircard[(int)TransDir::NumTransDir] = { "rev", "fwd" };
 //     "opmin"/"opmax": defines the healthy operational range the transducer. Actuators should be constrained to this range, Sensors should be expected to read within this range or flag an error
 class Transducer : public Device {
   protected:
-    float _mfactor = 1.0, _boffset = 0.0, sim_val, _zeropoint, _si_raw;  // si_raw is only meaningful for sensors, not actuators. managed here because that's easier
+    float _mfactor = 1.0, _boffset = 0.0, _zeropoint;
     float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;
     int _transtype, _convmethod = LinearMath;  // the default method
     float _default_value_si = NAN;  // must be set by child classes to a valid default value (allows simulation)
     float _default_fixed_si = NAN;  // may be overridden by child classes. becomes value always when src == Fixed
-    Param _si, _native;
+    Param _si, _raw, _native;  // note _raw value is in si units, shares the same abs limits, and only relevant for sensors (TODO should be in sensors class?)
     TransDir _dir = TransDir::Fwd;
     void set_val_from_fixed() override { _si.set(_default_fixed_si); }  // if sensor set to fixed value, leave value as it is (ie do nothing)
     void set_val_from_sim() override { if (std::isnan(val())) _si.set(_default_value_si); }    // TODO: need to implement value change logic here, instead of values being directly set by touchscreen class
@@ -314,7 +314,7 @@ class Transducer : public Device {
         if (std::isnan(argmin)) argmin = _si.min();                               // use incumbent min value if none was passed in
         if (std::isnan(argmax)) argmax = _si.max();                               // use incumbent max value if none was passed in
         _si.set_limits(argmin, argmax);                                           // commit to the Param accordingly
-        _si_raw = constrain(_si_raw, _si.min(), _si.max());                       // in case we have new limits, re-constrain the raw si value we also manage
+        _raw.set_limits(argmin, argmax);                                           // raw si value always has the same abs limits as si value
         if ((_convmethod == LinearMath) && autocalc) {                      // if we know our conversion formula, and not instructed to skip autocalculation...
             _native.set_limits(to_native(_si.min()), to_native(_si.max()));       // then convert the new values and ensure si and native stay equivalent
         }
@@ -356,13 +356,13 @@ class Transducer : public Device {
         if (!_native.set(arg_val_native)) ret = false;
         if (std::isnan(arg_val_native)) _si.set(NAN);
         else _si.set(from_native(_native.val()));
-        if (also_set_raw) _si_raw = _si.val();
+        if (also_set_raw) _raw.set(_si.val());
         return ret;
     }
     bool set_si(float arg_val_si, bool also_set_raw=true) {
         bool ret = true;
         if (!_si.set(arg_val_si)) ret = false;
-        if (also_set_raw) _si_raw = _si.val();
+        if (also_set_raw) _raw.set(_si.val());
         if (std::isnan(arg_val_si)) _native.set(NAN);
         else _native.set(to_native(_si.val()));
         return ret;
@@ -376,11 +376,10 @@ class Transducer : public Device {
     bool sim_si(float arg_val_si, bool also_set_raw=true) {
         if (_source != src::Sim && _source != src::Pot) return false;
         if (!_si.set(arg_val_si)) return false;
-        if (also_set_raw) _si_raw = _si.val();
+        if (also_set_raw) _raw.set(_si.val());
         _native.set(to_native(_si.val()));
         return true;
     }
-    void set_margin(float arg_marg) { _margin = arg_marg; }
     void set_conversions(float arg_mfactor=NAN, float arg_boffset=NAN) {  // arguments passed in as NAN will not be used.  // Convert units from base numerical value to disp units:  val_native = m-factor*val_numeric + offset  -or-  val_native = m-factor/val_numeric + offset  where m-factor, b-offset, invert are set here
         if (!std::isnan(arg_mfactor)) {
             if (iszero(arg_mfactor)) ezread.squintf("Err: can not support _mfactor of zero\n");
@@ -388,11 +387,13 @@ class Transducer : public Device {
         }
         if (!std::isnan(arg_boffset)) _boffset = arg_boffset;
     }
+    void set_margin(float arg_marg) { _margin = constrain(arg_marg, 0.0f, _opmax - _opmin); }
+    void set_zeropoint(float arg_zero) { _zeropoint = constrain(arg_zero, _opmin, _opmax); }
     float val() { return _si.val(); }  // this is the si-unit filtered value (default for general consumption)
     float native() { return _native.val(); }  // This is a native unit value, constrained to abs range but otherwise unfiltered
     float pc() { return to_pc(_si.val()); }  // get value as a percent of the operational range
-    float raw() { return _si_raw; }  // this is the si-unit raw value, constrained to abs range but otherwise unfiltered
-    float raw_pc() { return to_pc(_si_raw); }  // get raw value in percent
+    float raw() { return _raw.val(); }  // this is the si-unit raw value, constrained to abs range but otherwise unfiltered
+    float raw_pc() { return to_pc(_raw.val()); }  // get raw value in percent
     float absmin() { return _si.min(); }
     float absmax() { return _si.max(); }
     float absmin_native() { return _native.min(); }
@@ -430,11 +431,11 @@ class Sensor : public Transducer {
   protected:
     float _ema_alpha = 0.1;
     bool _first_filter_run = false;
-    virtual float run_ema() { return ema_filt(_si_raw, _si.val(), _ema_alpha); }
+    virtual float run_ema() { return ema_filt(raw(), val(), _ema_alpha); }
     void update_source() override { if (_source == src::Pin) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
     void set_si_w_ema() { // Exponential Moving Average
         if (_first_filter_run) {
-            _si.set(_si_raw);
+            _si.set(raw());
             _first_filter_run = false;
             return;
         }
@@ -484,7 +485,7 @@ class I2CSensor : public Sensor {  // base class for sensors which communicate u
         if (_i2c->i2cbaton == _i2c_bus_index) _i2c->pass_i2c_baton();  // deal with bus semaphore, since we're done with it
         if (std::isnan(_native.val())) _si.set((NAN));                    // propagate nan native value to all values
         else {                                                         // if reading was good
-            _si_raw = from_native(_native.val());                      // convert native to raw si value
+            _raw.set(from_native(_native.val()));                      // convert native to raw si value
             set_si_w_ema();                                           // set si filtered value based on new raw reading
         }
     }
@@ -585,7 +586,7 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
         float rawread = static_cast<float>(analogRead(_pin));
         _last_read_valid = rawread >= absmin_native() && rawread <= absmax_native();  // used to detect presence of sensor at boot
         _native.set(rawread);  // continue to read anyway, in case sensor is intermittent after boot
-        _si_raw = from_native(_native.val());
+        _raw.set(from_native(_native.val()));
         set_si_w_ema(); // filtered values are kept in si format
     }
   public:
@@ -698,14 +699,14 @@ class PressureSensor : public AnalogSensor {
         set_oplim(0.0, NAN);  // now set just the si op minimum (only) to exactly zero. This will cause native op minimum to autocalc such that any small errors don't cause our si oplim to be nonzero
         set_ema_alpha(0.03);         // from step #1 above  // 2024 was 0.055
         set_margin(from_native(noise_margin_adc));    // max acceptible error when checking psi levels
-        _zeropoint = from_native(opmin_native() + noise_margin_adc / 2.0f);   // tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
+        set_zeropoint(from_native(opmin_native() + noise_margin_adc / 2.0f));   // tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
         _default_value_si = opmin();
         // set_native(_opmin_native);
         AnalogSensor::postsetup();
     }
     bool parked() { return (std::abs(val() - opmin()) <= margin()); }  // is tha brake motor parked?
-    float parkpos() { return _opmin; }
-    float parkpos_pc() { return to_pc(_opmin); }
+    float parkpos() { return opmin(); }
+    float parkpos_pc() { return to_pc(opmin()); }
 };
 // BrakePositionSensor represents a linear position sensor for measuring brake pedal position
 // extends AnalogSensor for handling analog pin reading and conversion.
@@ -753,15 +754,15 @@ class BrakePositionSensor : public AnalogSensor {
         set_abslim(1.22, 7.26, false);        // from step #1   // need false argument to prevent autocalculation
         set_abslim_native(1885, 2933, false); // from step #2   // need false argument to prevent autocalculation
         set_oplim(1.22, 5.9f);                // from step #13  !! 250720 not yet finalized! (do step 13)
-        _zeropoint = 5.7;                     // from step #12 c
+        set_zeropoint(5.7);                   // from step #12
         set_ema_alpha(0.35);
         set_margin(0.2);  // in inches
         _default_value_si = opmax();
         AnalogSensor::postsetup();
     }
     bool parked() { return (std::abs(val() - opmax()) <= margin()); }  // is tha brake motor parked?
-    float parkpos() { return _opmax; }
-    float parkpos_pc() { return to_pc(_opmax); }
+    float parkpos() { return opmax(); }
+    float parkpos_pc() { return to_pc(opmax()); }
 };
 // class PulseSensor are hall-effect based magnetic field sensors where the value is based on magnetic
 // pulse timing of a rotational Source (eg tachometer, speedometer). The ISR calls esp_timer_get_time() 
@@ -811,12 +812,12 @@ class PulseSensor : public Sensor {
             _us = static_cast<float>(isr_delta_buf_us); // commit isr pulsewidth value to official value
             _native.set(us_to_hz(_us)); // convert it from us to native Hz value
         }
-        _si_raw = from_native(_native.val());    // convert native Hz to get raw si value        
+        _raw.set(from_native(_native.val()));    // convert native Hz to get raw si value        
 
         // TODO - if zero timeout happened should final si value jump to 0 also?  Here we are continuing to apply ema filter 
         set_si_w_ema();   // (orig) apply ema filter for si filt value
         
-        if (!std::isnan(_si.val()) && iszero(_si.val())) _us = NAN; // once filtered si hits zero, call pulsewidth invalid
+        if (!std::isnan(val()) && iszero(val())) _us = NAN; // once filtered si hits zero, call pulsewidth invalid
         update_pulsecount(isr_time_buf_us);
         _pin_level = read_pin(_pin);             // for debug/display
         set_pin_inactive();                      // for idiot light showing pulse activity
@@ -835,7 +836,7 @@ class PulseSensor : public Sensor {
 
     float run_ema() override {
         // assert(false);  // will crash always.  (just wanted to ensure this override is working as expected - it is)
-        return scaling_ema_filt(_si_raw, _si.val(), _us, _ema_tau_us);
+        return scaling_ema_filt(raw(), val(), _us, _ema_tau_us);
     }  // override ema calculator
 
     void set_pin_inactive() {
@@ -934,8 +935,8 @@ class PulseSensor : public Sensor {
     }   
     // float last_read_time() { return _last_read_time_us; }
     bool stopped() { return !std::isnan(val()) && iszero(val()); }
-    // old: bool stopped() { return (std::abs(val() - _opmin) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
-    // older:  bool stopped() { return (esp_timer_get_time() - _last_read_time_us > _opmax_native); }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    // old: bool stopped() { return (std::abs(val() - opmin()) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    // older:  bool stopped() { return (esp_timer_get_time() - _last_read_time_us > opmax_native()); }  // Note due to weird float math stuff, can not just check if tach == 0.0
     void set_ema_tau(float newtau) { _ema_tau_us = constrain(newtau, _ema_tau_min_us, _ema_tau_max_us); }
     void set_ema_taulim(float newmin, float newmax) {
         _ema_tau_min_us = newmin;
@@ -978,7 +979,7 @@ class Tachometer : public PulseSensor {
         set_abslim(0.0f, 4800.0f); // estimating the highest rpm we could conceivably ever see from the engine. but may lower b/c the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
         set_absmax_us(430000.0f);  // this sets the max pulse-to-pulse period to be considered as stopped.
         set_oplim(0.0f, 3600.0f);  // aka redline,  Max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
-        _governmax_rpm = _opmax * governor / 100.0;
+        _governmax_rpm = opmax() * governor / 100.0;
         set_ema_taulim(500.0f, 200000.0f);
         set_ema_tau(16000.0f);       // set filter tau factor
         set_margin(15.0f);
@@ -986,7 +987,7 @@ class Tachometer : public PulseSensor {
     }
     void set_val_from_pin() {
         PulseSensor::set_val_from_pin();
-        _governmax_rpm = _opmax * governor / 100.0;
+        _governmax_rpm = opmax() * governor / 100.0;
     }
     float idle() { return _idle; }
     float* idle_ptr() { return &_idle; }
@@ -994,12 +995,12 @@ class Tachometer : public PulseSensor {
     float idle_hot() { return _idle_hot; }
     float governmax() { return _governmax_rpm; }
     float* governmax_ptr() { return &_governmax_rpm; }
-    void set_idle(float newidle) { _idle = constrain(newidle, _opmin, _opmax); }
-    void set_idlecold(float newidlecold) { _idle_cold = constrain(newidlecold, _idle_hot + 1.0, _opmax); }
-    void set_idlehot(float newidlehot) { _idle_hot = constrain(newidlehot, _opmin, _idle_cold - 1.0); }
+    void set_idle(float newidle) { _idle = constrain(newidle, opmin(), opmax()); }
+    void set_idlecold(float newidlecold) { _idle_cold = constrain(newidlecold, _idle_hot + 1.0, opmax()); }
+    void set_idlehot(float newidlehot) { _idle_hot = constrain(newidlehot, opmin(), _idle_cold - 1.0); }
     // bool stopped() {
     //     if (bootbutton_val) 
-    //       ezread.squintf("tac.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), _opmin, _margin, (int)(std::abs(val() - _opmin) <= _margin));  // spam catcher works on this, (w/o bootbutton condition)
+    //       ezread.squintf("tac.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), opmin(), _margin, (int)(std::abs(val() - opmin()) <= _margin));  // spam catcher works on this, (w/o bootbutton condition)
     //     return PulseSensor::stopped();
     // }
 };
