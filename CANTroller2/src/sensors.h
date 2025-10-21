@@ -163,7 +163,7 @@ class Device {
     Timer valrefreshtimer;
     Potentiometer* _pot; // to pull input from the pot if we're in simulation mode
     src _source = src::Pin;
-    bool _can_source[(int)src::NumSources] = { true, true, false, false };  // [Fixed/Pin/Sim/Pot]
+    bool _can_source[static_cast<int>(src::NumSources)] = { true, true, false, false };  // [Fixed/Pin/Sim/Pot]
     // source handling functions (should be overridden in child classes as needed)
     virtual void set_val_from_pin() = 0;  // =0 makes pure virtual, thus *must* be overriden somewhere down lineage
     virtual void set_val_from_fixed() = 0;
@@ -217,7 +217,7 @@ class Device {
 enum class TransDir : int { Rev=0, Fwd=1, NumTransDir=2 }; // possible dir values. Rev means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
 enum TransType { ActuatorType=0, SensorType=1, NumTransType=2 }; // possible dir values. Rev means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
 std::string transtypecard[NumTransType] = { "actuator", "sensor" };
-std::string transdircard[(int)TransDir::NumTransDir] = { "rev", "fwd" };
+std::string transdircard[static_cast<int>(TransDir::NumTransDir)] = { "rev", "fwd" };
 
 // Transducer class
 // Device::Transducer is a base class for any system devices that convert real-world values <--> signals in either direction. it has a "native"
@@ -602,7 +602,7 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
         set_can_source(src::Pot, true);
         set_can_source(src::Sim, true);
         // set_source(src::Pin);
-        set_abslim_native(0.0, (float)adcrange_adc, false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
+        set_abslim_native(0.0, static_cast<float>(adcrange_adc), false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
     }
     void postsetup() {  // child classes call this before setting limits
         set_val_from_pin();
@@ -691,10 +691,10 @@ class PressureSensor : public AnalogSensor {
         AnalogSensor::presetup();
         float temp_min_adc = 650.0;  // from step #2 above. max value set in function call below  // 650 to 713  (earlier i was seeing 662 min. hmm)
         float noise_margin_adc = 45.0;  // how much the min value can jump to above the number above due to noise
-        float m = 1000.0 * (3.3 - 0.554) / (((float)adcrange_adc - temp_min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
+        float m = 1000.0 * (3.3 - 0.554) / ((static_cast<float>(adcrange_adc) - temp_min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
         float b = -1.0 * temp_min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
-        set_abslim_native(0.0, (float)adcrange_adc);  // set native abslims after m and b are set.  si abslims will autocalc
+        set_abslim_native(0.0, static_cast<float>(adcrange_adc));  // set native abslims after m and b are set.  si abslims will autocalc
         set_oplim_native(temp_min_adc, 2176.0);  // from step #3 above  // set this after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
         set_oplim(0.0, NAN);  // now set just the si op minimum (only) to exactly zero. This will cause native op minimum to autocalc such that any small errors don't cause our si oplim to be nonzero
         set_ema_alpha(0.03);         // from step #1 above  // 2024 was 0.055
@@ -775,9 +775,9 @@ class PulseSensor : public Sensor {
     float _freqfactor = 1.0;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
     // float _calfactor = 1.0;   // a tunable/calibratable factor same as the above, where if <1 gives fewer si-units/pulse-hz and vice versa.         also, most popular weight-loss plan in miami
     Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
-    volatile int64_t _isr_delta_us = 0;
     volatile int64_t _isr_time_last_us = 0;
     volatile int64_t _isr_time_now_us = 0;
+    volatile int _isr_delta_us = 0;
     volatile int _isr_pulse_period_us = 0;
     volatile int _pulse_count = 0;  // record pulses occurring for debug/monitoring pulse activity
     float _pulses_per_sec = 0.0f;
@@ -787,24 +787,24 @@ class PulseSensor : public Sensor {
     // absmin_us is calculated based on absmax_native (Hz) using overloaded set_abslim_native() function
     // absmax_us is our stop timeout, and not based on absmin_native (Hz). It must be set using set_abmax_us() function
     float _us, _absmin_us, _absmax_us = 1500000; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency.  max is chosen just arbitrarily
-    int64_t _absmin_us_64;  // so the isr doesn't have to cast type. 
-
+    int _absmin_us_int;  // int version keeps isr from needing to cast to int (8-15 cycles). maintained in abslim setter to always track _absmin_us float value.
+    
     void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
         _isr_time_now_us = esp_timer_get_time();
-        int64_t delta_us = _isr_time_now_us - _isr_time_last_us;
-        if (delta_us < _absmin_us_64) return;  // ignore spurious triggers or bounces. hereafter the pulse is valid
+        int delta_us = static_cast<int>(_isr_time_now_us - _isr_time_last_us);
+        if (delta_us < _absmin_us_int) return;  // ignore spurious triggers or bounces. hereafter the pulse is valid
         _isr_time_last_us = _isr_time_now_us;
         _isr_delta_us = delta_us;              // commit delta to official delta
         _pulse_count++;
     }
     // TODO - something in the below i suspect, is causing constant "err: iszero(NAN) called" prints on serial console
     void set_val_from_pin() {
+        int isr_delta_buf_us = _isr_delta_us;        // copy delta value (in case another interrupt happens)
         int64_t isr_time_buf_us = _isr_time_last_us; // copy last timestamp as well, for same reason
-        int64_t isr_delta_buf_us = _isr_delta_us;    // copy delta value (in case another interrupt happens)
         int64_t now_us = esp_timer_get_time();       // save current time
         float real_delta_us = static_cast<float>(now_us - isr_time_buf_us);  // calc actual time since last isr pulse
 
-        if (real_delta_us >= (int)_absmax_us) {       // if it's been too long since last pulse
+        if (real_delta_us >= static_cast<int>(_absmax_us)) {       // if it's been too long since last pulse
             _us = real_delta_us;  // after isr stops allow _us to keep incrementing, for accurate si filtration
             _native.set(0.0f);                        // call the frequency 0 Hz
         }
@@ -857,10 +857,10 @@ class PulseSensor : public Sensor {
     // TODO - this function is overly complex, uses more variables than needed, i never bothered to go and simplify
     void update_pulsecount(int64_t last_pulse_time_us) {
         static int first_pulse_fraction_us = 0;
-        static int timeout = (int)_pulsecount_timer.timeout();
+        static int timeout = static_cast<int>(_pulsecount_timer.timeout());
         static bool zero_pulses = true;
         if (!_pulsecount_timer.expired()) return;
-        int elapsed = (int)_pulsecount_timer.elapsed();
+        int elapsed = static_cast<int>(_pulsecount_timer.elapsed());
         _pulsecount_timer.reset();
         int next_first_pulse_fraction_us = elapsed - timeout;
         int last_pulse_fraction_us = elapsed - last_pulse_time_us - next_first_pulse_fraction_us;
@@ -907,7 +907,7 @@ class PulseSensor : public Sensor {
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
         if (!std::isnan(arg_max)) {  // now we set absmin_us to match absmax_native (hz). absmax_us is set in its own function
             _absmin_us = hz_to_us(_native.max());  // also set us limits from here, converting Hz to us. note min/max are swapped
-            _absmin_us_64 = (int64_t)_absmin_us;       // make an int copy for the isr to use conveniently
+            _absmin_us_int = static_cast<int>(_absmin_us);       // make an int copy for the isr to use conveniently
         }
     }
     // this function allows direct setting of the stop timeout value (pulse-to-pulse time at which sensor will be considered stopped)
@@ -1063,7 +1063,8 @@ class Simulator {
     Preferences* _myprefs;
   public:
     Simulator(Potentiometer& pot_arg, Preferences* myprefs) : _pot(pot_arg), _myprefs(myprefs) {
-        for (int sensor = (int)sens::none + 1; sensor < (int)sens::NumSensors; sensor++) set_can_sim((sens)sensor, false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
+        for (int sensor = static_cast<int>(sens::none) + 1; sensor < static_cast<int>(sens::NumSensors); sensor++)
+            set_can_sim(static_cast<sens>(sensor), false);   // initially turn off simulation of sensors  // static constexpr bool initial_sim_joy = false;
         set_potmap(); // set initial pot map
     }  // syspower, ignition removed, as they are not sensors or even inputs
 
@@ -1142,12 +1143,14 @@ class Simulator {
     void set_can_sim(sens arg_sensor, int can_sim) { set_can_sim(arg_sensor, (can_sim > 0)); } // allows interpreting -1 as 0, convenient for our tuner etc.
     void save_cansim() {  // compress can_sim status of all devices into a 32 bit int, and save it to flash
         uint32_t simword = 0;
-        for (int s=1; s<(int)sens::NumSensors; s++) simword = simword | ((uint32_t)can_sim((sens)s) << s);
+        for (int s=1; s<static_cast<int>(sens::NumSensors); s++)
+            simword = simword | (static_cast<uint32_t>(can_sim(static_cast<sens>(s))) << s);
         _myprefs->putUInt("cansim", simword);
     }
     void recall_cansim() {  // pull 32 bit int containing can_sim status of all devices from previous flash save, and set all devices accordingly
         uint32_t simword = _myprefs->getUInt("cansim", 0);
-        for (int s=1; s<(int)sens::NumSensors; s++) set_can_sim_nosave((sens)s, (bool)((simword >> s) & 1));
+        for (int s=1; s<static_cast<int>(sens::NumSensors); s++)
+            set_can_sim_nosave(static_cast<sens>(s), static_cast<bool>((simword >> s) & 1));
     }
     // set the component to be overridden by the pot (the pot can only override one component at a time)
     void set_potmap(sens arg_sensor) {
@@ -1349,7 +1352,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     int sim_button_last_ms() { return simBtnTimer.elapsed() / 1000; }  // returns time since last display menu ch4 button press. to help prevent phantom starter turnon
     int ch4_button_last_ms() { return ch4BtnTimer.elapsed() / 1000; }  // returns time since last actual ch4 button press. to help prevent phantom starter turnon
   private:
-    void read_channel(int ch) { us[ch][Raw] = (float)(rmt[ch].readPulseWidth(true)); }
+    void read_channel(int ch) { us[ch][Raw] = static_cast<float>(rmt[ch].readPulseWidth(true)); }
     void read_all_channels() {
         static bool sw_old[NumChans];  // for debug. note on first time thru sw_old is meaningless, may cause a print
         for (int ch = Horz; ch <= Vert; ch++) {      // analog channels
