@@ -870,7 +870,6 @@ class PulseSensor : public Sensor {
         _pulse_count = 0;  // reset isr pulse counter
         first_pulse_fraction_us = next_first_pulse_fraction_us;
     }
-
     float us_to_hz(float arg) {
         if (std::isnan(arg)) return 0.0;  // if invalid argument, return zero, a special value meaning we timed out
         if (iszero(arg)) return NAN;      // zero argument is an invalid value
@@ -896,11 +895,9 @@ class PulseSensor : public Sensor {
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // Overload the normal function so we can also include absmin_us calculation. Note absmax_us is set with a separate function 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) override {  // use calc_si = false to avoid recalculating si value
-        
-        ezread.squintf("pulse sensor abslim_native() called\n");
-        
+        // ezread.squintf("pulse sensor abslim_native() called\n");  // just to check if inheritance is working right
         if ((!std::isnan(arg_min) && iszero(arg_min)) || (!std::isnan(arg_max) && iszero(arg_max))) {
-            ezread.squintf(ezread.madcolor, "err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
+            ezread.squintf(ezread.madcolor, "err: %s set abslim=(%.1f, %.1f) Hz\n", _short_name.c_str(), arg_min, arg_max);
             return;  // we can't accept 0 Hz for either absmin or absmax
         }
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
