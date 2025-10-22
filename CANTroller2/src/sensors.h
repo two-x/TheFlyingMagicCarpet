@@ -478,7 +478,7 @@ class I2CSensor : public Sensor {  // base class for sensors which communicate u
         }
         else ezread.squintf("\n");
     }
-    void set_val_from_pin() {
+    void set_val_from_pin() override {
         if (_i2c->not_my_turn(_i2c_bus_index)) return;
         if (!_i2c->detected(_i2c_bus_index) || !_responding) _native.set(NAN);  // if bus/sensor failure set value to nan
         else _native.set(read_i2c_sensor());                           // otherwise take a new native reading from the bus
@@ -582,7 +582,7 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
     int64_t val_refresh_period = 25000; // , mapretry_timeout = 10000;
     float _initial_bs_value_si = NAN;  // invalid value allows us to detect whether sensor is present
     bool _last_read_valid = false;
-    void set_val_from_pin() {
+    void set_val_from_pin() override {
         float rawread = static_cast<float>(analogRead(_pin));
         _last_read_valid = rawread >= absmin_native() && rawread <= absmax_native();  // used to detect presence of sensor at boot
         _native.set(rawread);  // continue to read anyway, in case sensor is intermittent after boot
@@ -626,7 +626,7 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
         _si_units = "V";
     }
     CarBattery() = delete;
-    // void set_val_from_sim() { set_si(12.0, false); }  // When simulating battery, just lock it at 12V to avoid errors
+    // void set_val_from_sim() override { set_si(12.0, false); }  // When simulating battery, just lock it at 12V to avoid errors
     void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
         AnalogSensor::presetup();
         set_conversions(0.004075, 0.0);  // 240627 calibrated against my best multimeter: m = 0.004075
@@ -769,36 +769,32 @@ class BrakePositionSensor : public AnalogSensor {
 // on every pulse to know the time since the previous pulse. 
 class PulseSensor : public Sensor {
   protected:
-    // volatile int64_t timestamp_last_us;  // _stop_timeout_us = 1250000;  // time after last magnet pulse when we can assume the engine is stopped (in us)
     Timer _pulsecount_timer{1000000};  // one second timer
     bool _low_pulse = true, _pin_level, _pin_inactive = false;
-    float _freqfactor = 1.0;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
-    // float _calfactor = 1.0;   // a tunable/calibratable factor same as the above, where if <1 gives fewer si-units/pulse-hz and vice versa.         also, most popular weight-loss plan in miami
-    Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
-    volatile int64_t _isr_time_last_us = 0;
-    volatile int64_t _isr_time_now_us = 0;
-    volatile int _isr_delta_us = 0;
-    volatile int _isr_pulse_period_us = 0;
-    volatile int _pulse_count = 0;  // record pulses occurring for debug/monitoring pulse activity
-    float _pulses_per_sec = 0.0f;
     float _ema_tau_min_us = 1000.0f, _ema_tau_max_us = 100000.0f;  // default ema tau parameters. must be initialized in child classes!
+    float _freqfactor = 1.0;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
+    Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
     
     // we maintain our min and max pulse period, for each pulse sensor
     // absmin_us is calculated based on absmax_native (Hz) using overloaded set_abslim_native() function
     // absmax_us is our stop timeout, and not based on absmin_native (Hz). It must be set using set_abmax_us() function
     float _us, _absmin_us, _absmax_us = 1500000; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency.  max is chosen just arbitrarily
     int _absmin_us_int;  // int version keeps isr from needing to cast to int (8-15 cycles). maintained in abslim setter to always track _absmin_us float value.
+    float _pulses_per_sec = 0.0f;
+    volatile int64_t _isr_time_last_us = 0;
+    volatile int _isr_delta_us = 0;
+    volatile int _pulse_count = 0;  // record pulses occurring for debug/monitoring pulse activity
     
     void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
-        _isr_time_now_us = esp_timer_get_time();
-        int delta_us = static_cast<int>(_isr_time_now_us - _isr_time_last_us);
+        int64_t time_now_us = esp_timer_get_time();
+        int delta_us = static_cast<int>(time_now_us - _isr_time_last_us);
         if (delta_us < _absmin_us_int) return;  // ignore spurious triggers or bounces. hereafter the pulse is valid
-        _isr_time_last_us = _isr_time_now_us;
+        _isr_time_last_us = time_now_us;
         _isr_delta_us = delta_us;              // commit delta to official delta
         _pulse_count++;
     }
     // TODO - something in the below i suspect, is causing constant "err: iszero(NAN) called" prints on serial console
-    void set_val_from_pin() {
+    void set_val_from_pin() override {
         int isr_delta_buf_us = _isr_delta_us;        // copy delta value (in case another interrupt happens)
         int64_t isr_time_buf_us = _isr_time_last_us; // copy last timestamp as well, for same reason
         int64_t now_us = esp_timer_get_time();       // save current time
@@ -985,7 +981,7 @@ class Tachometer : public PulseSensor {
         set_margin(15.0f);
         PulseSensor::postsetup();
     }
-    void set_val_from_pin() {
+    void set_val_from_pin() override {
         PulseSensor::set_val_from_pin();
         _governmax_rpm = opmax() * governor / 100.0;
     }
