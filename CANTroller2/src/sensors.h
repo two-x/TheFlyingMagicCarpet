@@ -316,7 +316,7 @@ class Transducer : public Device {
         _si.set_limits(argmin, argmax);                                           // commit to the Param accordingly
         _raw.set_limits(argmin, argmax);                                           // raw si value always has the same abs limits as si value
         if ((_convmethod == LinearMath) && autocalc) {                      // if we know our conversion formula, and not instructed to skip autocalculation...
-            _native.set_limits(to_native(_si.min()), to_native(_si.max()));       // then convert the new values and ensure si and native stay equivalent
+            set_abslim_native(to_native(_si.min()), to_native(_si.max()), false);       // then convert the new values and ensure si and native stay equivalent
         }
         set_oplim(NAN, NAN, false);                                               // just to enforce any re-constraints if needed to keep op limits inside abs limits
     }
@@ -325,7 +325,7 @@ class Transducer : public Device {
         if (std::isnan(argmax)) argmax = _native.max();                              // use incumbent max value if none was passed in
         _native.set_limits(argmin, argmax);                                          // commit to the Param accordingly
         if ((_convmethod == LinearMath) && autocalc) {                         // if we know our conversion formula, and not instructed to skip autocalculation...
-            _si.set_limits(from_native(_native.min()), from_native(_native.max()));  // then convert the new values and ensure si and native stay equivalent
+            set_abslim(from_native(_native.min()), from_native(_native.max()), false);  // then convert the new values and ensure si and native stay equivalent
         }
         set_oplim_native(NAN, NAN, false);                                           // just to enforce any re-constraints if needed to keep op limits inside abs limits
     }
@@ -895,7 +895,10 @@ class PulseSensor : public Sensor {
     }
     // from our limits we will derive our min and max pulse period in us to use for bounce rejection and zero threshold respectively
     // Overload the normal function so we can also include absmin_us calculation. Note absmax_us is set with a separate function 
-    void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) {  // use calc_si = false to avoid recalculating si value
+    void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) override {  // use calc_si = false to avoid recalculating si value
+        
+        ezread.squintf("pulse sensor abslim_native() called\n");
+        
         if ((!std::isnan(arg_min) && iszero(arg_min)) || (!std::isnan(arg_max) && iszero(arg_max))) {
             ezread.squintf(ezread.madcolor, "err: pulse sensor %s can't have limit of 0\n", _short_name.c_str());
             return;  // we can't accept 0 Hz for either absmin or absmax
