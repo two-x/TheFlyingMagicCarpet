@@ -31,10 +31,10 @@ static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%",
 static std::string pagecard[datapages::NumDataPages] = { "Run ", "Hrc ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "Diag", "UI  " };
 static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 12, 10, 9, 8, 10, 5, 11, 9, 7, 12, 4, 11, 12 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = {
-    { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", "BkPosSrc", "Batt Src", "Governor", stEr"Safe", },  // PgRun
+    { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PgRun
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", "SimRaw H", "SimRaw V", __________, __________, horfailsaf, "Deadband", "SimDeadB", },  // PgHrc
     { " Pot Raw", brAk"Posn", brAk"Posn", brAk"Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PgSens
-    { "TachPuls", "Tach Raw", "TcAltRaw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpAltRaw", "SpeedRaw", "   Speed", "Tach Tau", "SpeedTau", "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", },  // PgPuls
+    { "TachPuls", "Tach Raw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpeedRaw", "   Speed", __________, __________, "Tach Tau", "SpeedTau", "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", },  // PgPuls
     { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", "AirVOMax", "MAP OMin", "MAP OMax", },  // PgPWMs
     { "Gas Mode", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PgIdle
     { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "BrakePID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", " Gas PID", "CruisPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PgMotr    
@@ -47,10 +47,10 @@ static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = 
     { "Loop Avg", "LoopPeak", "Loop Max", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", " EZ Spam", "EZAvgRat", "EZSpamBf", "EZSerial", "EZScroll", "PanelApp", },  // PgUI
 };
 static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  // note these will be right-aligned
-    { "psi",  "in",   "V",   "%", "mph", "atm", "g/s", "scr", "scr", "scr", "min", "scr", "scr",   "%",   "%", },  // PgRun
-    {  "us",  "us",  "us",  "us",  "us",  "us",   "%",   "%",   "%",   "%",    "",    "",   "us",  "us",  "%", },  // PgHrc
+    { "psi",  "in",   "V",   "%", "mph", "atm", "g/s", "scr", "scr", "scr", "min",    "",    "",   "%",   "%", },  // PgRun
+    {  "us",  "us",  "us",  "us",  "us",  "us",   "%",   "%",   "%",   "%",    "",    "",  "us",  "us",   "%", },  // PgHrc
     { "adc", "adc",  "in",   "%", "adc", "psi",   "%", "adc",   "V",    "", "psi", "psi",  "in",  "in",  "in", },  // PgSens
-    {  "ms",  "Hz",  "Hz", "rpm",  "ms",  "Hz",  "Hz", "mph",   "%",  "us",  "us", "rpm", "rpm", "mph", "mph", },  // PgPuls
+    {  "ms",  "Hz", "rpm",  "ms",  "Hz", "mph",   "%",    "",    "",  "us",  "us", "rpm", "rpm", "mph", "mph", },  // PgPuls
     { "ang",  "us",   "V",  "us",   "V",  "us",    "",    "", "ang", "ang",  "us",   "%", "mph", "atm", "atm", },  // PgPWMs
     { "scr", "rpm",   "%",   "%", "ang", "rpm",    "",    "",    "",    "",   "s",   "%",   "%", "deg", "deg", },  // PgIdle
     {   "%", "deg",   "%",    "",    "", "0/1", "scr", "scr", "0/1", "%/s", "0/1", "0/1", "scr", "0/1", "scr", },  // PgMotr
@@ -701,12 +701,7 @@ class Display {
             draw_ascii(17, motormodecard[brake.motormode]);
             draw_ascii(18, motormodecard[steer.motormode]);
             drawval(19, looptimer.uptime());
-
-            // temporary - for debugging airvelo/map source status
-            draw_ascii(20, sensor_src_card[(int)brkpos.source()]); 
-            draw_ascii(21, sensor_src_card[(int)mulebatt.source()]); 
-            // for (int line=20; line<=21; line++) draw_eraseval(line);
-            
+            for (int line=20; line<=21; line++) draw_eraseval(line);
             drawval(22, governor, 0.0f, 100.0f, NAN, 1);
             drawval(23, steer.steer_safe_pc, 0.0f, 100.0f, NAN, 1);
         }
@@ -748,13 +743,12 @@ class Display {
         else if (datapage == PgPuls) {
             drawval(9, tach.ms(), tach.absmin_ms(), tach.absmax_ms());
             drawval(10, tach.native(), tach.opmin_native(), tach.opmax_native());
-            drawval(11, tach.alt_native(), tach.opmin_native(), tach.opmax_native());
-            drawval(12, tach.raw(), tach.opmin(), tach.opmax());
-            drawval(13, speedo.ms(), speedo.absmin_ms(), speedo.absmax_ms());
-            drawval(14, speedo.native(), speedo.opmin_native(), speedo.opmax_native());
-            drawval(15, speedo.alt_native(), speedo.opmin_native(), speedo.opmax_native());
-            drawval(16, speedo.raw(), speedo.opmin(), speedo.opmax());
-            drawval(17, speedo.pc(), 0.0, 100.0);
+            drawval(11, tach.raw(), tach.opmin(), tach.opmax());
+            drawval(12, speedo.ms(), speedo.absmin_ms(), speedo.absmax_ms());
+            drawval(13, speedo.native(), speedo.opmin_native(), speedo.opmax_native());
+            drawval(14, speedo.raw(), speedo.opmin(), speedo.opmax());
+            drawval(15, speedo.pc(), 0.0, 100.0);
+            for (int line=16; line<=17; line++) draw_eraseval(line);
             drawval(18, tach.ema_tau(), tach.ema_tau_min(), tach.ema_tau_max());
             drawval(19, speedo.ema_tau(), speedo.ema_tau_min(), speedo.ema_tau_max());
             drawval(20, tach.opmin(), tach.absmin(), tach.absmax());

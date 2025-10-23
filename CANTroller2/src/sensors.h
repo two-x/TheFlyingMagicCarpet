@@ -200,17 +200,14 @@ class Device {
             else if (_source == src::Pin) set_val_from_pin();
             else if (_source == src::Pot) set_val_from_pot();
             else if (_source == src::Sim) set_val_from_sim();
-            else ezread.squintf("invalid Device source: %d\n", _source);
-            // set_val_common();
+            else ezread.squintf(ezread.madcolor, "err: device %s invalid src=%s\n", _short_name.c_str(), sensor_src_card[(int)_source].c_str());
         }
     }
-    void attach_pot(Potentiometer &pot_arg) {
-        _pot = &pot_arg;
-    }
-    // void set_enabled(bool arg_enable) { _enabled = arg_enable; }
+    void attach_pot(Potentiometer &pot_arg) { _pot = &pot_arg; }
     void set_can_source(src arg_source, bool is_possible) { _can_source[static_cast<int>(arg_source)] = is_possible; }
     src source() { return _source; }
     int pin() { return _pin; }
+    // void set_enabled(bool arg_enable) { _enabled = arg_enable; }
     // bool enabled() { return _enabled; }
 };
 
@@ -260,10 +257,6 @@ class Transducer : public Device {
         _short_name = "xducer";
     }
     Transducer() = delete;  // this ensures a pin is always provided
-    virtual void setup() {
-        // print_config(true, false);  // print header
-        // if (_pin < 255) ezread.squintf(" on pin %d\n", _pin);
-    }   // ezread.squintf("%s..\n", _long_name.c_str()); }
     virtual void print_config(bool header=true, bool ranges=true) {
         if (header) {
             ezread.squintf(ezread.highlightcolor, "%s (p%d)%s:\n", _long_name.c_str(), _pin, _detected ? " detected" : "");  // , transtypecard[_transtype].c_str());
@@ -446,16 +439,12 @@ class Sensor : public Transducer {
         _long_name = "Unknown";
         _short_name = "unksen";
     }
-    void presetup() {
+    void presetup() {  // must be run first by child class setup() function
         _transtype = SensorType;
         set_can_source(src::Fixed, true);  // all sensors can be made to hold a fixed value (eg on hardware errors etc.)
+        set_can_source(src::Sim, true);
+        set_can_source(src::Pot, true);
         // if (!_detected) set_source(src::Fixed);
-        Transducer::setup();
-    }
-    void postsetup() { }
-    virtual void setup() {
-        presetup();
-        postsetup();
     }
     void set_ema_alpha(float arg_alpha) { _ema_alpha = std::fmaxf(0.0f, arg_alpha); }
     float ema_alpha() { return _ema_alpha; }
@@ -494,16 +483,13 @@ class I2CSensor : public Sensor {  // base class for sensors which communicate u
     I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor(-1), _i2c(i2c_arg), addr(i2c_address_arg) {
         _long_name = "Unknown i2c sensor";
         _short_name = "unki2c";
-        set_can_source(src::Pin, true);
     }
     I2CSensor() = delete;
-    void presetup() {
-        Sensor::presetup();
-        set_can_source(src::Sim, true);
-        set_can_source(src::Pot, true);
+    void presetup() {  // must be run first by child class setup() function
+        Sensor::presetup();  // must be run first
         set_conversions(1.0, 0.0); // our i2c sensors so far provide si units directly.
     }
-    void postsetup() {  // call at the end of child setup() override functions
+    void postsetup() {  // must be run last by child class setup() function
         // set_si(_default_value_si);  // initialize value
         _detected = _i2c->detected_by_addr(addr);
         if (!_detected || !_responding) {
@@ -512,13 +498,8 @@ class I2CSensor : public Sensor {  // base class for sensors which communicate u
             // set_si(_default_value_si);
         }
         print_on_boot(_detected, _responding);
-        Sensor::postsetup();
     }
-    virtual void setup() {
-        presetup();
-        postsetup();
-    }
-
+    virtual void setup() = 0;  // child sensors must include a setup() function
 };
 class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
   protected:
@@ -538,15 +519,15 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
         _si_units = "mph";
     }
     AirVeloSensor() = delete;
-    void setup() {  // ezread.squintf("%s..", _long_name.c_str());
-        I2CSensor::presetup();
+    void setup() {
+        I2CSensor::presetup();  // must be run first
         _default_value_si = 0.0f;
         set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.0, 27.36);  // 620/2 cm3/rot * 4800 rot/min * 60 min/hr * 1/160934 mi/cm * 1/pi * 1/((2 in * 2.54 cm/in) / 2)^2) 1/cm2  = 27.36 mi/hr (mph
         set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         _responding = !_sensor.begin();
         if (_responding) _sensor.setRange(AIRFLOW_RANGE_15_MPS);
-        I2CSensor::postsetup();
+        I2CSensor::postsetup();  // must be run last
     }
 };
 class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
@@ -568,13 +549,13 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     }
     MAPSensor() = delete;
     void setup() {
-        I2CSensor::presetup();
+        I2CSensor::presetup();  // must be run first
         _default_value_si = 1.0f;
         set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68, 1.02);  // set in atm empirically
         set_ema_alpha(0.2);
         _responding = !_sensor.begin();
-        I2CSensor::postsetup();
+        I2CSensor::postsetup();  // must be run last
     }
 };
 class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
@@ -595,26 +576,18 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
         _short_name = "analog";
         _native_units = "adc";
     }
-    void presetup() {  // child classes call this before setting limits
-        Sensor::presetup();
+    void presetup() {  // must be run first by child class setup() function
+        Sensor::presetup();  // must be run first
         set_pin(_pin, INPUT);
-        // set_can_source(src::Pin, true);
-        set_can_source(src::Pot, true);
-        set_can_source(src::Sim, true);
-        // set_source(src::Pin);
         set_abslim_native(0.0, static_cast<float>(adcrange_adc), false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
     }
-    void postsetup() {  // child classes call this before setting limits
+    void postsetup() {  // must be run last by child class setup() function
         set_val_from_pin();
         _detected = _last_read_valid;
         if (!_detected) set_source(src::Fixed);
         print_config();
-        Sensor::postsetup();
     }
-    virtual void setup() {
-        presetup();
-        postsetup();
-    }
+    virtual void setup() = 0;  // child sensors must include a setup() function
 };
 class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level from the Mule battery
   public:
@@ -628,13 +601,13 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
     CarBattery() = delete;
     // void set_val_from_sim() override { set_si(12.0, false); }  // When simulating battery, just lock it at 12V to avoid errors
     void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
-        AnalogSensor::presetup();
+        AnalogSensor::presetup();  // must be run first
         set_conversions(0.004075, 0.0);  // 240627 calibrated against my best multimeter: m = 0.004075
         set_abslim(0.0, 15.1);  // set abs range. dictated in this case by the max voltage a battery charger might output
         set_oplim(10.7, 14.8);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
         set_ema_alpha(0.005);
         _default_value_si = 12.0f;
-        AnalogSensor::postsetup();
+        AnalogSensor::postsetup();  // must be run last
     }
 };
 // PressureSensor represents a brake fluid pressure sensor.
@@ -688,7 +661,7 @@ class PressureSensor : public AnalogSensor {
     }
     PressureSensor() = delete;
     void setup() {
-        AnalogSensor::presetup();
+        AnalogSensor::presetup();  // must be run first
         float temp_min_adc = 650.0;  // from step #2 above. max value set in function call below  // 650 to 713  (earlier i was seeing 662 min. hmm)
         float noise_margin_adc = 45.0;  // how much the min value can jump to above the number above due to noise
         float m = 1000.0 * (3.3 - 0.554) / ((static_cast<float>(adcrange_adc) - temp_min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
@@ -702,7 +675,7 @@ class PressureSensor : public AnalogSensor {
         set_zeropoint(from_native(opmin_native() + noise_margin_adc / 2.0f));   // tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
         _default_value_si = opmin();
         // set_native(_opmin_native);
-        AnalogSensor::postsetup();
+        AnalogSensor::postsetup();  // must be run last
     }
     bool parked() { return (std::abs(val() - opmin()) <= margin()); }  // is tha brake motor parked?
     float parkpos() { return opmin(); }
@@ -748,7 +721,7 @@ class BrakePositionSensor : public AnalogSensor {
     }
     BrakePositionSensor() = delete;
     void setup() {
-        AnalogSensor::presetup();
+        AnalogSensor::presetup();  // must be run first
         _dir = TransDir::Rev;  // causes percent conversions to use inverted scale 
         _convmethod = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
         set_abslim(1.22, 7.26, false);        // from step #1   // need false argument to prevent autocalculation
@@ -758,7 +731,7 @@ class BrakePositionSensor : public AnalogSensor {
         set_ema_alpha(0.35);
         set_margin(0.2);  // in inches
         _default_value_si = opmax();
-        AnalogSensor::postsetup();
+        AnalogSensor::postsetup();  // must be run last
     }
     bool parked() { return (std::abs(val() - opmax()) <= margin()); }  // is tha brake motor parked?
     float parkpos() { return opmax(); }
@@ -780,10 +753,8 @@ class PulseSensor : public Sensor {
     // absmax_us is our stop timeout, and not based on absmin_native (Hz). It must be set using set_abmax_us() function
     float _us, _absmin_us, _absmax_us = 1500000; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency.  max is chosen just arbitrarily
     int _absmin_us_int;  // int version keeps isr from needing to cast to int (8-15 cycles). maintained in abslim setter to always track _absmin_us float value.
-    float _pulses_per_sec = 0.0f;
     volatile int64_t _isr_time_last_us = 0;
     volatile int _isr_delta_us = 0;
-    volatile int _pulse_count = 0;  // record pulses occurring for debug/monitoring pulse activity
     
     void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
         int64_t time_now_us = esp_timer_get_time();
@@ -791,7 +762,6 @@ class PulseSensor : public Sensor {
         if (delta_us < _absmin_us_int) return;  // ignore spurious triggers or bounces. hereafter the pulse is valid
         _isr_time_last_us = time_now_us;
         _isr_delta_us = delta_us;              // commit delta to official delta
-        _pulse_count++;
     }
     // TODO - something in the below i suspect, is causing constant "err: iszero(NAN) called" prints on serial console
     void set_val_from_pin() override {
@@ -814,7 +784,6 @@ class PulseSensor : public Sensor {
         set_si_w_ema();   // (orig) apply ema filter for si filt value
         
         if (!std::isnan(val()) && iszero(val())) _us = NAN; // once filtered si hits zero, call pulsewidth invalid
-        update_pulsecount(isr_time_buf_us);
         _pin_level = read_pin(_pin);             // for debug/display
         set_pin_inactive();                      // for idiot light showing pulse activity
     }
@@ -843,32 +812,6 @@ class PulseSensor : public Sensor {
         }
         else if (pinactivitytimer.expired()) _pin_inactive = true;
         pinlevel_last = _pin_level;
-    }
-    // calculate _pulses_per_sec based on pulsecount (incremented at each pulse in isr) upon each expiration of the 1-second _pulsecount_timer
-    // this value is used to corroborate our _us pulse delta value for debugging
-    // note that here we attempt to correct for:
-    //   1) time elapsed between the timer expiration (exactly 1 sec) and the calling of this functioned
-    //   2) time epochs at the beginning and end of each 1sec period not accounted for by pulse events occurring during the period
-    // TODO - the resulting _pulses_per_sec comes out rounded to nearest integer, not what was intended
-    // TODO - this function is overly complex, uses more variables than needed, i never bothered to go and simplify
-    void update_pulsecount(int64_t last_pulse_time_us) {
-        static int first_pulse_fraction_us = 0;
-        static int timeout = static_cast<int>(_pulsecount_timer.timeout());
-        static bool zero_pulses = true;
-        if (!_pulsecount_timer.expired()) return;
-        int elapsed = static_cast<int>(_pulsecount_timer.elapsed());
-        _pulsecount_timer.reset();
-        int next_first_pulse_fraction_us = elapsed - timeout;
-        int last_pulse_fraction_us = elapsed - last_pulse_time_us - next_first_pulse_fraction_us;
-        int used_by_pulses_us = timeout - first_pulse_fraction_us - last_pulse_fraction_us;
-        float pulsecount = static_cast<float>(_pulse_count);
-        float avg_pulse_us = (used_by_pulses_us + last_pulse_fraction_us + first_pulse_fraction_us) / (pulsecount + 1.0f);        
-        if (_pulse_count) zero_pulses = false;
-        if (zero_pulses) _pulses_per_sec = 0.0f;
-        else _pulses_per_sec = static_cast<float>(timeout)  / avg_pulse_us;  // pulses_per_sec can be used for monitoring/debugging;  // 
-        if (!_pulse_count) zero_pulses = true;
-        _pulse_count = 0;  // reset isr pulse counter
-        first_pulse_fraction_us = next_first_pulse_fraction_us;
     }
     float us_to_hz(float arg) {
         if (std::isnan(arg)) return 0.0;  // if invalid argument, return zero, a special value meaning we timed out
@@ -908,31 +851,25 @@ class PulseSensor : public Sensor {
     }
     // this function allows direct setting of the stop timeout value (pulse-to-pulse time at which sensor will be considered stopped)
     void set_absmax_us(float arg_max) { _absmax_us = arg_max; }
-    void presetup() {
-        Sensor::presetup();
+    void presetup() {  // must be run first by each child setup() function
+        Sensor::presetup();  // must be run first
         set_pin(_pin, INPUT_PULLUP);
-        // set_can_source(src::Pin, true);
-        // set_source(src::Pin);
         attachInterrupt(digitalPinToInterrupt(_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
-        set_can_source(src::Pot, true);
-        set_can_source(src::Sim, true);
         _detected = true;  // can't tell at boot whether sensor is present or not, so default to it's working
     }
-    void postsetup() {
+    void postsetup() {  // must be run last by each child setup() function
         _default_value_si = opmin();
         set_si(_default_value_si);
         _us = hz_to_us(_native.val());
         print_config();
-        Sensor::postsetup();
     }
-    virtual void setup() {
-        presetup();
-        postsetup();
-    }   
-    // float last_read_time() { return _last_read_time_us; }
-    bool stopped() { return !std::isnan(val()) && iszero(val()); }
-    // old: bool stopped() { return (std::abs(val() - opmin()) <= _margin); }  // Note due to weird float math stuff, can not just check if tach == 0.0
-    // older:  bool stopped() { return (esp_timer_get_time() - _last_read_time_us > opmax_native()); }  // Note due to weird float math stuff, can not just check if tach == 0.0
+    virtual void setup() = 0;  // child sensors must include a setup() function
+    bool stopped() { 
+        if (std::isnan(val())) return false;      // on invalid value return false return for safety reasons
+        if (iszero(val() - opmin())) return true; // return true if val equals opmin, avoiding float near-zero comparison errors 
+        return val() - opmin() <= margin();       // return whether val is within margin of opmin
+    }
+    // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > opmax_native()); }  // alternate approach
     void set_ema_tau(float newtau) { _ema_tau_us = constrain(newtau, _ema_tau_min_us, _ema_tau_max_us); }
     void set_ema_taulim(float newmin, float newmax) {
         _ema_tau_min_us = newmin;
@@ -950,7 +887,7 @@ class PulseSensor : public Sensor {
     float absmax_ms() { return _absmax_us / 1000.0f; }
     float us() { return _us; }
     float ms() { return std::isnan(_us) ? NAN : _us / 1000.0f; }
-    float alt_native() { return _pulses_per_sec; };  // returns pulse freq in hz based on count, rather than conversion (just a check to debug) (only updates once per second)
+    // float alt_native() { return _pulses_per_sec; };  // returns pulse freq in hz based on count, rather than conversion (just a check to debug) (only updates once per second)
 };
 // Tachometer represents a magnetic pulse measurement of the engine rotation
 // it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
@@ -994,7 +931,7 @@ class Tachometer : public PulseSensor {
     void set_idle(float newidle) { _idle = constrain(newidle, opmin(), opmax()); }
     void set_idlecold(float newidlecold) { _idle_cold = constrain(newidlecold, _idle_hot + 1.0, opmax()); }
     void set_idlehot(float newidlehot) { _idle_hot = constrain(newidlehot, opmin(), _idle_cold - 1.0); }
-    // bool stopped() {
+    // bool stopped() override {  // debugging bad stopped performance
     //     if (bootbutton_val) 
     //       ezread.squintf("tac.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), opmin(), _margin, (int)(std::abs(val() - opmin()) <= _margin));  // spam catcher works on this, (w/o bootbutton condition)
     //     return PulseSensor::stopped();
@@ -1031,10 +968,6 @@ class Speedometer : public PulseSensor {
         set_margin(0.30f);
         // _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
         PulseSensor::postsetup();
-    }
-    bool stopped() { 
-        if (std::isnan(val())) return false;  // for speedometer default to false return for safety reasons
-        return iszero(val());
     }
 };
 
