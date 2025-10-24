@@ -1184,7 +1184,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         // note: opmin/opmax range should be set to be just smaller than the actual measured range, to prevent out-of-range errors. this way it will reach all the way to 100%
         //   margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
     float deadband_pc, deadband_us = 20.0f;  // size of each side of the center deadband in us.  pc value is derived  // was 15
-    float sim_deadband_pc = 7.5f;  // when simulating joystick using display buttons, allows rounding of near-zero values to zero
+    float sim_deadband_pc = 10.0f;  // when simulating joystick using display buttons, allows rounding of near-zero values to zero
     float margin_us = 15.0f;    // all [Margin] values above are derived from this by calling derive()  // was 12
     float failsafe_us = 880.0f; // Hotrc must be configured per the instructions: search for "HotRC Setup Procedure"
     float failsafe_margin_us = 100.0f; // in the carpet dumpster file: https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA/edit
@@ -1235,7 +1235,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         read_all_channels(); // read new raw pwm values from rmt buffer. critical to do this continually, fast enough to avoid rmt buffer overflow 
         radiolost_update();  // determine if the radio receiver detects good signal
         toggles_update();    // handle button presses on the digital channels
-        direction_update();  // update directional values from the analog channels
+        directions_update();  // update directional values from the analog channels
     }
     void set_deadband_us(float val) {
         deadband_us = constrain(val, 0.0f, us[Horz][OpMax] - us[Horz][Cent]);  // using Horz for this b/c it's the same for either axis
@@ -1353,36 +1353,50 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         }
         return in_deadbands;
     }
-    void clean_sim_vals() {  // prevent false values when turning on simulator
-        static bool simulating_last = sim->simulating(sens::joy);
-        if (sim->simulating(sens::joy) && !simulating_last) 
-            for (int axis = Horz; axis <= Vert; axis++) sim_raw_pc[axis] = pc[axis][Filt];
-        simulating_last = sim->simulating(sens::joy);
-    }
-    void set_direction(int axis) {  // for radio values, do filtration and set us and pc values based on new reading
-        spike_us[axis] = spike_filter(axis, us[axis][Raw]);  // apply spike filter on raw reading
-        us[axis][Filt] = ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha); // apply ema filter on spike filter output
-        bool in_deadbands = remove_deadbands(&us[axis][Filt], deadband_us, us[axis][Cent], us[axis][OpMin], us[axis][OpMax]); // enforce deadbands
-        if (_radiolost) pc[axis][Filt] = pc[axis][Cent];     // if radio lost set pc value to center for sanity, but keep us value for debug
-        else {                                               // otherwise if radio is not lost
-            pc[axis][Filt] = us_to_pc(axis, us[axis][Filt]); // convert filtered us value to percent
-            if (!in_deadbands) kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig); // register evidence of user activity
+    void clean_sim_vals() { // detect simulator turn-on & keep values from jumping around
+        static bool simlast[NumAxes] = { false, false };  // init last vals to false in case simulating on boot
+        bool simnow[NumAxes];  // track both axes as they can simulate independently (due to horz potmap)
+        simnow[Horz] = sim->simulating(sens::joy);  // horz can simulate either by touch or pot
+        simnow[Vert] = sim->simulating(sens::joy) && sim->simulating();  // vert can simulate by touch only
+        for (int axis = Horz; axis <= Vert; axis++) {
+            // if (simnow[axis] && !simlast[axis]) sim_raw_pc[axis] = pc[axis][Filt]; // prevent values from jumping at sim turnon
+            if (simnow[axis] && !simlast[axis]) {  // if this axis just started simulating,
+                if (pc[axis][Filt] < pc[axis][OpMin] - pc[axis][Margin] || pc[axis][Filt] > pc[axis][OpMax] + pc[axis][Margin])
+                    sim_raw_pc[axis] = pc[axis][Cent]; // center out-of-range value (eg if vert is at radiolost extreme) 
+                else sim_raw_pc[axis] = pc[axis][Filt]; // otherwise prevent value from jumping when starting simulation
+            }
+            simlast[axis] = simnow[axis];
         }
     }
-    void set_sim_direction(int axis) {     // when simulating, set values respecting deadbands
-        pc[axis][Filt] = sim_raw_pc[axis]; // commit externally set or potmapped sim value
-        remove_deadbands(&pc[axis][Filt], sim_deadband_pc, pc[axis][Cent], pc[axis][OpMin], pc[axis][OpMax]); // enforce sim deadbands
+    float calc_sim_direction(int axis) {
+        float retval = sim_raw_pc[axis]; // default to the externally set or potmapped sim value
+        remove_deadbands(&retval, sim_deadband_pc, pc[axis][Cent], pc[axis][OpMin], pc[axis][OpMax]); // enforce sim deadbands
+        return retval;
     }
-    void direction_update() { // update all directional values based on latest read or simulated values
-        clean_sim_vals(); // prevent false values when turning on simulator
-        if (sim->simulating() && sim->simulating(sens::joy)) set_sim_direction(Vert); // correctly navigate confusing sim function naming
-        else set_direction(Vert);
-        if (sim->simulating(sens::joy)) {
-            if (sim->potmapping(sens::joy)) sim_raw_pc[Horz] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]); // if potmapping set horz to pot
-            set_sim_direction(Horz);
+    void directions_update() { // update all directional values based on latest read or simulated values
+        float newfilt_pc[NumAxes] = { NAN, NAN };
+
+        for (int axis = Horz; axis <= Vert; axis++) { // calc radio direction vals. run always so raw vals update regardless of sim status
+            spike_us[axis] = spike_filter(axis, us[axis][Raw]); // apply spike filter on latest raw reading
+            us[axis][Filt] = ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha); // apply ema filter on spike filter output
+            bool in_deadbands = remove_deadbands(&us[axis][Filt], deadband_us, us[axis][Cent], us[axis][OpMin], us[axis][OpMax]); // enforce deadbands
+            if (_radiolost) newfilt_pc[axis] = pc[axis][Cent]; // if no radio, set pc value to center for sanity. keep us value for debug
+            else { // else if radio is good,
+                if (!in_deadbands) kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig); // register evidence of user activity
+                newfilt_pc[axis] = us_to_pc(axis, us[axis][Filt]); // convert filtered us value to percent
+            }
         }
-        else set_direction(Horz);
-        for (int axis = Horz; axis <= Vert; axis++) pc[axis][Filt] = constrain(pc[axis][Filt], pc[axis][OpMin], pc[axis][OpMax]);
+        clean_sim_vals(); // sanely init simulated values when turning on simulator
+        if (sim->simulating(sens::joy)) { // if simulating then overwrite final radio filt value with simulated values
+            if (sim->potmapping(sens::joy)) // if potmapping, for horz only, overwrite simulated and pc filt values from pot
+                newfilt_pc[Horz] = sim_raw_pc[Horz] = pot->mapToRange(pc[Horz][OpMin], pc[Horz][OpMax]);
+            newfilt_pc[Horz] = calc_sim_direction(Horz); // horz: always overwrite filt pc value, as it's either touch or pot simulated
+            if (sim->simulating()) newfilt_pc[Vert] = calc_sim_direction(Vert); // vert: only overwrite filt pc value if touch sim enabled
+        }
+        for (int axis = Horz; axis <= Vert; axis++) { // always constrain both axes
+            if (std::isnan(newfilt_pc[axis])) ezread.squintf(ezread.madcolor, "err: hrc %s axis=NAN\n", (axis == Horz) ? "Horz" : "Vert");
+            else pc[axis][Filt] = constrain(newfilt_pc[axis], pc[axis][OpMin], pc[axis][OpMax]);
+        }
     }
     // spike_filter() : I wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals coming
     // from the hotrc, where often the incoming values change suddenly then (usually) quickly jump back by the same amount. 
