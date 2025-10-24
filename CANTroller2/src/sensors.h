@@ -191,7 +191,7 @@ class Device {
         } 
         return false;
     }
-    void update() {  // I changed case statement into if statements and now is 10 lines long instead of 28.  case sucks like that
+    virtual void update() {  // I changed case statement into if statements and now is 10 lines long instead of 28.  case sucks like that
         if (valrefreshtimer.expired()) {
             valrefreshtimer.set(val_refresh_period);  // allows for dynamic adjustment of update period as needed each device
             if (runmode == LowPower) return; // do nothing if in lowpower mode or this device is disabled
@@ -743,7 +743,7 @@ class BrakePositionSensor : public AnalogSensor {
 class PulseSensor : public Sensor {
   protected:
     Timer _pulsecount_timer{1000000};  // one second timer
-    bool _low_pulse = true, _pin_level, _pin_inactive = false;
+    bool _low_pulse = true, _pin_level, _pin_inactive = false, _stopped = false;
     float _ema_tau_min_us = 1000.0f, _ema_tau_max_us = 100000.0f;  // default ema tau parameters. must be initialized in child classes!
     float _freqfactor = 1.0;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
     Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
@@ -821,6 +821,11 @@ class PulseSensor : public Sensor {
         // return absmax();
     }
     float hz_to_us(float arg) { return us_to_hz(arg); }  // the same math converts in either direction
+    void stopped_update() {
+        if (std::isnan(val())) _stopped = false;      // on invalid value return false return for safety reasons
+        else if (iszero(val() - opmin())) _stopped = true; // return true if val equals opmin, avoiding float near-zero comparison errors 
+        else _stopped = (val() - opmin() <= margin());       // return whether val is within margin of opmin
+    }
   public:
     std::string _true_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
     float _ema_tau_us = 10000.0f;  // default ema tau value. must be initialized in child classes!
@@ -831,6 +836,23 @@ class PulseSensor : public Sensor {
         _native_units = "Hz";
     }
     PulseSensor() = delete;
+    void presetup() {  // must be run first by each child setup() function
+        Sensor::presetup();  // must be run first
+        set_pin(_pin, INPUT_PULLUP);
+        attachInterrupt(digitalPinToInterrupt(_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
+        _detected = true;  // can't tell at boot whether sensor is present or not, so default to it's working
+    }
+    void postsetup() {  // must be run last by each child setup() function
+        _default_value_si = opmin();
+        set_si(_default_value_si);
+        _us = hz_to_us(_native.val());
+        print_config();
+    }
+    virtual void setup() = 0;  // child sensors must include a setup() function
+    void update() override {
+        Device::update();
+        stopped_update();                        // keep _stopped variable accurate
+    }
     void print_config(bool header=true, bool ranges=true) {
         Transducer::print_config(header, ranges);
         if (ranges) ezread.squintf("  pulse = %.0lf %s, abs: %.0lf-%.0lf %s\n", _us, _true_native_units.c_str(), _absmin_us, _absmax_us, _true_native_units.c_str());
@@ -851,24 +873,8 @@ class PulseSensor : public Sensor {
     }
     // this function allows direct setting of the stop timeout value (pulse-to-pulse time at which sensor will be considered stopped)
     void set_absmax_us(float arg_max) { _absmax_us = arg_max; }
-    void presetup() {  // must be run first by each child setup() function
-        Sensor::presetup();  // must be run first
-        set_pin(_pin, INPUT_PULLUP);
-        attachInterrupt(digitalPinToInterrupt(_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
-        _detected = true;  // can't tell at boot whether sensor is present or not, so default to it's working
-    }
-    void postsetup() {  // must be run last by each child setup() function
-        _default_value_si = opmin();
-        set_si(_default_value_si);
-        _us = hz_to_us(_native.val());
-        print_config();
-    }
-    virtual void setup() = 0;  // child sensors must include a setup() function
-    bool stopped() { 
-        if (std::isnan(val())) return false;      // on invalid value return false return for safety reasons
-        if (iszero(val() - opmin())) return true; // return true if val equals opmin, avoiding float near-zero comparison errors 
-        return val() - opmin() <= margin();       // return whether val is within margin of opmin
-    }
+    bool stopped() { return _stopped; }
+    bool* stopped_ptr() { return &_stopped; }
     // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > opmax_native()); }  // alternate approach
     void set_ema_tau(float newtau) { _ema_tau_us = constrain(newtau, _ema_tau_min_us, _ema_tau_max_us); }
     void set_ema_taulim(float newmin, float newmax) {
