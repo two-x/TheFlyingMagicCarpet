@@ -81,9 +81,9 @@ class Jaguar : public ServoMotor2 {
     }
     Jaguar() = delete;
     void setup() {
-        set_abslim(45.0, 168.2);  //this should also set oplim to the same
+        set_abslim(45.0f, 168.2f);  //this should also set oplim to the same
         float m = (absmax() - absmin()) / (absmax_native() / absmin_native());  // (180 - 0) / (2500 - 500) = 0.09 deg/us
-        set_abslim(0.0, 180.0, false);
+        set_abslim(0.0f, 180.0f, false);
     }
 };
 class ThrottleServo2 : public ServoMotor2 {
@@ -93,8 +93,8 @@ class ThrottleServo2 : public ServoMotor2 {
     
     // float idle_si[NumMotorVals] = { 45.0, NAN, 60.0, 58.0, NAN, 43.0, 75.0, 1.0 };          // in angular degrees [OpMin(hot)/-/OpMax(cold)/Out/-/AbsMin/AbsMax/Margin]
     // float idletemp_f[NumMotorVals] = { 60.0, NAN, 205.0, 75.0, NAN, 40.0, 225.0, 1.5};      // in degrees F [OpMin/-/OpMax/Out/-/AbsMin/AbsMax/Margin]
-    float idle_pc = 11.3;                              // idle percent is derived from the si (degrees) value
-    float starting_pc = 25.0;                          // percent throttle to open to while starting the car
+    float idle_pc = 11.3f;                              // idle percent is derived from the si (degrees) value
+    float starting_pc = 25.0f;                          // percent throttle to open to while starting the car
   public:
     ThrottleServo2(int pin, int freq) : ServoMotor2(pin, freq) {
         _dir = TransDir::Fwd;  // if your servo goes CCW with increasing pulsewidths, change to Rev
@@ -105,13 +105,13 @@ class ThrottleServo2 : public ServoMotor2 {
     ThrottleServo2() = delete;
     void setup() {
         _convmethod = AbsLimMap;
-        set_abslim(0.0, 180.0, false);
-        set_abslim_native(500.0, 2500.0, false);
+        set_abslim(0.0f, 180.0f, false);
+        set_abslim_native(500.0f, 2500.0f, false);
         float m = (absmax() - absmin()) / (absmax_native() / absmin_native());  // (180 - 0) / (2500 - 500) = 0.09 deg/us
-        set_conversions(m, 0.0);
-        governor_pc.set(95);
-        idle_si.set_limits(43.0, 75.0);
-        idle_si.set(58.0);
+        set_conversions(m, 0.0f);
+        governor_pc.set(95.0f);
+        idle_si.set_limits(43.0f, 75.0f);
+        idle_si.set(58.0f);
         ServoMotor2::setup();
 
     }

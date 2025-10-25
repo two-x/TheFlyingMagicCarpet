@@ -183,7 +183,7 @@ int looptime_linefeed_threshold = 0;    // when looptime_print == 1, will linefe
 float flycruise_vert_margin_pc = 3.0f;  // margin of error (in percent) for determining hard brake value for dropping out of cruise mode
 float cruise_holdtime_attenuator_pc = 10.0f; // adjustment rate multiplier for cruise HoldTime mode
 float cruise_onepull_attenuator_pc = 14.0f;  // adjustment rate multiplier for cruise OnePull mode
-float maf_min_gps = 0.0;                // in grams per second
+float maf_min_gps = 0.0f;                // in grams per second
 float maf_max_gps = 50.0f;              // i just made this number up as i have no idea what's normal for MAF
 float tuning_rate_pcps = 7.5f;          // values being edited by touch buttons change value at this percent of their overall range per second
 float neobright = 20.0f;                // default for us dim/brighten the neopixels in percent
@@ -245,7 +245,7 @@ volatile int sel = 0;                   // in the real time tuning UI, which of 
 volatile int sel_last = 0;
 // bool syspower = HIGH, not_syspower = !syspower; // set by handler only. Reflects current state of the signal
 int sleep_request = ReqNA;
-float maf_gps = 0;                              // manifold mass airflow in grams per second
+float maf_gps = 0.0f;                              // manifold mass airflow in grams per second
 uint16_t heartbeat_override_color = 0x0000;
 bool nowtouch = false, ts_tapped = false, ts_doubletapped = false, ts_longpressed = false, ts_swiped = false;  // touchscreen globals
 int ts_swipedir = DirNone;  // touchscreen
@@ -312,7 +312,7 @@ void write_pin(int pin, int val) {  if (pin >= 0 && pin != 255) digitalWrite (pi
 void set_pin(int pin, int mode, int val) { set_pin(pin, mode); write_pin(pin, val); }
 int read_pin(int pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
 
-float convert_units(float from_units, float convert_factor, bool invert, float in_offset = 0.0, float out_offset = 0.0) {
+float convert_units(float from_units, float convert_factor, bool invert, float in_offset = 0.0f, float out_offset = 0.0f) {
     if (!invert) return out_offset + convert_factor * (from_units - in_offset);
     if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
     Serial.printf("err: convert_units(%3.3f, %3.3f, %d, %3.3f, %3.3f) called\n", from_units, convert_factor, invert, in_offset, out_offset); // would prefer ezread if it were defined
@@ -326,8 +326,8 @@ float ema_filt(float _raw, float _filt, float _alpha) {
         if (std::isnan(_raw)) return _filt;  // try to save the runtime value in case of spurious glitch
         return NAN;
     }
-    _alpha = constrain(_alpha, 0.0, 1.0);
-    return (_alpha * _raw) + ((1.0 - _alpha) * _filt);
+    _alpha = constrain(_alpha, 0.0f, 1.0f);
+    return (_alpha * _raw) + ((1.0f - _alpha) * _filt);
 }
 // template<typename Raw_T, typename Filt_T>
 // void ema_filt(Raw_T _raw, Filt_T* _filt, float _alpha) {
@@ -567,9 +567,9 @@ class EZReadConsole {
         }
         if (!ezread_suppress_spam || graceperiod || !updatetimer.expireset()) return;
         window_accum_char = std::max(0.0f, window_accum_char - avg_spamrate_cps * updatetimer.timeout() / 1e6f);  // let old spam fall out of the buffer.
-        cleanzero(&window_accum_char, 0.1);
+        cleanzero(&window_accum_char, 0.1f);
         avg_spamrate_cps = window_accum_char * 1e6f / spam_window_us;  // calc a new avg rate.
-        cleanzero(&avg_spamrate_cps, 0.1);
+        cleanzero(&avg_spamrate_cps, 0.1f);
         if (spam_active && ((int)avg_spamrate_cps < spam_disable_thresh_cps)) {
             spam_active = false;
             this->printf(happycolor, "ezread spam suppression off\n");
@@ -721,12 +721,12 @@ int most_significant_place(T value, int zeroplace=1) {
         if (value == 0.0f) return zeroplace;  // if (iszero(value)) return zeroplace; breaks tune crossing zero
         value = std::fabs(value);  // safer to directly use fabs within a type-ambiguous template
         int place = 0;
-        while (value >= 10.0) {
-            value /= 10.0;
+        while (value >= 10.0f) {
+            value /= 10.0f;
             place++;
         }
-        while (value < 1.0) {
-            value *= 10.0;
+        while (value < 1.0f) {
+            value *= 10.0f;
             place--;
         }
         return place;
@@ -773,9 +773,9 @@ float tune(float orig_val, int idelta, float min_val=NAN, float max_val=NAN, int
     int sig_digits = disp_default_float_sig_dig;
     if (min_sig_edit_place == unlikely_int) min_sig_edit_place = -1 * disp_default_float_sig_dig;
     int sig_place = std::max(least_significant_place(orig_val), min_sig_edit_place + sig_digits);
-    float scale = 1.0;  // needs to change if disp_default_float_sig_dig is modified !!
+    float scale = 1.0f;  // needs to change if disp_default_float_sig_dig is modified !!
     while (sig_place > sig_digits) {
-        scale *= 10.0;
+        scale *= 10.0f;
         sig_place--;
     }
     while (sig_place < sig_digits) {

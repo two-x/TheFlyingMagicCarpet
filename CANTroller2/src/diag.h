@@ -8,7 +8,7 @@
 class LoopTimer {
   public:
     LoopTimer() { setup(); }
-    float max_allowable_looptime_ms = 50.0;
+    float max_allowable_looptime_ms = 50.0f;
     // Loop timing related
     Timer loop_timer{1000000};  // how long the previous main loop took to run (in us)
     int loopno = 1, loopindex = 0, loop_recentsum = 0;
@@ -59,9 +59,9 @@ class LoopTimer {
         loop_avg_us = calc_avg(loop_now, thisloop);
         loop_periods_us[loop_now] = thisloop;  // us since beginning of this loop
         loop_timer.reset();
-        loop_sum_s += (float)loop_periods_us[loop_now] / 1000000;
+        loop_sum_s += (float)loop_periods_us[loop_now] / 1000000.0f;
         // ema_filt(loop_periods_us[loop_now], &loop_avg_us, 0.01);
-        if (loop_avg_us > 1) loopfreq_hz = 1000000/loop_avg_us;
+        if (loop_avg_us > 1) loopfreq_hz = 1000000.0f/loop_avg_us;
         loop_peak_us = 0;
         for (int i=0; i<loop_history; i++) if (loop_peak_us < loop_periods_us[i]) loop_peak_us = loop_periods_us[i]; 
         if (looptime_print) {  // note: convert cout to ezread.squintf
@@ -86,7 +86,7 @@ class LoopTimer {
         // static int steady_report_printed = false;
         if (!bootup_complete) initbuffer_timer.reset();
         if (initbuffer_timer.expired()) {
-            if ((float)thisloop > loop_max_ms * 1000.0) loop_max_ms = (float)thisloop / 1000.0;
+            if ((float)thisloop > loop_max_ms * 1000.0f) loop_max_ms = (float)thisloop / 1000.0f;
             // if (!steady_report_printed) ezread.squintf(YEL, "loop: steady runtime reached at %d sec\n", (int)(esp_timer_get_time() / 1000000));
             // steady_report_printed = true;
         }
@@ -95,7 +95,7 @@ class LoopTimer {
         return esp_timer_get_time() - boot_mark_us;
     }
     float uptime() {  // returns uptime since last reset in minutes
-        return (float)((esp_timer_get_time() - boot_mark_us)) / (60.0 * 1000000.0);
+        return (float)(esp_timer_get_time() - boot_mark_us) / (60.0f * 1000000.0f);
     }
 };
 
@@ -444,7 +444,7 @@ class DiagRuntime {
         //     baseline_speed = speedo->val();         // store the speed value when we are stopped
         //     // }
         // }
-        bool gunning_it = (gas->pc[Out] > 20.0 && (runmode == Fly || runmode == Cruise));
+        bool gunning_it = (gas->pc[Out] > 20.0f && (runmode == Fly || runmode == Cruise));
         if (gunning_it) {                                               // if we're attempting to drive
             if (!gunning_last) speedoTimer.reset();                     // delay our speed comparison so car can accelerate
             else if (speedoTimer.expired()) fail = (speedo->val() - baseline_speed < speedo->margin());  // the car should be moving by now
@@ -469,7 +469,7 @@ class DiagRuntime {
         }
 
         // checks if tach isn't low when throttle is released, or doesn't increase when we gun it
-        bool running_it = (gas->pc[Out] > 20.0 && (runmode == Fly || runmode == Cruise));
+        bool running_it = (gas->pc[Out] > 20.0f && (runmode == Fly || runmode == Cruise));
         if (running_it) {                                               // if we're attempting to drive
             if (!running_last) tachTimer.reset();                     // delay our rpm comparison so car can respond
             else if (tachTimer.expired()) fail = (tach->val() - baseline_rpm < tach->margin());  // the car should be moving by now

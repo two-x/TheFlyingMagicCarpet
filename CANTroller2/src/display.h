@@ -96,7 +96,7 @@ static constexpr uint8_t unitmaps[21][13] = {  // 13x7-pixel bitmaps for unit st
 
 static EZReadDrawer ezdraw(&ezread);
 static PanelAppManager panel(&ezdraw);
-volatile float fps = 0.0;
+volatile float fps = 0.0f;
 // int pushclock, drawclock, idleclock;
 volatile bool reset_request = false;
 
@@ -262,29 +262,6 @@ class Display {
         else return ((color & 0xe000) | (color & 0x780) | (color & 0x1c)) >> 2;
     }
   private:
-    void drawWideLine(int x0, int y0, int x1, int y1, float wd) {  // took from http://members.chello.at/~easyfilter/bresenham.html
-        int dx = std::abs(x1-x0), sx = x0 < x1 ? 1 : -1; 
-        int dy = std::abs(y1-y0), sy = y0 < y1 ? 1 : -1; 
-        int err = dx-dy, e2, x2, y2;                          /* error value e_xy */
-        float ed = dx+dy == 0 ? 1 : sqrt((float)dx*dx+(float)dy*dy);
-
-        for (wd = (wd+1)/2; ; ) {                                   /* pixel loop */
-            sprptr->drawPixel(x0, y0, std::max(0.0f, 255*(std::abs(err-dx+dy)/ed-wd+1)));
-            e2 = err; x2 = x0;
-            if (2*e2 >= -dx) {                                           /* x step */
-                for (e2 += dy, y2 = y0; e2 < ed*wd && (y1 != y2 || dx > dy); e2 += dx)
-                   sprptr->drawPixel(x0, y2 += sy, std::max(0.0f, 255*(abs(e2)/ed-wd+1)));
-                if (x0 == x1) break;
-                e2 = err; err -= dy; x0 += sx; 
-            } 
-            if (2*e2 <= dy) {                                            /* y step */
-                for (e2 = dx-e2; e2 < ed*wd && (x1 != x2 || dx < dy); e2 += dy)
-                    sprptr->drawPixel(x2 += sx, y0, std::max(0.0f, 255*(abs(e2)/ed-wd+1)));
-                if (y0 == y1) break;
-                err += dx; y0 += sy; 
-            }
-        }
-    }
     void draw_bargraph_base(int corner_x, int corner_y, int width) {  // draws a horizontal bargraph scale.  124, y, 40
         sprptr->drawFastHLine(corner_x + 1, corner_y, width - 2, MGRY);  // base line
         sprptr->drawFastVLine(corner_x + width/2, corner_y-1, 2, WHT);  // centerpoint gradient line
@@ -685,7 +662,7 @@ class Display {
         drawval(2, hotrc.pc[Horz][Filt], hotrc.pc[Horz][OpMin], hotrc.pc[Horz][OpMax]);
         drawval(3, speedo.val(), 0.0f, speedo.opmax(), gas.cruisepid.target());
         drawval(4, tach.val(), 0.0f, tach.opmax(), gas.pid.target());
-        drawval(5, brake.combined_read_pc, 0.0, 100.0, brake.target_pc);  // (brake_active_pid == S_PID) ? (int)brakeSPID.targ() : pressure_target_adc);
+        drawval(5, brake.combined_read_pc, 0.0f, 100.0f, brake.target_pc);  // (brake_active_pid == S_PID) ? (int)brakeSPID.targ() : pressure_target_adc);
         drawval(6, gas.pc[Out], gas.pc[OpMin], gas.pc[OpMax], gas.throttle_target_pc);
         drawval(7, brake.pc[Out], brake.pc[OpMin], brake.pc[OpMax]);
         drawval(8, steer.pc[Out], steer.pc[OpMin], steer.pc[OpMax]);
@@ -725,10 +702,10 @@ class Display {
             drawval(9, pot.native(), pot.absmin_native(), pot.absmax_native());
             drawval(10, brkpos.native(), brkpos.opmin_native(), brkpos.opmax_native());
             drawval(11, brkpos.val(), brkpos.opmin(), brkpos.opmax());
-            drawval(12, brkpos.pc(), 0.0, 100.0);
+            drawval(12, brkpos.pc(), 0.0f, 100.0f);
             drawval(13, pressure.native(), pressure.opmin_native(), pressure.opmax_native());
             drawval(14, pressure.val(), pressure.opmin(), pressure.opmax());
-            drawval(15, pressure.pc(), 0.0, 100.0);
+            drawval(15, pressure.pc(), 0.0f, 100.0f);
             // drawval(11, brkpos.raw(), brkpos.opmin(), brkpos.opmax());
             // drawval(15, pressure.raw(), pressure.opmin(), pressure.opmax());
             drawval(16, mulebatt.native(), mulebatt.opmin_native(), mulebatt.opmax_native());
@@ -747,7 +724,7 @@ class Display {
             drawval(12, speedo.ms(), speedo.absmin_ms(), speedo.absmax_ms());
             drawval(13, speedo.native(), speedo.opmin_native(), speedo.opmax_native());
             drawval(14, speedo.raw(), speedo.opmin(), speedo.opmax());
-            drawval(15, speedo.pc(), 0.0, 100.0);
+            drawval(15, speedo.pc(), 0.0f, 100.0f);
             for (int line=16; line<=17; line++) draw_eraseval(line);
             drawval(18, tach.ema_tau(), tach.ema_tau_min(), tach.ema_tau_max());
             drawval(19, speedo.ema_tau(), speedo.ema_tau_min(), speedo.ema_tau_max());
@@ -789,7 +766,7 @@ class Display {
         else if (datapage == PgMotr) {
             drawval(9, brake.duty(), brake.dutymin(), brake.dutymax());  // brake_spid_speedo_delta_adc, -range, range);            
             drawval(10, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
-            drawval(11, brake.combined_read_pc, 0.0, 100.0);  // brake_spid_speedo_delta_adc, -range, range);
+            drawval(11, brake.combined_read_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
             for (int myline=12; myline<=13; myline++) draw_eraseval(myline);
             draw_truth(14, brake.pid_enabled, binstyl::Enabled);
             draw_ascii(15, brakefeedbackcard[brake.feedback]);
@@ -805,11 +782,11 @@ class Display {
         else if (datapage == PgBPID) {
             drange = brake.us[AbsMin]-brake.us[AbsMax];
             draw_ascii(9, motormodecard[brake.motormode]);
-            drawval(10, pressure.pc(), 0.0, 100.0, brake.pids[PressureFB].target());
+            drawval(10, pressure.pc(), 0.0f, 100.0f, brake.pids[PressureFB].target());
             drawval(11, brake.pids[PressureFB].target(), pressure.opmin(), pressure.opmax());
-            drawval(12, brkpos.pc(), 0.0, 100.0, brake.pids[PositionFB].target());
+            drawval(12, brkpos.pc(), 0.0f, 100.0f, brake.pids[PositionFB].target());
             drawval(13, brake.pids[PositionFB].target(), brkpos.opmin(), brkpos.opmax());
-            drawval(14, brake.target_pc, 0.0, 100.0);
+            drawval(14, brake.target_pc, 0.0f, 100.0f);
             // draw_ascii(9, motormodecard[brake.motormode]);
             // draw_ascii(10, brakefeedbackcard[brake.feedback]);
             // drawval(12, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
@@ -827,7 +804,7 @@ class Display {
         }
         else if (datapage == PgGPID) {
             draw_ascii(9, motormodecard[gas.motormode]);
-            drawval(10, gas.trigger_vert_pc, 0.0, 100.0);
+            drawval(10, gas.trigger_vert_pc, 0.0f, 100.0f);
             drawval(11, gas.throttle_target_pc, tach.opmin(), tach.opmax());
             drawval(12, gas.pid.target(), tach.opmin(), tach.opmax());
             drawval(13, gas.pid.err(), tach.idle() - tach.opmax(), tach.opmax() - tach.idle());
@@ -893,8 +870,8 @@ class Display {
             // draw_ascii(19, pcbaglowcard[neo->pcbaglow]);
             draw_truth(20, flashdemo, binstyl::On);
             draw_truth(21, neo->sleepmode, binstyl::On);
-            drawval(22, neobright, 0.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, unlikely_int, 3);
-            drawval(23, neosat, 1.0, 100.0);  // drawval(22, neobright, 1.0, 100.0f, unlikely_int, 3);
+            drawval(22, neobright, 0.0f, 100.0f);  // drawval(22, neobright, 1.0, 100.0f, unlikely_int, 3);
+            drawval(23, neosat, 1.0f, 100.0f);  // drawval(22, neobright, 1.0, 100.0f, unlikely_int, 3);
         }
         else if (datapage == PgUI) {
             drawval(9, loop_avg_us);
@@ -1104,7 +1081,7 @@ class Tuner {
         if (touch->increment_datapage) ++datapage %= NumDataPages;  // touchscreen datapage change, go to next page, wrapping around
         touch->increment_sel = touch->increment_datapage = false;   // reset the touch requests
         id = id_encoder + touch->get_delta();                       // combine accelerated value changes from both the encoder and the touchscreen
-        if (pot_tuner_acceleration && !sim.potmapping()) id = constrain(id * (int)(map(pot.val(), 0.0, 100.0, 1.0, 10.0)), 1, (int)encoder._accel_max);  // if pot is allowed to control data edit acceleration (experimental)
+        if (pot_tuner_acceleration && !sim.potmapping()) id = constrain(id * (int)(map(pot.val(), 0.0f, 100.0f, 1.0f, 10.0f)), 1, (int)encoder._accel_max);  // if pot is allowed to control data edit acceleration (experimental)
         if (tunctrl != tunctrl_last || datapage != datapage_last || sel != sel_last || id) tuningAbandonmentTimer.reset();  // any tuning activity by the user postpones tuner timeout
         else if (tuningAbandonmentTimer.expired()) tunctrl = Off;      // turn off the tuner after extended user inactivity
         datapage = constrain(datapage, 0, datapages::NumDataPages-1);  // keep datapage value in range
@@ -1225,8 +1202,8 @@ class Tuner {
             // if (sel == 10) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, GlowNumModes - 1, true));
             if (sel == 11) neo2->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
             else if (sel == 12) neo->sleepmode_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
-            else if (sel == 13) tune(&neobright, id, 0.0, 100.0);  // with recent changes to tune() I had to move the setter function for
-            else if (sel == 14) tune(&neosat, id, 0.0, 100.0);     //  these into the neopix update function, or acceleration wouldn't work
+            else if (sel == 13) tune(&neobright, id, 0.0f, 100.0f);  // with recent changes to tune() I had to move the setter function for
+            else if (sel == 14) tune(&neosat, id, 0.0f, 100.0f);     //  these into the neopix update function, or acceleration wouldn't work
             else if (sel == 14) tune(&ui_app, id, 0, NumContextsUI-1, true);
         }
         else if (datapage == PgUI) {
@@ -1274,7 +1251,7 @@ static void draw_task(void *parameter) {
             screen.do_draw();
             xSemaphoreGive(easelbuf_sem);  // give away the easel so it can be processed & sent to the screen
         }
-        vTaskDelay(pdMS_TO_TICKS(1 + ((int)limit_framerate * refresh_limit_us / 1000)));  //   || sim.enabled()
+        vTaskDelay(pdMS_TO_TICKS(1 + ((int)limit_framerate * refresh_limit_us / 1000.0f)));  //   || sim.enabled()
         // if (limit_framerate && !auto_saver_enabled) vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit_us / 1000 - 1)));  //   || sim.enabled()
         lastmode = runmode;
     }

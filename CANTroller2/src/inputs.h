@@ -131,7 +131,7 @@ class Encoder {
     MomentarySwitch button;
     bool enc_a, val_a_isr = LOW;  // initializing HIGH sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
     bool enc_b, val_b_isr = HIGH;
-    float _accel_max = 25.0;      // maximum acceleration factor    
+    float _accel_max = 25.0f;      // maximum acceleration factor    
     Encoder(int a, int b, int sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) { button.setup(_sw_pin); }
     Encoder() = delete;           // must be instantiated with pins
     
@@ -147,8 +147,8 @@ class Encoder {
             _spintime_min_us >> 1;  // so double the fastest spin threshold time
             // _accel_thresh_us *= 2;  // and double the acceleration threshold time
         #endif
-        _spinrate_max = 1000000.0 / (float)_spintime_min_us;
-        // spinrate_accel_thresh = 1000000.0 / (float)_accel_thresh_us;
+        _spinrate_max = 1000000.0f / (float)_spintime_min_us;
+        // spinrate_accel_thresh = 1000000.0f / (float)_accel_thresh_us;
         
     }
     float spinrate() { return _spinrate; }          // in Hz for display
@@ -171,10 +171,10 @@ class Encoder {
             _spinrate = 0.0;
         }
         time_last = _spintime_isr_us;
-        if (best_time_this_twist != 0) _spinrate = 1000000.0 / (float)best_time_this_twist;  // convert to Hz
+        if (best_time_this_twist != 0) _spinrate = 1000000.0f / (float)best_time_this_twist;  // convert to Hz
         // if (best_time_this_twist < _accel_thresh_us) _accel_factor = 1;
         // else _accel_factor = (int)(map(_spinrate, spinrate_accel_thresh, _spinrate_max, 1.0, 10.0));
-        _accel_factor = (int)(map(_spinrate, 0.0, _spinrate_max, 1.0, _accel_max));
+        _accel_factor = (int)(map(_spinrate, 0.0f, _spinrate_max, 1.0f, _accel_max));
         // Serial.printf("dt:%d sr:%lf af:%d\n", div_time, _spinrate, _accel_factor);
     }
     void update() {
@@ -406,7 +406,7 @@ class Touchscreen {
             fd = (float)(1 << fd_exponent); // update the touch acceleration value
             id = (int)fd;
             process_ui();
-            fd = 0.0;
+            fd = 0.0f;
         }
     }
     void process_untouched() {  // executes on update whenever screen is not being touched (nowtouch == false)

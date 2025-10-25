@@ -155,11 +155,11 @@ private:
                 if (idiotlights[i].criticalAlertMode) {
                     // critical alert mode: 3x 100ms period, 50% duty pulses per animation cycle
                     bool flash_on;
-                    if (time_ms > 250.0) flash_on = false;
-                    else if (time_ms > 200.0) flash_on = true;
-                    else if (time_ms > 150.0) flash_on = false;
-                    else if (time_ms > 100.0) flash_on = true;
-                    else if (time_ms > 50.0) flash_on = false;
+                    if (time_ms > 250.0f) flash_on = false;
+                    else if (time_ms > 200.0f) flash_on = true;
+                    else if (time_ms > 150.0f) flash_on = false;
+                    else if (time_ms > 100.0f) flash_on = true;
+                    else if (time_ms > 50.0f) flash_on = false;
                     else flash_on = true;                        
                     neoobj.SetPixelColor(idiotlights[i].led, flash_on ? RgbColor(255, 255, 255) : idiotlights[i].solidColor);
                 } else if (idiotlights[i].solidOnMode) {

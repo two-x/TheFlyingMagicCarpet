@@ -158,14 +158,14 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
     }
     else { // Check status byte if GPIO is not defined
         _status = readStatus();
-        while((_status&BUSY_FLAG) && (_status!=0xFF)) {
+        while((_status & BUSY_FLAG) && (_status != 0xFF)) {
             if (noblock) return NAN;
             delay(1);
             _status = readStatus();
         }
     }
     run_preamble = true;
-    _i2cPort->requestFrom(_address,4);
+    _i2cPort->requestFrom(_address, 4);
     _status = _i2cPort->read();
     if ((_status & INTEGRITY_FLAG) || (_status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
     int reading = 0;
@@ -175,12 +175,12 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
     }
     pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
     pressure = (pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
-    if (units == PA)        pressure *= 6894.7573; //Pa (Pascal)
-    else if (units == KPA)  pressure *= 6.89476;   //kPa (kilopascal)
-    else if (units == TORR) pressure *= 51.7149;   //torr (mmHg)
-    else if (units == INHG) pressure *= 2.03602;   //inHg (inch of mercury)
-    else if (units == ATM)  pressure *= 0.06805;   //atm (atmosphere)
-    else if (units == BAR)  pressure *= 0.06895;   //bar
+    if (units == PA)        pressure *= 6894.7573f; //Pa (Pascal)
+    else if (units == KPA)  pressure *= 6.89476f;   //kPa (kilopascal)
+    else if (units == TORR) pressure *= 51.7149f;   //torr (mmHg)
+    else if (units == INHG) pressure *= 2.03602f;   //inHg (inch of mercury)
+    else if (units == ATM)  pressure *= 0.06805f;   //atm (atmosphere)
+    else if (units == BAR)  pressure *= 0.06895f;   //bar
     return pressure;
 }
 
@@ -227,7 +227,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     }
     bool sendspeed(float _speed) {
         uint8_t byt = 0x20;  // command template for speed update
-        uint16_t speed = (uint16_t)(_speed * 100);
+        uint16_t speed = (uint16_t)(_speed * 100.0f);
         if (speed == speed_last) return false;  // bail if speed has not changed
         byt |= ((uint8_t)(speed >> 8) & 0x0f);
         Wire.beginTransmission(addr);

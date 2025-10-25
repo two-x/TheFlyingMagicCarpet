@@ -20,13 +20,13 @@ int sources[static_cast<int>(sens::NumSensors)] = { static_cast<int>(src::Pin) }
 // Potentiometer does an analog read from a pin and maps it to a percent (0%-100%). We filter the value to keep it smooth.
 class Potentiometer {
   protected:
-    float _ema_alpha = 0.2;
-    float _opmin = 0.0, _opmax = 100.0 ;  // in percent
-    float _opmin_native = 380; // TUNED 230603 - used only in determining theconversion factor
-    float _opmax_native = 4095; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
-    float _absmin_native = 0.0, _absmax_native = static_cast<float>(adcrange_adc);
-    float _absmin = 0.0, _absmax = 100.0;
-    float _margin_pc = 5.0;
+    float _ema_alpha = 0.2f;
+    float _opmin = 0.0f, _opmax = 100.0f ;  // in percent
+    float _opmin_native = 380.0f; // TUNED 230603 - used only in determining theconversion factor
+    float _opmax_native = 4095.0f; // TUNED 230613 - adc max measured = ?, or 9x.? % of adc_range. Used only in determining theconversion factor
+    float _absmin_native = 0.0f, _absmax_native = static_cast<float>(adcrange_adc);
+    float _absmin = 0.0f, _absmax = 100.0f;
+    float _margin_pc = 5.0f;
     int _pin;
     float _pc, _raw, _native, _activity_ref;  // values in filtered percent, raw percent, raw adc
     Timer pot_timer{100000};  // adc cannot read too fast w/o errors, so give some time between readings
@@ -87,7 +87,7 @@ class Potentiometer {
 // either or both min/max to infinity.
 class Param {
   protected:
-    float _min_internal = 0.0, _max_internal = 0.0;  // these are internally managed values our limit pointers can point at if nothing external is given
+    float _min_internal = 0.0f, _max_internal = 0.0f;  // these are internally managed values our limit pointers can point at if nothing external is given
     float _val, _last;  // this is our primary value and its previous value
     float* _min_ptr = &_min_internal;
     float* _max_ptr = &_max_internal;
@@ -240,8 +240,8 @@ std::string transdircard[static_cast<int>(TransDir::NumTransDir)] = { "rev", "fw
 //     "opmin"/"opmax": defines the healthy operational range the transducer. Actuators should be constrained to this range, Sensors should be expected to read within this range or flag an error
 class Transducer : public Device {
   protected:
-    float _mfactor = 1.0, _boffset = 0.0, _zeropoint;
-    float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0;
+    float _mfactor = 1.0f, _boffset = 0.0f, _zeropoint;
+    float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0f;
     int _transtype, _convmethod = LinearMath;  // the default method
     float _default_value_si = NAN;  // must be set by child classes to a valid default value (allows simulation)
     float _default_fixed_si = NAN;  // may be overridden by child classes. becomes value always when src == Fixed
@@ -288,13 +288,13 @@ class Transducer : public Device {
     }
     virtual float to_pc(float arg_si) {  // convert an absolute si value to percent form.  note this honors the _dir setting
         if (std::isnan(arg_si)) return NAN;
-        float ret = map(arg_si, _opmin, _opmax, 100.0 * (_dir == TransDir::Rev), 100.0 * (_dir == TransDir::Fwd));
+        float ret = map(arg_si, _opmin, _opmax, 100.0f * (_dir == TransDir::Rev), 100.0f * (_dir == TransDir::Fwd));
         cleanzero(&ret, float_conversion_zero);
         return ret;
     }
     virtual float from_pc(float arg_pc) {  // convert an absolute percent value to si unit form.  note this honors the _dir setting
         if (std::isnan(arg_pc)) return NAN;
-        float ret = map(arg_pc, 100.0 * (_dir == TransDir::Rev), 100.0 * (_dir == TransDir::Fwd), _opmin, _opmax);
+        float ret = map(arg_pc, 100.0f * (_dir == TransDir::Rev), 100.0f * (_dir == TransDir::Fwd), _opmin, _opmax);
         cleanzero(&ret, float_conversion_zero);
         return ret;
     }
@@ -422,7 +422,7 @@ class Transducer : public Device {
 //     "pc()": the filtered value is available scaled as a percentage of the operatioal range. it's not stored, but accessible using pc()
 class Sensor : public Transducer {
   protected:
-    float _ema_alpha = 0.1;
+    float _ema_alpha = 0.1f;
     bool _first_filter_run = false;
     virtual float run_ema() { return ema_filt(raw(), val(), _ema_alpha); }
     void update_source() override { if (_source == src::Pin) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
@@ -487,7 +487,7 @@ class I2CSensor : public Sensor {  // base class for sensors which communicate u
     I2CSensor() = delete;
     void presetup() {  // must be run first by child class setup() function
         Sensor::presetup();  // must be run first
-        set_conversions(1.0, 0.0); // our i2c sensors so far provide si units directly.
+        set_conversions(1.0f, 0.0f); // our i2c sensors so far provide si units directly.
     }
     void postsetup() {  // must be run last by child class setup() function
         // set_si(_default_value_si);  // initialize value
@@ -522,9 +522,9 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     void setup() {
         I2CSensor::presetup();  // must be run first
         _default_value_si = 0.0f;
-        set_abslim(0.0, 33.55);  // set abs range. defined in this case by the sensor spec max reading
-        set_oplim(0.0, 27.36);  // 620/2 cm3/rot * 4800 rot/min * 60 min/hr * 1/160934 mi/cm * 1/pi * 1/((2 in * 2.54 cm/in) / 2)^2) 1/cm2  = 27.36 mi/hr (mph
-        set_ema_alpha(0.2);  // note: all the conversion constants for this sensor are actually correct being the defaults 
+        set_abslim(0.0f, 33.55f);  // set abs range. defined in this case by the sensor spec max reading
+        set_oplim(0.0f, 27.36f);  // 620/2 cm3/rot * 4800 rot/min * 60 min/hr * 1/160934 mi/cm * 1/pi * 1/((2 in * 2.54 cm/in) / 2)^2) 1/cm2  = 27.36 mi/hr (mph
+        set_ema_alpha(0.2f);  // note: all the conversion constants for this sensor are actually correct being the defaults 
         _responding = !_sensor.begin();
         if (_responding) _sensor.setRange(AIRFLOW_RANGE_15_MPS);
         I2CSensor::postsetup();  // must be run last
@@ -551,9 +551,9 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     void setup() {
         I2CSensor::presetup();  // must be run first
         _default_value_si = 1.0f;
-        set_abslim(0.06, 2.46);  // set abs range. defined in this case by the sensor spec max reading
-        set_oplim(0.68, 1.02);  // set in atm empirically
-        set_ema_alpha(0.2);
+        set_abslim(0.06f, 2.46f);  // set abs range. defined in this case by the sensor spec max reading
+        set_oplim(0.68f, 1.02f);  // set in atm empirically
+        set_ema_alpha(0.2f);
         _responding = !_sensor.begin();
         I2CSensor::postsetup();  // must be run last
     }
@@ -579,7 +579,7 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
     void presetup() {  // must be run first by child class setup() function
         Sensor::presetup();  // must be run first
         set_pin(_pin, INPUT);
-        set_abslim_native(0.0, static_cast<float>(adcrange_adc), false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
+        set_abslim_native(0.0f, static_cast<float>(adcrange_adc), false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
     }
     void postsetup() {  // must be run last by child class setup() function
         set_val_from_pin();
@@ -602,10 +602,10 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
     // void set_val_from_sim() override { set_si(12.0, false); }  // When simulating battery, just lock it at 12V to avoid errors
     void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
         AnalogSensor::presetup();  // must be run first
-        set_conversions(0.004075, 0.0);  // 240627 calibrated against my best multimeter: m = 0.004075
-        set_abslim(0.0, 15.1);  // set abs range. dictated in this case by the max voltage a battery charger might output
-        set_oplim(10.7, 14.8);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
-        set_ema_alpha(0.005);
+        set_conversions(0.004075f, 0.0f);  // 240627 calibrated against my best multimeter: m = 0.004075
+        set_abslim(0.0f, 15.1f);  // set abs range. dictated in this case by the max voltage a battery charger might output
+        set_oplim(10.7f, 14.8f);  // set op range. dictated by the expected range of voltage of a loaded lead-acid battery across its discharge curve
+        set_ema_alpha(0.005f);
         _default_value_si = 12.0f;
         AnalogSensor::postsetup();  // must be run last
     }
@@ -662,15 +662,15 @@ class PressureSensor : public AnalogSensor {
     PressureSensor() = delete;
     void setup() {
         AnalogSensor::presetup();  // must be run first
-        float temp_min_adc = 650.0;  // from step #2 above. max value set in function call below  // 650 to 713  (earlier i was seeing 662 min. hmm)
-        float noise_margin_adc = 45.0;  // how much the min value can jump to above the number above due to noise
-        float m = 1000.0 * (3.3 - 0.554) / ((static_cast<float>(adcrange_adc) - temp_min_adc) * (4.5 - 0.554)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
+        float temp_min_adc = 650.0f;  // from step #2 above. max value set in function call below  // 650 to 713  (earlier i was seeing 662 min. hmm)
+        float noise_margin_adc = 45.0f;  // how much the min value can jump to above the number above due to noise
+        float m = 1000.0f * (3.3f - 0.554f) / ((static_cast<float>(adcrange_adc) - temp_min_adc) * (4.5f - 0.554f)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
         float b = -1.0 * temp_min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
         set_conversions(m, b);
-        set_abslim_native(0.0, static_cast<float>(adcrange_adc));  // set native abslims after m and b are set.  si abslims will autocalc
-        set_oplim_native(temp_min_adc, 2176.0);  // from step #3 above  // set this after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
-        set_oplim(0.0, NAN);  // now set just the si op minimum (only) to exactly zero. This will cause native op minimum to autocalc such that any small errors don't cause our si oplim to be nonzero
-        set_ema_alpha(0.03);         // from step #1 above  // 2024 was 0.055
+        set_abslim_native(0.0f, static_cast<float>(adcrange_adc));  // set native abslims after m and b are set.  si abslims will autocalc
+        set_oplim_native(temp_min_adc, 2176.0f);  // from step #3 above  // set this after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
+        set_oplim(0.0f, NAN);  // now set just the si op minimum (only) to exactly zero. This will cause native op minimum to autocalc such that any small errors don't cause our si oplim to be nonzero
+        set_ema_alpha(0.03f);         // from step #1 above  // 2024 was 0.055
         set_margin(from_native(noise_margin_adc));    // max acceptible error when checking psi levels
         set_zeropoint(from_native(opmin_native() + noise_margin_adc / 2.0f));   // tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
         _default_value_si = opmin();
@@ -724,12 +724,12 @@ class BrakePositionSensor : public AnalogSensor {
         AnalogSensor::presetup();  // must be run first
         _dir = TransDir::Rev;  // causes percent conversions to use inverted scale 
         _convmethod = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
-        set_abslim(1.22, 7.26, false);        // from step #1   // need false argument to prevent autocalculation
-        set_abslim_native(1885, 2933, false); // from step #2   // need false argument to prevent autocalculation
-        set_oplim(1.22, 5.9f);                // from step #13  !! 250720 not yet finalized! (do step 13)
-        set_zeropoint(5.7);                   // from step #12
-        set_ema_alpha(0.35);
-        set_margin(0.2);  // in inches
+        set_abslim(1.22f, 7.26f, false);        // from step #1   // need false argument to prevent autocalculation
+        set_abslim_native(1885.0f, 2933.0f, false); // from step #2   // need false argument to prevent autocalculation
+        set_oplim(1.22f, 5.9f);                // from step #13  !! 250720 not yet finalized! (do step 13)
+        set_zeropoint(5.7f);                   // from step #12
+        set_ema_alpha(0.35f);
+        set_margin(0.2f);  // in inches
         _default_value_si = opmax();
         AnalogSensor::postsetup();  // must be run last
     }
@@ -744,14 +744,14 @@ class PulseSensor : public Sensor {
   protected:
     Timer _pulsecount_timer{1000000};  // one second timer
     bool _low_pulse = true, _pin_level, _pin_inactive = false, _stopped = false;
-    float _ema_tau_min_us = 1000.0f, _ema_tau_max_us = 100000.0f;  // default ema tau parameters. must be initialized in child classes!
-    float _freqfactor = 1.0;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
+    float _ema_tau_min_us = 1000.0f, _ema_tau_max_us = 100000.0f, _ema_alpha_max = 0.95f;  // default ema tau parameters. must be initialized in child classes!
+    float _freqfactor = 1.0f;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
     Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
     
     // we maintain our min and max pulse period, for each pulse sensor
     // absmin_us is calculated based on absmax_native (Hz) using overloaded set_abslim_native() function
     // absmax_us is our stop timeout, and not based on absmin_native (Hz). It must be set using set_abmax_us() function
-    float _us, _absmin_us, _absmax_us = 1500000; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency.  max is chosen just arbitrarily
+    float _us, _absmin_us, _absmax_us = 1500000.0f; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency.  max is chosen just arbitrarily
     int _absmin_us_int;  // int version keeps isr from needing to cast to int (8-15 cycles). maintained in abslim setter to always track _absmin_us float value.
     volatile int64_t _isr_time_last_us = 0;
     volatile int _isr_delta_us = 0;
@@ -790,20 +790,16 @@ class PulseSensor : public Sensor {
     // modified ema filter where filtering is smoother the less often it's called
     // tau value is time it takes for filter to reach 63% of the way toward a new value after a step change
     // smaller tau is more responsive, larger tau is smoother
-    float scaling_ema_filt(float raw, float filt, float dt, float tau) {  // dt and tau must both be in same unit of time
+    float scaling_ema_filt(float raw, float filt, float dt, float tau, float maxalpha) {  // dt and tau must both be in same unit of time
         if (std::isnan(dt) || std::isnan(tau)) return filt; // bypass if invalid values given
         dt = std::fmaxf(0.0f, dt);                          // pretend negative times are 0
         if (iszero(dt) || iszero(tau + dt)) return filt;    // bypass if no time passed or we would div by zero
-        // optional: alpha = std::fminf(alpha, 0.95f);      // cap responsiveness after long gaps
         float alpha = dt / (tau + dt);                      // alpha = dt / (tau + dt)  ∈ (0,1)
+        alpha = std::fminf(alpha, maxalpha);                // (optional) cap responsiveness after long gaps
         return std::fmaf(alpha, (raw - filt), filt);        // filt + alpha*(raw - filt)
     }  // return filt * std::exp(-dt / tau) + raw * (1 - std::exp(-dt / tau));  // true math but it uses expensive exponents
 
-    float run_ema() override {
-        // assert(false);  // will crash always.  (just wanted to ensure this override is working as expected - it is)
-        return scaling_ema_filt(raw(), val(), _us, _ema_tau_us);
-    }  // override ema calculator
-
+    float run_ema() override { return scaling_ema_filt(raw(), val(), _us, _ema_tau_us, _ema_alpha_max); }  // override ema calculator
     void set_pin_inactive() {
         static bool pinlevel_last;
         if (pinlevel_last != _pin_level) {
@@ -814,16 +810,16 @@ class PulseSensor : public Sensor {
         pinlevel_last = _pin_level;
     }
     float us_to_hz(float arg) {
-        if (std::isnan(arg)) return 0.0;  // if invalid argument, return zero, a special value meaning we timed out
+        if (std::isnan(arg)) return 0.0f;  // if invalid argument, return zero, a special value meaning we timed out
         if (iszero(arg)) return NAN;      // zero argument is an invalid value
-        return 1000000.0 / arg;           // convert units of valid value
+        return 1000000.0f / arg;           // convert units of valid value
         // ezread.squintf("Err: %s us_to_hz() reciprocal of zero\n", _short_name.c_str());
         // return absmax();
     }
     float hz_to_us(float arg) { return us_to_hz(arg); }  // the same math converts in either direction
     void stopped_update() {
         if (std::isnan(val())) _stopped = false;      // on invalid value return false return for safety reasons
-        else if (iszero(val() - opmin())) _stopped = true; // return true if val equals opmin, avoiding float near-zero comparison errors 
+        // else if (iszero(val() - opmin())) _stopped = true; // return true if val equals opmin, avoiding float near-zero comparison errors 
         else _stopped = (val() - opmin() <= margin());       // return whether val is within margin of opmin
     }
   public:
@@ -873,10 +869,9 @@ class PulseSensor : public Sensor {
     }
     // this function allows direct setting of the stop timeout value (pulse-to-pulse time at which sensor will be considered stopped)
     void set_absmax_us(float arg_max) { _absmax_us = arg_max; }
-    bool stopped() { return _stopped; }
-    bool* stopped_ptr() { return &_stopped; }
     // bool stopped() { return (esp_timer_get_time() - _last_read_time_us > opmax_native()); }  // alternate approach
     void set_ema_tau(float newtau) { _ema_tau_us = constrain(newtau, _ema_tau_min_us, _ema_tau_max_us); }
+    void set_ema_alphamax(float newmax) { _ema_alpha_max = constrain(newmax, 0.0f, 1.0f); }
     void set_ema_taulim(float newmin, float newmax) {
         _ema_tau_min_us = newmin;
         _ema_tau_max_us = newmax;
@@ -885,8 +880,10 @@ class PulseSensor : public Sensor {
     float ema_tau() { return _ema_tau_us; }
     float ema_tau_min() { return _ema_tau_min_us; }
     float ema_tau_max() { return _ema_tau_max_us; }
-    bool* pin_inactive_ptr() { return &_pin_inactive; }
+    bool stopped() { return _stopped; }
+    bool* stopped_ptr() { return &_stopped; }
     bool* pin_level_ptr() { return &_pin_level; }
+    bool* pin_inactive_ptr() { return &_pin_inactive; }
     float absmin_us() { return _absmin_us; }
     float absmax_us() { return _absmax_us; }
     float absmin_ms() { return _absmin_us / 1000.0f; }
@@ -901,7 +898,7 @@ class Tachometer : public PulseSensor {
   public:
     sens _senstype = sens::tach;
     float _governmax_rpm;
-    float _idle = 590.0, _idle_cold = 680.0, _idle_hot = 500.0;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer    
+    float _idle = 590.0f, _idle_cold = 680.0f, _idle_hot = 500.0f;  // , _mfactor = 1.0;  // m is si/native conversion factor, informs transducer    
     Tachometer(int arg_pin, float arg_freqfactor) : PulseSensor(arg_pin, arg_freqfactor) {  // where actual_hz = pulses_hz * freqfactor (due to external circuitry or magnet arrangement)
         _long_name = "Tachometer";
         _short_name = "tach";
@@ -913,20 +910,21 @@ class Tachometer : public PulseSensor {
         // note the max pulse freq at the mcu pin is max-rpm/m , or:  pinmax hz = 4500 rpm * (1/480) hz/rpm = 9.375 hz  (max freq at pin)
         // bc of the divider max freq in the wire is max-pin-hz/freqfactor , or:  wiremax hz = 9.375 hz / 0.125 = 75 hz  (max freq in wire)
         // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=220nF (round up)
-        float mfact = 60.0 / _freqfactor;  // 1 Hz = 1 pulse/sec * 60 sec/min / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
+        float mfact = 60.0f / _freqfactor;  // 1 Hz = 1 pulse/sec * 60 sec/min / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
         set_conversions(mfact, 0.0f);
         set_abslim(0.0f, 4800.0f); // estimating the highest rpm we could conceivably ever see from the engine. but may lower b/c the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
         set_absmax_us(430000.0f);  // this sets the max pulse-to-pulse period to be considered as stopped.
         set_oplim(0.0f, 3600.0f);  // aka redline,  Max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
-        _governmax_rpm = opmax() * governor / 100.0;
+        _governmax_rpm = opmax() * governor / 100.0f;
         set_ema_taulim(500.0f, 200000.0f);
         set_ema_tau(16000.0f);       // set filter tau factor
+        set_ema_alphamax(0.95f);
         set_margin(15.0f);
         PulseSensor::postsetup();
     }
     void set_val_from_pin() override {
         PulseSensor::set_val_from_pin();
-        _governmax_rpm = opmax() * governor / 100.0;
+        _governmax_rpm = opmax() * governor / 100.0f;
     }
     float idle() { return _idle; }
     float* idle_ptr() { return &_idle; }
@@ -935,8 +933,8 @@ class Tachometer : public PulseSensor {
     float governmax() { return _governmax_rpm; }
     float* governmax_ptr() { return &_governmax_rpm; }
     void set_idle(float newidle) { _idle = constrain(newidle, opmin(), opmax()); }
-    void set_idlecold(float newidlecold) { _idle_cold = constrain(newidlecold, _idle_hot + 1.0, opmax()); }
-    void set_idlehot(float newidlehot) { _idle_hot = constrain(newidlehot, opmin(), _idle_cold - 1.0); }
+    void set_idlecold(float newidlecold) { _idle_cold = constrain(newidlecold, _idle_hot + 1.0f, opmax()); }
+    void set_idlehot(float newidlehot) { _idle_hot = constrain(newidlehot, opmin(), _idle_cold - 1.0f); }
     // bool stopped() override {  // debugging bad stopped performance
     //     if (bootbutton_val) 
     //       ezread.squintf("tac.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), opmin(), _margin, (int)(std::abs(val() - opmin()) <= _margin));  // spam catcher works on this, (w/o bootbutton condition)
@@ -961,7 +959,7 @@ class Speedometer : public PulseSensor {
     Speedometer() = delete;
     void setup() {
         PulseSensor::presetup();
-        float mfact = 3600.0 * 20 * M_PI / (_freqfactor * 12 * 5280); // 1 Hz = 1 pulse/sec * 3600 sec/hr * 20*pi in/whlrot * 1/2 whlrot/pulse * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.785 mph/Hz)
+        float mfact = 3600.0f * 20.0f * M_PI / (_freqfactor * 12.0f * 5280.0f); // 1 Hz = 1 pulse/sec * 3600 sec/hr * 20*pi in/whlrot * 1/2 whlrot/pulse * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.785 mph/Hz)
         // note the max pulse freq is max-mph/m , or:  pinmax hz = 20 mph * (1 / 1.785) hz/mph = 11.2 hz  (max freq at pin and in wire)
         // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=1uF
         set_conversions(mfact, 0.0f);
@@ -970,6 +968,7 @@ class Speedometer : public PulseSensor {
         set_oplim(0.0f, 15.0f);    // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         set_ema_taulim(10000.0f, 1e8f);
         set_ema_tau(5e7f);      // set filter tau factor
+        set_ema_alphamax(0.95f);
         // set_ema_alpha(0.003f);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(0.30f);
         // _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
@@ -1183,10 +1182,10 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     float absmax_us = 2120.0f; // max configurable pulsewidth for the hotrc
     float pc[NumAxes][NumValues], sim_raw_pc[NumAxes]; // values range from -100% to 100%. pc[][] are all derived or auto-assigned. sim_raw_pc[] are simulated inputs
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
-        {  969, 1473, 1977, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        { 1080, 1583, 2087, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2, // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        { 1200, 1606, 1810, 0, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2, // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        { 1300, 1505, 1710, 0, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2, // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        {  969.0f, 1473.0f, 1977.0f, 0, 1500, 0, 0, 0 },     // (974-1981) 1000-30+1, 1500-30,  2000-30-2   // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        { 1080.0f, 1583.0f, 2087.0f, 0, 1500, 0, 0, 0 },     // (1084-2091) 1000+80+1, 1500+80,  2000+80-2, // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        { 1200.0f, 1606.0f, 1810.0f, 0.0f, 1500, 0, 0, 0 },     // (1204-1809) 1000+150+1,   1500, 2000-150-2, // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
+        { 1300.0f, 1505.0f, 1710.0f, 0.0f, 1500, 0, 0, 0 }, };  // (1304-1707) 1000+250+1,   1500, 2000-250-2, // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
         // note: opmin/opmax range should be set to be just smaller than the actual measured range, to prevent out-of-range errors. this way it will reach all the way to 100%
         //   margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
     float deadband_pc, deadband_us = 20.0f;  // size of each side of the center deadband in us.  pc value is derived  // was 15
@@ -1222,9 +1221,9 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             us[ch][OpMax] = constrain(us[ch][OpMax], us[ch][Cent] + us[ch][Margin], absmax_us);
         }
         for (int axis=Horz; axis<=Vert; axis++) {  // derive pc values for the 2 analog directional axes
-            pc[axis][OpMin] = -100.0;
-            pc[axis][Cent] = 0.0;
-            pc[axis][OpMax] = 100.0;
+            pc[axis][OpMin] = -100.0f;
+            pc[axis][Cent] = 0.0f;
+            pc[axis][OpMax] = 100.0f;
             pc[axis][Margin] = us_to_pc(axis, us[axis][Margin]);
         }
         set_deadband_us(deadband_us);  // set deadband to itself, b/c the setter forces derivation of percent value

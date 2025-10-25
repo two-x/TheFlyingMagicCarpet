@@ -660,14 +660,14 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
     viewport* vp;
     EZReadConsole* ez;
     void draw_scrollbar(LGFX_Sprite* spr, uint8_t color) {  // this runs but is not finished and doesn't do anything
-        int cent = (int)((float)vp->h * 0.125) - 6;
+        int cent = (int)((float)vp->h * 0.125f) - 6;
         for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
-        cent = (int)((float)vp->h * 0.375) - 6;
+        cent = (int)((float)vp->h * 0.375f) - 6;
         for (int arrow=0; arrow<3; arrow++) {
             int my_y = cent + arrow * 5 - 4;    
             for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, my_y + i, i + 1, color);
         }
-        cent = (int)((float)vp->h * 0.625) - 6;
+        cent = (int)((float)vp->h * 0.625f) - 6;
         for (int arrow=0; arrow<3; arrow++) {
             int my_y = cent + arrow * 5 - 4;    
             for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, my_y, i + 1, color);
@@ -779,7 +779,7 @@ class PanelAppManager {
     void calc_fps() {
         int64_t now = fps_timer.elapsed();
         myfps = (float)(now - fps_mark);
-        if (myfps > 0.001) myfps = 1000000 / myfps;
+        if (myfps > 0.001f) myfps = 1000000.0f / myfps;
         fps_mark = now;
     }
     void display_fps(LGFX_Sprite* spr) {
@@ -803,8 +803,8 @@ class PanelAppManager {
     void draw_mule(LGFX_Sprite* spr) {
         if (mule_drawn) return;
         spr->fillSprite(BLK);
-        float w = 145.0, h = 74.0;
-        spr->pushImageRotateZoom(85 + vp.x, 85 + vp.y, w / 2, h / 2, 0, 1, 1, w, h, mulechassis_145x74x8, BLK);
+        float w = 145.0f, h = 74.0f;
+        spr->pushImageRotateZoom(85.0f + vp.x, 85.0f + vp.y, w / 2.0f, h / 2.0f, 0.0f, 1.0f, 1.0f, w, h, mulechassis_145x74x8, BLK);
         mule_drawn = true;
     }
     int check_cycle_req() {  // check for user input wanting to cycle the animation (in fullscreen animation mode)

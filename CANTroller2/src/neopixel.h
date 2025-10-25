@@ -86,15 +86,15 @@ uint8_t NeopixelStrip::get_sat(neorgb_t rgb) { return static_cast<uint8_t>(((Hsl
 uint8_t NeopixelStrip::get_brite(neorgb_t rgb) { return static_cast<uint8_t>(((HslColor)rgb).L * 255); } // Convert saturation from float [0.0, 1.0] to 16-bit integer [0, 65535]
 
 // recolor sets overall brightness and reduces saturation to match the percents given, and returns the modified color. pass in 100.0 to leave either brightness or sat unchanged
-neorgb_t NeopixelStrip::recolor(neorgb_t orig, float bright_pc=100.0, float sat_pc=100.0) {
-    uint8_t newbrite = (uint8_t)((float)(get_brite(orig)) * bright_pc / 100.0);  // uint8_t newbrite = (uint8_t)(bright_pc / 100.0);
-    uint8_t newsat = (uint8_t)((float)(get_sat(orig)) * sat_pc / 100.0);
+neorgb_t NeopixelStrip::recolor(neorgb_t orig, float bright_pc=100.0f, float sat_pc=100.0f) {
+    uint8_t newbrite = (uint8_t)((float)(get_brite(orig)) * bright_pc / 100.0f);  // uint8_t newbrite = (uint8_t)(bright_pc / 100.0);
+    uint8_t newsat = (uint8_t)((float)(get_sat(orig)) * sat_pc / 100.0f);
     return color_to_neo(hsv_to_rgb<uint32_t>(get_hue(orig), newsat, newbrite));
 }
-uint32_t NeopixelStrip::recolor(uint32_t orig888, float bright_pc=100.0, float sat_pc=100.0) {
+uint32_t NeopixelStrip::recolor(uint32_t orig888, float bright_pc=100.0f, float sat_pc=100.0f) {
     neorgb_t orig = color_to_neo(orig888);
-    uint8_t newbrite = (uint8_t)((float)(get_brite(orig)) * bright_pc / 100.0);  // uint8_t newbrite = (uint8_t)(bright_pc / 100.0);
-    uint8_t newsat = (uint8_t)((float)(get_sat(orig)) * sat_pc / 100.0);
+    uint8_t newbrite = (uint8_t)((float)(get_brite(orig)) * bright_pc / 100.0f);  // uint8_t newbrite = (uint8_t)(bright_pc / 100.0);
+    uint8_t newsat = (uint8_t)((float)(get_sat(orig)) * sat_pc / 100.0f);
     return hsv_to_rgb<uint32_t>(get_hue(orig), newsat, newbrite);
 }
 void NeopixelStrip::recolor_idiots(int _idiot) {  // call w/ -1 to recolor all idiots
@@ -173,7 +173,7 @@ void NeopixelStrip::heartbeat_update() {
         for (int i=0; i<heartcount; i++) {
             brt_last[i] = brt[i];
             if (fadeTimer.expired()) brt[i] = lobright_heart[i];
-            else brt[i] = (int)(lobright_heart[i] + std::max(0.0f, (hibright_heart[i] - lobright_heart[i]) * (float)(1.0 - ((state == 1) ? 1.5 : 1.0) * fadeTimer.elapsed() / fadeTimer.timeout())));
+            else brt[i] = (int)(lobright_heart[i] + std::max(0.0f, (hibright_heart[i] - lobright_heart[i]) * (float)(1.0f - ((state == 1) ? 1.5f : 1.0f) * fadeTimer.elapsed() / fadeTimer.timeout())));
             if (brt[i] > brt_last[i]) brt[i] = brt_last[i];
         }
     }
@@ -198,7 +198,7 @@ bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolst
     fset[_idiot][fcount] = 0;
     cidiot[_idiot][clast] = color_to_neo((uint32_t)0);
     if (use_tft_colors_for_neo) cidiot[_idiot][cnormal] = color_to_neo(color332);
-    else cidiot[_idiot][cnormal] = color_to_neo((hsv_to_rgb<uint32_t>((uint16_t)(_idiot * 65563.0 / idiotcount), 255, 255)));
+    else cidiot[_idiot][cnormal] = color_to_neo((hsv_to_rgb<uint32_t>((uint16_t)(_idiot * 65563.0f / idiotcount), 255, 255)));
     setlogic(_idiot, startboolstate);
     for (int pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
     recolor_idiots(_idiot);
@@ -310,7 +310,7 @@ void NeopixelStrip::sleepmode_ena(bool ena) {
 void NeopixelStrip::knightrider() {
     static Timer knighttimer{150000};
     static int tail = 4, posn = heartcount - 1, first = heartcount - 1, dir = 1; // dir=1 for right, dir=-1 for left
-    static const float maxspeed = 20.0, minspeed = 100.0;  // fastest and slowest speed (milliseconds per step)
+    static const float maxspeed = 20.0f, minspeed = 100.0f;  // fastest and slowest speed (milliseconds per step)
     static const uint32_t color = 0xff0000;                // red color
     float speed = maxspeed + (minspeed - maxspeed) * (float)posn / (striplength - 1); // Calculate the speed based on the position (decelerates as it moves)
     if (knighttimer.expireset()) {      // if (knighttimer.elapsed((int)moveInterval)) {

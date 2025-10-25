@@ -10,11 +10,11 @@ enum brakemotor_types { Nil=-1, Thomson=0, MotorFactoryStore=1, GoMotorWorld=2, 
     
 float temp_lims_f[NumTempCategories][NumMotorVals] {
     // changed opmin values all to 40 to avoid idiot lights. engine opmin was 125, wheel was 50, brake was 45
-    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatUnknown] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
-    {  40.0,  77.0, 120.0, 135.0, NAN, -67.0, 257.0, 2.0 },  // [CatAmbient] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
-    {  40.0, 178.0, 205.0, 218.0, NAN, -67.0, 257.0, 2.0 },  //  [CatEngine] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
-    {  40.0,  77.0, 170.0, 145.0, NAN, -67.0, 257.0, 2.0 },  //   [CatWheel] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin] (applies to all wheels)
-    {  45.0,  77.0, 115.0, 125.0, NAN, -67.0, 257.0, 2.0 },  //   [CatBrake] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0f,  77.0f, 120.0f, 135.0f, NAN, -67.0f, 257.0f, 2.0f },  // [CatUnknown] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0f,  77.0f, 120.0f, 135.0f, NAN, -67.0f, 257.0f, 2.0f },  // [CatAmbient] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0f, 178.0f, 205.0f, 218.0f, NAN, -67.0f, 257.0f, 2.0f },  //  [CatEngine] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0f,  77.0f, 170.0f, 145.0f, NAN, -67.0f, 257.0f, 2.0f },  //   [CatWheel] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin] (applies to all wheels)
+    {  45.0f,  77.0f, 115.0f, 125.0f, NAN, -67.0f, 257.0f, 2.0f },  //   [CatBrake] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
 };  // float* degf[(int)loc::NumTempLocatio  ns][NumMotorVals];
 
 class TemperatureSensor {

@@ -113,13 +113,13 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
     }
     maf_velo_last = new_velo;
     maf_map_last = new_map;
-    float T = 0.556 * (temp - 32.0) + 273.15;  // in K.  This converts from degF to K
-    float R = 287.1;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
-    float v = 0.447 * (std::isnan(_airvelo) ? new_velo : _airvelo); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
+    float T = 0.556f * (temp - 32.0f) + 273.15f;  // in K.  This converts from degF to K
+    float R = 287.1f;  // R (for air) in J/(kg·K) ( equivalent to 8.314 J/(mol·K) )  1 J = 1 kg*m2/s2
+    float v = 0.447f * (std::isnan(_airvelo) ? new_velo : _airvelo); // in m/s   1609.34 m/mi * 1/3600 hr/s = 0.447
     float Ain2 = M_PI;  // in in2    1.0^2 in2 * pi  // will still need to divide by 1550 in2/m2
-    float P = 101325.0 * (std::isnan(_map) ? new_map : _map);  // in Pa   101325 Pa/atm  1 Pa = 1 J/m3
-    float maf = v * Ain2 * P * 1000.0 / (R * T * 1550);  // mas\\s air flow in grams per second (g/s)   (1000 g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
-    if (std::abs(maf) < 0.001) maf = 0;
+    float P = 101325.0f * (std::isnan(_map) ? new_map : _map);  // in Pa   101325 Pa/atm  1 Pa = 1 J/m3
+    float maf = v * Ain2 * P * 1000.0f / (R * T * 1550.0f);  // mas\\s air flow in grams per second (g/s)   (1000 g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
+    if (std::abs(maf) < 0.001f) maf = 0.0f;
     // ezread.squintf("maf: %.3lf\n", maf);
     return maf;
 }
@@ -351,7 +351,7 @@ class Starter {
     }
   public:
     int now_req = ReqNA;
-    float run_timeout = 3.5, run_lolimit = 1.0, run_hilimit = 10.0;;  // timeout for motor to shut off automatically, in seconds
+    float run_timeout = 3.5f, run_lolimit = 1.0f, run_hilimit = 10.0f;;  // timeout for motor to shut off automatically, in seconds
     bool req_active = false;  // for idiotlight display
     bool motor = LOW;         // motor is the current state of starter voltage. set in this class only
 
