@@ -1406,9 +1406,12 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             newfilt_pc[Horz] = calc_sim_direction(Horz); // horz: always overwrite filt pc value, as it's either touch or pot simulated
             if (sim->simulating()) newfilt_pc[Vert] = calc_sim_direction(Vert); // vert: only overwrite filt pc value if touch sim enabled
         }
-        for (int axis = Horz; axis <= Vert; axis++) { // always constrain both axes
-            if (std::isnan(newfilt_pc[axis])) ezread.squintf(ezread.madcolor, "err: hrc %s axis=NAN\n", (axis == Horz) ? "Horz" : "Vert");
-            else pc[axis][Filt] = constrain(newfilt_pc[axis], pc[axis][OpMin], pc[axis][OpMax]);
+        static bool err_printed[NumAxes] = { false, false }; // to prevent console spam if an axis becomes indeterminate
+        for (int axis = Horz; axis <= Vert; axis++) { // check each axis has assigned value. if so, constrain it. if not, report it
+            bool in_error = std::isnan(newfilt_pc[axis]);
+            if (!in_error) pc[axis][Filt] = constrain(newfilt_pc[axis], pc[axis][OpMin], pc[axis][OpMax]); // always constrain axis value
+            else if (!err_printed[axis]) ezread.squintf(ezread.madcolor, "err: hrc %s axis not determined\n", (axis == Horz) ? "Horz" : "Vert");
+            err_printed[axis] = in_error;
         }
     }
     // spike_filter() : I wrote this custom filter to clean up some specific anomalies i noticed with the pwm signals coming

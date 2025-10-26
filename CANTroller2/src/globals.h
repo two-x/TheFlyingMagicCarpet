@@ -681,7 +681,7 @@ class EZReadConsole {
             Serial.flush();
         }
     }
-    void debugf(const char* format, ...) {
+    void debugf(const char* format, ...) {  // same as squintf except w/ imposed limit on print frequency
         static Timer debugtimer{1000};
         if (!debugtimer.expired()) return;
         debugtimer.set(passthrutimer.timeout());
@@ -690,7 +690,18 @@ class EZReadConsole {
         va_start(args, format);
         vsnprintf(temp, sizeof(temp), format, args);
         va_end(args);
-        this->squintf(highlightcolor, "%s", temp);
+        this->squintf(defaultcolor, "%s", temp);
+    }
+    void debugf(uint8_t color, const char* format, ...) {  // debugf with color specified
+        static Timer debugtimer{1000};
+        if (!debugtimer.expired()) return;
+        debugtimer.set(passthrutimer.timeout());
+        char temp[100];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(temp, sizeof(temp), format, args);
+        va_end(args);
+        this->squintf(color, "%s", temp);
     }
     void lookback(int off) {
         int offset_old = offset;
