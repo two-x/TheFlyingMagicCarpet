@@ -165,11 +165,14 @@ class Device {
     src _source = src::Pin;
     bool _can_source[static_cast<int>(src::NumSources)] = { true, true, false, false };  // [Fixed/Pin/Sim/Pot]
     // source handling functions (should be overridden in child classes as needed)
+    virtual void update_source() = 0;
     virtual void set_val_from_pin() = 0;  // =0 makes pure virtual, thus *must* be overriden somewhere down lineage
     virtual void set_val_from_fixed() = 0;
-    virtual void set_val_from_sim() = 0;
     virtual void set_val_from_pot() = 0;
-    virtual void update_source() = 0;
+    // set_val_from_sim() currently does nothing, as setters are called externally.  TODO: need to implement value change logic here, instead of values being directly set by touchscreen class
+    // note for devices not having adjustments in the UI, must override this to set them to a desired fixed value
+    virtual void set_val_from_sim() { }
+    // older approach: //  void set_val_from_sim() override { if (std::isnan(val())) _si.set(_default_value_si); }    // TODO: need to implement value change logic here, instead of values being directly set by touchscreen class
   public:
     std::string _long_name = "Unknown device";
     std::string _short_name = "device";
@@ -248,7 +251,6 @@ class Transducer : public Device {
     Param _si, _raw, _native;  // note _raw value is in si units, shares the same abs limits, and only relevant for sensors (TODO should be in sensors class?)
     TransDir _dir = TransDir::Fwd;
     void set_val_from_fixed() override { _si.set(_default_fixed_si); }  // if sensor set to fixed value, leave value as it is (ie do nothing)
-    void set_val_from_sim() override { if (std::isnan(val())) _si.set(_default_value_si); }    // TODO: need to implement value change logic here, instead of values being directly set by touchscreen class
     void set_val_from_pot() override { _si.set(_pot->mapToRange(_opmin, _opmax)); } // pot spoofs filtered si value directly.
   public:
     // operator float() { return _si.val(); }
@@ -509,6 +511,7 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
     float read_i2c_sensor() {
         return _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
     }
+    void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:
     static constexpr uint8_t addr = 0x28;
     sens _senstype = sens::airvelo;
@@ -538,6 +541,7 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
     float read_i2c_sensor() {
         return _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
     }
+    void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:
     static constexpr uint8_t addr = 0x18;  // note: would all MAPSensors have the same address?  ANS: yes by default, or an alternate fixed addr can be hardware-selected by hooking a pin low or something
     sens _senstype = sens::mapsens;
@@ -583,13 +587,15 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
     }
     void postsetup() {  // must be run last by child class setup() function
         set_val_from_pin();
-        _detected = _last_read_valid;
-        if (!_detected) set_source(src::Fixed);
+        _detected = _last_read_valid;  // _detected just is whether it got a value outside of abslim range. so it can have false negatives, thus not super accurate
+        // if (!_detected) set_source(src::Fixed);
         print_config();
     }
     virtual void setup() = 0;  // child sensors must include a setup() function
 };
 class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level from the Mule battery
+  protected:
+    void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:
     sens _senstype = sens::mulebatt;
     CarBattery(int arg_pin) : AnalogSensor(arg_pin) {
@@ -599,7 +605,6 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
         _si_units = "V";
     }
     CarBattery() = delete;
-    // void set_val_from_sim() override { set_si(12.0, false); }  // When simulating battery, just lock it at 12V to avoid errors
     void setup() {  // ezread.squintf("%s..\n", _long_name.c_str());
         AnalogSensor::presetup();  // must be run first
         set_conversions(0.004075f, 0.0f);  // 240627 calibrated against my best multimeter: m = 0.004075
@@ -863,7 +868,7 @@ class PulseSensor : public Sensor {
         //     ezread.squintf(ezread.madcolor, "err: %s set abslim=(%.1f, %.1f) Hz\n", _short_name.c_str(), arg_min, arg_max);
         //     return;  // we can't accept 0 Hz for either absmin or absmax
         // }
-        
+
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
         if (!std::isnan(arg_max)) {  // now we set absmin_us to match absmax_native (hz). absmax_us is set in its own function
             _absmin_us = hz_to_us(_native.max());  // also set us limits from here, converting Hz to us. note min/max are swapped
