@@ -198,7 +198,7 @@ bool NeopixelStrip::newIdiotLight(int _idiot, uint8_t color332, bool startboolst
     fset[_idiot][fcount] = 0;
     cidiot[_idiot][clast] = color_to_neo((uint32_t)0);
     if (use_tft_colors_for_neo) cidiot[_idiot][cnormal] = color_to_neo(color332);
-    else cidiot[_idiot][cnormal] = color_to_neo((hsv_to_rgb<uint32_t>((uint16_t)(_idiot * 65563.0f / idiotcount), 255, 255)));
+    else cidiot[_idiot][cnormal] = color_to_neo((hsv_to_rgb<uint32_t>((uint16_t)(_idiot * 65563 / idiotcount), 255, 255)));
     setlogic(_idiot, startboolstate);
     for (int pg = 0; pg < fevpages; pg++) fevents[_idiot][pg] = 0;
     recolor_idiots(_idiot);

@@ -857,10 +857,13 @@ class PulseSensor : public Sensor {
     // Overload the normal function so we can also include absmin_us calculation. Note absmax_us is set with a separate function 
     void set_abslim_native(float arg_min, float arg_max, bool calc_si=true) override {  // use calc_si = false to avoid recalculating si value
         // ezread.squintf("pulse sensor abslim_native() called\n");  // just to check if inheritance is working right
-        if ((!std::isnan(arg_min) && iszero(arg_min)) || (!std::isnan(arg_max) && iszero(arg_max))) {
-            ezread.squintf(ezread.madcolor, "err: %s set abslim=(%.1f, %.1f) Hz\n", _short_name.c_str(), arg_min, arg_max);
-            return;  // we can't accept 0 Hz for either absmin or absmax
-        }
+        
+        // commented b/c why isn't it ok to have an abslim of 0?  TODO - review original intent.  Regardless, this approach shouldn't fail to set absmax just b/c absmin is zero
+        // if ((!std::isnan(arg_min) && iszero(arg_min)) || (!std::isnan(arg_max) && iszero(arg_max))) {
+        //     ezread.squintf(ezread.madcolor, "err: %s set abslim=(%.1f, %.1f) Hz\n", _short_name.c_str(), arg_min, arg_max);
+        //     return;  // we can't accept 0 Hz for either absmin or absmax
+        // }
+        
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
         if (!std::isnan(arg_max)) {  // now we set absmin_us to match absmax_native (hz). absmax_us is set in its own function
             _absmin_us = hz_to_us(_native.max());  // also set us limits from here, converting Hz to us. note min/max are swapped
