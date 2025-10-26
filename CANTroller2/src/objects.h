@@ -278,7 +278,10 @@ class Ignition {  // the ignition object controls the car ignition signal and th
             if (!sim.simulating(sens::joy) && hotrc.radiolost()) _panic_req = ReqOn;
         }
         if (_panic_req != ReqNA) set_panicstop((_panic_req == ReqOn) ? true : false);    // ezread.squintf("panic=%d\n", panicstop);
-        if (panicstop) _ign_req = ReqOff;  // panic stop causes ignition cut
+        if (panicstop) {
+            if (signal) ezread.squintf(ezread.madcolor, "ign kill due to panic stop condition\n");
+            _ign_req = ReqOff;  // panic stop causes ignition cut
+        }
         if (speedo.stopped() || panicTimer.expired()) set_panicstop(false);  // Cancel panic stop if car is stopped
         if (_ign_req != ReqNA) set_ignition((_ign_req == ReqOn) ? HIGH : LOW);
     }
