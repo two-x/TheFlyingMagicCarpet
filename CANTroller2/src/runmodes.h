@@ -5,7 +5,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     int _lowpower_delay_min = 20;      // Time of inactivity after entering standby mode before going to lowpower mode.  900sec = 15min
     int _screensaver_delay_min = 17;   // Time of inactivity after entering standby mode before starting screensaver turns on.  300sec = 5min
     int _joydir, _oldmode = LowPower;
-    bool _joy_has_been_centered = false, _we_just_switched_modes = true, _stoppedholdtimer_active = false;
+    bool _joy_has_been_centered = false, _we_just_switched_modes = true, _stoppedholdtimer_active = false, _stall_ch4start_timed_out = false;
     Timer _gestureFlyTimer{500000};    // Time allowed for joy mode-change gesture motions (Fly mode <==> Cruise mode) (in us)
   public:
     bool display_reset_requested = false;  // set these for the display to poll and take action, since we don't have access to that object, but it has access to us
@@ -34,7 +34,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             brake.setmode(run_motor_mode[runmode][_BrakeMotor]);
             steer.setmode(run_motor_mode[runmode][_SteerMotor]);
             watchdog.set_codestatus();
-            shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = false;  // clean up previous runmode values
+            shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = _stall_ch4start_timed_out = false;  // clean up previous runmode values
             _stoppedholdtimer_active = cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
             // ezread.squintf("runmode %s -> %s\n", modecard[_oldmode].c_str(), modecard[runmode].c_str());
         }
@@ -170,17 +170,24 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
         static Timer kill_ign_timer{3 * 60 * 1000000};  // set an X minute timer to kill the ignition, reducing risk of phantom starter bug
         if (_we_just_switched_modes) kill_ign_timer.reset();
-        if (!starter.motor && (starter.now_req != ReqOn)) {  // if starter is not running, or in-progress request to start running
-            if (brake.motormode != run_motor_mode[runmode][_BrakeMotor]) brake.setmode(run_motor_mode[runmode][_BrakeMotor]); // take back the brake after failed attempt to start
-            if (gas.motormode != run_motor_mode[runmode][_Throttle]) gas.setmode(run_motor_mode[runmode][_Throttle]); // take back the gas after failed attempt to start
-        }
-        if (starter.motor) {  // if starter is running
+        if (starter.motor) {  // if starter is running,
             if (hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());  // turn off starter if any Ch4 event occurred. Note keep this if separate, as it will reset the sw event
         } 
-        else if (hotrc.sw_event_filt(Ch4)) starter.request(ReqOn, hotrc.last_ch4_source());  // turn on starter if a stable, filtered Ch4 event occurred. Note keep this if separate, as it will reset the sw event
-        if (kill_ign_timer.expired()) {
-            ezread.squintf("stall mode %dmin ign-kill (avoid phantom start)\n", kill_ign_timer.timeout() / (60 * 1000000));
-            ignition.request(ReqOff);  // ignition kill will result in fall back to Standby mode
+        else {  // if starter is not running,
+            if (starter.now_req != ReqOn) {  // if there's no in-progress request to start the starter
+                if (brake.motormode != run_motor_mode[runmode][_BrakeMotor]) // if brake mode was taken over by a failed start attempt,
+                    brake.setmode(run_motor_mode[runmode][_BrakeMotor]);     // put it back to default
+                if (gas.motormode != run_motor_mode[runmode][_Throttle])     // if gas mode was taken over by a failed start attempt,
+                    gas.setmode(run_motor_mode[runmode][_Throttle]);         // put it back to default
+            }
+            if (!_stall_ch4start_timed_out) {  // if ch3-start functionality hasn't timed out,
+                if (hotrc.sw_event_filt(Ch4)) starter.request(ReqOn, hotrc.last_ch4_source());  // turn on starter if a stable Ch4 event occurred. Note keep this if separate, as it will reset the sw event
+            }
+        }
+        if (stall_ch4start_fn_timeout && !_stall_ch4start_timed_out && kill_ign_timer.expired()) {
+            _stall_ch4start_timed_out = true;
+            ezread.squintf("stall mode %dmin ch3-start fn timed out\n", kill_ign_timer.timeout() / (60 * 1000000));
+            // ignition.request(ReqOff);  // ignition kill will result in fall back to Standby mode
         }
         if (!tach.stopped()) runmode = Hold;  // If we started the car, enter hold mode
     }
