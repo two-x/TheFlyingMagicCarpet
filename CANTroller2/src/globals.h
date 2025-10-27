@@ -180,7 +180,6 @@ constexpr float float_conversion_zero = 0.001f;
 constexpr int unlikely_int = -92935762; // random ass unlikely value for detecting unintended arguments
 int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;    // when looptime_print == 1, will linefeed after printing loops taking > this value. set to 0 linefeeds all prints
-float flycruise_vert_margin_pc = 3.0f;  // margin of error (in percent) for determining hard brake value for dropping out of cruise mode
 float cruise_holdtime_attenuator_pc = 10.0f; // adjustment rate multiplier for cruise HoldTime mode
 float cruise_onepull_attenuator_pc = 14.0f;  // adjustment rate multiplier for cruise OnePull mode
 float maf_min_gps = 0.0f;                // in grams per second
@@ -548,7 +547,7 @@ class EZReadConsole {
     // int boot_graceperiod_timeout_us = 3500000;  // spam detection is suspended for this long after intitial boot
   public:
     bool ezread_serial_console_enabled = console_enabled;  // when true then ezread.squintf() does the same thing as ezread.printf()
-    bool dirty = true, has_wrapped = false, graceperiod = true, graceperiod_valid = true;  // on boot spam detector is in a grace period for the boot messages, until end_bootgraceperiod() is called
+    bool dirty = true, has_wrapped = false, graceperiod = true, graceperiod_valid = true;  // on boot spam detector is in a grace period for the boot messages, boot graceperiod ends
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
     EZReadConsole() {}
     static constexpr int num_lines = 300;
@@ -560,6 +559,16 @@ class EZReadConsole {
     uint8_t defaultcolor = LGRY, happycolor = LGRN, sadcolor = ORG, madcolor = RED, announcecolor = LPUR, highlightcolor = DCYN;    // std::vector<std::string> textlines; // Ring buffer array
     bool spam_active = false, spam_notice_shown = false;
     float avg_spamrate_cps = 0.0f, window_accum_char = 0.0f;  // variables to dynamically manage moving average
+    void setup() {
+        std::string blank = "";
+        for (int i=0; i<bufferSize; i++) {
+            // linecolors[i] = MGRY;
+            this->printf("%s", blank.c_str());
+            linecolors[i] = defaultcolor;
+        }
+        // this->printf(highlightcolor, "Welcome to EZ-Read console\n");
+        dirty = true;
+    }
     void update() {
         if (graceperiod && !graceperiod_valid) {
             graceperiod = false;
@@ -579,9 +588,13 @@ class EZReadConsole {
             this->printf(sadcolor, "ezread spam suppression on\n");
         }
     }
-    void end_bootgraceperiod() {
-        graceperiod_valid = false;
+    void lookback(int off) {
+        int offset_old = offset;
+        offset = constrain(off, 0, bufferSize);  //  - ez->num_lines);
+        if (offset) offsettimer.reset();
+        if (offset != offset_old) dirty = true;
     }
+    void end_bootgraceperiod() { graceperiod_valid = false; }
   private:
     int last_allowed_us = 0;
     bool should_allow_output(size_t upcoming_chars) {
@@ -590,7 +603,15 @@ class EZReadConsole {
         if (!spam_active) return true;
         return passthrutimer.expireset();  // only return true upon passthru timer expiration, otherwise false
     }
-    void printf_impl(uint8_t _color, const char* format, va_list args) {  // this is not called directly but by one ots overloads below
+    std::string remove_nonprintable(const std::string& victim) {
+        std::string result;
+        for (char ch : victim) {
+            // if (ch == '\r' || ch == '\n') result += " | "; else
+            if (isprint(static_cast<unsigned char>(ch))) result += ch;
+        }
+        return result;
+    }
+    void ezprint_core(uint8_t _color, const char* format, va_list args) {  // core implementation of all prints to ez console. called only by overloads below
         char preview[100];
         va_list args_copy;
         va_copy(args_copy, args);
@@ -620,94 +641,59 @@ class EZReadConsole {
         }
         dirty = true;
     }
-    std::string remove_nonprintable(const std::string& victim) {
-        std::string result;
-        for (char ch : victim) {
-            // if (ch == '\r' || ch == '\n') result += " | "; else
-            if (isprint(static_cast<unsigned char>(ch))) result += ch;
-        }
-        return result;
-    }
-  public:
-    void setup() {
-        std::string blank = "";
-        for (int i=0; i<bufferSize; i++) {
-            // linecolors[i] = MGRY;
-            this->printf("%s", blank.c_str());
-            linecolors[i] = defaultcolor;
-        }
-        // this->printf(highlightcolor, "Welcome to EZ-Read console\n");
-        dirty = true;
-    }
-    void printf(const char* format, ...) {  // for if we're called with same arguments as printf would take
-        va_list args;
-        va_start(args, format);
-        printf_impl(defaultcolor, format, args);  // Use default color
-        va_end(args);
-    }
-    void printf(uint8_t color, const char* format, ...) {  // otherwise you can insert a custom color as the first argument
-        va_list args;
-        va_start(args, format);
-        printf_impl(color, format, args);  // Use provided color
-        va_end(args);
-    }
-    void squintf(const char* format, ...) {  // prints string to both serial and ezread consoles, except you have to squint to see it
-        va_list args;
-        va_start(args, format);
-        printf_impl(defaultcolor, format, args);
-        va_end(args);
-        if (ezread_serial_console_enabled) {
+    void squintf_core(uint8_t color, const char* format, va_list args) {  // core implementation for squintf overloads below
+        ezprint_core(color, format, args);  // send to ezread
+        if (ezread_serial_console_enabled) {  // also echo to Serial if enabled
             char temp[100];
-            va_list args;  // suggested by ai tool
-            va_start(args, format);  // suggested by ai tool
             vsnprintf(temp, sizeof(temp), format, args);
-            va_end(args);  // suggested by ai tool
             Serial.printf("%s", temp);
             Serial.flush();
         }
     }
-    void squintf(uint8_t color, const char* format, ...) {  // prints string to both serial and ezread consoles, except you have to squint to see it
-        va_list args;
-        va_start(args, format);
-        printf_impl(color, format, args);  
-        va_end(args);
-        if (ezread_serial_console_enabled) {
-            char temp[100];
-            va_list args;  // suggested by ai tool
-            va_start(args, format);  // suggested by ai tool
-            vsnprintf(temp, sizeof(temp), format, args);
-            va_end(args);  // suggested by ai tool
-            Serial.printf("%s", temp);
-            Serial.flush();
-        }
-    }
-    void debugf(const char* format, ...) {  // same as squintf except w/ imposed limit on print frequency
+    void debugf_core(uint8_t color, const char* format, va_list args) {  // core implementation for debugf overloads below
         static Timer debugtimer{1000};
         if (!debugtimer.expired()) return;
         debugtimer.set(passthrutimer.timeout());
         char temp[100];
-        va_list args;
-        va_start(args, format);
         vsnprintf(temp, sizeof(temp), format, args);
-        va_end(args);
-        this->squintf(defaultcolor, "%s", temp);
-    }
-    void debugf(uint8_t color, const char* format, ...) {  // debugf with color specified
-        static Timer debugtimer{1000};
-        if (!debugtimer.expired()) return;
-        debugtimer.set(passthrutimer.timeout());
-        char temp[100];
-        va_list args;
-        va_start(args, format);
-        vsnprintf(temp, sizeof(temp), format, args);
-        va_end(args);
         this->squintf(color, "%s", temp);
     }
-    void lookback(int off) {
-        int offset_old = offset;
-        offset = constrain(off, 0, bufferSize);  //  - ez->num_lines);
-        if (offset) offsettimer.reset();
-        if (offset != offset_old) dirty = true;
+  public:
+    void printf(const char* format, ...) {  // call with same arguments as printf would take
+        va_list args;
+        va_start(args, format);
+        ezprint_core(defaultcolor, format, args);  // use default color
+        va_end(args);
+    }
+    void printf(uint8_t color, const char* format, ...) {  // version with optional color as 1st argument
+        va_list args;
+        va_start(args, format);
+        ezprint_core(color, format, args);  // use provided color
+        va_end(args);
+    }
+    void squintf(const char* format, ...) {  // default-color overload
+        va_list args;
+        va_start(args, format);
+        squintf_core(defaultcolor, format, args);
+        va_end(args);
+    }
+    void squintf(uint8_t color, const char* format, ...) {  // explicit-color overload
+        va_list args;
+        va_start(args, format);
+        squintf_core(color, format, args);
+        va_end(args);
+    }
+    void debugf(const char* format, ...) {  // default-color overload
+        va_list args;
+        va_start(args, format);
+        debugf_core(defaultcolor, format, args);
+        va_end(args);
+    }
+    void debugf(uint8_t color, const char* format, ...) {  // explicit-color overload
+        va_list args;
+        va_start(args, format);
+        debugf_core(color, format, args);
+        va_end(args);
     }
 };
 static EZReadConsole ezread;
