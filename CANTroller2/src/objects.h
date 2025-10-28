@@ -309,7 +309,7 @@ class Starter {
         else ok_to_start = true;  // if no error checks were triggered then return that no anomalies were detected
 
         if (ok_to_start) {
-            ezread.squintf("starter turnon by %s.%d\n", startreqcard[_requestor].c_str(), code);  // maybe use ezread.squintf instead? (prints to both screen and console)
+            ezread.squintf("starter turnon by %s (%d)\n", startreqcard[_requestor].c_str(), code);  // maybe use ezread.squintf instead? (prints to both screen and console)
             if (push_gas_when_starting && check_brake_before_starting) gas.setmode(Starting);  // give it some gas if we're allowed to, unless brake wasn't checked (due to risk of lurching forward)
             _starterTimer.set((int64_t)(run_timeout * 1000000.0));  // if left on the starter will turn off automatically after X seconds
             motor = HIGH;                                           // ensure starter variable always reflects the starter status regardless who is driving it

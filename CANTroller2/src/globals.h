@@ -285,19 +285,18 @@ inline unsigned int constrain(unsigned int amt, unsigned int low, unsigned int h
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
     // if (std::isnan(x)) return NAN;  // TODO - there are consistent calls happening of map with x == NAN. Should we figure out why?
     if (std::isnan(x) || std::isnan(in_min) || std::isnan(in_max) || std::isnan(out_min) || std::isnan(out_max) || iszero(in_max - in_min)) {
-        
+        // // trying to track down where calls with NAN arguments are coming from
+        // //
         // static int64_t tlast = esp_timer_get_time();
         // int64_t now = esp_timer_get_time();
         // Serial.printf("err: %6dus map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", (int)((now - tlast) / 1), x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
         // tlast = now;
-        //
-        // Serial.printf("err: map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
-        
-        if (std::isnan(x)) return NAN;
-        if (iszero(in_max - in_min)) return out_max;
-        return NAN;  // instead of dividing by zero, return the highest valid result
+        // // Serial.printf("err: map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
+        return NAN;
     }
-    else return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
+    // if (std::isnan(x)) return NAN;
+    if (iszero(in_max - in_min)) return out_max;  // instead of dividing by zero, return the highest valid result
+    return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
 }
 inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
     if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
@@ -311,12 +310,14 @@ void write_pin(int pin, int val) {  if (pin >= 0 && pin != 255) digitalWrite (pi
 void set_pin(int pin, int mode, int val) { set_pin(pin, mode); write_pin(pin, val); }
 int read_pin(int pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1; }
 
-float convert_units(float from_units, float convert_factor, bool invert, float in_offset = 0.0f, float out_offset = 0.0f) {
-    if (!invert) return out_offset + convert_factor * (from_units - in_offset);
-    if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
-    Serial.printf("err: convert_units(%3.3f, %3.3f, %d, %3.3f, %3.3f) called\n", from_units, convert_factor, invert, in_offset, out_offset); // would prefer ezread if it were defined
-    return -1;
-}
+// unused
+// float convert_units(float from_units, float convert_factor, bool invert, float in_offset = 0.0f, float out_offset = 0.0f) {
+//     if (!invert) return out_offset + convert_factor * (from_units - in_offset);
+//     if (from_units - in_offset) return out_offset + convert_factor / (from_units - in_offset);
+//     Serial.printf("err: convert_units(%3.3f, %3.3f, %d, %3.3f, %3.3f) called\n", from_units, convert_factor, invert, in_offset, out_offset); // would prefer ezread if it were defined
+//     return -1;
+// }
+
 // Exponential Moving Average filter : smooth out noise on inputs. 0 < alpha < 1 where lower = smoother and higher = more responsive
 // pass in a fresh raw value, current filtered value, and alpha factor, new filtered value is returned
 float ema_filt(float _raw, float _filt, float _alpha) {
@@ -400,6 +401,35 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
         return true;
     }
 };
+// class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regular intervals
+//   protected:
+//     volatile int64_t end, timeout_us;
+//   public:
+//     AbsTimer() { reset(); }
+//     AbsTimer(int arg_timeout) { set ((int64_t)arg_timeout); }
+//     void IRAM_ATTR set (int64_t arg_timeout) {
+//         timeout_us = arg_timeout;
+//         end = esp_timer_get_time() + timeout_us;
+//     }
+//     void IRAM_ATTR set() { end = esp_timer_get_time() + timeout_us; }  // use to rezero the timer phase
+//     void IRAM_ATTR reset() {  // move expiration to the next timeout multiple
+//         int64_t now = esp_timer_get_time();
+//         if (now >= end) end += timeout_us * (1 + (now - end) / timeout_us);
+//     }
+//     bool IRAM_ATTR expired() { return esp_timer_get_time() >= end; }
+//     int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() + timeout_us - end; }
+//     int64_t timeout() { return timeout_us; }    
+//     // never finished writing this ...
+//     //
+//     // bool IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
+//     //     int64_t now_us = esp_timer_get_time();
+//     //     if (now >= end) 
+//     //     end += timeout_us * (1 + (now - end) / timeout_us);
+//     //     if (now_us < start_us + timeout_us) return false;
+//     //     start_us = now_us;
+//     //     return true;
+//     // }
+// };
 
 // color macros and color conversion functions. these are global to allow accessibility from multiple places
 //
@@ -493,36 +523,6 @@ void kick_inactivity_timer(int source=-1) {
     // ezread.squintf("kick%d ", source);
 }
 
-// class AbsTimer {  // absolute timer ensures consecutive timeouts happen on regular intervals
-//   protected:
-//     volatile int64_t end, timeout_us;
-//   public:
-//     AbsTimer() { reset(); }
-//     AbsTimer(int arg_timeout) { set ((int64_t)arg_timeout); }
-//     void IRAM_ATTR set (int64_t arg_timeout) {
-//         timeout_us = arg_timeout;
-//         end = esp_timer_get_time() + timeout_us;
-//     }
-//     void IRAM_ATTR set() { end = esp_timer_get_time() + timeout_us; }  // use to rezero the timer phase
-//     void IRAM_ATTR reset() {  // move expiration to the next timeout multiple
-//         int64_t now = esp_timer_get_time();
-//         if (now >= end) end += timeout_us * (1 + (now - end) / timeout_us);
-//     }
-//     bool IRAM_ATTR expired() { return esp_timer_get_time() >= end; }
-//     int64_t IRAM_ATTR elapsed() { return esp_timer_get_time() + timeout_us - end; }
-//     int64_t timeout() { return timeout_us; }    
-//     // never finished writing this ...
-//     //
-//     // bool IRAM_ATTR expireset() {  // Like expired() but immediately resets if expired
-//     //     int64_t now_us = esp_timer_get_time();
-//     //     if (now >= end) 
-//     //     end += timeout_us * (1 + (now - end) / timeout_us);
-//     //     if (now_us < start_us + timeout_us) return false;
-//     //     start_us = now_us;
-//     //     return true;
-//     // }
-// };
-
 // EZRead is a text-logging console for display on a small low-res LCD in a window (or fullscreen if you feel like coding it).
 //   the output text is very space-efficient, except the most recent message at bottom, which is zoomed in "enormously".
 //   the user-obsessed legibility of EZRead is something you'll write home to your parents about after every use
@@ -546,7 +546,6 @@ class EZReadConsole {
     Timer updatetimer{20000};
     // int boot_graceperiod_timeout_us = 3500000;  // spam detection is suspended for this long after intitial boot
   public:
-    bool ezread_serial_console_enabled = console_enabled;  // when true then ezread.squintf() does the same thing as ezread.printf()
     bool dirty = true, has_wrapped = false, graceperiod = true, graceperiod_valid = true;  // on boot spam detector is in a grace period for the boot messages, boot graceperiod ends
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
     EZReadConsole() {}
@@ -643,7 +642,7 @@ class EZReadConsole {
     }
     void squintf_core(uint8_t color, const char* format, va_list args) {  // core implementation for squintf overloads below
         ezprint_core(color, format, args);  // send to ezread
-        if (ezread_serial_console_enabled) {  // also echo to Serial if enabled
+        if (console_enabled) {  // also echo to Serial if enabled
             char temp[100];
             vsnprintf(temp, sizeof(temp), format, args);
             Serial.printf("%s", temp);

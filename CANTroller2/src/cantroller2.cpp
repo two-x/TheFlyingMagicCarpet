@@ -5,7 +5,7 @@ TaskHandle_t temptask = NULL, maftask = NULL, pushtask = NULL, drawtask = NULL;
 void setup() {             // runs once automatically immediately upon boot
     initialize_boot();     // set pins, read the basic switch (only possible w/o console), then start the serial console for boot msgs. run 1st!
     semaphore_setup();     // needed by display buffering, so run before screen setup
-    i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);  // run early as i2c addrs used to autodetect touchscreen type, & other sensors
+    i2c.setup(touch.addr, lightbox.addr, airvelo.addr, mapsens.addr);  // must run before touchscreen setup
     touch.setup(&lcd, &i2c); // set up touchscreen object. must run before screen driver, which is also driver for touchscreen
     screen.setup();        // start up the screen asap so we can monitor the boot progress on the ezread console. also inits touchscreen
     xTaskCreatePinnedToCore(push_task, "taskPush", 2048, NULL, 4, &pushtask, CONFIG_ARDUINO_RUNNING_CORE);     // display bus-push task  // 2048 works, 1024 failed
