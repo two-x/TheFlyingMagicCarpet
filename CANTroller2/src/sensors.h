@@ -1190,12 +1190,21 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     float absmax_us = 2120.0f; // max configurable pulsewidth for the hotrc
     float pc[NumAxes][NumValues], sim_raw_pc[NumAxes]; // values range from -100% to 100%. pc[][] are all derived or auto-assigned. sim_raw_pc[] are simulated inputs
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
-        {  969.0f, 1473.0f, 1977.0f, NAN, 1500.0f, NAN, NAN, NAN },    // (974-1981)  1000-30+1, 1500-30,  2000-30-2  // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        { 1080.0f, 1583.0f, 2087.0f, NAN, 1500.0f, NAN, NAN, NAN },    // (1084-2091) 1000+80+1, 1500+80,  2000+80-2, // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        { 1200.0f, 1606.0f, 1810.0f, NAN, 1500.0f, NAN, NAN, NAN },    // (1204-1809) 1000+150+1,   1500, 2000-150-2, // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        { 1300.0f, 1505.0f, 1710.0f, NAN, 1500.0f, NAN, NAN, NAN }, }; // (1304-1707) 1000+250+1,   1500, 2000-250-2, // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]
-        // note: opmin/opmax range should be set to be just smaller than the actual measured range, to prevent out-of-range errors. this way it will reach all the way to 100%
-        //   margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit, to prevent triggering errors
+
+        // 251028 tuned using flight handle #8
+        { 1000.0f, 1483.0f, 2005.0f, NAN, 1483.0f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
+        { 1120.0f, 1602.0f, 2125.0f, NAN, 1602.0f, NAN, NAN, NAN },    // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (1084-2091) 1000+80+1, 1500+80,  2000+80-2
+        { 1000.0f, 1483.0f, 2005.0f, NAN, 1483.0f, NAN, NAN, NAN },    // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1204-1809) 1000+150+1,   1500, 2000-150-2
+        { 1000.0f, 1483.0f, 2005.0f, NAN, 1483.0f, NAN, NAN, NAN }, }; // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1304-1707) 1000+250+1,   1500, 2000-250-2
+        
+        // pre-251028 values
+        // {  969.0f, 1473.0f, 1977.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
+        // { 1080.0f, 1583.0f, 2087.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (1084-2091) 1000+80+1, 1500+80,  2000+80-2
+        // { 1200.0f, 1606.0f, 1810.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1204-1809) 1000+150+1,   1500, 2000-150-2
+        // { 1300.0f, 1505.0f, 1710.0f, NAN, 1500.0f, NAN, NAN, NAN }, }; // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1304-1707) 1000+250+1,   1500, 2000-250-2
+        
+        // note: opmin/opmax here should be set to be just on the outside of the actual displayed values, to prevent out-of-range errors. this way it will reach all the way to 100%
+        //   margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit *across all hotrc handles*, to prevent triggering errors
     float deadband_pc, deadband_us = 20.0f;  // size of each side of the center deadband in us.  pc value is derived  // was 15
     float sim_deadband_pc = 10.0f;  // when simulating joystick using display buttons, allows rounding of near-zero values to zero
     float margin_us = 15.0f;    // all [Margin] values above are derived from this by calling derive()  // was 12

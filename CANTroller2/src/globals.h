@@ -546,6 +546,7 @@ class EZReadConsole {
     Timer updatetimer{20000};
     // int boot_graceperiod_timeout_us = 3500000;  // spam detection is suspended for this long after intitial boot
   public:
+    bool ezread_serial_console_enabled = console_enabled;  // when true then ezread.squintf() does the same thing as ezread.printf()
     bool dirty = true, has_wrapped = false, graceperiod = true, graceperiod_valid = true;  // on boot spam detector is in a grace period for the boot messages, boot graceperiod ends
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
     EZReadConsole() {}
@@ -642,7 +643,7 @@ class EZReadConsole {
     }
     void squintf_core(uint8_t color, const char* format, va_list args) {  // core implementation for squintf overloads below
         ezprint_core(color, format, args);  // send to ezread
-        if (console_enabled) {  // also echo to Serial if enabled
+        if (ezread_serial_console_enabled) {  // also echo to Serial if enabled
             char temp[100];
             vsnprintf(temp, sizeof(temp), format, args);
             Serial.printf("%s", temp);

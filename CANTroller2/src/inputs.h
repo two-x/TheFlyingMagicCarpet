@@ -81,8 +81,13 @@ class Encoder {
     volatile int _bounce_lock = EncB;           // which of the encoder A or B inputs is currently untrustworthy due to bouncing 
     static const int _bounce_expire_us = 10000;  // need to let bounce lock expire to reliably catch turn events in either direction on direction reversals
     volatile int _delta = 0;                     // keeps track of un-handled rotary clicks of the encoder. positive for CW clicks, Negative for CCW. 
-    int _a_pin, _b_pin, _sw_pin, _state = 0, _spintime_us = 1000000;  // how many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
+    int _a_pin, _b_pin, _sw_pin, _spintime_us = 1000000;  // how many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
     bool activity = false;
+    void read_pins() {
+        button.update();
+        enc_a = !digitalRead(_a_pin);
+        enc_b = !digitalRead(_b_pin);
+    }
     // encoder isr. note you gotta set the define EncoderPanasonicType to match your encoder type
     // if true, supports one type of cheap amazon black-pcb. 2024 one of these is mounted in the vehicle control enclosure
     //   * these guys hit a detent around each B transition, and A transitions in between detents
@@ -132,15 +137,17 @@ class Encoder {
     bool enc_a, val_a_isr = LOW;  // initializing HIGH sets us up right after a reboot with a bit of a hair trigger which turns left at the slightest touch
     bool enc_b, val_b_isr = HIGH;
     float _accel_max = 25.0f;      // maximum acceleration factor    
-    Encoder(int a, int b, int sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) { button.setup(_sw_pin); }
-    Encoder() = delete;           // must be instantiated with pins
-    
-    void setup() {
-        ezread.squintf(ezread.highlightcolor, "Encoder init\n");
+    Encoder(int a, int b, int sw) : _a_pin(a), _b_pin(b), _sw_pin(sw) {
         set_pin(_a_pin, INPUT_PULLUP);
         set_pin(_b_pin, INPUT_PULLUP);
-        button.setup();
-        // set_pin(_sw_pin, INPUT_PULLUP);  // the esp32 pullup is too weak. Use resistor
+        button.setup(_sw_pin);    // note: the esp32 pullup is too weak. Use resistor
+    }
+    Encoder() = delete;           // must be instantiated with pins
+    void setup() {
+        ezread.squintf(ezread.highlightcolor, "Encoder init\n");
+        read_pins();
+        val_a_isr = enc_a;
+        val_b_isr = enc_b;
         attachInterrupt(digitalPinToInterrupt(_a_pin), [this]{ _a_isr(); }, CHANGE); \
         attachInterrupt(digitalPinToInterrupt(_b_pin), [this]{ _b_isr(); }, CHANGE);
         #if EncoderPanasonicType    // these encoders have half the transitions/interrupts for the same amount of turn 
@@ -149,7 +156,6 @@ class Encoder {
         #endif
         _spinrate_max = 1000000.0f / (float)_spintime_min_us;
         // spinrate_accel_thresh = 1000000.0f / (float)_accel_thresh_us;
-        
     }
     float spinrate() { return _spinrate; }          // in Hz for display
     float spinrate_max() { return _spinrate_max; }  // in Hz for display
@@ -179,9 +185,7 @@ class Encoder {
     }
     void update() {
         static int delta_last;
-        button.update();
-        enc_a = !digitalRead(_a_pin);
-        enc_b = !digitalRead(_b_pin);
+        read_pins();
         // if (runmode == LowPower || runmode == Standby) {
         //     if (button.shortpress(false)) {
         //         sleep_request = ReqOff;
