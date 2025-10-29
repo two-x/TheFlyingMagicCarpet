@@ -1192,10 +1192,10 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
 
         // 251028 tuned using flight handle #8
-        { 1000.0f, 1483.0f, 2005.0f, NAN, 1483.0f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
-        { 1120.0f, 1602.0f, 2125.0f, NAN, 1602.0f, NAN, NAN, NAN },    // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (1084-2091) 1000+80+1, 1500+80,  2000+80-2
-        { 1000.0f, 1483.0f, 2005.0f, NAN, 1483.0f, NAN, NAN, NAN },    // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1204-1809) 1000+150+1,   1500, 2000-150-2
-        { 1000.0f, 1483.0f, 2005.0f, NAN, 1483.0f, NAN, NAN, NAN }, }; // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1304-1707) 1000+250+1,   1500, 2000-250-2
+        { 1000.0f, 1502.5f, 2005.0f, NAN, 1502.5f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
+        { 1120.0f, 1622.5f, 2125.0f, NAN, 1622.5f, NAN, NAN, NAN },    // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (1084-2091) 1000+80+1, 1500+80,  2000+80-2
+        { 1000.0f, 1502.5f, 2005.0f, NAN, 1502.5f, NAN, NAN, NAN },    // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1204-1809) 1000+150+1,   1500, 2000-150-2
+        { 1000.0f, 1502.5f, 2005.0f, NAN, 1502.5f, NAN, NAN, NAN }, }; // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1304-1707) 1000+250+1,   1500, 2000-250-2
         
         // pre-251028 values
         // {  969.0f, 1473.0f, 1977.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
