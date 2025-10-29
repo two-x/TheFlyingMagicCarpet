@@ -97,13 +97,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             powering_down = true; // during this time we blackout the screen (should be done in display.h)
             pwrchange_timer.reset();  // give some time for screen to blackout
         }
-        else if (powering_down && pwrchange_timer.expired()) {  // blackout time is over, now go to sleep
+        if (powering_down && pwrchange_timer.expired()) {  // blackout time is over, now go to sleep
             syspower.set(LOW);  // Power down devices to save battery
             powering_down = false;
         }
         else if (powering_up && pwrchange_timer.expired()) {  // by now sensors etc. have got powered up, so switch runmode
-            powering_up = false;
             runmode = (in_basicmode) ? Basic : Standby;  // basicsw.val()  finish powering up . display->all_dirty();  // tells display to redraw everything. display must set back to false
+            // powering_up = false;  // this is set by first loop thru Basic or Standby modes
         }
         else {
             if (encoder.button.shortpress()) sleep_request = ReqOff;
@@ -123,6 +123,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         static bool stopcar_phase;
         if (_we_just_switched_modes) {              
             shutting_down = !powering_up;   // if waking up from sleep standby is already complete
+            powering_up = false;
             stopcar_phase = true;  // !speedo.stopped();
             ignition.request(ReqOff);  // ezread.squintf("temp: ignition OFF in standby\n");
             stopcar_timer.reset();
@@ -135,16 +136,20 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                     if (stopcar_timer.expired()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to stop car\n");
                     stopcar_phase = false;  // move on to parkmotor phase
                     parkmotors_timer.reset();
+                    brake.setmode(ParkMotor);
                 }
                 else if (brake.motormode != AutoStop) brake.setmode(AutoStop);
             }
             else {  // we are in park motor phase
+                // TODO - there is logic for park timeout in both brake class and here.  That's no good and prob why parking fails
                 if (brkpos.parked() || parkmotors_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
+                // if (!parking || parkmotors_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
+                
                     if (parkmotors_timer.expired()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to park brake\n");
                     shutting_down = false;  // done shutting down
                     brake.setmode(Halt);
                 }
-                else if (brake.motormode != ParkMotor) brake.setmode(ParkMotor);
+                // else if (brake.motormode == AutoStop || brake.motormode == Halt) brake.setmode(ParkMotor);
             }
         }
         else {

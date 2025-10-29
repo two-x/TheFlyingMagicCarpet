@@ -889,7 +889,7 @@ class BrakeControl : public JagMotor {
         // active_sensor = (enabled_sensor == PressureFB) ? PressureFB : PositionFB;  // use posn sensor for this unless we are specifically forcing pressure only
         if (motormode == PropLoop || motormode == ActivePID) {
             set_target(tgt_position);
-            return (std::abs(target_pc - combined_read_pc <= target_margin_pc));
+            return (std::abs(target_pc - combined_read_pc) <= target_margin_pc);
         }
         bool in_progress;
         if (feedback == NoneFB) in_progress = (!blindaction_timer.expired());  // if running w/o feedback, let's blindly release the brake for a few seconds then halt it
@@ -974,6 +974,8 @@ class BrakeControl : public JagMotor {
     void setmode(int _mode, bool external_request=true) {  // external_request set to false when calling from inside the class (to remember what the outside world wants the mode to be)   
         bool mode_forced = false;                                                 // note whether requested mode was overriden
         int save_mode_request = _mode;
+        parking = (_mode == ParkMotor);
+        releasing = (_mode == Release);
         if ((motormode == PropLoop) || (motormode == ActivePID)) {
             if (_mode == Release || _mode == ParkMotor) {
                 _fixed_target_mode = _mode;  // tells loop to target a fixed braking lavel instead of user control. Avoids stopping pid
@@ -1003,7 +1005,7 @@ class BrakeControl : public JagMotor {
         }
         if (_mode == motormode) return;
         if (external_request) last_external_mode_request = save_mode_request;  // remember what the outside world actually asked for, in case we override it but later wish to go back
-        autostopping = autoholding = cal_brakemode = parking = releasing = false;        
+        autostopping = autoholding = cal_brakemode;        
         if ((motormode == PropLoop) || (motormode == ActivePID)) _fixed_target_mode = _mode;  // cancel any fixed target condition
         interval_timer.reset();
         stopcar_timer.reset();

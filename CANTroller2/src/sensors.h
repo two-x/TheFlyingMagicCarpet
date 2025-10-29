@@ -1428,9 +1428,9 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     // This works by pushing new hotrc readings into a FIFO ring buffer, and replacing any well-defined spikes with values 
     // interpolated from before and after the spike, thereby erasing any spikes that recover fast enough.
     // Also if a detected cliff edge (potential spike) doesn't recover in time, it will smooth out the transition linearly.
-    // The cost of this is our readings are delayed by a number of readings (equal to the maximum erasable spike duration).
+    // The cost of this is our readings are delayed by the maximum erasable spike duration.
     static const int ringdepth = 9;  // more depth will reject longer spikes at the expense of increased controller delay
-    float spike_cliff[NumAxes] = { 6.0f, 6.0f };  // spike_cliff is min diff of consecutive values to count as a spike
+    float spike_cliff = 6.0f;        // spike_cliff is the min diff of consecutive values to count as a spike
     int prespike_idx[NumAxes] = { -1, -1 }, ringidx[NumAxes] = { 1, 1 };  // prespike of -1 means no current spike
     float ringbuf[NumAxes][ringdepth];
     float spike_filter(int axis, float new_val) {  // pass a fresh reading in, will return a filtered reading to use instead
@@ -1438,11 +1438,11 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         static bool spike_signbit[NumAxes];
         int previdx = (ringdepth + ringidx[axis] - 1) % ringdepth; // previdx is where the incoming new value will be stored
         if (++num_calls[axis] <= ringdepth) ringbuf[axis][previdx] = new_val;  // until buf is filled, fake the values
-        float this_delta = new_val - ringbuf[axis][previdx];   // value change since last reading
-        if (std::abs(this_delta) > spike_cliff[axis]) {        // if new value is a cliff edge (start or end of a spike)
-            if (prespike_idx[axis] == -1) {                    // if this cliff edge is the start of a new spike
-                prespike_idx[axis] = previdx;                  // save idx of last good value just before the cliff
-                spike_signbit[axis] = std::signbit(this_delta);     // save the direction of the cliff
+        float this_delta = new_val - ringbuf[axis][previdx];    // value change since last reading
+        if (std::abs(this_delta) > spike_cliff) {               // if new value is a cliff edge (start or end of a spike)
+            if (prespike_idx[axis] == -1) {                     // if this cliff edge is the start of a new spike
+                prespike_idx[axis] = previdx;                   // save idx of last good value just before the cliff
+                spike_signbit[axis] = std::signbit(this_delta); // save the direction of the cliff
             }
             else if (spike_signbit[axis] == std::signbit(this_delta)) {  // if this cliff edge deepens an in-progress spike, or is a continuance of a valid rapid change
                 inject_interpolations(axis, previdx, ringbuf[axis][previdx]); // smooth out the values between the last cliff & previous value
