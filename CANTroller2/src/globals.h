@@ -116,7 +116,7 @@ enum telemetry_idiots {                              // list of transducers whic
     _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
     _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are mission-critical actuators, driven by us.  note: these enums are also used to index global runmode:motormode array 
     _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7,  // these transducers are mission-critical sensors, we read from
-    _Temps=8, _MuleBatt=9, _Other=10, _GPIO=11,          // these are actually groups of multiple sensors (see below)
+    _Temps=8, _MuleBatt=9, _GPIO=10, _Other=11,           // these are actually groups of multiple sensors (see below)
     NumTelemetryIdiots=12,                           // size of the list of values with idiot lights
 };
 enum telemetry_full {                                                                                 // complete list expanding sensor groups

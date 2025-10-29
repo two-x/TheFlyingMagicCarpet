@@ -798,6 +798,7 @@ class BrakeControl : public JagMotor {
         if (pressure_ratio >= brake_pid_trans_threshold_hi) return 1.0f;  // at pressure above hi threshold, pressure has 100% influence
         if (pressure_ratio <= brake_pid_trans_threshold_lo) return 0.0f;  // at pressure below lo threshold, position has 100% influence
         return 0.5 + 0.5 * sin(hybrid_math_coeff * (pressure_ratio - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
+        // TODO (251028) hybrid brake value can decrease as pressure increases (w/ position fixed) during transition from 100% pressure <-> 100% position, i noticed while simulating both on breadboard
     }
     void set_hybrid_ratio() {
         float temp = calc_hybrid_ratio(pressure->pc());

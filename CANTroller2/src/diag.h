@@ -132,7 +132,7 @@ class DiagRuntime {
     std::string err_type_card[NumErrTypes] = { "Lost", "Rang", "Warn" };  // this needs to match err_type enum   // , "Lost", "Range", "Warn"
     std::string err_sens_card[NumTelemetryFull+3] = {  // this needs to match telemetry_idiots and telemetry_full enums, with NA, None, and Hybrid tacked on the end.  access these names using ascii_name() function
         "Throtl", "BkMotr", "Steer", "HotRC", "Speedo", "Tach", "BkPres", "BkPosn",
-        "Temps", "Batery", "Other", "GPIO", "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4",
+        "Temps", "Batery", "GPIO", "Other", "HrcHrz", "HrcVrt", "HrcCh3", "HrcCh4",
         "AirVel", "MAP", "Pot", "TmpEng", "TmpWFL", "TmpWFR", "TmpWRL", "TmpWRR",
         "TmpBrk", "TmpAmb", "Ign", "Start", "BasicS", "TmpWhl",
         "NA", "None", "Hybrid",
@@ -267,17 +267,10 @@ class DiagRuntime {
         for (int typ=0; typ<NumErrTypes; typ++) {
             setflag(_HotRC, typ, err_sens[typ][_HotRCHorz] || err_sens[typ][_HotRCVert] || err_sens[typ][_HotRCCh3] || err_sens[typ][_HotRCCh4]);
             setflag(_GPIO, typ, err_sens[typ][_Ignition] || err_sens[typ][_BasicSw] || err_sens[typ][_Starter]);
-            setflag(_Other, typ, err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot]);  // || err_sens[typ][_MuleBatt]
+            setflag(_Other, typ, err_sens[typ][_AirVelo] || err_sens[typ][_MAP] || err_sens[typ][_Pot]);
             setflag(_TempWheel, typ, err_sens[typ][_TempWhFL] || err_sens[typ][_TempWhFR] || err_sens[typ][_TempWhRL] || err_sens[typ][_TempWhRR]);
             setflag(_Temps, typ, err_sens[typ][_TempEng] || err_sens[typ][_TempWheel] || err_sens[typ][_TempBrake] || err_sens[typ][_TempAmb]);
         }
-        // adding this workaround for the mulebatt errors, which should have been included in the _Other group above,
-        // but as you can see above I had to comment it out b/c of the confounding fact that err_sens[ErrRange][_MuleBatt]
-        // for some reason has the same mem address as the global nowtouch flag (!!)
-        setflag(_Other, ErrWarn, err_sens[ErrWarn][_Other] || err_sens[ErrWarn][_MuleBatt]);
-        setflag(_Other, ErrLost, err_sens[ErrLost][_Other] || err_sens[ErrLost][_MuleBatt]);
-        setflag(_Other, ErrRange, err_sens[ErrRange][_Other] || battrangeerr);
-        // end of cheesy workaround
     }
     void set_sensidiots() {
         for (int err=0; err<=_GPIO; err++) {

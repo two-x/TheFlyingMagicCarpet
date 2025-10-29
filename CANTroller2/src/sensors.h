@@ -1186,8 +1186,8 @@ class RMTInput {  // note: for some reason if we ever stop reading our rmt objec
 class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
     bool _verbose = false;  // causes console print whenever an unfiltered switch event is queried externally, thus canceling the in-progress filtering
-    float absmin_us = 880.0f;  // min configurable pulsewidth for the hotrc
-    float absmax_us = 2125.0f; // max configurable pulsewidth for the hotrc
+    float absmin_us = 875.0f;  // min configurable pulsewidth for the hotrc (w/ ~5 us extra margin)
+    float absmax_us = 2130.0f; // max configurable pulsewidth for the hotrc (w/ ~5 us extra margin)
     float pc[NumAxes][NumValues], sim_raw_pc[NumAxes]; // values range from -100% to 100%. pc[][] are all derived or auto-assigned. sim_raw_pc[] are simulated inputs
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
 

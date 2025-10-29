@@ -398,7 +398,7 @@ class IdiotLights {
         speedo.stopped_ptr(), tach.stopped_ptr(), &nowtouch, encoder.activity_ptr(), &running_on_devboard, syspower.notval_ptr(),
         // row 3 onscreen.  this row has one light per actuator or sensor, lit when there's any kind of error w/ that device
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
-        &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_Other], &sensidiots[_GPIO],
+        &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_GPIO], &sensidiots[_Other],
     };
     bool lastvals[iconcount];
     uint8_t colors[2][iconcount] = { // each row gradiated across the hue sprectrum, avoiding the dimmest stretch of the blue range
@@ -471,8 +471,8 @@ class IdiotLights {
         { 0x7e, 0x42, 0x46, 0x42, 0x4e, 0x42, 0x46, 0x42, 0x4e, 0x42, 0x7e, },  // ruler                        // &sensidiots[_BrakePosn]
         { 0x02, 0x07, 0x35, 0x77, 0x7a, 0x1c, 0x0e, 0x1f, 0x13, 0x06, 0x04, },  // thermometer                  // &sensidiots[_Temps]
         { 0x7e, 0x77, 0x63, 0x77, 0x7e, 0x7e, 0x7e, 0x77, 0x77, 0x77, 0x7e, },  // car battery                  // &diag.battrangeerr  // &sensidiots[_MuleBatt] <-- is the same value as &nowtouch (wtf)
-        { 0x7f, 0x6b, 0x6b, 0x00, 0x03, 0x7f, 0x03, 0x00, 0x3e, 0x63, 0x63, },  // "ETC"                        // &sensidiots[_Other]
         { 0x2a, 0x2a, 0x2a, 0x7f, 0x7d, 0x7f, 0x7f, 0x7f, 0x2a, 0x2a, 0x2a, },  // chip                         // &sensidiots[_GPIO]
+        { 0x7f, 0x6b, 0x6b, 0x00, 0x03, 0x7f, 0x03, 0x00, 0x3e, 0x63, 0x63, },  // "ETC"                        // &sensidiots[_Other]
     };
      // { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // "SHD..."                     // &shutting_down
      // { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },  // boot                         // bootbutton.ptr()
