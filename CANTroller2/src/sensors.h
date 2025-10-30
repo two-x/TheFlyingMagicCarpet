@@ -169,7 +169,8 @@ class Device {
     virtual void set_val_from_pin() = 0;  // =0 makes pure virtual, thus *must* be overriden somewhere down lineage
     virtual void set_val_from_fixed() = 0;
     virtual void set_val_from_pot() = 0;
-    // set_val_from_sim() currently does nothing, as setters are called externally.  TODO: need to implement value change logic here, instead of values being directly set by touchscreen class
+    // set_val_from_sim() currently does nothing, as setters are called externally.
+    // TODO: need to implement value change logic here, instead of values being directly set by touchscreen class
     // note for devices not having adjustments in the UI, must override this to set them to a desired fixed value
     virtual void set_val_from_sim() { }
     // older approach: //  void set_val_from_sim() override { if (std::isnan(val())) _si.set(_default_value_si); }    // TODO: need to implement value change logic here, instead of values being directly set by touchscreen class
@@ -309,9 +310,9 @@ class Transducer : public Device {
         if (std::isnan(argmin)) argmin = _si.min();                               // use incumbent min value if none was passed in
         if (std::isnan(argmax)) argmax = _si.max();                               // use incumbent max value if none was passed in
         _si.set_limits(argmin, argmax);                                           // commit to the Param accordingly
-        _raw.set_limits(argmin, argmax);                                           // raw si value always has the same abs limits as si value
-        if ((_convmethod == LinearMath) && autocalc) {                      // if we know our conversion formula, and not instructed to skip autocalculation...
-            set_abslim_native(to_native(_si.min()), to_native(_si.max()), false);       // then convert the new values and ensure si and native stay equivalent
+        _raw.set_limits(argmin, argmax);                                          // raw si value always has the same abs limits as si value
+        if ((_convmethod == LinearMath) && autocalc) {                            // if we know our conversion formula, and not instructed to skip autocalculation...
+            set_abslim_native(to_native(_si.min()), to_native(_si.max()), false); // then convert the new values and ensure si and native stay equivalent
         }
         set_oplim(NAN, NAN, false);                                               // just to enforce any re-constraints if needed to keep op limits inside abs limits
     }
@@ -319,19 +320,19 @@ class Transducer : public Device {
         if (std::isnan(argmin)) argmin = _native.min();                              // use incumbent min value if none was passed in
         if (std::isnan(argmax)) argmax = _native.max();                              // use incumbent max value if none was passed in
         _native.set_limits(argmin, argmax);                                          // commit to the Param accordingly
-        if ((_convmethod == LinearMath) && autocalc) {                         // if we know our conversion formula, and not instructed to skip autocalculation...
-            set_abslim(from_native(_native.min()), from_native(_native.max()), false);  // then convert the new values and ensure si and native stay equivalent
+        if ((_convmethod == LinearMath) && autocalc) {                               // if we know our conversion formula, and not instructed to skip autocalculation...
+            set_abslim(from_native(_native.min()), from_native(_native.max()), false); // then convert the new values and ensure si and native stay equivalent
         }
         set_oplim_native(NAN, NAN, false);                                           // just to enforce any re-constraints if needed to keep op limits inside abs limits
     }
-    virtual void set_oplim(float argmin=NAN, float argmax=NAN, bool autocalc=true) {  // these are opmin and opmax limits. values where NAN is passed in won't be used
+    virtual void set_oplim(float argmin=NAN, float argmax=NAN, bool autocalc=true) { // these are opmin and opmax limits. values where NAN is passed in won't be used
         if (!std::isnan(argmin)) _opmin = argmin;                             // if min value was passed in then set opmin to it
         else if (std::isnan(_opmin)) _opmin = _si.min();                      // otherwise if opmin has no value then set it to absmin
         if (!std::isnan(argmax)) _opmax = argmax;                             // if max value was passed in then set opmax to it
         else if (std::isnan(_opmax)) _opmax = _si.max();                      // otherwise if opmax has no value then set it to absmax
         _opmin = constrain(_opmin, _si.min(), _opmax);                        // constrain to ensure absmin <= opmin <= opmax <= absmax
         _opmax = constrain(_opmax, _opmin, _si.max());                        // constrain to ensure absmin <= opmin <= opmax <= absmax
-        if ((_convmethod != OpLimMap) && autocalc) {                    // if we know our conversion formula, and not instructed to skip autocalculation...
+        if ((_convmethod != OpLimMap) && autocalc) {                          // if we know our conversion formula, and not instructed to skip autocalculation...
             set_oplim_native(to_native(_opmin), to_native(_opmax), false);    // then convert the new values and ensure si and native stay equivalent
         }
     }
@@ -400,7 +401,7 @@ class Transducer : public Device {
     float margin() { return _margin; }
     float margin_native() { return to_native(_margin); }
     float margin_pc() { return std::abs(to_pc(_margin)); }
-    float zeropoint() { return _zeropoint; }  // zeropoint is the pressure at which we can consider the brake is released (if position is unavailable)
+    float zeropoint() { return _zeropoint; }  // zeropoint is the point we can consider the brake is released
     float zeropoint_pc() { return to_pc(_zeropoint); }
     float mfactor() { return _mfactor; }
     float boffset() { return _boffset; }
@@ -452,16 +453,16 @@ class Sensor : public Transducer {
     float ema_alpha() { return _ema_alpha; }
     bool released() { return (std::abs(val() - zeropoint()) <= margin()); }
 };
-class I2CSensor : public Sensor {  // base class for sensors which communicate using i2c
+// I2CSensor is the base class for sensors having i2c interface
+class I2CSensor : public Sensor {
   protected:
     I2C* _i2c;
-    int _i2c_bus_index = I2CBogus;  // children must set this to identify self in calls to I2C bus class
+    int _i2c_bus_index = I2CBogus;     // children must set this to identify self in calls to I2C bus class
     virtual float read_i2c_sensor() {  // childrem must override this
         ezread.squintf(ezread.madcolor, "err: %s needs overridden read_i2c_sensor()\n", _short_name.c_str());
         return NAN;
     }
     void print_on_boot(bool detected, bool responding) {
-        // if (header) Transducer::print_config(true, false);
         ezread.squintf(ezread.highlightcolor, "%s sensor (i2c 0x%02x) %sdetected\n", _long_name.c_str(), addr, _detected ? "" : "not ");
         if (detected) {
             if (responding) ezread.squintf("  reading %.4f %s\n", read_i2c_sensor(), _si_units.c_str());
@@ -471,12 +472,12 @@ class I2CSensor : public Sensor {  // base class for sensors which communicate u
     }
     void set_val_from_pin() override {
         if (_i2c->not_my_turn(_i2c_bus_index)) return;
-        if (!_i2c->detected(_i2c_bus_index) || !_responding) _native.set(NAN);  // if bus/sensor failure set value to nan
-        else _native.set(read_i2c_sensor());                           // otherwise take a new native reading from the bus
-        if (_i2c->i2cbaton == _i2c_bus_index) _i2c->pass_i2c_baton();  // deal with bus semaphore, since we're done with it
-        if (std::isnan(_native.val())) _si.set((NAN));                    // propagate nan native value to all values
-        else {                                                         // if reading was good
-            _raw.set(from_native(_native.val()));                      // convert native to raw si value
+        if (!_i2c->detected(_i2c_bus_index) || !_responding) _native.set(NAN); // if bus/sensor failure set value to nan
+        else _native.set(read_i2c_sensor());                          // otherwise take a new native reading from the bus
+        if (_i2c->i2cbaton == _i2c_bus_index) _i2c->pass_i2c_baton(); // deal with bus semaphore, since we're done with it
+        if (std::isnan(_native.val())) _si.set((NAN));                // propagate nan native value to all values
+        else {                                                        // if reading was good
+            _raw.set(from_native(_native.val()));                     // convert native to raw si value
             set_si_w_ema();                                           // set si filtered value based on new raw reading
         }
     }
@@ -503,7 +504,8 @@ class I2CSensor : public Sensor {  // base class for sensors which communicate u
     }
     virtual void setup() = 0;  // child sensors must include a setup() function
 };
-class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air intake into the engine in MPH. It communicates with the external sensor using i2c.
+// AirVeloSensor measures the intake air velocity in mph. Sensor is an external i2c device.
+class AirVeloSensor : public I2CSensor {
   protected:
     FS3000 _sensor;
     int64_t val_refresh_period = 85000;
@@ -533,7 +535,8 @@ class AirVeloSensor : public I2CSensor {  // AirVeloSensor measures the air inta
         I2CSensor::postsetup();  // must be run last
     }
 };
-class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of the engine manifold in PSI. It communicates with the external sensor using i2c.
+// MAPSensor measures the Manifold Air Pressure of the engine intake in PSI. Sensor is an external i2c device.
+class MAPSensor : public I2CSensor {
   protected:
     SparkFun_MicroPressure _sensor;
     int64_t val_refresh_period = 120000; // , mapretry_timeout = 10000;
@@ -562,7 +565,8 @@ class MAPSensor : public I2CSensor {  // MAPSensor measures the air pressure of 
         I2CSensor::postsetup();  // must be run last
     }
 };
-class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
+// AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
+class AnalogSensor : public Sensor {
   protected:
     int64_t val_refresh_period = 25000; // , mapretry_timeout = 10000;
     float _initial_bs_value_si = NAN;  // invalid value allows us to detect whether sensor is present
@@ -583,17 +587,18 @@ class AnalogSensor : public Sensor {  // class AnalogSensor are sensors where th
     void presetup() {  // must be run first by child class setup() function
         Sensor::presetup();  // must be run first
         set_pin(_pin, INPUT);
-        set_abslim_native(0.0f, static_cast<float>(adcrange_adc), false);  // do not autocalc the si units because our math is not set up yet (is in child classes)
+        set_abslim_native(0.0f, static_cast<float>(adcrange_adc), false);  // need false arg to avoid autocalc si abslim values
     }
     void postsetup() {  // must be run last by child class setup() function
         set_val_from_pin();
-        _detected = _last_read_valid;  // _detected just is whether it got a value outside of abslim range. so it can have false negatives, thus not super accurate
+        _detected = _last_read_valid; // _detected just is whether it got a value outside of abslim range. so it can have false negatives, thus not super accurate
         // if (!_detected) set_source(src::Fixed);
         print_config();
     }
     virtual void setup() = 0;  // child sensors must include a setup() function
 };
-class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level from the Mule battery
+// CarBattery reads the voltage level from the Mule battery
+class CarBattery : public AnalogSensor {
   protected:
     void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:
@@ -615,10 +620,77 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
         AnalogSensor::postsetup();  // must be run last
     }
 };
-// PressureSensor represents a brake fluid pressure sensor.
-// it extends AnalogSensor to handle reading an analog pin and converting the ADC value to a pressure value in PSI.
+
+// WIP! Brake calibration procedure (position-related steps):  updated 251029
 //
-// Older cal notes:
+// 1) brkpos absolute limits si (inches):
+//    a) context: calibrate once for each model of motor.
+//    b) setup: on bench or on car w/o linkage, in cal mode.
+//    c) measure inches from housing end to piston end at both motor extremes.
+//    d) enter in brkpos setup():
+//       set_abslim(1.22, 7.26, false);  // 250719 w/ gmw1 motor
+// 2) brkpos absolute limits native (adc):
+//    a) context: calibrate once for each individual motor.
+//    b) setup: on bench or on car w/o linkage, in cal mode.
+//    c) move motor to each extreme, get brkpos adc values from datapage.
+//    d) enter in brkpos setup():
+//       set_abslim_native(1885.0f, 2933.0f, false);  // 250719 w/ gmw1 motor
+// 3) approximate brkpos operational limits and zeropoint si (inches):
+//    a) context: calibrate whenever linkage is adjusted.
+//    b) setup: on car w/ linkage, in cal mode.
+//    c) move motor until pedal is released, chain just beginning to sag from slack. read brkpos inches, note this value PosMax.
+//    d) watch pressure psi as you manually push brake as hard as soren can, while bracing only by grabbing table. note this pressure PresMax.
+//    e) use actuator to push brake to the same PresMax pressure. read the corresponding brkpos inches, note this value PosMin.
+//    // NO subtract a buffer, like 0.75" to PosMin b/c motor can pull harder, and for chain slack (3.0) 250719 w/ gmw1 motor
+//    // NO center this range within the abslim range above, to get approximate opmin & opmax (2.73, 5.73) on 250719 w/ gmw1 motor
+//    f) determine a fake zeropoint value ~midway between PosMin and PosMax.
+//    g) enter in brkpos setup():
+//       set_oplim(2.73f, 5.95f);  // 250719
+//       set_zeropoint(4.23f);
+// 4) compile in the above approximations then continue below.
+//
+// TODO (251030) continue calibration routine overhaul from here
+//
+// Further brkpos related:
+// ?) (on car w/o linkage, in cal mode), set the motor so datapage value matches the approximate opmax value from step #3c
+// ?) if necessary, adjust the shim block under the actuator housing so the unit has minimal clearance to it when pedal is fully depressed and linkage is tight
+// ?) attach brake pedal linkage, make as short as possible w/ a minimum of slack while still allowing pedal to fully release
+// ?) adjust brake pressure ema alpha value, if necessary - see cal procedure in the PressureSensor class for this step
+// ?) calibrate brake pressure opmin: see cal procedure in the PressureSensor class for this step
+// ?) calibrate brake pressure opmax: see cal procedure in the PressureSensor class for this step
+// ?a) determine the pressure/position zeropoint, ie where is the point where the pressure first begins to increase from min value. (based on pressure readings while calbraking carefully)
+// ?b) read zeropoint pressure from datapage (goes in pressure class)
+// ?c) read zeropoint position from datapage in inches (4.07) on 250720 w/ gmw1 motor
+// !! ?) *NOT* complete!  (on car w/ linkage, in ?? mode) fine-tune the operational limits to final values (finish detailing this step)  
+//
+// Pressure related cal:
+// ?) first setup up brkpos cal above
+// ?) (on car w/ linkage, in cal mode) set the ema alpha value:   (this process is somewhat iterative, needs work)
+//    * watch datapage value for pressure psi change after going directly from high to no brake. this settling time should be just fast enough for the pid to work
+//    * lower alpha will stabilize sensor readings, but slow down the settling time. the rest of the cal procedure below will need to be redone if alpha is changed
+//    * settled on alpha of (0.03) on 250720
+//    * put this value in the set_ema_alpha() call below
+//    !! * TODO!  try slowing down the brake pid to mitigate calculus inaccuracies from low alpha values. in theory the pid math loop should run just slower than the sensor value takes to be accurate. needs on-car experimentation to optimize
+// ?) (on car w/ linkage, in cal mode) determine the adc opmin:
+//     * fully release brake (slack in linkage), reading value from the datapage
+//     * as value jumps around, go for the lowest value you see. (682) 250720
+//     * put this value in the min_adc assignment below
+// ?) (on car w/ linkage, in cal mode) set the adc opmax, by watching datapage value while pushing brake to max
+//     * guidelines: use one hand to grab dash for bracing, pump brake twice then push hard as soren can (no other aids)
+//     * as value jumps around, go for the lowest value.  (2200) 250720
+//     * put this value in the set_oplim_native() call below (2nd argument)
+//
+// Finalize brkpos values cal:
+// ?) finalize the position sensor values - see the cal procedure in the BrakePositionSensor class for these steps
+//
+// ===========
+// Old pre-bm24 calibrating notes:
+// * hook to sensor and release brake, then pump and press as hard as you can. Get adc vals and set here as oplims_native. 
+// * released and point of pedal begins moving (chain slack already minimized):  posn = 4.13in, pres = 0 psi (615 adc)
+// * point just before pressure begins to rise from 0 (zeropoint):  posn = 3.63 in, pres = 0 psi (618 adc)
+// * max i can push w/ foot:  posn = 2.32 in (1352 adc), pres = 313 psi (2172 adc)
+//
+// Even older cal notes:
 // the sensor output voltage spec range is 0.5-4.5 V to indicate 0-1000 psi
 // our ADC top is just 3.3V tho, so we can sense up to 695 psi (calculated) at our max adc
 // calculated using spec values:
@@ -630,34 +702,15 @@ class CarBattery : public AnalogSensor {  // CarBattery reads the voltage level 
 // math to convert (based on spec values):
 //   psi = 0.2 * (adc - 621)  ->  psi = 0.2 * adc - 124  ->  adc = 5 * psi + 621
 //
-// (old) pre-bm24 calibrating notes:
-// * hook to sensor and release brake, then pump and press as hard as you can. Get adc vals and set here as oplims_native. 
-// * released and point of pedal begins moving (chain slack already minimized):  posn = 4.13in, pres = 0 psi (615 adc)
-// * point just before pressure begins to rise from 0 (zeropoint):  posn = 3.63 in, pres = 0 psi (618 adc)
-// * max i can push w/ foot:  posn = 2.32 in (1352 adc), pres = 313 psi (2172 adc)
-//
-// 2025 Brake calibration procedure (pressure-related steps):   circa 250720
-// 1-8) first setup up some position sensor values - see the cal procedure in the BrakePositionSensor class for these steps  
-// 9) (on car w/ linkage, in cal mode) set the ema alpha value:   (this process is somewhat iterative, needs work)
-//    * watch datapage value for pressure psi change after going directly from high to no brake. this settling time should be just fast enough for the pid to work
-//    * lower alpha will stabilize sensor readings, but slow down the settling time. the rest of the cal procedure below will need to be redone if alpha is changed
-//    * settled on alpha of (0.03) on 250720
-//    * put this value in the set_ema_alpha() call below
-//    !! * TODO!  try slowing down the brake pid to mitigate calculus inaccuracies from low alpha values. in theory the pid math loop should run just slower than the sensor value takes to be accurate. needs on-car experimentation to optimize
-// 10) (on car w/ linkage, in cal mode) determine the adc opmin:
-//     * fully release brake (slack in linkage), reading value from the datapage
-//     * as value jumps around, go for the lowest value you see. (682) 250720
-//     * put this value in the min_adc assignment below
-// 11) (on car w/ linkage, in cal mode) set the adc opmax, by watching datapage value while pushing brake to max
-//     * guidelines: use one hand to grab dash for bracing, pump brake twice then push hard as soren can (no other aids)
-//     * as value jumps around, go for the lowest value.  (2200) 250720
-//     * put this value in the set_oplim_native() call below (2nd argument)
-// 12-13) finalize the position sensor values - see the cal procedure in the BrakePositionSensor class for these steps  
+// int opmin_adc, opmax_adc, absmin_adc, absmax_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
+// Soren 230920: reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
+
+
+// PressureSensor represents a brake fluid pressure sensor.
+// it extends AnalogSensor to handle reading an analog pin and converting the ADC value to a pressure value in PSI.
 class PressureSensor : public AnalogSensor {
   public:
     sens _senstype = sens::pressure;
-    // int opmin_adc, opmax_adc, absmin_adc, absmax_adc; // Sensor reading when brake fully released.  230430 measured 658 adc (0.554V) = no brakes
-    // Soren 230920: reducing max to value even wimpier than Chris' pathetic 2080 adc (~284 psi) brake press, to prevent overtaxing the motor
     PressureSensor(int arg_pin) : AnalogSensor(arg_pin) {
         _long_name = "BrkPressure";
         _short_name = "presur";
@@ -669,15 +722,16 @@ class PressureSensor : public AnalogSensor {
         AnalogSensor::presetup();  // must be run first
         float temp_min_adc = 650.0f;  // from step #2 above. max value set in function call below  // 650 to 713  (earlier i was seeing 662 min. hmm)
         float noise_margin_adc = 45.0f;  // how much the min value can jump to above the number above due to noise
-        float m = 1000.0f * (3.3f - 0.554f) / ((static_cast<float>(adcrange_adc) - temp_min_adc) * (4.5f - 0.554f)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 684 adc) * (v-max v - v-min v)) = 0.1358 psi/adc
-        float b = -1.0 * temp_min_adc * m;  // -684 adc * 0.1358 psi/adc = -92.88 psi
+        float volt_min_v = 0.554f;  // minimum voltage reading of sensor at zero pressure
+        float m = 1000.0f * (3.3f - volt_min_v) / ((static_cast<float>(adcrange_adc) - temp_min_adc) * (4.5f - volt_min_v)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 650 adc) * (v-max v - v-min v)) = 0.202 psi/adc
+        float b = -1.0 * temp_min_adc * m;  // -650 adc * 0.202 psi/adc = -131.3 psi
         set_conversions(m, b);
         set_abslim_native(0.0f, static_cast<float>(adcrange_adc));  // set native abslims after m and b are set.  si abslims will autocalc
-        set_oplim_native(temp_min_adc, 2176.0f);  // from step #3 above  // set this after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
+        set_oplim_native(temp_min_adc, 2176.0f);  // set this after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
         set_oplim(0.0f, NAN);  // now set just the si op minimum (only) to exactly zero. This will cause native op minimum to autocalc such that any small errors don't cause our si oplim to be nonzero
-        set_ema_alpha(0.03f);         // from step #1 above  // 2024 was 0.055
-        set_margin(from_native(noise_margin_adc));    // max acceptible error when checking psi levels
-        set_zeropoint(from_native(opmin_native() + noise_margin_adc / 2.0f));   // tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
+        set_ema_alpha(0.03f);  // 2024 was 0.055
+        set_margin(from_native(noise_margin_adc)); // max acceptible error when checking psi levels
+        set_zeropoint(from_native(opmin_native() + noise_margin_adc / 2.0f));  // OLD note: tuning 250720 set to 686, avg value on screen (was chging +/- 5 adc), when at zeropoint value set in position sensor (4.07in)  ////    pushing the pedal just enough to take up the useless play, braking only barely starting. I saw adc = 680. convert this to si
         _default_value_si = opmin();
         // set_native(_opmin_native);
         AnalogSensor::postsetup();  // must be run last
@@ -688,33 +742,6 @@ class PressureSensor : public AnalogSensor {
 };
 // BrakePositionSensor represents a linear position sensor for measuring brake pedal position
 // extends AnalogSensor for handling analog pin reading and conversion.
-//
-// WIP! 2025 Brake calibration procedure (position-related steps):   circa 250720
-//
-// 1) (w/o linkage, in cal mode), measure inches from housing end to piston end at both motor extremes (1.22, 7.26) on 250719 w/ gmw1 motor. this can also be done on the bench
-// 2) (w/o linkage, in cal mode), get corresponding bkakposn adc values from datapage, at motor extremes (1885, 2933) on 250719 w/ gmw1 motor. this can also be done on the bench
-// 3a) (on car w/o linkage, in cal mode) we will find position op limits:
-//     * w/pedal released get opmax inches.
-//     * watch pressure as you push brake as hard as you can w/ foot, note this pressure
-//     * In cal mode use actuator to push brake to the same pressure. The corresponding brake positionis its op minimum
-// 3b) (math) add a buffer, like 0.75" to the approximate range b/c motor can pull harder, and for chain slack (3.0) 250719 w/ gmw1 motor
-// 3c) (math) center this range within the abslim range above, to get approximate opmin & opmax (2.73, 5.73) on 250719 w/ gmw1 motor
-// 4) (math) determine fake zeropoint value to midpoint of oprange above (4.23) on 250719 w/ gmw1 motor
-// 5) compile in these results as follows (instead of values being used currently) and upload:
-//    set_abslim(1.22, 7.26, false);        // from step #1
-//    set_abslim_native(1885, 2933, false); // from step #2
-//    set_oplim(2.73, 5.95);                // from step #3c
-//    _zeropoint = 4.23;                    // from step #4
-// 6) (on car w/o linkage, in cal mode), set the motor so datapage value matches the approximate opmax value from step #3c
-// 7) if necessary, adjust the shim block under the actuator housing so the unit has minimal clearance to it when pedal is fully depressed and linkage is tight
-// 8) attach brake pedal linkage, make as short as possible w/ a minimum of slack while still allowing pedal to fully release
-// 9) adjust brake pressure ema alpha value, if necessary - see cal procedure in the PressureSensor class for this step
-// 10) calibrate brake pressure opmin: see cal procedure in the PressureSensor class for this step
-// 11) calibrate brake pressure opmax: see cal procedure in the PressureSensor class for this step
-// 12a) determine the pressure/position zeropoint, ie where is the point where the pressure first begins to increase from min value. (based on pressure readings while calbraking carefully)
-// 12b) read zeropoint pressure from datapage (goes in pressure class)
-// 12c) read zeropoint position from datapage in inches (4.07) on 250720 w/ gmw1 motor
-// !! 13) *NOT* complete!  (on car w/ linkage, in ?? mode) fine-tune the operational limits to final values (finish detailing this step)  
 class BrakePositionSensor : public AnalogSensor {
   public:
     sens _senstype = sens::brkpos;
@@ -726,13 +753,13 @@ class BrakePositionSensor : public AnalogSensor {
     }
     BrakePositionSensor() = delete;
     void setup() {
-        AnalogSensor::presetup();  // must be run first
-        _dir = TransDir::Rev;  // causes percent conversions to use inverted scale 
-        _convmethod = AbsLimMap;  // because using map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
-        set_abslim(1.22f, 7.26f, false);        // from step #1   // need false argument to prevent autocalculation
-        set_abslim_native(1885.0f, 2933.0f, false); // from step #2   // need false argument to prevent autocalculation
-        set_oplim(1.22f, 5.9f);                // from step #13  !! 250720 not yet finalized! (do step 13)
-        set_zeropoint(5.7f);                   // from step #12
+        AnalogSensor::presetup(); // must be run first
+        _dir = TransDir::Rev;     // causes percent conversions to use inverted scale 
+        _convmethod = AbsLimMap;  // for map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
+        set_abslim(1.22f, 7.26f, false);            // need false argument to prevent native autocalculation
+        set_abslim_native(1885.0f, 2933.0f, false); // need false argument to prevent si autocalculation
+        set_oplim(1.22f, 5.9f);
+        set_zeropoint(5.7f);
         set_ema_alpha(0.35f);
         set_margin(0.2f);  // in inches
         _default_value_si = opmax();
@@ -743,19 +770,17 @@ class BrakePositionSensor : public AnalogSensor {
     float parkpos_pc() { return to_pc(opmax()); }
 };
 // class PulseSensor are hall-effect based magnetic field sensors where the value is based on magnetic
-// pulse timing of a rotational Source (eg tachometer, speedometer). The ISR calls esp_timer_get_time() 
-// on every pulse to know the time since the previous pulse. 
+// pulse timing of a rotational Source (eg tachometer, speedometer).
 class PulseSensor : public Sensor {
   protected:
-    Timer _pulsecount_timer{1000000};  // one second timer
     bool _low_pulse = true, _pin_level, _pin_inactive = false, _stopped = false;
     float _ema_tau_min_us = 1000.0f, _ema_tau_max_us = 100000.0f, _ema_alpha_max = 0.95f;  // default ema tau parameters. must be initialized in child classes!
-    float _freqfactor = 1.0f;  // a fixed freq compensation factor for certain externals like multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
-    Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur
-    
+    float _freqfactor = 1.0f;  // a fixed factor to compensate for multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
+    Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur. for display
+
     // we maintain our min and max pulse period, for each pulse sensor
     // absmin_us is calculated based on absmax_native (Hz) using overloaded set_abslim_native() function
-    // absmax_us is our stop timeout, and not based on absmin_native (Hz). It must be set using set_abmax_us() function
+    // absmax_us is our stop timeout, and not based on absmin_native (Hz). It must be tuned using set_abmax_us() function
     float _us, _absmin_us, _absmax_us = 1500000.0f; //  at min = 6500 us:   1000000 us/sec / 6500 us = 154 Hz max pulse frequency.  max is chosen just arbitrarily
     int _absmin_us_int;  // int version keeps isr from needing to cast to int (8-15 cycles). maintained in abslim setter to always track _absmin_us float value.
     volatile int64_t _isr_time_last_us = 0;
@@ -764,9 +789,9 @@ class PulseSensor : public Sensor {
     void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
         int64_t time_now_us = esp_timer_get_time();
         int delta_us = static_cast<int>(time_now_us - _isr_time_last_us);
-        if (delta_us < _absmin_us_int) return;  // ignore spurious triggers or bounces. hereafter the pulse is valid
+        if (delta_us < _absmin_us_int) return; // ignore spurious triggers or bounces. hereafter the pulse is valid
         _isr_time_last_us = time_now_us;
-        _isr_delta_us = delta_us;              // commit delta to official delta
+        _isr_delta_us = delta_us; // commit delta to official delta
     }
     // TODO - something in the below i suspect, is causing constant "err: iszero(NAN) called" prints on serial console
     void set_val_from_pin() override {
@@ -775,22 +800,22 @@ class PulseSensor : public Sensor {
         int64_t now_us = esp_timer_get_time();       // save current time
         float real_delta_us = static_cast<float>(now_us - isr_time_buf_us);  // calc actual time since last isr pulse
 
-        if (real_delta_us >= static_cast<int>(_absmax_us)) {       // if it's been too long since last pulse
+        if (real_delta_us >= static_cast<int>(_absmax_us)) { // if it's been too long since last pulse
             _us = real_delta_us;  // after isr stops allow _us to keep incrementing, for accurate si filtration
-            _native.set(0.0f);                        // call the frequency 0 Hz
+            _native.set(0.0f);    // call the frequency 0 Hz
         }
         else {                                          // else if pulsewidth is valid
             _us = static_cast<float>(isr_delta_buf_us); // commit isr pulsewidth value to official value
-            _native.set(us_to_hz(_us)); // convert it from us to native Hz value
+            _native.set(us_to_hz(_us));                 // convert it from us to native Hz value
         }
-        _raw.set(from_native(_native.val()));    // convert native Hz to get raw si value        
+        _raw.set(from_native(_native.val()));           // convert native Hz to get raw si value        
 
         // TODO - if zero timeout happened should final si value jump to 0 also?  Here we are continuing to apply ema filter 
-        set_si_w_ema();   // (orig) apply ema filter for si filt value
+        set_si_w_ema(); // (orig) apply ema filter for si filt value
         
         if (!std::isnan(val()) && iszero(val())) _us = NAN; // once filtered si hits zero, call pulsewidth invalid
-        _pin_level = read_pin(_pin);             // for debug/display
-        set_pin_inactive();                      // for idiot light showing pulse activity
+        _pin_level = read_pin(_pin); // for debug/display
+        set_pin_inactive();          // for idiot light showing pulse activity
     }
     // modified ema filter where filtering is smoother the less often it's called
     // tau value is time it takes for filter to reach 63% of the way toward a new value after a step change
@@ -815,21 +840,21 @@ class PulseSensor : public Sensor {
         pinlevel_last = _pin_level;
     }
     float us_to_hz(float arg) {
-        if (std::isnan(arg)) return 0.0f;  // if invalid argument, return zero, a special value meaning we timed out
+        if (std::isnan(arg)) return 0.0f; // if invalid argument, return zero, a special value meaning we timed out
         if (iszero(arg)) return NAN;      // zero argument is an invalid value
-        return 1000000.0f / arg;           // convert units of valid value
+        return 1000000.0f / arg;          // convert units of valid value
         // ezread.squintf("Err: %s us_to_hz() reciprocal of zero\n", _short_name.c_str());
         // return absmax();
     }
-    float hz_to_us(float arg) { return us_to_hz(arg); }  // the same math converts in either direction
+    float hz_to_us(float arg) { return us_to_hz(arg); } // the same math converts in either direction
     void stopped_update() {
-        if (std::isnan(val())) _stopped = false;      // on invalid value return false return for safety reasons
+        if (std::isnan(val())) _stopped = false;        // on invalid value return false return for safety reasons
         // else if (iszero(val() - opmin())) _stopped = true; // return true if val equals opmin, avoiding float near-zero comparison errors 
-        else _stopped = (val() - opmin() <= margin());       // return whether val is within margin of opmin
+        else _stopped = (val() - opmin() <= margin());  // return whether val is within margin of opmin
     }
   public:
     std::string _true_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
-    float _ema_tau_us = 10000.0f;  // default ema tau value. must be initialized in child classes!
+    float _ema_tau_us = 10000.0f;           // default ema tau value. must be initialized in child classes!
 
     PulseSensor(int arg_pin, float arg_freqfactor=1.0) : Sensor(arg_pin), _freqfactor(arg_freqfactor) {
         _long_name = "Unknown hall-effect";
@@ -849,10 +874,10 @@ class PulseSensor : public Sensor {
         _us = hz_to_us(_native.val());
         print_config();
     }
-    virtual void setup() = 0;  // child sensors must include a setup() function
+    virtual void setup() = 0; // child sensors must include a setup() function
     void update() override {
         Device::update();
-        stopped_update();                        // keep _stopped variable accurate
+        stopped_update();     // keep _stopped variable accurate
     }
     void print_config(bool header=true, bool ranges=true) {
         Transducer::print_config(header, ranges);
@@ -870,9 +895,9 @@ class PulseSensor : public Sensor {
         // }
 
         Transducer::set_abslim_native(arg_min, arg_max, calc_si);
-        if (!std::isnan(arg_max)) {  // now we set absmin_us to match absmax_native (hz). absmax_us is set in its own function
-            _absmin_us = hz_to_us(_native.max());  // also set us limits from here, converting Hz to us. note min/max are swapped
-            _absmin_us_int = static_cast<int>(_absmin_us);       // make an int copy for the isr to use conveniently
+        if (!std::isnan(arg_max)) { // now we set absmin_us to match absmax_native (hz). absmax_us is set in its own function
+            _absmin_us = hz_to_us(_native.max()); // also set us limits from here, converting Hz to us. note min/max are swapped
+            _absmin_us_int = static_cast<int>(_absmin_us); // make an int copy for the isr to use conveniently
         }
     }
     // this function allows direct setting of the stop timeout value (pulse-to-pulse time at which sensor will be considered stopped)
@@ -883,7 +908,7 @@ class PulseSensor : public Sensor {
     void set_ema_taulim(float newmin, float newmax) {
         _ema_tau_min_us = newmin;
         _ema_tau_max_us = newmax;
-        set_ema_tau(_ema_tau_us);  // set tau to itself in order to reconstrain it to new limits
+        set_ema_tau(_ema_tau_us); // set tau to itself in order to reconstrain it to new limits
     }
     float ema_tau() { return _ema_tau_us; }
     float ema_tau_min() { return _ema_tau_min_us; }
@@ -898,10 +923,8 @@ class PulseSensor : public Sensor {
     float absmax_ms() { return _absmax_us / 1000.0f; }
     float us() { return _us; }
     float ms() { return std::isnan(_us) ? NAN : _us / 1000.0f; }
-    // float alt_native() { return _pulses_per_sec; };  // returns pulse freq in hz based on count, rather than conversion (just a check to debug) (only updates once per second)
 };
-// Tachometer represents a magnetic pulse measurement of the engine rotation
-// it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to RPM
+// Tachometer measures engine rotation in rpm based on hall-effect sensor pulses from a magnet glued to drive pulley
 class Tachometer : public PulseSensor {
   public:
     sens _senstype = sens::tach;
@@ -921,8 +944,8 @@ class Tachometer : public PulseSensor {
         float mfact = 60.0f / _freqfactor;  // 1 Hz = 1 pulse/sec * 60 sec/min / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
         set_conversions(mfact, 0.0f);
         set_abslim(0.0f, 4800.0f); // estimating the highest rpm we could conceivably ever see from the engine. but may lower b/c the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
-        set_absmax_us(430000.0f);  // this sets the max pulse-to-pulse period to be considered as stopped.
-        set_oplim(0.0f, 3600.0f);  // aka redline,  Max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        set_absmax_us(430000.0f);  // this sets the max pulse-to-pulse period to be considered as engine stopped
+        set_oplim(0.0f, 3600.0f);  // aka redline (from mule specs), max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         _governmax_rpm = opmax() * governor / 100.0f;
         set_ema_taulim(500.0f, 200000.0f);
         set_ema_tau(16000.0f);       // set filter tau factor
@@ -943,19 +966,8 @@ class Tachometer : public PulseSensor {
     void set_idle(float newidle) { _idle = constrain(newidle, opmin(), opmax()); }
     void set_idlecold(float newidlecold) { _idle_cold = constrain(newidlecold, _idle_hot + 1.0f, opmax()); }
     void set_idlehot(float newidlehot) { _idle_hot = constrain(newidlehot, opmin(), _idle_cold - 1.0f); }
-    // bool stopped() override {  // debugging bad stopped performance
-    //     if (bootbutton_val) 
-    //       ezread.squintf("tac.st: v=%4.1f, om=%4.1f, m=%4.1f, e%d\n", val(), opmin(), _margin, (int)(std::abs(val() - opmin()) <= _margin));  // spam catcher works on this, (w/o bootbutton condition)
-    //     return PulseSensor::stopped();
-    // }
 };
-
-// Speedometer represents a magnetic pulse measurement of the enginge rotation
-// it extends PulseSensor to handle reading a hall monitor sensor and converting RPU to MPH
-
-// ~ 200ms pulses according to datapage when wheel was turning steady 3.3s per rotation, should have been 1.65s pulses! So, suspect super noisy.
-// also that 220ms was not steady in the slightest, jumped continuously from ~100ms to ~380ms.
-// at higher rpm wheel went faster but was reporting max 20mph when wheel maybe at jogging speed (could be similar 4x calfactor like tach?)
+// Speedometer measures car speed in mph based on hall-effect sensor pulses from magnets glued to rear axle
 class Speedometer : public PulseSensor {
   public:
     sens _senstype = sens::speedo;
@@ -969,28 +981,21 @@ class Speedometer : public PulseSensor {
         PulseSensor::presetup();
         float mfact = 3600.0f * 20.0f * M_PI / (_freqfactor * 12.0f * 5280.0f); // 1 Hz = 1 pulse/sec * 3600 sec/hr * 20*pi in/whlrot * 1/2 whlrot/pulse * 1/12 ft/in * 1/5280 mi/ft = 1.785 mi/hr,  (so 1.785 mph/Hz)
         // note the max pulse freq is max-mph/m , or:  pinmax hz = 20 mph * (1 / 1.785) hz/mph = 11.2 hz  (max freq at pin and in wire)
-        // perhaps want an rc lowpass at divider input  w/ R=22kohm, C=1uF
+        // TODO perhaps want an rc lowpass at divider input  w/ R=22kohm, C=1uF
         set_conversions(mfact, 0.0f);
         set_abslim(0.0f, 18.0f);   // the max readable vehicle speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
-        set_absmax_us(1300000.0f); // this sets the max pulse-to-pulse period to be considered as stopped.
-        set_oplim(0.0f, 15.0f);    // aka redline,  Max possible engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
+        set_absmax_us(1300000.0f); // this sets the max pulse-to-pulse period to be considered as car being stopped.
+        set_oplim(0.0f, 15.0f);    // max physically possible vehicle speed
         set_ema_taulim(10000.0f, 1e8f);
         set_ema_tau(5e7f);      // set filter tau factor
         set_ema_alphamax(0.95f);
-        // set_ema_alpha(0.003f);  // alpha value for ema filtering, lower is more continuous, higher is more responsive (0-1). 
         set_margin(0.30f);
-        // _idle = 3.0;  // estimate of speed when idling forward on flat ground (in mph)
         PulseSensor::postsetup();
     }
 };
-
-// note: if devices.h gets to be too long, we can (and maybe just should) move this to a separate file, it's not really a device...
-// simulator manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
-// note: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,
-//       we can simplify the logic here a lot.
-
 // Simulator class: manager class for the simulator settings and status. Note simulation values are not assigned here
-//   appropriately, the objects for each simulated transducer would s  objects to sensorather, a simulation management object.
+//   manages the source handling logic for all simulatable components. Currently, components can recieve simulated input from either the touchscreen, or from
+//   note: this class is designed to be backwards-compatible with existing code, which does everything with global booleans. if/when we switch all our Devices to use sources,
 class Simulator {
   private:
     // note: if we only simulated devices, we could keep track of simulability in the Device class. We could keep the default source in Device the same way.

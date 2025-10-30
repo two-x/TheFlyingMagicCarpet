@@ -41,12 +41,12 @@ class QPID {
     int64_t lasttime; // need 64 bit value to hold 54 bit esp hardware timer value (ensures no overflow after a few hours like micros())
   public:
     QPID() {}  // Default constructor
-    QPID(float* a_in, float* a_min, float* a_max, float a_kp = 0, float a_ki = 0, float a_kd = 0,
+    QPID(float* a_in, float* a_min, float* a_max, float a_kp = 0.0f, float a_ki = 0.0f, float a_kd = 0.0f,
       pmod a_pmode = pmod::onerr, dmod a_dmode = dmod::onmeas, awmod a_awmode = awmod::cond, cdir a_dir = cdir::direct,
       int a_sampletime = 100000, ctrl a_mode = ctrl::manual, centmod a_centmode = centmod::off, float a_cent = NAN) {
         init(a_in, a_min, a_max, a_kp, a_ki, a_kd, a_pmode, a_dmode, a_awmode, a_dir, a_sampletime, a_mode, a_centmode, a_cent);
     }
-    void init(float* a_in, float* a_min, float* a_max, float a_kp = 0, float a_ki = 0, float a_kd = 0,
+    void init(float* a_in, float* a_min, float* a_max, float a_kp = 0.0f, float a_ki = 0.0f, float a_kd = 0.0f,
       pmod a_pmode = pmod::onerr, dmod a_dmode = dmod::onmeas, awmod a_awmode = awmod::cond, cdir a_dir = cdir::direct,
       int a_sampletime = 100000, ctrl a_mode = ctrl::manual, centmod a_centmode = centmod::off, float a_cent = NAN) {
         myin = a_in;
@@ -797,7 +797,7 @@ class BrakeControl : public JagMotor {
         float pressure_ratio = pressure_val / 100.0f;  // (pressure_val - pressure->opmin()) / (pressure->opmax() - pressure->opmin());  // calculate ratio of output to range
         if (pressure_ratio >= brake_pid_trans_threshold_hi) return 1.0f;  // at pressure above hi threshold, pressure has 100% influence
         if (pressure_ratio <= brake_pid_trans_threshold_lo) return 0.0f;  // at pressure below lo threshold, position has 100% influence
-        return 0.5 + 0.5 * sin(hybrid_math_coeff * (pressure_ratio - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
+        return 0.5f + 0.5f * (float)std::sin(hybrid_math_coeff * (pressure_ratio - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
         // TODO (251028) hybrid brake value can decrease as pressure increases (w/ position fixed) during transition from 100% pressure <-> 100% position, i noticed while simulating both on breadboard
     }
     void set_hybrid_ratio() {
@@ -829,7 +829,7 @@ class BrakeControl : public JagMotor {
         if (motormode == PropLoop) {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
             float err = (combined_read_pc - target_pc);
             if (std::abs(err) < thresh_loop_hysteresis_pc) return pc[Stop];
-            if (err > 0.0) return thresh_loop_attenuation_pc * throttle->idle_pc();
+            if (err > 0.0f) return thresh_loop_attenuation_pc * throttle->idle_pc();
             return thresh_loop_attenuation_pc * pc[OpMax];
         }
         else {
@@ -845,11 +845,11 @@ class BrakeControl : public JagMotor {
             else new_out = pc[OpMin];
         }
         else if (openloop_mode == AutoRelease) {  // AutoRelease: releases brake whenever trigger is released, and presses brake proportional to trigger push. must hold trigger steady to stop brakes where they are
-            if (hotrc->joydir() == HrcDn) new_out = open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[Stop], pc[OpMax]) / 100.0;
+            if (hotrc->joydir() == HrcDn) new_out = open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[Stop], pc[OpMax]) / 100.0f;
             else new_out = pc[OpMin];
         }
         else if (openloop_mode == MedianPoint) {  // Median: holds brake when trigger is released, or if pulled to exactly halfway point. trigger pulls over or under halfway either proportionally apply or release the brake
-            if (hotrc->joydir() == HrcDn) new_out = open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[OpMin], pc[OpMax]) / 100.0;
+            if (hotrc->joydir() == HrcDn) new_out = open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[OpMin], pc[OpMax]) / 100.0f;
             else new_out = pc[Stop];
         }
         return new_out;  // this is openloop (blind trigger) control scheme
