@@ -134,24 +134,24 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 if (speedo.stopped() || stopcar_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
                     if (stopcar_timer.expired()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to stop car\n");
                     stopcar_phase = false;  // move on to parkmotor phase
+                    brake.setmode(ParkMotor);
                     parkmotors_timer.reset();
                 }
                 else if (brake.motormode != AutoStop) brake.setmode(AutoStop);
             }
             else {  // we are in park motor phase
-                if (brkpos.parked() || parkmotors_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
-                    if (parkmotors_timer.expired()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to park brake\n");
+                if (brake.parked() || parkmotors_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
+                    if (!brake.parked()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to park brake\n");
                     shutting_down = false;  // done shutting down
                     brake.setmode(Halt);
                 }
-                else if (brake.motormode != ParkMotor) brake.setmode(ParkMotor);
+                // else if (brake.motormode != ParkMotor) brake.setmode(ParkMotor);
             }
         }
         else {
             if (steer.motormode != Halt) steer.setmode(Halt);
             if (brake.motormode != Halt) brake.setmode(Halt);
-            if (user_inactivity_timer.expired() || sleep_request == ReqTog || sleep_request == ReqOn) runmode = LowPower;
-            if (hotrc.sw_event_filt(Ch4)) runmode = LowPower;  // ch4 press puts system to sleep.  ensure switch event check is in its own if statement
+            if (hotrc.sw_event_filt(Ch4)) sleep_request = ReqOn;  // ch4 press puts system to sleep.  ensure switch event check is in its own if statement
             if (hotrc.sw_event_filt(Ch3)) { 
                 if (!hotrc.radiolost_untested() && !hotrc.radiolost()) ignition.request(ReqOn); // turn on ignition, will land us in stall mode
                 else ezread.squintf(ezread.sadcolor, "warn: ignition requires tested radio\n");
@@ -159,9 +159,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (calmode_request) runmode = Cal;  // if fully shut down and cal mode requested, go to cal mode
             if (auto_saver_enabled) if (encoder.button.shortpress()) autosaver_request = ReqOff;
             if (user_inactivity_timer.elapsed() > _screensaver_delay_min * 60 * 1000000) autosaver_request = ReqOn;
+            if (user_inactivity_timer.expired() || sleep_request == ReqTog || sleep_request == ReqOn) runmode = LowPower;
         }
-        sleep_request = ReqNA;
-
         // TODO - review whether going to hold mode directly from standby is ever necessary or wise ... what is the use case where we want this?
         if ((speedo.stopped() || allow_rolling_start) && ignition.signal && !panicstop && !tach.stopped())
             runmode = Hold;  // If the car is already running, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically

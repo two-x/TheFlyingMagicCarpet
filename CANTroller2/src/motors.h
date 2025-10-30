@@ -989,6 +989,8 @@ class BrakeControl : public JagMotor {
             }
             else if (_mode == Release || _mode == ParkMotor) {
                 _mode = Halt;  // TODO: should have a timer way to release/park w/o sensors
+                if (_mode == Release) releasing = true;
+                if (_mode == ParkMotor) parking = true;
                 mode_forced = true;
             }
             if (_mode == ActivePID || _mode == PropLoop) { 
@@ -1042,14 +1044,16 @@ class BrakeControl : public JagMotor {
         }
     }
     bool parked() {
-        if (feedback_enabled[PositionFB]) return brkpos->parked();
-        if (feedback_enabled[PressureFB]) return pressure->released();  // pressure doesn't have a parked() function yet
+        if (!feedback_enabled[PressureFB]) return brkpos->parked();
+        else if (!feedback_enabled[PositionFB]) return pressure->released();  // pressure doesn't have a parked() function yet
+        else return (combined_read_pc <= sensmin());  // TODO - sensmin() value is untested and arbitrary - replace with a calibrated value?
         ezread.squintf(ezread.sadcolor, "warn: brake unaware if parked w/o sensors\n");
         return false;  // really without sensors we have no idea if we're parked. Print an error message
     }
     bool released() {
-        if (feedback_enabled[PositionFB]) return brkpos->released();
-        if (feedback_enabled[PressureFB]) return pressure->released();  // pressure doesn't have a parked() function yet
+        if (!feedback_enabled[PressureFB]) return brkpos->released();
+        else if (!feedback_enabled[PositionFB]) return pressure->released();  // pressure doesn't have a parked() function yet
+        else return (combined_read_pc <= sensmin());  // TODO - sensmin() value is untested and arbitrary - replace with a calibrated value?
         ezread.squintf(ezread.sadcolor, "warn: brake unaware if released w/o sensors\n");
         return false;  // really without sensors we have no idea if we're released. Print an error message
     }
