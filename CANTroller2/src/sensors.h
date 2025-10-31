@@ -1190,17 +1190,26 @@ class RMTInput {  // note: for some reason if we ever stop reading our rmt objec
 };
 class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
-    bool _verbose = false;  // causes console print whenever an unfiltered switch event is queried externally, thus canceling the in-progress filtering
-    float absmin_us = 875.0f;  // min configurable pulsewidth for the hotrc (w/ ~5 us extra margin)
-    float absmax_us = 2130.0f; // max configurable pulsewidth for the hotrc (w/ ~5 us extra margin)
+    bool _verbose = true;      // causes console reports of switch press actions and event action
+    float absmin_us = 875.0f;  // min configurable pulsewidth for the hotrc (w/ ~5us extra margin)
+    float absmax_us = 2132.0f; // using older "v07" receiver. max configurable pulsewidth for the hotrc (w/ ~5us extra margin)
+    // float absmax_us = 2138.0f; // using newer "v01" receiver. max configurable pulsewidth for the hotrc (w/ ~5us extra margin)
     float pc[NumAxes][NumValues], sim_raw_pc[NumAxes]; // values range from -100% to 100%. pc[][] are all derived or auto-assigned. sim_raw_pc[] are simulated inputs
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
-        // 251028 tuned to work with all 4 handles I have here
-        {  998.0f, 1500.0f, 2002.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
-        { 1117.0f, 1620.0f, 2122.0f, NAN, 1620.0f, NAN, NAN, NAN },    // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (1084-2091) 1000+80+1, 1500+80,  2000+80-2
-        {  998.0f, 1500.0f, 2002.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1204-1809) 1000+150+1,   1500, 2000-150-2
-        {  998.0f, 1500.0f, 2002.0f, NAN, 1500.0f, NAN, NAN, NAN }, }; // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1304-1707) 1000+250+1,   1500, 2000-250-2
-        // note: opmin/opmax here should be set to be just on the outside of the actual displayed values, to prevent out-of-range errors. this way it will reach all the way to 100%
+        // 251028 config values when using older "v07" receiver module - tuned to work with all 4 handles I have
+        //   note at this time (251031) we only have older "v07" receivers, newer ones are returned
+        {  998.0f, 1500.0f, 2007.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
+        { 1117.0f, 1620.0f, 2127.0f, NAN, 1620.0f, NAN, NAN, NAN },    // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (1084-2091) 1000+80+1, 1500+80,  2000+80-2
+        {  998.0f, 1500.0f, 2007.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1204-1809) 1000+150+1,   1500, 2000-150-2
+        {  998.0f, 1500.0f, 2007.0f, NAN, 1500.0f, NAN, NAN, NAN }, }; // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1304-1707) 1000+250+1,   1500, 2000-250-2
+
+        // // 251031 config values when using newer "v01" receiver module - note: opmin/cent/opmax vals seem stepped up higher compared to v07 receiver
+        // { 1003.0f, 1507.0f, 2012.0f, NAN, 1510.0f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
+        // { 1122.0f, 1629.0f, 2133.0f, NAN, 1635.0f, NAN, NAN, NAN },    // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (1084-2091) 1000+80+1, 1500+80,  2000+80-2
+        // { 1003.0f, 1510.0f, 2012.0f, NAN, 1510.0f, NAN, NAN, NAN },    // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1204-1809) 1000+150+1,   1500, 2000-150-2
+        // { 1003.0f, 1510.0f, 2012.0f, NAN, 1510.0f, NAN, NAN, NAN }, }; // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1304-1707) 1000+250+1,   1500, 2000-250-2
+
+        // note: opmin/opmax here should be set to be 2us to the outside of the actual displayed values, to prevent out-of-range errors. this way it will reach all the way to 100%
         //   margin should be set just larger than the largest difference between an opmin/max value and its corresponding actual measured limit *across all hotrc handles*, to prevent triggering errors
     float deadband_pc, deadband_us = 20.0f;  // size of each side of the center deadband in us.  pc value is derived  // was 15
     float sim_deadband_pc = 10.0f;  // when simulating joystick using display buttons, allows rounding of near-zero values to zero

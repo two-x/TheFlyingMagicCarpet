@@ -1,6 +1,7 @@
 #pragma once
 class RunModeManager {  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in standby mode with no activity
   private:
+    bool _verbose = true;              // causes console prints for debug purposes
     int _preferred_drivemode = Cruise; // from hold mode, should we enter cruise or fly mode?
     int _lowpower_delay_min = 20;      // Time of inactivity after entering standby mode before going to lowpower mode.  900sec = 15min
     int _screensaver_delay_min = 17;   // Time of inactivity after entering standby mode before starting screensaver turns on.  300sec = 5min
@@ -35,7 +36,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             watchdog.set_codestatus();
             shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = _stall_ch4start_timed_out = false;  // clean up previous runmode values
             _stopped_hold_timer_active = cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
-            // ezread.squintf("runmode %s -> %s\n", modecard[_oldmode].c_str(), modecard[runmode].c_str());
+            if (_verbose) ezread.squintf("run: mode change %s->%s\n", modecard[_oldmode].c_str(), modecard[runmode].c_str());
         }
         _oldmode = runmode;
 
@@ -119,7 +120,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_standbyMode() { // In standby mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
         static Timer stopcar_timer{5000000}; // spend this long trying to stop the car and parking motors before halting actuators 
-        static Timer parkmotors_timer{2300000}; // spend this long trying to park the motors before halting them
+        static Timer parkmotors_timer{2500000}; // spend this long trying to park the motors before halting them
         static bool stopcar_phase;
         if (_we_just_switched_modes) {              
             shutting_down = !powering_up;   // if waking up from sleep standby is already complete
