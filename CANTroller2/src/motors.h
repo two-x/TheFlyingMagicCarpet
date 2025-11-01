@@ -887,15 +887,19 @@ class BrakeControl : public JagMotor {
     }
     bool goto_fixed_position(float tgt_position, bool at_position) {  // goes to a fixed position (hopefully) or pressure (if posn is unavailable) then stops.  useful for parking and releasing modes
         // active_sensor = (enabled_sensor == PressureFB) ? PressureFB : PositionFB;  // use posn sensor for this unless we are specifically forcing pressure only
+        bool in_progress;
         if (motormode == PropLoop || motormode == ActivePID) {
             set_target(tgt_position);
-            return (std::abs(target_pc - combined_read_pc <= target_margin_pc));
+            in_progress = (std::abs(target_pc - combined_read_pc) <= target_margin_pc);
         }
-        bool in_progress;
-        if (feedback == NoneFB) in_progress = (!blindaction_timer.expired());  // if running w/o feedback, let's blindly release the brake for a few seconds then halt it
-        else in_progress = ((brkpos->pc() < tgt_position) && !motor_park_timer.expired());
-        if (in_progress) pc[Out] = _fixed_release_speed;
-        else setmode(Halt, false); 
+        else {
+            if (feedback == NoneFB) in_progress = (!blindaction_timer.expired());  // if running w/o feedback, let's blindly release the brake for a few seconds then halt it
+            else in_progress = ((brkpos->pc() < tgt_position) && !motor_park_timer.expired());
+        }
+        if (!in_progress) {
+            setmode(Halt, false);
+            _fixed_target_mode = NA;
+        }
         return in_progress;
     }
     void set_output() {  // sets pc[Out] in whatever way is right for the current motor mode
@@ -936,11 +940,13 @@ class BrakeControl : public JagMotor {
         }
         else if (motormode == Release) {  // this will not get entered if using loop control. instead target is set in setmode function
             releasing = goto_fixed_position(brkpos->zeropoint_pc(), brkpos->released());
+            if (releasing) pc[Out] = _fixed_release_speed;
             // if (feedback == NoneFB) pc[Out] = target_pc; else
             // pc[Out] = calc_loop_out();   // if (autoholding) pc[Out] = pc[Stop];  // kills power to motor while car is stopped. 
         }
         else if (motormode == ParkMotor) {  // this will not get entered if using loop control. instead target is set in setmode function
             parking = goto_fixed_position(brkpos->parkpos_pc(), brkpos->parked());  // will set target to parked position
+            if (parking) pc[Out] = _fixed_release_speed;
             // if (feedback == NoneFB) pc[Out] = target_pc;  else
             // pc[Out] = calc_loop_out();   // if (autoholding) pc[Out] = pc[Stop];  // kills power to motor while car is stopped. 
         }
@@ -948,8 +954,10 @@ class BrakeControl : public JagMotor {
             pc[Out] = calc_open_out();
         }
         else if ((motormode == PropLoop) || (motormode == ActivePID)) {
-            if (_fixed_target_mode == Release) releasing = goto_fixed_position(brkpos->zeropoint_pc(), brkpos->released());
-            else if (_fixed_target_mode == ParkMotor) parking = goto_fixed_position(brkpos->parkpos_pc(), brkpos->parked());
+            if (_fixed_target_mode == Release)
+                releasing = goto_fixed_position(brkpos->zeropoint_pc(), brkpos->released());
+            else if (_fixed_target_mode == ParkMotor)
+                parking = goto_fixed_position(brkpos->parkpos_pc(), brkpos->parked());
             else {  // when dynamically driving
                 if (hotrc->joydir(Vert) != HrcDn) set_target(pc[Stop]);  // let off the brake
                 else set_target(map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], 0.0f, 100.0f));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint

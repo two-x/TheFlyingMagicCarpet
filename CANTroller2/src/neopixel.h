@@ -392,10 +392,18 @@ class IdiotLights {
     bool* vals[iconcount] = {  // arranged here as 6 bool pointers per line of code
         // row 1 onscreen.  the 1st 7 of these are true hazard lights (lit only on error), also copied onto the last 7 neopixel idiot lights
         &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, &panicstop,
-        hotrc.radiolost_ptr(), hotrc.radiolost_untested_ptr(), &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting,
+        hotrc.radiolost_ptr(), hotrc.radiolost_untested_ptr(), &brake.autostopping, &brake.autoholding, &parking, &releasing,
         // row 2 onscreen.  these are all just informational values
-        &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(),
-        speedo.stopped_ptr(), tach.stopped_ptr(), &nowtouch, encoder.activity_ptr(), &running_on_devboard, syspower.notval_ptr(),
+         &cruise_adjusting, &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(),
+         tach.pin_level_ptr(), speedo.stopped_ptr(), tach.stopped_ptr(), &nowtouch, encoder.activity_ptr(), &running_on_devboard,
+
+        // // row 1 onscreen.  the 1st 7 of these are true hazard lights (lit only on error), also copied onto the last 7 neopixel idiot lights
+        // &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, &panicstop,
+        // hotrc.radiolost_ptr(), hotrc.radiolost_untested_ptr(), &parking, &brake.autostopping, &brake.autoholding, &cruise_adjusting,
+        // // row 2 onscreen.  these are all just informational values
+        // &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(), tach.pin_level_ptr(),
+        // speedo.stopped_ptr(), tach.stopped_ptr(), &nowtouch, encoder.activity_ptr(), &running_on_devboard, syspower.notval_ptr(),
+
         // row 3 onscreen.  this row has one light per actuator or sensor, lit when there's any kind of error w/ that device
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
         &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_GPIO], &sensidiots[_Other],
@@ -436,7 +444,14 @@ class IdiotLights {
     uint8_t color(int index, int state=On) { return colors[state][index]; }
     std::string letter_string(int index) { return letter_strings[index]; }
 
+// &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, &panicstop,
+// hotrc.radiolost_ptr(), hotrc.radiolost_untested_ptr(), &brake.autostopping, &brake.autoholding, &parking, &releasing,
+// // row 2 onscreen.  these are all just informational values
+// &cruise_adjusting, &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(),
+// tach.pin_level_ptr(), speedo.stopped_ptr(), tach.stopped_ptr(), &nowtouch, encoder.activity_ptr(), &running_on_devboard,
+
     uint8_t icon[iconcount][11] = {  // this array really shouldn't be public, needs a getter function
+        // row 1 of screen icons
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // "S" w/ crossout symbol       // &diag.err_sens_alarm[ErrLost]
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x78, 0x70, 0x59, 0x4d, 0x07, 0x0f, },  // "S" w/ double arrow          // &diag.err_sens_alarm[ErrRange]
         { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x10, 0x10, 0x77, 0x65, 0x07, },  // "En" w/ degree symbol        // &diag.err_sens[ErrRange][_TempEng]
@@ -445,9 +460,11 @@ class IdiotLights {
         { 0x7f, 0x7f, 0x09, 0x09, 0x77, 0x16, 0x70, 0x60, 0x00, 0x6f, 0x6f, },  // "Pn!"                        // &panicstop
         { 0x7a, 0x7f, 0x4f, 0x17, 0x06, 0x00, 0x22, 0x1c, 0x00, 0x41, 0x3e, },  // hotrc w/ radio waves         // hotrc.radiolost_ptr()
         { 0x7a, 0x7f, 0x4f, 0x17, 0x06, 0x00, 0x02, 0x03, 0x51, 0x5d, 0x06, },  // hotrc w/ "?"                 // hotrc.radiolost_untested_ptr()
-        { 0x3e, 0x63, 0x41, 0x7d, 0x7d, 0x55, 0x55, 0x5d, 0x49, 0x63, 0x3e, },  // circle-"P"                   // &parking
         { 0x3e, 0x49, 0x1c, 0x00, 0x6e, 0x6b, 0x3b, 0x00, 0x1c, 0x49, 0x3e, },  // brake assembly w/ "S"        // &brake.autostopping
         { 0x3e, 0x49, 0x1c, 0x00, 0x7f, 0x18, 0x7f, 0x00, 0x1c, 0x49, 0x3e, },  // brake assembly w/ "H"        // &brake.autoholding
+        { 0x3e, 0x63, 0x01, 0x7d, 0x7d, 0x15, 0x15, 0x1d, 0x09, 0x63, 0x3e, },  // opencircle-"P"               // &parking
+        { 0x3e, 0x63, 0x01, 0x7d, 0x7d, 0x15, 0x35, 0x5d, 0x09, 0x63, 0x3e, },  // opencircle-"R"               // &releasing
+        // row 2 of screen icons
         { 0x08, 0x1c, 0x36, 0x00, 0x3e, 0x63, 0x63, 0x00, 0x36, 0x1c, 0x08, },  // "<C>"                        // &cruise_adjusting
         { 0x3d, 0x43, 0x07, 0x00, 0x3e, 0x63, 0x55, 0x49, 0x55, 0x63, 0x3e, },  // rotation arrow w/ X wheel    // &car_hasnt_moved
         { 0x3e, 0x41, 0x7f, 0x7b, 0x7b, 0x7b, 0x3e, 0x1c, 0x7f, 0x55, 0x7f, },  // motor w/ spur gear           // &starter.motor
@@ -460,7 +477,7 @@ class IdiotLights {
         { 0x78, 0x7c, 0x7f, 0x7f, 0x7c, 0x7c, 0x1c, 0x0c, 0x0c, 0x0c, 0x0c, },  // finger                       // &nowtouch
         { 0x0e, 0x1d, 0x7d, 0x7d, 0x1d, 0x0e, 0x00, 0x7f, 0x6b, 0x6b, 0x63, },  // encoder "E"                  // encoder.activity_ptr()
         { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },  // "DEV"                        // &running_on_devboard
-        { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },  // power on/off symbol          // syspower.notval_ptr()  // &powering_up
+        // row 3 of screen icons
         { 0x3e, 0x63, 0x7b, 0x00, 0x7e, 0x13, 0x7e, 0x00, 0x6e, 0x6b, 0x3b, },  // "GAS"                        // &sensidiots[_Throttle]
         { 0x3e, 0x49, 0x08, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x08, 0x49, 0x3e, },  // brakes or tie fighter        // &sensidiots[_BrakeMotor]
         { 0x00, 0x1c, 0x26, 0x45, 0x49, 0x79, 0x49, 0x45, 0x26, 0x1c, 0x00, },  // steering wheel               // &sensidiots[_SteerMotor]
@@ -496,6 +513,8 @@ class IdiotLights {
      // { 0x3e, 0x63, 0x41, 0x63, 0x36, 0x1c, 0x1c, 0x36, 0x22, 0x63, 0x41, },  // open loop                    // &brake.no_feedback
      // { 0x00, 0x00, 0x00, 0x1c, 0x3e, 0x3e, 0x3e, 0x1c, 0x00, 0x00, 0x00, },  // one dot                      // &ts_tapped  // touch.tap_ptr()
      // { 0x1c, 0x3e, 0x3e, 0x3e, 0x1c, 0x00, 0x1c, 0x3e, 0x3e, 0x3e, 0x1c, },  // two dots                     // &ts_doubletapped  // touch.doubletap_ptr()
+     // { 0x00, 0x3e, 0x63, 0x41, 0x40, 0x4f, 0x40, 0x41, 0x63, 0x3e, 0x00, },  // power on/off symbol          // syspower.notval_ptr()  // &powering_up
+     // { 0x3e, 0x63, 0x41, 0x7d, 0x7d, 0x55, 0x55, 0x5d, 0x49, 0x63, 0x3e, },  // fullcircle-"P"               // &parking
 
     // uint8_t idiot_saturation = 225;  // 170-195 makes nice bright yet distinguishable colors
     // uint8_t idiot_hue_offset = 240;
