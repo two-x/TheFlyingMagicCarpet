@@ -52,14 +52,17 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         
         if (ignition.signal && runmode != Cal) {  // guarantee execution of ignition-kill features, in all modes except Cal
             bool kill_ign = false;
-            if (!sim.simulating(sens::joy)) {  // when using the radio to drive (rather than simulator)
+            if (!(sim.simulating(sens::joy) && sim.enabled())) {  // when using the radio to control joy vert (rather than simulator)
                 if (hotrc.radiolost_untested() && require_radiolost_test) kill_ign = true;
                 if (hotrc.radiolost()) kill_ign = true;
                 if (kill_ign) ezread.squintf(ezread.madcolor, "run: ignition kill due to radio error\n");
             }
             if (hotrc.sw_event_unfilt(Ch3)) kill_ign = true; // any Ch3 event turns ign off
             if (kill_ign) {
-                if (!speedo.stopped()) ignition.panic_request(ReqOn); // if moving, panic will kill ignition and apply brakes
+                if (!speedo.stopped()) {
+                    if (_verbose) ezread.squintf("panic state requested by run.update()\n");
+                    ignition.panic_request(ReqOn); // if moving, panic will kill ignition and apply brakes
+                }
                 else ignition.request(ReqOff);                        // otherwise just kill the ignition
             }
         }

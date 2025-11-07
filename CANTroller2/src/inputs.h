@@ -294,7 +294,6 @@ class Touchscreen {
         ts_swiped = (ts_swipedir != DirNone);  // for debug idiot light
     }
   public:
-    static constexpr uint8_t addr = 0x38;  // i2c addr for captouch panel
     int drag_dist_min = 20;  // if a press changes location more than this many pixels, it is considered a drag not a press
     int swipe_min = 50;     // minimum travel in pixels to count as a swipe
     int idelta, id;         // id is edit amount as integer for locally made edits. idelta is edit amount as integer for passing off to tuner object.
@@ -314,6 +313,7 @@ class Touchscreen {
             || (longpress_timeout >= pressTimer.timeout()) )   ezread.squintf(ezread.madcolor, "  err: invalid touchscreen timings\n");
     }
     // bool* touched_ptr() { return &nowtouch; }
+    uint8_t get_addr() { return known_i2c_addr[I2CTouch]; }
     int touch_x() { return tft_touch[Horz]; }
     int touch_y() { return tft_touch[Vert]; }
     int touch_pt(int axis) { return tft_touch[axis]; }  // returns coordinate along given axis of last-read touch point (in pixels)

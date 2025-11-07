@@ -152,6 +152,12 @@ class Param {
     float* max_ptr() { return _max_ptr; }
     float last() { return _last; } // note: currently unused, do we still need this for drawing purposes?
 };
+
+enum class TransDir : int { Rev=0, Fwd=1, NumTransDir=2 }; // possible dir values. Rev means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
+std::string transdircard[static_cast<int>(TransDir::NumTransDir)] = { "rev", "fwd" };
+// enum TransType { UnknownType=0, ActuatorType=1, SensorType=2, NumTransType=3 };  // whether device is a sensor or actuator
+// std::string transtypecard[NumTransType] = { "actuator", "sensor" };
+
 // Device class - is a base class for any connected system device or signal associated with a pin
 class Device {
   protected:
@@ -215,11 +221,6 @@ class Device {
     // bool enabled() { return _enabled; }
 };
 
-enum class TransDir : int { Rev=0, Fwd=1, NumTransDir=2 }; // possible dir values. Rev means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
-enum TransType { ActuatorType=0, SensorType=1, NumTransType=2 }; // possible dir values. Rev means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
-std::string transtypecard[NumTransType] = { "actuator", "sensor" };
-std::string transdircard[static_cast<int>(TransDir::NumTransDir)] = { "rev", "fwd" };
-
 // Transducer class
 // Device::Transducer is a base class for any system devices that convert real-world values <--> signals in either direction. it has a "native"
 // value which represents the sensed or driven hardware input/output. it also has a "si" value which represents the logical or human-readable
@@ -246,7 +247,7 @@ class Transducer : public Device {
   protected:
     float _mfactor = 1.0f, _boffset = 0.0f, _zeropoint;
     float _opmin = NAN, _opmax = NAN, _opmin_native = NAN, _opmax_native = NAN, _margin = 0.0f;
-    int _transtype, _convmethod = LinearMath;  // the default method
+    int _convmethod = LinearMath;  // the default method  // int _transtype
     float _default_value_si = NAN;  // must be set by child classes to a valid default value (allows simulation)
     float _default_fixed_si = NAN;  // may be overridden by child classes. becomes value always when src == Fixed
     Param _si, _raw, _native;  // note _raw value is in si units, shares the same abs limits, and only relevant for sensors (TODO should be in sensors class?)
@@ -256,6 +257,7 @@ class Transducer : public Device {
   public:
     // operator float() { return _si.val(); }
     Transducer(int arg_pin) : Device(arg_pin) {
+        // _transtype = UnknownType;
         _long_name = "Unknown transducer";
         _short_name = "xducer";
     }
@@ -282,8 +284,8 @@ class Transducer : public Device {
     }
     virtual float to_native(float arg_si) {  // convert an absolute si value to native units
         float ret = NAN;
-        if (_convmethod == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());  // TODO : this math does not work if _invert == true!
-        else if (_convmethod == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);  // TODO : this math does not work if _invert == true!
+        if (_convmethod == AbsLimMap) ret = map(arg_si, _si.min(), _si.max(), _native.min(), _native.max());
+        else if (_convmethod == OpLimMap) ret = map(arg_si, _opmin, _opmax, _opmin_native, _opmax_native);
         else if ((_convmethod == LinearMath) && !iszero(_mfactor)) ret = (arg_si - _boffset) / _mfactor;
         else ezread.squintf(ezread.madcolor, "err: %s to_native can't convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_si, _si.min(), _si.max());
         cleanzero(&ret, float_conversion_zero);
@@ -291,13 +293,13 @@ class Transducer : public Device {
     }
     virtual float to_pc(float arg_si) {  // convert an absolute si value to percent form.  note this honors the _dir setting
         if (std::isnan(arg_si)) return NAN;
-        float ret = map(arg_si, _opmin, _opmax, 100.0f * (_dir == TransDir::Rev), 100.0f * (_dir == TransDir::Fwd));
+        float ret = map(arg_si, _opmin, _opmax, 100.0f * (int)(_dir == TransDir::Rev), 100.0f * (int)(_dir == TransDir::Fwd));
         cleanzero(&ret, float_conversion_zero);
         return ret;
     }
     virtual float from_pc(float arg_pc) {  // convert an absolute percent value to si unit form.  note this honors the _dir setting
         if (std::isnan(arg_pc)) return NAN;
-        float ret = map(arg_pc, 100.0f * (_dir == TransDir::Rev), 100.0f * (_dir == TransDir::Fwd), _opmin, _opmax);
+        float ret = map(arg_pc, 100.0f * (int)(_dir == TransDir::Rev), 100.0f * (int)(_dir == TransDir::Fwd), _opmin, _opmax);
         cleanzero(&ret, float_conversion_zero);
         return ret;
     }
@@ -413,6 +415,7 @@ class Transducer : public Device {
     float* opmax_ptr() { return &_opmax; }
     float* margin_ptr() { return &_margin; }
     float* zeropoint_ptr() { return &_zeropoint; }
+    TransDir dir() { return _dir; };
 };
 // Sensor class - is a base class for control system sensors, ie anything that measures real world data or electrical signals 
 // 
@@ -443,7 +446,7 @@ class Sensor : public Transducer {
         _short_name = "unksen";
     }
     void presetup() {  // must be run first by child class setup() function
-        _transtype = SensorType;
+        // _transtype = SensorType;
         set_can_source(src::Fixed, true);  // all sensors can be made to hold a fixed value (eg on hardware errors etc.)
         set_can_source(src::Sim, true);
         set_can_source(src::Pot, true);
@@ -464,11 +467,11 @@ class I2CSensor : public Sensor {
     }
     void print_on_boot(bool detected, bool responding) {
         ezread.squintf(ezread.highlightcolor, "%s sensor (i2c 0x%02x) %sdetected\n", _long_name.c_str(), addr, _detected ? "" : "not ");
-        if (detected) {
-            if (responding) ezread.squintf("  reading %.4f %s\n", read_i2c_sensor(), _si_units.c_str());
-            else ezread.squintf(ezread.sadcolor, "  no response\n");  // begin communication with air flow sensor) over I2C 
-        }
-        else ezread.squintf("\n");
+        // TODO - i had to comment this b/c map sensor would hang here during setup at boot
+        // if (detected) {
+        //     if (responding) ezread.squintf("  reading %.4f %s\n", read_i2c_sensor(), _si_units.c_str());
+        //     else ezread.squintf(ezread.sadcolor, "  no response\n");  // begin communication with air flow sensor) over I2C 
+        // }
     }
     void set_val_from_pin() override {
         if (_i2c->not_my_turn(_i2c_bus_index)) return;
@@ -530,7 +533,7 @@ class AirVeloSensor : public I2CSensor {
         set_abslim(0.0f, 33.55f);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.0f, 27.36f);  // 620/2 cm3/rot * 4800 rot/min * 60 min/hr * 1/160934 mi/cm * 1/pi * 1/((2 in * 2.54 cm/in) / 2)^2) 1/cm2  = 27.36 mi/hr (mph
         set_ema_alpha(0.2f);  // note: all the conversion constants for this sensor are actually correct being the defaults 
-        _responding = !_sensor.begin();
+        _responding = _sensor.begin(Wire);
         if (_responding) _sensor.setRange(AIRFLOW_RANGE_15_MPS);
         I2CSensor::postsetup();  // must be run last
     }
@@ -542,7 +545,7 @@ class MAPSensor : public I2CSensor {
     int64_t val_refresh_period = 120000; // , mapretry_timeout = 10000;
     int _i2c_bus_index = I2CMAP;  // to identify self in calls to I2C bus class
     float read_i2c_sensor() {
-        return _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
+        return _sensor.readPressure(ATM, true);  // _sensor.readPressure(PSI);  // <- blocking version (true argument) takes 6.5ms to read
     }
     void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:
@@ -561,7 +564,7 @@ class MAPSensor : public I2CSensor {
         set_abslim(0.06f, 2.46f);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68f, 1.02f);  // set in atm empirically
         set_ema_alpha(0.2f);
-        _responding = !_sensor.begin();
+        _responding = _sensor.begin(Wire);
         I2CSensor::postsetup();  // must be run last
     }
 };
@@ -810,7 +813,7 @@ class PulseSensor : public Sensor {
         }
         _raw.set(from_native(_native.val()));           // convert native Hz to get raw si value        
 
-        // TODO - if zero timeout happened should final si value jump to 0 also?  Here we are continuing to apply ema filter 
+        // We are continuing to apply ema filter to the filtered si value
         set_si_w_ema(); // (orig) apply ema filter for si filt value
         
         if (!std::isnan(val()) && iszero(val())) _us = NAN; // once filtered si hits zero, call pulsewidth invalid
@@ -850,7 +853,7 @@ class PulseSensor : public Sensor {
     void stopped_update() {
         if (std::isnan(val())) _stopped = false;        // on invalid value return false return for safety reasons
         // else if (iszero(val() - opmin())) _stopped = true; // return true if val equals opmin, avoiding float near-zero comparison errors 
-        else _stopped = (val() - opmin() <= margin());  // return whether val is within margin of opmin
+        else _stopped = (std::abs(val() - opmin()) <= margin());  // return whether val is within margin of opmin
     }
   public:
     std::string _true_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
@@ -1032,11 +1035,6 @@ class Simulator {
         }
         _enabled = enableSimulation;  // update the simulation status
     }
-    void enable() { updateSimulationStatus(true); }            // turn on the simulator. all components which are set to be simulated will switch to simulated input
-    void disable() { updateSimulationStatus(false); }          // turn off the simulator. all devices will be set to their default input (if they are not being mapped from the pot)
-    void toggle() { return _enabled ? disable() : enable(); }  // check if a componenet is currently being simulated (by either the touchscreen or the pot)
-    bool simulating() { return _enabled; }                     // equivalent to enabled()  // Maybe include || potmapping() too ?
-    bool simulating(sens arg_sensor) { return can_sim(arg_sensor) && (_enabled || _potmap == arg_sensor); }
     // associate a Device and a given fall-back source with a sensor
     void register_device(sens arg_sensor, Device &d, src default_mode) {
         bool can_sim = false; // by default, disable simulation for this component
@@ -1129,11 +1127,16 @@ class Simulator {
             _myprefs->putUInt("potmap", static_cast<uint32_t>(_potmap));
         }
     }
+    void enable() { updateSimulationStatus(true); }            // turn on the simulator. all components which are set to be simulated will switch to simulated input
+    void disable() { updateSimulationStatus(false); }          // turn off the simulator. all devices will be set to their default input (if they are not being mapped from the pot)
+    void toggle() { return _enabled ? disable() : enable(); }  // check if a componenet is currently being simulated (by either the touchscreen or the pot)
+    bool simulating() { return _enabled; }                     // equivalent to enabled()  // Maybe include || potmapping() too ?
+    bool simulating(sens arg_sensor) { return can_sim(arg_sensor) && (_enabled || _potmap == arg_sensor); }
     void set_potmap() { set_potmap(static_cast<sens>(_myprefs->getUInt("potmap", static_cast<uint32_t>(sens::none)))); }
     bool potmapping(sens s) { return can_sim(s) && _potmap == s; }  // query if a certain sensor is being potmapped
     bool potmapping(int s) { return can_sim(static_cast<sens>(s)) && (_potmap == static_cast<sens>(s)); }  // query if a certain sensor is being potmapped        
     bool potmapping() { return can_sim(_potmap) && !(_potmap == sens::none); }  // query if any sensors are being potmapped
-    int potmap() { return static_cast<int>(_potmap); }  // query which sensor is being potmapped
+    int potmap() { return static_cast<int>(_potmap); }         // query which sensor is being potmapped
     bool enabled() { return _enabled; }
     bool* enabled_ptr() { return &_enabled; }
     int registered_device_count() { return _registered_device_count; }

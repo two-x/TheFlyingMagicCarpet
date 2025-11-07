@@ -1,8 +1,8 @@
 #pragma once
 #include <Wire.h>   // for i2c bus support
-enum i2c_nodes : int { I2CBogus=-1, I2CTouch=0, I2CLightbox=1, I2CAirVelo=2, I2CMAP=3, NumI2CSlaves=4 };  // I2CTouch, 
+enum i2c_nodes { I2CBogus=-1, I2CTouch=0, I2CLightbox=1, I2CAirVelo=2, I2CMAP=3, NumI2CSlaves=4 };  // I2CTouch, 
 std::string i2ccard[(int)NumI2CSlaves] = { "touch", "litbox", "airvel", "mapsns" };
-uint8_t known_i2c_addrs[(int)NumI2CSlaves] = { 0x38, 0x69, 0x28, 0x18 };
+uint8_t known_i2c_addr[(int)NumI2CSlaves] = { 0x38, 0x69, 0x28, 0x18 };
 
 class I2C {
   private:
@@ -38,7 +38,7 @@ class I2C {
             Wire.beginTransmission(address);
             error = Wire.endTransmission();
             int devindex = -1;
-            for (int i=0; i<(int)NumI2CSlaves; i++) if (address == known_i2c_addrs[i]) devindex = i;
+            for (int i=0; i<(int)NumI2CSlaves; i++) if (address == known_i2c_addr[i]) devindex = i;
             if (error == 0) {
                 ezread.squintf("  found device addr 0x%s%x : %s\n", (address < 16) ? "0" : "", address, i2ccard[devindex].c_str());
                 _detaddrs[_devicecount++] = address;
@@ -86,13 +86,14 @@ enum Pressure_Units {PSI, PA, KPA, TORR, INHG, ATM, BAR};  // {PSI, Pa, kPa, tor
 
 class SparkFun_MicroPressure {
   public:
-    static constexpr uint8_t addr = 0x18;
     SparkFun_MicroPressure(int8_t eoc_pin=-1, int8_t rst_pin=-1, uint8_t minimumPSI=MINIMUM_PSI, uint8_t maximumPSI=MAXIMUM_PSI);
-    bool begin(uint8_t deviceAddress = addr, TwoWire &wirePort = Wire);
+    bool begin(TwoWire &wirePort = Wire);
     uint8_t readStatus(void);
-    float readPressure(Pressure_Units units=PSI, bool noblock=false);
-    uint8_t get_addr();
+    float readPressure(Pressure_Units units=PSI, bool blocking=true);
+    uint8_t get_addr() { return _addr; };
   private:
+    // bool begin(uint8_t deviceAddress = _addr, TwoWire &wirePort = Wire);
+    uint8_t _addr = known_i2c_addr[I2CMAP];   
     static constexpr int MAXIMUM_PSI = 25;
     static constexpr int MINIMUM_PSI = 0;
     static constexpr uint8_t BUSY_FLAG = 0x20;
@@ -102,7 +103,7 @@ class SparkFun_MicroPressure {
     static constexpr uint32_t OUTPUT_MIN = 0x19999A;
     bool run_preamble = true;
     float pressure = NAN;
-    int8_t _address, _eoc, _rst;
+    uint8_t _eoc, _rst;
     uint8_t _minPsi, _maxPsi, _status;
     TwoWire *_i2cPort = &Wire;
 };
@@ -111,16 +112,18 @@ class SparkFun_MicroPressure {
 // - minimum/maximum PSI, minimum range value of the sensor (in PSI). Default: 0
 // - maximumPSI, maximum range value of the sensor (in pSI). Default: 25
 SparkFun_MicroPressure::SparkFun_MicroPressure(int8_t eoc_pin, int8_t rst_pin, uint8_t minimumPSI, uint8_t maximumPSI) {
+    _addr = _addr;
     _eoc = eoc_pin;
     _rst = rst_pin;
     _minPsi = minimumPSI;
     _maxPsi = maximumPSI;
+    // begin(Wire);
 }
 // - deviceAddress, I2C address of the sensor. Default: 0x18
 // - wirePort, sets the I2C bus used for communication. Default: Wire
 // - Returns 0/1: 0: sensor not found, 1: sensor connected  */
-bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
-    _address = deviceAddress;
+// bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
+bool SparkFun_MicroPressure::begin(TwoWire &wirePort) {
     _i2cPort = &wirePort;
     if(_eoc != -1) pinMode(_eoc, INPUT);
     if(_rst != -1) {
@@ -131,19 +134,21 @@ bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
         delay(5);
     }
     run_preamble = true;
-    _i2cPort->beginTransmission(_address);
+    _i2cPort->beginTransmission(_addr);
     //return !(_i2cPort->endTransmission());
     uint8_t error = _i2cPort->endTransmission();
+    delay(5);
     if(error == 0) return true;
     else           return false;
 }
 uint8_t SparkFun_MicroPressure::readStatus(void) {
-    _i2cPort->requestFrom(_address,1);
+    _i2cPort->requestFrom((int)_addr,1);
     return _i2cPort->read();
 }
-float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
+float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool blocking) {
+    static Timer read_timer{500000};  // half-second timeout to avoid hanging during failed read
     if (run_preamble) {
-        _i2cPort->beginTransmission(_address);
+        _i2cPort->beginTransmission(_addr);
         _i2cPort->write((uint8_t)0xAA);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->write((uint8_t)0x00);
@@ -152,20 +157,25 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool noblock) {
     run_preamble = false;
     if (_eoc != -1) { // Use GPIO pin if defined
         while (!digitalRead(_eoc)) {
-            if (noblock) return NAN;
+            if (!blocking) return NAN;
             delay(1);
         }
     }
     else { // Check status byte if GPIO is not defined
+        read_timer.reset();
         _status = readStatus();
         while((_status & BUSY_FLAG) && (_status != 0xFF)) {
-            if (noblock) return NAN;
+            if (!blocking) return NAN;
             delay(1);
             _status = readStatus();
+            if (read_timer.expired()) {
+                ezread.squintf(ezread.sadcolor, "warn: map sensor read timed out\n");
+                return NAN;
+            }
         }
     }
     run_preamble = true;
-    _i2cPort->requestFrom(_address, 4);
+    _i2cPort->requestFrom((int)_addr, 4);
     _status = _i2cPort->read();
     if ((_status & INTEGRITY_FLAG) || (_status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
     int reading = 0;
@@ -196,49 +206,10 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     uint16_t speed_last;
     uint8_t status_nibble_last;
     I2C* i2c;
+    uint8_t _addr = known_i2c_addr[I2CLightbox];
     // DiagRuntime* diag;
   public:
-    static constexpr uint8_t addr = 0x69;
     LightingBox(I2C* _i2c) : i2c{_i2c} {}  // LightingBox(DiagRuntime* _diag) : diag(_diag) {}
-    void setup() {
-        ezread.squintf(ezread.highlightcolor, "Lightbox (i2c 0x%02x) init\n", addr);  // ezread.squintf("Lighting box serial comm..\n");
-    }
-    bool sendstatus() {
-        uint8_t byt = 0x00;  // command template for status update
-        uint8_t warning = 0;  // (diag->worst_sensor(3) != _None);
-        uint8_t alarm = 0;  // (diag->worst_sensor(4) != _None);
-        byt |= (uint8_t)syspower.val() | (uint8_t)(panicstop << 1) | (uint8_t)(warning << 2) | (alarm << 3);  // insert status bits nibble
-        if (byt == status_nibble_last) return false;  // bail if no change to status occured
-        Wire.beginTransmission(addr);
-        Wire.write(byt);
-        Wire.endTransmission(addr);
-        status_nibble_last = byt;
-        return true;
-    }
-    bool sendrunmode(int runmode) {
-        uint8_t byt = 0x10;  // command template for runmode update
-        if (runmode == runmode_last) return false;  // bail if no change to runmode occured
-        byt |= (uint8_t)(runmode & 0x0f);  // insert runmode in 2nd nibble
-        Wire.beginTransmission(addr);
-        Wire.write(byt);
-        Wire.endTransmission(addr);
-        runmode_last = runmode;
-        return true;
-    }
-    bool sendspeed(float _speed) {
-        uint8_t byt = 0x20;  // command template for speed update
-        uint16_t speed = (uint16_t)(_speed * 100.0f);
-        if (speed == speed_last) return false;  // bail if speed has not changed
-        byt |= ((uint8_t)(speed >> 8) & 0x0f);
-        Wire.beginTransmission(addr);
-        Wire.write(byt);
-        byt = (uint8_t)(speed & 0xff);
-        Wire.write(byt);
-        Wire.endTransmission();
-        speed_last = speed;
-        return true;
-    }
-    uint8_t get_addr() { return addr; }
     void update(float speed) {
         bool sent = false;
         if (i2c->not_my_turn(I2CLightbox)) return;
@@ -250,5 +221,45 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         }
         i2c->pass_i2c_baton();
         return;
+    }
+    void setup() {
+        ezread.squintf(ezread.highlightcolor, "Lightbox (i2c 0x%02x) init\n", _addr);  // ezread.squintf("Lighting box serial comm..\n");
+    }
+    uint8_t get_addr() { return _addr; }
+  private:
+    bool sendstatus() {
+        uint8_t byt = 0x00;  // command template for status update
+        uint8_t warning = 0;  // (diag->worst_sensor(3) != _None);
+        uint8_t alarm = 0;  // (diag->worst_sensor(4) != _None);
+        byt |= (uint8_t)syspower.val() | (uint8_t)(panicstop << 1) | (uint8_t)(warning << 2) | (alarm << 3);  // insert status bits nibble
+        if (byt == status_nibble_last) return false;  // bail if no change to status occured
+        Wire.beginTransmission(_addr);
+        Wire.write(byt);
+        Wire.endTransmission(_addr);
+        status_nibble_last = byt;
+        return true;
+    }
+    bool sendrunmode(int runmode) {
+        uint8_t byt = 0x10;  // command template for runmode update
+        if (runmode == runmode_last) return false;  // bail if no change to runmode occured
+        byt |= (uint8_t)(runmode & 0x0f);  // insert runmode in 2nd nibble
+        Wire.beginTransmission(_addr);
+        Wire.write(byt);
+        Wire.endTransmission(_addr);
+        runmode_last = runmode;
+        return true;
+    }
+    bool sendspeed(float _speed) {
+        uint8_t byt = 0x20;  // command template for speed update
+        uint16_t speed = (uint16_t)(_speed * 100.0f);
+        if (speed == speed_last) return false;  // bail if speed has not changed
+        byt |= ((uint8_t)(speed >> 8) & 0x0f);
+        Wire.beginTransmission(_addr);
+        Wire.write(byt);
+        byt = (uint8_t)(speed & 0xff);
+        Wire.write(byt);
+        Wire.endTransmission();
+        speed_last = speed;
+        return true;
     }
 };

@@ -130,6 +130,7 @@ void maf_task(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
         if (i2c.detected(I2CAirVelo)) airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
         maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+        vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
         if (!i2c.detected(I2CAirVelo) && !i2c.detected(I2CMAP)) vTaskDelay(pdMS_TO_TICKS(100));  // Delay for a second to avoid updating the sensors too frequently
     }
 }
@@ -249,6 +250,7 @@ void finalize_boot() {
 }
 class Ignition {  // the ignition object controls the car ignition signal and the panicstop state based on external requests
   private:
+    bool _verbose = true;
     int _pin, _ign_req = ReqNA, _panic_req = ReqNA;  // bool _verbose = true;
     Timer panicTimer{10000000};  // how long should a panic stop last?  we can't stay mad forever
     void set_ignition(bool newval) {
@@ -273,10 +275,17 @@ class Ignition {  // the ignition object controls the car ignition signal and th
         if (runmode == LowPower) return;
         if (_panic_req == ReqTog) _panic_req = panicstop ? ReqOff : ReqOn;
         if (_ign_req == ReqTog) _ign_req = signal ? ReqOff : ReqOn;
+
+        // 251102 TODO - is this redundant to code in run.update() ?
         if (!speedo.stopped()) {  //  && (runmode == Fly || runmode == Cruise || runmode == Hold)
-            if (signal && _ign_req == ReqOff) _panic_req = ReqOn;  // ignition cut while driving causes panic stop
-            if (!sim.simulating(sens::joy) && hotrc.radiolost()) _panic_req = ReqOn;
+            int req_last = _panic_req;
+            if (signal && _ign_req == ReqOff) _panic_req = ReqOn;    // ignition cut while driving causes panic stop
+            if (!(sim.simulating(sens::joy) && sim.enabled()))       // if using hotrc to drive
+                if (hotrc.radiolost() || hotrc.radiolost_untested()) // and radio problem
+                    _panic_req = ReqOn;                              // then panic
+            if (_verbose && !req_last && _panic_req) ezread.squintf("panic state initiated by ign class\n");
         }
+        
         if (_panic_req != ReqNA) set_panicstop((_panic_req == ReqOn) ? true : false);    // ezread.squintf("panic=%d\n", panicstop);
         if (panicstop) {
             if (signal) ezread.squintf(ezread.madcolor, "ign kill due to panic stop condition\n");
