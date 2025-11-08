@@ -126,14 +126,25 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
 // RTOS task that updates map and airflow sensors, and mass airflow calculation
 void maf_task(void *parameter) {
     while (true) {
-        if (i2c.detected(I2CMAP)) mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
+        mapsens.update();        // manifold air pressure sensor  // 70 us + 2ms every 9 loops
         vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
-        if (i2c.detected(I2CAirVelo)) airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
-        maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+        airvelo.update();        // manifold air velocity sensor  // 20us + 900us every 4 loops
+        maf_gps = massairflow(); // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
         vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
-        if (!i2c.detected(I2CAirVelo) && !i2c.detected(I2CMAP)) vTaskDelay(pdMS_TO_TICKS(100));  // Delay for a second to avoid updating the sensors too frequently
+        if (!i2c.detected(I2CAirVelo) && !i2c.detected(I2CMAP)) vTaskDelay(pdMS_TO_TICKS(300)); // guarantees easement of cpu cycles & bus activity by disconnecting i2c plug (in case of problems)
     }
 }
+// WIP debugging
+// void maf_task(void *parameter) {
+//     while (true) {
+//         if (i2c.detected(I2CMAP)) mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
+//         vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
+//         if (i2c.detected(I2CAirVelo)) airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
+//         maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
+//         vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
+//         if (!i2c.detected(I2CAirVelo) && !i2c.detected(I2CMAP)) vTaskDelay(pdMS_TO_TICKS(100));  // Delay for a second to avoid updating the sensors too frequently
+//     }
+// }
 class ToggleSwitch {
   public:
     bool val = LOW;  // pin low means val high

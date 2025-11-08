@@ -87,13 +87,14 @@ enum Pressure_Units {PSI, PA, KPA, TORR, INHG, ATM, BAR};  // {PSI, Pa, kPa, tor
 class SparkFun_MicroPressure {
   public:
     SparkFun_MicroPressure(int8_t eoc_pin=-1, int8_t rst_pin=-1, uint8_t minimumPSI=MINIMUM_PSI, uint8_t maximumPSI=MAXIMUM_PSI);
-    bool begin(TwoWire &wirePort = Wire);
+    
+    bool begin(uint8_t deviceAddress = known_i2c_addr[I2CMAP], TwoWire &wirePort = Wire);
+    // bool begin(TwoWire &wirePort = Wire);
+    
     uint8_t readStatus(void);
     float readPressure(Pressure_Units units=PSI, bool blocking=true);
-    uint8_t get_addr() { return _addr; };
+    uint8_t get_addr() { return (uint8_t)_addr; }; // WIP debugging
   private:
-    // bool begin(uint8_t deviceAddress = _addr, TwoWire &wirePort = Wire);
-    uint8_t _addr = known_i2c_addr[I2CMAP];   
     static constexpr int MAXIMUM_PSI = 25;
     static constexpr int MINIMUM_PSI = 0;
     static constexpr uint8_t BUSY_FLAG = 0x20;
@@ -103,16 +104,20 @@ class SparkFun_MicroPressure {
     static constexpr uint32_t OUTPUT_MIN = 0x19999A;
     bool run_preamble = true;
     float pressure = NAN;
-    uint8_t _eoc, _rst;
+
+    int8_t _addr, _eoc, _rst; // WIP debugging
+    // uint8_t _addr = known_i2c_addr[I2CMAP]; // WIP debugging
+    // uint8_t _eoc, _rst; // WIP debugging
+
     uint8_t _minPsi, _maxPsi, _status;
     TwoWire *_i2cPort = &Wire;
+    // bool begin(uint8_t deviceAddress = _addr, TwoWire &wirePort = Wire); // WIP debugging
 };
 // - (Optional) eoc_pin, End of Conversion indicator. Default: -1 (skip)
 // - (Optional) rst_pin, Reset pin for MPR sensor. Default: -1 (skip)
 // - minimum/maximum PSI, minimum range value of the sensor (in PSI). Default: 0
 // - maximumPSI, maximum range value of the sensor (in pSI). Default: 25
 SparkFun_MicroPressure::SparkFun_MicroPressure(int8_t eoc_pin, int8_t rst_pin, uint8_t minimumPSI, uint8_t maximumPSI) {
-    _addr = _addr;
     _eoc = eoc_pin;
     _rst = rst_pin;
     _minPsi = minimumPSI;
@@ -123,7 +128,11 @@ SparkFun_MicroPressure::SparkFun_MicroPressure(int8_t eoc_pin, int8_t rst_pin, u
 // - wirePort, sets the I2C bus used for communication. Default: Wire
 // - Returns 0/1: 0: sensor not found, 1: sensor connected  */
 // bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
-bool SparkFun_MicroPressure::begin(TwoWire &wirePort) {
+
+// bool SparkFun_MicroPressure::begin(TwoWire &wirePort) { // WIP debugging
+bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) { // WIP debugging
+    _addr = deviceAddress; // WIP debugging
+
     _i2cPort = &wirePort;
     if(_eoc != -1) pinMode(_eoc, INPUT);
     if(_rst != -1) {
@@ -137,16 +146,16 @@ bool SparkFun_MicroPressure::begin(TwoWire &wirePort) {
     _i2cPort->beginTransmission(_addr);
     //return !(_i2cPort->endTransmission());
     uint8_t error = _i2cPort->endTransmission();
-    delay(5);
     if(error == 0) return true;
     else           return false;
 }
 uint8_t SparkFun_MicroPressure::readStatus(void) {
-    _i2cPort->requestFrom((int)_addr,1);
+    _i2cPort->requestFrom(_addr, 1); // WIP debugging
+    // _i2cPort->requestFrom((int)_addr, 1); // WIP debugging
     return _i2cPort->read();
 }
 float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool blocking) {
-    static Timer read_timer{500000};  // half-second timeout to avoid hanging during failed read
+    // static Timer read_timer{500000};  // half-second timeout to avoid hanging during failed read // WIP debugging
     if (run_preamble) {
         _i2cPort->beginTransmission(_addr);
         _i2cPort->write((uint8_t)0xAA);
@@ -162,20 +171,21 @@ float SparkFun_MicroPressure::readPressure(Pressure_Units units, bool blocking) 
         }
     }
     else { // Check status byte if GPIO is not defined
-        read_timer.reset();
+        // read_timer.reset(); // WIP debugging
         _status = readStatus();
-        while((_status & BUSY_FLAG) && (_status != 0xFF)) {
+        while((_status & BUSY_FLAG) && (_status != 0xff)) {
             if (!blocking) return NAN;
             delay(1);
             _status = readStatus();
-            if (read_timer.expired()) {
-                ezread.squintf(ezread.sadcolor, "warn: map sensor read timed out\n");
-                return NAN;
-            }
+            // if (read_timer.expired()) { // WIP debugging
+            //     ezread.squintf(ezread.sadcolor, "warn: map sensor read timed out\n"); // WIP debugging
+            //     return NAN; // WIP debugging
+            // } // WIP debugging
         }
     }
     run_preamble = true;
-    _i2cPort->requestFrom((int)_addr, 4);
+    _i2cPort->requestFrom(_addr, 4); // WIP debugging
+    // _i2cPort->requestFrom((int)_addr, 4); // WIP debugging
     _status = _i2cPort->read();
     if ((_status & INTEGRITY_FLAG) || (_status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
     int reading = 0;

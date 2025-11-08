@@ -468,22 +468,33 @@ class I2CSensor : public Sensor {
     void print_on_boot(bool detected, bool responding) {
         ezread.squintf(ezread.highlightcolor, "%s sensor (i2c 0x%02x) %sdetected\n", _long_name.c_str(), addr, _detected ? "" : "not ");
         // TODO - i had to comment this b/c map sensor would hang here during setup at boot
-        // if (detected) {
-        //     if (responding) ezread.squintf("  reading %.4f %s\n", read_i2c_sensor(), _si_units.c_str());
-        //     else ezread.squintf(ezread.sadcolor, "  no response\n");  // begin communication with air flow sensor) over I2C 
-        // }
-    }
-    void set_val_from_pin() override {
-        if (_i2c->not_my_turn(_i2c_bus_index)) return;
-        if (!_i2c->detected(_i2c_bus_index) || !_responding) _native.set(NAN); // if bus/sensor failure set value to nan
-        else _native.set(read_i2c_sensor());                          // otherwise take a new native reading from the bus
-        if (_i2c->i2cbaton == _i2c_bus_index) _i2c->pass_i2c_baton(); // deal with bus semaphore, since we're done with it
-        if (std::isnan(_native.val())) _si.set((NAN));                // propagate nan native value to all values
-        else {                                                        // if reading was good
-            _raw.set(from_native(_native.val()));                     // convert native to raw si value
-            set_si_w_ema();                                           // set si filtered value based on new raw reading
+        if (detected) {
+            if (responding) ezread.squintf("  reading %.4f %s\n", read_i2c_sensor(), _si_units.c_str());
+            else ezread.squintf(ezread.sadcolor, "  no response\n");  // begin communication with air flow sensor) over I2C 
         }
     }
+
+    void set_val_from_pin() override {
+        // set_native(read_i2c_sensor());
+        // calculate_ema();  // Sensor EMA filter
+
+        _native.set(read_i2c_sensor());
+        _raw.set(from_native(_native.val()));                     // convert native to raw si value
+        set_si_w_ema();                                           // set si filtered value based on new raw reading
+    }
+    // WIP debugging
+    // void set_val_from_pin() override {
+    //     if (_i2c->not_my_turn(_i2c_bus_index)) return;
+    //     if (!_i2c->detected(_i2c_bus_index) || !_responding) _native.set(NAN); // if bus/sensor failure set value to nan
+    //     else _native.set(read_i2c_sensor());                          // otherwise take a new native reading from the bus
+    //     if (_i2c->i2cbaton == _i2c_bus_index) _i2c->pass_i2c_baton(); // deal with bus semaphore, since we're done with it
+    //     if (std::isnan(_native.val())) _si.set((NAN));                // propagate nan native value to all values
+    //     else {                                                        // if reading was good
+    //         _raw.set(from_native(_native.val()));                     // convert native to raw si value
+    //         set_si_w_ema();                                           // set si filtered value based on new raw reading
+    //     }
+    // }
+
   public:
     uint8_t addr;
     I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor(-1), _i2c(i2c_arg), addr(i2c_address_arg) {
@@ -493,18 +504,28 @@ class I2CSensor : public Sensor {
     I2CSensor() = delete;
     void presetup() {  // must be run first by child class setup() function
         Sensor::presetup();  // must be run first
+        _detected = _i2c->detected_by_addr(addr); // WIP debugging
         set_conversions(1.0f, 0.0f); // our i2c sensors so far provide si units directly.
     }
+
+    // WIP debugging
     void postsetup() {  // must be run last by child class setup() function
-        // set_si(_default_value_si);  // initialize value
-        _detected = _i2c->detected_by_addr(addr);
-        if (!_detected || !_responding) {
-            // _enabled = false;
-            set_source(src::Fixed);  // TODO - added to prevent continual map(NAN, ...) errors on sensors not present. review
-            // set_si(_default_value_si);
-        }
+        if (!_detected || !_responding) set_source(src::Fixed);  // TODO - added to prevent continual map(NAN, ...) errors on sensors not present. review
+        else set_source(src::Pin);
+        update();
         print_on_boot(_detected, _responding);
     }
+
+    // WIP debugging
+    // void postsetup() {  // must be run last by child class setup() function
+    //     // set_si(_default_value_si);  // initialize value
+    //     _detected = _i2c->detected_by_addr(addr);
+    //     if (!_detected || !_responding) {
+    //         set_source(src::Fixed);  // TODO - added to prevent continual map(NAN, ...) errors on sensors not present. review
+    //         // set_si(_default_value_si);
+    //     }
+    //     print_on_boot(_detected, _responding);
+    // }
     virtual void setup() = 0;  // child sensors must include a setup() function
 };
 // AirVeloSensor measures the intake air velocity in mph. Sensor is an external i2c device.
@@ -533,8 +554,11 @@ class AirVeloSensor : public I2CSensor {
         set_abslim(0.0f, 33.55f);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.0f, 27.36f);  // 620/2 cm3/rot * 4800 rot/min * 60 min/hr * 1/160934 mi/cm * 1/pi * 1/((2 in * 2.54 cm/in) / 2)^2) 1/cm2  = 27.36 mi/hr (mph
         set_ema_alpha(0.2f);  // note: all the conversion constants for this sensor are actually correct being the defaults 
-        _responding = _sensor.begin(Wire);
+
+        if (_detected) _responding = _sensor.begin(); // WIP debugging
         if (_responding) _sensor.setRange(AIRFLOW_RANGE_15_MPS);
+        // _responding = _sensor.begin(Wire); // WIP debugging
+
         I2CSensor::postsetup();  // must be run last
     }
 };
@@ -544,9 +568,29 @@ class MAPSensor : public I2CSensor {
     SparkFun_MicroPressure _sensor;
     int64_t val_refresh_period = 120000; // , mapretry_timeout = 10000;
     int _i2c_bus_index = I2CMAP;  // to identify self in calls to I2C bus class
+
+    Timer mapreadTimer{0}; // WIP debugging
+    int mapread_timeout = 100000, mapretry_timeout = 10000; // WIP debugging
+
     float read_i2c_sensor() {
-        return _sensor.readPressure(ATM, true);  // _sensor.readPressure(PSI);  // <- blocking version (true argument) takes 6.5ms to read
+        static float goodreading = NAN;
+        if (!_i2c->detected(_i2c_bus_index)) return NAN;
+        if (mapreadTimer.expired()) {
+            float temp = _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
+            if (!std::isnan(temp)) {
+                goodreading = temp;
+                mapreadTimer.set(mapread_timeout);
+            }
+            else mapreadTimer.set(mapretry_timeout);  // ezread.squintf("av:%f\n", goodreading);
+        }
+        // ezread.squintf("m:%.3lf\n", goodreading);
+        return goodreading;
     }
+    // WIP debugging
+    // float read_i2c_sensor() {
+    //     return _sensor.readPressure(ATM, true);  // _sensor.readPressure(PSI);  // <- blocking version (true argument) takes 6.5ms to read
+    // }
+
     void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:
     static constexpr uint8_t addr = 0x18;  // note: would all MAPSensors have the same address?  ANS: yes by default, or an alternate fixed addr can be hardware-selected by hooking a pin low or something
@@ -564,7 +608,11 @@ class MAPSensor : public I2CSensor {
         set_abslim(0.06f, 2.46f);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68f, 1.02f);  // set in atm empirically
         set_ema_alpha(0.2f);
-        _responding = _sensor.begin(Wire);
+
+        mapreadTimer.set(mapread_timeout); // WIP debugging
+        if (_detected) _responding = _sensor.begin(); // WIP debugging
+        // _responding = _sensor.begin(Wire); // WIP debugging
+        
         I2CSensor::postsetup();  // must be run last
     }
 };
