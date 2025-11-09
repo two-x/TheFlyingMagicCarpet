@@ -165,8 +165,8 @@ class Device {
     int _pin;
     bool _detected = false, _responding = false;
     // bool _enabled = true;
-    int val_refresh_period = 5000;  // minimum delay between value updates, just to be efficient w/ processing. (overload this per device)
-    Timer valrefreshtimer;
+    int _update_period = 10000;  // default delay between value updates, just to be efficient w/ processing. (overload this per device)
+    Timer _updatetimer;
     Potentiometer* _pot; // to pull input from the pot if we're in simulation mode
     src _source = src::Pin;
     bool _can_source[static_cast<int>(src::NumSources)] = { true, true, false, false };  // [Fixed/Pin/Sim/Pot]
@@ -189,7 +189,7 @@ class Device {
     Device() = delete; // should always be created with a pin
     // note: should we start in Pin mode?
     Device(int arg_pin) : _pin(arg_pin) {
-        valrefreshtimer.set(val_refresh_period);
+        _updatetimer.set(_update_period);
     }
     bool can_source(src arg_source) { return _can_source[static_cast<int>(arg_source)]; }
     bool set_source(src arg_source) {
@@ -202,7 +202,7 @@ class Device {
         return false;
     }
     virtual void update() {  // I changed case statement into if statements and now is 10 lines long instead of 28.  case sucks like that
-        if (valrefreshtimer.expired()) {
+        if (_updatetimer.expired()) {
             if (runmode == LowPower) return; // do nothing if in lowpower mode or this device is disabled
             // if (!_enabled) return; // do nothing if in lowpower mode or this device is disabled
             if (_source == src::Fixed) set_val_from_fixed();
@@ -210,7 +210,7 @@ class Device {
             else if (_source == src::Pot) set_val_from_pot();
             else if (_source == src::Sim) set_val_from_sim();
             else ezread.squintf(ezread.madcolor, "err: device %s invalid src=%s\n", _short_name.c_str(), sensor_src_card[(int)_source].c_str());
-            valrefreshtimer.set(val_refresh_period);  // allows for dynamic adjustment of update period as needed each device
+            _updatetimer.set(_update_period);  // allows for dynamic adjustment of update period as needed each device
         }
     }
     void attach_pot(Potentiometer &pot_arg) { _pot = &pot_arg; }
@@ -508,7 +508,7 @@ class I2CSensor : public Sensor {
     void postsetup() {  // must be run last by child class setup() function
         if (!_detected || !_responding) set_source(src::Fixed);  // TODO - added to prevent continual map(NAN, ...) errors on sensors not present. review
         else set_source(src::Pin);
-        update();
+        set_val_from_pin();
         print_on_boot(_detected, _responding);
     }
 
@@ -528,7 +528,6 @@ class I2CSensor : public Sensor {
 class AirVeloSensor : public I2CSensor {
   protected:
     FS3000 _sensor;
-    int64_t val_refresh_period = 85000;
     int _i2c_bus_index = I2CAirVelo;  // to identify self in calls to I2C bus class
     float read_i2c_sensor() {
         return _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
@@ -546,6 +545,7 @@ class AirVeloSensor : public I2CSensor {
     AirVeloSensor() = delete;
     void setup() {
         I2CSensor::presetup();  // must be run first
+        _update_period = 85000;
         _default_value_si = 0.0f;
         set_abslim(0.0f, 33.55f);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.0f, 27.36f);  // 620/2 cm3/rot * 4800 rot/min * 60 min/hr * 1/160934 mi/cm * 1/pi * 1/((2 in * 2.54 cm/in) / 2)^2) 1/cm2  = 27.36 mi/hr (mph
@@ -562,19 +562,18 @@ class AirVeloSensor : public I2CSensor {
 class MAPSensor : public I2CSensor {
   protected:
     SparkFun_MicroPressure _sensor;
-    int mapread_timeout = 120000, mapretry_timeout = 10000; // WIP debugging
-    int64_t val_refresh_period = (uint64_t)mapread_timeout; // , mapretry_timeout = 10000;
     int _i2c_bus_index = I2CMAP;  // to identify self in calls to I2C bus class
+    int _mapread_timeout = 120000, _mapretry_timeout = 5000; // retry timeout of ~10ms is handled by a task delay in maf_task() instead // WIP debugging
 
     float read_i2c_sensor() {
         static float goodreading = NAN;
         if (!_detected) return NAN;
         float temp = _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
-        if (!std::isnan(temp)) {
+        if (std::isnan(temp)) _update_period = _mapretry_timeout; // affects delay until next read attempt
+        else {
             goodreading = temp;
-            val_refresh_period = (uint64_t)mapread_timeout;
+            _update_period = _mapread_timeout; // affects delay until next read attempt
         }
-        else val_refresh_period = (uint64_t)mapretry_timeout;  // ezread.squintf("av:%f\n", goodreading);
         // ezread.squintf("m:%.3lf\n", goodreading);
         return goodreading;
     }
@@ -596,6 +595,7 @@ class MAPSensor : public I2CSensor {
     MAPSensor() = delete;
     void setup() {
         I2CSensor::presetup();  // must be run first
+        _update_period = _mapread_timeout;
         _default_value_si = 1.0f;
         set_abslim(0.06f, 2.46f);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68f, 1.02f);  // set in atm empirically
@@ -610,7 +610,6 @@ class MAPSensor : public I2CSensor {
 // AnalogSensor are sensors where the value is based on an ADC reading (eg brake pressure, brake actuator position, pot)
 class AnalogSensor : public Sensor {
   protected:
-    int64_t val_refresh_period = 25000; // , mapretry_timeout = 10000;
     float _initial_bs_value_si = NAN;  // invalid value allows us to detect whether sensor is present
     bool _last_read_valid = false;
     void set_val_from_pin() override {
@@ -629,6 +628,7 @@ class AnalogSensor : public Sensor {
     void presetup() {  // must be run first by child class setup() function
         Sensor::presetup();  // must be run first
         set_pin(_pin, INPUT);
+        _update_period = 25000;
         set_abslim_native(0.0f, static_cast<float>(adcrange_adc), false);  // need false arg to avoid autocalc si abslim values
     }
     void postsetup() {  // must be run last by child class setup() function
@@ -818,7 +818,7 @@ class PulseSensor : public Sensor {
     bool _low_pulse = true, _pin_level, _pin_inactive = false, _stopped = false;
     float _ema_tau_min_us = 1000.0f, _ema_tau_max_us = 100000.0f, _ema_alpha_max = 0.95f;  // default ema tau parameters. must be initialized in child classes!
     float _freqfactor = 1.0f;  // a fixed factor to compensate for multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
-    Timer pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur. for display
+    Timer _pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur. for display
 
     // we maintain our min and max pulse period, for each pulse sensor
     // absmin_us is calculated based on absmax_native (Hz) using overloaded set_abslim_native() function
@@ -875,10 +875,10 @@ class PulseSensor : public Sensor {
     void set_pin_inactive() {
         static bool pinlevel_last;
         if (pinlevel_last != _pin_level) {
-            pinactivitytimer.reset();
+            _pinactivitytimer.reset();
             _pin_inactive = false;
         }
-        else if (pinactivitytimer.expired()) _pin_inactive = true;
+        else if (_pinactivitytimer.expired()) _pin_inactive = true;
         pinlevel_last = _pin_level;
     }
     float us_to_hz(float arg) {
@@ -908,6 +908,7 @@ class PulseSensor : public Sensor {
         Sensor::presetup();  // must be run first
         set_pin(_pin, INPUT_PULLUP);
         attachInterrupt(digitalPinToInterrupt(_pin), [this]{ _isr(); }, _low_pulse ? FALLING : RISING);
+        _update_period = 15000;
         _detected = true;  // can't tell at boot whether sensor is present or not, so default to it's working
     }
     void postsetup() {  // must be run last by each child setup() function
