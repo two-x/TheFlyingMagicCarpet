@@ -203,7 +203,6 @@ class Device {
     }
     virtual void update() {  // I changed case statement into if statements and now is 10 lines long instead of 28.  case sucks like that
         if (valrefreshtimer.expired()) {
-            valrefreshtimer.set(val_refresh_period);  // allows for dynamic adjustment of update period as needed each device
             if (runmode == LowPower) return; // do nothing if in lowpower mode or this device is disabled
             // if (!_enabled) return; // do nothing if in lowpower mode or this device is disabled
             if (_source == src::Fixed) set_val_from_fixed();
@@ -211,6 +210,7 @@ class Device {
             else if (_source == src::Pot) set_val_from_pot();
             else if (_source == src::Sim) set_val_from_sim();
             else ezread.squintf(ezread.madcolor, "err: device %s invalid src=%s\n", _short_name.c_str(), sensor_src_card[(int)_source].c_str());
+            valrefreshtimer.set(val_refresh_period);  // allows for dynamic adjustment of update period as needed each device
         }
     }
     void attach_pot(Potentiometer &pot_arg) { _pot = &pot_arg; }
@@ -467,7 +467,6 @@ class I2CSensor : public Sensor {
     }
     void print_on_boot(bool detected, bool responding) {
         ezread.squintf(ezread.highlightcolor, "%s sensor (i2c 0x%02x) %sdetected\n", _long_name.c_str(), addr, _detected ? "" : "not ");
-        // TODO - i had to comment this b/c map sensor would hang here during setup at boot
         if (detected) {
             if (responding) ezread.squintf("  reading %.4f %s\n", read_i2c_sensor(), _si_units.c_str());
             else ezread.squintf(ezread.sadcolor, "  no response\n");  // begin communication with air flow sensor) over I2C 
@@ -475,9 +474,6 @@ class I2CSensor : public Sensor {
     }
 
     void set_val_from_pin() override {
-        // set_native(read_i2c_sensor());
-        // calculate_ema();  // Sensor EMA filter
-
         _native.set(read_i2c_sensor());
         _raw.set(from_native(_native.val()));                     // convert native to raw si value
         set_si_w_ema();                                           // set si filtered value based on new raw reading
@@ -566,23 +562,19 @@ class AirVeloSensor : public I2CSensor {
 class MAPSensor : public I2CSensor {
   protected:
     SparkFun_MicroPressure _sensor;
-    int64_t val_refresh_period = 120000; // , mapretry_timeout = 10000;
+    int mapread_timeout = 120000, mapretry_timeout = 10000; // WIP debugging
+    int64_t val_refresh_period = (uint64_t)mapread_timeout; // , mapretry_timeout = 10000;
     int _i2c_bus_index = I2CMAP;  // to identify self in calls to I2C bus class
-
-    Timer mapreadTimer{0}; // WIP debugging
-    int mapread_timeout = 100000, mapretry_timeout = 10000; // WIP debugging
 
     float read_i2c_sensor() {
         static float goodreading = NAN;
-        if (!_i2c->detected(_i2c_bus_index)) return NAN;
-        if (mapreadTimer.expired()) {
-            float temp = _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
-            if (!std::isnan(temp)) {
-                goodreading = temp;
-                mapreadTimer.set(mapread_timeout);
-            }
-            else mapreadTimer.set(mapretry_timeout);  // ezread.squintf("av:%f\n", goodreading);
+        if (!_detected) return NAN;
+        float temp = _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
+        if (!std::isnan(temp)) {
+            goodreading = temp;
+            val_refresh_period = (uint64_t)mapread_timeout;
         }
+        else val_refresh_period = (uint64_t)mapretry_timeout;  // ezread.squintf("av:%f\n", goodreading);
         // ezread.squintf("m:%.3lf\n", goodreading);
         return goodreading;
     }
@@ -609,7 +601,6 @@ class MAPSensor : public I2CSensor {
         set_oplim(0.68f, 1.02f);  // set in atm empirically
         set_ema_alpha(0.2f);
 
-        mapreadTimer.set(mapread_timeout); // WIP debugging
         if (_detected) _responding = _sensor.begin(); // WIP debugging
         // _responding = _sensor.begin(Wire); // WIP debugging
         
