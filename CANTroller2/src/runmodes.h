@@ -5,7 +5,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     int _preferred_drivemode = Cruise; // from hold mode, should we enter cruise or fly mode?
     int _lowpower_delay_min = 20;      // Time of inactivity after entering standby mode before going to lowpower mode.  900sec = 15min
     int _screensaver_delay_min = 17;   // Time of inactivity after entering standby mode before starting screensaver turns on.  300sec = 5min
-    int _joydir, _oldmode = LowPower;
+    int _joydir, _oldmode = runmode;
     bool _joy_has_been_centered = false, _we_just_switched_modes = true, _stopped_hold_timer_active = false, _stall_ch4start_timed_out = false;
   public:
     bool display_reset_requested = false;  // set these for the display to poll and take action, since we don't have access to that object, but it has access to us
@@ -16,9 +16,11 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         runmode = Standby;  // our first mode upon boot  // disabling ability to recover to previous runmode after crash:  runmode = watchdog.boot_to_runmode;
     }  // we don't really need to set up anything, unless we need to recover to a specific runmode after crash
     int update() {
+        static bool first_boot = true; // only true during first runthrough
+
         if (runmode != LowPower && runmode != Cal) {
             if (in_basicmode) runmode = Basic;  // basicsw.val() if basicmode switch was on at boot time --> Basic Mode
-            else if (!ignition.signal) runmode = Standby;
+            else if (first_boot || !ignition.signal) runmode = Standby; // go to standby mode upon bootup or any time ignition is cut
             else if (tach.stopped()) runmode = Stall;  // otherwise if engine not running --> Stall Mode
         }
         if ((runmode == Hold) && (brake.feedback == _None)) {  // if we have no brake feedback then hold mode must be skipped...
@@ -26,7 +28,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (_oldmode == Basic || _oldmode == Cal || _oldmode == LowPower) runmode = Standby;  // just to cover all possibilities
             else runmode = _oldmode;  // don't drop to hold mode from other (driving) modes
         }
-        _we_just_switched_modes = (runmode != _oldmode);  // has our runmode been changed?
+        _we_just_switched_modes = (runmode != _oldmode) || first_boot; // has our runmode been changed?  or we just booted up?
+        
         if (_we_just_switched_modes) {
             calmode_request = autosaver_request = ReqOff;
             if (starter.motor && runmode != Hold && _oldmode != Stall) starter.request(ReqOff, StartRunmode); // the only mode transition the starter motor may remain running thru is stall -> hold
@@ -36,7 +39,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             watchdog.set_codestatus();
             shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = _stall_ch4start_timed_out = false;  // clean up previous runmode values
             _stopped_hold_timer_active = cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
-            if (_verbose) ezread.squintf("run: mode change %s->%s\n", modecard[_oldmode].c_str(), modecard[runmode].c_str());
+            if (_verbose && !first_boot) ezread.squintf("run: mode change %s->%s\n", modecard[_oldmode].c_str(), modecard[runmode].c_str());
+            first_boot = false;
         }
         _oldmode = runmode;
 

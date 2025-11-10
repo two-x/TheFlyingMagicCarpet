@@ -601,7 +601,7 @@ class MAPSensor : public I2CSensor {
         set_oplim(0.68f, 1.02f);  // set in atm empirically
         set_ema_alpha(0.2f);
 
-        if (_detected) _responding = _sensor.begin(); // WIP debugging
+        if (_detected) _responding = _sensor.begin(known_i2c_addr[I2CMAP]); // WIP debugging
         // _responding = _sensor.begin(Wire); // WIP debugging
         
         I2CSensor::postsetup();  // must be run last

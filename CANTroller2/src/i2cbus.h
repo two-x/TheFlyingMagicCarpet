@@ -88,13 +88,14 @@ class SparkFun_MicroPressure {
   public:
     SparkFun_MicroPressure(int8_t eoc_pin=-1, int8_t rst_pin=-1, uint8_t minimumPSI=MINIMUM_PSI, uint8_t maximumPSI=MAXIMUM_PSI);
     
-    bool begin(uint8_t deviceAddress = known_i2c_addr[I2CMAP], TwoWire &wirePort = Wire);
+    bool begin(uint8_t deviceAddress=DEFAULT_ADDRESS, TwoWire &wirePort=Wire);
     // bool begin(TwoWire &wirePort = Wire);
     
     uint8_t readStatus(void);
     float readPressure(Pressure_Units units=PSI, bool blocking=true);
     uint8_t get_addr() { return (uint8_t)_addr; }; // WIP debugging
   private:
+    static constexpr uint8_t DEFAULT_ADDRESS = 0x18;
     static constexpr int MAXIMUM_PSI = 25;
     static constexpr int MINIMUM_PSI = 0;
     static constexpr uint8_t BUSY_FLAG = 0x20;
@@ -110,7 +111,7 @@ class SparkFun_MicroPressure {
     // uint8_t _eoc, _rst; // WIP debugging
 
     uint8_t _minPsi, _maxPsi, _status;
-    TwoWire *_i2cPort = &Wire;
+    TwoWire *_i2cPort;
     // bool begin(uint8_t deviceAddress = _addr, TwoWire &wirePort = Wire); // WIP debugging
 };
 // - (Optional) eoc_pin, End of Conversion indicator. Default: -1 (skip)
@@ -122,18 +123,18 @@ SparkFun_MicroPressure::SparkFun_MicroPressure(int8_t eoc_pin, int8_t rst_pin, u
     _rst = rst_pin;
     _minPsi = minimumPSI;
     _maxPsi = maximumPSI;
-    // begin(Wire);
+    // begin(Wire); // WIP debugging
 }
+// begin() initialize hardware
 // - deviceAddress, I2C address of the sensor. Default: 0x18
 // - wirePort, sets the I2C bus used for communication. Default: Wire
 // - Returns 0/1: 0: sensor not found, 1: sensor connected  */
-// bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
 
 // bool SparkFun_MicroPressure::begin(TwoWire &wirePort) { // WIP debugging
-bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) { // WIP debugging
-    _addr = deviceAddress; // WIP debugging
-
+bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
+    _addr = deviceAddress;
     _i2cPort = &wirePort;
+
     if(_eoc != -1) pinMode(_eoc, INPUT);
     if(_rst != -1) {
         pinMode(_rst, OUTPUT);
