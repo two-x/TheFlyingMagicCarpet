@@ -47,7 +47,7 @@ class Potentiometer {
             _pc = ema_filt(_raw, _pc, _ema_alpha);
             _pc = constrain(_pc, _absmin, _absmax); // the lower limit of the adc reading isn't steady (it will dip below zero) so constrain it back in range
             // Serial.printf("r: %.6lf f: %.6lf\n", _raw, _pc);
-            if (std::abs(_pc - _activity_ref) > _margin_pc) {
+            if (std::fabs(_pc - _activity_ref) > _margin_pc) {
                 // ezread.squintf("a:%ld n:%lf v:%lf r:%lf m:%lf ", adc_raw, new_val, _val, _activity_ref, _pc_activity_margin);
                 kick_inactivity_timer(HuPot);  // evidence of user activity
                 _activity_ref = _pc;
@@ -150,7 +150,6 @@ class Param {
     float* ptr() { return &_val; }
     float* min_ptr() { return _min_ptr; }
     float* max_ptr() { return _max_ptr; }
-    float last() { return _last; } // note: currently unused, do we still need this for drawing purposes?
 };
 
 enum class TransDir : int { Rev=0, Fwd=1, NumTransDir=2 }; // possible dir values. Rev means native sensed value has the opposite polarity of the real world effect (for example, brake position lower inches of extension means higher applied brakes)
@@ -279,7 +278,7 @@ class Transducer : public Device {
         else if (_convmethod == OpLimMap) ret = map(arg_native, _opmin_native, _opmax_native, _opmin, _opmax);
         else if (_convmethod == LinearMath) ret = _boffset + _mfactor * arg_native; // ezread.squintf("%lf = %lf + %lf * %lf\n", ret, _boffset, _mfactor, arg_val_f);
         else ezread.squintf(ezread.madcolor, "err: %s from_native convert %lf (min %lf, max %lf)\n", _short_name.c_str(), arg_native, _native.min(), _native.max());
-        cleanzero(&ret, float_conversion_zero);   // if (std::abs(ret) < float_conversion_zero) ret = 0.0;  // reject any stupidly small near-zero values
+        cleanzero(&ret, float_conversion_zero);   // if (std::fabs(ret) < float_conversion_zero) ret = 0.0;  // reject any stupidly small near-zero values
         return ret;
     }
     virtual float to_native(float arg_si) {  // convert an absolute si value to native units
@@ -402,7 +401,7 @@ class Transducer : public Device {
     float opmax_native() { return _opmax_native; }
     float margin() { return _margin; }
     float margin_native() { return to_native(_margin); }
-    float margin_pc() { return std::abs(to_pc(_margin)); }
+    float margin_pc() { return std::fabs(to_pc(_margin)); }
     float zeropoint() { return _zeropoint; }  // zeropoint is the point we can consider the brake is released
     float zeropoint_pc() { return to_pc(_zeropoint); }
     float mfactor() { return _mfactor; }
@@ -454,7 +453,6 @@ class Sensor : public Transducer {
     }
     void set_ema_alpha(float arg_alpha) { _ema_alpha = std::fmaxf(0.0f, arg_alpha); }
     float ema_alpha() { return _ema_alpha; }
-    bool released() { return (std::abs(val() - zeropoint()) <= margin()); }
 };
 // I2CSensor is the base class for sensors having i2c interface
 class I2CSensor : public Sensor {
@@ -778,7 +776,8 @@ class PressureSensor : public AnalogSensor {
         // set_native(_opmin_native);
         AnalogSensor::postsetup();  // must be run last
     }
-    bool parked() { return (std::abs(val() - opmin()) <= margin()); }  // is tha brake motor parked?
+    bool released() { return (std::fabs(val() - zeropoint()) <= margin()); }
+    bool parked() { return (std::fabs(val() - opmin()) <= margin()); }  // is tha brake motor parked?
     float parkpos() { return opmin(); }
     float parkpos_pc() { return to_pc(opmin()); }
 };
@@ -807,7 +806,8 @@ class BrakePositionSensor : public AnalogSensor {
         _default_value_si = opmax();
         AnalogSensor::postsetup();  // must be run last
     }
-    bool parked() { return (std::abs(val() - opmax()) <= margin()); }  // is tha brake motor parked?
+    bool released() { return (std::fabs(val() - zeropoint()) <= margin()); }
+    bool parked() { return (std::fabs(val() - opmax()) <= margin()); }  // is tha brake motor parked?
     float parkpos() { return opmax(); }
     float parkpos_pc() { return to_pc(opmax()); }
 };
@@ -862,7 +862,7 @@ class PulseSensor : public Sensor {
     // modified ema filter where filtering is smoother the less often it's called
     // tau value is time it takes for filter to reach 63% of the way toward a new value after a step change
     // smaller tau is more responsive, larger tau is smoother
-    float scaling_ema_filt(float raw, float filt, float dt, float tau, float maxalpha) {  // dt and tau must both be in same unit of time
+    float scaling_ema_filt(float raw, float filt, float dt, float tau, float maxalpha=1.0f) {  // dt and tau must both be in same unit of time
         if (std::isnan(dt) || std::isnan(tau)) return filt; // bypass if invalid values given
         dt = std::fmaxf(0.0f, dt);                          // pretend negative times are 0
         if (iszero(dt) || iszero(tau + dt)) return filt;    // bypass if no time passed or we would div by zero
@@ -892,7 +892,7 @@ class PulseSensor : public Sensor {
     void stopped_update() {
         if (std::isnan(val())) _stopped = false;        // on invalid value return false return for safety reasons
         // else if (iszero(val() - opmin())) _stopped = true; // return true if val equals opmin, avoiding float near-zero comparison errors 
-        else _stopped = (std::abs(val() - opmin()) <= margin());  // return whether val is within margin of opmin
+        else _stopped = (std::fabs(val() - opmin()) <= margin());  // return whether val is within margin of opmin
     }
   public:
     std::string _true_native_units = "us";  // these pulse sensors actually deal in us, more native than Hz but Hz is compatible w/ our common conversion algos
@@ -1320,7 +1320,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     int joydir(int axis=Vert) {  // returns current joy direction on given axis (up/dn/lt/rt) or otherwise (cent) if w/i deadbands
         if (axis == Vert) return (pc[axis][Filt] > pc[axis][Cent]) ? HrcUp : (pc[axis][Filt] < pc[axis][Cent]) ? HrcDn : HrcCent;
         return (pc[axis][Filt] > pc[axis][Cent]) ? HrcRt : (pc[axis][Filt] < pc[axis][Cent]) ? HrcLt : HrcCent;
-    }  // return (pc[axis][Filt] > pc[axis][Cent]) ? ((axis == Vert) ? HrcUp : HrcRt) : (pc[axis][Filt] < pc[axis][Cent]) ? ((axis == Vert) ? HrcDn : HrcLt) : HrcCent;
+    }
     void sim_button_press(int chan) {  // handles ch4 action button on display menu
         _sw_event_filt[chan] = true;
         if (chan == Ch4) {
@@ -1380,7 +1380,6 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         _sw_event_filt[ch] = _sw_event_unfilt[ch] = _sw_pending[ch] = false;  // cancel all events
     }
     // hotrc digital button handler which rejects spurious values which could cause false events (re: phantom starter bug)
-    //   seems to work except it generates a Ch4 sleep request shortly after boot (should be a simple fix)
     void toggles_update() {  // note, below the two timer[] indices are each 2 less than those of their corresponding switches (avoids creating 2 extra Timer instances)
         static Timer filttimer[NumChans-2] = { 60000, 60000 }; // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
         int event_expiration_us = 1500000;             // to cancel events if they have become stale on a human timescale
@@ -1479,7 +1478,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     // Also if a detected cliff edge (potential spike) doesn't recover in time, it will smooth out the transition linearly.
     // The cost of this is our readings are delayed by a number of readings (equal to the maximum erasable spike duration).
     static const int ringdepth = 9;  // more depth will reject longer spikes at the expense of increased controller delay
-    float spike_cliff[NumAxes] = { 6.0f, 6.0f };  // spike_cliff is min diff of consecutive values to count as a spike
+    static constexpr float spike_cliff = 6.0f; // spike_cliff is min diff of consecutive values to count as a spike
     int prespike_idx[NumAxes] = { -1, -1 }, ringidx[NumAxes] = { 1, 1 };  // prespike of -1 means no current spike
     float ringbuf[NumAxes][ringdepth];
     float spike_filter(int axis, float new_val) {  // pass a fresh reading in, will return a filtered reading to use instead
@@ -1488,7 +1487,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         int previdx = (ringdepth + ringidx[axis] - 1) % ringdepth; // previdx is where the incoming new value will be stored
         if (++num_calls[axis] <= ringdepth) ringbuf[axis][previdx] = new_val;  // until buf is filled, fake the values
         float this_delta = new_val - ringbuf[axis][previdx];   // value change since last reading
-        if (std::abs(this_delta) > spike_cliff[axis]) {        // if new value is a cliff edge (start or end of a spike)
+        if (std::fabs(this_delta) > spike_cliff) {        // if new value is a cliff edge (start or end of a spike)
             if (prespike_idx[axis] == -1) {                    // if this cliff edge is the start of a new spike
                 prespike_idx[axis] = previdx;                  // save idx of last good value just before the cliff
                 spike_signbit[axis] = std::signbit(this_delta);     // save the direction of the cliff

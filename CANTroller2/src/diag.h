@@ -396,21 +396,21 @@ class DiagRuntime {
         checkrange(_BrakePres);
 
         // checks if posn is not changing while pressure is changing and motor is moving (assuming not near max brake)
-        if ((std::abs(brake->pc[Out]) > brake->pc[Margin]) && (std::abs(motor_last_pc) > brake->pc[Margin]) && (signbit(brake->pc[Out]) == signbit(motor_last_pc))) {  // if brake motor is moving
+        if ((std::fabs(brake->pc[Out]) > brake->pc[Margin]) && (std::fabs(motor_last_pc) > brake->pc[Margin]) && (signbit(brake->pc[Out]) == signbit(motor_last_pc))) {  // if brake motor is moving
             if (pressure->pc() <= 80.0) {  // if not near the max pressure (where position changes very little)
-                setflag(_BrakePosn, ErrLost, ((std::abs(pressure->pc() - pressure_last_pc) > pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if pressure value is changing but position isn't, then set flag otherwise clear
+                setflag(_BrakePosn, ErrLost, ((std::fabs(pressure->pc() - pressure_last_pc) > pressure->margin_pc()) && (std::fabs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if pressure value is changing but position isn't, then set flag otherwise clear
                 
                 // Skipping to avoid annoying warnings. check this!
                 // setflag(_BrakePosn, ErrWarn, (brake->feedback == HybridFB) && (signbit(brkpos->pc()) != signbit(pressure->pc())) && (signbit(brkpos->pc()) != signbit(brake->pc[Out])));  // if motor and pressure are consistent with moving one direction but position is changing the opposite way  // rewmove the (brake->feedback == HybridFB) && term?
             }
             if (brkpos->pc() >= 20.0) {  // if not near the min braking full extension (where pressure changes very little) 
-                setflag(_BrakePres, ErrLost, ((std::abs(brkpos->pc() - brkpos_last_pc) > brkpos->margin_pc()) && (std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc())));  // if position value is changing but pressure isn't, then set flag otherwise clear
+                setflag(_BrakePres, ErrLost, ((std::fabs(brkpos->pc() - brkpos_last_pc) > brkpos->margin_pc()) && (std::fabs(pressure->pc() - pressure_last_pc) < pressure->margin_pc())));  // if position value is changing but pressure isn't, then set flag otherwise clear
                 setflag(_BrakePres, ErrWarn, (brake->feedback == HybridFB) && (signbit(pressure->pc()) != signbit(brkpos->pc())) && (signbit(pressure->pc()) != signbit(brake->pc[Out])));  // if motor and position are consistent with moving one direction but pressure is changing the opposite way
             }
             
             // Skipping this b/c it is triggering and I don't care. Really should figure out what's going on
             // // if neither sensor is changing, set motor lost flag
-            // setflag(_BrakeMotor, ErrLost, ((std::abs(pressure->pc() - pressure_last_pc) < pressure->margin_pc()) && (std::abs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));
+            // setflag(_BrakeMotor, ErrLost, ((std::fabs(pressure->pc() - pressure_last_pc) < pressure->margin_pc()) && (std::fabs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));
         }
 
         // // cause brake motor error if any sensors being used as feedback are in error

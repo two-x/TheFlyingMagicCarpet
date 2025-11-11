@@ -127,7 +127,7 @@ class QPID {
             float max_out_change = _max_out_changerate_ps * (float)timechange / 1000000.0f;  // calculate max allowed output value change since the last calculate
             _output = constrain(_output, lastout - max_out_change, lastout + max_out_change);  // constrain output to comply
         }
-        _out_changerate_ps = !timechange ? NAN : std::abs(_output - lastout) * 1000000.0f / (float)timechange;  // for external query
+        _out_changerate_ps = !timechange ? NAN : std::fabs(_output - lastout) * 1000000.0f / (float)timechange;  // for external query
         
         lasterr = _err;
         lastin = in;
@@ -141,9 +141,9 @@ class QPID {
         if (a_kp < 0.0f || a_ki < 0.0f || a_kd < 0.0f || !_sampletime) return;  // added divide by zero protection
         if (a_ki == 0.0f) _outsum = 0.0f;
         _pmode = a_pmode; _dmode = a_dmode; _awmode = a_awmode;
-        if (std::abs(a_kp) < float_conversion_zero) a_kp = 0.0f;
-        if (std::abs(a_ki) < float_conversion_zero) a_ki = 0.0f;
-        if (std::abs(a_kd) < float_conversion_zero) a_kd = 0.0f;
+        if (std::fabs(a_kp) < float_conversion_zero) a_kp = 0.0f;
+        if (std::fabs(a_ki) < float_conversion_zero) a_ki = 0.0f;
+        if (std::fabs(a_kd) < float_conversion_zero) a_kd = 0.0f;
         dispkp = a_kp; dispki = a_ki; dispkd = a_kd;
         float sampletime_sec = (float)_sampletime / 1000000.0f;
         _kp = a_kp;
@@ -183,7 +183,7 @@ class QPID {
             _outsum *= ratio;
         }
         else _output = _outsum = a_output;
-        if (std::abs(oldout - _output) > _dterm) pause_diff = true;  // will skip differential effect on net compute cycle if output changed significantly
+        if (std::fabs(oldout - _output) > _dterm) pause_diff = true;  // will skip differential effect on net compute cycle if output changed significantly
     }
     void set_limits(float* a_min, float* a_max) {
         _outmin = a_min;
@@ -486,7 +486,7 @@ class ThrottleControl : public ServoMotor {
         else if (cruise_adjust_scheme == OnePull) {  // this scheme makes a single adjustment with each departure from trigger center, based on how far you push it (in either dir).
             static float running_max_pc;             // stores the furthest the trigger has been from center since start of the adjustment event
             if (!cruise_adjusting) running_max_pc = hotrc->pc[Vert][Cent];  // on first time thru, recenter our max-trigger-value-so-far value back to center
-            if (std::abs(trigger_vert_pc) >= std::abs(running_max_pc)) {  // if new trigger read beats our record so far (to avoid continuing adjustments when trigger hasn't increased)
+            if (std::fabs(trigger_vert_pc) >= std::fabs(running_max_pc)) {  // if new trigger read beats our record so far (to avoid continuing adjustments when trigger hasn't increased)
                 thr_targ += (trigger_vert_pc - running_max_pc) * cruise_onepull_attenuator_pc / 100.0f;  // make an adjustment proportional to the incremental trigger difference
                 running_max_pc = trigger_vert_pc;    // update our value for the furthest trigger read thusfar during the push
             }
@@ -617,7 +617,7 @@ class ThrottleControl : public ServoMotor {
         cruise_adjust_scheme = newscheme;  // otherwise anything goes
         // ezread.squintf("cruise using %s adj scheme\n", cruiseschemecard[cruise_adjust_scheme].c_str());
     }
-    bool parked() { return (std::abs(out_pc_to_si(pc[Out]) - si[Parked]) < si[Margin]); }
+    bool parked() { return (std::fabs(out_pc_to_si(pc[Out]) - si[Parked]) < si[Margin]); }
     void set_governor_pc(float a_newgov) {
         governor = a_newgov;
         derive();
@@ -828,7 +828,7 @@ class BrakeControl : public JagMotor {
     float calc_loop_out() {  // returns motor output percent calculated based on current target_pc or target[] values, in a way consistent w/ current config
         if (motormode == PropLoop) {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
             float err = (combined_read_pc - target_pc);
-            if (std::abs(err) < thresh_loop_hysteresis_pc) return pc[Stop];
+            if (std::fabs(err) < thresh_loop_hysteresis_pc) return pc[Stop];
             if (err > 0.0f) return thresh_loop_attenuation_pc * throttle->idle_pc();
             return thresh_loop_attenuation_pc * pc[OpMax];
         }
@@ -890,7 +890,7 @@ class BrakeControl : public JagMotor {
         bool in_progress;
         if (motormode == PropLoop || motormode == ActivePID) {
             set_target(tgt_position);
-            in_progress = (std::abs(target_pc - combined_read_pc) <= target_margin_pc);
+            in_progress = (std::fabs(target_pc - combined_read_pc) <= target_margin_pc);
         }
         else {
             if (feedback == NoneFB) in_progress = (!blindaction_timer.expired());  // if running w/o feedback, let's blindly release the brake for a few seconds then halt it
@@ -974,7 +974,7 @@ class BrakeControl : public JagMotor {
           || (new_out > pc[Stop] && brkpos->val() < brkpos->opmin())))                              //  - brkpos->margin() //  + brkpos->margin()
             new_out = pc[Stop];                                           // THEN stop the motor
         else new_out = constrain(new_out, pc[OpMin], pc[OpMax]);          // constrain motor value to operational range (in pid mode pids should manage this)
-        cleanzero(&new_out, 0.01f);  // if (std::abs(pc[Out]) < 0.01) pc[Out] = 0.0;                                 // prevent stupidly small values which i was seeing
+        cleanzero(&new_out, 0.01f);  // if (std::fabs(pc[Out]) < 0.01f) pc[Out] = 0.0f;                                 // prevent stupidly small values which i was seeing
         pc[Out] = rate_limiter(new_out);  // changerate_limiter();
         // for (int p = PositionFB; p <= PressureFB; p++) if (feedback_enabled[p]) pids[p].set_output(pc[Out]);  // feed the final value back into the pids
     }

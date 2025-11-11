@@ -85,7 +85,7 @@ class CollisionsSaver {
     }
     bool mainfunc(void) {
         bool new_round = false;
-        static constexpr float e = 0.999;  // 0.999 coefficient of friction
+        static constexpr float e = 0.999f;  // 0.999 coefficient of friction
         sec = lgfx::millis() / ball_create_rate;
         if (psec != sec) {
             psec = sec;
@@ -373,7 +373,7 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         if (plast[Vert] != point[Vert]) im = (float)(plast[Horz] - point[Horz]) / (float)(plast[Vert] - point[Vert]);
         sprite->fillCircle(plast[Horz] + vp->x, plast[Vert] + vp->y, 3, wcball);
         for (int h=-4; h<=4; h++)
-            sprite->drawGradientLine(point[Horz] + vp->x, point[Vert] + vp->y, plast[Horz] + vp->x + (int)(h / ((std::abs(im) > 1.0) ? im : 1)), plast[Vert] + vp->y + (int)(h * ((std::abs(im) > 1.0) ? 1 : im)), wctip, wcball);
+            sprite->drawGradientLine(point[Horz] + vp->x, point[Vert] + vp->y, plast[Horz] + vp->x + (int)(h / ((std::fabs(im) > 1.0f) ? im : 1)), plast[Vert] + vp->y + (int)(h * ((std::fabs(im) > 1.0f) ? 1 : im)), wctip, wcball);
         wclast = wcball;
     }
     void run_ellipses() {
