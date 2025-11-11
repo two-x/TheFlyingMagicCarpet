@@ -561,12 +561,12 @@ class MAPSensor : public I2CSensor {
   protected:
     SparkFun_MicroPressure _sensor;
     int _i2c_bus_index = I2CMAP;  // to identify self in calls to I2C bus class
-    int _mapread_timeout = 120000, _mapretry_timeout = 5000; // retry timeout of ~10ms is handled by a task delay in maf_task() instead // WIP debugging
+    int _mapread_timeout = 120000, _mapretry_timeout = 8000; // WIP debugging
 
     float read_i2c_sensor() {
         static float goodreading = NAN;
         if (!_detected) return NAN;
-        float temp = _sensor.readPressure(ATM, false);  // _sensor.readPressure(PSI);  // <- blocking version takes 6.5ms to read
+        float temp = _sensor.readPressure(MapUnitATM, true);  // _sensor.readPressure(PSI);  // <- blocking version (true arg) takes 6.5ms to read
         if (std::isnan(temp)) _update_period = _mapretry_timeout; // affects delay until next read attempt
         else {
             goodreading = temp;
@@ -599,8 +599,12 @@ class MAPSensor : public I2CSensor {
         set_oplim(0.68f, 1.02f);  // set in atm empirically
         set_ema_alpha(0.2f);
 
-        if (_detected) _responding = _sensor.begin(known_i2c_addr[I2CMAP]); // WIP debugging
-        // _responding = _sensor.begin(Wire); // WIP debugging
+        // forcing _responding true prevents post_setup() from setting source to Fixed. TODO debug this!
+        // if (_detected) _responding = _sensor.begin(known_i2c_addr[I2CMAP]); // WIP debugging
+        if (_detected) {
+            _sensor.begin(known_i2c_addr[I2CMAP]); // WIP debugging
+            _responding = true;
+        }
         
         I2CSensor::postsetup();  // must be run last
     }

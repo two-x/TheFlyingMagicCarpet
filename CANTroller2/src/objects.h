@@ -125,6 +125,7 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
 }
 // RTOS task that updates map and airflow sensors, and mass airflow calculation
 void maf_task(void *parameter) {
+    while (!bootup_complete) vTaskDelay(pdMS_TO_TICKS(10)); // let boot finish before reading
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff. serves as the device class update timer for these sensors
         mapsens.update();        // manifold air pressure sensor  // 70 us + 2ms every 9 loops
