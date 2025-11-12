@@ -182,19 +182,19 @@ float SparkFun_MicroPressure::readPressure(MapUnits units, bool blocking) {
 
     // if ((_statusbyte & INTEGRITY_FLAG) || (_statusbyte & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
     
-    if (_statusbyte & INTEGRITY_FLAG) {
-        _errorflag = MapErrIntegrity;
-        static bool err_printed = false;
-        if (!err_printed) ezread.squintf(ezread.sadcolor, "warn: mapsens integrity flag (0x%02X)\n", _statusbyte);
-        err_printed = true;  // print error only once on first read. it will spam otherwise
-        // if (_respect_integrity_errors) return NAN;
-    }
-    else if (_statusbyte & MATH_SAT_FLAG) {
+    if (_statusbyte & MATH_SAT_FLAG) {
         _errorflag = MapErrMath;
         static bool err_printed = false;
         if (!err_printed) ezread.squintf(ezread.sadcolor, "warn: mapsens math sat flag (0x%02X)\n", _statusbyte);
         err_printed = true;  // print error only once on first read. it will spam otherwise
         // return NAN;  // math sat errors seem fairly rare (unlike integrity errs), so we can skip reading when we get one. TODO debug this!
+    }
+    else if (_statusbyte & INTEGRITY_FLAG) {
+        _errorflag = MapErrIntegrity;
+        static bool err_printed = false;
+        if (!err_printed) ezread.squintf(ezread.sadcolor, "warn: mapsens integrity flag (0x%02X)\n", _statusbyte);
+        err_printed = true;  // print error only once on first read. it will spam otherwise
+        // if (_respect_integrity_errors) return NAN;
     }
     else _errorflag = MapErrNone;
 
