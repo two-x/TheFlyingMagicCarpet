@@ -84,7 +84,9 @@ class I2C {
 // SparkFun_MicroPressure library by Alex Wende July 2020 (Beerware license)
 // This is a library for the Qwiic MicroPressure Sensor, which can read from 0 to 25 PSI.
 enum MapUnits { MapUnitPSI, MapUnitPA, MapUnitKPA, MapUnitTORR, MapUnitINHG, MapUnitATM, MapUnitBAR };  // {PSI, Pa, kPa, torr, inHg, atm, bar};
-enum MapPhases { MapIdle, MapWaiting };
+// enum MapPhases { MapIdle, MapWaiting };
+enum MapErrors { MapErrNone=0, MapErrWaiting=1, MapErrIntegrity=2, MapErrMath=3 };
+
 class SparkFun_MicroPressure {
   public:
     SparkFun_MicroPressure(int eoc_pin=-1, int rst_pin=-1, uint8_t minimumPSI=MINIMUM_PSI, uint8_t maximumPSI=MAXIMUM_PSI);
@@ -92,7 +94,8 @@ class SparkFun_MicroPressure {
     uint8_t readStatus(void);
     float readPressure(MapUnits units=MapUnitPSI, bool blocking=true);
     uint8_t get_addr() { return (uint8_t)_addr; }; // WIP debugging
-    int get_phase() { return _readphase; };
+    int err_status() { return _errorflag; };
+    float get_pressure() { return _pressure; };
   private:
     bool _respect_integrity_errors = false; // workaround due to constant integrity flag errors on my devboard - TODO debug this!
 
@@ -104,9 +107,11 @@ class SparkFun_MicroPressure {
     static constexpr uint8_t MATH_SAT_FLAG = 0x01;
     static constexpr uint32_t OUTPUT_MAX = 0xE66666;
     static constexpr uint32_t OUTPUT_MIN = 0x19999A;
-    int _readphase = MapIdle;
-    int _eoc, _rst; // WIP debugging
-    uint8_t _addr, _minPsi, _maxPsi, _status;
+    // int _readphase = MapIdle;
+    int _eoc, _rst;
+    int _errorflag = MapErrNone;
+    float _pressure = NAN;
+    uint8_t _addr, _minPsi, _maxPsi, _statusbyte;
     TwoWire *_i2cPort;
 };
 // - (Optional) eoc_pin, End of Conversion indicator. Default: -1 (skip)
@@ -145,61 +150,68 @@ uint8_t SparkFun_MicroPressure::readStatus(void) {
 }
 float SparkFun_MicroPressure::readPressure(MapUnits units, bool blocking) {
     // static Timer read_timer{500000};  // half-second timeout to avoid hanging during failed read // WIP debugging
-    if (_readphase == MapIdle) {
+    if (_errorflag != MapErrWaiting) {
         _i2cPort->beginTransmission(_addr);
         _i2cPort->write((uint8_t)0xAA);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->endTransmission();
     }
-    _readphase = MapWaiting;
     if (_eoc != -1) { // Use GPIO pin if defined
         while (!digitalRead(_eoc)) {
-            if (!blocking) return NAN;
+            if (!blocking) {
+                _errorflag = MapErrWaiting;
+                return NAN;  // return _pressure;  may be better to return last read good value while waiting for new one
+            }
             delay(1);
         }
     }
     else { // Check status byte if GPIO is not defined
-        _status = readStatus();
-        while((_status & BUSY_FLAG) && (_status != 0xff)) {
-            if (!blocking) return NAN;
+        _statusbyte = readStatus();
+        while((_statusbyte & BUSY_FLAG) && (_statusbyte != 0xff)) {
+            if (!blocking) {
+                _errorflag = MapErrWaiting;
+                return NAN;  // return _pressure;  may be better to return last read good value while waiting for new one
+            }
             delay(1);
-            _status = readStatus();
+            _statusbyte = readStatus();
         }
     }
-    _readphase = MapIdle;
     _i2cPort->requestFrom(_addr, (uint8_t)4); // WIP debugging
-    _status = _i2cPort->read();
+    _statusbyte = _i2cPort->read();
 
-    // if ((_status & INTEGRITY_FLAG) || (_status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
+    // if ((_statusbyte & INTEGRITY_FLAG) || (_statusbyte & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
     
-    if (_status & INTEGRITY_FLAG) {
+    if (_statusbyte & INTEGRITY_FLAG) {
+        _errorflag = MapErrIntegrity;
         static bool err_printed = false;
-        if (!err_printed) ezread.squintf(ezread.sadcolor, "warn: mapsens integrity flag (0x%02X)\n", _status);
+        if (!err_printed) ezread.squintf(ezread.sadcolor, "warn: mapsens integrity flag (0x%02X)\n", _statusbyte);
         err_printed = true;  // print error only once on first read. it will spam otherwise
-        if (_respect_integrity_errors) return NAN;
+        // if (_respect_integrity_errors) return NAN;
     }
-    if (_status & MATH_SAT_FLAG) {
+    else if (_statusbyte & MATH_SAT_FLAG) {
+        _errorflag = MapErrMath;
         static bool err_printed = false;
-        if (!err_printed) ezread.squintf(ezread.sadcolor, "warn: mapsens math sat flag (0x%02X)\n", _status);
+        if (!err_printed) ezread.squintf(ezread.sadcolor, "warn: mapsens math sat flag (0x%02X)\n", _statusbyte);
         err_printed = true;  // print error only once on first read. it will spam otherwise
-        return NAN;  // math sat errors seem fairly rare (unlike integrity errs), so we can skip reading when we get one. TODO debug this!
+        // return NAN;  // math sat errors seem fairly rare (unlike integrity errs), so we can skip reading when we get one. TODO debug this!
     }
+    else _errorflag = MapErrNone;
 
     int reading = 0;
     for (int i=0; i<3; i++) {  //  read 24-bit pressure
         reading |= _i2cPort->read();
         if (i != 2) reading = reading<<8;
     }
-    float pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
-    pressure = (pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
-    if (units == MapUnitPA)        pressure *= 6894.7573f; //Pa (Pascal)
-    else if (units == MapUnitKPA)  pressure *= 6.89476f;   //kPa (kilopascal)
-    else if (units == MapUnitTORR) pressure *= 51.7149f;   //torr (mmHg)
-    else if (units == MapUnitINHG) pressure *= 2.03602f;   //inHg (inch of mercury)
-    else if (units == MapUnitATM)  pressure *= 0.06805f;   //atm (atmosphere)
-    else if (units == MapUnitBAR)  pressure *= 0.06895f;   //bar
-    return pressure;
+    _pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
+    _pressure = (_pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
+    if (units == MapUnitPA)        _pressure *= 6894.7573f; //Pa (Pascal)
+    else if (units == MapUnitKPA)  _pressure *= 6.89476f;   //kPa (kilopascal)
+    else if (units == MapUnitTORR) _pressure *= 51.7149f;   //torr (mmHg)
+    else if (units == MapUnitINHG) _pressure *= 2.03602f;   //inHg (inch of mercury)
+    else if (units == MapUnitATM)  _pressure *= 0.06805f;   //atm (atmosphere)
+    else if (units == MapUnitBAR)  _pressure *= 0.06895f;   //bar
+    return _pressure;
 }
 
 // LightingBox - object to manage 12c communications link to our lighting box

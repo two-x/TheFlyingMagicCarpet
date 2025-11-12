@@ -566,20 +566,21 @@ class MAPSensor : public I2CSensor {
     int _mapread_timeout = 120000, _mapretry_timeout = 8000; // WIP debugging
 
     float read_i2c_sensor() {
-        static float reading = NAN; // value return from read function
         static float goodreading = NAN; // last non-NAN value
         if (!_detected) return NAN;
-        float temp = _sensor.readPressure(MapUnitATM, true);  // _sensor.readPressure(PSI);  // <- blocking version (true arg) takes 6.5ms to read
-
-        if (_sensor.get_phase() == MapWaiting) _update_period = _mapretry_timeout;  // last request still processing
+        float reading = _sensor.readPressure(MapUnitATM, true); // request reading.  blocking version (true arg) takes 6.5ms to read
+        int err_status = _sensor.err_status();
+        if (err_status == MapErrWaiting) _update_period = _mapretry_timeout;  // last request still processing, recheck soon for result
         else {
-            reading = temp;
-            if (std::isnan(reading)) { } // TODO need to register error has occurred to indicate on idiot lights 
+            // check for errors before committing new reading
+            // if (err_status != MapErrNone) { } // TODO need to register error has occurred to indicate on idiot lights 
+            if (err_status == MapErrMath) { } // workaround due to constant integrity bugs (probably bad data). TODO debug!
+
             else goodreading = reading;
-            _update_period = _mapread_timeout; // affects delay until next read attempt
+            _update_period = _mapread_timeout; // longer delay till next read after read request complete
         }
         // ezread.squintf("m:%.3lf\n", goodreading);
-        return goodreading;  // TODO - this ignores errors, keeping the previous reading. should be (?): return reading;
+        return goodreading;
     }
 
     void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
@@ -595,7 +596,7 @@ class MAPSensor : public I2CSensor {
     MAPSensor() = delete;
     void setup() {
         I2CSensor::presetup();  // must be run first
-        _update_period = _mapread_timeout;
+        _update_period = 8000;
         _default_value_si = 1.0f;
         set_abslim(0.06f, 2.46f);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68f, 1.02f);  // set in atm empirically
