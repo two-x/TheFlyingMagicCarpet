@@ -32,6 +32,7 @@ class I2C {
         scanTimer.reset();
         if (disabled) return 0;
         Wire.begin(_sda_pin, _scl_pin, i2c_frequency);  // I2c bus needed for airflow sensor
+        Wire.setTimeOut(25);  // set ms to move on if a device holds SCL for too long. default = 50
         byte error, address;
         _devicecount = 0;
         for (address = 1; address < 127; address++ ) {
@@ -83,18 +84,18 @@ class I2C {
 // SparkFun_MicroPressure library by Alex Wende July 2020 (Beerware license)
 // This is a library for the Qwiic MicroPressure Sensor, which can read from 0 to 25 PSI.
 enum MapUnits { MapUnitPSI, MapUnitPA, MapUnitKPA, MapUnitTORR, MapUnitINHG, MapUnitATM, MapUnitBAR };  // {PSI, Pa, kPa, torr, inHg, atm, bar};
-
+enum MapPhases { MapIdle, MapWaiting };
 class SparkFun_MicroPressure {
   public:
     SparkFun_MicroPressure(int eoc_pin=-1, int rst_pin=-1, uint8_t minimumPSI=MINIMUM_PSI, uint8_t maximumPSI=MAXIMUM_PSI);
-    
-    bool begin(uint8_t deviceAddress=DEFAULT_ADDRESS, TwoWire &wirePort=Wire);
-    // bool begin(TwoWire &wirePort = Wire);
-    
+    bool begin(uint8_t deviceAddress=DEFAULT_ADDRESS, TwoWire &wirePort=Wire);    
     uint8_t readStatus(void);
     float readPressure(MapUnits units=MapUnitPSI, bool blocking=true);
     uint8_t get_addr() { return (uint8_t)_addr; }; // WIP debugging
+    int get_phase() { return _readphase; };
   private:
+    bool _respect_integrity_errors = false; // workaround due to constant integrity flag errors on my devboard - TODO debug this!
+
     static constexpr uint8_t DEFAULT_ADDRESS = 0x18;
     static constexpr int MAXIMUM_PSI = 25;
     static constexpr int MINIMUM_PSI = 0;
@@ -103,16 +104,10 @@ class SparkFun_MicroPressure {
     static constexpr uint8_t MATH_SAT_FLAG = 0x01;
     static constexpr uint32_t OUTPUT_MAX = 0xE66666;
     static constexpr uint32_t OUTPUT_MIN = 0x19999A;
-    bool run_preamble = true;
-    float pressure = NAN;
-
+    int _readphase = MapIdle;
     int _eoc, _rst; // WIP debugging
-    // uint8_t _addr = known_i2c_addr[I2CMAP]; // WIP debugging
-    // uint8_t _eoc, _rst; // WIP debugging
-
     uint8_t _addr, _minPsi, _maxPsi, _status;
     TwoWire *_i2cPort;
-    // bool begin(uint8_t deviceAddress = _addr, TwoWire &wirePort = Wire); // WIP debugging
 };
 // - (Optional) eoc_pin, End of Conversion indicator. Default: -1 (skip)
 // - (Optional) rst_pin, Reset pin for MPR sensor. Default: -1 (skip)
@@ -123,18 +118,14 @@ SparkFun_MicroPressure::SparkFun_MicroPressure(int eoc_pin, int rst_pin, uint8_t
     _rst = rst_pin;
     _minPsi = minimumPSI;
     _maxPsi = maximumPSI;
-    // begin(Wire); // WIP debugging
 }
 // begin() initialize hardware
 // - deviceAddress, I2C address of the sensor. Default: 0x18
 // - wirePort, sets the I2C bus used for communication. Default: Wire
 // - Returns 0/1: 0: sensor not found, 1: sensor connected  */
-
-// bool SparkFun_MicroPressure::begin(TwoWire &wirePort) { // WIP debugging
 bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
     _addr = deviceAddress;
     _i2cPort = &wirePort;
-
     if(_eoc != -1) pinMode(_eoc, INPUT);
     if(_rst != -1) {
         pinMode(_rst, OUTPUT);
@@ -143,28 +134,25 @@ bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
         digitalWrite(_rst, HIGH);
     }
     delay(15);
-    run_preamble = true;
     _i2cPort->beginTransmission(_addr);
-    //return !(_i2cPort->endTransmission());
     uint8_t error = _i2cPort->endTransmission();
-    if(error == 0) return true;  // success
-    else           return false; // fail
+    if (error == 0) return true;  // success
+    return false; // fail
 }
 uint8_t SparkFun_MicroPressure::readStatus(void) {
     _i2cPort->requestFrom(_addr, (uint8_t)1); // WIP debugging
-    // _i2cPort->requestFrom((int)_addr, 1); // WIP debugging
     return _i2cPort->read();
 }
 float SparkFun_MicroPressure::readPressure(MapUnits units, bool blocking) {
     // static Timer read_timer{500000};  // half-second timeout to avoid hanging during failed read // WIP debugging
-    if (run_preamble) {
+    if (_readphase == MapIdle) {
         _i2cPort->beginTransmission(_addr);
         _i2cPort->write((uint8_t)0xAA);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->endTransmission();
     }
-    run_preamble = false;
+    _readphase = MapWaiting;
     if (_eoc != -1) { // Use GPIO pin if defined
         while (!digitalRead(_eoc)) {
             if (!blocking) return NAN;
@@ -172,21 +160,15 @@ float SparkFun_MicroPressure::readPressure(MapUnits units, bool blocking) {
         }
     }
     else { // Check status byte if GPIO is not defined
-        // read_timer.reset(); // WIP debugging
         _status = readStatus();
         while((_status & BUSY_FLAG) && (_status != 0xff)) {
             if (!blocking) return NAN;
             delay(1);
             _status = readStatus();
-            // if (read_timer.expired()) { // WIP debugging
-            //     ezread.squintf(ezread.sadcolor, "warn: map sensor read timed out\n"); // WIP debugging
-            //     return NAN; // WIP debugging
-            // } // WIP debugging
         }
     }
-    run_preamble = true;
+    _readphase = MapIdle;
     _i2cPort->requestFrom(_addr, (uint8_t)4); // WIP debugging
-    // _i2cPort->requestFrom((int)_addr, 4); // WIP debugging
     _status = _i2cPort->read();
 
     // if ((_status & INTEGRITY_FLAG) || (_status & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
@@ -195,10 +177,7 @@ float SparkFun_MicroPressure::readPressure(MapUnits units, bool blocking) {
         static bool err_printed = false;
         if (!err_printed) ezread.squintf(ezread.sadcolor, "warn: mapsens integrity flag (0x%02X)\n", _status);
         err_printed = true;  // print error only once on first read. it will spam otherwise
-        
-        // 251111 commented b/c this fails on every read on devboard. now we get (wrong?) values. TODO debug this!
-        // return NAN;
-    
+        if (_respect_integrity_errors) return NAN;
     }
     if (_status & MATH_SAT_FLAG) {
         static bool err_printed = false;
@@ -212,7 +191,7 @@ float SparkFun_MicroPressure::readPressure(MapUnits units, bool blocking) {
         reading |= _i2cPort->read();
         if (i != 2) reading = reading<<8;
     }
-    pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
+    float pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
     pressure = (pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
     if (units == MapUnitPA)        pressure *= 6894.7573f; //Pa (Pascal)
     else if (units == MapUnitKPA)  pressure *= 6.89476f;   //kPa (kilopascal)

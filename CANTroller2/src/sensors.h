@@ -431,13 +431,15 @@ class Sensor : public Transducer {
     bool _first_filter_run = false;
     virtual float run_ema() { return ema_filt(raw(), val(), _ema_alpha); }
     void update_source() override { if (_source == src::Pin) _first_filter_run = true; } // if we just switched to pin input, the old filtered value is not valid
-    void set_si_w_ema() { // Exponential Moving Average
+    void set_si_w_ema(float zero_precision=float_zero) { // Exponential Moving Average
+        float new_si;
         if (_first_filter_run) {
-            _si.set(raw());
+            new_si = raw();
             _first_filter_run = false;
-            return;
         }
-        _si.set(run_ema());
+        else new_si = run_ema();
+        cleanzero(&new_si, zero_precision);
+        _si.set(new_si);
     }
   public:
     Sensor(int pin) : Transducer(pin) {
@@ -473,8 +475,8 @@ class I2CSensor : public Sensor {
 
     void set_val_from_pin() override {
         _native.set(read_i2c_sensor());
-        _raw.set(from_native(_native.val()));                     // convert native to raw si value
-        set_si_w_ema();                                           // set si filtered value based on new raw reading
+        _raw.set(from_native(_native.val())); // convert native to raw si value
+        set_si_w_ema(0.001f);                 // set si filtered value based on new raw reading
     }
     // WIP debugging
     // void set_val_from_pin() override {
@@ -561,24 +563,24 @@ class MAPSensor : public I2CSensor {
   protected:
     SparkFun_MicroPressure _sensor;
     int _i2c_bus_index = I2CMAP;  // to identify self in calls to I2C bus class
-    int _mapread_timeout = 120000, _mapretry_timeout = 8000; // WIP debugging
+    int _mapread_timeout = 500000, _mapretry_timeout = 8000; // WIP debugging
 
     float read_i2c_sensor() {
-        static float goodreading = NAN;
+        static float reading = NAN; // value return from read function
+        static float goodreading = NAN; // last non-NAN value
         if (!_detected) return NAN;
         float temp = _sensor.readPressure(MapUnitATM, true);  // _sensor.readPressure(PSI);  // <- blocking version (true arg) takes 6.5ms to read
-        if (std::isnan(temp)) _update_period = _mapretry_timeout; // affects delay until next read attempt
+
+        if (_sensor.get_phase() == MapWaiting) _update_period = _mapretry_timeout;  // last request still processing
         else {
-            goodreading = temp;
+            reading = temp;
+            if (std::isnan(reading)) { } // TODO need to register error has occurred to indicate on idiot lights 
+            else goodreading = reading;
             _update_period = _mapread_timeout; // affects delay until next read attempt
         }
         // ezread.squintf("m:%.3lf\n", goodreading);
-        return goodreading;
+        return goodreading;  // TODO - this ignores errors, keeping the previous reading. should be (?): return reading;
     }
-    // WIP debugging
-    // float read_i2c_sensor() {
-    //     return _sensor.readPressure(ATM, true);  // _sensor.readPressure(PSI);  // <- blocking version (true argument) takes 6.5ms to read
-    // }
 
     void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:

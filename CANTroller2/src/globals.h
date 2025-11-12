@@ -284,7 +284,7 @@ inline unsigned int constrain(unsigned int amt, unsigned int low, unsigned int h
 #undef map
 inline float map(float x, float in_min, float in_max, float out_min, float out_max) {
     // if (std::isnan(x)) return NAN;  // TODO - there are consistent calls happening of map with x == NAN. Should we figure out why?
-    if (std::isnan(x) || std::isnan(in_min) || std::isnan(in_max) || std::isnan(out_min) || std::isnan(out_max) || iszero(in_max - in_min)) {
+    if (std::isnan(x) || std::isnan(in_min) || std::isnan(in_max) || std::isnan(out_min) || std::isnan(out_max)) {
         // // trying to track down where calls with NAN arguments are coming from
         // //
         // static int64_t tlast = esp_timer_get_time();
@@ -295,7 +295,7 @@ inline float map(float x, float in_min, float in_max, float out_min, float out_m
         return NAN;
     }
     // if (std::isnan(x)) return NAN;
-    if (iszero(in_max - in_min)) return out_max;  // instead of dividing by zero, return the highest valid result
+    if (iszero(in_max - in_min)) return NAN; // return out_max;  // was: instead of dividing by zero, return the highest valid result
     return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
 }
 inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
