@@ -563,7 +563,7 @@ class MAPSensor : public I2CSensor {
   protected:
     SparkFun_MicroPressure _sensor;
     int _i2c_bus_index = I2CMAP;  // to identify self in calls to I2C bus class
-    int _mapread_timeout = 500000, _mapretry_timeout = 8000; // WIP debugging
+    int _mapread_timeout = 120000, _mapretry_timeout = 8000; // WIP debugging
 
     float read_i2c_sensor() {
         static float reading = NAN; // value return from read function
