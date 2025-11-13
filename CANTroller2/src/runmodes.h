@@ -12,9 +12,9 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     RunModeManager() {}
     void setup() {
         ezread.squintf(ezread.highlightcolor, "Runmode state machine init\n");
-        set_preferred_drivemode();        // read preferred drivemode from flash
-        runmode = Standby;  // our first mode upon boot  // disabling ability to recover to previous runmode after crash:  runmode = watchdog.boot_to_runmode;
-    }  // we don't really need to set up anything, unless we need to recover to a specific runmode after crash
+        set_preferred_drivemode(); // read preferred drivemode from flash
+        runmode = Standby;         // our first mode upon boot
+    }
     int update() {
         static bool first_boot = true; // only true during first runthrough
 
@@ -131,7 +131,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         static bool stopcar_phase;
         if (_we_just_switched_modes) {              
             shutting_down = !powering_up;   // if waking up from sleep standby is already complete
-            stopcar_phase = true;  // !speedo.stopped();
+            stopcar_phase = true;
             ignition.request(ReqOff);  // ezread.squintf("temp: ignition OFF in standby\n");
             stopcar_timer.reset();
             sleep_request = ReqNA;
@@ -153,7 +153,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                     shutting_down = false;  // done shutting down
                     brake.setmode(Halt);
                 }
-                // else if (brake.motormode != ParkMotor) brake.setmode(ParkMotor);
             }
         }
         else {
@@ -193,7 +192,6 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (stall_ch4start_fn_timeout && !_stall_ch4start_timed_out && ch4start_disable_timer.expired()) {
             _stall_ch4start_timed_out = true;
             ezread.squintf("stall mode %dmin ch3-start fn timed out\n", ch4start_disable_timer.timeout() / (60 * 1000000));
-            // ignition.request(ReqOff);  // ignition kill will result in fall back to Standby mode
         }
         if (!tach.stopped()) runmode = Hold;  // If we started the car, enter hold mode
     }
@@ -249,7 +247,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (hotrc.pc[Vert][Filt] > hotrc.pc[Vert][OpMin] + hotrc.pc[Vert][Margin]) gesture_fly_timer.reset();  // keep resetting timer if joystick not at bottom
             else if (gesture_fly_timer.expired()) runmode = Fly;
         }
-        if (hotrc.sw_event_filt(Ch4)) tog_current_drivemode();                 // hrc ch4 button press switches drivemodes
+        if (hotrc.sw_event_filt(Ch4)) tog_current_drivemode(); // hrc ch4 button press switches drivemodes
     }
     void run_calMode() {  // calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration - don't use it unless you know how.
         if (_we_just_switched_modes) calmode_request = cal_gasmode_request = cal_brakemode_request = false;
@@ -260,57 +258,3 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (!cal_brakemode_request && brake.motormode == Calibrate) brake.setmode(Halt);
     }
 };
-// Here are the different runmodes documented
-//
-// ** Basic Mode **
-// - Required: BasicMode switch On
-// At startup it attempts to park the gas servo and brake motor, to release all tension on gas or brake
-// pedals so you can drive w/ your feet. Thereafter the gas and brake don't do anything. Only the steering
-// works, so use the pedals. This mode is enabled by a switch on the controller box. The only way to 
-// leave Basic Mode is by turning off the basic switch, or turning off the syspower signal.
-//
-// ** Lowpower Mode **
-// - Required: Request with hotrc ch4 button when shut down
-// Turns off power to the system. This includes all sensors/actuators and the screen, but not the hotrc receiver.
-// When requested to power up (same ch4 hotrc button), it re-powers everything and goes to standby mode.
-//
-// ** Standby Mode **
-// - Required: BasicMode switch Off & Ignition Off
-// This mode is active at boot, or whenever the ignition is off or when panic stopping. If the car is
-// moving, then like hold mode, standby mode will try to stop the car. Once stopped, then like basic mode,
-// it will park the motors out of the way and all systems stop. After a timeout it will go to lowpower mode.
-//
-// ** Stall Mode **
-// - Required: Engine stopped & BasicMode switch Off & Ignition On
-// This mode is active when the engine is not running.  If car is moving, then it presumably may
-// coast to a stop.  The actuators are all enabled and work, but the gas drops to open-loop control.
-// The starter may be turned on or off freely here by hitting the hotrc ch4 button. If the engine 
-// turns, then it'll go to hold mode. May be useful if beoing pushed or towed, or when servicing.
-//
-// ** Hold Mode **
-// - Required: Engine running & HrcVert<=Center & BasicMode switch Off & Ignition On
-// This mode ensures the car is stopped and stays stopped until you pull the trigger to give it gas, at which
-// point it goes to fly mode. This mode is entered from fly mode if the car comes to a stop, or from Stall Mode if
-// the engine starts turning. The starter can possibly be on through that transition, and thereafter it may be 
-// turned off but not on from hold mode.
-//
-// ** Fly Mode **
-// - Required: HrcVert>Center & Engine running & BasicMode Off & Ign On
-// This mode is for driving under manual control. This mode is entered from hold mode by pulling the gas trigger.
-// If the trigger is released again before the car moves, it's back to hold mode though. Trigger pull controls throttle
-// and trigger push controls brake, either/or. Whenever the car stops, then back to hold mode. Cruise mode may be 
-// entered from fly mode by pressing the cruise toggle button (ch4).
-//
-// ** Cruise Mode **
-// - Required: Car Moving & Engine running & BasicMode switch Off & Ignition On
-// This mode is entered from Fly Mode by pushing the cruise toggle button, and pushing it again will take you back.
-// There are no brakes in cruise mode, and pushing away on the trigger instead allows decreasing the cruise setpoint
-// (or pull it to increase the setpoint) Cruise can be run in three modes which adjust differently. The default
-// THROTTLE_DELTA mode holds a fixed throttle servo position as long as the trigger is centered, and if not,
-// it adjusts the setpoint up or down proportional to how far and how long you hold the trigger away from center.
-// If you panic and push full brake for over 500ms, it will drop to fly mode and then push brakes.
-//
-// ** Cal Mode **
-// This mode allows direct control of some actuators without respecting limits of motion, for purpose of
-// calibrating those very limits. It can be entered from standby mode with simulator on by long-pressing the CAL
-// button. Be careful with it.

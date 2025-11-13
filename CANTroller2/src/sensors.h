@@ -6,7 +6,7 @@
 #include <Arduino.h>
 #include <FunctionalInterrupt.h>
 #include "driver/rmt.h"
-#include <ESP32Servo.h>        // makes PWM output to control motors (for rudimentary control of our gas and steering)
+#include <ESP32Servo.h>  // makes PWM output to control motors (for rudimentary control of our gas and steering)
 #include <Preferences.h>  // functions for writing values to nvs flash partition
 
 // this enum class represent the components which can be simulated (sensor). It's int type under the covers, so it can be used as an index
@@ -771,7 +771,7 @@ class PressureSensor : public AnalogSensor {
         float noise_margin_adc = 45.0f;  // how much the min value can jump to above the number above due to noise
         float volt_min_v = 0.554f;  // minimum voltage reading of sensor at zero pressure
         float m = 1000.0f * (3.3f - volt_min_v) / ((static_cast<float>(adcrange_adc) - temp_min_adc) * (4.5f - volt_min_v)); // 1000 psi * (adc_max v - v_min v) / ((4095 adc - 650 adc) * (v-max v - v-min v)) = 0.202 psi/adc
-        float b = -1.0 * temp_min_adc * m;  // -650 adc * 0.202 psi/adc = -131.3 psi
+        float b = -1.0f * temp_min_adc * m;  // -650 adc * 0.202 psi/adc = -131.3 psi
         set_conversions(m, b);
         set_abslim_native(0.0f, static_cast<float>(adcrange_adc));  // set native abslims after m and b are set.  si abslims will autocalc
         set_oplim_native(temp_min_adc, 2176.0f);  // set this after abslims. si oplims will autocalc. bm24: max before pedal interference = 1385 (previous:) 2350 adc is the adc when I push as hard as i can (soren 240609)
@@ -835,7 +835,7 @@ class PulseSensor : public Sensor {
     volatile int64_t _isr_time_last_us = 0;
     volatile int _isr_delta_us = 0;
     
-    void IRAM_ATTR _isr() { // The isr gets the period of the vehicle pulley rotations.
+    void IRAM_ATTR _isr() { // The isr gets the period of the pulse train
         int64_t time_now_us = esp_timer_get_time();
         int delta_us = static_cast<int>(time_now_us - _isr_time_last_us);
         if (delta_us < _absmin_us_int) return; // ignore spurious triggers or bounces. hereafter the pulse is valid
@@ -1288,9 +1288,9 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         return map(_us, us[axis][Cent], us[axis][OpMin], pc[axis][Cent], pc[axis][OpMin]);    
     }
     void derive() {  // need to run this upon objct creation, and again whenever any tunable parameter is changed
-        for (int ch=0; ch<NumChans; ch++) {                      // derive us values for all 4 channels
-            us[ch][Margin] = margin_us;                          // same margin value is ultimately used on all channels
-            us[ch][OpMin] = constrain(us[ch][OpMin], absmin_us, us[ch][Cent] - us[ch][Margin]);  // ensure any oplimit tuning stays in sensible range
+        for (int ch=0; ch<NumChans; ch++) {  // derive us values for all 4 channels
+            us[ch][Margin] = margin_us;      // same margin value is ultimately used on all channels
+            us[ch][OpMin] = constrain(us[ch][OpMin], absmin_us, us[ch][Cent] - us[ch][Margin]); // ensure any oplimit tuning stays in sensible range
             us[ch][OpMax] = constrain(us[ch][OpMax], us[ch][Cent] + us[ch][Margin], absmax_us);
         }
         for (int axis=Horz; axis<=Vert; axis++) {  // derive pc values for the 2 analog directional axes
@@ -1306,14 +1306,14 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     void setup() {
         ezread.squintf(ezread.highlightcolor, "Hotrc init.. starting rmt..\n");
         for (int axis=Horz; axis<=Ch4; axis++) rmt[axis].init();  // set up 4 RMT receivers, one per channel
-        read_all_channels();  // must read values before initializing toggles below
-        toggles_init();       // initialize toggles to prevent spurious sw events on boot
+        read_all_channels(); // must read values before initializing toggles below
+        toggles_init();      // initialize toggles to prevent spurious sw events on boot
     }
     void update() {          // run this in each loop
         read_all_channels(); // read new raw pwm values from rmt buffer. critical to do this continually, fast enough to avoid rmt buffer overflow 
         radiolost_update();  // determine if the radio receiver detects good signal
         toggles_update();    // handle button presses on the digital channels
-        directions_update();  // update directional values from the analog channels
+        directions_update(); // update directional values from the analog channels
     }
     void set_deadband_us(float val) {
         deadband_us = constrain(val, 0.0f, us[Horz][OpMax] - us[Horz][Cent]);  // using Horz for this b/c it's the same for either axis
@@ -1484,24 +1484,24 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     // interpolated from before and after the spike, thereby erasing any spikes that recover fast enough.
     // Also if a detected cliff edge (potential spike) doesn't recover in time, it will smooth out the transition linearly.
     // The cost of this is our readings are delayed by a number of readings (equal to the maximum erasable spike duration).
-    static const int ringdepth = 9;  // more depth will reject longer spikes at the expense of increased controller delay
+    static const int ringdepth = 9; // more depth will reject longer spikes at the expense of increased controller delay
     static constexpr float spike_cliff = 6.0f; // spike_cliff is min diff of consecutive values to count as a spike
-    int prespike_idx[NumAxes] = { -1, -1 }, ringidx[NumAxes] = { 1, 1 };  // prespike of -1 means no current spike
+    int prespike_idx[NumAxes] = { -1, -1 }, ringidx[NumAxes] = { 1, 1 }; // prespike of -1 means no current spike
     float ringbuf[NumAxes][ringdepth];
-    float spike_filter(int axis, float new_val) {  // pass a fresh reading in, will return a filtered reading to use instead
-        static int num_calls[NumAxes] = { 0, 0 };  // track #function calls, to mitigate the initially-empty ring buffer 
+    float spike_filter(int axis, float new_val) { // pass a fresh reading in, will return a filtered reading to use instead
+        static int num_calls[NumAxes] = { 0, 0 }; // track #function calls, to mitigate the initially-empty ring buffer 
         static bool spike_signbit[NumAxes];
         int previdx = (ringdepth + ringidx[axis] - 1) % ringdepth; // previdx is where the incoming new value will be stored
-        if (++num_calls[axis] <= ringdepth) ringbuf[axis][previdx] = new_val;  // until buf is filled, fake the values
-        float this_delta = new_val - ringbuf[axis][previdx];   // value change since last reading
-        if (std::fabs(this_delta) > spike_cliff) {        // if new value is a cliff edge (start or end of a spike)
-            if (prespike_idx[axis] == -1) {                    // if this cliff edge is the start of a new spike
-                prespike_idx[axis] = previdx;                  // save idx of last good value just before the cliff
-                spike_signbit[axis] = std::signbit(this_delta);     // save the direction of the cliff
+        if (++num_calls[axis] <= ringdepth) ringbuf[axis][previdx] = new_val; // until buf is filled, fake the values
+        float this_delta = new_val - ringbuf[axis][previdx];    // value change since last reading
+        if (std::fabs(this_delta) > spike_cliff) {              // if new value is a cliff edge (start or end of a spike)
+            if (prespike_idx[axis] == -1) {                     // if this cliff edge is the start of a new spike
+                prespike_idx[axis] = previdx;                   // save idx of last good value just before the cliff
+                spike_signbit[axis] = std::signbit(this_delta); // save the direction of the cliff
             }
-            else if (spike_signbit[axis] == std::signbit(this_delta)) {  // if this cliff edge deepens an in-progress spike, or is a continuance of a valid rapid change
+            else if (spike_signbit[axis] == std::signbit(this_delta)) { // if this cliff edge deepens an in-progress spike, or is a continuance of a valid rapid change
                 inject_interpolations(axis, previdx, ringbuf[axis][previdx]); // smooth out the values between the last cliff & previous value
-                prespike_idx[axis] = previdx;                                 // consider this cliff edge the start of the spike instead
+                prespike_idx[axis] = previdx;                           // consider this cliff edge the start of the spike instead
             }
             else {                                                   // if this cliff edge is a recovery of an in-progress spike
                 inject_interpolations(axis, ringidx[axis], new_val); // fill in the spiked value section with interpolated values
@@ -1517,11 +1517,11 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         ++ringidx[axis] %= ringdepth;                   // advance the index (with wraparound) for next time
         return returnval;                               // return the value, now with any spikes removed or smoothed by the filter
     }
-    void inject_interpolations(int axis, int endspike_idx, float endspike_val) {  // replaces values between indices w/ linear interpolated values
-        int spike_length = ((ringdepth + endspike_idx - prespike_idx[axis]) % ringdepth) - 1;  // equal to the spiking values count plus one
-        if (spike_length <= 0) return;  // two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
+    void inject_interpolations(int axis, int endspike_idx, float endspike_val) { // replaces values between indices w/ linear interpolated values
+        int spike_length = ((ringdepth + endspike_idx - prespike_idx[axis]) % ringdepth) - 1; // equal to the spiking values count plus one
+        if (spike_length <= 0) return; // two cliffs in the same direction on consecutive readings needs no adjustment, also prevents divide by zero 
         float interp_slope = (endspike_val - ringbuf[axis][prespike_idx[axis]]) / spike_length;
-        for (int idx=1; idx<=spike_length; idx++)  // fill specified section of the buffer with interpolated values
+        for (int idx=1; idx<=spike_length; idx++) // fill specified section of the buffer with interpolated values
             ringbuf[axis][(prespike_idx[axis] + idx) % ringdepth] = ringbuf[axis][prespike_idx[axis]] + idx * interp_slope;
     }
 };

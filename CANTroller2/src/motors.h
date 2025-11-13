@@ -306,9 +306,6 @@ class JagMotor : public ServoMotor {
     float duty_fwd_pc = 100.0f;  // default. subclasses override as necessary
     float duty_rev_pc = 100.0f;  // default. subclasses override as necessary
     float* volt = si;  // apparently not legal:  float (&volt)[arraysize(si)] = si;  // our standard si value is volts. Create reference so si and volt are interchangeable
-    #if !BrakeThomson
-    // set opmin to avoid driving motor with under 8%
-    #endif
     JagMotor(int _pin, int _timerno, int _freq) : ServoMotor(_pin, _timerno, _freq) {}
     void derive() {  // calc pc and voltage op limits from volt and us abs limits 
         si[AbsMax] = running_on_devboard ? car_batt_fake_v : mulebatt->val();
@@ -362,7 +359,6 @@ class JagMotor : public ServoMotor {
 //    OnePull : Cruise locks servo angle (throttle_target_pc), instead of pid. Moving trigger from center adjusts setpoint proportional to how far you push it before releasing (and reduced by an attenuation factor)
 //    HoldTime : Cruise locks servo angle (throttle_target_pc), instead of pid. Any non-center trigger position continuously adjusts setpoint proportional to how far it's pulled over time (up to a specified maximum rate)
 class ThrottleControl : public ServoMotor {
-// replace with class ThrottleControl {
   private:
     Tachometer* tach;
     Potentiometer* pot;
@@ -377,9 +373,7 @@ class ThrottleControl : public ServoMotor {
     float* cruise_outmax_ptr[2] = { &pc[Govern], tach->governmax_ptr() }; // [GasOpen/GasPID] 
     bool pid_ena_last = false, cruise_pid_ena_last = false;
   public:
-    // replace this: ...
     using ServoMotor::ServoMotor;
-    // ThrottleControl(int _pin, int _freq) { pin = _pin; freq = _freq; };
     float tach_last, throttle_target_pc; //, max_throttle_angular_velocity_pcps;
     float linearizer_exponent = 3.75f;
     float cruise_linearizer_exponent = 1.05f;
@@ -438,10 +432,6 @@ class ThrottleControl : public ServoMotor {
     //   4. if increasing pulsewidths moves servo CCW then set reverse = true
     //   5. note also the reported angular value to see how accurate they are. if not, fix the conversions (currently a map statement)
     // * set operational angular range (OpMin/OpMax), margin (Margin) and parking angle (Parked) in setup() function, in degree units (si)
-    //
-    // (old) us[OpMin] = 1365.0f;  us[Parked] = 1340.0f;  us[OpMax] = 2475.0f;  us[Margin] = 30.0f;
-    // (old) float si[NumMotorVals] = { 88.8, NAN, 5.0f, 69.0f, NAN, 0.0f, 180, 1.0f };  // standard si-unit values [OpMin/Parked/OpMax/Out/Govern/AbsMin/AbsMax/Margin]
-    // (old) float us[NumMotorVals] = { 1365.0f, 1340.0f, 2475.0f, NAN, NAN, 0.0f, 180, 1.0f };  // standard si-unit values [OpMin/Parked/OpMax/Out/Govern/AbsMin/AbsMax/Margin]
 
     void setup(Hotrc* _hotrc, Speedometer* _speedo, Tachometer* _tach, Potentiometer* _pot, TemperatureSensorManager* _temp) {
         tach = _tach;  pot = _pot;  tempsens = _temp;
@@ -551,8 +541,6 @@ class ThrottleControl : public ServoMotor {
         else new_out = throttle_target_pc;
         if (!pid_enabled) new_out = rate_limiter(new_out);  // the pid should already be set to limit rate if needed.   pc[Out] = rate_limiter(new_out);  max_out_change_rate_pcps
         pc[Out] = constrain(new_out, out_lowlim, pc[Govern]);   // pid should constrain on its own, do not want to go editing its output
-        // if (last_mode != motormode) ezread.printf("gas mode changed %s -> %s\n", motormodecard[last_mode].c_str(), motormodecard[motormode].c_str());
-        // last_mode = motormode;
     }
   public:
     void setmode(int _mode) {
@@ -596,10 +584,7 @@ class ThrottleControl : public ServoMotor {
     void set_cruise_pid_ena(bool new_cruise_pid_ena) {   // run w/o arguments each loop to enforce configuration limitations, or call with an argument to enable/disable pid and update. do not change pid_enabled anywhere else!
         bool cruise_pid_ena_last = cruise_pid_enabled;
         cruise_pid_enabled = new_cruise_pid_ena;
-        if (cruise_pid_ena_last != cruise_pid_enabled) {
-            update_cruise_pid();
-            // ezread.squintf("cruis pid %s %s linz\n", cruise_pid_enabled ? "enab" : "disab", throttle_linearize_cruise ? "w/" : "w/o");
-        }
+        if (cruise_pid_ena_last != cruise_pid_enabled) update_cruise_pid();
     }    
     void set_pid_ena(bool new_pid_ena) {   // run w/o arguments each loop to enforce configuration limitations, or call with an argument to enable/disable pid and update. do not change pid_enabled anywhere else!
         bool pid_ena_last = pid_enabled;
@@ -609,7 +594,6 @@ class ThrottleControl : public ServoMotor {
             else if (motormode == ActivePID && !pid_enabled) motormode = OpenLoop; 
             update_pid();
             update_cruise_pid();
-            // if (pid_ena_last != pid_enabled) ezread.squintf("throt pid %s %s linz\n", pid_enabled ? "enab" : "disab", throttle_linearize_trigger ? "w/" : "w/o");
         }
     }
     void set_cruise_scheme(int newscheme) {
@@ -627,11 +611,6 @@ class ThrottleControl : public ServoMotor {
     void update() {
         if (runmode == LowPower) return;
         if (pid_timer.expireset()) {
-            // with recent changes to tune() I had to move the setter function for these here, instead of inline in the tuner like it was, to make edit acceleration work
-            // static float gov_last;                                // attempt to fix ui tuning acceleration of governor value
-            // if (governor != gov_last) set_governor_pc(governor);  // attempt to fix ui tuning acceleration of governor value
-            // gov_last = governor;                                  // attempt to fix ui tuning acceleration of governor value
-            // update_ctrl_config();
             update_idle();                // Step 1 : do any idle speed management needed          
             set_output();                      // Step 2 : determine motor output value. updates throttle target from idle control or cruise mode pid, if applicable (on the same timer as gas pid). allows idle control to mess with tach_target if necessary, or otherwise step in to prevent car from stalling
             us[Out] = out_pc_to_us(pc[Out], reverse);   // Step 4 : convert motor value to pulsewidth time

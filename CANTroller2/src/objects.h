@@ -42,11 +42,9 @@ static SteeringControl steer(steer_pwm_pin, 2, 50);
 static LightingBox lightbox(&i2c);  // lightbox(&diag);
 
 void set_board_defaults() {          // true for dev boards, false for printed board (on the car)
-    // ezread.squintf("  using %s defaults..\n", (running_on_devboard) ? "dev-board" : "vehicle-pcb");  // already printed during detection in temperature class
     if (running_on_devboard) return;      // override settings if running on the real car
     looptime_print = false;         // Makes code write out timestamps throughout loop to serial port
     touch_reticles = false;
-    // console_enabled = false;     // safer to disable because serial printing itself can easily cause new problems, and libraries might do it whenever
     wifi_client_mode = false;       // Should wifi be in client or access point mode?
     keep_system_powered = false;    // Use true during development
     dont_take_temperatures = false;
@@ -64,22 +62,6 @@ void sim_setup() {
     sim.register_device(sens::mulebatt, mulebatt, mulebatt.source());
     sim.recall_cansim();
     sim.set_potmap();
-    // sim.register_device(sens::engtemp, temp, temp.source());
-    // sim.register_device(sens::starter, starter, starter.source());
-    // for (sens sen=sens::pressure; sen<=sens::mulebatt; sen=(sens)((int)sen+1))
-    // sim.set_can_sim(sens::joy, running_on_devboard);    
-    // sim.set_can_sim(sens::pressure, running_on_devboard);
-    // sim.set_can_sim(sens::brkpos, running_on_devboard);
-    // sim.set_can_sim(sens::speedo, running_on_devboard);
-    // sim.set_can_sim(sens::tach, running_on_devboard);
-    // sim.set_can_sim(sens::airvelo, running_on_devboard);
-    // sim.set_can_sim(sens::mapsens, running_on_devboard);
-    // sim.set_can_sim(sens::engtemp, running_on_devboard);
-    // sim.set_can_sim(sens::mulebatt, running_on_devboard);
-    // // sim.set_can_sim(sens::starter, running_on_devboard);
-    // sim.set_can_sim(sens::basicsw, running_on_devboard);
-    // for (sens sen=sens::engtemp; sen<sens::basicsw; sen=(sens)((int)sen+1)) sim.set_can_sim(sen, false);
-    // sim.set_potmap(sens::none);        
     ezread.squintf(ezread.highlightcolor, "Simulator: registered %d devices\n", sim.registered_device_count());
 }
 // RTOS task that updates temp sensors in a separate task
@@ -102,7 +84,6 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
     static float maf_map_last;
     static float maf_velo_last;
     float temp = _ambient;
-    // if (!airvelo.enabled() || !mapsens.enabled()) return NAN;
     float new_velo = airvelo.val();
     float new_map = mapsens.val();
     if (std::isnan(_ambient)) {
@@ -120,7 +101,6 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
     float P = 101325.0f * (std::isnan(_map) ? new_map : _map);  // in Pa   101325 Pa/atm  1 Pa = 1 J/m3
     float maf = v * Ain2 * P * 1000.0f / (R * T * 1550.0f);  // mas\\s air flow in grams per second (g/s)   (1000 g/kg * m/s * in2 * J/m3) / (J/(kg*K) * K * 1550 in2/m2) = g/s
     if (std::fabs(maf) < 0.001f) maf = 0.0f;
-    // ezread.squintf("maf: %.3lf\n", maf);
     return maf;
 }
 // RTOS task that updates map and airflow sensors, and mass airflow calculation
@@ -135,17 +115,6 @@ void maf_task(void *parameter) {
         if (!i2c.detected(I2CAirVelo) && !i2c.detected(I2CMAP)) vTaskDelay(pdMS_TO_TICKS(300)); // guarantees easement of cpu cycles & bus activity by disconnecting i2c plug (in case of problems)
     }
 }
-// WIP debugging
-// void maf_task(void *parameter) {
-//     while (true) {
-//         if (i2c.detected(I2CMAP)) mapsens.update();          // manifold air pressure sensor  // 70 us + 2ms every 9 loops
-//         vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
-//         if (i2c.detected(I2CAirVelo)) airvelo.update();          // manifold air velocity sensor  // 20us + 900us every 4 loops
-//         maf_gps = massairflow();   // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air 
-//         vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff
-//         if (!i2c.detected(I2CAirVelo) && !i2c.detected(I2CMAP)) vTaskDelay(pdMS_TO_TICKS(100));  // Delay for a second to avoid updating the sensors too frequently
-//     }
-// }
 class ToggleSwitch {
   public:
     bool val = LOW;  // pin low means val high
@@ -185,7 +154,6 @@ class BasicModeSwitch : public ToggleSwitch {
         if (sim.simulating(attached_sensor)) return;
         if (runmode == Fly || runmode == Hold || runmode == Cruise) return;
         if (console_enabled) {
-            // delay(200);  // give time for serial to print everything in its buffer
             Serial.flush();  // empty serial buffer before closing port
             Serial.end();  // close serial console to prevent crashes due to error printing
         }
@@ -218,12 +186,6 @@ static inline void print_git_info() {
     if (build_git_error()) ezread.squintf(ezread.madcolor, "err: git data unknown due to git errors\n");
     else ezread.squintf("Git sha=%s (%s) branch=%s\n", kBuildSha.c_str(), (build_dirty()) ? "dirty" : " clean", kBuildBranch.c_str());
     ezread.squintf("  utc: %s\n", kBuildBuiltUtc.c_str());
-    
-    // std::string line = "Git sha=" + kBuildSha +
-    //     " dirty=" + std::to_string(kBuildDirty ? 1 : 0) +
-    //     " branch=" + kBuildBranch +
-    //     " built=" + kBuildBuiltUtc;  // + " err=" + std::to_string(kBuildGitError ? 1 : 0);
-    // ezread.squintf("%s\n", line.c_str());  // out.println(line.c_str());
 }
 #endif
 
@@ -456,7 +418,6 @@ static RunModeManager run;
 class BootButton : public MomentarySwitch {
   protected:
     void actions();  // function prototyhpe. see full definition below
-    // int dummyprintcount = 0;  // useful for debugging ezread spam suppression feature
   public:
     BootButton(int apin) : MomentarySwitch(apin, false) {}
     void update() {
@@ -471,7 +432,6 @@ static BootButton bootbutton(boot_sw_pin);
 #include "display.h"
 
 void BootButton::actions() {  // temporary (?) functionality added for development convenience
-    // if (val()) ezread.printf("long ass print %d\n", ++dummyprintcount); return;  // useful for debugging ezread spam suppression feature
     if (longpress()) autosaver_request = ReqTog;  // screen.auto_saver(!auto_saver_enabled);
     if (shortpress()) {
         if (runmode == LowPower) sleep_request = ReqOff;
@@ -496,9 +456,6 @@ class CoolingFan {  // new class to serve as thermostat for vehicle radiator fan
     bool signal = LOW;  // reflects current state of the fan output pin
     CoolingFan(int pin) : _pin(pin) { set_pin(_pin, OUTPUT); }
     void setup() { ezread.squintf(ezread.highlightcolor, "Cooling fan (p%d) engine thermostat init\n", _pin); }
-    void update() {
-        // read engine temp
-        // turn on cooling fan as needed
-    }
+    void update() { }
 };
 static CoolingFan fan(coolingfan_pin);  // uses the pin and transistor circuit existing onboard originally intended for the vehicle fuel pump
