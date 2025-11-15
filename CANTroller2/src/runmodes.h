@@ -38,7 +38,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.setmode(run_motor_mode[runmode][_SteerMotor]);
             watchdog.set_codestatus();
             shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = _stall_ch4start_timed_out = false;  // clean up previous runmode values
-            _stopped_hold_timer_active = cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
+            powering_up = _stopped_hold_timer_active = cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
             if (_verbose && !first_boot) ezread.squintf("run: mode change %s->%s\n", modecard[_oldmode].c_str(), modecard[runmode].c_str());
             first_boot = false;
         }
@@ -91,7 +91,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
   private:
     void run_basicMode() { // Basic mode is for when we want to operate the pedals manually. All PIDs stop, only steering still works.
-        if (_we_just_switched_modes) powering_up = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from lowpower mode
+        // if (_we_just_switched_modes) powering_up = false;  // to cover unlikely edge case where basic mode switch is enabled during wakeup from lowpower mode
         if (!ignition.signal) {
             if (hotrc.sw_event_filt(Ch4)) runmode = LowPower;  // Note keep this if separate, as it will reset the sw event
         }
@@ -101,16 +101,15 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         static Timer pwrchange_timer{300000}; // time allowed to power up/down system devices during wakeup/sleeping. delays entry to standby mode (in us)
         if (_we_just_switched_modes) {
             sleep_request = ReqNA;
-            powering_up = false;  // three state variables to track entry/exit phases of lowpower mode
+            // powering_up = false;  // three state variables to track entry/exit phases of lowpower mode
             powering_down = true; // during this time we blackout the screen (should be done in display.h)
             pwrchange_timer.reset();  // give some time for screen to blackout
         }
-        else if (powering_down && pwrchange_timer.expired()) {  // blackout time is over, now go to sleep
+        if (powering_down && pwrchange_timer.expired()) {  // blackout time is over, now go to sleep
             syspower.set(LOW);  // Power down devices to save battery
             powering_down = false;
         }
         else if (powering_up && pwrchange_timer.expired()) {  // by now sensors etc. have got powered up, so switch runmode
-            powering_up = false;
             runmode = (in_basicmode) ? Basic : Standby;  // basicsw.val()  finish powering up . display->all_dirty();  // tells display to redraw everything. display must set back to false
         }
         else {
@@ -126,32 +125,34 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         sleep_request = ReqNA;
     }
     void run_standbyMode() { // In standby mode we stop the car if it's moving, park the motors, go idle for a while and eventually sleep.
-        static Timer stopcar_timer{5000000}; // spend this long trying to stop the car and parking motors before halting actuators 
-        static Timer parkmotors_timer{2500000}; // spend this long trying to park the motors before halting them
+        static constexpr int stopcar_timeout = 6000000; // spend this many us trying to stop the car and parking motors before halting actuators  
+        static constexpr int parkmotors_timeout = 3000000; // spend this many us trying to park the motors before halting them
+        static Timer phase_timer;
         static bool stopcar_phase;
         if (_we_just_switched_modes) {              
-            shutting_down = !powering_up;   // if waking up from sleep standby is already complete
-            stopcar_phase = true;
+            shutting_down = stopcar_phase = true;
+            // shutting_down = !powering_up;   // if waking up from sleep standby is already complete
+            // powering_up = false;
             ignition.request(ReqOff);  // ezread.squintf("temp: ignition OFF in standby\n");
-            stopcar_timer.reset();
+            phase_timer.set(stopcar_timeout);
             sleep_request = ReqNA;
             user_inactivity_timer.set(_lowpower_delay_min * 60 * 1000000);
         }
         if (shutting_down) {
             if (stopcar_phase) {
-                if (speedo.stopped() || stopcar_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
-                    if (stopcar_timer.expired()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to stop car\n");
-                    stopcar_phase = false;  // move on to parkmotor phase
+                if (speedo.stopped() || phase_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
+                    if (!speedo.stopped()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to stop car\n");
                     brake.setmode(ParkMotor);
-                    parkmotors_timer.reset();
+                    phase_timer.set(parkmotors_timeout);
+                    stopcar_phase = false;  // move on to parkmotor phase
                 }
                 else if (brake.motormode != AutoStop) brake.setmode(AutoStop);
             }
             else {  // we are in park motor phase
-                if (brake.parked() || parkmotors_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
+                if (brake.parked() || phase_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
                     if (!brake.parked()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to park brake\n");
-                    shutting_down = false;  // done shutting down
                     brake.setmode(Halt);
+                    shutting_down = false;  // done shutting down
                 }
             }
         }
@@ -168,9 +169,11 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (user_inactivity_timer.elapsed() > _screensaver_delay_min * 60 * 1000000) autosaver_request = ReqOn;
             if (user_inactivity_timer.expired() || sleep_request == ReqTog || sleep_request == ReqOn) runmode = LowPower;
         }
-        // TODO - review whether going to hold mode directly from standby is ever necessary or wise ... what is the use case where we want this?
-        if ((speedo.stopped() || allow_rolling_start) && ignition.signal && !panicstop && !tach.stopped())
-            runmode = Hold;  // If the car is already running, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
+
+        // Removing this bit that could go directly to hold mode from standby mode. I don't see why this is relevant at all
+        //
+        // if ((speedo.stopped() || allow_rolling_start) && ignition.signal && !panicstop && !tach.stopped())
+        //     runmode = Hold;  // If the car is already running, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
     }
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
         static Timer ch4start_disable_timer{3 * 60 * 1000000};  // set an X minute timer to disable ch4 start function, reducing risk of phantom starter bug
