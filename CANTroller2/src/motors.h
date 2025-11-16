@@ -647,14 +647,13 @@ class BrakeControl : public JagMotor {
     float _autostop_fast_increment_pc = 4.0f; // same as above but for fast-braking (during panic or when stopped)
     float _autohold_initial_pc = 100.0f;  // braking to apply when autoholding if car is stopped 
     float brakemotor_duty_spec_pc = 10.0f;  // = 25.0; // In order to not exceed spec and overheat the actuator, limit brake presses when under pressure and adding pressure
-    float pres_out, posn_out, pc_out_last, posn_last, pres_last;
     float heat_math_offset, motor_heat_min = 75.0f, motor_heat_max = 200.0f;
     int dominantsens_last = HybridFB, last_external_mode_request = Halt;
     Timer stopcar_timer{8000000}, interval_timer{250000}, motor_park_timer{4000000}, motorheat_timer{500000}, blindaction_timer{3000000};
-    void set_dominant_sensor(float _hybrid_ratio) {
+    void set_dominant_sensor(float _hybrid_ratio_pc) {
         if (feedback == PressureFB || feedback == PositionFB) dominantsens = feedback;
-        else if (std::isnan(_hybrid_ratio)) return;  // dominantsens = NoneFB;
-        else dominantsens = (int)(_hybrid_ratio + 0.5f) ? PressureFB : PositionFB;  // round to 0 or 1, the indices of posn and pres respectively
+        else if (std::isnan(_hybrid_ratio_pc)) return;  // dominantsens = NoneFB;
+        else dominantsens = (_hybrid_ratio_pc >= 50.0f) ? PressureFB : PositionFB;  // round to 0 or 1, the indices of posn and pres respectively
         if (dominantsens == PositionFB) pid_dom = &(pids[PositionFB]);
         else pid_dom = &(pids[PressureFB]);
         posn_pid_active = (dominantsens == PositionFB);  // for display
@@ -674,20 +673,21 @@ class BrakeControl : public JagMotor {
     QPID pids[NumBrakeSens];  // brake changes from pressure target to position target as pressures decrease, and vice versa
     QPID* pid_dom = &(pids[PositionFB]);  // AnalogSensor sensed[2];
     float duty_pc = 0.0f;  // our continuous estimate of current duty level of actuator (in pc)
-    float brake_pid_trans_threshold_lo = 0.25f;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
-    float brake_pid_trans_threshold_hi = 0.50f;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
+    float brake_pid_trans_threshold_lo = 25.0f;  // tunable. At what fraction of full brake pressure will motor control begin to transition from posn control to pressure control
+    float brake_pid_trans_threshold_hi = 50.0f;  // tunable. At what fraction of full brake pressure will motor control be fully transitioned to pressure control
     bool autostopping = false, autoholding = false;
     float target_si[NumBrakeSens];  // this value is the posn and pressure (and hybrid combined) target settings, or fed into pid to calculate setting if pid enabled, in si units appropriate to each sensor
     float hybrid_math_offset, hybrid_math_coeff, hybrid_sens_ratio, hybrid_sens_ratio_pc, target_pc, pid_err_pc;
-    float combined_read_pc, target_margin_pc = 2.0f, hybrid_out_ratio = 1.0f, hybrid_out_ratio_pc = 100.0f;
+    float combined_read_pc, target_margin_pc = 2.0f, hybrid_out_ratio_pc = 100.0f;
     float _fixed_release_speed = -50.0f;  // rate an openloop pedal release will travel
     float motor_heat = NAN, motor_heatloss_rate = 3.0f, motor_max_loaded_heatup_rate = 1.5f, motor_max_unloaded_heatup_rate = 0.3f;  // deg F per timer timeout
     float open_loop_attenuation_pc = 75.0f, thresh_loop_attenuation_pc = 45.0f, thresh_loop_hysteresis_pc = 2.0f;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
     void derive() {  // to-do below: need stop/hold values for posn only operation!
         JagMotor::derive();
         // pc[Margin] = 100.0 * pressure->margin() / (pressure->opmax() - pressure->opmin());
-        hybrid_math_offset = 0.5f * (brake_pid_trans_threshold_hi + brake_pid_trans_threshold_lo);  // pre-do some of the math to speed up hybrid calculations
-        hybrid_math_coeff = M_PI / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo);  // pre-do some of the math to speed up hybrid calculations
+        hybrid_math_offset = 0.5f * (brake_pid_trans_threshold_hi + brake_pid_trans_threshold_lo);     // e.g. 37.5
+        hybrid_math_coeff  = static_cast<float>(M_PI) / (brake_pid_trans_threshold_hi - brake_pid_trans_threshold_lo); // e.g. π/25
+
     }
     bool detect_tempsens() {
         float trytemp = tempsens->val(loc::TempBrake);
@@ -700,8 +700,6 @@ class BrakeControl : public JagMotor {
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         pid_timeout = 40000;  // Needs to be long enough for motor to cause change in measurement, but higher means less responsive
         JagMotor::setup(_hotrc, _speedo, _batt);
-        pres_last = pressure->val();
-        posn_last = brkpos->val();
         detect_tempsens();
         if (!std::isnan(tempsens->val(loc::TempAmbient))) motor_heat_min = tempsens->val(loc::TempAmbient) - 2.0f;
         derive();
@@ -769,27 +767,23 @@ class BrakeControl : public JagMotor {
     // near either pressure extreme only one of the two sensors is accurate. So at lower psi, control is 100% 
     // position-based, fade to 100% pressure-based at mid/high pressures.
     // "dominant" PID means the PID loop (pressure or position) that has the majority influence over the motor
-    float calc_hybrid_ratio(float pressure_val) {  // returns pressure influence as a ratio (from 0.0 to 1.0) for a given pressure level in percent 
+    float calc_hybrid_ratio_pc(float pressure_val) {  // returns pressure influence as a ratio (from 0.0 to 1.0) for a given pressure level in percent 
         if (feedback == NoneFB) return NAN;
-        if (feedback == PressureFB) return 1.0f;
+        if (feedback == PressureFB) return 100.0f;
         if (feedback == PositionFB) return 0.0f;
-        float pressure_ratio = pressure_val / 100.0f;  // (pressure_val - pressure->opmin()) / (pressure->opmax() - pressure->opmin());  // calculate ratio of output to range
-        if (pressure_ratio >= brake_pid_trans_threshold_hi) return 1.0f;  // at pressure above hi threshold, pressure has 100% influence
-        if (pressure_ratio <= brake_pid_trans_threshold_lo) return 0.0f;  // at pressure below lo threshold, position has 100% influence
-        return 0.5f + 0.5f * (float)std::sin(hybrid_math_coeff * (pressure_ratio - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
+        if (pressure_val >= brake_pid_trans_threshold_hi) return 100.0f;  // at pressure above hi threshold, pressure has 100% influence
+        if (pressure_val <= brake_pid_trans_threshold_lo) return 0.0f;  // at pressure below lo threshold, position has 100% influence
+        return 50.0f + 50.0f * (float)std::sin(hybrid_math_coeff * (pressure_val - hybrid_math_offset));  // in between we make a steep but smooth transition during which both have some influence
         // TODO (251028) hybrid brake value can decrease as pressure increases (w/ position fixed) during transition from 100% pressure <-> 100% position, i noticed while simulating both on breadboard
     }
-    void set_hybrid_ratio() {
-        float temp = calc_hybrid_ratio(pressure->pc());
-        if (!isnan(temp)) {
-            hybrid_out_ratio = temp;  // calculate pressure vs. position multiplier based on the sensed values
-            hybrid_out_ratio_pc = 100.0f * hybrid_out_ratio;  // for display
-        }
-        else hybrid_out_ratio = hybrid_out_ratio_pc = NAN;
-        set_dominant_sensor(hybrid_out_ratio);  // round to 0 (posn pid) or 1 (pressure pid). this is for idiot light display
-    }
     float get_hybrid_brake_pc(float _given_pres, float _given_posn) {  // uses current hybrid_ratio to calculate a combined brake percentage value from given pres and posn values
-        return hybrid_out_ratio * _given_pres + (1.0f - hybrid_out_ratio) * _given_posn;  // combine pid outputs weighted by the multiplier
+        return _given_pres * hybrid_out_ratio_pc / 100.0f + _given_posn * (100.0f - hybrid_out_ratio_pc) / 100.0f ;  // combine pid outputs weighted by the multiplier
+    }
+    void calc_combined_brake() {  // calculates and saves combined brake value percent, based on readings of the feedback sensors. harmless to call even if running openloop
+        hybrid_out_ratio_pc = calc_hybrid_ratio_pc(pressure->pc());
+        set_dominant_sensor(hybrid_out_ratio_pc);  // round to 0 (posn pid) or 1 (pressure pid). this is for idiot light display
+        if (feedback == NoneFB) combined_read_pc = NAN;
+        else combined_read_pc = get_hybrid_brake_pc(pressure->pc(), brkpos->pc());
     }
     void set_target(float targ_pc) {  // sets brake target percent. if hybrid, will set pressue and posn targets per current hybrid ratio, and set both pid targets in case pids are used
         target_pc = targ_pc;
@@ -798,12 +792,6 @@ class BrakeControl : public JagMotor {
         target_si[PositionFB] = brkpos->from_pc(target_pc);  // (saved into variables for display)
         for (int mypid=PositionFB; mypid<=PressureFB; mypid++) pids[mypid].set_target(target_si[mypid]);  // feed target vals to pid loops. this is harmless if pids disabled, it will have no effect
     }
-    void read_sensors() {  // calculates and saves combined brake value percent, based on readings of the feedback sensors. harmless to call even if running openloop
-        if (feedback == PositionFB) combined_read_pc = brkpos->pc();
-        else if (feedback == PressureFB) combined_read_pc = pressure->pc();
-        else if (feedback == HybridFB) combined_read_pc = get_hybrid_brake_pc(pressure->pc(), brkpos->pc());
-        else combined_read_pc = NAN;
-    }
     float calc_loop_out() {  // returns motor output percent calculated based on current target_pc or target[] values, in a way consistent w/ current config
         if (motormode == PropLoop) {  // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
             float err = (combined_read_pc - target_pc);
@@ -811,9 +799,7 @@ class BrakeControl : public JagMotor {
             if (err > 0.0f) return thresh_loop_attenuation_pc * throttle->idle_pc();
             return thresh_loop_attenuation_pc * pc[OpMax];
         }
-        else {
-            return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // if (motormode == ActivePID) combine pid outputs weighted by the multiplier
-        }
+        else return get_hybrid_brake_pc(pids[PressureFB].compute(), pids[PositionFB].compute());  // if (motormode == ActivePID) combine pid outputs weighted by the multiplier
     }
     float calc_open_out() {
         float new_out = pc[Out];
@@ -882,10 +868,10 @@ class BrakeControl : public JagMotor {
         return in_progress;
     }
     void set_output() {  // sets pc[Out] in whatever way is right for the current motor mode
-        if (!(motormode == OpenLoop || feedback == NoneFB)) {  // open loop should skip calculating hybrid ratio
-            set_hybrid_ratio();
-            read_sensors();
-        }
+        // if (!(motormode == OpenLoop || feedback == NoneFB)) {  // open loop should skip calculating hybrid ratio
+        //     set_hybrid_ratio();
+        //     read_sensors();
+        // }
 
         // AutoHold will initially stop the car (if moving) or apply decent brake pressure (if not), then thereafter ensure it stays stopped while in this mode
         if (motormode == AutoHold) {  // autohold: apply initial moderate brake pressure, and incrementally more if car is moving. If car stops, then stop motor but continue to monitor car speed indefinitely, adding brake as needed
@@ -954,7 +940,8 @@ class BrakeControl : public JagMotor {
             new_out = pc[Stop];                                           // THEN stop the motor
         else new_out = constrain(new_out, pc[OpMin], pc[OpMax]);          // constrain motor value to operational range (in pid mode pids should manage this)
         cleanzero(&new_out, 0.01f);  // if (std::fabs(pc[Out]) < 0.01f) pc[Out] = 0.0f;                                 // prevent stupidly small values which i was seeing
-        pc[Out] = rate_limiter(new_out);  // changerate_limiter();
+        if (pid_enabled) pc[Out] = new_out;  // when using pids the pid controls rate limiting
+        else pc[Out] = rate_limiter(new_out);
         // for (int p = PositionFB; p <= PressureFB; p++) if (feedback_enabled[p]) pids[p].set_output(pc[Out]);  // feed the final value back into the pids
     }
   public:
@@ -1023,6 +1010,7 @@ class BrakeControl : public JagMotor {
         if (pid_timer.expireset()) {
             update_ctrl_config();   // catch any change in configuration affecting motor mode
             update_motorheat();     // update motor heat management, will halt the motor and panic if overheated
+            calc_combined_brake();  // calculate current sensed brake value (possibly hybrid)
             set_output();           // determine motor percent value
             postprocessing();       // fix motor pc value if it's out of range or threatening to exceed positional limits
             us[Out] = out_pc_to_us(pc[Out], reverse); // convert motor percent value to pulse width for motor
