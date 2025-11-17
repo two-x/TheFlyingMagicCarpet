@@ -225,15 +225,15 @@ void finalize_boot() {
 class Ignition {  // the ignition object controls the car ignition signal and the panicstop state based on external requests
   private:
     bool _verbose = true;
-    int _pin, _ign_req = ReqNA, _panic_req = ReqNA;  // bool _verbose = true;
+    int _pin;  // bool _verbose = true;
     Timer panicTimer{10000000};  // how long should a panic stop last?  we can't stay mad forever
     void set_ignition(bool newval) {
-        _ign_req = ReqNA;
+        ignreq = ReqNA;
         signal = newval;
         write_pin(_pin, signal);  // turn car off or on (ign output is active high), ensuring to never turn on the ignition while panicking
     }
     void set_panicstop(bool newval) {
-        _panic_req = ReqNA;                 // no matter what happens we will service the request
+        panicreq = ReqNA;                 // no matter what happens we will service the request
         if (!newval && !panicstop) return;  // no need to turn panic off if it's already off, so bail
         if (newval != panicstop) prefs.putUInt("panicstop", (uint32_t)newval);  // whenever panic state changes, update flash. this is read at boot, see diag.h
         if (newval && !panicstop) panicTimer.reset();  // start chillout timer when turning panic state on
@@ -241,32 +241,33 @@ class Ignition {  // the ignition object controls the car ignition signal and th
     }
   public:
     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
+    int ignreq = ReqNA, panicreq = ReqNA;
     Ignition(int pin) : _pin(pin) {}
     void setup() { ezread.squintf(ezread.highlightcolor, "Ignition (p%d) handler init\n", _pin); }
-    void request(int req) { _ign_req = req; }  // ezread.squintf("ign req %s\n", requestcard[req].c_str());
-    void panic_request(int req) { _panic_req = req; }  // if (_verbose) ezread.squintf("ign2: ign=%d ir=%s pan=%d pr=%s\n", (int)signal, requestcard[ign_req].c_str(), (int)panicstop, requestcard[panic_req].c_str()); delay(1);
+    void request(int req) { ignreq = req; }  // ezread.squintf("ign req %s\n", requestcard[req].c_str());
+    void panic_request(int req) { panicreq = req; }  // if (_verbose) ezread.squintf("ign2: ign=%d ir=%s pan=%d pr=%s\n", (int)signal, requestcard[ign_req].c_str(), (int)panicstop, requestcard[panic_req].c_str()); delay(1);
     void update() {  // Run once each main loop
         if (runmode == LowPower) return;
-        if (_panic_req == ReqTog) _panic_req = panicstop ? ReqOff : ReqOn;
-        if (_ign_req == ReqTog) _ign_req = signal ? ReqOff : ReqOn;
+        if (panicreq == ReqTog) panicreq = panicstop ? ReqOff : ReqOn;
+        if (ignreq == ReqTog) ignreq = signal ? ReqOff : ReqOn;
 
         // 251102 TODO - is this redundant to code in run.update() ?
         if (!speedo.stopped()) {  //  && (runmode == Fly || runmode == Cruise || runmode == Hold)
-            int req_last = _panic_req;
-            if (signal && _ign_req == ReqOff) _panic_req = ReqOn;    // ignition cut while driving causes panic stop
+            int req_last = panicreq;
+            if (signal && ignreq == ReqOff) panicreq = ReqOn;    // ignition cut while driving causes panic stop
             if (!(sim.simulating(sens::joy) && sim.enabled()))       // if using hotrc to drive
                 if (hotrc.radiolost() || hotrc.radiolost_untested()) // and radio problem
-                    _panic_req = ReqOn;                              // then panic
-            if (_verbose && !req_last && _panic_req) ezread.squintf("panic state initiated by ign class\n");
+                    panicreq = ReqOn;                              // then panic
+            if (_verbose && !req_last && panicreq) ezread.squintf("panic state initiated by ign class\n");
         }
         
-        if (_panic_req != ReqNA) set_panicstop((_panic_req == ReqOn) ? true : false);    // ezread.squintf("panic=%d\n", panicstop);
+        if (panicreq != ReqNA) set_panicstop((panicreq == ReqOn) ? true : false);    // ezread.squintf("panic=%d\n", panicstop);
         if (panicstop) {
             if (signal) ezread.squintf(ezread.madcolor, "ign kill due to panic stop condition\n");
-            _ign_req = ReqOff;  // panic stop causes ignition cut
+            ignreq = ReqOff;  // panic stop causes ignition cut
         }
         if (speedo.stopped() || panicTimer.expired()) set_panicstop(false);  // Cancel panic stop if car is stopped
-        if (_ign_req != ReqNA) set_ignition((_ign_req == ReqOn) ? HIGH : LOW);
+        if (ignreq != ReqNA) set_ignition((ignreq == ReqOn) ? HIGH : LOW);
     }
 };
 static Ignition ignition(ignition_pin);
@@ -351,6 +352,7 @@ class Starter {
         else {  // if no errors happened then accept the request
             if (_verbose && ((req != last_req) || (a_requestor != StartClass))) ezread.squintf("new starter %s request from %s\n", requestcard[req].c_str(), startreqcard[a_requestor].c_str());  // report all request activity
             if (req == ReqTog) req = motor ? ReqOff : ReqOn;  // translate a toggle request to a drive request opposite to the current drive state
+            if (req == now_req) ezread.squintf("starter duplicate request %s from %s\n", requestcard[req].c_str(), startreqcard[a_requestor].c_str()); // report now_req was apparently set by somewhere besides this function
             now_req = req;
             _requestor = a_requestor;
             last_req = now_req;

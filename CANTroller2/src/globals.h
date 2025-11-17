@@ -101,7 +101,7 @@ enum rgb { Red=0, Grn=1, Blu=2, NumRGB=3 };
 // search for all uses and understand them before changing anything
 enum hotrc_axis { Horz=0, Vert=1, Ch3=2, Ch4=3 };
 enum hotrc_val { OpMin=0, Cent=1, OpMax=2, Raw=3, Filt=4, DBBot=5, DBTop=6 };
-enum motor_val { Parked=1, Out=3, Govern=4 , AbsMin=5, AbsMax=6, Margin=7, NumMotorVals=8 }; // Idle=8, NumMotorVals=9 };
+enum motor_val { Out=3, Govern=4, AbsMin=5, AbsMax=6, Margin=7, Parked=8, NumMotorVals=9 }; // Idle=8, NumMotorVals=9 };
 enum stop_val { Stop=1 };
 enum temp_val { Alarm=3 };
 enum size_enums { NumAxes=2, NumChans=4, NumValues=8 };

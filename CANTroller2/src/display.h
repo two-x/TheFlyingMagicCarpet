@@ -792,7 +792,7 @@ class Display {
             // drawval(12, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
             // drawval(13, brake.target[PressureFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
             // drawval(14, brake.target[PositionFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-            drawval(15, brake.hybrid_out_ratio_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
+            drawval(15, brake.hybrid_ratio_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
             drawval(16, brake.pid_dom->pterm(), -drange, drange);
             drawval(17, brake.pid_dom->outsum(), -drange, drange);
             drawval(18, brake.pid_dom->iterm(), -drange, drange);

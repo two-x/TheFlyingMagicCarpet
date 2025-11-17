@@ -472,25 +472,15 @@ class I2CSensor : public Sensor {
             else ezread.squintf(ezread.sadcolor, "  no response\n");  // begin communication with air flow sensor) over I2C 
         }
     }
-
     void set_val_from_pin() override {
+        if (_i2c->not_my_turn(_i2c_bus_index)) return;
+        // if (!_i2c->detected(_i2c_bus_index) || !_responding) _native.set(NAN); else
         _native.set(read_i2c_sensor());
+        if (_i2c->i2cbaton == _i2c_bus_index) _i2c->pass_i2c_baton(); // deal with bus semaphore, since we're done with it
+        // if (std::isnan(_native.val())) _si.set((NAN)); else {}
         _raw.set(from_native(_native.val())); // convert native to raw si value
         set_si_w_ema(0.001f);                 // set si filtered value based on new raw reading
     }
-    // WIP debugging
-    // void set_val_from_pin() override {
-    //     if (_i2c->not_my_turn(_i2c_bus_index)) return;
-    //     if (!_i2c->detected(_i2c_bus_index) || !_responding) _native.set(NAN); // if bus/sensor failure set value to nan
-    //     else _native.set(read_i2c_sensor());                          // otherwise take a new native reading from the bus
-    //     if (_i2c->i2cbaton == _i2c_bus_index) _i2c->pass_i2c_baton(); // deal with bus semaphore, since we're done with it
-    //     if (std::isnan(_native.val())) _si.set((NAN));                // propagate nan native value to all values
-    //     else {                                                        // if reading was good
-    //         _raw.set(from_native(_native.val()));                     // convert native to raw si value
-    //         set_si_w_ema();                                           // set si filtered value based on new raw reading
-    //     }
-    // }
-
   public:
     uint8_t addr;
     I2CSensor(I2C* i2c_arg, uint8_t i2c_address_arg) : Sensor(-1), _i2c(i2c_arg), addr(i2c_address_arg) {
@@ -503,25 +493,12 @@ class I2CSensor : public Sensor {
         _detected = _i2c->detected_by_addr(addr); // WIP debugging
         set_conversions(1.0f, 0.0f); // our i2c sensors so far provide si units directly.
     }
-
-    // WIP debugging
     void postsetup() {  // must be run last by child class setup() function
         if (!_detected || !_responding) set_source(src::Fixed);  // TODO - added to prevent continual map(NAN, ...) errors on sensors not present. review
         else set_source(src::Pin);
         set_val_from_pin();
         print_on_boot(_detected, _responding);
     }
-
-    // WIP debugging
-    // void postsetup() {  // must be run last by child class setup() function
-    //     // set_si(_default_value_si);  // initialize value
-    //     _detected = _i2c->detected_by_addr(addr);
-    //     if (!_detected || !_responding) {
-    //         set_source(src::Fixed);  // TODO - added to prevent continual map(NAN, ...) errors on sensors not present. review
-    //         // set_si(_default_value_si);
-    //     }
-    //     print_on_boot(_detected, _responding);
-    // }
     virtual void setup() = 0;  // child sensors must include a setup() function
 };
 // AirVeloSensor measures the intake air velocity in mph. Sensor is an external i2c device.

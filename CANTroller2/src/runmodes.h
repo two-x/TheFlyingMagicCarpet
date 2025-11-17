@@ -53,8 +53,14 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (runmode == Cruise) run_cruiseMode();
         else if (runmode == Cal) run_calMode();
         else ezread.squintf(ezread.madcolor, "err: invalid runmode=%d entered\n", runmode);  // Obviously this should never happen
-        
-        if (ignition.signal && runmode != Cal) {  // guarantee execution of ignition-kill features, in all modes except Cal
+
+        // guarantee starter non-operation outside legal modes
+        if ((starter.motor || starter.now_req == ReqOn) && runmode != Cal && runmode != Stall && runmode != Hold) {
+            if (_verbose) ezread.squintf("starter detected and killed by run.update()\n");
+            starter.request(ReqOff);
+        }
+        // guarantee execution of ignition-kill features, in all modes except Cal
+        if ((ignition.signal || ignition.ignreq == ReqOn) && runmode != Cal) {
             bool kill_ign = false;
             if (!(sim.simulating(sens::joy) && sim.enabled())) {  // when using the radio to control joy vert (rather than simulator)
                 if (hotrc.radiolost_untested() && require_radiolost_test) kill_ign = true;
@@ -98,12 +104,14 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (!in_basicmode) runmode = Standby;  // if we turned off the basic mode switch, go to standby mode
     }
     void run_lowpowerMode() {  // turns off syspower and just waits. sleep_request are handled here or in standby mode below
-        static Timer pwrchange_timer{300000}; // time allowed to power up/down system devices during wakeup/sleeping. delays entry to standby mode (in us)
+        static int pwrdowntime = 350000;
+        static int pwruptime = 900000;
+        static Timer pwrchange_timer; // time allowed to power up/down system devices during wakeup/sleeping. delays entry to standby mode (in us)
         if (_we_just_switched_modes) {
             sleep_request = ReqNA;
             // powering_up = false;  // three state variables to track entry/exit phases of lowpower mode
             powering_down = true; // during this time we blackout the screen (should be done in display.h)
-            pwrchange_timer.reset();  // give some time for screen to blackout
+            pwrchange_timer.set(pwrdowntime);  // give some time for screen to blackout
         }
         if (powering_down && pwrchange_timer.expired()) {  // blackout time is over, now go to sleep
             syspower.set(LOW);  // Power down devices to save battery
@@ -117,7 +125,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (hotrc.sw_event_filt(Ch4)) sleep_request = ReqOff;  // Note keep this if separate, as it will reset the sw event
             if (sleep_request == ReqTog || sleep_request == ReqOff) {  // start powering up
                 syspower.set(HIGH);        // switch on control system devices
-                pwrchange_timer.reset();   // stay in lowpower mode for a delay to allow devices to power up
+                pwrchange_timer.set(pwruptime);   // stay in lowpower mode for a delay to allow devices to power up
                 powering_up = true;
                 autosaver_request = ReqOff;
             }
@@ -198,14 +206,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         if (!tach.stopped()) runmode = Hold;  // If we started the car, enter hold mode
     }
-    void run_holdMode(bool recovering=false) {  // recovering argument is only used by the [experimental & optional] boot monitor feature to resume previous drive state after a system crash
+    void run_holdMode() {  // recovering argument is only used by the [experimental & optional] boot monitor feature to resume previous drive state after a system crash
         static Timer ch4_function_timer{500000};  // this long after starter motor has stopped, ch4 button function becomes toggling between preferred drivemode, rather than stopping the running starter
-        if (_we_just_switched_modes) _joy_has_been_centered = recovering;  // Fly mode will be locked until the joystick first is put at or below center (to avoid acting on whatever initial trigger value upon Hold mode entry)
         if (starter.motor) {  // if starter motor is running
             ch4_function_timer.reset();  // constantly reset timer to prevent Ch4 buttonn from changing drivemode until after starter motor is stopped
             if (hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());  // a Ch4 event turns off the starter.  Note keep this if separate, as it will reset the sw event
         }
-        if (holdmode_ch4_drivetoggle && ch4_function_timer.expired()) {  // if the starter motor has been off for long enough
+        else if (holdmode_ch4_drivetoggle && ch4_function_timer.expired()) {  // if the starter motor has been off for long enough
             if (hotrc.sw_event_filt(Ch4)) tog_preferred_drivemode();  // a Ch4 event will select the preferred drivemode.  Note keep this if separate, as it will reset the sw event
         }
         if (hotrc.joydir(Vert) != HrcUp) _joy_has_been_centered = true;  // if not pushing up, set this flag. now pushing up will go to fly mode
