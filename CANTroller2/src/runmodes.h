@@ -54,11 +54,11 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         else if (runmode == Cal) run_calMode();
         else ezread.squintf(ezread.madcolor, "err: invalid runmode=%d entered\n", runmode);  // Obviously this should never happen
 
-        // guarantee starter non-operation outside legal modes
-        if ((starter.motor || starter.now_req == ReqOn) && runmode != Cal && runmode != Stall && runmode != Hold) {
-            if (_verbose) ezread.squintf("starter detected and killed by run.update()\n");
-            starter.request(ReqOff);
-        }
+        // // guarantee starter non-operation outside legal modes
+        // if ((starter.motor || starter.now_req == ReqOn) && runmode != Cal && runmode != Stall && runmode != Hold) {
+        //     if (_verbose) ezread.squintf("starter detected and killed by run.update()\n");
+        //     starter.request(ReqOff);
+        // }
         // guarantee execution of ignition-kill features, in all modes except Cal
         if ((ignition.signal || ignition.ignreq == ReqOn) && runmode != Cal) {
             bool kill_ign = false;
@@ -141,6 +141,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             shutting_down = stopcar_phase = true;
             // shutting_down = !powering_up;   // if waking up from sleep standby is already complete
             // powering_up = false;
+            starter.request(ReqOff);  // ezread.squintf("temp: ignition OFF in standby\n");
             ignition.request(ReqOff);  // ezread.squintf("temp: ignition OFF in standby\n");
             phase_timer.set(stopcar_timeout);
             sleep_request = ReqNA;

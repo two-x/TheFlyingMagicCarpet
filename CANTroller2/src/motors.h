@@ -30,6 +30,7 @@ class QPID {
     float *_outmax;
     float _out_changerate_ps = 0.0f;  // how much output is changing per sec (differential of output) 
     float _max_out_changerate_ps = 0.0f;  // set to impose limits on how fast the output can change. set to 0.0 to disable
+    float _round_precision = 0.001;
     bool pause_diff;
     ctrl _mode = ctrl::manual;
     cdir _dir = cdir::direct;
@@ -107,11 +108,14 @@ class QPID {
             else if (_itermout < (*_outmin * _iaw_cond_thresh) && derr < 0.0f) aw = true;
             if (aw && _ki) _iterm = constrain(_itermout, -(*_outmax * _iaw_cond_thresh), *_outmax * _iaw_cond_thresh);
         }
-        if ((_awmode == awmod::round || _awmode == awmod::roundcond) && _err < 0.001f && _err > -0.001f) {
-            _err = 0.0f;
-            if (_centmode == centmod::on || _centmode == centmod::strict) _outsum = _cent;     
+        if (_awmode == awmod::round || _awmode == awmod::roundcond) cleanzero(&_err, _round_precision);
+        bool zero_terms = false;
+        if (_centmode != centmod::off && iszero(_err, _round_precision)) zero_terms = true;
+        if (_centmode == centmod::strict && _err * lasterr < 0.0f) zero_terms = true;
+        if (zero_terms) {
+            _iterm = 0.0f;
+            _outsum = _cent;
         }
-        if (_centmode == centmod::strict && _err * lasterr < 0.0f) _outsum = _cent;  // Recenters any old integral when error crosses zero
         
         if (pause_diff) _dterm = 0.0f;  // avoid differential effect on this cycle due to recent external setting of output
         pause_diff = false;
@@ -636,12 +640,12 @@ class BrakeControl : public JagMotor {
     PressureSensor* pressure;
     ThrottleControl* throttle;
     TemperatureSensorManager* tempsens;
-    float press_kp = 0.54f;        // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float press_ki = 0.22f;        // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float press_kd = 0.0f;        // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    float posn_kp = 30.3f;          // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
-    float posn_ki = 8.0f;         // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
-    float posn_kd = 0.0f;         // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    float press_kp = 0.54f;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float press_ki = 0.10f;  // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float press_kd = 0.0f;   // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
+    float posn_kp = 30.3f;   // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float posn_ki = 5.5f;    // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
+    float posn_kd = 0.0f;    // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     float _autostop_smooth_initial_pc = 60.0f;  // default initial applied braking to auto-stop or auto-hold the car (in percent of op range)
     float _autostop_smooth_increment_pc = 2.5f;  // default additional braking added periodically when auto stopping (in percent of op range)
     float _autostop_fast_initial_pc = 65.0f; // same as above but for fast-braking (during panic or when stopped)
@@ -682,9 +686,9 @@ class BrakeControl : public JagMotor {
         derive();
         update_ctrl_config();
         pids[PressureFB].init(pressure->ptr(), &(pc[OpMin]), &(pc[OpMax]), press_kp, press_ki, press_kd, QPID::pmod::onerr,
-            QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::strict, pc[Stop]);  // QPID::centmod::off);
+            QPID::dmod::onerr, QPID::awmod::roundcond, QPID::cdir::direct, pid_timeout, QPID::ctrl::manual, QPID::centmod::strict, pc[Stop]);  // QPID::centmod::off);
         pids[PositionFB].init(brkpos->ptr(), &(pc[OpMin]), &(pc[OpMax]), posn_kp, posn_ki, posn_kd, QPID::pmod::onerr, 
-            QPID::dmod::onerr, QPID::awmod::cond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::strict, pc[Stop]);  // QPID::centmod::off);
+            QPID::dmod::onerr, QPID::awmod::roundcond, QPID::cdir::reverse, pid_timeout, QPID::ctrl::manual, QPID::centmod::strict, pc[Stop]);  // QPID::centmod::off);
         // pids[PressureFB].set_iaw_cond_thresh(0.25);  // set the fraction of the output range within which integration works at all
         // pids[PositionFB].set_iaw_cond_thresh(0.25);
         set_out_changerate_pcps(400.0);  // MotorFactoryStore actuator stutters and stalls when changing direction suddenly, when power is low
@@ -926,13 +930,13 @@ class BrakeControl : public JagMotor {
             else pc[Out] = pc[Stop];
         }
         else if (motormode == Release) {  // this will not get entered if using loop control. instead target is set in setmode function
-            releasing = goto_fixed_position(brkpos->zeropoint_pc(), brkpos->released());
+            releasing = goto_fixed_position(brkpos->zeropoint_pc(), released());
             if (releasing) pc[Out] = _fixed_release_speed;
             // if (feedback == NoneFB) pc[Out] = target_pc; else
             // pc[Out] = calc_loop_out();   // if (autoholding) pc[Out] = pc[Stop];  // kills power to motor while car is stopped. 
         }
         else if (motormode == ParkMotor) {  // this will not get entered if using loop control. instead target is set in setmode function
-            parking = goto_fixed_position(brkpos->parkpos_pc(), brkpos->parked());  // will set target to parked position
+            parking = goto_fixed_position(brkpos->parkpos_pc(), parked());  // will set target to parked position
             if (parking) pc[Out] = _fixed_release_speed;
             // if (feedback == NoneFB) pc[Out] = target_pc;  else
             // pc[Out] = calc_loop_out();   // if (autoholding) pc[Out] = pc[Stop];  // kills power to motor while car is stopped. 
@@ -941,10 +945,14 @@ class BrakeControl : public JagMotor {
             pc[Out] = calc_open_out();
         }
         else if ((motormode == PropLoop) || (motormode == ActivePID)) {
-            if (_fixed_target_mode == Release)
-                releasing = goto_fixed_position(brkpos->zeropoint_pc(), brkpos->released());
-            else if (_fixed_target_mode == ParkMotor)
-                parking = goto_fixed_position(brkpos->parkpos_pc(), brkpos->parked());
+            if (_fixed_target_mode == Release) {
+                if (feedback_enabled[PositionFB]) releasing = goto_fixed_position(brkpos->zeropoint_pc(), released());
+                else releasing = goto_fixed_position(pressure->zeropoint_pc(), released());
+            }                
+            else if (_fixed_target_mode == ParkMotor) {
+                if (feedback_enabled[PositionFB]) parking = goto_fixed_position(brkpos->parkpos_pc(), parked());
+                else parking = goto_fixed_position(pressure->parkpos_pc(), parked());
+            }
             else {  // when dynamically driving
                 if (hotrc->joydir(Vert) != HrcDn) set_target(pc[Stop]);  // let off the brake
                 else set_target(map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], 0.0f, 100.0f));  // If we are trying to brake, scale joystick value to determine brake pressure setpoint
@@ -1027,21 +1035,29 @@ class BrakeControl : public JagMotor {
         pid_ena_last = pid_enabled;
     }
     bool parked() {
-        if (!feedback_enabled[PressureFB]) return brkpos->parked();
-        else if (!feedback_enabled[PositionFB]) return pressure->released();  // pressure doesn't have a parked() function yet
-        else return (combined_read_pc <= sensmin());  // TODO - sensmin() value is untested and arbitrary - replace with a calibrated value?
+        if (feedback_enabled[PositionFB]) return brkpos->parked();  // pressure doesn't have a parked() function yet
+        if (feedback_enabled[PressureFB]) return pressure->parked();  // pressure doesn't have a parked() function yet
         ezread.squintf(ezread.sadcolor, "warn: brake unaware if parked w/o sensors\n");
-        return false;  // really without sensors we have no idea if we're parked. Print an error message
+        return false;
+        // if (!feedback_enabled[PressureFB]) return brkpos->parked();
+        // else if (!feedback_enabled[PositionFB]) return pressure->released();  // pressure doesn't have a parked() function yet
+        // else return (combined_read_pc <= sensmin_pc() + pc[Margin]);  // TODO - sensmin() value is untested and arbitrary - replace with a calibrated value?
+        // ezread.squintf(ezread.sadcolor, "warn: brake unaware if parked w/o sensors\n");
+        // return false;  // really without sensors we have no idea if we're parked. Print an error message
     }
     bool released() {
-        if (!feedback_enabled[PressureFB]) return brkpos->released();
-        else if (!feedback_enabled[PositionFB]) return pressure->released();  // pressure doesn't have a parked() function yet
-        else return (combined_read_pc <= sensmin());  // TODO - sensmin() value is untested and arbitrary - replace with a calibrated value?
+        if (feedback_enabled[PositionFB]) return brkpos->released();  // pressure doesn't have a parked() function yet
+        if (feedback_enabled[PressureFB]) return pressure->released();  // pressure doesn't have a parked() function yet
         ezread.squintf(ezread.sadcolor, "warn: brake unaware if released w/o sensors\n");
-        return false;  // really without sensors we have no idea if we're released. Print an error message
+        return false;
+        // if (!feedback_enabled[PressureFB]) return brkpos->released();
+        // else if (!feedback_enabled[PositionFB]) return pressure->released();  // pressure doesn't have a parked() function yet
+        // else return (combined_read_pc <= sensmin_pc());  // TODO - sensmin() value is untested and arbitrary - replace with a calibrated value?
+        // ezread.squintf(ezread.sadcolor, "warn: brake unaware if released w/o sensors\n");
+        // return false;  // really without sensors we have no idea if we're released. Print an error message
     }
-    float sensmin() { return (dominantsens == PressureFB) ? pressure->opmin() : brkpos->opmin(); }
-    float sensmax() { return (dominantsens == PressureFB) ? pressure->opmax() : brkpos->opmax(); }
+    // float sensmin_pc() { return (dominantsens == PressureFB) ? pressure->opmin_pc() : brkpos->opmin_pc(); }
+    // float sensmax_pc() { return (dominantsens == PressureFB) ? pressure->opmax_pc() : brkpos->opmax_pc(); }
     float duty() { return duty_pc; }
     float dutymin() { return 0.0f; }
     float dutymax() { return brakemotor_duty_spec_pc; }

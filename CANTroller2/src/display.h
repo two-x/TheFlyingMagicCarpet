@@ -54,7 +54,7 @@ static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  //
     { "ang",  "us",   "V",  "us",   "V",  "us",    "",    "", "ang", "ang",  "us",   "%", "mph", "atm", "atm", },  // PgPWMs
     { "scr", "rpm",   "%",   "%", "ang", "rpm",    "",    "",    "",    "",   "s",   "%",   "%", "deg", "deg", },  // PgIdle
     {   "%", "deg",   "%",    "",    "", "0/1", "scr", "scr", "0/1", "%/s", "0/1", "0/1", "scr", "0/1", "scr", },  // PgMotr
-    { "scr",   "%", "psi",   "%",  "in",   "%",   "%",   "%",   "%",   "%",   "%",  "us",    "",  "Hz",   "s", },  // PgBPID
+    { "scr", "psi", "psi",  "in",  "in",   "%",   "%",   "%",   "%",   "%",   "%",  "us",    "",  "Hz",   "s", },  // PgBPID
     { "scr",   "%",   "%", "rpm", "rpm",   "%",   "%",   "%",    "", "0/1",    "", "d/s",    "",  "Hz",   "s", },  // PgGPID
     { "mph", "mph", "%|r", "%|r", "%|r",   "%",    "", "0/1", "0/1", "0/1",    "",   "%",    "",  "Hz",   "s", },  // PgCPID
     { "deg", "deg", "deg", "deg", "deg", "deg", "deg", "0/1",    "",    "",    "",    "",    "", "deg", "0/1", },  // PgTemp
@@ -782,10 +782,10 @@ class Display {
         else if (datapage == PgBPID) {
             drange = brake.us[AbsMin]-brake.us[AbsMax];
             draw_ascii(9, motormodecard[brake.motormode]);
-            drawval(10, pressure.pc(), 0.0f, 100.0f, brake.pids[PressureFB].target());
-            drawval(11, brake.pids[PressureFB].target(), pressure.opmin(), pressure.opmax());
-            drawval(12, brkpos.pc(), 0.0f, 100.0f, brake.pids[PositionFB].target());
-            drawval(13, brake.pids[PositionFB].target(), brkpos.opmin(), brkpos.opmax());
+            drawval(10, pressure.val(), pressure.opmin(), pressure.opmax(), brake.target_si[PressureFB]);
+            drawval(11, brake.target_si[PressureFB], pressure.opmin(), pressure.opmax());
+            drawval(12, brkpos.val(), brkpos.opmin(), brkpos.opmax(), brake.target_si[PositionFB]);
+            drawval(13, brake.target_si[PositionFB], brkpos.opmin(), brkpos.opmax());
             drawval(14, brake.target_pc, 0.0f, 100.0f);
             // draw_ascii(9, motormodecard[brake.motormode]);
             // draw_ascii(10, brakefeedbackcard[brake.feedback]);

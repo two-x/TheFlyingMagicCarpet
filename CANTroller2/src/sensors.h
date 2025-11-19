@@ -395,10 +395,14 @@ class Transducer : public Device {
     float absmax() { return _si.max(); }
     float absmin_native() { return _native.min(); }
     float absmax_native() { return _native.max(); }
+    float absmin_pc() { return to_pc(_si.min()); }
+    float absmax_pc() { return to_pc(_si.max()); }
     float opmin() { return _opmin; }
     float opmax() { return _opmax; }
     float opmin_native() { return _opmin_native; }
     float opmax_native() { return _opmax_native; }
+    float opmin_pc() { return to_pc(_opmin); }
+    float opmax_pc() { return to_pc(_opmax); }
     float margin() { return _margin; }
     float margin_native() { return to_native(_margin); }
     float margin_pc() { return std::fabs(to_pc(_margin)); }
