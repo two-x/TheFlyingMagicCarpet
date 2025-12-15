@@ -294,7 +294,7 @@ class Starter {
 
         if (ok_to_start) {
             ezread.squintf("starter turnon by %s (%d)\n", startreqcard[_requestor].c_str(), code);  // maybe use ezread.squintf instead? (prints to both screen and console)
-            if (push_gas_when_starting && check_brake_before_starting) gas.setmode(Starting);  // give it some gas if we're allowed to, unless brake wasn't checked (due to risk of lurching forward)
+            if (push_gas_when_starting && check_brake_before_starting) gas.set_action(ActionStarting);  // give it some gas if we're allowed to, unless brake wasn't checked (due to risk of lurching forward)
             _starterTimer.set((int64_t)(run_timeout * 1000000.0));  // if left on the starter will turn off automatically after X seconds
             motor = HIGH;                                           // ensure starter variable always reflects the starter status regardless who is driving it
             write_pin(_pin, motor);                                 // and start the motor
@@ -387,9 +387,9 @@ class Starter {
                 request(ReqNA, StartClass); // cancel turn on request
                 return;                     // finished servicing request
             }
-            else if (brake.motormode != AutoHold) {  // if we haven't yet told the brake to hold down
+            else if (brake.ctrlmode != ActionAutoHold) {  // if we haven't yet told the brake to hold down
                 ezread.squintf("starter autobraking..\n");
-                brake.setmode(AutoHold);             // tell the brake to hold
+                brake.set_action(ActionAutoHold);             // tell the brake to hold
                 brakeTimer.reset();                  // start a timer to time box the application of brake
                 return;                              // ditch out and wait for brake to push, leaving on request active
             }

@@ -77,32 +77,32 @@
 //
 // this group has enums which are relatively straightforward, i.e. each used in only one context 
 enum runmode { Basic=0, LowPower=1, Standby=2, Stall=3, Hold=4, Fly=5, Cruise=6, Cal=7, NumRunModes=8 };
-enum req { ReqOff=0, ReqOn=1, ReqTog=2, ReqNA=3, NumReqs=4 };  // requesting handler actions of digital values with handler functions
-enum starter_requestors { StartUnknown=0, StartClass=1, StartHotrc=2, StartTouch=3, StartRunmode=4, NumStartReq=5 };  // for identification of starter motor request source
-enum cruise_modes { OnePull=0, HoldTime=1, NumCruiseSchemes=2 };
+enum req { ReqOff=0, ReqOn=1, ReqTog=2, ReqNA=3, NumReqs=4 }; // requesting handler actions of digital values with handler functions
+enum starter_requestors { StartUnknown=0, StartClass=1, StartHotrc=2, StartTouch=3, StartRunmode=4, NumStartReq=5 }; // for identification of starter motor request source
 enum sw_presses { SwNone=0, SwShort=1, SwLong=2 };
-enum motor_modes { NA=0, Halt=1, Idle=2, Release=3, OpenLoop=4, PropLoop=5, ActivePID=6, AutoStop=7, AutoHold=8, ParkMotor=9, CruiseMode=10, Calibrate=11, Starting=12, AutoPID=13, NumMotorModes=14 };
-enum brakefeedbacks { PositionFB=0, PressureFB=1, HybridFB=2, NoneFB=3, NumBrakeFB=4 };
-enum openloopmodes { MedianPoint=0, AutoRelease=1, AutoRelHoldable=2, NumOpenLoopModes=3 };
+enum motor_ctrlmodes { CtrlDisable=0, CtrlOpenLoop=1, CtrlPID=2, CtrlCalibrate=3, CtrlAutoPID=4, NumMotorCtrls=5 };
+enum motor_actions { ActionCruise=0, ActionStarting=1, ActionHalt=2, ActionManual=3, ActionRelease=4, ActionPark=5, ActionAutoStop=6, ActionAutoHold=7, NumMotorActions=8 };
+enum brake_feedbacks { FBPosition=0, FBPressure=1, FBHybrid=2, NumBrakeFB=3 }; // brkpos must be index 0 and pressure must be index 1
+enum brake_openmodes { OpenMedian=0, OpenAutoRel=1, OpenAutoRelHoldable=2, NumOpenLoops=3 };
+enum gas_cruisemodes { CruiseOnePull=0, CruiseHoldTime=1, NumCruiseSchemes=2 };
 enum datapages { PgRun=0, PgHrc=1, PgSens=2, PgPuls=3, PgPWMs=4, PgIdle=5, PgMotr=6, PgBPID=7, PgGPID=8, PgCPID=9, PgTemp=10, PgSim=11, PgDiag=12, PgUI=13, NumDataPages=14 };
 enum diag_val { DiagVal=0, DiagMin=1, DiagMax=2, DiagMargin=3, NumDiagVals=4 };
 enum joydirs { HrcRt=-2, HrcDn=-1, HrcCent=0, HrcUp=1, HrcLt=2, HrcPlus=3, HrcMinus=4 };
-enum panel_apps { EZReadUI=0, MuleChassisUI=1, ScreensaverUI=2, NumContextsUI=3 };  // uses for the multi purpose panel
+enum panel_apps { EZReadUI=0, MuleChassisUI=1, ScreensaverUI=2, NumContextsUI=3 }; // uses for the multi purpose panel
 enum codestatus { StConfused=0, StAsleep=1, StBooting=2, StParked=3, StStopped=4, StDriving=5, StInBasic=6, StPanicking=7, NumCodeStatuses=8 };
-enum pcba_glow_modes { GlowOff=0, GlowSimple=1, GlowHeart=2, GlowXFade=3, GlowSine=4, GlowNumModes=5 };
 enum err_type { ErrLost=0, ErrRange=1, ErrWarn=2, NumErrTypes=3 };
 enum directional { DirNone=0, DirDown=1, DirUp=2, DirLeft=3, DirRight=4, NumDirs=5 };
 enum cycle_dirs { DirRev=-1, DirFwd=1 };
 enum cruisepids { GasOpen=0, GasPID=1 };
 enum rgb { Red=0, Grn=1, Blu=2, NumRGB=3 };
-//
+
 // this group is used in multiple places in different ways, and is thus high-risk.
 // for example, arrays exist with indexes drawn from different combinations of multiple ones of these enums
 // search for all uses and understand them before changing anything
 enum hotrc_axis { Horz=0, Vert=1, Ch3=2, Ch4=3 };
 enum hotrc_val { OpMin=0, Cent=1, OpMax=2, Raw=3, Filt=4, DBBot=5, DBTop=6 };
 enum motor_val { Out=3, Govern=4, AbsMin=5, AbsMax=6, Margin=7, Parked=8, NumMotorVals=9 }; // Idle=8, NumMotorVals=9 };
-enum stop_val { Stop=1 };
+enum stop_val { NA=0, Stop=1 };
 enum temp_val { Alarm=3 };
 enum size_enums { NumAxes=2, NumChans=4, NumValues=8 };
 //
@@ -114,7 +114,7 @@ enum boolean_states { On=1 };
 enum brakeextra { NumBrakeSens=2 };
 enum telemetry_idiots {                              // list of transducers which have onscreen idiotlights showing status
     _Hybrid=-3, _None=-2, _NA=-1,                    // these meta values indicate no transducer, useful for some contexts  
-    _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are mission-critical actuators, driven by us.  note: these enums are also used to index global runmode:motormode array 
+    _Throttle=0, _BrakeMotor=1, _SteerMotor=2,       // these transducers are mission-critical actuators, driven by us.  note: these enums are also used to index global runmode:motorctrlmode array 
     _HotRC=3, _Speedo=4, _Tach=5, _BrakePres=6, _BrakePosn=7,  // these transducers are mission-critical sensors, we read from
     _Temps=8, _MuleBatt=9, _GPIO=10, _Other=11,           // these are actually groups of multiple sensors (see below)
     NumTelemetryIdiots=12,                           // size of the list of values with idiot lights
@@ -150,7 +150,7 @@ bool console_enabled = true;         // completely disables the console serial o
 bool keep_system_powered = false;    // ensures syspower is always high.
 bool looptime_print = false;         // makes code write out timestamps throughout loop to serial port. for analyzing what parts of the code take the most time
 bool touch_reticles = true;          // draws tiny little plus reticles to aim at for doing touchscreen calibration
-bool button_test_heartbeat_color = false;  // makes boot button short press change heartbeat color. useful for testing code on bare esp
+bool button_test_heartbeat_color = false; // makes boot button short press change heartbeat color. useful for testing code on bare esp
 bool wifi_client_mode = false;       // should wifi be in client or access point mode?
 bool screensaver_enabled = true;     // does fullscreen screensaver start automatically (after a delay) when in standby mode?
 bool print_framebuffers = false;     // dumps out ascii representations of screen buffer contents to console. for debugging frame buffers. *hella* slow
@@ -162,26 +162,29 @@ bool use_idle_boost = false;         // should we try to manage a dynamic idle s
 bool overtemp_shutoff_brake = true;  // should a brake temp beyond opmax cause a brake motor and engine shutoff?
 bool overtemp_shutoff_engine = true; // should an engine temp beyond opmax cause engine shutoff and possible panic?
 bool overtemp_shutoff_wheel = true;  // should a wheel temp beyond opmax cause engine shutoff?
-bool throttle_linearize_trigger = true;  // should trigger values be linearized for gas determination?
-bool throttle_linearize_cruise = false;  // should trigger values be linearized when in cruise mode?
-bool stall_ch4start_fn_timeout = true; // should stall mode ability to turn starter on time out after a few minutes, to mitigate phantom start risks?
-bool throttle_pid_default = false;    // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
-bool cruise_pid_default = false;       // default throttle control mode. values: ActivePID (use the rpm-sensing pid), OpenLoop, or Linearized
-// bool force_hotrc_button_filter = false; // always force button filtration for all actions. otherwise unfiltered presses are allowed for safety events (ie ignition or starter kill), in case of radio interference
+bool throttle_linearize_trigger = true; // should trigger values be linearized for gas determination?
+bool throttle_linearize_cruise = false; // should trigger values be linearized when in cruise mode?
+bool stall_ch4start_fn_timeout = true;  // should stall mode ability to turn starter on time out after a few minutes, to mitigate phantom start risks?
+bool gas_pid_default = false;           // default should throttle use the pid
+bool brake_pid_default = true;          // default should brake use the pid
+bool cruise_pid_default = false;        // default should cruise use the pid
 bool ezread_suppress_spam = true;       // activates ezread feature to suppress data coming into the console too fast (to prevent overrun crashes)
 bool panic_on_boot_after_crash = true;  // causes bootmanager to do a panic on boot if car was in a drive state when reset 
 bool require_radiolost_test = true;     // should we refuse ignition to be on if radiolost feature hasn't been tested
 bool holdmode_ch4_drivetoggle = false;  // should a ch4 press in hold mode toggle the preferred drivemode, assuming starter is off?
+bool allow_openloop_autobrake = true; // if brake in openloop mode, do we still do autobrake maneuvers using a timer?
+bool allow_openloop_panicstop = true; // if brake in openloop mode, do we still do panicstops using a timer? (overrides the above only in panic condition)
+// bool force_hotrc_button_filter = false; // always force button filtration for all actions. otherwise unfiltered presses are allowed for safety events (ie ignition or starter kill), in case of radio interference
 
 // global tunable variables
-int operational_framerate_limit_fps = 100;  // max display frame rate to enforce while driving whenever limit_framerate == true
+int operational_framerate_limit_fps = 100; // max display frame rate to enforce while driving whenever limit_framerate == true
 float wheeldifferr = 35.0f;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel before idiot light
 constexpr float float_conversion_zero = 0.001f;
 constexpr int unlikely_int = -92935762; // random ass unlikely value for detecting unintended arguments
 int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;    // when looptime_print == 1, will linefeed after printing loops taking > this value. set to 0 linefeeds all prints
-float cruise_holdtime_attenuator_pc = 10.0f; // adjustment rate multiplier for cruise HoldTime mode
-float cruise_onepull_attenuator_pc = 14.0f;  // adjustment rate multiplier for cruise OnePull mode
+float cruise_holdtime_attenuator_pc = 10.0f; // adjustment rate multiplier for CruiseHoldTime mode
+float cruise_onepull_attenuator_pc = 14.0f;  // adjustment rate multiplier for CruiseOnePull mode
 float maf_min_gps = 0.0f;                // in grams per second
 float maf_max_gps = 50.0f;              // i just made this number up as i have no idea what's normal for MAF
 float tuning_rate_pcps = 7.5f;          // values being edited by touch buttons change value at this percent of their overall range per second
@@ -190,15 +193,25 @@ float neosat = 90.0f;                   // default saturation of neopixels in pe
 int i2c_frequency = 400000;             // in kHz. standard freqs are: 100k, 400k, 1M, 3.4M, 5M
 float governor = 95.0f;                 // software governor will only allow this percent of full-open throttle (percent 0-100)
 
-int run_motor_mode[NumRunModes][3] = {   // Array of which motor mode the gas/brake/steer get set to upon entering each runmode
-    { Halt, Halt, OpenLoop },  // Basic mode    (_Throttle/_BrakeMotor/_SteerMotor)
-    { ParkMotor, ParkMotor, Halt },      // LowPower mode (_Throttle/_BrakeMotor/_SteerMotor)
-    { ParkMotor, Halt, OpenLoop },       // Standby mode  (_Throttle/_BrakeMotor/_SteerMotor)
-    { OpenLoop, ActivePID, OpenLoop },   // Stall mode    (_Throttle/_BrakeMotor/_SteerMotor)
-    { AutoPID, AutoHold, OpenLoop },     // Hold mode     (_Throttle/_BrakeMotor/_SteerMotor)
-    { AutoPID, ActivePID, OpenLoop },    // Fly mode      (_Throttle/_BrakeMotor/_SteerMotor)
-    { CruiseMode, ActivePID, OpenLoop }, // Cruise mode   (_Throttle/_BrakeMotor/_SteerMotor)
-    { Idle, Halt, Halt },                // Cal mode      (_Throttle/_BrakeMotor/_SteerMotor)
+int run_motor_ctrlmode[NumRunModes][3] = { // array of initial motor ctrl mode for gas/brake/steer upon entering each runmode
+    { CtrlDisable, CtrlDisable, CtrlOpenLoop },  // Basic mode    (_Throttle/_BrakeMotor/_SteerMotor)
+    { CtrlDisable, CtrlDisable, CtrlDisable },   // LowPower mode (_Throttle/_BrakeMotor/_SteerMotor)
+    { CtrlAutoPID, CtrlAutoPID, CtrlOpenLoop },  // Standby mode  (_Throttle/_BrakeMotor/_SteerMotor)
+    { CtrlOpenLoop, CtrlAutoPID, CtrlOpenLoop }, // Stall mode    (_Throttle/_BrakeMotor/_SteerMotor)
+    { CtrlAutoPID, CtrlAutoPID, CtrlOpenLoop },  // Hold mode     (_Throttle/_BrakeMotor/_SteerMotor)
+    { CtrlAutoPID, CtrlAutoPID, CtrlOpenLoop },  // Fly mode      (_Throttle/_BrakeMotor/_SteerMotor)
+    { CtrlAutoPID, CtrlAutoPID, CtrlOpenLoop },  // Cruise mode   (_Throttle/_BrakeMotor/_SteerMotor)
+    { CtrlOpenLoop, CtrlAutoPID, CtrlOpenLoop }, // Cal mode      (_Throttle/_BrakeMotor/_SteerMotor)
+};
+int run_motor_action[NumRunModes][3] = { // array of initial motor action for gas/brake/steer upon entering each runmode
+    { ActionHalt, ActionHalt, ActionManual },        // Basic mode    (_Throttle/_BrakeMotor/_SteerMotor)
+    { ActionHalt, ActionHalt, ActionHalt },          // LowPower mode (_Throttle/_BrakeMotor/_SteerMotor)
+    { ActionPark, ActionAutoStop, ActionManual },    // Standby mode  (_Throttle/_BrakeMotor/_SteerMotor)
+    { ActionManual, ActionManual, ActionManual },    // Stall mode    (_Throttle/_BrakeMotor/_SteerMotor)
+    { ActionRelease, ActionAutoHold, ActionManual }, // Hold mode     (_Throttle/_BrakeMotor/_SteerMotor)
+    { ActionManual, ActionManual, ActionManual },    // Fly mode      (_Throttle/_BrakeMotor/_SteerMotor)
+    { ActionCruise, ActionManual, ActionManual, },   // Cruise mode   (_Throttle/_BrakeMotor/_SteerMotor)
+    { ActionManual, ActionManual, ActionManual },    // Cal mode      (_Throttle/_BrakeMotor/_SteerMotor)
 };
 
 #ifndef MonitorBaudrate
@@ -226,10 +239,10 @@ bool shutting_down = true;              // minor state variable for standby mode
 bool parking = false;                   // indicates in process of parking the brake & gas motors so the pedals can be used manually without interference
 bool releasing = false;                 // indicates in process of releasing the brake to the zero brake point
 bool cruise_adjusting = false;
-bool cal_brakemode = false;             // allows direct control of brake motor using controller vert
 bool cal_brakemode_request = false;     // allows direct control of brake motor using controller vert
-bool cal_gasmode = false;               // allows direct control of gas servo using pot. First requires pot to be in valid position before mode is entered
 bool cal_gasmode_request = false;
+bool cal_brakemode = false;
+bool cal_gasmode = false;
 bool car_hasnt_moved = false;           // minor state variable for fly mode - Whether car has moved at all since entering fly mode
 bool powering_up = false;               // minor state variable for lowpower mode
 bool powering_down = false;             // minor state variable for lowpower mode
@@ -286,7 +299,7 @@ inline float map(float x, float in_min, float in_max, float out_min, float out_m
     // if (std::isnan(x)) return NAN;  // TODO - there are consistent calls happening of map with x == NAN. Should we figure out why?
     if (std::isnan(x) || std::isnan(in_min) || std::isnan(in_max) || std::isnan(out_min) || std::isnan(out_max)) {
         // // trying to track down where calls with NAN arguments are coming from
-        // //
+        //
         // static int64_t tlast = esp_timer_get_time();
         // int64_t now = esp_timer_get_time();
         // Serial.printf("err: %6dus map(%3.3f, %3.3f, %3.3f, %3.3f, %3.3f) called\n", (int)((now - tlast) / 1), x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
@@ -520,7 +533,7 @@ void kick_inactivity_timer(int source=-1) {
     if (source < 0) return;
     user_inactivity_timer.reset();  // evidence of user activity
     last_activity = source;
-    // ezread.squintf("kick%d ", source);
+
 }
 
 // EZRead is a text-logging console for display on a small low-res LCD in a window (or fullscreen if you feel like coding it).
@@ -803,20 +816,20 @@ bool tune(int idelta) {  // overloaded to return bool value. idelta == 0 or -1 r
     bool ret = (idelta > 0);
     return ret;
 }
-void tune(float* orig_ptr, int idelta, float min_val=NAN, float max_val=NAN, int sig_digits=-1) {  // overloaded to directly modify float at given address
+void tune(float* orig_ptr, int idelta, float min_val=NAN, float max_val=NAN, int sig_digits=-1) { // overloaded to directly modify float at given address
     *orig_ptr = tune(*orig_ptr, idelta, min_val, max_val, sig_digits);
 }
-void tune(int* orig_ptr, int idelta, int min_val=-1, int max_val=-1, bool dropdown=false) {  // overloaded to directly modify int at given address
+void tune(int* orig_ptr, int idelta, int min_val=-1, int max_val=-1, bool dropdown=false) { // overloaded to directly modify int at given address
     *orig_ptr = tune(*orig_ptr, idelta, min_val, max_val, dropdown);
 }
-void tune(bool* orig_ptr, int idelta) {  // overloaded to directly modify bool at given address
+void tune(bool* orig_ptr, int idelta) { // overloaded to directly modify bool at given address
     *orig_ptr = tune(idelta);
 }
 
 #include <random>
 std::random_device rd;
-std::mt19937 gen(rd());  // randomizer
-int rn(int values=256) {  // Generate a random number between 0 and values-1
+std::mt19937 gen(rd()); // randomizer
+int rn(int values=256) { // Generate a random number between 0 and values-1
     std::uniform_int_distribution<> dis(0, values - 1);
     return dis(gen);
 }

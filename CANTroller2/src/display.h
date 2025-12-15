@@ -18,45 +18,45 @@ std::string top_menu_buttons[4]  = { "CAL", "SIM", "CH4", "IGN" };
 std::string ch4_menu_buttons[NumRunModes] = { "CH4", "WAKE", "SLEEP", "START", "DMODE", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airvel", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
-std::string pcbaglowcard[GlowNumModes] = { "off", "simple", "heart", "xfade", "sine" };
-#define stEr "St\x88r"     // these defines are just a convenience to keep the below datapage strings
-#define brAk "Br\x83k"     // array initializations aligned in neat rows & cols for legibility
-#define spEd "Sp\x88""d"
-#define neo_bright "NeoBr\x8dgt"
-#define maxadjrate "MaxAjR\x83t"
-#define horfailsaf "HFails\x83""f"
+// std::string pcbaglowcard[GlowNumModes] = { "off", "simple", "heart", "xfade", "sine" };
+// #define stEr "St\x88r"     // these defines are just a convenience to keep the below datapage strings
+// #define brAk "Br\x83k"     // array initializations aligned in neat rows & cols for legibility
+// #define spEd "Sp\x88""d"
+// #define neo_bright "NeoBr\x8dgt"
+// #define maxadjrate "MaxAjR\x83t"
+// #define horfailsaf "HFails\x83""f"
 #define __________ "      \xf9"
-static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", brAk"Sens", "Throttle", brAk"Motr", stEr"Motr" };  // Fixed rows
+static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", "Brk Sens", "Throttle", "Brk Motr", "Str Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
 static std::string pagecard[datapages::NumDataPages] = { "Run ", "Hrc ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "Diag", "UI  " };
-static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 12, 10, 9, 8, 10, 5, 11, 9, 7, 12, 4, 11, 12 };  // first value in each dataset page that's editable. All values after this must also be editable
+static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 12, 10, 9, 8, 10, 5, 10, 8, 6, 12, 4, 11, 12 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = {
-    { brAk"Pres", brAk"Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Mode", brAk"Mode", stEr"Mode", "  Uptime", __________, __________, "Governor", stEr"Safe", },  // PgRun
-    { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", "SimRaw H", "SimRaw V", __________, __________, horfailsaf, "Deadband", "SimDeadB", },  // PgHrc
-    { " Pot Raw", brAk"Posn", brAk"Posn", brAk"Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PgSens
-    { "TachPuls", "Tach Raw", "Tach Raw", spEd"Puls", "SpeedRaw", "SpeedRaw", "   Speed", __________, __________, "Tach Tau", "SpeedTau", "TachOMin", "TachOMax", spEd"OMin", spEd"OMax", },  // PgPuls
-    { "Throttle", "Throttle", brAk"Motr", brAk"Motr", stEr"Motr", stEr"Motr", __________, __________, "ThrotCls", "ThrotOpn", brAk"Stop", brAk"Duty", "AirVOMax", "MAP OMin", "MAP OMax", },  // PgPWMs
-    { "Gas Mode", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PgIdle
-    { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "BrakePID", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", " Gas PID", "CruisPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PgMotr    
-    { "MotrMode", "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PgBPID
-    { "MotrMode", "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PgGPID
-    { spEd"Targ", "SpeedErr", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "GasEnPID", "CrEnaPID", "Lineariz", "Exponent", maxadjrate, "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
+    { "Brk Pres", "Brk Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Ctrl", " Gas Act", "Brk Ctrl", " Brk Act", "Str Ctrl", "  Uptime", "Governor", "Str Safe", },  // PgRun
+    { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", "SimRaw H", "SimRaw V", __________, __________, "HrzFlSaf", "Deadband", "SimDeadB", },  // PgHrc
+    { " Pot Raw", "Brk Posn", "Brk Posn", "Brk Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PgSens
+    { "TachPuls", "Tach Raw", "Tach Raw", "Spd Puls", "SpeedRaw", "SpeedRaw", "   Speed", __________, __________, "Tach Tau", "SpeedTau", "TachOMin", "TachOMax", "Spd OMin", "Spd OMax", },  // PgPuls
+    { "Throttle", "Throttle", "Brk Motr", "Brk Motr", "Str Motr", "Str Motr", __________, __________, "ThrotCls", "ThrotOpn", "Brk Stop", "Brk Duty", "AirVOMax", "MAP OMin", "MAP OMax", },  // PgPWMs
+    { "Gas Ctrl", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PgIdle
+    { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "Brk Ctrl", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", "Gas Ctrl", "CruisPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PgMotr    
+    { "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "Brk Ctrl", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PgBPID
+    { "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Gas Ctrl", "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PgGPID
+    { "Spd Targ", " Spd Err", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "Gas Ctrl", "CrEnaPID", "Lineariz", "Exponent", "MaxAjRat", "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
-    { __________, __________, __________, __________, "   HotRC", brAk"Pres", brAk"Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", " Battery", " Pot Map", "CalBrake", " Cal Gas", },  // PgSim
-    { __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, "BlnkDemo", "NiteRidr", neo_bright, "NeoSatur", },  // PgDiag
+    { __________, __________, __________, __________, "   HotRC", "Brk Pres", "Brk Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", " Battery", " Pot Map", "CalBrake", " Cal Gas", },  // PgSim
+    { __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, "BlnkDemo", "NiteRidr", "NeoBrite", "NeoSatur", },  // PgDiag
     { "Loop Avg", "LoopPeak", "Loop Max", "FramRate", "HumanAct", " Touch X", " Touch Y", "EncAccel", "ESpinRat", " EZ Spam", "EZAvgRat", "EZSpamBf", "EZSerial", "EZScroll", "PanelApp", },  // PgUI
 };
 static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  // note these will be right-aligned
-    { "psi",  "in",   "V",   "%", "mph", "atm", "g/s", "scr", "scr", "scr", "min",    "",    "",   "%",   "%", },  // PgRun
+    { "psi",  "in",   "V",   "%", "mph", "atm", "g/s", "scr", "scr", "scr", "scr", "scr", "min",   "%",   "%", },  // PgRun
     {  "us",  "us",  "us",  "us",  "us",  "us",   "%",   "%",   "%",   "%",    "",    "",  "us",  "us",   "%", },  // PgHrc
     { "adc", "adc",  "in",   "%", "adc", "psi",   "%", "adc",   "V",    "", "psi", "psi",  "in",  "in",  "in", },  // PgSens
     {  "ms",  "Hz", "rpm",  "ms",  "Hz", "mph",   "%",    "",    "",  "us",  "us", "rpm", "rpm", "mph", "mph", },  // PgPuls
     { "ang",  "us",   "V",  "us",   "V",  "us",    "",    "", "ang", "ang",  "us",   "%", "mph", "atm", "atm", },  // PgPWMs
     { "scr", "rpm",   "%",   "%", "ang", "rpm",    "",    "",    "",    "",   "s",   "%",   "%", "deg", "deg", },  // PgIdle
-    {   "%", "deg",   "%",    "",    "", "0/1", "scr", "scr", "0/1", "%/s", "0/1", "0/1", "scr", "0/1", "scr", },  // PgMotr
-    { "scr", "psi", "psi",  "in",  "in",   "%",   "%",   "%",   "%",   "%",   "%",  "us",    "",  "Hz",   "s", },  // PgBPID
-    { "scr",   "%",   "%", "rpm", "rpm",   "%",   "%",   "%",    "", "0/1",    "", "d/s",    "",  "Hz",   "s", },  // PgGPID
-    { "mph", "mph", "%|r", "%|r", "%|r",   "%",    "", "0/1", "0/1", "0/1",    "",   "%",    "",  "Hz",   "s", },  // PgCPID
+    {   "%", "deg",   "%",    "",    "", "scr", "scr", "scr", "0/1", "%/s", "scr", "0/1", "scr", "0/1", "scr", },  // PgMotr
+    { "psi", "psi",  "in",  "in",   "%",   "%",   "%",   "%",   "%",   "%", "scr",  "us",    "",  "Hz",   "s", },  // PgBPID
+    {   "%",   "%", "rpm", "rpm",   "%",   "%",   "%",    "", "scr", "0/1",   "",  "d/s",    "",  "Hz",   "s", },  // PgGPID
+    { "mph", "mph", "%|r", "%|r", "%|r",   "%",    "", "scr", "0/1", "0/1",    "",   "%",    "",  "Hz",   "s", },  // PgCPID
     { "deg", "deg", "deg", "deg", "deg", "deg", "deg", "0/1",    "",    "",    "",    "",    "", "deg", "0/1", },  // PgTemp
     {    "",    "",    "",    "", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "scr", "0/1", "0/1", },  // PgSim
     {    "",    "",    "",    "",    "",    "",    "",    "",    "",    "",    "", "0/1", "eye",   "%",   "%", },  // PgDiag
@@ -674,11 +674,12 @@ class Display {
             drawval(13, airvelo.val(), airvelo.opmin(), airvelo.opmax());
             drawval(14, mapsens.val(), mapsens.opmin(), mapsens.opmax());
             drawval(15, maf_gps, maf_min_gps, maf_max_gps);
-            draw_ascii(16, motormodecard[gas.motormode]);
-            draw_ascii(17, motormodecard[brake.motormode]);
-            draw_ascii(18, motormodecard[steer.motormode]);
-            drawval(19, looptimer.uptime());
-            for (int line=20; line<=21; line++) draw_eraseval(line);
+            draw_ascii(16, motorctrlcard[gas.ctrlmode]);
+            draw_ascii(17, motoractioncard[gas.motoraction]);
+            draw_ascii(18, motorctrlcard[brake.ctrlmode]);
+            draw_ascii(19, motoractioncard[brake.motoraction]);
+            draw_ascii(20, motorctrlcard[steer.ctrlmode]);
+            drawval(21, looptimer.uptime());
             drawval(22, governor, 0.0f, 100.0f, NAN, 1);
             drawval(23, steer.steer_safe_pc, 0.0f, 100.0f, NAN, 1);
         }
@@ -750,7 +751,7 @@ class Display {
             drawval(23, mapsens.opmax(), mapsens.absmin(), mapsens.absmax());
         }
         else if (datapage == PgIdle) {
-            draw_ascii(9, motormodecard[gas.motormode]);
+            draw_ascii(9, motorctrlcard[gas.ctrlmode]);
             drawval(10, gas.pid.target(), tach.opmin(), tach.opmax());
             drawval(11, gas.idle_boost_pc, 0.0f, gas.idle_max_boost_pc);
             drawval(12, gas.idle_pc(), gas.pc[OpMin], gas.pc[OpMax]);
@@ -768,51 +769,53 @@ class Display {
             drawval(10, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
             drawval(11, brake.combined_read_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
             for (int myline=12; myline<=13; myline++) draw_eraseval(myline);
-            draw_truth(14, brake.pid_enabled, binstyl::Enabled);
+            // draw_truth(14, brake_pid_default, binstyl::Enabled);
+            draw_ascii(14, motorctrlcard[brake.ctrlmode]);
             draw_ascii(15, brakefeedbackcard[brake.feedback]);
-            draw_ascii(16, openloopmodecard[brake.openloop_mode]);
+            draw_ascii(16, openloopcard[brake.openloop_mode]);
             draw_truth(17, brake.enforce_positional_limits, binstyl::Yes);
             drawval(18, brake.max_out_changerate_pcps);
-            draw_truth(19, gas.pid_enabled, binstyl::Enabled);
-            draw_truth(20, gas.cruise_pid_enabled, binstyl::Enabled);
+            // draw_truth(19, throttle_pid_default, binstyl::Enabled);
+            draw_ascii(19, motorctrlcard[gas.ctrlmode]);
+            draw_truth(20, cruise_pid_default, binstyl::Enabled);
             draw_ascii(21, cruiseschemecard[gas.cruise_adjust_scheme]);
             draw_truth(22, cruise_brake, binstyl::Yes);
             draw_ascii(23, modecard[run.preferred_drivemode()]);
         }
         else if (datapage == PgBPID) {
             drange = brake.us[AbsMin]-brake.us[AbsMax];
-            draw_ascii(9, motormodecard[brake.motormode]);
-            drawval(10, pressure.val(), pressure.opmin(), pressure.opmax(), brake.target_si[PressureFB]);
-            drawval(11, brake.target_si[PressureFB], pressure.opmin(), pressure.opmax());
-            drawval(12, brkpos.val(), brkpos.opmin(), brkpos.opmax(), brake.target_si[PositionFB]);
-            drawval(13, brake.target_si[PositionFB], brkpos.opmin(), brkpos.opmax());
-            drawval(14, brake.target_pc, 0.0f, 100.0f);
-            // draw_ascii(9, motormodecard[brake.motormode]);
+            drawval(9, pressure.val(), pressure.opmin(), pressure.opmax(), brake.target_si[FBPressure]);
+            drawval(10, brake.target_si[FBPressure], pressure.opmin(), pressure.opmax());
+            drawval(11, brkpos.val(), brkpos.opmin(), brkpos.opmax(), brake.target_si[FBPosition]);
+            drawval(12, brake.target_si[FBPosition], brkpos.opmin(), brkpos.opmax());
+            drawval(13, brake.target_pc, 0.0f, 100.0f);
+            // draw_ascii(9, motorctrlcard[brake.ctrlmode]);
             // draw_ascii(10, brakefeedbackcard[brake.feedback]);
             // drawval(12, brake.pid_dom->err(), -brake.sensmax(), brake.sensmax());
-            // drawval(13, brake.target[PressureFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-            // drawval(14, brake.target[PositionFB], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
-            drawval(15, brake.hybrid_ratio_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
-            drawval(16, brake.pid_dom->pterm(), -drange, drange);
-            drawval(17, brake.pid_dom->outsum(), -drange, drange);
-            drawval(18, brake.pid_dom->iterm(), -drange, drange);
-            drawval(19, brake.pid_dom->dterm(), -drange, drange);
+            // drawval(13, brake.target[FBPressure], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+            // drawval(14, brake.target[FBPosition], 0.0f, 100.0f);  // brake.pid_dom->outmin(), brake.pid_dom->outmax());
+            drawval(14, brake.hybrid_ratio_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
+            drawval(15, brake.pid_dom->pterm(), -drange, drange);
+            drawval(16, brake.pid_dom->outsum(), -drange, drange);
+            drawval(17, brake.pid_dom->iterm(), -drange, drange);
+            drawval(18, brake.pid_dom->dterm(), -drange, drange);
+            draw_ascii(19, motorctrlcard[brake.ctrlmode]);
             drawval(20, brake.pid_dom->sampletime());
             drawval(21, brake.pid_dom->kp());
             drawval(22, brake.pid_dom->ki());
             drawval(23, brake.pid_dom->kd());
         }
         else if (datapage == PgGPID) {
-            draw_ascii(9, motormodecard[gas.motormode]);
-            drawval(10, gas.trigger_vert_pc, 0.0f, 100.0f);
-            drawval(11, gas.throttle_target_pc, tach.opmin(), tach.opmax());
-            drawval(12, gas.pid.target(), tach.opmin(), tach.opmax());
-            drawval(13, gas.pid.err(), tach.idle() - tach.opmax(), tach.opmax() - tach.idle());
-            drawval(14, gas.pid.pterm(), -100.0f, 100.0f);
-            drawval(15, gas.pid.iterm(), -100.0f, 100.0f);
-            drawval(16, gas.pid.dterm(), -100.0f, 100.0f);
+            drawval(9, gas.trigger_vert_pc, 0.0f, 100.0f);
+            drawval(10, gas.throttle_target_pc, tach.opmin(), tach.opmax());
+            drawval(11, gas.pid.target(), tach.opmin(), tach.opmax());
+            drawval(12, gas.pid.err(), tach.idle() - tach.opmax(), tach.opmax() - tach.idle());
+            drawval(13, gas.pid.pterm(), -100.0f, 100.0f);
+            drawval(14, gas.pid.iterm(), -100.0f, 100.0f);
+            drawval(15, gas.pid.dterm(), -100.0f, 100.0f);
             // drawval(15, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
-            for (int line=17; line<=17; line++) draw_eraseval(line);
+            for (int line=16; line<=16; line++) draw_eraseval(line);
+            draw_ascii(17, motorctrlcard[gas.ctrlmode]);
             draw_truth(18, throttle_linearize_trigger, binstyl::Enabled);
             drawval(19, gas.linearizer_exponent, 1.0f, 10.0f);
             drawval(20, gas.out_pc_to_si(gas.max_out_changerate_pcps), 0.0f, 360.0f);
@@ -829,8 +832,8 @@ class Display {
             // drawval(14, gas.cruisepid.outsum(), -gas.cruisepid.outrange(), gas.cruisepid.outrange());  // cruise_spid_speedo_delta_adc, -drange, drange);
             drawval(14, gas.throttle_target_pc, 0.0f, 100.0f);
             for (int line=15; line<=15; line++) draw_eraseval(line);
-            draw_truth(16, gas.pid_enabled, binstyl::Enabled);
-            draw_truth(17, gas.cruise_pid_enabled, binstyl::Enabled);
+            draw_ascii(16, motorctrlcard[gas.ctrlmode]);
+            draw_truth(17, cruise_pid_default, binstyl::Enabled);
             draw_truth(18, throttle_linearize_cruise, binstyl::Enabled);
             drawval(19, gas.cruise_linearizer_exponent, 1.0f, 5.0f);
             drawval(20, cruise_holdtime_attenuator_pc, 0.0f, 100.0f);
@@ -1144,25 +1147,27 @@ class Tuner {
             else if (sel == 14) tune(&gas.idle_temp_lim_f[HIGH], id, gas.idle_temp_lim_f[LOW], tempsens.opmax(loc::TempEngine));
         }
         else if (datapage == PgMotr) {
-            if (sel == 5) brake.update_ctrl_config((int)tune(id));
-            else if (sel == 6) brake.update_ctrl_config(-1, tune(brake.feedback, id, 0, NumBrakeFB-1, true));
-            else if (sel == 7) brake.update_ctrl_config(-1, -1, tune(brake.openloop_mode, id, 0, NumOpenLoopModes-1, true));
+            if (sel == 5) brake.set_ctrlmode(tune(brake.ctrlmode, id, 0, NumMotorCtrls-1, true));
+            else if (sel == 6) brake.set_feedback(tune(brake.feedback, id, 0, NumBrakeFB-1, true));
+            else if (sel == 7) brake.set_openmode(tune(brake.openloop_mode, id, 0, NumOpenLoops-1, true));
             else if (sel == 8) brake.enforce_positional_limits = tune(id);
             else if (sel == 9) brake.set_out_changerate_pcps(tune(brake.max_out_changerate_pcps, id, 0.0f, 1000.0f));
-            else if (sel == 10) gas.set_pid_ena(tune(id));
-            else if (sel == 11) gas.set_cruise_pid_ena(tune(id));
+            else if (sel == 10) gas.set_ctrlmode(tune(gas.ctrlmode, id, 0, NumMotorCtrls-1, true));
+            else if (sel == 11) gas.set_cruise_pid_default(tune(id));
             else if (sel == 12) gas.set_cruise_scheme(tune(gas.cruise_adjust_scheme, id, 0, NumCruiseSchemes-1, true));
             else if (sel == 13) tune(&cruise_brake, id);
             else if (sel == 14) run.set_preferred_drivemode(tune(run.preferred_drivemode(), id, Fly, Cruise, true));
         }
         else if (datapage == PgBPID) {
-            if (sel == 11) brake.pid_dom->set_sampletime(tune(brake.pid_dom->sampletime(), id, 1000));
+            if (sel == 10) brake.set_ctrlmode(tune(brake.ctrlmode, id, 0, NumMotorCtrls-1, true));
+            else if (sel == 11) brake.pid_dom->set_sampletime(tune(brake.pid_dom->sampletime(), id, 1000));
             else if (sel == 12) brake.pid_dom->set_kp(tune(brake.pid_dom->kp(), id, 0.0f, NAN));
             else if (sel == 13) brake.pid_dom->set_ki(tune(brake.pid_dom->ki(), id, 0.0f, NAN));
             else if (sel == 14) brake.pid_dom->set_kd(tune(brake.pid_dom->kd(), id, 0.0f, NAN));
         }
         else if (datapage == PgGPID) {
-            if (sel == 9) tune(&throttle_linearize_trigger, id);
+            if (sel == 8) gas.set_ctrlmode(tune(gas.ctrlmode, id, 0, NumMotorCtrls-1, true));
+            else if (sel == 9) tune(&throttle_linearize_trigger, id);
             else if (sel == 10) tune(&gas.linearizer_exponent, id, 1.0f, 3.0f);
             else if (sel == 11) gas.set_out_changerate_degps(tune(gas.get_max_out_changerate_degps(), id, 0.0f, 180.0f));
             else if (sel == 12) gas.pid.set_kp(tune(gas.pid.kp(), id, 0.0f, NAN));
@@ -1170,8 +1175,8 @@ class Tuner {
             else if (sel == 14) gas.pid.set_kd(tune(gas.pid.kd(), id, 0.0f, NAN));
         }
         else if (datapage == PgCPID) {
-            if (sel == 7) gas.set_pid_ena(tune(id));
-            else if (sel == 8) gas.set_cruise_pid_ena(tune(id));
+            if (sel == 7) gas.set_ctrlmode(tune(gas.ctrlmode, id, 0, NumMotorCtrls-1, true));
+            else if (sel == 8) gas.set_cruise_pid_default(tune(id));
             else if (sel == 9) tune(&throttle_linearize_cruise, id);
             else if (sel == 10) tune(&gas.cruise_linearizer_exponent, id, 1.0f, 3.0f);
             else if (sel == 11) tune(&cruise_holdtime_attenuator_pc, id, 0.0f, 100.0f);

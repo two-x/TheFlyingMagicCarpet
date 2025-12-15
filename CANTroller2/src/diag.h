@@ -378,8 +378,8 @@ class DiagRuntime {
         }
         if (overtemp_shutoff_brake) {  // here the engine is shut off. also in brake motor class the brake motor is stopped
             if (err_sens[ErrRange][_TempBrake]) {
-                brake->setmode(Halt);        // stop the brake actuator 
-                ignition->request(ReqOff);  // kill the engine
+                brake->set_action(ActionHalt); // stop the brake actuator 
+                ignition->request(ReqOff);     // kill the engine
                 if (!printed_error_brake) ezread.squintf(ezread.madcolor, "err: brakemotor temp out of range. stop engine\n");
                 printed_error_brake = true;
             }
@@ -401,11 +401,11 @@ class DiagRuntime {
                 setflag(_BrakePosn, ErrLost, ((std::fabs(pressure->pc() - pressure_last_pc) > pressure->margin_pc()) && (std::fabs(brkpos->pc() - brkpos_last_pc) < brkpos->margin_pc())));  // if pressure value is changing but position isn't, then set flag otherwise clear
                 
                 // Skipping to avoid annoying warnings. check this!
-                // setflag(_BrakePosn, ErrWarn, (brake->feedback == HybridFB) && (signbit(brkpos->pc()) != signbit(pressure->pc())) && (signbit(brkpos->pc()) != signbit(brake->pc[Out])));  // if motor and pressure are consistent with moving one direction but position is changing the opposite way  // rewmove the (brake->feedback == HybridFB) && term?
+                // setflag(_BrakePosn, ErrWarn, (brake->feedback == FBHybrid) && (signbit(brkpos->pc()) != signbit(pressure->pc())) && (signbit(brkpos->pc()) != signbit(brake->pc[Out])));  // if motor and pressure are consistent with moving one direction but position is changing the opposite way  // rewmove the (brake->feedback == FBHybrid) && term?
             }
             if (brkpos->pc() >= 20.0) {  // if not near the min braking full extension (where pressure changes very little) 
                 setflag(_BrakePres, ErrLost, ((std::fabs(brkpos->pc() - brkpos_last_pc) > brkpos->margin_pc()) && (std::fabs(pressure->pc() - pressure_last_pc) < pressure->margin_pc())));  // if position value is changing but pressure isn't, then set flag otherwise clear
-                setflag(_BrakePres, ErrWarn, (brake->feedback == HybridFB) && (signbit(pressure->pc()) != signbit(brkpos->pc())) && (signbit(pressure->pc()) != signbit(brake->pc[Out])));  // if motor and position are consistent with moving one direction but pressure is changing the opposite way
+                setflag(_BrakePres, ErrWarn, (brake->feedback == FBHybrid) && (signbit(pressure->pc()) != signbit(brkpos->pc())) && (signbit(pressure->pc()) != signbit(brake->pc[Out])));  // if motor and position are consistent with moving one direction but pressure is changing the opposite way
             }
             
             // Skipping this b/c it is triggering and I don't care. Really should figure out what's going on

@@ -33,12 +33,15 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         if (_we_just_switched_modes) {
             calmode_request = autosaver_request = ReqOff;
             if (starter.motor && runmode != Hold && _oldmode != Stall) starter.request(ReqOff, StartRunmode); // the only mode transition the starter motor may remain running thru is stall -> hold
-            gas.setmode(run_motor_mode[runmode][_Throttle]);
-            brake.setmode(run_motor_mode[runmode][_BrakeMotor]);
-            steer.setmode(run_motor_mode[runmode][_SteerMotor]);
+            gas.set_ctrlmode(run_motor_ctrlmode[runmode][_Throttle]);
+            brake.set_ctrlmode(run_motor_ctrlmode[runmode][_BrakeMotor]);
+            steer.set_ctrlmode(run_motor_ctrlmode[runmode][_SteerMotor]);
+            gas.set_action(run_motor_action[runmode][_Throttle]);
+            brake.set_action(run_motor_action[runmode][_BrakeMotor]);
+            steer.set_action(run_motor_action[runmode][_SteerMotor]);
             watchdog.set_codestatus();
-            shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = _stall_ch4start_timed_out = false;  // clean up previous runmode values
-            powering_up = _stopped_hold_timer_active = cal_gasmode = cal_brakemode = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
+            shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = powering_up = false;  // clean up previous runmode values
+            _stall_ch4start_timed_out = _stopped_hold_timer_active = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
             if (_verbose && !first_boot) ezread.squintf("run: mode change %s->%s\n", modecard[_oldmode].c_str(), modecard[runmode].c_str());
             first_boot = false;
         }
@@ -151,23 +154,23 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (stopcar_phase) {
                 if (speedo.stopped() || phase_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
                     if (!speedo.stopped()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to stop car\n");
-                    brake.setmode(ParkMotor);
+                    brake.set_action(ActionPark);
                     phase_timer.set(parkmotors_timeout);
                     stopcar_phase = false;  // move on to parkmotor phase
                 }
-                else if (brake.motormode != AutoStop) brake.setmode(AutoStop);
+                else if (brake.ctrlmode != ActionAutoStop) brake.set_action(ActionAutoStop);
             }
             else {  // we are in park motor phase
                 if (brake.parked() || phase_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
                     if (!brake.parked()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to park brake\n");
-                    brake.setmode(Halt);
+                    brake.set_action(ActionHalt);
                     shutting_down = false;  // done shutting down
                 }
             }
         }
         else {
-            if (steer.motormode != Halt) steer.setmode(Halt);
-            if (brake.motormode != Halt) brake.setmode(Halt);
+            if (steer.motoraction != ActionHalt) steer.set_action(ActionHalt);
+            if (brake.motoraction != ActionHalt) brake.set_action(ActionHalt);
             if (hotrc.sw_event_filt(Ch4)) sleep_request = ReqOn;  // ch4 press puts system to sleep.  ensure switch event check is in its own if statement
             if (hotrc.sw_event_filt(Ch3)) { 
                 if (!hotrc.radiolost_untested() && !hotrc.radiolost()) ignition.request(ReqOn); // turn on ignition, will land us in stall mode
@@ -192,10 +195,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         } 
         else {  // if starter is not running,
             if (starter.now_req != ReqOn) {  // if there's no in-progress request to start the starter
-                if (brake.motormode != run_motor_mode[runmode][_BrakeMotor]) // if brake mode was taken over by a failed start attempt,
-                    brake.setmode(run_motor_mode[runmode][_BrakeMotor]);     // put it back to default
-                if (gas.motormode != run_motor_mode[runmode][_Throttle])     // if gas mode was taken over by a failed start attempt,
-                    gas.setmode(run_motor_mode[runmode][_Throttle]);         // put it back to default
+                brake.set_action(run_motor_action[runmode][_BrakeMotor]);     // put it back to default
+                gas.set_action(run_motor_action[runmode][_Throttle]);         // put it back to default
             }
             if (!_stall_ch4start_timed_out) {  // if ch3-start functionality hasn't timed out,
                 if (hotrc.sw_event_filt(Ch4)) starter.request(ReqOn, hotrc.last_ch4_source());  // turn on starter if a stable Ch4 event occurred. Note keep this if separate, as it will reset the sw event
@@ -233,7 +234,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         static Timer gesture_fly_timer{500000};    // how long a full-down press is held before auto-drop to fly mode
         if (_we_just_switched_modes) {  // upon first entering cruise mode, initialize things
             car_hasnt_moved = speedo.stopped();  // note whether car is moving going into the mode, this turns true once it has initially got moving
-            if (!cruise_brake) brake.setmode(Release);  // override the mode set by run_motor_mode[][] array which assumes cruise_brake == true
+            if (!cruise_brake) brake.set_action(ActionRelease);  // override the mode set by run_motor_mode[][] array which assumes cruise_brake == true
             gesture_fly_timer.reset();  // initialize brake-trigger timer
         }
         if (car_hasnt_moved) {  // if car has not yet moved
@@ -262,10 +263,16 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_calMode() {  // calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration - don't use it unless you know how.
         if (_we_just_switched_modes) calmode_request = cal_gasmode_request = cal_brakemode_request = false;
-        else if (calmode_request) runmode = Standby;
-        if (cal_gasmode_request && gas.motormode != Calibrate) gas.setmode(Calibrate);  // ezread.squintf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode);
-        else if (!cal_gasmode_request && gas.motormode == Calibrate) gas.setmode(Idle);
-        if (cal_brakemode_request && brake.motormode != Calibrate) brake.setmode(Calibrate);  // ezread.squintf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode);
-        else if (!cal_brakemode_request && brake.motormode == Calibrate) brake.setmode(Halt);
+        if (calmode_request) runmode = Standby;
+        if (cal_gasmode_request && gas.ctrlmode != CtrlCalibrate) gas.set_ctrlmode(CtrlCalibrate);  // ezread.squintf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode);
+        else if (!cal_gasmode_request && gas.ctrlmode == CtrlCalibrate) {
+            gas.set_ctrlmode(run_motor_ctrlmode[Cal][_Throttle]);
+            gas.set_action(run_motor_action[Cal][_Throttle]);
+        }
+        if (cal_brakemode_request && brake.ctrlmode != CtrlCalibrate) brake.set_ctrlmode(CtrlCalibrate);  // ezread.squintf("req:%d, cal:%d\n", cal_brakemode_request, cal_brakemode);
+        else if (!cal_brakemode_request && brake.ctrlmode == CtrlCalibrate) {
+            brake.set_ctrlmode(run_motor_ctrlmode[Cal][_BrakeMotor]);
+            brake.set_action(run_motor_action[Cal][_BrakeMotor]);
+        }
     }
 };
