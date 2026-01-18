@@ -31,7 +31,7 @@ static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%",
 static std::string pagecard[datapages::NumDataPages] = { "Run ", "Hrc ", "Sens", "Puls", "PWMs", "Idle", "Motr", "Bpid", "Gpid", "Cpid", "Temp", "Sim ", "Diag", "UI  " };
 static constexpr int tuning_first_editable_line[datapages::NumDataPages] = { 13, 12, 10, 9, 8, 10, 5, 10, 8, 6, 12, 4, 11, 12 };  // first value in each dataset page that's editable. All values after this must also be editable
 static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = {
-    { "Brk Pres", "Brk Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", "Gas Ctrl", " Gas Act", "Brk Ctrl", " Brk Act", "Str Ctrl", "  Uptime", "Governor", "Str Safe", },  // PgRun
+    { "Brk Pres", "Brk Posn", "MuleBatt", "     Pot", " AirVelo", "     MAP", "MasAirFl", " Gas Ctl", " Gas Act", " Brk Ctl", " Brk Act", " Str Ctl", "  Uptime", "Governor", "Str Safe", },  // PgRun
     { "FiltHorz", "FiltVert", "Raw Horz", "Raw Vert", " Raw Ch3", " Raw Ch4", "Raw Horz", "Raw Vert", "SimRaw H", "SimRaw V", __________, __________, "HrzFlSaf", "Deadband", "SimDeadB", },  // PgHrc
     { " Pot Raw", "Brk Posn", "Brk Posn", "Brk Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PgSens
     { "TachPuls", "Tach Raw", "Tach Raw", "Spd Puls", "SpeedRaw", "SpeedRaw", "   Speed", __________, __________, "Tach Tau", "SpeedTau", "TachOMin", "TachOMax", "Spd OMin", "Spd OMax", },  // PgPuls
