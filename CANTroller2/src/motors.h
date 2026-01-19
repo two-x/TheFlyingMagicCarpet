@@ -515,7 +515,10 @@ class ThrottleControl : public ServoMotor {
     void set_output() {
         // static int last_mode = CtrlCalibrate;
         float new_out, out_lowlim = _idle_pc;
-        if (ctrlmode == ActionHalt) return; // a servo by its nature will hold its current angle whenever its pwm input pulsewidth isn't changing
+        if (ctrlmode == CtrlDisable) {
+            set_action(ActionHalt);
+            return;
+        }
         else if (ctrlmode == CtrlCalibrate) { // allows adjustment of gas using potmap, with its operational limits temporarily disabled (to facilitate calibrating those limits)
             new_out = map(pot->val(), pot->opmin(), pot->opmax(), si[AbsMin], si[AbsMax]);  // translate pot value to a gas value
             pc[Out] = constrain(out_si_to_pc(new_out), pc[AbsMin], pc[AbsMax]);  // make doubly sure the resulting gas value is within its *absolute* limits 
@@ -523,14 +526,14 @@ class ThrottleControl : public ServoMotor {
         }  // ezread.squintf(":%d tgt:%lf pk:%lf idl:%lf\n", ctrlmode, throttle_target_pc, pc[Parked], _idle_pc);
         
         trigger_vert_pc = hotrc->pc[Vert][Filt]; // copy current trigger value to internal value, in case we linearize it
-        if (ctrlmode == ActionRelease) throttle_target_pc = _idle_pc;
-        else if (ctrlmode == ActionStarting) throttle_target_pc = starting_pc;
-        else if (ctrlmode == ActionPark) throttle_target_pc = out_lowlim = pc[Parked];
-        else if (ctrlmode == ActionCruise) {
+        if (motoraction == ActionRelease) throttle_target_pc = _idle_pc;
+        else if (motoraction == ActionStarting) throttle_target_pc = starting_pc;
+        else if (motoraction == ActionPark) throttle_target_pc = out_lowlim = pc[Parked];
+        else if (motoraction == ActionCruise) {
             if (throttle_linearize_cruise) linearizer(&trigger_vert_pc, cruise_linearizer_exponent); // we now linearize the trigger value not the output value
             throttle_target_pc = cruise_logic(throttle_target_pc); // cruise mode just got too big to be nested in this if-else clause
         }
-        else if (ctrlmode == CtrlOpenLoop || ctrlmode == CtrlPID) { // combine these into one "Driving" mode
+        else if (motoraction == ActionManual) {
             if (throttle_linearize_trigger) linearizer(&trigger_vert_pc, linearizer_exponent); // we now linearize the trigger value not the output value
             if (hotrc->joydir() == HrcUp) throttle_target_pc = map(trigger_vert_pc, hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMax], _idle_pc, pc[Govern]);  // actuators still respond even w/ engine turned off
             else throttle_target_pc = _idle_pc; // if in deadband or being pushed down, we want idle
@@ -884,9 +887,7 @@ class BrakeControl : public JagMotor {
         return in_progress;
     }
     float set_output() { // returns updated motor output % in whatever way is right for the current ctrlmode and action
-        if (motoraction == CtrlDisable) {
-            set_action(ActionHalt);
-        }
+        if (ctrlmode == CtrlDisable) set_action(ActionHalt);
         else if (ctrlmode == CtrlCalibrate) {
             int _joydir = hotrc->joydir(); 
             if (_joydir == HrcUp) return map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMax], pc[Stop], pc[OpMax]);
@@ -1084,8 +1085,9 @@ class SteeringControl : public JagMotor {
     }
     void set_output() {
         float new_out = pc[Out];
-        if (ctrlmode == ActionHalt || ctrlmode == CtrlDisable) new_out = pc[Stop]; // stop the steering motor if in standby mode and standby is complete
-        else if (ctrlmode == CtrlOpenLoop) {
+        if (ctrlmode == CtrlDisable) set_action(ActionHalt);
+        if (motoraction == ActionHalt) new_out = pc[Stop]; // stop the steering motor
+        else if (motoraction == ActionManual) {
             int _joydir = hotrc->joydir(Horz);
             if (_joydir == HrcRt)
                 new_out = map(hotrc->pc[Horz][Filt], hotrc->pc[Horz][Cent], hotrc->pc[Horz][OpMax], pc[Stop], steer_safe(pc[OpMax])); // if joy to the right of deadband

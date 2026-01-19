@@ -8,7 +8,7 @@
 class LoopTimer {
   public:
     LoopTimer() { setup(); }
-    float max_allowable_looptime_ms = 50.0f;
+    float max_allowable_looptime_ms = 100.0f;
     // Loop timing related
     Timer loop_timer{1000000};  // how long the previous main loop took to run (in us)
     int loopno = 1, loopindex = 0, loop_recentsum = 0;
@@ -492,7 +492,7 @@ class DiagRuntime {
         if (looptimer->loop_max_ms > loop_record_ms) {
             loop_record_ms = looptimer->loop_max_ms;
             if (looptimer->loop_max_ms > looptimer->max_allowable_looptime_ms)
-                ezread.squintf(ezread.madcolor, "err: detect loop time of %d ms (max %d ms)\n", (int)loop_record_ms, (int)looptimer->max_allowable_looptime_ms);
+                ezread.squintf(ezread.sadcolor, "warn: detect loop time of %d ms (max %d ms)\n", (int)loop_record_ms, (int)looptimer->max_allowable_looptime_ms);
         }
     }
     void dump_errorcode_update() {

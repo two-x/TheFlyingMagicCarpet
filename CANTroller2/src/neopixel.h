@@ -397,7 +397,7 @@ class IdiotLights {
         hotrc.radiolost_ptr(), hotrc.radiolost_untested_ptr(), &brake.autostopping, &brake.autoholding, &parking, &releasing,
         // row 2 onscreen.  these are all just informational values
         &cruise_adjusting, &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(),
-        tach.pin_level_ptr(), speedo.stopped_ptr(), tach.stopped_ptr(), &nowtouch, encoder.activity_ptr(), &running_on_devboard,
+        tach.pin_level_ptr(), speedo.stopped_ptr(), tach.stopped_ptr(), &nowtouch, &shutting_down, &running_on_devboard,
         // row 3 onscreen.  this row has one light per actuator or sensor, lit when there's any kind of error w/ that device
         &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
         &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_GPIO], &sensidiots[_Other],
@@ -462,7 +462,7 @@ class IdiotLights {
         { 0x22, 0x36, 0x1c, 0x08, 0x1c, 0x36, 0x22, 0x00, 0x6e, 0x6b, 0x3b, },  // "S" w/ X                     // speedo.stopped_ptr()
         { 0x22, 0x36, 0x1c, 0x08, 0x1c, 0x36, 0x22, 0x00, 0x06, 0x7e, 0x06, },  // "T" w/ X                     // tach.stopped_ptr()
         { 0x78, 0x7c, 0x7f, 0x7f, 0x7c, 0x7c, 0x1c, 0x0c, 0x0c, 0x0c, 0x0c, },  // finger                       // &nowtouch
-        { 0x0e, 0x1d, 0x7d, 0x7d, 0x1d, 0x0e, 0x00, 0x7f, 0x6b, 0x6b, 0x63, },  // encoder "E"                  // encoder.activity_ptr()
+        { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // "SHD..."                     // &shutting_down
         { 0x7f, 0x63, 0x3e, 0x00, 0x7f, 0x6b, 0x6b, 0x00, 0x7f, 0x30, 0x1f, },  // "DEV"                        // &running_on_devboard
         // row 3 of screen icons
         { 0x3e, 0x63, 0x7b, 0x00, 0x7e, 0x13, 0x7e, 0x00, 0x6e, 0x6b, 0x3b, },  // "GAS"                        // &sensidiots[_Throttle]
@@ -478,7 +478,7 @@ class IdiotLights {
         { 0x2a, 0x2a, 0x2a, 0x7f, 0x7d, 0x7f, 0x7f, 0x7f, 0x2a, 0x2a, 0x2a, },  // chip                         // &sensidiots[_GPIO]
         { 0x7f, 0x6b, 0x6b, 0x00, 0x03, 0x7f, 0x03, 0x00, 0x3e, 0x63, 0x63, },  // "ETC"                        // &sensidiots[_Other]
     };
-     // { 0x16, 0x15, 0x0d, 0x60, 0x6f, 0x04, 0x6f, 0x60, 0x0f, 0x69, 0x66, },  // "SHD..."                     // &shutting_down
+     // { 0x0e, 0x1d, 0x7d, 0x7d, 0x1d, 0x0e, 0x00, 0x7f, 0x6b, 0x6b, 0x63, },  // encoder "E"                  // encoder.activity_ptr()
      // { 0x01, 0x7f, 0x7f, 0x7f, 0x3f, 0x38, 0x74, 0x70, 0x70, 0x70, 0x60, },  // boot                         // bootbutton.ptr()
      // { 0x6e, 0x6b, 0x3b, 0x00, 0x7f, 0x00, 0x7f, 0x06, 0x1c, 0x06, 0x7f, },  // "SIM"                        // sim.enabled_ptr()
      // { 0x4c, 0x2a, 0x19, 0x00, 0x63, 0x63, 0x63, 0x63, 0x77, 0x3e, 0x1c, },  // [original] magnet w/ zap     // speedo.pin_level_ptr()  // speedo.pin_inactive_ptr()  // tach.pin_inactive_ptr(),

@@ -267,7 +267,11 @@ class Ignition {  // the ignition object controls the car ignition signal and th
             ignreq = ReqOff;  // panic stop causes ignition cut
         }
         if (speedo.stopped() || panicTimer.expired()) set_panicstop(false);  // Cancel panic stop if car is stopped
-        if (ignreq != ReqNA) set_ignition((ignreq == ReqOn) ? HIGH : LOW);
+        if (ignreq == ReqOn && !tach.stopped()) {
+            ezread.squintf(ezread.sadcolor, "warn: ignition-on fail due to nonzero tach\n");
+            ignreq = ReqNA;
+        }
+        if (ignreq != ReqNA) set_ignition(ignreq ? HIGH : LOW);
     }
 };
 static Ignition ignition(ignition_pin);

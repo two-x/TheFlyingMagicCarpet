@@ -36,11 +36,11 @@ static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = 
     { " Pot Raw", "Brk Posn", "Brk Posn", "Brk Posn", "Pressure", "Pressure", "Pressure", "MuleBatt", "MuleBatt", __________, "PresOmin", "PresOmax", "BPosOmin", "BPosOmax", "BPosZero", },  // PgSens
     { "TachPuls", "Tach Raw", "Tach Raw", "Spd Puls", "SpeedRaw", "SpeedRaw", "   Speed", __________, __________, "Tach Tau", "SpeedTau", "TachOMin", "TachOMax", "Spd OMin", "Spd OMax", },  // PgPuls
     { "Throttle", "Throttle", "Brk Motr", "Brk Motr", "Str Motr", "Str Motr", __________, __________, "ThrotCls", "ThrotOpn", "Brk Stop", "Brk Duty", "AirVOMax", "MAP OMin", "MAP OMax", },  // PgPWMs
-    { "Gas Ctrl", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PgIdle
-    { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, "Brk Ctrl", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", "Gas Ctrl", "CruisPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PgMotr    
-    { "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", "Brk Ctrl", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PgBPID
-    { "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", __________, "Gas Ctrl", "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PgGPID
-    { "Spd Targ", " Spd Err", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, "Gas Ctrl", "CrEnaPID", "Lineariz", "Exponent", "MaxAjRat", "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
+    { " Gas Ctl", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PgIdle
+    { "Brk Duty", "Brk Heat", "HybBrake", __________, __________, " Brk Ctl", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", " Gas Ctl", "CruisPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PgMotr    
+    { "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", " Brk Ctl", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PgBPID
+    { "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", " Gas Act", " Gas Ctl", "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PgGPID
+    { "Spd Targ", " Spd Err", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, " Gas Ctl", "CrEnaPID", "Lineariz", "Exponent", "MaxAjRat", "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
     { " Ambient", "  Engine", "Wheel FL", "Wheel FR", "Wheel RL", "Wheel RR", "BrkMotor", __________, __________, __________, __________, __________, "TuneTest", "WhTmpDif", "No Temps", },  // PgTemp
     { __________, __________, __________, __________, "   HotRC", "Brk Pres", "Brk Posn", "  Speedo", "    Tach", "Air Velo", "     MAP", " Battery", " Pot Map", "CalBrake", " Cal Gas", },  // PgSim
     { __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, __________, "BlnkDemo", "NiteRidr", "NeoBrite", "NeoSatur", },  // PgDiag
@@ -55,7 +55,7 @@ static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  //
     { "scr", "rpm",   "%",   "%", "ang", "rpm",    "",    "",    "",    "",   "s",   "%",   "%", "deg", "deg", },  // PgIdle
     {   "%", "deg",   "%",    "",    "", "scr", "scr", "scr", "0/1", "%/s", "scr", "0/1", "scr", "0/1", "scr", },  // PgMotr
     { "psi", "psi",  "in",  "in",   "%",   "%",   "%",   "%",   "%",   "%", "scr",  "us",    "",  "Hz",   "s", },  // PgBPID
-    {   "%",   "%", "rpm", "rpm",   "%",   "%",   "%",    "", "scr", "0/1",   "",  "d/s",    "",  "Hz",   "s", },  // PgGPID
+    {   "%",   "%", "rpm", "rpm",   "%",   "%",   "%", "scr", "scr", "0/1",   "",  "d/s",    "",  "Hz",   "s", },  // PgGPID
     { "mph", "mph", "%|r", "%|r", "%|r",   "%",    "", "scr", "0/1", "0/1",    "",   "%",    "",  "Hz",   "s", },  // PgCPID
     { "deg", "deg", "deg", "deg", "deg", "deg", "deg", "0/1",    "",    "",    "",    "",    "", "deg", "0/1", },  // PgTemp
     {    "",    "",    "",    "", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "0/1", "scr", "0/1", "0/1", },  // PgSim
@@ -799,6 +799,7 @@ class Display {
             drawval(16, brake.pid_dom->outsum(), -drange, drange);
             drawval(17, brake.pid_dom->iterm(), -drange, drange);
             drawval(18, brake.pid_dom->dterm(), -drange, drange);
+            // draw_ascii(17, motoractioncard[.motoraction]);
             draw_ascii(19, motorctrlcard[brake.ctrlmode]);
             drawval(20, brake.pid_dom->sampletime());
             drawval(21, brake.pid_dom->kp());
@@ -814,7 +815,7 @@ class Display {
             drawval(14, gas.pid.iterm(), -100.0f, 100.0f);
             drawval(15, gas.pid.dterm(), -100.0f, 100.0f);
             // drawval(15, gas.pid.outsum(), -gas.pid.outrange(), gas.pid.outrange());
-            for (int line=16; line<=16; line++) draw_eraseval(line);
+            draw_ascii(16, motoractioncard[gas.motoraction]);
             draw_ascii(17, motorctrlcard[gas.ctrlmode]);
             draw_truth(18, throttle_linearize_trigger, binstyl::Enabled);
             drawval(19, gas.linearizer_exponent, 1.0f, 10.0f);
