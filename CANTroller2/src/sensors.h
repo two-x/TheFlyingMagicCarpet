@@ -1227,12 +1227,18 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     // float absmax_us = 2138.0f; // using newer "v01" receiver. max configurable pulsewidth for the hotrc (w/ ~5us extra margin)
     float pc[NumAxes][NumValues], sim_raw_pc[NumAxes]; // values range from -100% to 100%. pc[][] are all derived or auto-assigned. sim_raw_pc[] are simulated inputs
     float us[NumChans][NumValues] = {  // these inherently integral values are kept as floats for more abstractified unit management
+        // 260617 config values when using newer 2026 6-ch receiver module - tuned to work with handle#7
+        {  998.0f, 1500.0f, 2002.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
+        { 1118.0f, 1620.0f, 2122.0f, NAN, 1620.0f, NAN, NAN, NAN },    // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (1084-2091) 1000+80+1, 1500+80,  2000+80-2
+        {  998.0f, 1500.0f, 2002.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1204-1809) 1000+150+1,   1500, 2000-150-2
+        {  998.0f, 1500.0f, 2002.0f, NAN, 1500.0f, NAN, NAN, NAN }, }; // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1304-1707) 1000+250+1,   1500, 2000-250-2
+
         // 251028 config values when using older "v07" receiver module - tuned to work with all 4 handles I have
         //   note at this time (251031) we only have older "v07" receivers, newer ones are returned
-        {  998.0f, 1500.0f, 2007.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
-        { 1117.0f, 1620.0f, 2127.0f, NAN, 1620.0f, NAN, NAN, NAN },    // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (1084-2091) 1000+80+1, 1500+80,  2000+80-2
-        {  998.0f, 1500.0f, 2007.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1204-1809) 1000+150+1,   1500, 2000-150-2
-        {  998.0f, 1500.0f, 2007.0f, NAN, 1500.0f, NAN, NAN, NAN }, }; // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1304-1707) 1000+250+1,   1500, 2000-250-2
+        // {  998.0f, 1500.0f, 2007.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
+        // { 1117.0f, 1620.0f, 2127.0f, NAN, 1620.0f, NAN, NAN, NAN },    // [Vert] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (1084-2091) 1000+80+1, 1500+80,  2000+80-2
+        // {  998.0f, 1500.0f, 2007.0f, NAN, 1500.0f, NAN, NAN, NAN },    // [Ch3] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1204-1809) 1000+150+1,   1500, 2000-150-2
+        // {  998.0f, 1500.0f, 2007.0f, NAN, 1500.0f, NAN, NAN, NAN }, }; // [Ch4] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]   // (1304-1707) 1000+250+1,   1500, 2000-250-2
 
         // // 251031 config values when using newer "v01" receiver module - note: opmin/cent/opmax vals seem stepped up higher compared to v07 receiver
         // { 1003.0f, 1507.0f, 2012.0f, NAN, 1510.0f, NAN, NAN, NAN },    // [Horz] [OpMin/Cent/OpMax/Raw/Filt/-/-/Margin]  // (974-1981)  1000-30+1, 1500-30,  2000-30-2
