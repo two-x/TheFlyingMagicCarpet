@@ -158,7 +158,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                     phase_timer.set(parkmotors_timeout);
                     stopcar_phase = false;  // move on to parkmotor phase
                 }
-                else if (brake.ctrlmode != ActionAutoStop) brake.set_action(ActionAutoStop);
+                else if (brake.motoraction != ActionAutoStop) brake.set_action(ActionAutoStop);
             }
             else {  // we are in park motor phase
                 if (brake.parked() || phase_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
