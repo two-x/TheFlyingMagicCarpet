@@ -381,11 +381,11 @@ class Starter {
             turnon(0);            // start the car
             return;               // finished servicing request
         }
-        if (!brake_before_starting && !check_brake_before_starting) {  // if we don't need to apply the brake or even check the brake
+        if (!brake_before_starting && !check_brake_before_starting || simple_brake) {  // if we don't need to apply the brake or even check the brake
             turnon(1);            // start the car
             return;               // finished servicing request
         }
-        if (brake_before_starting) {        // if we must apply brakes before starting
+        if (brake_before_starting && !simple_brake) {        // if we must apply brakes before starting
             if (brake.feedback == _None) {  // check if brake is running in openloop mode (we can't control an autohold)
                 ezread.squintf(ezread.sadcolor, "warn: starter can't use openloop brake\n");
                 request(ReqNA, StartClass); // cancel turn on request
@@ -400,7 +400,7 @@ class Starter {
         }
         // hereafter we are waiting for the brake push timer to expire
         if (brakeTimer.expired()) {                      // waited long enough for the brake to push
-            if (!check_brake_before_starting) turnon(2); // if no need to check whether brake succeeded, then start the car
+            if (!check_brake_before_starting || simple_brake) turnon(2); // if no need to check whether brake succeeded, then start the car
             else {                                       // if we were supposed to apply the brakes and also check they got pushed
                 ezread.squintf(ezread.sadcolor, "warn: cant start, brake not autoholding\n");
                 request(ReqNA, StartClass);              // cancel the starter-on request, we can't drive the starter cuz the car might lurch forward

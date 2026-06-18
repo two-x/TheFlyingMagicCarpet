@@ -23,11 +23,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             else if (first_boot || !ignition.signal) runmode = Standby; // go to standby mode upon bootup or any time ignition is cut
             else if (tach.stopped()) runmode = Stall;  // otherwise if engine not running --> Stall Mode
         }
-        if ((runmode == Hold) && (brake.feedback == _None)) {  // if we have no brake feedback then hold mode must be skipped...
+        if (runmode == Hold && brake.feedback == _None) {  // if we have no brake feedback then hold mode must be skipped...
             if (_oldmode == Stall || _oldmode == Standby) runmode = _preferred_drivemode;  // skip hold mode when starting up
             else if (_oldmode == Basic || _oldmode == Cal || _oldmode == LowPower) runmode = Standby;  // just to cover all possibilities
             else runmode = _oldmode;  // don't drop to hold mode from other (driving) modes
         }
+        if (runmode == Hold && simple_brake) runmode = _oldmode;  // ignore attempt to enter hold mode when simple_brake enabled 
+
         _we_just_switched_modes = (runmode != _oldmode) || first_boot; // has our runmode been changed?  or we just booted up?
         
         if (_we_just_switched_modes) {
@@ -152,7 +154,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         }
         if (shutting_down) {
             if (stopcar_phase) {
-                if (speedo.stopped() || phase_timer.expired()) {  // first we need to stop the car and release brakes and gas before shutting down
+                if (speedo.stopped() || phase_timer.expired() || simple_brake) {  // first we need to stop the car and release brakes and gas before shutting down
                     if (!speedo.stopped()) ezread.squintf(ezread.sadcolor, "warn: standby mode unable to stop car\n");
                     brake.set_action(ActionPark);
                     phase_timer.set(parkmotors_timeout);
@@ -198,15 +200,17 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
                 brake.set_action(run_motor_action[runmode][_BrakeMotor]);     // put it back to default
                 gas.set_action(run_motor_action[runmode][_Throttle]);         // put it back to default
             }
-            if (!_stall_ch4start_timed_out) {  // if ch3-start functionality hasn't timed out,
-                if (hotrc.sw_event_filt(Ch4)) starter.request(ReqOn, hotrc.last_ch4_source());  // turn on starter if a stable Ch4 event occurred. Note keep this if separate, as it will reset the sw event
+            if (hotrc.sw_event_filt(Ch4)) {
+                if (_stall_ch4start_timed_out) ezread.squintf(ezread.sadcolor, "run: starter disabled after stall mode entry timeout\n");
+                else if (simple_brake && hotrc.joydir(Vert) != DirDown) ezread.squintf(ezread.sadcolor, "run: must brake while starting when simple_brake enabled\n");
+                else starter.request(ReqOn, hotrc.last_ch4_source());  // turn on starter if a stable Ch4 event occurred. Note keep this if separate, as it will reset the sw event
             }
         }
         if (stall_ch4start_fn_timeout && !_stall_ch4start_timed_out && ch4start_disable_timer.expired()) {
             _stall_ch4start_timed_out = true;
             ezread.squintf("stall mode %dmin ch3-start fn timed out\n", ch4start_disable_timer.timeout() / (60 * 1000000));
         }
-        if (!tach.stopped()) runmode = Hold;  // If we started the car, enter hold mode
+        if (!tach.stopped()) runmode = simple_brake ? _preferred_drivemode : Hold;
     }
     void run_holdMode() {  // recovering argument is only used by the [experimental & optional] boot monitor feature to resume previous drive state after a system crash
         static Timer ch4_function_timer{500000};  // this long after starter motor has stopped, ch4 button function becomes toggling between preferred drivemode, rather than stopping the running starter
@@ -222,11 +226,13 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_flyMode() {
         if (_we_just_switched_modes) car_hasnt_moved = speedo.stopped();  // note whether car is moving going into fly mode (probably not), this turns true once it has initially got moving
-        if (car_hasnt_moved) {
-            if (hotrc.joydir(Vert) != HrcUp) runmode = Hold;      // must keep pulling trigger until car moves, or it drops back to hold mode
-            else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
+        if (!simple_brake) {
+            if (car_hasnt_moved) {
+                if (hotrc.joydir(Vert) != HrcUp) runmode = Hold;      // must keep pulling trigger until car moves, or it drops back to hold mode
+                else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of fly mode
+            }
+            else if (speedo.stopped() && hotrc.joydir() != HrcUp) runmode = Hold;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[Vert][Filt] <= hotrc.pc[Vert][Cent]
         }
-        else if (speedo.stopped() && hotrc.joydir() != HrcUp) runmode = Hold;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[Vert][Filt] <= hotrc.pc[Vert][Cent]
         if (hotrc.sw_event_filt(Ch4)) tog_current_drivemode();                 // hrc ch4 button press switches drivemodes
     }
     void run_cruiseMode() {
@@ -237,23 +243,24 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (!cruise_brake) brake.set_action(ActionRelease);  // override the mode set by run_motor_mode[][] array which assumes cruise_brake == true
             gesture_fly_timer.reset();  // initialize brake-trigger timer
         }
-        if (car_hasnt_moved) {  // if car has not yet moved
-            if (hotrc.joydir(Vert) != HrcUp) runmode = Hold;            // must keep pulling trigger until car moves, or it drops back to hold mode
-            else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of the mode
-        }
-        else if (speedo.stopped()) {  // if car has become stopped after previously moving
-            if (hotrc.joydir() == HrcDn) runmode = Hold;  // if we have purposely braked to a stop, go to hold mode
-            else if (hotrc.joydir() == HrcUp) _stopped_hold_timer_active = false;  // if trying to get moving again, keep car in cruise mode
-            else {  // if we coasted to a stop and there's no immediate attempt to get moving, drop to hold mode. this is for safety, b/c car could easily resume movement, while driver assumes it's safe
-                if (!_stopped_hold_timer_active) {
-                    stopped_hold_timer.reset();
-                    _stopped_hold_timer_active = true;
-                }
-                else if (stopped_hold_timer.expired()) runmode = Hold;
+        if (!simple_brake) {
+            if (car_hasnt_moved) {  // if car has not yet moved
+                if (hotrc.joydir(Vert) != HrcUp) runmode = Hold;            // must keep pulling trigger until car moves, or it drops back to hold mode
+                else if (!speedo.stopped()) car_hasnt_moved = false;  // once car moves, we're allowed to release the trigger without falling out of the mode
             }
+            else if (speedo.stopped()) {  // if car has become stopped after previously moving
+                if (hotrc.joydir() == HrcDn) runmode = Hold;  // if we have purposely braked to a stop, go to hold mode
+                else if (hotrc.joydir() == HrcUp) _stopped_hold_timer_active = false;  // if trying to get moving again, keep car in cruise mode
+                else {  // if we coasted to a stop and there's no immediate attempt to get moving, drop to hold mode. this is for safety, b/c car could easily resume movement, while driver assumes it's safe
+                    if (!_stopped_hold_timer_active) {
+                        stopped_hold_timer.reset();
+                        _stopped_hold_timer_active = true;
+                    }
+                    else if (stopped_hold_timer.expired()) runmode = Hold;
+                }
+            }
+            else _stopped_hold_timer_active = false;  // if car is moving, cancel any impending holdmode timeout
         }
-        else _stopped_hold_timer_active = false;  // if car is moving, cancel any impending holdmode timeout
-
         // if joystick is held full-brake for more than X, driver could be confused & panicking, drop to fly mode so fly mode will push the brakes
         if (!cruise_brake) {  // no need for this feature if cruise includes braking
             if (hotrc.pc[Vert][Filt] > hotrc.pc[Vert][OpMin] + hotrc.pc[Vert][Margin]) gesture_fly_timer.reset();  // keep resetting timer if joystick not at bottom

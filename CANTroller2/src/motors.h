@@ -770,6 +770,22 @@ class BrakeControl : public JagMotor {
             }
         } // that's great to have some idea whether the motor is hot. but we need to take some actions in response
     }
+    void check_simple_brake() {
+        if (simple_brake) {
+            if (openloop_mode == OpenMedian) {
+                openloop_mode = OpenAutoRel;
+                ezread.squintf(ezread.madcolor, "brake: No OpenMedian mode if simple_brake. Now OpenAutoRel\n");
+            }
+            if (motoraction == ActionAutoHold) {
+                motoraction = ActionManual;
+                ezread.squintf(ezread.madcolor, "brake: AutoHold disabled w/ simple_brake\n");
+            }
+            if (motoraction == ActionAutoStop) {
+                motoraction = ActionManual;
+                ezread.squintf(ezread.madcolor, "brake: AutoStop disabled w/ simple_brake\n");
+            }
+        }
+    }
     void set_dominant_sensor() {
         if (feedback == FBPressure || feedback == FBPosition) dominantsens = feedback;
         else if (std::isnan(hybrid_ratio_pc)) return;
@@ -825,13 +841,13 @@ class BrakeControl : public JagMotor {
             else if (hotrc->joydir() == HrcDn) new_out = pc[Stop];
             else new_out = pc[OpMin];
         }
-        else if (openloop_mode == OpenAutoRel) { // OpenAutoRel: releases brake whenever trigger is released, and presses brake proportional to trigger push. must hold trigger steady to stop brakes where they are
-            if (hotrc->joydir() == HrcDn) new_out = open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[Stop], pc[OpMax]) / 100.0f;
-            else new_out = pc[OpMin];
-        }
-        else if (openloop_mode == OpenMedian) { // Median: holds brake when trigger is released, or if pulled to exactly halfway point. trigger pulls over or under halfway either proportionally apply or release the brake
+        if (openloop_mode == OpenMedian) { // Median: holds brake when trigger is released, or if pulled to exactly halfway point. trigger pulls over or under halfway either proportionally apply or release the brake
             if (hotrc->joydir() == HrcDn) new_out = open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[OpMin], pc[OpMax]) / 100.0f;
             else new_out = pc[Stop];
+        }
+        if (openloop_mode == OpenAutoRel) { // OpenAutoRel: releases brake whenever trigger is released, and presses brake proportional to trigger push. must hold trigger steady to stop brakes where they are
+            if (hotrc->joydir() == HrcDn) new_out = open_loop_attenuation_pc * map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], pc[Stop], pc[OpMax]) / 100.0f;
+            else new_out = pc[OpMin];
         }
         return new_out; // this is openloop (blind trigger) control scheme
     }
@@ -887,12 +903,13 @@ class BrakeControl : public JagMotor {
         return in_progress;
     }
     float set_output() { // returns updated motor output % in whatever way is right for the current ctrlmode and action
+        check_simple_brake();  // if simple_brake enabled, fixes any brake config settings incompatible with it
         if (ctrlmode == CtrlDisable) set_action(ActionHalt);
         else if (ctrlmode == CtrlCalibrate) {
             int _joydir = hotrc->joydir(); 
             if (_joydir == HrcUp) return map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMax], pc[Stop], pc[OpMax]);
             else if (_joydir == HrcDn) return map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][OpMin], hotrc->pc[Vert][Cent], pc[OpMin], pc[Stop]);
-            else pc[Out] = pc[Stop];
+            else return pc[Stop];
         }
         // else if (ctrlmode == CtrlOpenLoop) { // if somehow we are in an invalid mode (should not happen)
         //     set_ctrlmode(CtrlDisable);
@@ -1027,7 +1044,12 @@ class BrakeControl : public JagMotor {
         feedback = a_fb; // receive new feedback sensors setting (FBNone/FBPressure/FBPosition/_Hybrid) if given
     }
     void set_openmode(int a_openmode) {
+        static int last_mode = openloop_mode;
+        if (simple_brake && openloop_mode == OpenMedian) {
+            if (last_mode == OpenMedian) openloop_mode = OpenAutoRel; 
+            else openloop_mode = last_mode;
         openloop_mode = constrain(a_openmode, 0, NumOpenLoops - 1); // constrain in case UI acceleration may shoot past out of range
+        last_mode = openloop_mode;
     }
     bool parked() {
         if (feedback_enabled[FBPosition]) return brkpos->parked();
