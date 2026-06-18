@@ -773,7 +773,7 @@ class BrakeControl : public JagMotor {
     void check_simple_brake() {
         if (simple_brake) {
             if (openloop_mode == OpenMedian) {
-                openloop_mode = OpenAutoRelHoldable;
+                set_openmode(OpenAutoRelHoldable);
                 ezread.squintf(ezread.madcolor, "brake: No OpenMedian mode if simple_brake. Now OpenAutoRel\n");
             }
             if (motoraction == ActionAutoHold) {
