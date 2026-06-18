@@ -1048,6 +1048,7 @@ class BrakeControl : public JagMotor {
         if (simple_brake && openloop_mode == OpenMedian) {
             if (last_mode == OpenMedian) openloop_mode = OpenAutoRel; 
             else openloop_mode = last_mode;
+        }
         openloop_mode = constrain(a_openmode, 0, NumOpenLoops - 1); // constrain in case UI acceleration may shoot past out of range
         last_mode = openloop_mode;
     }
