@@ -773,7 +773,7 @@ class BrakeControl : public JagMotor {
     void check_simple_brake() {
         if (simple_brake) {
             if (openloop_mode == OpenMedian) {
-                openloop_mode = OpenAutoRel;
+                openloop_mode = OpenAutoRelHoldable;
                 ezread.squintf(ezread.madcolor, "brake: No OpenMedian mode if simple_brake. Now OpenAutoRel\n");
             }
             if (motoraction == ActionAutoHold) {
@@ -1046,7 +1046,7 @@ class BrakeControl : public JagMotor {
     void set_openmode(int a_openmode) {
         static int last_mode = openloop_mode;
         if (simple_brake && openloop_mode == OpenMedian) {
-            if (last_mode == OpenMedian) openloop_mode = OpenAutoRel; 
+            if (last_mode == OpenMedian) openloop_mode = OpenAutoRelHoldable; 
             else openloop_mode = last_mode;
         }
         openloop_mode = constrain(a_openmode, 0, NumOpenLoops - 1); // constrain in case UI acceleration may shoot past out of range
