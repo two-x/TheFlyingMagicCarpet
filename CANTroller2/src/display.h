@@ -53,7 +53,7 @@ static std::string tuneunits[datapages::NumDataPages][disp_tuning_lines] = {  //
     {  "ms",  "Hz", "rpm",  "ms",  "Hz", "mph",   "%",    "",    "",  "us",  "us", "rpm", "rpm", "mph", "mph", },  // PgPuls
     { "ang",  "us",   "V",  "us",   "V",  "us",    "",    "", "ang", "ang",  "us",   "%", "mph", "atm", "atm", },  // PgPWMs
     { "scr", "rpm",   "%",   "%", "ang", "rpm",    "",    "",    "",    "",   "s",   "%",   "%", "deg", "deg", },  // PgIdle
-    {   "%", "deg",   "%",    "",    "", "scr", "scr", "scr", "0/1", "%/s", "scr", "0/1", "scr", "0/1", "scr", },  // PgMotr
+    {   "%", "deg",   "%",    "", "0/1", "scr", "scr", "scr", "0/1", "%/s", "scr", "0/1", "scr", "0/1", "scr", },  // PgMotr
     { "psi", "psi",  "in",  "in",   "%",   "%",   "%",   "%",   "%",   "%", "scr",  "us",    "",  "Hz",   "s", },  // PgBPID
     {   "%",   "%", "rpm", "rpm",   "%",   "%",   "%", "scr", "scr", "0/1",   "",  "d/s",    "",  "Hz",   "s", },  // PgGPID
     { "mph", "mph", "%|r", "%|r", "%|r",   "%",    "", "scr", "0/1", "0/1",    "",   "%",    "",  "Hz",   "s", },  // PgCPID
@@ -69,7 +69,7 @@ static constexpr uint8_t unitmaps[21][13] = {  // 13x7-pixel bitmaps for unit st
     { 0x00, 0x00, 0x00, 0x40, 0x7e, 0x20, 0x1c, 0x20, 0x00, 0x24, 0x2a, 0x2a, 0x12, },  // us - b/c the font's lowercase mu character doesn't work
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x20, 0x7f, 0x00, 0x7f, 0x02, 0x04, },  // up/down arrows to indicate multiple choices. right-aligned to fit longer string values
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x57, 0x57, 0x22, 0x00, },  // on/off dots for binary values. right-aligned to allow longer string values
-    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x25, 0x17, 0x08, 0x74, 0x52, 0x71, },  // % - we use this a lot and the font % looks feeble.
+    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x47, 0x25, 0x17, 0x08, 0x74, 0x52, 0x71, },  // % - we use this a lot and the font % looks feeble
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4e, 0x51, 0x61, 0x01, 0x61, 0x51, 0x4e, },  // capital omega for ohms
     { 0x00, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x41, 0x3e, 0x63, 0x63, 0x77, 0x7f, 0x3e, },  // googly eyes, are as goofy as they are stupid
     { 0x00, 0x00, 0x06, 0x09, 0x49, 0x66, 0x50, 0x48, 0x4c, 0x72, 0x41, 0x40, 0x40, },  // angular degrees

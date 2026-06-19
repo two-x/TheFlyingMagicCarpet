@@ -6,7 +6,7 @@
 
 enum class loc { TempAmbient=0, TempEngine, TempWheelFL, TempWheelFR, TempWheelRL, TempWheelRR, TempBrake, NumTempLocations };  // , SorenDev0, SorenDev1, };
 enum temp_categories { CatUnknown=0, CatAmbient=1, CatEngine=2, CatWheel=3, CatBrake=4, NumTempCategories=5 };  // 
-enum brakemotor_types { Nil=-1, Thomson=0, MotorFactoryStore=1, GoMotorWorld=2, NumBrakeMotorTypes=3 };
+enum brakemotor_types { Nil=-1, Thomson=0, MotorFactoryStore=1, GoMotorWorld1=2, GoMotorWorld2=3, NumBrakeMotorTypes=4 };
     
 float temp_lims_f[NumTempCategories][NumMotorVals] {
     // changed opmin values all to 40 to avoid idiot lights. engine opmin was 125, wheel was 50, brake was 45
@@ -169,9 +169,9 @@ private:
         {loc::TempWheelFR, {0x28, 0x70, 0x73, 0xb3, 0x5c, 0x21, 0x01, 0x27}},  // these are the sensors on the car
         {loc::TempWheelRL, {0x28, 0x54, 0xfb, 0x88, 0x5c, 0x21, 0x01, 0x64}},  // these are the sensors on the car
         {loc::TempWheelRR, {0x28, 0x6f, 0xcd, 0xba, 0x5c, 0x21, 0x01, 0x26}},  // these are the sensors on the car
-        {loc::TempBrake, {0x28, 0xb5, 0x1d, 0x9c, 0x4b, 0x20, 0x01, 0xfe}},  // ?
-        // {loc::TempBrake, {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}},  // ?
-        
+        // {loc::TempBrake, {0x28, 0xb5, 0x1d, 0x9c, 0x4b, 0x20, 0x01, 0xfe}},  // brake sensor addr is assigned by assign_known_addresses()
+
+        // {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}, // (?)
         // {0x28, 0x53, 0x57, 0xad, 0x5c, 0x21, 0x01, 0x02}  // sensor glued to the the control box
         // {0x28, 0x09, 0xe0, 0xd7, 0x5c, 0x21, 0x01, 0x4e}  // sensor on soren's breadboard
         // {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2}  // Thomson (2023) motor (?) confirm this
@@ -189,7 +189,8 @@ private:
     void assign_known_addresses() {
         DeviceAddress thomson_brake_address = {0x28, 0x6b, 0x0f, 0x84, 0x4b, 0x20, 0x01, 0xf2};
         DeviceAddress mfs_brake_address = {0x28, 0xce, 0x10, 0x8b, 0x4b, 0x20, 0x01, 0xcc};
-        DeviceAddress gmw_brake_address = {0x28, 0xf0, 0x03, 0xb6, 0x5c, 0x21, 0x01, 0x21};
+        DeviceAddress gmw1_brake_address = {0x28, 0xf0, 0x03, 0xb6, 0x5c, 0x21, 0x01, 0x21};
+        DeviceAddress gmw2_brake_address = {0x28, 0xb5, 0x1d, 0x9c, 0x4b, 0x20, 0x01, 0xfe};
         
         bool brake_assigned = false;
 
@@ -201,8 +202,11 @@ private:
             else if (std::equal(detected_address.begin(), detected_address.end(), mfs_brake_address.begin())) {
                 brakemotor_type_detected = MotorFactoryStore;
             }
-            else if (std::equal(detected_address.begin(), detected_address.end(), gmw_brake_address.begin())) {
-                brakemotor_type_detected = GoMotorWorld;
+            else if (std::equal(detected_address.begin(), detected_address.end(), gmw1_brake_address.begin())) {
+                brakemotor_type_detected = GoMotorWorld1;
+            }
+            else if (std::equal(detected_address.begin(), detected_address.end(), gmw2_brake_address.begin())) {
+                brakemotor_type_detected = GoMotorWorld2;
             }
             if (!brake_assigned && (brakemotor_type_detected != Nil)) {
                 sensors.emplace(loc::TempBrake, TemperatureSensor(loc::TempBrake, detected_address, &tempsensebus));
@@ -305,7 +309,8 @@ private:
             case Nil: return "undetected";
             case Thomson: return "Thomson";
             case MotorFactoryStore: return "MFS";
-            case GoMotorWorld: return "GMW";
+            case GoMotorWorld1: return "GMW1";
+            case GoMotorWorld2: return "GMW2";
             default: return "undetected";
         }
     }

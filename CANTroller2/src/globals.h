@@ -138,8 +138,8 @@ bool display_enabled = true;         // should we run 325x slower in order to ge
 bool use_i2c_baton = false;          // use soren's custom homemade semaphores to prevent i2c bus collisions?
 bool limit_framerate = true;         // set to true to enforce a cap on screen frame draws during operational modes, otherwise draw as fast as we can. fullscreen screensaver ignores this, always balls-out
 bool brake_before_starting = true;   // if true, the starter motor attempts to apply the brake pedal before turning on the starter motor
-bool check_brake_before_starting = true;  // if true, the starter motor won't turn on until or unless it senses the brake pressure is enough. otherwise then after a timeout it will start anyway
-bool simple_brake = false;           // if true, will only use brake manually. hold mode is skipped. autostop, autohold, panic braking and starter braking are disabled, including 
+bool check_brake_before_starting = true; // if true, the starter motor won't turn on until or unless it senses the brake pressure is enough. otherwise then after a timeout it will start anyway
+bool simple_brake = true;            // if true, will only use brake manually. hold mode is skipped. autostop, autohold, panic braking and starter braking are disabled, including 
 bool push_gas_when_starting = false; // will help start esp when engine is cold, in lieu of choke access, however if it lurches then disable. automatically disables if brake check is disabled
 bool two_click_starter = false;      // to start the starter requires two requests within a timeframe
 bool watchdog_enabled = false;       // enable the esp's built-in watchdog circuit, it will reset us if it doesn't get pet often enough (to prevent infinite hangs). disabled cuz it seems to mess with the hotrc (?)
@@ -173,8 +173,8 @@ bool ezread_suppress_spam = true;       // activates ezread feature to suppress 
 bool panic_on_boot_after_crash = true;  // causes bootmanager to do a panic on boot if car was in a drive state when reset 
 bool require_radiolost_test = true;     // should we refuse ignition to be on if radiolost feature hasn't been tested
 bool holdmode_ch4_drivetoggle = false;  // should a ch4 press in hold mode toggle the preferred drivemode, assuming starter is off?
-bool allow_openloop_autobrake = true; // if brake in openloop mode, do we still do autobrake maneuvers using a timer?
-bool allow_openloop_panicstop = true; // if brake in openloop mode, do we still do panicstops using a timer? (overrides the above only in panic condition)
+bool allow_openloop_autobrake = true;   // if brake in openloop mode, do we still do autobrake maneuvers using a timer?
+bool allow_openloop_panicstop = true;   // if brake in openloop mode, do we still do panicstops using a timer? (overrides the above only in panic condition)
 // bool force_hotrc_button_filter = false; // always force button filtration for all actions. otherwise unfiltered presses are allowed for safety events (ie ignition or starter kill), in case of radio interference
 
 // global tunable variables
@@ -186,7 +186,7 @@ int sprite_color_depth = 8;
 int looptime_linefeed_threshold = 0;    // when looptime_print == 1, will linefeed after printing loops taking > this value. set to 0 linefeeds all prints
 float cruise_holdtime_attenuator_pc = 10.0f; // adjustment rate multiplier for CruiseHoldTime mode
 float cruise_onepull_attenuator_pc = 14.0f;  // adjustment rate multiplier for CruiseOnePull mode
-float maf_min_gps = 0.0f;                // in grams per second
+float maf_min_gps = 0.0f;               // in grams per second
 float maf_max_gps = 50.0f;              // i just made this number up as i have no idea what's normal for MAF
 float tuning_rate_pcps = 7.5f;          // values being edited by touch buttons change value at this percent of their overall range per second
 float neobright = 20.0f;                // default for us dim/brighten the neopixels in percent
