@@ -151,6 +151,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             phase_timer.set(stopcar_timeout);
             sleep_request = ReqNA;
             user_inactivity_timer.set(_lowpower_delay_min * 60 * 1000000);
+            if (!simple_brake) brake.set_action(ActionAutoStop); // stop car right away by default unless using simple_brake
         }
         if (shutting_down) {
             if (stopcar_phase) {
@@ -176,7 +177,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (hotrc.sw_event_filt(Ch4)) sleep_request = ReqOn;  // ch4 press puts system to sleep.  ensure switch event check is in its own if statement
             if (hotrc.sw_event_filt(Ch3)) { 
                 if (!hotrc.radiolost_untested() && !hotrc.radiolost()) ignition.request(ReqOn); // turn on ignition, will land us in stall mode
-                else ezread.squintf(ezread.sadcolor, "warn: ignition requires tested radio\n");
+                else ezread.squintf(ezread.sadcolor, "warn: ignition requires handle power cycle test\n");
             }
             if (calmode_request) runmode = Cal;  // if fully shut down and cal mode requested, go to cal mode
             if (auto_saver_enabled) if (encoder.button.shortpress()) autosaver_request = ReqOff;

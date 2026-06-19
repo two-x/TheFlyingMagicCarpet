@@ -208,7 +208,7 @@ int run_motor_ctrlmode[NumRunModes][3] = { // array of initial motor ctrl mode f
 int run_motor_action[NumRunModes][3] = { // array of initial motor action for gas/brake/steer upon entering each runmode
     { ActionHalt, ActionHalt, ActionManual },        // Basic mode    (_Throttle/_BrakeMotor/_SteerMotor)
     { ActionHalt, ActionHalt, ActionHalt },          // LowPower mode (_Throttle/_BrakeMotor/_SteerMotor)
-    { ActionPark, ActionAutoStop, ActionManual },    // Standby mode  (_Throttle/_BrakeMotor/_SteerMotor)
+    { ActionPark, ActionManual, ActionManual },    // Standby mode  (_Throttle/_BrakeMotor/_SteerMotor)
     { ActionManual, ActionManual, ActionManual },    // Stall mode    (_Throttle/_BrakeMotor/_SteerMotor)
     { ActionRelease, ActionAutoHold, ActionManual }, // Hold mode     (_Throttle/_BrakeMotor/_SteerMotor)
     { ActionManual, ActionManual, ActionManual },    // Fly mode      (_Throttle/_BrakeMotor/_SteerMotor)
