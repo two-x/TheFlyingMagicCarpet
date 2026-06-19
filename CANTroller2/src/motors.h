@@ -770,11 +770,11 @@ class BrakeControl : public JagMotor {
             }
         } // that's great to have some idea whether the motor is hot. but we need to take some actions in response
     }
-    void check_simple_brake() {
+    void check_simple_brake() {  // if simple_brake enabled, fixes any brake config settings incompatible with it
         if (simple_brake) {
             if (openloop_mode == OpenMedian) {
                 set_openmode(OpenAutoRelHoldable);
-                ezread.squintf(ezread.madcolor, "brake: No OpenMedian mode if simple_brake. Now OpenAutoRel\n");
+                ezread.squintf(ezread.madcolor, "brake: No OpenMedian mode if simple_brake. Now OpenAutoRelHold\n");
             }
             if (motoraction == ActionAutoHold) {
                 motoraction = ActionManual;
@@ -1010,9 +1010,10 @@ class BrakeControl : public JagMotor {
         cal_brakemode = (a_mode == CtrlCalibrate);
         ctrlmode = a_mode;
     }
-    void set_action(int a_action, bool force=false) { // use force=true when changing ctrlmode and need to restart action 
+    void set_action(int a_action, bool force=false) { // use force=true when changing ctrlmode and need to restart action
         if (a_action != ActionAutoStop && a_action != ActionAutoHold && a_action != ActionHalt &&
             a_action != ActionManual && a_action != ActionRelease && a_action != ActionPark) return; // allow only valid modes
+        if (simple_brake && (a_action == ActionAutoStop || a_action == ActionAutoHold)) return; // disallow automatic braking actions if simple_brake enabled  
         // if (a_action == ActionAutoStop && panicstop) ezread.squintf(ezread.sadcolor, "warn: performing blind panic stop maneuver\n"); else
         bool drop_to_manual = false;
         if (ctrlmode == CtrlOpenLoop) {

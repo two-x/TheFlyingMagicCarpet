@@ -202,7 +202,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             }
             if (hotrc.sw_event_filt(Ch4)) {
                 if (_stall_ch4start_timed_out) ezread.squintf(ezread.sadcolor, "run: starter disabled after stall mode entry timeout\n");
-                else if (simple_brake && hotrc.joydir(Vert) != DirDown) ezread.squintf(ezread.sadcolor, "run: must brake while starting when simple_brake enabled\n");
+                else if (simple_brake && simple_brake_before_starting && hotrc.joydir(Vert) != HrcDn) ezread.squintf(ezread.sadcolor, "run: must brake while starting when simple_brake enabled\n");
                 else starter.request(ReqOn, hotrc.last_ch4_source());  // turn on starter if a stable Ch4 event occurred. Note keep this if separate, as it will reset the sw event
             }
         }
