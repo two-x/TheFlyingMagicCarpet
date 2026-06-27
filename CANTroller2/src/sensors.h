@@ -764,8 +764,9 @@ class PressureSensor : public AnalogSensor {
         // set_native(_opmin_native);
         AnalogSensor::postsetup();  // must be run last
     }
-    bool released() { return (std::fabs(val() - zeropoint()) <= margin()); }
-    bool parked() { return (std::fabs(val() - opmin()) <= margin()); }  // is tha brake motor parked?
+    bool at_target(float a_target_pc, float a_margin_pc = 0.0f) { return std::fabs(a_target_pc - val()) <= a_margin_pc; }
+    bool released() { return(at_target(zeropoint())); }  // is the brake motor released
+    bool parked() { return(at_target(opmax(), margin())); }  // is the brake motor parked
     float parkpos() { return opmin(); }
     float parkpos_pc() { return to_pc(opmin()); }
 };
@@ -794,8 +795,11 @@ class BrakePositionSensor : public AnalogSensor {
         _default_value_si = opmax();
         AnalogSensor::postsetup();  // must be run last
     }
-    bool released() { return (std::fabs(val() - zeropoint()) <= margin()); }
-    bool parked() { return (std::fabs(val() - opmax()) <= margin()); }  // is tha brake motor parked?
+    bool at_target(float a_target_pc, float a_margin_pc = 0.0f) { return std::fabs(a_target_pc - val()) <= a_margin_pc; }
+    bool released() { return(at_target(zeropoint())); }  // is the brake motor released
+    bool parked() { return(at_target(opmax(), margin())); }  // is the brake motor parked
+        // if (_dir == TransDir::Fwd) return (std::fabs(val() - opmax()) >= margin());
+        // if (_dir == TransDir::Rev) return (std::fabs(val() - opmax()) <= margin());
     float parkpos() { return opmax(); }
     float parkpos_pc() { return to_pc(opmax()); }
 };

@@ -174,7 +174,7 @@ bool ezread_suppress_spam = true;       // activates ezread feature to suppress 
 bool panic_on_boot_after_crash = true;  // causes bootmanager to do a panic on boot if car was in a drive state when reset 
 bool require_radiolost_test = true;     // should we refuse ignition to be on if radiolost feature hasn't been tested
 bool holdmode_ch4_drivetoggle = false;  // should a ch4 press in hold mode toggle the preferred drivemode, assuming starter is off?
-bool allow_openloop_autobrake = true;   // if brake in openloop mode, do we still do autobrake maneuvers using a timer?
+bool allow_openloop_autobrake = true;   // includes release and park maneuvers. if brake in openloop mode, do we still do autobrake maneuvers using a timer?
 bool allow_openloop_panicstop = true;   // if brake in openloop mode, do we still do panicstops using a timer? (overrides the above only in panic condition)
 // bool force_hotrc_button_filter = false; // always force button filtration for all actions. otherwise unfiltered presses are allowed for safety events (ie ignition or starter kill), in case of radio interference
 

@@ -621,7 +621,7 @@ class ThrottleControl : public ServoMotor {
             set_output();
             us[Out] = out_pc_to_us(pc[Out], reverse);
             deg[Out] = out_pc_to_si(pc[Out]);
-            write_motor();
+            write_motor(); // uncomment
         }
     } // ezread.squintf("out pc:%lf us:%lf\n", pc[Out], us[Out]);
 };
@@ -875,7 +875,7 @@ class BrakeControl : public JagMotor {
             }
             else if (autostopping_last) {
                 ezread.squintf("brake: autostop session ended, halting motor\n"); // temporary for debugging
-                set_target(pc[Stop]);
+                // set_target(pc[Out]);
                 set_action(ActionHalt);
             }
         }
@@ -886,19 +886,14 @@ class BrakeControl : public JagMotor {
         }
         else ezread.squintf("brake: can not autostop w/o feedback\n");
     }
-    bool goto_fixed_position(float tgt_position, bool at_position) { // goes to a fixed position (hopefully) or pressure (if posn is unavailable) then stops.  useful for parking and releasing modes
+    bool goto_fixed_position(float tgt_position_pc, bool at_position_pc) { // goes to a fixed position (hopefully) or pressure (if posn is unavailable) then stops.  useful for parking and releasing modes
         // active_sensor = (enabled_sensor == FBPressure) ? FBPressure : FBPosition;  // use posn sensor for this unless we are specifically forcing pressure only
         bool in_progress = false;
-        if (ctrlmode == CtrlPID) {
-            set_target(tgt_position);
-            in_progress = (std::fabs(target_pc - combined_read_pc) <= target_margin_pc);
+        if (ctrlmode == CtrlPID || (ctrlmode == CtrlOpenLoop && allow_openloop_autobrake)) {
+            if (feedback_enabled[FBPosition]) in_progress = brkpos->at_target(tgt_position_pc, target_margin_pc);
+            else if (feedback_enabled[FBPressure]) in_progress = brkpos->at_target(tgt_position_pc, target_margin_pc);
+            else ezread.squintf(ezread.sadcolor, "brake: can not autobrake to position w/o feedback. Halting.\n");
         }
-        else if (allow_openloop_autobrake && (motoraction == ActionRelease || motoraction == ActionPark)) {
-            in_progress = !blindaction_timer.expired(); // if running w/o feedback, let's blindly release the brake for a few seconds then halt it
-            // in_progress = ((brkpos->pc() < tgt_position) && !motor_park_timer.expired());
-            // in_progress = !motor_park_timer.expired();
-        }
-        else ezread.squintf("brake: can not autobrake w/o feedback\n");
         if (!in_progress) set_action(ActionHalt);
         return in_progress;
     }
@@ -938,35 +933,34 @@ class BrakeControl : public JagMotor {
             carstop(true); // this will set the autostopping flag as appropriate, and set increasing brake pressure target if so
             if (!autostopping) set_action(ActionHalt); // After AutoStop mode stops the car or times out, then stop driving the motor
         }
-        else if (motoraction == ActionRelease) { // this will not get entered if using loop control. instead target is set in set_ctrlmode function
-            // TODO this logic is all bad for openloop mode
-            if (ctrlmode == CtrlPID) {
-                if (feedback_enabled[FBPosition]) releasing = goto_fixed_position(brkpos->zeropoint_pc(), released());
-                else releasing = goto_fixed_position(pressure->zeropoint_pc(), released());
-            }
-            else {
-                releasing = goto_fixed_position(brkpos->zeropoint_pc(), released());
-                if (releasing) pc[Out] = _fixed_release_speed;
-            }
+        else if (motoraction == ActionRelease) { // this function always uses open loop. PIDs are on hold
+            if (feedback_enabled[FBPosition]) releasing = goto_fixed_position(brkpos->zeropoint_pc(), brkpos->val());
+            else if (feedback_enabled[FBPressure]) releasing = goto_fixed_position(pressure->zeropoint_pc(), pressure->val());
+            else releasing = false;
+            return releasing ? _fixed_release_speed : pc[Stop];
         }
-        else if (motoraction == ActionPark) { // this will not get entered if using loop control. instead target is set in set_ctrlmode function
-            // TODO review this logic for openloop mode
-            if (ctrlmode == CtrlPID) {
-                if (feedback_enabled[FBPosition]) parking = goto_fixed_position(brkpos->parkpos_pc(), parked());
-                else parking = goto_fixed_position(pressure->parkpos_pc(), parked());
-            }
-            else {
-                parking = goto_fixed_position(brkpos->parkpos_pc(), parked()); // will set target to parked position
-                if (parking) pc[Out] = _fixed_release_speed;
-            }
+        else if (motoraction == ActionPark) { // this function always uses open loop
+            if (feedback_enabled[FBPosition]) parking = goto_fixed_position(brkpos->parkpos_pc(), brkpos->val());
+            else if (feedback_enabled[FBPressure]) parking = goto_fixed_position(pressure->parkpos_pc(), pressure->val());
+            else parking = false;
+            return parking ? _fixed_release_speed : pc[Stop];
         }
         else if (motoraction == ActionManual) {
-            // TODO review this logic for openloop mode
-            if (ctrlmode == CtrlPID) {
-                if (hotrc->joydir(Vert) != HrcDn) set_target(pc[Stop]); // let off the brake
-                else set_target(map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], 0.0f, 100.0f)); // if we are trying to brake, scale joystick value to determine brake pressure setpoint
+            if (hotrc->joydir(Vert) == HrcDn) set_target(map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], 0.0f, 100.0f)); // if we are trying to brake, scale joystick value to determine brake pressure setpoint
+            else if (simple_brake) {
+                if (feedback_enabled[FBPosition]) releasing = goto_fixed_position(brkpos->zeropoint_pc(), brkpos->val());
+                else if (feedback_enabled[FBPressure]) releasing = goto_fixed_position(pressure->zeropoint_pc(), pressure->val());
+                else releasing = false;
+                return releasing ? _fixed_release_speed : pc[Stop];
             }
-            // TODO else ?
+            else {
+                if (feedback_enabled[FBPosition]) set_target(brkpos->zeropoint_pc());
+                else if (feedback_enabled[FBPressure]) set_target(pressure->zeropoint_pc());
+                else {
+                    ezread.squintf(ezread.madcolor, "brake: undefined behavior w/o feedback. Halting\n");
+                    set_action(ActionHalt);
+                }
+            }
         }
         else if (motoraction == ActionHalt) {
             return pc[Stop];
@@ -1092,7 +1086,7 @@ class SteeringControl : public JagMotor {
             set_output();
             us[Out] = out_pc_to_us(pc[Out], reverse);
             volt[Out] = out_pc_to_si(pc[Out]);
-            write_motor();
+            write_motor(); // uncomment
         }
     }
     void set_ctrlmode(int a_mode) {
