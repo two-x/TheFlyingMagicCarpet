@@ -191,7 +191,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
         //     runmode = Hold;  // If the car is already running, go to Hold mode. If ignition is on w/o engine running, we'll end up in Stall Mode automatically
     }
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
-        static Timer ch4start_disable_timer{3 * 60 * 1000000};  // set an X minute timer to disable ch4 start function, reducing risk of phantom starter bug
+        static Timer ch4start_disable_timer{2 * 60 * 1000000};  // set an X minute timer to disable ch4 start function, reducing risk of phantom starter bug
         if (_we_just_switched_modes) ch4start_disable_timer.reset();
         if (starter.motor) {  // if starter is running,
             if (hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());  // turn off starter if any Ch4 event occurred. Note keep this if separate, as it will reset the sw event

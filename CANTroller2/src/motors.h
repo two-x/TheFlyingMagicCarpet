@@ -774,7 +774,7 @@ class BrakeControl : public JagMotor {
         if (simple_brake) {
             if (openloop_mode == OpenMedian) {
                 set_openmode(OpenAutoRelHoldable);
-                ezread.squintf(ezread.madcolor, "brake: No OpenMedian mode if simple_brake. Now OpenAutoRelHold\n");
+                ezread.squintf(ezread.sadcolor, "brake: No OpenMedian mode if simple_brake. Now OpenAutoRelHold\n");
             }
             if (motoraction == ActionAutoHold) {
                 motoraction = ActionManual;
@@ -891,7 +891,7 @@ class BrakeControl : public JagMotor {
         bool in_progress = false;
         if (ctrlmode == CtrlPID || (ctrlmode == CtrlOpenLoop && allow_openloop_autobrake)) {
             if (feedback_enabled[FBPosition]) in_progress = brkpos->at_target(tgt_position_pc, target_margin_pc);
-            else if (feedback_enabled[FBPressure]) in_progress = brkpos->at_target(tgt_position_pc, target_margin_pc);
+            else if (feedback_enabled[FBPressure]) in_progress = pressure->at_target(tgt_position_pc, target_margin_pc);
             else ezread.squintf(ezread.sadcolor, "brake: can not autobrake to position w/o feedback. Halting.\n");
         }
         if (!in_progress) set_action(ActionHalt);
@@ -931,7 +931,7 @@ class BrakeControl : public JagMotor {
             // ezread.printf("gas debug: mmode=%s, eval=%d\n", motorctrlcard[ctrlmode].c_str(), (int)((run_motor_mode[runmode][_Throttle] == ActionPark)));
             throttle->set_action((run_motor_ctrlmode[runmode][_Throttle] == ActionPark) ? ActionPark : ActionRelease);  // Stop pushing the gas, will help us stop the car better
             carstop(true); // this will set the autostopping flag as appropriate, and set increasing brake pressure target if so
-            if (!autostopping) set_action(ActionHalt); // After AutoStop mode stops the car or times out, then stop driving the motor
+            if (!autostopping) set_action(ActionHalt); // after AutoStop mode stops the car or times out, then stop driving the motor
         }
         else if (motoraction == ActionRelease) { // this function always uses open loop. PIDs are on hold
             if (feedback_enabled[FBPosition]) releasing = goto_fixed_position(brkpos->zeropoint_pc(), brkpos->val());
@@ -957,7 +957,7 @@ class BrakeControl : public JagMotor {
                 if (feedback_enabled[FBPosition]) set_target(brkpos->zeropoint_pc());
                 else if (feedback_enabled[FBPressure]) set_target(pressure->zeropoint_pc());
                 else {
-                    ezread.squintf(ezread.madcolor, "brake: undefined behavior w/o feedback. Halting\n");
+                    ezread.squintf(ezread.sadcolor, "brake: undefined behavior w/o feedback. Halting\n");
                     set_action(ActionHalt);
                 }
             }
@@ -965,9 +965,9 @@ class BrakeControl : public JagMotor {
         else if (motoraction == ActionHalt) {
             return pc[Stop];
         }
-
-        if (ctrlmode == CtrlPID) return calc_loop_out();
-        else return calc_open_out(); // in open loop, push trigger out less than 1/2way, motor extends (release brake), or more than halfway to retract (push brake), w/ speed proportional to distance from halfway point 
+        // at this point we haven't yet returned new pc[Out], but our new target value is ready for us to calculate it
+        if (ctrlmode == CtrlPID) return calc_loop_out(); // returns new pc[Out] value based on target value using PID loop math
+        else return calc_open_out(); // returns new pc[Out] value based on target value using simple open loop comparison
     }
     float postprocess_out(float a_outval) { // returns output value constrained to the operational range (or if calibrating, to the absolute range)
         if (ctrlmode == CtrlPID); // don't mess with the output value that's being controlled internally to a pid. except for an artificial cleanzero unbeknownst to the pid

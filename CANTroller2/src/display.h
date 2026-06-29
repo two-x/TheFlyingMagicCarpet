@@ -19,12 +19,6 @@ std::string ch4_menu_buttons[NumRunModes] = { "CH4", "WAKE", "SLEEP", "START", "
 std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airvel", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 // std::string pcbaglowcard[GlowNumModes] = { "off", "simple", "heart", "xfade", "sine" };
-// #define stEr "St\x88r"     // these defines are just a convenience to keep the below datapage strings
-// #define brAk "Br\x83k"     // array initializations aligned in neat rows & cols for legibility
-// #define spEd "Sp\x88""d"
-// #define neo_bright "NeoBr\x8dgt"
-// #define maxadjrate "MaxAjR\x83t"
-// #define horfailsaf "HFails\x83""f"
 #define __________ "      \xf9"
 static std::string telemetry[disp_fixed_lines] = { "Hot Vert", "Hot Horz", "   Speed", "    Tach", "Brk Sens", "Throttle", "Brk Motr", "Str Motr" };  // Fixed rows
 static std::string units[disp_fixed_lines] = { "%", "%", "mph", "rpm", "%", "%", "%", "%" };  // Fixed rows
@@ -1264,8 +1258,3 @@ static void draw_task(void *parameter) {
         lastmode = runmode;
     }
 }
-// the following project draws a nice looking gauge cluster, very apropos to our needs and the code is given.
-// see this video: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
-// rinkydink home page: http://www.rinkydinkelectronics.com
-// moving transparent arrow sprite over background: https://www.youtube.com/watch?v=U4jOFLFNZBI&ab_channel=VolosProjects
-// bar graphs: https://www.youtube.com/watch?v=g4jlj_T-nRw&ab_channel=VolosProjects
