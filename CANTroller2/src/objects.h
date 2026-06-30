@@ -243,7 +243,10 @@ class Ignition {  // the ignition object controls the car ignition signal and th
     bool signal = LOW;                    // set by handler only. Reflects current state of the signal
     int ignreq = ReqNA, panicreq = ReqNA;
     Ignition(int pin) : _pin(pin) {}
-    void setup() { ezread.squintf(ezread.highlightcolor, "Ignition (p%d) handler init\n", _pin); }
+    void setup() {
+        ezread.squintf(ezread.highlightcolor, "Ignition (p%d) handler init\n", _pin);
+        set_pin(_pin, OUTPUT, LOW);  // start with pin set low (ign off)
+    }
     void request(int req) { ignreq = req; }  // ezread.squintf("ign req %s\n", requestcard[req].c_str());
     void panic_request(int req) { panicreq = req; }  // if (_verbose) ezread.squintf("ign2: ign=%d ir=%s pan=%d pr=%s\n", (int)signal, requestcard[ign_req].c_str(), (int)panicstop, requestcard[panic_req].c_str()); delay(1);
     void update() {  // Run once each main loop
