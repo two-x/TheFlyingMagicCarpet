@@ -436,7 +436,7 @@ class BootButton : public MomentarySwitch {
 };
 static BootButton bootbutton(boot_sw_pin);
 #include "animations.h"
-#include "neopixel.h"
+#include "idiots.h"
 #include "display.h"
 
 void BootButton::actions() {  // temporary (?) functionality added for development convenience

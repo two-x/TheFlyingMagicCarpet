@@ -12,7 +12,7 @@
 #define disp_bargraphs_x 111  // 122
 #define disp_datapage_title_x 83
 #define disp_value_dimsteps 2  // or 3 for multiple levels of dimness
-#include "neopixel2.h"
+#include "neopixel.h"
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "ANI" };  // pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { "CAL", "SIM", "CH4", "IGN" };
 std::string ch4_menu_buttons[NumRunModes] = { "CH4", "WAKE", "SLEEP", "START", "DMODE", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
@@ -121,7 +121,6 @@ std::string* nulstrptr = &nulstr;
 class Display {
   private:
     NeopixelStrip* neo;
-    NeopixelStrip2* neo2;
     Touchscreen* touch;
     Simulator* sim;
     IdiotLights* idiots;
@@ -141,8 +140,8 @@ class Display {
     int disp_datapage_last, disp_needles[disp_lines], disp_targets[disp_lines], disp_age_quanta[disp_lines];
     bool disp_selection_dirty, disp_datapage_dirty, disp_values_dirty, disp_data_dirty[disp_lines], disp_menutoggles_dirty;
     bool disp_menus_dirty, disp_runmode_dirty, disp_simbuttons_dirty,disp_idiots_dirty, disp_units_dirty;
-    Display(NeopixelStrip* _neo, NeopixelStrip2* _neo2,Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
-      : neo(_neo), neo2(_neo2), touch(_touch), idiots(_idiots), sim(_sim) {}
+    Display(NeopixelStrip* _neo, Touchscreen* _touch, IdiotLights* _idiots, Simulator* _sim)
+      : neo(_neo), touch(_touch), idiots(_idiots), sim(_sim) {}
     void init_framebuffers(int _sprwidth, int _sprheight) {
         int sprsize[2] = { _sprwidth, _sprheight };
         lcd.setColorDepth(sprite_color_depth);
@@ -588,42 +587,33 @@ class Display {
     void update_idiots(bool force=false) {
         for (int i = 0; i < idiots->num_idiots(); i++) {
             bool* val_ptr = idiots->val_ptr(i);
-            if (i < neo->num_neo_idiots()) {  // the first group of displayed idiot lights are also represented by neopixels
-                neo2->setIdiotLightSolidOnMode(i, *val_ptr);
-                if (*val_ptr != idiots->lastval(i)) {
-                    neo->setlogic(i, *val_ptr);
-                }
+            if (i < idiot_light_led_count) {  // the first group of displayed idiot lights are also represented by neopixels
+                neo->setIdiotLightSolidOnMode(i, *val_ptr);
                 if (*val_ptr) {
                     if (val_ptr == &panicstop || val_ptr == &diag.err_sens[ErrRange][_TempEng] || val_ptr == &wheeltemperr) {
-                        neo->setflash(i, 3, 1, 2, 100, 0xffffff);  // add a brilliant flash to the more critical idiot lights
-                        neo2->setIdiotLightCriticalAlertMode(i, true);
+                        neo->setIdiotLightCriticalAlertMode(i, true);
                     }
-                    else if (val_ptr == &diag.err_sens_alarm[ErrLost] ) {
+                    else if (val_ptr == &diag.err_sens_alarm[ErrLost]) {
                         for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
                             if (diag.err_sens[ErrLost][sensor]) {
-                                neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
+                                neo->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
                             } else {
-                                // Disable the flash mode for this sensor by setting it to black
-                                neo2->setIdiotLightFlashColor(i, sensor, BLACK);
+                                neo->setIdiotLightFlashColor(i, sensor, BLACK);
                             }
                         }
-                        neo->setflash(i, diag.errorcount(ErrLost), 2, 6, 1, 0);  // encode number of errored sensors with black blinks
                     }
                     else if (val_ptr == &diag.err_sens_alarm[ErrRange]) {
                         for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
                             if (diag.err_sens[ErrRange][sensor]) {
-                                neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
+                                neo->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
                             } else {
-                                // Disable the flash mode for this sensor by setting it to black
-                                neo2->setIdiotLightFlashColor(i, sensor, BLACK);
+                                neo->setIdiotLightFlashColor(i, sensor, BLACK);
                             }
                         }
                     }
                 }
                 else {
-                    neo->setflash(i, 0);
-                    neo2->setIdiotLightCriticalAlertMode(i, false);
-                    // neo2->setIdiotLightWarningBlinkColor(i, 0x000000);  // black blinks
+                    neo->setIdiotLightCriticalAlertMode(i, false);
                 }
             }
             if (force || (*val_ptr != idiots->lastval(i))) {
@@ -868,7 +858,7 @@ class Display {
             for (int line=9; line<=19; line++) draw_eraseval(line);
             // draw_ascii(19, pcbaglowcard[neo->pcbaglow]);
             draw_truth(20, flashdemo, binstyl::On);
-            draw_truth(21, neo->sleepmode, binstyl::On);
+            draw_truth(21, runmode == LowPower, binstyl::On);
             drawval(22, neobright, 0.0f, 100.0f);  // drawval(22, neobright, 1.0, 100.0f, unlikely_int, 3);
             drawval(23, neosat, 1.0f, 100.0f);  // drawval(22, neobright, 1.0, 100.0f, unlikely_int, 3);
         }
@@ -1037,13 +1027,12 @@ class Tuner {
   private:
     Display* screen;
     NeopixelStrip* neo;
-    NeopixelStrip2* neo2;
     Touchscreen* touch;
     Timer tuningAbandonmentTimer{45000000};  // this times out edit mode after a a long period of inactivity
     Timer tuningEditTimer{50000};  // control frequency of polling for new edits
     int datapage_last;
   public:
-    Tuner(Display* _screen, NeopixelStrip* _neo, NeopixelStrip2* _neo2, Touchscreen* _touch) : screen(_screen), neo2(_neo2), neo(_neo), touch(_touch) {}
+    Tuner(Display* _screen, NeopixelStrip* _neo, Touchscreen* _touch) : screen(_screen), neo(_neo), touch(_touch) {}
     int id, id_encoder = 0;  // idelta is integer edit value accelerated, and is used for all tuning edits regardless if int float or bool
     int rdelta_encoder = 0;  // rdelta is raw (unaccelerated) integer edit value, idelta is integer edit value accelerated
     void update() {
@@ -1202,8 +1191,8 @@ class Tuner {
         }
         else if (datapage == PgDiag) {
             // if (sel == 10) neo->set_pcba_glow(tune(neo->pcbaglow, id, 0, GlowNumModes - 1, true));
-            if (sel == 11) neo2->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
-            else if (sel == 12) neo->sleepmode_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
+            if (sel == 11) neo->flashdemo_ena(tune(id));  //  neo->enable_flashdemo(flashdemo); }
+            // sel == 12 was neo->sleepmode_ena(); NeopixelStrip handles LowPower mode automatically
             else if (sel == 13) tune(&neobright, id, 0.0f, 100.0f);  // with recent changes to tune() I had to move the setter function for
             else if (sel == 14) tune(&neosat, id, 0.0f, 100.0f);     //  these into the neopix update function, or acceleration wouldn't work
             else if (sel == 14) tune(&ui_app, id, 0, NumContextsUI-1, true);
@@ -1218,12 +1207,11 @@ class Tuner {
     }
 };
 
-static NeopixelStrip2 neo2;
-static NeopixelStrip neo(neopixel_pin);
+static NeopixelStrip neo;
 static IdiotLights idiots;
 static Touchscreen touch;
-static Display screen(&neo, &neo2, &touch, &idiots, &sim);
-static Tuner tuner(&screen, &neo, &neo2, &touch);
+static Display screen(&neo, &touch, &idiots, &sim);
+static Tuner tuner(&screen, &neo, &touch);
 bool take_two_semaphores(SemaphoreHandle_t* sem1, SemaphoreHandle_t* sem2, TickType_t waittime=portMAX_DELAY) {   // pdMS_TO_TICKS(1)
     if (xSemaphoreTake(*sem1, waittime) == pdTRUE) {  // try to take 1st semaphore, and if successful ...
         if (xSemaphoreTake(*sem2, waittime) == pdTRUE) return pdTRUE;  // try to take 2nd semaphore, and if successful, return true
