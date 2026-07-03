@@ -372,6 +372,17 @@ public:
             else if (progressAnim[AnimIdiots] >= 1.0f) startIdiotLightsAnimation();
 
             neoanimator.UpdateAnimations();
+            // Directly apply basic on/off state each tick so pixels 3-9 always
+            // mirror solidOnMode without relying solely on the animation cycle.
+            // (Cylon owns pixels 3-9 in LowPower; animation still owns flash/critical cases.)
+            if (runmode != LowPower) {
+                for (int i = 0; i < idiot_light_led_count; i++) {
+                    if (!idiotlights[i].criticalAlertMode && !idiotlights[i].hasFlashColors()) {
+                        neoobj.SetPixelColor(idiotlights[i].led,
+                            idiotlights[i].solidOnMode ? idiotlights[i].solidColor : BLACK);
+                    }
+                }
+            }
             neoobj.Show();
         }
     }
