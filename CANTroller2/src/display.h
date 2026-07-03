@@ -600,7 +600,7 @@ class Display {
                     }
                     else if (val_ptr == &diag.err_sens_alarm[ErrLost] ) {
                         for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
-                            if (diag.devices[sensor][ErrLost]) {
+                            if (diag.err_sens[ErrLost][sensor]) {
                                 neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
                             } else {
                                 // Disable the flash mode for this sensor by setting it to black
@@ -611,7 +611,7 @@ class Display {
                     }
                     else if (val_ptr == &diag.err_sens_alarm[ErrRange]) {
                         for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
-                            if (diag.devices[sensor][ErrRange]) {
+                            if (diag.err_sens[ErrRange][sensor]) {
                                 neo2->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
                             } else {
                                 // Disable the flash mode for this sensor by setting it to black

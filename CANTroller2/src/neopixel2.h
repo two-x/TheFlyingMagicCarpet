@@ -7,7 +7,7 @@
 #define idiot_light_led_offset 3  // Offset for idiot lights in the strip, after the heartbeat LEDs
 #define idiot_light_led_count 7  // Number of idiot lights after the heartbeat leds
 #define runmode_lights_animation_duration_ms 6000
-#define idiot_lights_animation_duration_ms 6000
+#define idiot_lights_animation_duration_ms 9000
 
 // Declared outside of class because https://github.com/Makuna/NeoPixelBus/wiki/FAQ-%2311
 NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(striplength, neopixel_pin);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method,
@@ -59,8 +59,8 @@ public:
     }
 
     RgbColor getFlashColor(float time) {
-        // 6 second cycle with alternating pattern every 350ms
-        float cycle_time = fmod(time, 6.0f);  // 6 second cycle
+        // 9 second cycle with alternating pattern every 525ms
+        float cycle_time = fmod(time, 9.0f);  // 9 second cycle
         
         // Count non-black colors and build array of indices
         uint8_t nonBlackIndices[NumTelemetryIdiots];
@@ -76,18 +76,17 @@ public:
             return solidColor;  // No flash colors, return solid color
         }
         
-        // Pattern: t=0ms flash1, t=350ms solid, t=750ms flash2, t=1100ms solid, etc.
-        // Each segment is 350ms, alternating between flash colors and solid
-        uint32_t segment = (uint32_t)(cycle_time * 1000) / 350;  // Which 350ms segment (0-16 in 6s)
-        
-        if (segment % 2 == 0) {
-            // Even segments (0, 2, 4, ...): show flash colors
-            uint8_t flash_index = (segment / 2) % nonBlackCount;
-            return flashColors[nonBlackIndices[flash_index]];
-        } else {
-            // Odd segments (1, 3, 5, ...): show solid color
-            return solidColor;
-        }
+        // Divide the 9s cycle into N equal slots, one per erroring sensor — exactly one flash each
+        float pos_ms = cycle_time * 1000.0f;
+        float slot_ms = 9000.0f / nonBlackCount;
+        uint8_t slot_index = (uint8_t)(pos_ms / slot_ms) % nonBlackCount;
+        float slot_pos_ms = fmod(pos_ms, slot_ms);
+
+        // Slot structure: 30ms black / 465ms color / 30ms black / solid for remainder
+        if (slot_pos_ms < 30.0f) return BLACK;
+        if (slot_pos_ms < 495.0f) return flashColors[nonBlackIndices[slot_index]];
+        if (slot_pos_ms < 525.0f) return BLACK;
+        return solidColor;
     }
 };
 
