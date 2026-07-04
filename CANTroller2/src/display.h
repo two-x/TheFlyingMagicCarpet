@@ -378,7 +378,7 @@ class Display {
             }
         }
         else delete_bargraph = true;
-        if (delete_bargraph || value == NAN) {
+        if (delete_bargraph || std::isnan(value)) {
             sprptr->fillRect(corner_x - 1, corner_y, disp_bargraph_width + 2, disp_line_height_pix, BLK);
             disp_bargraphs[lineno] = false;
         }

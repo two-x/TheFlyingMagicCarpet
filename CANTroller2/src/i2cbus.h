@@ -41,8 +41,8 @@ class I2C {
             int devindex = -1;
             for (int i=0; i<(int)NumI2CSlaves; i++) if (address == known_i2c_addr[i]) devindex = i;
             if (error == 0) {
-                ezread.squintf("  found device addr 0x%s%x : %s\n", (address < 16) ? "0" : "", address, i2ccard[devindex].c_str());
-                _detaddrs[_devicecount++] = address;
+                ezread.squintf("  found device addr 0x%s%x : %s\n", (address < 16) ? "0" : "", address, (devindex >= 0) ? i2ccard[devindex].c_str() : "unknown");
+                if (_devicecount < 10) _detaddrs[_devicecount++] = address;
             }
             else if (error == 4) {
                 ezread.squintf(ezread.madcolor, "  error device addr 0x%s%x\n", (address < 16) ? "0" : "", address);
@@ -203,7 +203,7 @@ float SparkFun_MicroPressure::readPressure(MapUnits units, bool blocking) {
         reading |= _i2cPort->read();
         if (i != 2) reading = reading<<8;
     }
-    _pressure = (reading - OUTPUT_MIN) * (_maxPsi - _minPsi);
+    _pressure = ((float)reading - (float)OUTPUT_MIN) * (_maxPsi - _minPsi);
     _pressure = (_pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
     if (units == MapUnitPA)        _pressure *= 6894.7573f; //Pa (Pascal)
     else if (units == MapUnitKPA)  _pressure *= 6.89476f;   //kPa (kilopascal)

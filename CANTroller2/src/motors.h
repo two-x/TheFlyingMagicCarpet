@@ -870,7 +870,7 @@ class BrakeControl : public JagMotor {
             autostopping = !stopped_now && !stopcar_timer.expired(); // if car is moving and we are trying to stop it, this status flag is set
             if (autostopping) {
                 bool fast = panic || stopped_now;
-                if (interval_timer.expireset()) set_target(std::min(pressure->opmax(), target_pc + fast ? _autostop_fast_increment_pc : _autostop_smooth_increment_pc));  // gradually increase brake pressure on regular intervals until car stops
+                if (interval_timer.expireset()) set_target(std::min(pressure->opmax(), target_pc + (fast ? _autostop_fast_increment_pc : _autostop_smooth_increment_pc)));  // gradually increase brake pressure on regular intervals until car stops
                 else set_target(std::max(target_pc, fast ? _autostop_fast_initial_pc : _autostop_smooth_initial_pc)); // initially set pressure target to baseline value, then hold it constant in between intervals
             }
             else if (autostopping_last) {

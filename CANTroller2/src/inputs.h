@@ -151,7 +151,7 @@ class Encoder {
         attachInterrupt(digitalPinToInterrupt(_a_pin), [this]{ _a_isr(); }, CHANGE); \
         attachInterrupt(digitalPinToInterrupt(_b_pin), [this]{ _b_isr(); }, CHANGE);
         #if EncoderPanasonicType    // these encoders have half the transitions/interrupts for the same amount of turn 
-            _spintime_min_us >> 1;  // so double the fastest spin threshold time
+            _spintime_min_us >>= 1;  // so double the fastest spin threshold time
             // _accel_thresh_us *= 2;  // and double the acceleration threshold time
         #endif
         _spinrate_max = 1000000.0f / (float)_spintime_min_us;
@@ -167,7 +167,7 @@ class Encoder {
         if (_spintime_isr_us != time_last) {
             div_time = _spintime_isr_us;
             #if EncoderPanasonicType  // these encoders have half the transitions/interrupts for the same amount of turn 
-            div_time >> 1;            // because it takes 2 detents to get 1 A interrupt w/ these encoders, ie each detent took half the time
+            div_time >>= 1;           // because it takes 2 detents to get 1 A interrupt w/ these encoders, ie each detent took half the time
             #endif
             if (!twist_in_progress || (div_time < best_time_this_twist)) best_time_this_twist = div_time;
             twist_in_progress = true;
@@ -288,7 +288,7 @@ class Touchscreen {
     void update_swipe() {  // determines if there's a valid swipe, saved to variable
         int _dragged[2] = { drag(Horz), drag(Vert) };
         int _axis = (std::abs(_dragged[Horz]) > std::abs(_dragged[Vert])) ? Horz : Vert;  // was swipe mostly horizontal or mostly vertical
-        if (!swipe_possible || (std::abs(_dragged[_axis] < swipe_min))) ts_swipedir = DirNone;  // catch if swipe doesn't qualify
+        if (!swipe_possible || (std::abs(_dragged[_axis]) < swipe_min)) ts_swipedir = DirNone;  // catch if swipe doesn't qualify
         else if (_axis == Horz) ts_swipedir = (_dragged[Horz] > 0) ? DirRight : DirLeft;
         else ts_swipedir = (_dragged[Vert] > 0) ? DirUp : DirDown;
         ts_swiped = (ts_swipedir != DirNone);  // for debug idiot light

@@ -75,6 +75,7 @@ class CollisionsSaver {
         auto a = &_balls[_loop_count & 1][ballno];
         a->color = lgfx::color332(100 + (std::rand() % 155), 100 + (std::rand() % 155), 100 + (std::rand() % 155));
         a->x = _width * rn(2);
+        a->y = _height * rn(2);
         a->dx = (std::rand() & (5 << SHIFTSIZE)) + 1;
         a->dy = (std::rand() & (5 << SHIFTSIZE)) + 1;
         sqrme = (uint8_t)(ball_radius_base * (float)(vp->w + vp->h));
@@ -218,8 +219,9 @@ class CollisionsSaver {
             float radius = 10.0, cosinc = 0.985, sininc = 0.174; // precomputed trig values  // angleinc = 10.0 * M_PI / 180.0; // Increment in radians
             static float x = 0, y = radius, mag = 0.5;
             mag = constrain((float)(mag + 0.01 * (float)(rn(70) - 35)), 0.0f, 1.0f);
-            x = x * cosinc - y * sininc; // apply rotation and get new coordinates
-            y = x * sininc + y * cosinc;
+            float x_old = x;
+            x = x_old * cosinc - y * sininc; // apply rotation and get new coordinates
+            y = x_old * sininc + y * cosinc;
             ball_gravity_x = (int)(x * radius * mag);  // ball_gravity_x = constrain((ball_gravity_x + rn(6) - 3), -18, 28);
             ball_gravity_y = (int)(y * radius * mag);  // ball_gravity_y = constrain((ball_gravity_y + rn(6) - 3), -18, 28);
             gravtimer.set(200000 * (3 + rn(3)));
@@ -448,14 +450,14 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         else if (myshape < 6) myshape = 1;
         else myshape = 2;
         if (!punches_left) {
-            stars = 13 - (adddot / 2) - (mindot + adddot > 8) ? 3 : 0;
+            stars = 13 - (adddot / 2) - ((mindot + adddot > 8) ? 3 : 0);
             has_eraser = was_eraser;
         }
         else if (extratimer.expired()) stars = 1;
         for (int i=0; i<2; i++) myhue[i] += rn(511) - 255;
         for (int star = 0; star < stars; star++) {
-            p[0] = vp->x + (punches_left > 0) ? vp->w >> 1 : rn(vp->w);
-            p[1] = vp->y + (punches_left > 0) ? vp->h >> 1 : rn(vp->h);
+            p[0] = vp->x + ((punches_left > 0) ? vp->w >> 1 : rn(vp->w));
+            p[1] = vp->y + ((punches_left > 0) ? vp->h >> 1 : rn(vp->h));
             if (!punches_left) r = scaler * (mindot + rn(adddot));
             else r = scaler * (int)((float)vp->h * 0.45 * (1.0 - ((float)punches_left / (float)total_punches)));
             if (precess < 6) {
@@ -497,7 +499,7 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         }
         if (point[Horz] + boxsize[Horz] > vp->w) boxsize[Horz] = (vp->w + boxrad - point[Horz]);
         if (point[Vert] + boxsize[Vert] > vp->h) boxsize[Vert] = (vp->h + boxrad - point[Vert]);
-        int shells = 1 + (rn(5) != 0) ? 1 + rn(4) : 0;
+        int shells = 1 + ((rn(5) != 0) ? 1 + rn(4) : 0);
         int steps[2] = { boxsize[Horz] / (shells + 1), boxsize[Vert] / (shells + 1) };
         // this crashes it
         // if (precess > 5 && !rn(2)) shells = boxsize[!longer] >> 1;

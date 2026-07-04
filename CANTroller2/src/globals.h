@@ -314,7 +314,7 @@ inline float map(float x, float in_min, float in_max, float out_min, float out_m
     return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
 }
 inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
-    if (in_max - in_min) return out_min + (x - in_min) * (out_max - out_min) / (in_max - in_min);
+    if (in_max - in_min) return (int)(out_min + (int64_t)(x - in_min) * (out_max - out_min) / (in_max - in_min));
     Serial.printf("err: map(%d, %d, %d, %d, %d) called\n", x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
@@ -405,9 +405,9 @@ class Timer {  // !!! beware, this 54-bit microsecond timer overflows after ever
         start = esp_timer_get_time();
     }
     void reset() { start = esp_timer_get_time(); }                            // zeroes the timer
-    int elapsed() { return esp_timer_get_time() - start; }                    // returns microseconds elapsed since last reset
-    bool elapsed(int check) { return esp_timer_get_time() - start >= check; } // returns whether the given amount of us have elapsed since last reset
-    int timeout() { return tout; }                                            // getter function returns the currently set timeout value in us
+    int64_t elapsed() { return esp_timer_get_time() - start; }                    // returns microseconds elapsed since last reset
+    bool elapsed(int64_t check) { return esp_timer_get_time() - start >= check; } // returns whether the given amount of us have elapsed since last reset
+    int64_t timeout() { return tout; }                                            // getter function returns the currently set timeout value in us
     bool expired() { return esp_timer_get_time() >= start + tout; }           // returns whether more than the previously-set timeout has elapsed since last reset
     bool expireset() {                                                        // like expired() but automatically resets if expired
         int64_t now = esp_timer_get_time();

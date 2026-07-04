@@ -101,7 +101,7 @@ class Param {
         set_limits(*_min_ptr, *_max_ptr);
         _last = _val;
     } 
-    Param(float arg_val) { Param(arg_val, arg_val, arg_val); }  // creates a constant Param (with min/max == val) which cannot be changed
+    Param(float arg_val) : Param(arg_val, arg_val, arg_val) {}  // creates a constant Param (with min/max == val) which cannot be changed
     Param(float arg_val, float* arg_min_ptr, float* arg_max_ptr) {  // creates a constraned Param which uses external limits.
         _val = arg_val;
         _min_ptr = arg_min_ptr;

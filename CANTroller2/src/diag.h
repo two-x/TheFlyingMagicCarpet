@@ -337,10 +337,10 @@ class DiagRuntime {
         bool last_rangerr = battrangeerr;
         int _sens = _MuleBatt;
         battrangeerr = ((*devices[_sens][DiagVal] < *devices[_sens][DiagMin] - *devices[_sens][DiagMargin]) || (*devices[_sens][DiagVal] > *devices[_sens][DiagMax] + *devices[_sens][DiagMargin]));
+        setflag(_MuleBatt, ErrRange, battrangeerr);
         if (battrangeerr != last_rangerr) {
-            violating_value[_sens] = *devices[_sens][DiagVal];  
+            violating_value[_sens] = *devices[_sens][DiagVal];
         }
-        // checkrange(_MuleBatt);
     }
     void TempFailure() {
         static bool printed_error_wheel = false, printed_error_eng = false, printed_error_brake = false;
