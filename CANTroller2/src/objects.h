@@ -263,13 +263,12 @@ class Ignition {  // the ignition object controls the car ignition signal and th
                     panicreq = ReqOn;                              // then panic
             if (_verbose && !req_last && panicreq) ezread.squintf("panic state initiated by ign class\n");
         }
-        bool already_stopping = panicstop;  // capture before potential set, so cancel can't fire same frame as set
         if (panicreq != ReqNA) set_panicstop((panicreq == ReqOn) ? true : false);    // ezread.squintf("panic=%d\n", panicstop);
         if (panicstop) {
             if (signal) ezread.squintf(ezread.sadcolor, "ign kill due to panic stop condition\n");
             ignreq = ReqOff;  // panic stop causes ignition cut
         }
-        if (already_stopping && (speedo.stopped() || panicTimer.expired())) set_panicstop(false);  // Cancel panic stop if car is stopped
+        if (speedo.stopped() || panicTimer.expired()) set_panicstop(false);  // Cancel panic stop if car is stopped
         if (ignreq == ReqOn && !tach.stopped()) {
             ezread.squintf(ezread.sadcolor, "warn: ignition-on fail due to nonzero tach\n");
             ignreq = ReqNA;

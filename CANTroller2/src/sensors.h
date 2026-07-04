@@ -1219,7 +1219,7 @@ class RMTInput {  // note: for some reason if we ever stop reading our rmt objec
   private:
     rmt_channel_t channel_;
     gpio_num_t gpio_;
-    int pulse_width, pulse_width_last;
+    int pulse_width = 0, pulse_width_last = 1000;
     float scale_factor = 0.625f;
     RingbufHandle_t rb_;
 };
@@ -1379,7 +1379,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     }
     // hotrc digital button handler which rejects spurious values which could cause false events (re: phantom starter bug)
     void toggles_update() {  // note, below the two timer[] indices are each 2 less than those of their corresponding switches (avoids creating 2 extra Timer instances)
-        static Timer filttimer[NumChans-2] = { 60000, 60000 }; // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
+        static Timer filttimer[NumChans-2] = { 150000, 150000 }; // timers ensure no spurious events, changes must persist this long to count (no human can click this fast). see comment above re: offset indices
         int event_expiration_us = 1500000;             // to cancel events if they have become stale on a human timescale
         for (int ch = Ch3; ch <= Ch4; ch++) {          // do once for each digital channel
             if (_sw_new[ch] != _sw_val[ch]) {          // if new read value differs from prev valid value ...

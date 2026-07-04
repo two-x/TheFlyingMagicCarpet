@@ -43,7 +43,8 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             steer.set_action(run_motor_action[runmode][_SteerMotor]);
             watchdog.set_codestatus();
             shutting_down = _joy_has_been_centered = car_hasnt_moved = cruise_adjusting = powering_up = false;  // clean up previous runmode values
-            _stall_ch4start_timed_out = _stopped_hold_timer_active = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
+            _stopped_hold_timer_active = cal_gasmode_request = cal_brakemode_request = false;  // clean up previous runmode values
+            if (_oldmode != Hold) _stall_ch4start_timed_out = false;  // preserve timeout across Stall<->Hold transitions so tach noise can't reset the 2-min safety timer
             if (_verbose && !first_boot) ezread.squintf("run: mode change %s->%s\n", modecard[_oldmode].c_str(), modecard[runmode].c_str());
             first_boot = false;
         }
@@ -192,7 +193,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
     }
     void run_stallMode() {  // In stall mode, the gas doesn't have feedback, so runs open loop, and brake pressure target proportional to joystick
         static Timer ch4start_disable_timer{2 * 60 * 1000000};  // set an X minute timer to disable ch4 start function, reducing risk of phantom starter bug
-        if (_we_just_switched_modes) ch4start_disable_timer.reset();
+        if (_we_just_switched_modes && _oldmode != Hold) ch4start_disable_timer.reset();
         if (starter.motor) {  // if starter is running,
             if (hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());  // turn off starter if any Ch4 event occurred. Note keep this if separate, as it will reset the sw event
         } 
