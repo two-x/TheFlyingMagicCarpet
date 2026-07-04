@@ -180,7 +180,7 @@ private:
         // Both sides have zero slope at the peak (C1 continuous) so there is no
         // perceptible step as the dot crosses each integer LED position.
         // Narrow sigma ahead for tight sub-pixel interpolation; wide sigma behind for the tail.
-        neoanimator.StartAnimation(AnimCylon, 2000, [this](const AnimationParam& param) {
+        neoanimator.StartAnimation(AnimCylon, 2750, [this](const AnimationParam& param) {
             int effect_offset = 2;
             int effect_length = striplength - effect_offset;
 
