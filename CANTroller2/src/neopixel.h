@@ -396,8 +396,14 @@ public:
             if (runmode != LowPower && !flashdemo) {
                 for (int i = 0; i < idiot_light_led_count; i++) {
                     if (!idiotlights[i].criticalAlertMode && !idiotlights[i].hasFlashColors()) {
-                        neoobj.SetPixelColor(idiotlights[i].led,
-                            idiotlights[i].solidOnMode ? idiotlights[i].solidColor : BLACK);
+                        if (i == 3 && brake.heat_strobe_freq > 0.0f) {
+                            uint32_t phase_ms = millis() % (uint32_t)(1000.0f / brake.heat_strobe_freq);
+                            RgbColor base = idiotlights[i].solidOnMode ? idiotlights[i].solidColor : BLACK;
+                            neoobj.SetPixelColor(idiotlights[i].led, (phase_ms < 60) ? RgbColor(255, 255, 255) : base);
+                        } else {
+                            neoobj.SetPixelColor(idiotlights[i].led,
+                                idiotlights[i].solidOnMode ? idiotlights[i].solidColor : BLACK);
+                        }
                     }
                 }
             }

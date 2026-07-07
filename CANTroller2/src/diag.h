@@ -361,26 +361,29 @@ class DiagRuntime {
         }
         wheeltemperr = wheel_err_range || wheel_err_other || ((maxwheel - minwheel) > wheeldifferr);  // set global wheel temp idiot light to include all wheel temp errors
         if (overtemp_shutoff_wheel) {
-            if (wheel_err_range) {
-                ignition->request(ReqOff);  // ignition->panic_request(ReqOff);  // not sure if this was intentional? commenting out
-                if (!printed_error_wheel) ezread.squintf(ezread.madcolor, "err: wheel temp out of range. stop engine\n");
+            bool any_wheel_overtemp = false;
+            for (int sen = _TempWhFL; sen <= _TempWhRR; sen++)
+                if (*devices[sen][DiagVal] >= *devices[sen][DiagMax]) any_wheel_overtemp = true;
+            if (any_wheel_overtemp) {
+                ignition->request(ReqOff);
+                if (!printed_error_wheel) ezread.squintf(ezread.sadcolor, "warn: wheel overtemp, ign killed\n");
                 printed_error_wheel = true;
             }
             else printed_error_wheel = false;
         }
         if (overtemp_shutoff_engine) {
-            if (err_sens[ErrRange][_TempEng]) {
+            if (*devices[_TempEng][DiagVal] >= *devices[_TempEng][DiagMax]) {
                 ignition->request(ReqOff);
-                if (!printed_error_eng) ezread.squintf(ezread.madcolor, "err: engine temp out of range. stop engine\n");
+                if (!printed_error_eng) ezread.squintf(ezread.sadcolor, "warn: engine overtemp, ign killed\n");
                 printed_error_eng = true;
             }
             else printed_error_eng = false;
         }
         if (overtemp_shutoff_brake) {  // here the engine is shut off. also in brake motor class the brake motor is stopped
-            if (err_sens[ErrRange][_TempBrake]) {
-                brake->set_action(ActionHalt); // stop the brake actuator 
-                ignition->request(ReqOff);     // kill the engine
-                if (!printed_error_brake) ezread.squintf(ezread.madcolor, "err: brakemotor temp out of range. stop engine\n");
+            if (*devices[_TempBrake][DiagVal] >= *devices[_TempBrake][DiagMax]) {
+                brake->set_action(ActionHalt);
+                ignition->request(ReqOff);
+                if (!printed_error_brake) ezread.squintf(ezread.sadcolor, "warn: brktemp overtemp, ign killed\n");
                 printed_error_brake = true;
             }
             else printed_error_brake = false;
@@ -513,14 +516,14 @@ class DiagRuntime {
                     errtotal++;
                     if (!(was & 1)) {
                         errdiffs++;  // there's a new error
-                        if (color == ezread.happycolor) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
+                        if (color == ezread.gladcolor) color = ezread.defaultcolor;  // but also another error got cleared, so use default color
                         else if (color == NON) color = ezread.sadcolor;  // use the bad news color
                     }
                 }
                 else if ((now & 1) < (was & 1)) {
                     errdiffs--;  // an error got cleared
                     if (color == ezread.sadcolor) color = ezread.defaultcolor;  // but there was also a new error, so use default color
-                    else if (color == NON) color = ezread.happycolor;  // use the good news color
+                    else if (color == NON) color = ezread.gladcolor;  // use the good news color
                 }
                 now >>= 1;
                 was >>= 1;

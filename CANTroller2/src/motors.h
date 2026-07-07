@@ -677,6 +677,7 @@ class BrakeControl : public JagMotor {
     float combined_read_pc, target_margin_pc = 2.0f, hybrid_ratio_pc = 100.0f;
     float _fixed_release_speed = -50.0f; // rate an openloop pedal release will travel
     float motor_heat = NAN, motor_heatloss_rate = 3.0f, motor_max_loaded_heatup_rate = 1.5f, motor_max_unloaded_heatup_rate = 0.3f;  // deg F per timer timeout
+    float heat_strobe_freq = 0.0f;
     float open_loop_attenuation_pc = 75.0f, thresh_loop_attenuation_pc = 45.0f, thresh_loop_hysteresis_pc = 2.0f;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, ThrottleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         ezread.squintf(ezread.highlightcolor, "Brake (p%d) pid %s, feedback: %s\n", pin, gas_pid_default ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
@@ -727,18 +728,16 @@ class BrakeControl : public JagMotor {
     float pressure_pc_to_si(float pc) {
         return map(pc, 0.0f, 100.0f, pressure->opmin(), pressure->opmax());
     }
-    void update_motorheat() { // i am probably going to scrap all this nonsense and just put another temp sensor on the motor
-        float added_heat, nowtemp, out_ratio;
+    void update_motorheat() {
+        float added_heat = 0.0f, nowtemp;
         static bool printed_error = false;
         if (motorheat_timer.expireset()) {
-            out_ratio = pc[Out] / 100.0f;
             if (brake_tempsens_exists) motor_heat = tempsens->val(loc::TempBrake);
             else {
                 nowtemp = tempsens->val(loc::TempAmbient);
-                if (std::isnan(motor_heat) && !std::isnan(nowtemp)) motor_heat = nowtemp; // ezread.squintf("Actively forecasting brake motor heat generation\n");
+                if (std::isnan(motor_heat)) motor_heat = std::isnan(nowtemp) ? motor_heat_min : nowtemp;
                 else {
-                    if (std::isnan(nowtemp)) added_heat = motor_heatloss_rate / -4.0f;
-                    else {
+                    if (!std::isnan(nowtemp)) {
                         motor_heat_min = nowtemp;
                         if (motor_heat > nowtemp) added_heat = -motor_heatloss_rate * (motor_heat - nowtemp) / nowtemp;
                     }
@@ -748,27 +747,20 @@ class BrakeControl : public JagMotor {
                         added_heat += map(pc[Out], brakemotor_duty_spec_pc, 100.0f, 0.0f, motor_max_loaded_heatup_rate);
                     motor_heat += added_heat;
                 }
-            }        
-            // duty_pc is intended for us to estimate the current duty of the actuator, as a percent. for now is proportional to temp reading
-            if (std::isnan(motor_heat)) {
-                duty_pc = NAN;
-                if (!printed_error) ezread.squintf(ezread.madcolor, "err: brake motor_heat value == NAN\n");
-                printed_error = true;        
             }
-            else {
-                motor_heat = constrain(motor_heat, tempsens->absmin(loc::TempBrake), tempsens->absmax(loc::TempBrake));            
-                duty_pc = map(motor_heat, motor_heat_min, motor_heat_max, 0.0f, brakemotor_duty_spec_pc);  // replace this w/ ongoing estimate
-                if (overtemp_shutoff_brake) { // here the brakemotor is shut off if overtemp. also in diag class the engine is stopped
-                    if (motor_heat > tempsens->opmax(loc::TempBrake)) {
-                        if (!printed_error) ezread.squintf(ezread.madcolor, "err: brake motor overheating. stop motor\n");
-                        printed_error = true;
-                        // set_ctrlmode(ActionHalt, false); // commented b/c is done in diag (it didn't seem to work here)       // stop the brake motor // pc[Out] = pc[Stop];  // set_ctrlmode(ActionPark, false);
-                        // ignition.request(ReqOff); // request kill ignition  // commented this out b/c is already in diag brake check
-                    }
-                    else printed_error = false;
+            motor_heat = constrain(motor_heat, tempsens->absmin(loc::TempBrake), tempsens->absmax(loc::TempBrake));
+            duty_pc = map(motor_heat, motor_heat_min, motor_heat_max, 0.0f, brakemotor_duty_spec_pc);
+            float heat_ratio = (motor_heat - motor_heat_min) / (motor_heat_max - motor_heat_min);
+            heat_strobe_freq = (heat_ratio > 0.5f) ? map(heat_ratio, 0.5f, 1.0f, 1.0f/3.0f, 5.0f) : 0.0f;
+            if (overtemp_shutoff_brake) {
+                if (motor_heat >= tempsens->opmax(loc::TempBrake)) {
+                    set_ctrlmode(CtrlDisable);
+                    if (!printed_error) ezread.squintf(ezread.sadcolor, "warn: brkmtr overtemp, halted\n");
+                    printed_error = true;
                 }
+                else printed_error = false;
             }
-        } // that's great to have some idea whether the motor is hot. but we need to take some actions in response
+        }
     }
     void check_simple_brake() {  // if simple_brake enabled, fixes any brake config settings incompatible with it
         if (simple_brake) {
