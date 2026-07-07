@@ -683,6 +683,7 @@ class BrakeControl : public JagMotor {
         pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
         pid_timeout = 40000; // needs to be long enough for motor to cause change in measurement, but higher means less responsive
         JagMotor::setup(_hotrc, _speedo, _batt);
+        reverse = true;  // Jag forward (high us) extends piston (releases); positive pc must map to low us (Jag reverse = contracts = presses)
         detect_tempsens();
         if (!std::isnan(tempsens->val(loc::TempAmbient))) motor_heat_min = tempsens->val(loc::TempAmbient) - 2.0f;
         derive();
