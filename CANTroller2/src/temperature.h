@@ -10,11 +10,12 @@ enum brakemotor_types { Nil=-1, Thomson=0, MotorFactoryStore=1, GoMotorWorld1=2,
     
 float temp_lims_f[NumTempCategories][NumMotorVals] {
     // changed opmin values all to 40 to avoid idiot lights. engine opmin was 125, wheel was 50, brake was 45
-    {  40.0f,  77.0f, 120.0f, 135.0f, NAN, -67.0f, 257.0f, 2.0f },  // [CatUnknown] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
-    {  40.0f,  77.0f, 120.0f, 135.0f, NAN, -67.0f, 257.0f, 2.0f },  // [CatAmbient] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
-    {  40.0f, 178.0f, 205.0f, 218.0f, NAN, -67.0f, 257.0f, 2.0f },  //  [CatEngine] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    // alarm value is where idiot lights light up 
+    {  40.0f,  77.0f, 135.0f, 120.0f, NAN, -67.0f, 257.0f, 2.0f },  // [CatUnknown] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0f,  77.0f, 135.0f, 120.0f, NAN, -67.0f, 257.0f, 2.0f },  // [CatAmbient] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0f, 178.0f, 218.0f, 205.0f, NAN, -67.0f, 257.0f, 2.0f },  //  [CatEngine] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
     {  40.0f,  77.0f, 170.0f, 145.0f, NAN, -67.0f, 257.0f, 2.0f },  //   [CatWheel] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin] (applies to all wheels)
-    {  45.0f,  77.0f, 115.0f, 125.0f, NAN, -67.0f, 257.0f, 2.0f },  //   [CatBrake] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  45.0f,  77.0f,  90.0f,  65.0f, NAN, -67.0f, 257.0f, 2.0f },  //   [CatBrake] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
 };  // float* degf[(int)loc::NumTempLocatio  ns][NumMotorVals];
 
 class TemperatureSensor {

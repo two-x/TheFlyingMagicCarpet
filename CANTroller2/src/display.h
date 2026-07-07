@@ -590,7 +590,7 @@ class Display {
             if (i < idiot_light_led_count) {  // the first group of displayed idiot lights are also represented by neopixels
                 neo->setIdiotLightSolidOnMode(i, *val_ptr);
                 if (*val_ptr) {
-                    if (val_ptr == &panicstop || val_ptr == &diag.err_sens[ErrRange][_TempEng] || val_ptr == &wheeltemperr) {
+                    if (val_ptr == &panicstop) {
                         neo->setIdiotLightCriticalAlertMode(i, true);
                     }
                     else if (val_ptr == &diag.err_sens_alarm[ErrLost]) {

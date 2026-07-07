@@ -241,6 +241,8 @@ class DiagRuntime {
     }
     int errorcount(int errtype) { return registered_errcount[errtype]; }
     bool battrangeerr;
+    bool eng_alarm_active = false, wheel_alarm_active = false, brake_alarm_active = false;
+    float eng_strobe_freq = 0.0f, wheel_strobe_freq = 0.0f, brake_strobe_freq = 0.0f;
   private:
     void register_device(int _enumname, float* _value, float* _min, float* _max, float* _margin) {  // registers devices that are children of ServoMotor class
         devices[_enumname][DiagVal] = _value;
@@ -291,12 +293,16 @@ class DiagRuntime {
             most_critical_sensor[t] = _None;
             err_sens_alarm[t] = false;
             err_sens_fails[t] = 0;
-            for (int s=0; s<NumTelemetryIdiots; s++)
-                if (err_sens[t][s]) {
+            for (int s=0; s<NumTelemetryIdiots; s++) {
+                bool flag = (running_on_devboard && s == _Temps && t == ErrLost)
+                    ? err_sens[ErrLost][_TempEng]  // devboard: only engine drives neopixel sensors-lost flash
+                    : err_sens[t][s];
+                if (flag) {
                     if (most_critical_sensor[t] == _None) most_critical_sensor[t] = s;
                     err_sens_alarm[t] = true;
                     err_sens_fails[t]++;
                 }
+            }
         }
     }
     void report_changes() {
@@ -344,11 +350,15 @@ class DiagRuntime {
     }
     void TempFailure() {
         static bool printed_error_wheel = false, printed_error_eng = false, printed_error_brake = false;
-        for (int sen=_TempEng; sen<=_TempAmb; sen++) {
-            checkrange(sen);
-            // bypassing ErrLost check because it's giving false positive for all 7 sensors on the car, even tho they are reading fine. FIX!
-            // setflag(i, ErrLost, !tempsens->detected(i));
-        }
+        for (int sen=_TempEng; sen<=_TempAmb; sen++) checkrange(sen);
+        // ErrLost: always flag individual sensors based on detection. Prior bug was passing telemetry_full indices to detected() instead of loc.
+        setflag(_TempEng,  ErrLost, !tempsens->detected(loc::TempEngine));
+        setflag(_TempAmb,  ErrLost, !tempsens->detected(loc::TempAmbient));
+        setflag(_TempBrake,ErrLost, !tempsens->detected(loc::TempBrake));
+        setflag(_TempWhFL, ErrLost, !tempsens->detected(loc::TempWheelFL));
+        setflag(_TempWhFR, ErrLost, !tempsens->detected(loc::TempWheelFR));
+        setflag(_TempWhRL, ErrLost, !tempsens->detected(loc::TempWheelRL));
+        setflag(_TempWhRR, ErrLost, !tempsens->detected(loc::TempWheelRR));
         bool wheel_err_range = false, wheel_err_other = false;
         int minwheel = 400, maxwheel = -400;
         for (int sen=_TempWhFL; sen<=_TempWhRR; sen++) {
@@ -360,6 +370,30 @@ class DiagRuntime {
             
         }
         wheeltemperr = wheel_err_range || wheel_err_other || ((maxwheel - minwheel) > wheeldifferr);  // set global wheel temp idiot light to include all wheel temp errors
+
+        float eng_val = *devices[_TempEng][DiagVal];
+        float eng_alarm_thresh = temp_lims_f[CatEngine][Alarm];
+        float eng_opmax = *devices[_TempEng][DiagMax];
+        eng_alarm_active = !std::isnan(eng_val) && eng_val >= eng_alarm_thresh;
+        eng_strobe_freq = (eng_alarm_active && eng_opmax > eng_alarm_thresh)
+            ? constrain(map(eng_val, eng_alarm_thresh, eng_opmax, 1.0f/3.0f, 1000.0f/120.0f), 1.0f/3.0f, 1000.0f/120.0f) : 0.0f;
+
+        float w_alarm_thresh = temp_lims_f[CatWheel][Alarm];
+        float w_opmax = temp_lims_f[CatWheel][OpMax];
+        bool any_wheel_at_alarm = false;
+        for (int sen = _TempWhFL; sen <= _TempWhRR; sen++)
+            if (*devices[sen][DiagVal] >= w_alarm_thresh) any_wheel_at_alarm = true;
+        wheel_alarm_active = any_wheel_at_alarm || ((maxwheel - minwheel) > wheeldifferr);
+        wheel_strobe_freq = (any_wheel_at_alarm && w_opmax > w_alarm_thresh)
+            ? constrain(map((float)maxwheel, w_alarm_thresh, w_opmax, 1.0f/3.0f, 1000.0f/120.0f), 1.0f/3.0f, 1000.0f/120.0f) : 0.0f;
+
+        float brk_val = *devices[_TempBrake][DiagVal];
+        float brk_alarm_thresh = temp_lims_f[CatBrake][Alarm];
+        float brk_opmax = *devices[_TempBrake][DiagMax];
+        brake_alarm_active = !std::isnan(brk_val) && brk_val >= brk_alarm_thresh;
+        brake_strobe_freq = (brake_alarm_active && brk_opmax > brk_alarm_thresh)
+            ? constrain(map(brk_val, brk_alarm_thresh, brk_opmax, 1.0f/3.0f, 1000.0f/120.0f), 1.0f/3.0f, 1000.0f/120.0f) : 0.0f;
+
         if (overtemp_shutoff_wheel) {
             bool any_wheel_overtemp = false;
             for (int sen = _TempWhFL; sen <= _TempWhRR; sen++)
