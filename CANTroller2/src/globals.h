@@ -140,7 +140,7 @@ bool limit_framerate = true;         // set to true to enforce a cap on screen f
 bool brake_before_starting = true;   // if true, the starter motor attempts to apply the brake pedal before turning on the starter motor
 bool check_brake_before_starting = true; // if true, the starter motor won't turn on until or unless it senses the brake pressure is enough. otherwise then after a timeout it will start anyway
 bool simple_brake = true;            // if true, will only use brake manually. hold mode is skipped. autostop, autohold, panic braking and starter braking are disabled, including 
-bool simple_brake_pid_release = false; // if true and simple_brake=true, then autorelease will use the pid loop. otherwise it goes at fixed speed to brkpos=zeropoint
+bool simple_brake_open_release = false; // if true and simple_brake=true, autorelease drives at fixed speed (_fixed_release_speed) to brkpos zeropoint. if false, honors ctrlmode (pid or open loop)
 bool simple_brake_before_starting = true; // if true, and simple_brake enabled, then must push trigger out (applying brake) before starter can turn on
 bool push_gas_when_starting = false; // will help start esp when engine is cold, in lieu of choke access, however if it lurches then disable. automatically disables if brake check is disabled
 bool two_click_starter = false;      // to start the starter requires two requests within a timeframe

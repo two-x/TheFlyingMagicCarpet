@@ -31,7 +31,7 @@ static std::string datapage_names[datapages::NumDataPages][disp_tuning_lines] = 
     { "TachPuls", "Tach Raw", "Tach Raw", "Spd Puls", "SpeedRaw", "SpeedRaw", "   Speed", __________, __________, "Tach Tau", "SpeedTau", "TachOMin", "TachOMax", "Spd OMin", "Spd OMax", },  // PgPuls
     { "Throttle", "Throttle", "Brk Motr", "Brk Motr", "Str Motr", "Str Motr", __________, __________, "ThrotCls", "ThrotOpn", "Brk Stop", "Brk Duty", "AirVOMax", "MAP OMin", "MAP OMax", },  // PgPWMs
     { " Gas Ctl", "Tach Tgt", "IdlBoost", "    Idle", "    Idle", "    Idle", __________, __________, __________, __________, "StTimOut", "StartGas", "MaxBoost", "ColdTemp", "Hot Temp", },  // PgIdle
-    { "Brk Duty", "Brk Heat", "HybBrake", "SimplBrk", "SBusePID", " Brk Ctl", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", " Gas Ctl", "CruisPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PgMotr    
+    { "Brk Duty", "Brk Heat", "HybBrake", "SimplBrk", "SBrelOpL", " Brk Ctl", "BkFeedbk", "BOpnMode", "BkPosLim", "BkMaxChg", " Gas Ctl", "CruisPID", "CrAdjMod", "CrusBrak", "DrivMode", },  // PgMotr    
     { "Pressure", "Pres Tgt", "Position", "Posn Tgt", "Hyb Targ", "OutRatio", "  P Term", "Integral", "  I Term", "  D Term", " Brk Ctl", "SamplTim", "Brake Kp", "Brake Ki", "Brake Kd", },  // PgBPID
     { "LinrTrig", "AngleTgt", "TachTarg", "Tach Err", "  P Term", "  I Term", "  D Term", " Gas Act", " Gas Ctl", "Lineariz", "Exponent", "AnglVelo", "  Gas Kp", "  Gas Ki", "  Gas Kd", },  // PgGPID
     { "Spd Targ", " Spd Err", "  P Term", "  I Term", "  D Term", "ThrotSet", __________, " Gas Ctl", "CrEnaPID", "Lineariz", "Exponent", "MaxAjRat", "Cruis Kp", "Cruis Ki", "Cruis Kd", },  // PgCPID
@@ -753,7 +753,7 @@ class Display {
             drawval(10, brake.motorheat(), brake.motorheatmin(), brake.motorheatmax());  // brake_spid_speedo_delta_adc, -range, range);
             drawval(11, brake.combined_read_pc, 0.0f, 100.0f);  // brake_spid_speedo_delta_adc, -range, range);
             draw_truth(12, simple_brake, binstyl::Yes);
-            draw_truth(13, simple_brake_pid_release, binstyl::Yes);
+            draw_truth(13, simple_brake_open_release, binstyl::Yes);
             draw_ascii(14, motorctrlcard[brake.ctrlmode]);
             draw_ascii(15, brakefeedbackcard[brake.feedback]);
             draw_ascii(16, openloopcard[brake.openloop_mode]);
@@ -1132,7 +1132,7 @@ class Tuner {
         }
         else if (datapage == PgMotr) {
             if (sel == 3) tune(&simple_brake, id);
-            else if (sel == 4) tune(&simple_brake_pid_release, id);
+            else if (sel == 4) tune(&simple_brake_open_release, id);
             else if (sel == 5) brake.set_ctrlmode(tune(brake.ctrlmode, id, 0, NumMotorCtrls-1, true));
             else if (sel == 6) brake.set_feedback(tune(brake.feedback, id, 0, NumBrakeFB-1, true));
             else if (sel == 7) brake.set_openmode(tune(brake.openloop_mode, id, 0, NumOpenLoops-1, true));

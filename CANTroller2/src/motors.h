@@ -645,7 +645,7 @@ class BrakeControl : public JagMotor {
     float press_kp = 0.54f; // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float press_ki = 0.10f; // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float press_kd = 0.0f;  // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
-    float posn_kp = 30.3f;  // PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
+    float posn_kp = 22.0f;  // was 30.3f - PID proportional coefficient (brake). How hard to push for each unit of difference between measured and desired pressure (unitless range 0-1)
     float posn_ki = 5.5f;   // PID integral frequency factor (brake). How much harder to push for each unit time trying to reach desired pressure  (in 1/us (mhz), range 0-1)
     float posn_kd = 0.0f;   // PID derivative time factor (brake). How much to dampen sudden braking changes due to P and I infuences (in us, range 0-1)
     float _autostop_smooth_initial_pc = 60.0f; // default initial applied braking to auto-stop or auto-hold the car (in percent of op range)
@@ -932,17 +932,23 @@ class BrakeControl : public JagMotor {
             carstop(true); // this will set the autostopping flag as appropriate, and set increasing brake pressure target if so
             if (!autostopping) set_action(ActionHalt); // after AutoStop mode stops the car or times out, then stop driving the motor
         }
-        else if (motoraction == ActionRelease) { // this function always uses open loop. PIDs are on hold
+        else if (motoraction == ActionRelease) {
             if (feedback_enabled[FBPosition]) releasing = goto_fixed_position(brkpos->zeropoint_pc(), brkpos->val());
             else if (feedback_enabled[FBPressure]) releasing = goto_fixed_position(pressure->zeropoint_pc(), pressure->val());
             else releasing = false;
-            return releasing ? _fixed_release_speed : pc[Stop];
+            if (!releasing) return pc[Stop];
+            if (simple_brake_open_release) return _fixed_release_speed;
+            if (feedback_enabled[FBPosition]) set_target(brkpos->zeropoint_pc());
+            else if (feedback_enabled[FBPressure]) set_target(pressure->zeropoint_pc());
         }
-        else if (motoraction == ActionPark) { // this function always uses open loop
+        else if (motoraction == ActionPark) {
             if (feedback_enabled[FBPosition]) parking = goto_fixed_position(brkpos->parkpos_pc(), brkpos->val());
             else if (feedback_enabled[FBPressure]) parking = goto_fixed_position(pressure->parkpos_pc(), pressure->val());
             else parking = false;
-            return parking ? _fixed_release_speed : pc[Stop];
+            if (!parking) return pc[Stop];
+            if (simple_brake_open_release) return _fixed_release_speed;
+            if (feedback_enabled[FBPosition]) set_target(brkpos->parkpos_pc());
+            else if (feedback_enabled[FBPressure]) set_target(pressure->parkpos_pc());
         }
         else if (motoraction == ActionManual) {
             if (hotrc->joydir(Vert) == HrcDn) set_target(map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], brkpos->zeropoint_pc(), 100.0f)); // scale trigger to target range starting at zeropoint so any push is pressing not releasing
@@ -952,7 +958,10 @@ class BrakeControl : public JagMotor {
                 releasing = false;
                 if (feedback_enabled[FBPosition]) releasing = brkpos->pc() > brkpos->zeropoint_pc() + target_margin_pc;
                 else if (feedback_enabled[FBPressure]) releasing = pressure->pc() > pressure->zeropoint_pc() + target_margin_pc;
-                return releasing ? _fixed_release_speed : pc[Stop];
+                if (!releasing) return pc[Stop];
+                if (simple_brake_open_release) return _fixed_release_speed;
+                if (feedback_enabled[FBPosition]) set_target(brkpos->zeropoint_pc());
+                else if (feedback_enabled[FBPressure]) set_target(pressure->zeropoint_pc());
             }
             else {
                 if (feedback_enabled[FBPosition]) set_target(brkpos->zeropoint_pc());
