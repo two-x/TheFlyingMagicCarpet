@@ -788,8 +788,8 @@ class BrakePositionSensor : public AnalogSensor {
         _convmethod = AbsLimMap;  // for map conversions, need to set abslim for si and native separately, but don't need mfactor/boffset
         set_abslim(1.22f, 7.26f, false);            // need false argument to prevent native autocalculation
         set_abslim_native(1885.0f, 2933.0f, false); // need false argument to prevent si autocalculation
-        set_oplim(1.22f, 5.9f);
-        set_zeropoint(5.7f);
+        set_oplim(1.22f, 7.0f);
+        set_zeropoint(5.9f);
         set_ema_alpha(0.35f);
         set_margin(0.2f);  // in inches
         _default_value_si = opmax();
@@ -979,7 +979,7 @@ class Tachometer : public PulseSensor {
         float mfact = 60.0f / _freqfactor;  // 1 Hz = 1 pulse/sec * 60 sec/min / 0.125 pulse/rot = 480 rot/min, (so 480 rpm/Hz)
         set_conversions(mfact, 0.0f);
         set_abslim(0.0f, 4800.0f); // estimating the highest rpm we could conceivably ever see from the engine. but may lower b/c the max readable engine speed also defines the pulse debounce rejection threshold. the lower this speed, the more impervious to bouncing we are
-        set_absmax_us(430000.0f);  // this sets the max pulse-to-pulse period to be considered as engine stopped
+        set_absmax_us(1000000.0f);  // this sets the max pulse-to-pulse period to be considered as engine stopped. at idle ~590rpm pin period is 814ms; hot idle ~500rpm is 960ms, so needs to exceed that with margin
         set_oplim(0.0f, 3600.0f);  // aka redline (from mule specs), max acceptable engine rotation speed (tunable) corresponds to 1 / (3600 rpm * 1/60 min/sec) = 60 Hz
         _governmax_rpm = opmax() * governor / 100.0f;
         set_ema_taulim(500.0f, 200000.0f);
@@ -1225,7 +1225,7 @@ class RMTInput {  // note: for some reason if we ever stop reading our rmt objec
 };
 class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format the kids will just love
   public:
-    bool _verbose = true;      // causes console reports of switch press actions and event action
+    bool _verbose = false;      // causes console reports of switch press actions and event action
     float absmin_us = 875.0f;  // min configurable pulsewidth for the hotrc (w/ ~5us extra margin)
     float absmax_us = 2132.0f; // using older "v07" receiver. max configurable pulsewidth for the hotrc (w/ ~5us extra margin)
     // float absmax_us = 2138.0f; // using newer "v01" receiver. max configurable pulsewidth for the hotrc (w/ ~5us extra margin)

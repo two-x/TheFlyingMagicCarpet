@@ -20,33 +20,6 @@ neorgb_t color_to_neo(uint16_t color565) { return neorgb_t((color565 & 0xf800) >
 neorgb_t color_to_neo(uint8_t color332) { return neorgb_t(color332 & 0xe0, (color332 & 0x1c) << 3, (color332 & 0x3) << 6); }
 
 class IdiotLights {
-  private:
-    static constexpr int iconcount = 36;
-    bool* vals[iconcount] = {
-        // row 1 onscreen.  the 1st 7 of these are true hazard lights (lit only on error), also copied onto the last 7 neopixel idiot lights
-        &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, &panicstop,
-        hotrc.radiolost_ptr(), hotrc.radiolost_untested_ptr(), &brake.autostopping, &brake.autoholding, &parking, &releasing,
-        // row 2 onscreen.  these are all just informational values
-        &cruise_adjusting, &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(),
-        tach.pin_level_ptr(), speedo.stopped_ptr(), tach.stopped_ptr(), &nowtouch, &shutting_down, &running_on_devboard,
-        // row 3 onscreen.  this row has one light per actuator or sensor, lit when there's any kind of error w/ that device
-        &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
-        &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_GPIO], &sensidiots[_Other],
-    };
-    bool lastvals[iconcount];
-    uint8_t colors[2][iconcount] = {
-        { 0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01,
-          0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01,
-          0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01, }, // [Off] dim colors
-        { 0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b,
-          0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b,
-          0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b, }  // [On] bright colors
-    };
-    std::string letter_strings[iconcount] = {
-        "SL", "SR", "\xf7""E", "\xf7""W", "RC", "P\x13", "SI", "Pk", "AS", "AH", "Aj", "HM",
-        "St", "FP", "Pn", "NF", "SM", "TM", "Bt", "NT", "eA", "WD", "Dv", "Pw",
-        "Th", "Br", "St", "RC", "Sp", "Tc", "Pr", "Ps", "Tm", "Bt", "Ot", "IO",
-    };
   public:
     IdiotLights() { for (int i=0; i<iconcount; i++) lastvals[i] = *vals[i]; }
     void setup() {
@@ -61,6 +34,34 @@ class IdiotLights {
     bool* lastval_ptr(int index) { return &lastvals[index]; }
     uint8_t color(int index, int state=On) { return colors[state][index]; }
     std::string letter_string(int index) { return letter_strings[index]; }
+  private:
+    static constexpr int iconcount = 36;
+    bool lastvals[iconcount];
+    uint8_t colors[2][iconcount] = {
+        { 0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01,
+          0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01,
+          0x21, 0x41, 0x61, 0x40, 0x44, 0x68, 0x48, 0x28, 0x08, 0x09, 0x05, 0x01, }, // [Off] dim colors
+        { 0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b,
+          0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b,
+          0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8, 0x9c, 0x1d, 0x1b, 0x13, 0x0b, }  // [On] bright colors
+    };
+    std::string letter_strings[iconcount] = {
+        "SL", "SR", "\xf7""E", "\xf7""W", "RC", "P\x13", "SI", "Pk", "AS", "AH", "Aj", "HM",
+        "St", "FP", "Pn", "NF", "SM", "TM", "Bt", "NT", "eA", "WD", "Dv", "Pw",
+        "Th", "Br", "St", "RC", "Sp", "Tc", "Pr", "Ps", "Tm", "Bt", "Ot", "IO",
+    };
+    bool* vals[iconcount] = {
+        // row 1 onscreen.  the 1st 7 of these are true hazard lights (lit only on error), also copied onto the last 7 neopixel idiot lights
+        &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.err_sens[ErrRange][_TempEng], &diag.err_sens[ErrRange][_TempBrake], &wheeltemperr, &panicstop,
+        hotrc.radiolost_ptr(), hotrc.radiolost_untested_ptr(), &brake.autostopping, &brake.autoholding, &parking, &releasing,
+        // row 2 onscreen.  these are all just informational values
+        &cruise_adjusting, &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(),
+        tach.pin_level_ptr(), speedo.stopped_ptr(), tach.stopped_ptr(), &nowtouch, &shutting_down, &running_on_devboard,
+        // row 3 onscreen.  this row has one light per actuator or sensor, lit when there's any kind of error w/ that device
+        &sensidiots[_Throttle], &sensidiots[_BrakeMotor], &sensidiots[_SteerMotor], &sensidiots[_HotRC], &sensidiots[_Speedo], &sensidiots[_Tach],
+        &sensidiots[_BrakePres], &sensidiots[_BrakePosn], &sensidiots[_Temps], &diag.battrangeerr, &sensidiots[_GPIO], &sensidiots[_Other],
+    };
+  public:
     uint8_t icon[iconcount][11] = {
         // row 1
         { 0x6e, 0x6b, 0x6b, 0x3b, 0x00, 0x3e, 0x71, 0x59, 0x4d, 0x47, 0x3e, },  // "S" w/ crossout symbol       // &diag.err_sens_alarm[ErrLost]

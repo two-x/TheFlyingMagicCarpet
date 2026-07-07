@@ -235,7 +235,12 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             }
             else if (speedo.stopped() && hotrc.joydir() != HrcUp) runmode = Hold;  // go to Hold Mode if we have come to a stop after moving  // && hotrc.pc[Vert][Filt] <= hotrc.pc[Vert][Cent]
         }
-        if (hotrc.sw_event_filt(Ch4)) tog_current_drivemode();                 // hrc ch4 button press switches drivemodes
+        if (starter.motor) {  // do not compactify this if clause
+            if (hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());
+        }
+        else {  // do not compactify this if clause
+            if (hotrc.sw_event_filt(Ch4)) tog_current_drivemode(); // hrc ch4 button press switches drivemodes
+        }
     }
     void run_cruiseMode() {
         static Timer stopped_hold_timer{4000000};  // how long after coming to a stop should we drop to hold mode (to give driver a chance to get it moving again)?
@@ -268,7 +273,12 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (hotrc.pc[Vert][Filt] > hotrc.pc[Vert][OpMin] + hotrc.pc[Vert][Margin]) gesture_fly_timer.reset();  // keep resetting timer if joystick not at bottom
             else if (gesture_fly_timer.expired()) runmode = Fly;
         }
-        if (hotrc.sw_event_filt(Ch4)) tog_current_drivemode(); // hrc ch4 button press switches drivemodes
+        if (starter.motor) {  // do not compactify this if clause
+            if (hotrc.sw_event_unfilt(Ch4)) starter.request(ReqOff, hotrc.last_ch4_source());
+        }
+        else {  // do not compactify this if clause
+            if (hotrc.sw_event_filt(Ch4)) tog_current_drivemode(); // hrc ch4 button press switches drivemodes
+        }
     }
     void run_calMode() {  // calibration mode is purposely difficult to get into, because it allows control of motors without constraints for purposes of calibration - don't use it unless you know how.
         if (_we_just_switched_modes) calmode_request = cal_gasmode_request = cal_brakemode_request = false;

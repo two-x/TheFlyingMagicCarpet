@@ -14,7 +14,6 @@ NeoPixelAnimator neoanimator(3); // Channel 0 for runmode pulse, Channel 1 for i
 static const RgbColor BLACK = RgbColor(0);
 static const uint8_t idiot_light_colors[] = {0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8};
 
-
 class IdiotLight {
 private:
     bool _verbose = false;
@@ -28,34 +27,22 @@ public:
 
     IdiotLight(uint8_t led, RgbColor solidColor)
         : led(led), solidColor(solidColor), flashColorCount(NumTelemetryIdiots) {
-        for (uint8_t i = 0; i < NumTelemetryIdiots; i++) {
-            flashColors[i] = BLACK;
-        }
+        for (uint8_t i = 0; i < NumTelemetryIdiots; i++) flashColors[i] = BLACK;
         if (_verbose) ezread.squintf("IdiotLight created on LED %d with base color %d\n", led, solidColor);
     }
-
     void setFlashColor(uint8_t index, RgbColor color) {
-        if (index < NumTelemetryIdiots) {
-            flashColors[index] = color;
-        }
+        if (index < NumTelemetryIdiots) flashColors[index] = color;
     }
-
     void resetFlashColors() {
         flashColorCount = 0;
-        for (uint8_t i = 0; i < NumTelemetryIdiots; i++) {
-            flashColors[i] = BLACK;
-        }
+        for (uint8_t i = 0; i < NumTelemetryIdiots; i++) flashColors[i] = BLACK;
     }
-
     bool hasFlashColors() {
         for (uint8_t i = 0; i < NumTelemetryIdiots; i++) {
-            if (flashColors[i].R != 0 || flashColors[i].G != 0 || flashColors[i].B != 0) {
-                return true;
-            }
+            if (flashColors[i].R != 0 || flashColors[i].G != 0 || flashColors[i].B != 0) return true;
         }
         return false;
     }
-
     RgbColor getFlashColor(float time) {
         // 6.5 second cycle, each erroring sensor flashes once
         float cycle_time = fmod(time, 6.5f);
@@ -69,10 +56,7 @@ public:
                 nonBlackCount++;
             }
         }
-        
-        if (nonBlackCount == 0) {
-            return solidColor;  // No flash colors, return solid color
-        }
+        if (nonBlackCount == 0) return solidColor;  // No flash colors, return solid color
         
         // Divide cycle into N equal slots, one per erroring sensor — exactly one flash each
         float pos_ms = cycle_time * 1000.0f;
@@ -87,7 +71,6 @@ public:
         return solidColor;
     }
 };
-
 // Global idiot lights array
 // When placed inside the NeopixelStrip class, it's first member gets corrupted wtf so it lives out here for now.
 IdiotLight idiotlights[idiot_light_led_count] = {
@@ -95,7 +78,6 @@ IdiotLight idiotlights[idiot_light_led_count] = {
     IdiotLight(0, RgbColor(0)), IdiotLight(0, RgbColor(0)), IdiotLight(0, RgbColor(0)),
     IdiotLight(0, RgbColor(0))
 };
-
 class NeopixelStrip {
 private:
     enum anim { AnimRunmode=0, AnimIdiots=1, AnimCylon=2, NumAnims=3 };  // so humans can tell which animation we're talking about
@@ -141,7 +123,84 @@ private:
     void startIdiotLightsAnimation() {
         // Start the idiot lights animation that loops through each light
         neoanimator.StartAnimation(AnimIdiots, idiot_lights_animation_duration_ms, [this](const AnimationParam& param) {
-            // Loop through idiot lights - for now just iterate, do nothing
+            if (flashdemo) {
+                // demo_val oscillates 0→1→0 once per animation cycle — the "value being encoded"
+                float t = param.progress * (idiot_lights_animation_duration_ms / 1000.0f);
+                float demo_val = (sinf(param.progress * 2.0f * PI) + 1.0f) * 0.5f;
+
+                // Light 0 — 4-bit bitwise data: 300ms start gap, 4×500ms bit slots (bright=1, dim flicker=0), 500ms end gap
+                {
+                    uint8_t bits = (uint8_t)(demo_val * 15.0f);
+                    float sub = fmodf(t, 2.8f);
+                    RgbColor c = BLACK;
+                    if (sub >= 0.3f && sub < 2.3f) {
+                        int bit_idx = (int)((sub - 0.3f) / 0.5f);
+                        bool bit_on = (bits >> (3 - bit_idx)) & 1;
+                        float bit_phase = fmodf(sub - 0.3f, 0.5f);
+                        if (bit_on) c = idiotlights[0].solidColor;
+                        else if (bit_phase < 0.12f) c = RgbColor(8, 20, 50);  // dim flicker marks a 0-bit
+                    }
+                    neoobj.SetPixelColor(idiotlights[0].led, c);
+                }
+
+                // Light 1 — Duty-cycle value: fixed 4 Hz, on-fraction = demo_val (0%=min, 100%=max)
+                {
+                    bool on = fmodf(t * 4.0f, 1.0f) < demo_val;
+                    neoobj.SetPixelColor(idiotlights[1].led, on ? idiotlights[1].solidColor : BLACK);
+                }
+
+                // Light 2 — Danger strobe overlay: amber base + brief white flashes; rate 0.5→8 Hz as danger grows
+                {
+                    float freq = 0.5f + demo_val * 7.5f;
+                    bool strobe = fmodf(t * freq, 1.0f) < 0.06f;
+                    neoobj.SetPixelColor(idiotlights[2].led, strobe ? RgbColor(255, 255, 255) : idiotlights[2].solidColor);
+                }
+
+                // Light 3 — Blackout count 1-4: steady violet with N brief black dips per 2s cycle
+                {
+                    int n_dips = 1 + (int)(demo_val * 3.999f);
+                    float sub = fmodf(t, 2.0f);
+                    RgbColor c = idiotlights[3].solidColor;
+                    for (int n = 0; n < n_dips; n++) {
+                        float gap_start = 0.15f + n * 0.22f;
+                        if (sub >= gap_start && sub < gap_start + 0.08f) { c = BLACK; break; }
+                    }
+                    neoobj.SetPixelColor(idiotlights[3].led, c);
+                }
+
+                // Light 4 — Blink-rate urgency: 50% duty, rate scales 0.3 Hz (calm) → 6 Hz (critical)
+                {
+                    float freq = 0.3f + demo_val * 5.7f;
+                    bool on = fmodf(t * freq, 1.0f) < 0.5f;
+                    neoobj.SetPixelColor(idiotlights[4].led, on ? idiotlights[4].solidColor : BLACK);
+                }
+
+                // Light 5 — Dual-color alternating: cyan/orange swap at 1→5 Hz; fast rate = high urgency/ambiguity
+                {
+                    float freq = 1.0f + demo_val * 4.0f;
+                    bool first = fmodf(t * freq, 1.0f) < 0.5f;
+                    neoobj.SetPixelColor(idiotlights[5].led, first ? RgbColor(0, 200, 200) : RgbColor(255, 80, 0));
+                }
+
+                // Light 6 — Color-temperature hue shift: green→yellow→red encodes value proximity to limit
+                {
+                    uint8_t r, g;
+                    if (demo_val < 0.5f) {
+                        float f = demo_val * 2.0f;
+                        r = (uint8_t)(f * 210.0f);
+                        g = 200;
+                    } else {
+                        float f = (demo_val - 0.5f) * 2.0f;
+                        r = (uint8_t)(210.0f + f * 30.0f);
+                        g = (uint8_t)((1.0f - f) * 200.0f);
+                    }
+                    neoobj.SetPixelColor(idiotlights[6].led, RgbColor(r, g, 0));
+                }
+
+                this->progressAnim[AnimIdiots] = param.progress;
+                return;
+            }
+            // Normal idiot-lights operation below
             for (int i = 0; i < idiot_light_led_count; i++) {
                 if (idiotlights[i].criticalAlertMode) {
                     // Panic mode: 3 pulses in 1 second, then 2 second break (total 3 second cycle)
@@ -174,7 +233,6 @@ private:
             this->progressAnim[AnimIdiots] = param.progress;
         });
     }
-
     void startCylonAnimation() {
         // Smooth Cylon: asymmetric Gaussian centered on floating-point position.
         // Both sides have zero slope at the peak (C1 continuous) so there is no
@@ -207,15 +265,12 @@ private:
             this->progressAnim[AnimCylon] = param.progress;
         });
     }
-
     void clear() {
         for (int i = 0; i < striplength; i++) {
             neoobj.SetPixelColor(i, RgbColor(0, 0, 0));
         }
         neoobj.Show();
     }
-
-
     void setPixelColor(int index, RgbColor color) {
         if (index >= 0 && index < striplength) {
             neoobj.SetPixelColor(index, color);
@@ -237,17 +292,13 @@ public:
             neoobj.SetPixelColor(idiotlights[i].led, idiotlights[i].solidColor);
         }
         neoobj.Show();
-
         // test_pattern();   // removing bootup test pattern
-
         // demo mode for testing:
         // idiotlights[0].warningMode = true;
         // idiotlights[1].panicMode = true;
         // idiotlights[4].warningMode = true;
         // idiotlights[4].warningFlashColor = RgbColor(255, 0, 0);
-
     }
-
     void test_pattern() {
         for (int color = 0; color < 3; color++) {
             for (int i = 0; i < striplength; i++) {
@@ -260,13 +311,11 @@ public:
             neoobj.Show();
             delay(333);
         }
-
         for (int i = 0; i < striplength; i++) {
             neoobj.SetPixelColor(i, RgbColor(0, 0, 0));
         }
         neoobj.Show();
     }
-
     void setIdiotLightSolidOnMode(int idiot_index, bool on) {
         if (idiot_index < 0 || idiot_index >= idiot_light_led_count) return;
         idiotlights[idiot_index].solidOnMode = on;
@@ -274,50 +323,45 @@ public:
             setIdiotLightResetFlashColors(idiot_index);
         }
     }
-
     void setIdiotLightFlashColor(int idiot_index, uint8_t colorIndex, RgbColor color) {
         if (idiot_index >= 0 && idiot_index < idiot_light_led_count) {
             idiotlights[idiot_index].setFlashColor(colorIndex, color);
         }
     }
-
     void setIdiotLightResetFlashColors(int idiot_index) {
         if (idiot_index >= 0 && idiot_index < idiot_light_led_count) {
             idiotlights[idiot_index].resetFlashColors();
         }
     }
-
-  void setIdiotLightCriticalAlertMode(int idiot_index, bool panic_mode) {
+    void setIdiotLightCriticalAlertMode(int idiot_index, bool panic_mode) {
         idiotlights[idiot_index].criticalAlertMode = panic_mode;
     }
 
-    ~NeopixelStrip() {
-        // Don't delete neoobj since it points to global neoobj
-    }
+    ~NeopixelStrip() {}  // Don't delete neoobj since it points to global neoobj
 
     void flashdemo_ena(bool ena) {
         flashdemo = ena;
         if (flashdemo) {
-            idiotlights[0].criticalAlertMode = true;
-            idiotlights[1].criticalAlertMode = true;
-            idiotlights[4].criticalAlertMode = true;
-            // idiotlights[4].warningFlashColor = RgbColor(255, 0, 0);
-            // for (int i=1; i<=6; i++) setflash(i, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
-            // setflash(4, 8, 8, 8, 20);            // brightness toggle in a continuous squarewave
-            // setflash(5, 3, 1, 2, 100, 0xffffff); // three super-quick bright white flashes
-            // setflash(6, 2, 5, 5, 0, 0);          // two short black pulses
-        }
-        else {                                   // cancel any current blink programs on these leds
-            idiotlights[0].criticalAlertMode = false;
-            idiotlights[1].criticalAlertMode = false;
-            idiotlights[4].criticalAlertMode = false;
-            // for (int i=1; i<=6; i++) setflash(i, 0);
-            // setflash(4, 0);
-            // setflash(5, 0);
-            // setflash(6, 0);
+            for (int i = 0; i < idiot_light_led_count; i++) {
+                idiotlights[i].solidOnMode = true;
+                idiotlights[i].criticalAlertMode = false;
+                idiotlights[i].resetFlashColors();
+            }
+            // Each light gets a base color suited to its demo style
+            idiotlights[0].solidColor = RgbColor(  0,  90, 255);  // blue   — bitwise 4-bit data
+            idiotlights[1].solidColor = RgbColor(  0, 200,  40);  // green  — duty-cycle value
+            idiotlights[2].solidColor = RgbColor(220, 100,   0);  // amber  — danger strobe overlay
+            idiotlights[3].solidColor = RgbColor(160,   0, 200);  // violet — blackout count 1-4
+            idiotlights[4].solidColor = RgbColor(240,  20,   0);  // red    — blink-rate urgency
+            idiotlights[5].solidColor = RgbColor(  0, 200, 200);  // cyan   — dual-color choice/urgency
+            idiotlights[6].solidColor = RgbColor(  0, 200,  40);  // green (shifts to red) — color-temp value
+        } else {
+            for (int i = 0; i < idiot_light_led_count; i++) {
+                idiotlights[i].criticalAlertMode = false;
+                idiotlights[i].solidColor = color_to_neo(idiot_light_colors[i]);  // restore original colors
+            }
         }
     }
-
     void update() {
         static Timer update_timer{20000}; // 20000us = 20ms update is 50 fps, fast enough to look smooth i think
         static int last_runmode = -1;
@@ -337,8 +381,7 @@ public:
                     neoanimator.StopAnimation(AnimCylon);
                     startIdiotLightsAnimation();
                 }
-            }
-            
+            }       
             // restart animations when they finish so they cycle indefinitely
             // (this replaces the previous recursive approach where animations cycled themselves)
             //
@@ -350,7 +393,7 @@ public:
             // Directly apply basic on/off state each tick so pixels 3-9 always
             // mirror solidOnMode without relying solely on the animation cycle.
             // (Cylon owns pixels 3-9 in LowPower; animation still owns flash/critical cases.)
-            if (runmode != LowPower) {
+            if (runmode != LowPower && !flashdemo) {
                 for (int i = 0; i < idiot_light_led_count; i++) {
                     if (!idiotlights[i].criticalAlertMode && !idiotlights[i].hasFlashColors()) {
                         neoobj.SetPixelColor(idiotlights[i].led,
