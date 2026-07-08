@@ -90,7 +90,7 @@ float massairflow(float _map=NAN, float _airvelo=NAN, float _ambient=NAN) {  // 
     if (std::isnan(_ambient)) {
         if (new_velo == maf_velo_last && new_map == maf_map_last) return maf_gps;  // if no new sensor readings, don't recalculate the same value
         temp = tempsens.val(loc::TempAmbient);
-        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::TempBrake);
+        if (std::isnan(temp) && running_on_devboard) temp = tempsens.val(loc::TempEngine);
         if (std::isnan(temp)) return NAN;  // Avoid crashing due to trying to read absent sensor
     }
     maf_velo_last = new_velo;

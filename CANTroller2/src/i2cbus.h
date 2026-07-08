@@ -76,6 +76,10 @@ class I2C {
     bool not_my_turn(int checkdev) {
         return (use_i2c_baton && (checkdev != i2cbaton));
     }
+    void reinit_wire() {  // call after any library (e.g. LovyanGFX touch) that may reinitialize I2C port 0
+        Wire.begin(_sda_pin, _scl_pin, i2c_frequency);
+        Wire.setTimeOut(25);
+    }
 };
 
 // map.h - an i2c sensor to track the air pressure in our intake manifold. This, together with the air velocity
@@ -97,6 +101,7 @@ class SparkFun_MicroPressure {
     int err_status() { return _errorflag; };
     float get_pressure() { return _pressure; };
   private:
+    bool _verbose = false;
     bool _respect_integrity_errors = false; // workaround due to constant integrity flag errors on my devboard - TODO debug this!
 
     static constexpr uint8_t DEFAULT_ADDRESS = 0x18;
@@ -149,70 +154,141 @@ uint8_t SparkFun_MicroPressure::readStatus(void) {
     return _i2cPort->read();
 }
 float SparkFun_MicroPressure::readPressure(MapUnits units, bool blocking) {
-    // static Timer read_timer{500000};  // half-second timeout to avoid hanging during failed read // WIP debugging
     if (_errorflag != MapErrWaiting) {
+        // Issue measurement command
         _i2cPort->beginTransmission(_addr);
         _i2cPort->write((uint8_t)0xAA);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->write((uint8_t)0x00);
         _i2cPort->endTransmission();
-    }
-    if (_eoc != -1) { // Use GPIO pin if defined
-        while (!digitalRead(_eoc)) {
-            if (!blocking) {
-                _errorflag = MapErrWaiting;
-                return NAN;  // return _pressure;  may be better to return last read good value while waiting for new one
-            }
-            delay(1);
+        if (!blocking) {
+            // Defer read to next call after _mapretry_timeout (>=8ms > 6.4ms max conversion time).
+            // Reading status immediately after endTransmission() is a race: the sensor may not have
+            // asserted BUSY yet, causing the poll to see "not busy" and read stale/garbage bytes.
+            _errorflag = MapErrWaiting;
+            return NAN;
         }
+        delay(10);  // blocking: wait beyond max conversion time before reading (6.4ms max at 3.3V)
     }
-    else { // Check status byte if GPIO is not defined
-        _statusbyte = readStatus();
-        while((_statusbyte & BUSY_FLAG) && (_statusbyte != 0xff)) {
-            if (!blocking) {
-                _errorflag = MapErrWaiting;
-                return NAN;  // return _pressure;  may be better to return last read good value while waiting for new one
-            }
-            delay(1);
-            _statusbyte = readStatus();
-        }
-    }
-    _i2cPort->requestFrom(_addr, (uint8_t)4); // WIP debugging
+    // Non-blocking 2nd call: at least _mapretry_timeout has elapsed since the command, sensor is done.
+    // Blocking: waited 10ms above. In both cases, read 4 bytes directly without status polling.
+    _errorflag = MapErrNone;
+    _i2cPort->requestFrom(_addr, (uint8_t)4);
     _statusbyte = _i2cPort->read();
-
-    // if ((_statusbyte & INTEGRITY_FLAG) || (_statusbyte & MATH_SAT_FLAG)) return NAN; //  check memory integrity and math saturation bit
-    
+    if (_statusbyte & BUSY_FLAG) {  // shouldn't happen, but handle gracefully (retry next call)
+        for (int i = 0; i < 3; i++) _i2cPort->read();
+        _errorflag = MapErrWaiting;
+        return NAN;
+    }
     if (_statusbyte & MATH_SAT_FLAG) {
         _errorflag = MapErrMath;
         static bool err_printed = false;
-        if (!err_printed) ezread.squintf(ezread.sadcolor, "warn: mapsens math sat flag (0x%02X)\n", _statusbyte);
-        err_printed = true;  // print error only once on first read. it will spam otherwise
-        // return NAN;  // math sat errors seem fairly rare (unlike integrity errs), so we can skip reading when we get one. TODO debug this!
+        if (!err_printed && _verbose) {
+            ezread.squintf(ezread.sadcolor, "warn: mapsens math sat flag (0x%02X)\n", _statusbyte);
+            err_printed = true;
+        }
     }
     else if (_statusbyte & INTEGRITY_FLAG) {
         _errorflag = MapErrIntegrity;
         static bool err_printed = false;
-        if (!err_printed) ezread.squintf(ezread.sadcolor, "warn: mapsens integrity flag (0x%02X)\n", _statusbyte);
-        err_printed = true;  // print error only once on first read. it will spam otherwise
-        // if (_respect_integrity_errors) return NAN;
+        if (!err_printed && _verbose) {
+            ezread.squintf(ezread.sadcolor, "warn: mapsens integrity flag (0x%02X)\n", _statusbyte);
+            err_printed = true;
+        }
     }
-    else _errorflag = MapErrNone;
-
     int reading = 0;
-    for (int i=0; i<3; i++) {  //  read 24-bit pressure
+    for (int i = 0; i < 3; i++) {
         reading |= _i2cPort->read();
         if (i != 2) reading = reading<<8;
     }
     _pressure = ((float)reading - (float)OUTPUT_MIN) * (_maxPsi - _minPsi);
     _pressure = (_pressure / (OUTPUT_MAX - OUTPUT_MIN)) + _minPsi;
-    if (units == MapUnitPA)        _pressure *= 6894.7573f; //Pa (Pascal)
-    else if (units == MapUnitKPA)  _pressure *= 6.89476f;   //kPa (kilopascal)
-    else if (units == MapUnitTORR) _pressure *= 51.7149f;   //torr (mmHg)
-    else if (units == MapUnitINHG) _pressure *= 2.03602f;   //inHg (inch of mercury)
-    else if (units == MapUnitATM)  _pressure *= 0.06805f;   //atm (atmosphere)
-    else if (units == MapUnitBAR)  _pressure *= 0.06895f;   //bar
+    if (units == MapUnitPA)        _pressure *= 6894.7573f;
+    else if (units == MapUnitKPA)  _pressure *= 6.89476f;
+    else if (units == MapUnitTORR) _pressure *= 51.7149f;
+    else if (units == MapUnitINHG) _pressure *= 2.03602f;
+    else if (units == MapUnitATM)  _pressure *= 0.06805f;
+    else if (units == MapUnitBAR)  _pressure *= 0.06895f;
     return _pressure;
 }
+
+// FS3000 air velocity sensor - inlined from SparkFun_FS3000_Arduino_Library by Pete Lewis (SparkFun, 2021, MIT)
+// Inlined here so the fix to readRaw() survives PlatformIO reinstalls (same approach as MicroPressure above).
+// Key fix in readRaw(): return 0xFFFF only when count==0 (all-zeros buffer falsely passes checksum).
+// Counts 1-408 are below rated minimum but indicate a live sensor; readMetersPerSecond() clamps them to 0.0 mph.
+constexpr uint8_t AIRFLOW_RANGE_7_MPS  = 0x00;  // FS3000-1005, 0–7.23 m/s
+constexpr uint8_t AIRFLOW_RANGE_15_MPS = 0x01;  // FS3000-1015, 0–15 m/s
+
+class FS3000 {
+  public:
+    FS3000() {}
+    bool begin(TwoWire &wirePort = Wire);
+    bool isConnected();
+    void setRange(uint8_t range);
+    uint16_t readRaw();
+    float readMetersPerSecond();
+    float readMilesPerHour();
+  private:
+    static constexpr uint8_t FS3000_DEVICE_ADDRESS = 0x28;
+    TwoWire *_i2cPort = &Wire;
+    uint8_t _buff[5] = {};
+    uint8_t _range = AIRFLOW_RANGE_7_MPS;
+    float _mpsDataPoint[13] = {0, 1.07f, 2.01f, 3.00f, 3.97f, 4.96f, 5.98f, 6.99f, 7.23f};
+    int   _rawDataPoint[13] = {409, 915, 1522, 2066, 2523, 2908, 3256, 3572, 3686};
+    bool readData(uint8_t* buf);
+    bool checksum(uint8_t* data);
+};
+bool FS3000::begin(TwoWire &wirePort) {
+    _i2cPort = &wirePort;
+    return isConnected();
+}
+bool FS3000::isConnected() {
+    _i2cPort->beginTransmission(FS3000_DEVICE_ADDRESS);
+    return (_i2cPort->endTransmission() == 0);
+}
+void FS3000::setRange(uint8_t range) {
+    _range = range;
+    const float mps7[9]  = {0, 1.07f, 2.01f, 3.00f, 3.97f, 4.96f, 5.98f, 6.99f, 7.23f};
+    const int   raw7[9]  = {409, 915, 1522, 2066, 2523, 2908, 3256, 3572, 3686};
+    const float mps15[13] = {0, 2.00f, 3.00f, 4.00f, 5.00f, 6.00f, 7.00f, 8.00f, 9.00f, 10.00f, 11.00f, 13.00f, 15.00f};
+    const int   raw15[13] = {409, 1203, 1597, 1908, 2187, 2400, 2629, 2801, 3006, 3178, 3309, 3563, 3686};
+    if (_range == AIRFLOW_RANGE_7_MPS)
+        for (int i = 0; i < 9;  i++) { _mpsDataPoint[i] = mps7[i];  _rawDataPoint[i] = raw7[i]; }
+    else if (_range == AIRFLOW_RANGE_15_MPS)
+        for (int i = 0; i < 13; i++) { _mpsDataPoint[i] = mps15[i]; _rawDataPoint[i] = raw15[i]; }
+}
+bool FS3000::readData(uint8_t* buf) {
+    _i2cPort->requestFrom(FS3000_DEVICE_ADDRESS, (uint8_t)5);
+    uint8_t i = 0;
+    while (_i2cPort->available() && i < 5) buf[i++] = _i2cPort->read();
+    while (_i2cPort->available()) _i2cPort->read();
+    return (i == 5);
+}
+bool FS3000::checksum(uint8_t* data) {
+    uint8_t sum = 0;
+    for (int i = 1; i <= 4; i++) sum += data[i];
+    return ((uint8_t)(sum + data[0]) == 0x00);
+}
+uint16_t FS3000::readRaw() {
+    if (!readData(_buff)) return 0xFFFF;
+    if (!checksum(_buff)) return 0xFFFF;
+    uint16_t airflowRaw = ((_buff[1] & 0x0F) << 8) | _buff[2];
+    if (airflowRaw == 0) return 0xFFFF;  // all-zeros passes checksum by coincidence — definitive I2C failure
+    return airflowRaw;  // counts 1-408: live sensor below rated minimum; readMetersPerSecond() clamps to 0.0 mph
+}
+float FS3000::readMetersPerSecond() {
+    int airflowRaw = readRaw();
+    if (airflowRaw == 0xFFFF) return NAN;
+    if (airflowRaw <= 409) return 0.0f;
+    if (airflowRaw >= 3686) return (_range == AIRFLOW_RANGE_15_MPS) ? 15.00f : 7.23f;
+    int data_position = 0;
+    uint8_t dataPointsNum = (_range == AIRFLOW_RANGE_15_MPS) ? 13 : 9;
+    for (int i = 0; i < dataPointsNum; i++)
+        if (airflowRaw > _rawDataPoint[i]) data_position = i;
+    float percentage = (float)(airflowRaw - _rawDataPoint[data_position]) / (float)(_rawDataPoint[data_position+1] - _rawDataPoint[data_position]);
+    return _mpsDataPoint[data_position] + percentage * (_mpsDataPoint[data_position+1] - _mpsDataPoint[data_position]);
+}
+float FS3000::readMilesPerHour() { return readMetersPerSecond() * 2.2369362912f; }
 
 // LightingBox - object to manage 12c communications link to our lighting box
 // Our protocol is: 1st nibble of 1st byte contains 4-bit command/request code. The 2nd nibble and any additional bytes contain data, as required by the code

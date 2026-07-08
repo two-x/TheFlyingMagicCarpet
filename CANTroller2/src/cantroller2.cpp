@@ -8,6 +8,7 @@ void setup() {             // runs once automatically immediately upon boot
     i2c.setup(known_i2c_addr[I2CTouch], known_i2c_addr[I2CLightbox], known_i2c_addr[I2CAirVelo], known_i2c_addr[I2CMAP]);  // must run before touchscreen setup
     touch.setup(&lcd, &i2c); // set up touchscreen object. must run before screen driver, which is also driver for touchscreen
     screen.setup();        // start up the screen asap so we can monitor the boot progress on the ezread console. also inits touchscreen
+    i2c.reinit_wire();    // LovyanGFX touch init (in screen.setup) reinitializes I2C port 0, breaking Wire — restore it here before i2c sensors are set up
     xTaskCreatePinnedToCore(push_task, "taskPush", 2048, NULL, 4, &pushtask, CONFIG_ARDUINO_RUNNING_CORE);     // display bus-push task  // 2048 works, 1024 failed
     xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 4, &drawtask, 1 - CONFIG_ARDUINO_RUNNING_CORE); // display drawing task   // 4096 works, 2048 failed
     running_on_devboard = !tempsens.setup();  // initialize onewire bus & temp sensors. The addrs of detected sensors informs if running on vehicle

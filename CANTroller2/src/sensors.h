@@ -2,7 +2,7 @@
 #include <iostream>
 #include <map>
 #include <memory> // for std::shared_ptr
-#include <SparkFun_FS3000_Arduino_Library.h>  // for air velocity sensor  http://librarymanager/All#SparkFun_FS3000
+// FS3000 air velocity sensor class is inlined in i2cbus.h (same approach as SparkFun_MicroPressure)
 #include <Arduino.h>
 #include <FunctionalInterrupt.h>
 #include "driver/rmt.h"
@@ -135,10 +135,11 @@ class Param {
         bool ret = true;
         _last = _val;
         if (std::isnan(arg_val) && std::isnan(_last)) ret = false;
-        else {
+        else if (!std::isnan(arg_val)) {  // arg_val is a valid number
             cleanzero(&arg_val);  // avoid stupidly low near-zero values that happens sometimes
-            if (iszero(_val - arg_val)) ret = false;
+            if (!std::isnan(_val) && iszero(_val - arg_val)) ret = false;  // both valid: check equality
         }
+        // else: arg_val=NAN, _val=valid → ret stays true (IS a change), no iszero(NAN) spam
         _val = arg_val;
         if (!std::isnan(_val)) constrain_value();
         return ret;
@@ -439,7 +440,10 @@ class Sensor : public Transducer {
         float new_si;
         if (_first_filter_run) {
             new_si = raw();
-            _first_filter_run = false;
+            if (!std::isnan(new_si)) _first_filter_run = false;  // hold the flag until we have a valid value to seed with; consuming it on a NaN input would leave _si=NaN with _first_filter_run=false, then ema_filt(valid, NaN) returns NaN forever
+        }
+        else if (std::isnan(raw())) {
+            return;  // NAN raw: hold current _si unchanged; avoids ema_filt(NAN,...) message spam when sensors consistently return NAN
         }
         else new_si = run_ema();
         cleanzero(&new_si, zero_precision);
@@ -472,8 +476,8 @@ class I2CSensor : public Sensor {
     void print_on_boot(bool detected, bool responding) {
         ezread.squintf(ezread.highlightcolor, "%s sensor (i2c 0x%02x) %sdetected\n", _long_name.c_str(), addr, _detected ? "" : "not ");
         if (detected) {
-            if (responding) ezread.squintf("  reading %.4f %s\n", read_i2c_sensor(), _si_units.c_str());
-            else ezread.squintf(ezread.sadcolor, "  no response\n");  // begin communication with air flow sensor) over I2C 
+            if (responding) ezread.squintf("  reading %.4f %s\n", val(), _si_units.c_str());  // use cached val() — avoids triggering a 2nd I2C read while previous may still be in-flight
+            else ezread.squintf(ezread.sadcolor, "  no response\n");
         }
     }
     void set_val_from_pin() override {
@@ -509,15 +513,16 @@ class I2CSensor : public Sensor {
 class AirVeloSensor : public I2CSensor {
   protected:
     FS3000 _sensor;
-    int _i2c_bus_index = I2CAirVelo;  // to identify self in calls to I2C bus class
+    // NOTE: do NOT redeclare _i2c_bus_index here — set parent's protected member in constructor instead to avoid shadowing set_val_from_pin()'s lookup
     float read_i2c_sensor() {
-        return _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015 
+        return _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015
     }
     void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:
     static constexpr uint8_t addr = 0x28;
     sens _senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
+        _i2c_bus_index = I2CAirVelo;  // set parent's protected member (not redeclare — avoids shadowing)
         _long_name = "Air velocity";
         _short_name = "airvel";
         _native_units = "mph";
@@ -530,12 +535,12 @@ class AirVeloSensor : public I2CSensor {
         _default_value_si = 0.0f;
         set_abslim(0.0f, 33.55f);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.0f, 27.36f);  // 620/2 cm3/rot * 4800 rot/min * 60 min/hr * 1/160934 mi/cm * 1/pi * 1/((2 in * 2.54 cm/in) / 2)^2) 1/cm2  = 27.36 mi/hr (mph
-        set_ema_alpha(0.2f);  // note: all the conversion constants for this sensor are actually correct being the defaults 
-
-        if (_detected) _responding = _sensor.begin(); // WIP debugging
-        if (_responding) _sensor.setRange(AIRFLOW_RANGE_15_MPS);
-        // _responding = _sensor.begin(Wire); // WIP debugging
-
+        set_ema_alpha(0.2f);
+        if (_detected) {
+            _sensor.begin();  // sets _i2cPort even if ACK check fails; do not trust return value — scan already confirmed device
+            _sensor.setRange(AIRFLOW_RANGE_15_MPS);
+            _responding = true;  // trust scan detection; begin()'s ACK check can fail if Wire was reinitialized (e.g., by LovyanGFX) since the scan
+        }
         I2CSensor::postsetup();  // must be run last
     }
 };
@@ -543,21 +548,26 @@ class AirVeloSensor : public I2CSensor {
 class MAPSensor : public I2CSensor {
   protected:
     SparkFun_MicroPressure _sensor;
-    int _i2c_bus_index = I2CMAP;  // to identify self in calls to I2C bus class
-    int _mapread_timeout = 120000, _mapretry_timeout = 8000; // WIP debugging
+    // NOTE: do NOT redeclare _i2c_bus_index here — set parent's protected member in constructor instead to avoid shadowing set_val_from_pin()'s lookup
+    int _mapread_timeout = 120000, _mapretry_timeout = 12000;  // 12ms > 6.4ms max conversion, gives margin for bus latency
 
     float read_i2c_sensor() {
         static float goodreading = NAN; // last non-NAN value
         if (!_detected) return NAN;
-        float reading = _sensor.readPressure(MapUnitATM, true); // request reading.  blocking version (true arg) takes 6.5ms to read
+        float reading = _sensor.readPressure(MapUnitATM, false); // non-blocking: avoids 6.5ms block and delay(1) thread-safety issue; _mapretry_timeout gives sensor time to convert
         int err_status = _sensor.err_status();
         if (err_status == MapErrWaiting) _update_period = _mapretry_timeout;  // last request still processing, recheck soon for result
         else {
             // check for errors before committing new reading
             // if (err_status != MapErrNone) { } // TODO need to register error has occurred to indicate on idiot lights 
-            if (err_status == MapErrMath) { } // workaround due to constant integrity bugs (probably bad data). TODO debug!
-
-            else goodreading = reading;
+            if (err_status == MapErrMath) { }  // data bytes are clamped/invalid; skip
+            else if (!std::isnan(reading) && reading >= absmin() && reading <= absmax()) {
+                bool seeded = !std::isnan(goodreading);
+                if (seeded && std::fabs(reading - goodreading) < 0.5f)
+                    goodreading = reading;  // reject implausibly-large-step values (I2C corruption)
+                else if (!seeded && reading >= opmin() && reading <= opmax())
+                    goodreading = reading;  // initial seed: require op range — boot-time integrity reads can give garbage values (e.g. 0.3 ATM) outside op range
+            }
             _update_period = _mapread_timeout; // longer delay till next read after read request complete
         }
         // ezread.squintf("m:%.3lf\n", goodreading);
@@ -569,6 +579,7 @@ class MAPSensor : public I2CSensor {
     static constexpr uint8_t addr = 0x18;  // note: would all MAPSensors have the same address?  ANS: yes by default, or an alternate fixed addr can be hardware-selected by hooking a pin low or something
     sens _senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
+        _i2c_bus_index = I2CMAP;  // set parent's protected member (not redeclare — avoids shadowing)
         _long_name = "MAP";
         _short_name = "map";
         _native_units = "atm";
@@ -577,19 +588,15 @@ class MAPSensor : public I2CSensor {
     MAPSensor() = delete;
     void setup() {
         I2CSensor::presetup();  // must be run first
-        _update_period = 8000;
+        _update_period = _mapretry_timeout;  // initial period matches retry timeout (command will be sent in postsetup)
         _default_value_si = 1.0f;
         set_abslim(0.06f, 2.46f);  // set abs range. defined in this case by the sensor spec max reading
         set_oplim(0.68f, 1.02f);  // set in atm empirically
         set_ema_alpha(0.2f);
-
-        // forcing _responding true prevents post_setup() from setting source to Fixed. TODO debug this!
-        // if (_detected) _responding = _sensor.begin(known_i2c_addr[I2CMAP]); // WIP debugging
         if (_detected) {
-            _sensor.begin(known_i2c_addr[I2CMAP]); // WIP debugging
-            _responding = true;
+            _sensor.begin(known_i2c_addr[I2CMAP]);  // sets _i2cPort; do not trust return value
+            _responding = true;  // trust scan detection; begin()'s ACK check can fail if Wire was reinitialized since scan
         }
-        
         I2CSensor::postsetup();  // must be run last
     }
 };
@@ -1261,7 +1268,8 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
   private:
     Simulator* sim;
     Potentiometer* pot;
-    bool _radiolost = true, _radiolost_untested = true; // has any radiolost condition been detected since boot?  allows us to verify radiolost works before driving 
+    bool _radiolost = true, _radiolost_untested = true; // has any radiolost condition been detected since boot?  allows us to verify radiolost works before driving
+    bool _rc_ever_powered = false; // latches true once radio has been active AND failsafe has been verified — prevents -100% display during pre-transmitter boot
     float spike_us[NumAxes] = { us[Horz][Filt], us[Vert][Filt] }; // [Horz/Vert]  // added
     float ema_us[NumAxes] = { us[Horz][Filt], us[Vert][Filt] }; // [Horz/Vert]  // un-deprecated. seeded with fake initial values to not break the ema filter functionality
     bool _sw_val[NumChans], _sw_new[NumChans]; // whether pulsewidth is above center. note: index[2]=Ch3, index[3]=Ch4 (1st 2 indices unused)
@@ -1344,6 +1352,7 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
     }
     bool radiolost() { return _radiolost; }
     bool radiolost_untested() { return _radiolost_untested; }
+    bool rc_ever_powered() { return _rc_ever_powered; }
     bool* radiolost_ptr() { return &_radiolost; }
     bool* radiolost_untested_ptr() { return &_radiolost_untested; }
     int last_ch4_source() { return _last_ch4_source; }
@@ -1369,6 +1378,8 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
         _radiolost = (us[Vert][Raw] <= failsafe_us + failsafe_margin_us);  // is the newest reading in the failsafe range?
         if (_radiolost != lost_last) toggles_init(); // when radio comes in or out, re-initialize toggles to prevent spurious sw events
         if (_radiolost) _radiolost_untested = false;  // on first valid detection of radiolost, radiolost detection is known to work
+        if (!_rc_ever_powered && (us[Horz][Raw] > 1200.0f || us[Vert][Raw] > 1200.0f))
+            _rc_ever_powered = true;  // latch: transmitter seen on (boot default is 1000µs on all channels; any reading > 1200µs means real transmitter signal)
         lost_last = _radiolost;  // remember current reading for comparison on next loop
     }
     void toggles_init() { for (int ch=Ch3; ch<=Ch4; ch++) toggle_reset(ch); } // init switches to newest read values to prevent spurious events. run on boot & when radio gets lost or un-lost
@@ -1448,8 +1459,8 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             spike_us[axis] = spike_filter(axis, us[axis][Raw]); // apply spike filter on latest raw reading
             us[axis][Filt] = ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha); // apply ema filter on spike filter output
             bool in_deadbands = remove_deadbands(&us[axis][Filt], deadband_us, us[axis][Cent], us[axis][OpMin], us[axis][OpMax]); // enforce deadbands
-            if (_radiolost) {
-                us[axis][Filt] = ema_us[axis] = us[axis][Cent]; // also center the filtered us value so display and downstream calcs see center, not the failsafe pulse
+            if (_radiolost || !_rc_ever_powered) {
+                us[axis][Filt] = ema_us[axis] = us[axis][Cent]; // center when radio lost OR transmitter not yet confirmed powered — prevents -100% on pre-boot reads
                 newfilt_pc[axis] = pc[axis][Cent]; // set pc value to center for sanity
             }
             else { // else if radio is good,
