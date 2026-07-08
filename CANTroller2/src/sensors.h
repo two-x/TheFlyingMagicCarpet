@@ -1448,7 +1448,10 @@ class Hotrc {  // all things Hotrc, in a convenient, easily-digestible format th
             spike_us[axis] = spike_filter(axis, us[axis][Raw]); // apply spike filter on latest raw reading
             us[axis][Filt] = ema_us[axis] = ema_filt(spike_us[axis], ema_us[axis], ema_alpha); // apply ema filter on spike filter output
             bool in_deadbands = remove_deadbands(&us[axis][Filt], deadband_us, us[axis][Cent], us[axis][OpMin], us[axis][OpMax]); // enforce deadbands
-            if (_radiolost) newfilt_pc[axis] = pc[axis][Cent]; // if no radio, set pc value to center for sanity. keep us value for debug
+            if (_radiolost) {
+                us[axis][Filt] = ema_us[axis] = us[axis][Cent]; // also center the filtered us value so display and downstream calcs see center, not the failsafe pulse
+                newfilt_pc[axis] = pc[axis][Cent]; // set pc value to center for sanity
+            }
             else { // else if radio is good,
                 if (!in_deadbands) kick_inactivity_timer((axis == Horz) ? HuRCJoy : HuRCTrig); // register evidence of user activity
                 newfilt_pc[axis] = us_to_pc(axis, us[axis][Filt]); // convert filtered us value to percent

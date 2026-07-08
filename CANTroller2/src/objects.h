@@ -51,6 +51,7 @@ void set_board_defaults() {          // true for dev boards, false for printed b
     button_test_heartbeat_color = false;
     print_framebuffers = false;
     print_task_stack_usage = false;
+    utility_func_verbose = false;  // don't write debug stuff to serial port during flight as it blocks code
 }
 void sim_setup() {
     sim.register_device(sens::pressure, pressure, pressure.source());

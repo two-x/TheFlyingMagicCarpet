@@ -1,7 +1,7 @@
 #pragma once
 class RunModeManager {  // Runmode state machine. Gas/brake control targets are determined here.  - takes 36 us in standby mode with no activity
   private:
-    bool _verbose = true;              // causes console prints for debug purposes
+    bool _verbose = false;              // causes console prints for debug purposes
     int _preferred_drivemode = Cruise; // from hold mode, should we enter cruise or fly mode?
     int _lowpower_delay_min = 20;      // Time of inactivity after entering standby mode before going to lowpower mode.  900sec = 15min
     int _screensaver_delay_min = 17;   // Time of inactivity after entering standby mode before starting screensaver turns on.  300sec = 5min
@@ -71,7 +71,7 @@ class RunModeManager {  // Runmode state machine. Gas/brake control targets are 
             if (!(sim.simulating(sens::joy) && sim.enabled())) {  // when using the radio to control joy vert (rather than simulator)
                 if (hotrc.radiolost_untested() && require_radiolost_test) kill_ign = true;
                 if (hotrc.radiolost()) kill_ign = true;
-                if (kill_ign) ezread.squintf(ezread.madcolor, "run: ignition kill due to radio error\n");
+                if (kill_ign) ezread.squintf(ezread.sadcolor, "warn: ignition kill due to radio error\n");
             }
             if (hotrc.sw_event_unfilt(Ch3)) kill_ign = true; // any Ch3 event turns ign off
             if (kill_ign) {

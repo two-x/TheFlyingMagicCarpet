@@ -270,12 +270,13 @@ bool sensidiots[NumTelemetryIdiots];  // array holds an error flag for each crit
 int ui_app = EZReadUI, ui_app_default = EZReadUI;
 bool panicstop = false;
 bool bootup_complete = false;
+bool utility_func_verbose = true;  // will map(), iszero(), emafilt() etc. report errors? if vehicle detected then this is set to false (in objects.h) to prevent blackages from Serial print   
 
 constexpr float float_zero = 0.000069f;  // minimum required float precision. use for comparisons & zero checking
 inline bool iszero(float num, float margin=NAN) noexcept {  // safe check for if a float is effectively zero (avoid hyperprecision errors)
     if (std::isnan(margin)) margin = float_zero;  // assume global default margin value if nothing specific is given
     if (!std::isnan(num)) return (std::fabs(num) <= margin);  // if input is valid return result
-    Serial.printf("err: iszero(%3.3f, %3.3f) called\n", num, margin);  // print err rather than crash. would prefer ezread if it were defined
+    if (utility_func_verbose) Serial.printf("err: iszero(%3.3f, %3.3f) called\n", num, margin);  // print err rather than crash. would prefer ezread if it were defined
     return true;  // default to true if given nan (even tho likely inaccurate), b/c likely to best inform calls intending to prevent divzero
 }
 inline bool isinfinite(float num, float margin=NAN) noexcept {  // safe check for if a float is effectively infinite (handle value explosions)
@@ -284,7 +285,7 @@ inline bool isinfinite(float num, float margin=NAN) noexcept {  // safe check fo
         if (iszero(num, margin)) return false;        // prevent divzero errors
         return (1.0f / std::fabs(num) <= margin);  // if input is valid return result
     }
-    Serial.printf("err: isinfinite(%3.3f, %3.3f) called\n", num, margin);  // print err rather than crash. would prefer ezread if it were defined
+    if (utility_func_verbose) Serial.printf("err: isinfinite(%3.3f, %3.3f) called\n", num, margin);  // print err rather than crash. would prefer ezread if it were defined
     return true;  // default to true if given nan, b/c likely accurate, also likely to best inform calls intending to prevent divzero
 }
 inline void cleanzero(float* num, float margin=NAN) noexcept {  // zeroes float values which are obnoxiously close to zero
@@ -316,7 +317,7 @@ inline float map(float x, float in_min, float in_max, float out_min, float out_m
 }
 inline int map(int x, int in_min, int in_max, int out_min, int out_max) {
     if (in_max - in_min) return (int)(out_min + (int64_t)(x - in_min) * (out_max - out_min) / (in_max - in_min));
-    Serial.printf("err: map(%d, %d, %d, %d, %d) called\n", x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
+    if (utility_func_verbose) Serial.printf("err: map(%d, %d, %d, %d, %d) called\n", x, in_min, in_max, out_min, out_max); // would prefer ezread if it were defined
     return out_max;  // instead of dividing by zero, return the highest valid result
 }
 
@@ -338,7 +339,7 @@ int read_pin(int pin) { return (pin >= 0 && pin != 255) ? digitalRead (pin) : -1
 // pass in a fresh raw value, current filtered value, and alpha factor, new filtered value is returned
 float ema_filt(float _raw, float _filt, float _alpha) {
     if (std::isnan(_raw) || std::isnan(_filt)) {
-        Serial.printf("err: ema_filt received NAN value\n");
+        if (utility_func_verbose) Serial.printf("err: ema_filt received NAN value\n");
         if (std::isnan(_raw)) return _filt;  // try to save the runtime value in case of spurious glitch
         return NAN;
     }

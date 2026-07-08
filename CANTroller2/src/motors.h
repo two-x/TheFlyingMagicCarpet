@@ -103,10 +103,10 @@ class QPID {
 
         if (_awmode == awmod::cond || _awmode == awmod::roundcond) { // condition anti-windup (default)
             bool aw = false;
-            float _itermout = (peterm - pmterm) + _ki * (_iterm + _err);
+            float _itermout = (peterm - pmterm) + _outsum + _iterm; // prospective P+I output including accumulated integral (_outsum was previously missing — bug)
             if (_itermout > (*_outmax * _iaw_cond_thresh) && derr > 0.0f) aw = true;
             else if (_itermout < (*_outmin * _iaw_cond_thresh) && derr < 0.0f) aw = true;
-            if (aw && _ki) _iterm = constrain(_itermout, -(*_outmax * _iaw_cond_thresh), *_outmax * _iaw_cond_thresh);
+            if (aw && _ki) { _outsum = constrain(_outsum + _iterm, *_outmin, *_outmax); _iterm = 0.0f; } // constrain accumulated sum, not just this step's contribution
         }
         if (_awmode == awmod::round || _awmode == awmod::roundcond) cleanzero(&_err, _round_precision);
         bool zero_terms = false;
@@ -128,7 +128,8 @@ class QPID {
         _output = constrain(_outsum + peterm + _dterm, *_outmin, *_outmax); // include _dterm, clamp and drive output
         
         if (!iszero(_max_out_changerate_ps)) { // unless rate limiter is bypassed by having value of 0.0
-            float max_out_change = _max_out_changerate_ps * (float)timechange / 1000000.0f; // calculate max allowed output value change since the last calculate
+            int rate_time = std::min(timechange, 2 * _sampletime); // cap at 2× sampletime so long pauses (skipped computes) don't bypass the rate limiter
+            float max_out_change = _max_out_changerate_ps * (float)rate_time / 1000000.0f; // calculate max allowed output value change since the last calculate
             _output = constrain(_output, lastout - max_out_change, lastout + max_out_change); // constrain output to comply
         }
         _out_changerate_ps = !timechange ? NAN : std::fabs(_output - lastout) * 1000000.0f / (float)timechange; // for external query
@@ -721,7 +722,7 @@ class BrakeControl : public JagMotor {
     bool detect_tempsens() {
         float trytemp = tempsens->val(loc::TempBrake);
         brake_tempsens_exists = !std::isnan(trytemp);
-        ezread.squintf("  using heat %s sensor\n", brake_tempsens_exists ? "readings from detected" : "estimates in lieu of");
+        ezread.squintf("  brake temperature is%s available\n", brake_tempsens_exists ? "" : " not");
         return brake_tempsens_exists;
     }
   private:
@@ -796,7 +797,9 @@ class BrakeControl : public JagMotor {
     }
     float get_hybrid_brake_pc(float _pres_pc, float _posn_pc) { // uses current hybrid_ratio to calculate a combined brake percentage value from given pres and posn values
         if (std::isnan(hybrid_ratio_pc)) return NAN;
-        return _pres_pc * hybrid_ratio_pc / 100.0f + _posn_pc * (100.0f - hybrid_ratio_pc) / 100.0f ;  // combine pid outputs weighted by the multiplier
+        if (hybrid_ratio_pc <= 0.0f) return _posn_pc;   // short-circuit: avoids NaN*0=NaN when pressure sensor absent
+        if (hybrid_ratio_pc >= 100.0f) return _pres_pc; // short-circuit: avoids NaN*0=NaN when position sensor absent
+        return _pres_pc * hybrid_ratio_pc / 100.0f + _posn_pc * (100.0f - hybrid_ratio_pc) / 100.0f;
     }
     float calc_loop_out() { // returns motor output percent calculated based on current target_pc or target[] values, in a way consistent w/ current config
         // if (ctrlmode == CtrlPropLoop) { // scheme to drive using sensors but without pid, just uses target as a threshold value, always driving motor at a fixed speed toward it
@@ -805,7 +808,9 @@ class BrakeControl : public JagMotor {
         //     if (err > 0.0f) return thresh_loop_attenuation_pc * throttle->idle_pc();
         //     return thresh_loop_attenuation_pc * pc[OpMax];
         // }  else {
-        float retval = get_hybrid_brake_pc(pids[FBPressure].compute(), pids[FBPosition].compute()); // if gas_pid_default combine pid outputs weighted by the multiplier
+        float pres_out = feedback_enabled[FBPressure] ? pids[FBPressure].compute() : pc[Stop];
+        float posn_out = feedback_enabled[FBPosition] ? pids[FBPosition].compute() : pc[Stop];
+        float retval = get_hybrid_brake_pc(pres_out, posn_out);
         if (std::isnan(retval)) return pc[Stop]; // stop motor on indeterminate value
         return retval;
     }
@@ -930,14 +935,33 @@ class BrakeControl : public JagMotor {
             if (hotrc->joydir(Vert) == HrcDn) set_target(map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], brkpos->zeropoint_pc(), 100.0f)); // scale trigger to target range starting at zeropoint so any push is pressing not releasing
             else if (simple_brake) {
                 // inline position check — avoids goto_fixed_position's set_action(ActionHalt) side effect which permanently breaks fly/cruise
-                // directional check: only release while still above zeropoint; stop at or past it (prevents overshoot from re-triggering release)
                 releasing = false;
                 if (feedback_enabled[FBPosition]) releasing = brkpos->pc() > brkpos->zeropoint_pc() + target_margin_pc;
                 else if (feedback_enabled[FBPressure]) releasing = pressure->pc() > pressure->zeropoint_pc() + target_margin_pc;
-                if (!releasing) return pc[Stop];
-                if (simple_brake_open_release) return _fixed_release_speed;
-                if (feedback_enabled[FBPosition]) set_target(brkpos->zeropoint_pc());
-                else if (feedback_enabled[FBPressure]) set_target(pressure->zeropoint_pc());
+                if (simple_brake_open_release) {
+                    if (!releasing) return pc[Stop];
+                    return _fixed_release_speed;
+                }
+                // PID path: run through the margin zone (no early hard-stop on releasing flag) so the PID's rate
+                // limiter can smoothly decay output near the zeropoint. Hard-stop only at/past the exact zeropoint
+                // to prevent the PID from pressing when the position is already over-released. Reset PIDs there so
+                // the next approach starts without wound-up integral. The external rate limiter in postprocess_out
+                // then smooths the hard-stop's output transition to zero.
+                if (feedback_enabled[FBPosition]) {
+                    set_target(brkpos->zeropoint_pc());
+                    if (brkpos->pc() <= brkpos->zeropoint_pc()) {
+                        for (int i = FBPosition; i <= FBPressure; i++) pids[i].reset();
+                        return pc[Stop];
+                    }
+                }
+                else if (feedback_enabled[FBPressure]) {
+                    set_target(pressure->zeropoint_pc());
+                    if (pressure->pc() <= pressure->zeropoint_pc()) {
+                        for (int i = FBPosition; i <= FBPressure; i++) pids[i].reset();
+                        return pc[Stop];
+                    }
+                }
+                else return pc[Stop];
             }
             else {
                 if (feedback_enabled[FBPosition]) set_target(brkpos->zeropoint_pc());
@@ -964,8 +988,8 @@ class BrakeControl : public JagMotor {
             a_outval = pc[Stop];                                        // THEN stop the motor
         else a_outval = constrain(a_outval, pc[OpMin], pc[OpMax]);      // constrain motor value to operational range (in pid mode pids should manage this)
         cleanzero(&a_outval, 0.01f); // if (std::fabs(pc[Out]) < 0.01f) pc[Out] = 0.0f; // prevent stupidly small values which i was seeing
-        if (ctrlmode == CtrlPID) return a_outval; // when using pids the pid controls rate limiting
-        else return rate_limiter(a_outval);
+        if (ctrlmode == CtrlCalibrate) return a_outval; // calibration: direct output, no rate limiting
+        return rate_limiter(a_outval); // PID: external rate limiter smooths hard-stop transitions that bypass compute()'s internal limiter; open-loop: unchanged behavior
         // for (int p = FBPosition; p <= FBPressure; p++) if (feedback_enabled[p]) pids[p].set_output(pc[Out]);  // feed the final value back into the pids
     }
     void reset_state() {
@@ -974,6 +998,7 @@ class BrakeControl : public JagMotor {
         blindaction_timer.reset();
         motor_park_timer.reset();
         autostopping = autoholding = parking = releasing = false;
+        for (int i = FBPosition; i <= FBPressure; i++) pids[i].reset(); // clear integral windup on any mode/action transition
     }
   public:
     void set_ctrlmode(int a_mode) { // external_request set to false when calling from inside the class (to remember what the outside world wants the mode to be)   
