@@ -552,10 +552,9 @@ class MAPSensor : public I2CSensor {
   protected:
     SparkFun_MicroPressure _sensor;
     int _mapread_timeout = 120000, _mapretry_timeout = 12000;  // 12ms > 6.4ms max conversion, gives margin for bus latency
-    Timer _seed_grace_timer{10000000};  // see note on _stuck_recovery_timer above - after this long unseeded, we widen what we'll accept rather than potentially waiting forever for an in-op-range reading
+    float _goodreading = NAN; // last accepted valid reading - member (not a function-local static) so reinit_sensor() can clear it during recovery
 
     float read_i2c_sensor() {
-        static float goodreading = NAN; // last non-NAN value
         if (!_detected) return NAN;
         float reading = _sensor.readPressure(MapUnitATM, false); // non-blocking: avoids 6.5ms block and delay(1) thread-safety issue; _mapretry_timeout gives sensor time to convert
         int err_status = _sensor.err_status();
@@ -565,20 +564,18 @@ class MAPSensor : public I2CSensor {
             // if (err_status != MapErrNone) { } // TODO need to register error has occurred to indicate on idiot lights
             if (err_status == MapErrMath) { }  // data bytes are clamped/invalid; skip
             else if (!std::isnan(reading) && reading >= absmin() && reading <= absmax()) {
-                bool seeded = !std::isnan(goodreading);
-                if (seeded && std::fabs(reading - goodreading) < 0.5f)
-                    goodreading = reading;  // reject implausibly-large-step values (I2C corruption)
+                bool seeded = !std::isnan(_goodreading);
+                if (seeded && std::fabs(reading - _goodreading) < 0.5f)
+                    _goodreading = reading;  // reject implausibly-large-step values (I2C corruption)
                 else if (!seeded && reading >= opmin() && reading <= opmax())
-                    goodreading = reading;  // initial seed: require op range — boot-time integrity reads can give garbage values (e.g. 0.3 ATM) outside op range
-                else if (!seeded && _seed_grace_timer.expired())
-                    goodreading = reading;  // still unseeded after a generous grace period - accept anything in the wider absolute range rather than staying nan forever waiting for an in-op-range reading that may never come this boot
+                    _goodreading = reading;  // initial seed: require op range — boot-time integrity reads can give garbage values (e.g. 0.3 ATM) outside op range. Do NOT relax this: a bad seed here is effectively permanent afterward, since the continuity check above will then reject the real reading for being too far from the garbage one.
             }
             _update_period = _mapread_timeout; // longer delay till next read after read request complete
         }
-        // ezread.squintf("m:%.3lf\n", goodreading);
-        return goodreading;
+        // ezread.squintf("m:%.3lf\n", _goodreading);
+        return _goodreading;
     }
-    void reinit_sensor() override { _sensor.begin(known_i2c_addr[I2CMAP]); }
+    void reinit_sensor() override { _sensor.begin(known_i2c_addr[I2CMAP]); _goodreading = NAN; }  // also clear any (should-be-impossible, but just in case) bad seed so the strict op-range gate gets a clean shot at re-seeding
 
     void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:
