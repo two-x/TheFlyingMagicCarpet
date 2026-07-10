@@ -589,32 +589,32 @@ class Display {
         for (int i = 0; i < idiots->num_idiots(); i++) {
             bool* val_ptr = idiots->val_ptr(i);
             if (i < idiot_light_led_count) {  // the first group of displayed idiot lights are also represented by neopixels
-                neo->setIdiotLightSolidOnMode(i, *val_ptr);
+                neo->setNeoIdiotSolidOnMode(i, *val_ptr);
                 if (*val_ptr) {
                     if (val_ptr == &panicstop) {
-                        neo->setIdiotLightCriticalAlertMode(i, true);
+                        neo->setNeoIdiotCriticalAlertMode(i, true);
                     }
                     else if (val_ptr == &diag.err_sens_alarm[ErrLost]) {
                         for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
                             if (diag.err_sens[ErrLost][sensor]) {
-                                neo->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
+                                neo->setNeoIdiotFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
                             } else {
-                                neo->setIdiotLightFlashColor(i, sensor, BLACK);
+                                neo->setNeoIdiotFlashColor(i, sensor, BLACK);
                             }
                         }
                     }
                     else if (val_ptr == &diag.err_sens_alarm[ErrRange]) {
                         for (int sensor = 0; sensor < NumTelemetryIdiots; sensor++) {
                             if (diag.err_sens[ErrRange][sensor]) {
-                                neo->setIdiotLightFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
+                                neo->setNeoIdiotFlashColor(i, sensor, color_to_neo(idiots->color(sensor, On)));
                             } else {
-                                neo->setIdiotLightFlashColor(i, sensor, BLACK);
+                                neo->setNeoIdiotFlashColor(i, sensor, BLACK);
                             }
                         }
                     }
                 }
                 else {
-                    neo->setIdiotLightCriticalAlertMode(i, false);
+                    neo->setNeoIdiotCriticalAlertMode(i, false);
                 }
             }
             if (force || (*val_ptr != idiots->lastval(i))) {

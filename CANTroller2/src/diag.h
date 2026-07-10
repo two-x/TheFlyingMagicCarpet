@@ -850,15 +850,3 @@ class BootMonitor {
         ezread.squintf("  heap free: %" PRIu32 " B (min).\n", esp_get_minimum_free_heap_size());
     }
 };
-#if RUN_TESTS
-    #include "unittests.h"
-    void run_tests() {
-        ezread.squintf(ezread.highlightcolor, "Unit tests running ..\n");
-        delay(5000);
-        test_Param();
-        ezread.squintf("  complete.\n");
-        for(;;); // loop forever
-    }
-#else
-    void run_tests() {}
-#endif

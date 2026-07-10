@@ -1,5 +1,6 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
+#include "unittests.h"
 TaskHandle_t temptask = NULL, maftask = NULL, pushtask = NULL, drawtask = NULL, neotask = NULL;
 
 void setup() {             // runs once automatically immediately upon boot
@@ -14,7 +15,7 @@ void setup() {             // runs once automatically immediately upon boot
     running_on_devboard = !tempsens.setup();  // initialize onewire bus & temp sensors. The addrs of detected sensors informs if running on vehicle
     xTaskCreatePinnedToCore(tempsens_task, "taskTemp", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE); // temp sensors read task // 4096 works, 3072 failed — priority 6 is highest of the tasks sharing this core (draw/push/maf), so it wins contention among them; doesn't affect loop(), which is alone on the other core; ESP-IDF internals run above 24
     set_board_defaults();  // changes some configuration options based on whether we're running on the real car
-    run_tests();           // runs some sanity checks to ensure the code is self-consistent - Anders wrote this but it needs expansion
+    unittests.setup();     // runs unit tests for pure-logic code and reports any failures - comment out to skip
     watchdog.setup(&temptask, &drawtask, &pushtask, &maftask, &neotask);  // the watchdog must frequently be pet by the code, or it will assume we crashed & automatically reset it. disabled due to some bug i forgot
     bootbutton.setup();    // init button on the esp board, for misc use
     hotrc.setup();         // init hotrc remote control handle, source of steering/throttle/brake commands (how we drive the car)
