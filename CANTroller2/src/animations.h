@@ -318,7 +318,9 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
             if (newpat == -1) ++shape %= Rotate;
             if (newpat == -3) shape = (shape - 1 + Rotate) % Rotate;
             else if (newpat == -2) while (last_pat == shape) shape = rn(Rotate);
-            if (rn(25) == 13) shape = Rotate;
+            // Rotate (runs through all the other shapes in sequence) is deliberately excluded from automatic cycling above (-1/-2/-3 all wrap/pick
+            // within [0,Rotate) ) - it used to still sneak in here via a 1-in-25 random override on every automatic pattern change, which is exactly
+            // what's being removed. Rotate remains reachable manually (e.g. touch-cycling past the last pattern still lands on it).
         }  // Serial.printf("\ns%d %ldms: ", shape, (int)cycletimer.elapsed()/1000);
         return shape;
     }
@@ -838,11 +840,11 @@ class PanelAppManager {
         changeit = constrain(changeit, DirRev, DirFwd);
         if (nowsaver == Collisions) {  // if on ball saver
             change_saver();  // switch to eraser saver
-            eSaver.change_pattern((changeit == DirFwd) ? 0 : eSaver.num_shapes - 1);  // go to first or last erasersaver pattern
+            eSaver.change_pattern((changeit == DirFwd) ? 0 : eSaver.num_shapes - 2);  // go to first or last erasersaver pattern - Rotate (num_shapes-1, runs all shapes in sequence, hyperactive/processor-intensive) is deliberately excluded from manual cycling too; Worm (num_shapes-2) is the last reachable one
             return;
         }
         if (changeit == DirFwd) {  // go forward one animation
-            if (eSaver.shape == eSaver.num_shapes - 1) change_saver();  // going past the last erasersaver pattern changes to ball saver
+            if (eSaver.shape == eSaver.num_shapes - 2) change_saver();  // going past the last (non-Rotate) erasersaver pattern changes to ball saver
             else eSaver.change_pattern(-1);  // erasersaver goes to next pattern
             return;
         }  // else go back one animation (below)

@@ -254,7 +254,7 @@ class Touchscreen {
     // timing requirements: 1) sense < filter < (twotap & repeat & accel).  2) (twotap & swipe) < longpress < press. 
     Timer senseTimer{6500};        // touch chip can't respond faster than some time period.
     Timer filterTimer{10000};       // touch or untouch events lasting less than this long are ignored. needed for using through plastic box lid
-    Timer twotapTimer{180000};      // two tap events within this much time is a double tap
+    Timer twotapTimer{400000};      // two tap events within this much time is a double tap. was 180000 - too tight for reliable human double-tap timing (typical platform conventions use ~300-500ms), and ~20ms of this budget is always consumed by filterTimer debounce on both the release and re-press edges, not available as real reaction-time margin. Widened since only the decorative screensaver's tap()/doubletap() consumers care about this timer at all - core button UI reacts on ontouch()/longpress(), unaffected
     Timer pressTimer{750000};       // taps/presses/swipes will expire if not queried within this timeframe after occurrence
     // below are all based on pressTimer
     int repeat_timeout = 250000;    // for editing parameters with only a few values, auto repeat is this slow
@@ -291,7 +291,10 @@ class Touchscreen {
     bool ontouch() { return nowtouch && !lasttouch; }  // returns true only if touch is new for this update cycle. only reliable if called internally, otherwise use tap()
     bool onrelease() { return !nowtouch && lasttouch; }  // returns true only if release is new for this update cycle. only reliable if called internally, otherwise use tap()
     void update_swipe() {  // determines if there's a valid swipe, saved to variable
-        int _dragged[2] = { drag(Horz), drag(Vert) };
+        // NOTE: must use drag_axis() here, not the public drag() - this is always called right after release (nowtouch already false by this
+        // point), and drag() deliberately returns 0 whenever !nowtouch (correct for its own live-drag-query use elsewhere). Using drag() here
+        // meant swipe distance always read as {0,0}, so a swipe could never be detected - this was a 100%-reproducible bug, not intermittent.
+        int _dragged[2] = { drag_axis(Horz), drag_axis(Vert) };
         int _axis = (std::abs(_dragged[Horz]) > std::abs(_dragged[Vert])) ? Horz : Vert;  // was swipe mostly horizontal or mostly vertical
         if (!swipe_possible || (std::abs(_dragged[_axis]) < swipe_min)) ts_swipedir = DirNone;  // catch if swipe doesn't qualify
         else if (_axis == Horz) ts_swipedir = (_dragged[Horz] > 0) ? DirRight : DirLeft;
@@ -421,7 +424,11 @@ class Touchscreen {
             fd_exponent = 0;                  // reset acceleration factor
             fd = (float)(1 << fd_exponent);   // reset touch acceleration value to 1
             if (pressTimer.elapsed() < longpress_timeout) {      // if press duration was in short-press range
-                if (doubletap_possible) ts_doubletapped = true;  // if there was a previous recent tap when pressed, we have a valid double tap
+                if (doubletap_possible) {
+                    ts_doubletapped = true;  // if there was a previous recent tap when pressed, we have a valid double tap
+                    recent_tap = false;       // must clear this - it was still true from the first tap, and if left set, the still-running
+                                              // twotapTimer would later expire and fire a spurious extra single-tap right after this double-tap
+                }
                 else {
                     recent_tap = true;        // otherwise we have a potentially valid single tap
                     twotapTimer.reset();      // begin timeout again to wait for a second tap
