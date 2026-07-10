@@ -468,6 +468,14 @@ class Sensor : public Transducer {
 class I2CSensor : public Sensor {
   protected:
     I2C* _i2c;
+    // Neither mapsens nor airvelo has a hardware reset pin wired to the MCU (SparkFun_MicroPressure's library supports one, via its rst_pin constructor
+    // arg, but it isn't connected on this board), so re-running the sensor's own begin()/init sequence is the only recovery available if it comes up in a
+    // bad state at boot - these i2c sensors have occasionally been observed to report nan indefinitely from some boots, seemingly a race in the sensor's own
+    // internal power-on/warmup timing rather than anything in our code. If this happens, a full power cycle (not just a reflash/MCU reset) has reliably
+    // cleared it, since that resets the sensor's own internal state too, not just the ESP32's. This timer is a same-effect-as-a-power-cycle-minus-the-power-
+    // cycle attempt: periodically retry the sensor's init sequence for as long as it keeps reporting nan.
+    Timer _stuck_recovery_timer{10000000};
+    virtual void reinit_sensor() {}  // child sensors override this to re-run their library's begin() sequence
     virtual float read_i2c_sensor() {  // childrem must override this
         ezread.squintf(ezread.madcolor, "err: %s needs overridden read_i2c_sensor()\n", _short_name.c_str());
         return NAN;
@@ -481,6 +489,7 @@ class I2CSensor : public Sensor {
     }
     void set_val_from_pin() override {
         _native.set(read_i2c_sensor());
+        if (std::isnan(_native.val()) && _stuck_recovery_timer.expireset()) reinit_sensor();  // still not producing a valid reading - periodically nudge it by re-running init, since we can't hardware-reset it
         _raw.set(from_native(_native.val())); // convert native to raw si value
         set_si_w_ema(0.001f);                 // set si filtered value based on new raw reading
     }
@@ -511,6 +520,7 @@ class AirVeloSensor : public I2CSensor {
     float read_i2c_sensor() {
         return _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015
     }
+    void reinit_sensor() override { _sensor.begin(); _sensor.setRange(AIRFLOW_RANGE_15_MPS); }
     void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:
     static constexpr uint8_t addr = 0x28;
@@ -542,6 +552,7 @@ class MAPSensor : public I2CSensor {
   protected:
     SparkFun_MicroPressure _sensor;
     int _mapread_timeout = 120000, _mapretry_timeout = 12000;  // 12ms > 6.4ms max conversion, gives margin for bus latency
+    Timer _seed_grace_timer{10000000};  // see note on _stuck_recovery_timer above - after this long unseeded, we widen what we'll accept rather than potentially waiting forever for an in-op-range reading
 
     float read_i2c_sensor() {
         static float goodreading = NAN; // last non-NAN value
@@ -551,7 +562,7 @@ class MAPSensor : public I2CSensor {
         if (err_status == MapErrWaiting) _update_period = _mapretry_timeout;  // last request still processing, recheck soon for result
         else {
             // check for errors before committing new reading
-            // if (err_status != MapErrNone) { } // TODO need to register error has occurred to indicate on idiot lights 
+            // if (err_status != MapErrNone) { } // TODO need to register error has occurred to indicate on idiot lights
             if (err_status == MapErrMath) { }  // data bytes are clamped/invalid; skip
             else if (!std::isnan(reading) && reading >= absmin() && reading <= absmax()) {
                 bool seeded = !std::isnan(goodreading);
@@ -559,12 +570,15 @@ class MAPSensor : public I2CSensor {
                     goodreading = reading;  // reject implausibly-large-step values (I2C corruption)
                 else if (!seeded && reading >= opmin() && reading <= opmax())
                     goodreading = reading;  // initial seed: require op range — boot-time integrity reads can give garbage values (e.g. 0.3 ATM) outside op range
+                else if (!seeded && _seed_grace_timer.expired())
+                    goodreading = reading;  // still unseeded after a generous grace period - accept anything in the wider absolute range rather than staying nan forever waiting for an in-op-range reading that may never come this boot
             }
             _update_period = _mapread_timeout; // longer delay till next read after read request complete
         }
         // ezread.squintf("m:%.3lf\n", goodreading);
         return goodreading;
     }
+    void reinit_sensor() override { _sensor.begin(known_i2c_addr[I2CMAP]); }
 
     void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:

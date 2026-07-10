@@ -27,6 +27,7 @@ void setup() {             // runs once automatically immediately upon boot
     speedo.setup();        // init speedometer, which is based on pulses from magnets on the drive axle passing near a hall effect sensor
     airvelo.setup();       // init i2c air velocity sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
     mapsens.setup();       // init i2c manifold air pressure sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
+    // if either i2c sensor above reports nan indefinitely after a reflash, try a full power cycle (not just a reset/reflash) before assuming something's broken - see I2CSensor::_stuck_recovery_timer in sensors.h
     xTaskCreatePinnedToCore(maf_task, "taskMAF", 4096, NULL, 4, &maftask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // update mass airflow determination, including reading map and airvelo sensors // moved off loop()'s core: mapsens.update()/airvelo.update() are i2c reads with multi-ms waits (up to ~2ms), and at prio 4 (> loop()'s prio 1) would otherwise stall loop() when they periodically wake
     lightbox.setup();      // init object for the lighting control box (an i2c slave)
     starter.setup();       // init handler for the car starter motor
