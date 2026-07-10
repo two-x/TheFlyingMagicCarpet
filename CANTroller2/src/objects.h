@@ -113,7 +113,9 @@ void maf_task(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(10)); // Delay to allow other tasks to do stuff. serves as the device class update timer for these sensors
         airvelo.update();        // manifold air velocity sensor  // 20us + 900us every 4 loops
         maf_gps = massairflow(); // calculate grams/sec of air molecules entering the engine (Mass Air Flow) using velocity, pressure, and temperature of manifold air
-        lightbox.update(speedo.val());  // another i2c peripheral, same as mapsens/airvelo above — grouped here (off loop()'s core) rather than in loop(), especially since lightbox's periodic re-detect probe targets a device that powers on/off independently and can wedge the i2c bus for a while if caught mid-transition
+        // lightbox.update(speedo.val()) disabled here for now: re-adding this call (even boot-detect-only, and it should be a no-op if undetected) has now
+        // correlated 3-for-3 with mapsens breaking, and removing it 2-for-2 with mapsens recovering. Root mechanism not yet understood - possibly a false
+        // positive in the boot-time detection scan causing real (NACK'ing) sends every 250ms. Needs investigation before re-enabling.
         if (!i2c.detected(I2CAirVelo) && !i2c.detected(I2CMAP)) vTaskDelay(pdMS_TO_TICKS(300)); // guarantees easement of cpu cycles & bus activity by disconnecting i2c plug (in case of problems)
     }
 }

@@ -20,7 +20,6 @@ class I2C {
         }
     }
   public:
-    int i2cbaton = I2CLightbox;             // A semaphore mechanism to prevent bus conflict on i2c bus
     I2C(int sda_pin_arg, int scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
     int setup(uint8_t touch_addr, uint8_t lightbox_addr, uint8_t airvelo_addr, uint8_t map_addr) {
         _devaddrs[I2CTouch] = touch_addr;
@@ -59,27 +58,6 @@ class I2C {
     }
     bool detected(int device) {  // argument is one of the enums
         return _detected[device];
-    }
-    void set_detected(int device, bool state) { _detected[device] = state; }  // for devices (e.g. lightbox) that get periodically re-probed after boot, since they can be hot-plugged/powered independently of us
-    bool probe(uint8_t addr) {  // lightweight single-address presence check (fast NACK if absent), for periodic re-detection without a full bus rescan
-        Wire.beginTransmission(addr);
-        return Wire.endTransmission() == 0;
-    }
-    void pass_i2c_baton() {
-        static int lastsens = I2CMAP;
-        // Serial.printf("%d->", i2cbaton);
-        if (!use_i2c_baton) return;
-        if (i2cbaton == I2CAirVelo || i2cbaton == I2CMAP) i2cbaton = I2CTouch;
-        else if (i2cbaton == I2CTouch) i2cbaton = I2CLightbox;
-        else if (i2cbaton == I2CLightbox) {
-            if (lastsens == I2CAirVelo) i2cbaton = I2CMAP;
-            else i2cbaton = I2CAirVelo;
-            lastsens = i2cbaton;
-        }
-        // Serial.printf("\r-%d-", i2cbaton);
-    }
-    bool not_my_turn(int checkdev) {
-        return (use_i2c_baton && (checkdev != i2cbaton));
     }
     void reinit_wire() {  // call after any library (e.g. LovyanGFX touch) that may reinitialize I2C port 0
         Wire.begin(_sda_pin, _scl_pin, i2c_frequency);
@@ -303,9 +281,6 @@ inline float FS3000::readMilesPerHour() { return readMetersPerSecond() * 2.23693
 class LightingBox {  // represents the lighting controller i2c slave endpoint
   private:
     Timer send_timer{250000};
-    Timer rescan_timer{2000000};  // lightbox can be powered on/off independently of us, so periodically re-probe for it rather than trusting only the boot-time scan
-    bool was_detected_init = false;  // becomes true after the first rescan, so we don't print a spurious transition message comparing against a default-initialized was_detected
-    bool was_detected = false;
     int runmode_last = Standby;
     uint16_t speed_last;
     uint8_t status_nibble_last;
@@ -314,27 +289,18 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     // DiagRuntime* diag;
   public:
     LightingBox(I2C* _i2c) : i2c{_i2c} {}  // LightingBox(DiagRuntime* _diag) : diag(_diag) {}
+    // Detection is boot-time only (like touch/mapsens/airvelo) - no periodic re-probing. A previous version periodically re-probed this address to support
+    // hot-plugging the box at runtime, but that probe (NACK'ing when the box was absent) turned out to occasionally trigger a slow ESP32 i2c-driver recovery
+    // path that could stall the whole physical bus for the better part of a second, corrupting the touchscreen driver and other sensors along with it. Not
+    // worth the hot-plug convenience given that risk - if the box is absent at boot, it just stays undetected (and silent, since sends below are gated on
+    // detection) until the next boot.
     void update(float speed) {
         bool sent = false;
-        if (i2c->not_my_turn(I2CLightbox)) return;
-        if (rescan_timer.expireset()) {  // cheap (fast-NACK-if-absent) re-check, so hot-plug/unplug gets noticed within a couple seconds either direction
-            bool nowdetected = i2c->probe(_addr);
-            i2c->set_detected(I2CLightbox, nowdetected);
-            if (was_detected_init && nowdetected != was_detected) ezread.squintf(nowdetected ? ezread.highlightcolor : ezread.sadcolor, "Lightbox (i2c 0x%02x) %sdetected\n", _addr, nowdetected ? "" : "no longer ");
-            if (nowdetected && !was_detected) {  // box just came back (or appeared for the first time) - its own state reset when it lost power, so force a full resync instead of relying on our stale "last sent" trackers to skip everything as "unchanged"
-                status_nibble_last = 0xff;  // status nibble only uses its low 4 bits, so this value can never match and will always trigger a resend
-                runmode_last = -1;          // not a valid runmode
-                speed_last = 0xffff;        // not a plausible speed value (would be ~655 mph)
-            }
-            was_detected = nowdetected;
-            was_detected_init = true;
-        }
-        if (i2c->detected(I2CLightbox) && send_timer.expireset()) {  // only attempt the (larger, multi-byte) status sends once we know something's actually there to receive them
+        if (i2c->detected(I2CLightbox) && send_timer.expireset()) {  // only attempt sends once we know something's actually there to receive them
             sent = sendstatus();  // send status if it changed since last time
             sent |= sendrunmode(runmode);  // send runmode if it changed since last time
             if (!sent) sent = sendspeed(speed);  // if neither of above was sent, then send speed (to prevent long bus use)
         }
-        i2c->pass_i2c_baton();
         return;
     }
     void setup() {

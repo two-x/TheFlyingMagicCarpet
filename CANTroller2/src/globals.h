@@ -135,7 +135,6 @@ bool allow_rolling_start = true;     // are we lenient that it's ok to go to fly
 bool flip_the_screen = false;        // did you mount your screen upside-down?
 bool cruise_speed_lowerable = true;  // allows use of trigger to adjust cruise speed target without leaving cruise mode.  Otherwise cruise button is a "lock" button, and trigger activity cancels lock
 bool display_enabled = true;         // should we run 325x slower in order to get bombarded with tiny numbers?  Probably.
-bool use_i2c_baton = false;          // use soren's custom homemade semaphores to prevent i2c bus collisions?
 bool limit_framerate = true;         // set to true to enforce a cap on screen frame draws during operational modes, otherwise draw as fast as we can. fullscreen screensaver ignores this, always balls-out
 bool brake_before_starting = true;   // if true, the starter motor attempts to apply the brake pedal before turning on the starter motor
 bool check_brake_before_starting = true; // if true, the starter motor won't turn on until or unless it senses the brake pressure is enough. otherwise then after a timeout it will start anyway

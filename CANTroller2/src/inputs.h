@@ -371,7 +371,6 @@ class Touchscreen {
     // bool* doubletap_ptr() { return &ts_doubletapped; }  // for idiot light
     // bool* longpress_ptr() { return &ts_longpressed; }
     void update() {
-        if (_i2c->not_my_turn(I2CTouch)) return; // if (captouch && _i2c->not_my_turn(I2CTouch)) return;
         if (senseTimer.expireset()) {
             get_touch_debounced();
             if (nowtouch) process_touched();
@@ -384,7 +383,6 @@ class Touchscreen {
             lasttouch = nowtouch;
             // printTouchInfo();  // for debug
         }
-        _i2c->pass_i2c_baton();
     }  // Serial.printf("%s", nowtouch ? "+" : "-");
   private:
     void process_touched() {  // executes on update whenever screen is being touched (nowtouch == true)

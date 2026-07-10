@@ -468,7 +468,6 @@ class Sensor : public Transducer {
 class I2CSensor : public Sensor {
   protected:
     I2C* _i2c;
-    int _i2c_bus_index = I2CBogus;     // children must set this to identify self in calls to I2C bus class
     virtual float read_i2c_sensor() {  // childrem must override this
         ezread.squintf(ezread.madcolor, "err: %s needs overridden read_i2c_sensor()\n", _short_name.c_str());
         return NAN;
@@ -481,11 +480,7 @@ class I2CSensor : public Sensor {
         }
     }
     void set_val_from_pin() override {
-        if (_i2c->not_my_turn(_i2c_bus_index)) return;
-        // if (!_i2c->detected(_i2c_bus_index) || !_responding) _native.set(NAN); else
         _native.set(read_i2c_sensor());
-        if (_i2c->i2cbaton == _i2c_bus_index) _i2c->pass_i2c_baton(); // deal with bus semaphore, since we're done with it
-        // if (std::isnan(_native.val())) _si.set((NAN)); else {}
         _raw.set(from_native(_native.val())); // convert native to raw si value
         set_si_w_ema(0.001f);                 // set si filtered value based on new raw reading
     }
@@ -513,7 +508,6 @@ class I2CSensor : public Sensor {
 class AirVeloSensor : public I2CSensor {
   protected:
     FS3000 _sensor;
-    // NOTE: do NOT redeclare _i2c_bus_index here — set parent's protected member in constructor instead to avoid shadowing set_val_from_pin()'s lookup
     float read_i2c_sensor() {
         return _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015
     }
@@ -522,7 +516,6 @@ class AirVeloSensor : public I2CSensor {
     static constexpr uint8_t addr = 0x28;
     sens _senstype = sens::airvelo;
     AirVeloSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        _i2c_bus_index = I2CAirVelo;  // set parent's protected member (not redeclare — avoids shadowing)
         _long_name = "Air velocity";
         _short_name = "airvel";
         _native_units = "mph";
@@ -548,7 +541,6 @@ class AirVeloSensor : public I2CSensor {
 class MAPSensor : public I2CSensor {
   protected:
     SparkFun_MicroPressure _sensor;
-    // NOTE: do NOT redeclare _i2c_bus_index here — set parent's protected member in constructor instead to avoid shadowing set_val_from_pin()'s lookup
     int _mapread_timeout = 120000, _mapretry_timeout = 12000;  // 12ms > 6.4ms max conversion, gives margin for bus latency
 
     float read_i2c_sensor() {
@@ -579,7 +571,6 @@ class MAPSensor : public I2CSensor {
     static constexpr uint8_t addr = 0x18;  // note: would all MAPSensors have the same address?  ANS: yes by default, or an alternate fixed addr can be hardware-selected by hooking a pin low or something
     sens _senstype = sens::mapsens;
     MAPSensor(I2C* i2c_arg) : I2CSensor(i2c_arg, addr) {
-        _i2c_bus_index = I2CMAP;  // set parent's protected member (not redeclare — avoids shadowing)
         _long_name = "MAP";
         _short_name = "map";
         _native_units = "atm";
