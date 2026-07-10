@@ -931,7 +931,13 @@ class BrakeControl : public JagMotor {
             else if (feedback_enabled[FBPressure]) set_target(pressure->parkpos_pc());
         }
         else if (motoraction == ActionManual) {
-            if (hotrc->joydir(Vert) == HrcDn) set_target(map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], brkpos->zeropoint_pc(), 100.0f)); // scale trigger to target range starting at zeropoint so any push is pressing not releasing
+            // releasing must be resolved on every path through here, not just the simple_brake branch below - otherwise
+            // it's left stale from whatever last set it (eg a prior ActionRelease/ActionPark, or a simple_brake toggle),
+            // which is what caused the on-screen icon to show releasing while the brake was actually being pressed.
+            if (hotrc->joydir(Vert) == HrcDn) {
+                releasing = false; // actively pressing the trigger is never "releasing", regardless of physical position
+                set_target(map(hotrc->pc[Vert][Filt], hotrc->pc[Vert][Cent], hotrc->pc[Vert][OpMin], brkpos->zeropoint_pc(), 100.0f)); // scale trigger to target range starting at zeropoint so any push is pressing not releasing
+            }
             else if (simple_brake) {
                 // inline position check — avoids goto_fixed_position's set_action(ActionHalt) side effect which permanently breaks fly/cruise
                 releasing = false;
@@ -963,8 +969,18 @@ class BrakeControl : public JagMotor {
                 else return pc[Stop];
             }
             else {
-                if (feedback_enabled[FBPosition]) set_target(brkpos->zeropoint_pc());
-                else if (feedback_enabled[FBPressure]) set_target(pressure->zeropoint_pc());
+                // non-simple_brake (full PID) path: releasing was previously never touched here at all, leaving it
+                // stale for the entire time the brake spends in this mode - compute it the same way as the simple_brake
+                // branch above (actual position/pressure vs zeropoint+margin) so it's accurate regardless of config.
+                releasing = false;
+                if (feedback_enabled[FBPosition]) {
+                    releasing = brkpos->pc() > brkpos->zeropoint_pc() + target_margin_pc;
+                    set_target(brkpos->zeropoint_pc());
+                }
+                else if (feedback_enabled[FBPressure]) {
+                    releasing = pressure->pc() > pressure->zeropoint_pc() + target_margin_pc;
+                    set_target(pressure->zeropoint_pc());
+                }
                 else {
                     ezread.squintf(ezread.sadcolor, "brake: undefined behavior w/o feedback. Halting\n");
                     set_action(ActionHalt);
@@ -1029,14 +1045,15 @@ class BrakeControl : public JagMotor {
                     drop_to_manual = true;
         }
         if (drop_to_manual) {
-            a_action = ActionManual; 
+            // report the action that was actually requested (not yet overwritten below) - more accurate than claiming "can't Manual", which was never requested
             ezread.squintf("brake: can't %s in %s mode. action=%s\n", motoractioncard[a_action].c_str(), motorctrlcard[ctrlmode].c_str(), motoractioncard[motoraction].c_str());
+            // inline equivalent of set_action(ActionManual) without recursing back into this function: ActionManual can never itself trigger
+            // drop_to_manual (see the condition above - only Release/Park/AutoHold/AutoStop can), so this transition is always safe to apply directly
+            if (motoraction != ActionManual) {
+                reset_state();
+                motoraction = ActionManual;
+            }
             return;
-            // if (a_action == ActionRelease || a_action == ActionPark) {
-            //     a_action = ActionHalt; // TODO: should have a timer way to release/park w/o sensors
-            //     if (a_action == ActionRelease) releasing = true;
-            //     else if (a_action == ActionPark) parking = true;
-            // } else
         }
         if (a_action == motoraction && !force) return;
         reset_state();
