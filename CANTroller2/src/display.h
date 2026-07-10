@@ -105,6 +105,7 @@ SemaphoreHandle_t drawnbuf_sem;  // points to the buffer which is a copy of the 
 // SemaphoreHandle_t drawbuf_sem;  // *would* point to a third buffer which is ready to send to the screen, except the esp doesn't *quite* have enough memory for a 3rd buffer
 static void push_task(void *parameter);
 static void draw_task(void *parameter);
+static void neo_task(void *parameter);
 void semaphore_setup() {
     ezread.squintf(ezread.highlightcolor, "Semaphores init\n");
     drawnbuf_sem = xSemaphoreCreateBinary();  // StaticSemaphore_t push_semaphorebuf_sem;
@@ -1244,5 +1245,14 @@ static void draw_task(void *parameter) {
         vTaskDelay(pdMS_TO_TICKS(1 + ((int)limit_framerate * refresh_limit_us / 1000.0f)));  //   || sim.enabled()
         // if (limit_framerate && !auto_saver_enabled) vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit_us / 1000 - 1)));  //   || sim.enabled()
         lastmode = runmode;
+    }
+}
+// neo.update() calls neoobj.Show(), a blocking write to the neopixel strip's RMT hw peripheral (~300-400us for our 10-pixel strip) — same
+// category of HW-port-timing-sensitive call as the temp sensor (OneWire) and MAF (i2c) tasks, so it gets its own task off loop()'s core too,
+// rather than blocking loop() directly whenever its internal 20ms update timer fires.
+static void neo_task(void *parameter) {
+    while (true) {
+        neo.update();  // internally gated by its own 20ms Timer, so this only actually does work (and blocks on Show()) 1 time in ~4 wakeups here
+        vTaskDelay(pdMS_TO_TICKS(5));
     }
 }

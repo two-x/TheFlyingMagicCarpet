@@ -50,11 +50,11 @@ class LoopTimer {
             for (int l = 0; l <= loop_history; l++)
                 loop_recentsum += loop_periods_us[(_loop_now + l) % loop_history];
         }
-        else loop_recentsum += _thisloop - loop_periods_us[loop_now];
+        else loop_recentsum += _thisloop - loop_periods_us[_loop_now];
         return (float)loop_recentsum/(float)loop_history;
     }
     void update() {  // Call once each loop at the very end
-        // if (runmode == LowPower) return;
+        // if (runmode == LowPower) return;  // intentionally not skipped — LoopTimer keeps running in LowPower so loop stats remain accurate
         int thisloop = (int)loop_timer.elapsed();
         loop_avg_us = calc_avg(loop_now, thisloop);
         loop_periods_us[loop_now] = thisloop;  // us since beginning of this loop
@@ -91,7 +91,7 @@ class LoopTimer {
             // steady_report_printed = true;
         }
     }
-    int uptime_us() {  // returns uptime since last reset in microseconds
+    int64_t uptime_us() {  // returns uptime since last reset in microseconds
         return esp_timer_get_time() - boot_mark_us;
     }
     float uptime() {  // returns uptime since last reset in minutes
@@ -121,7 +121,7 @@ class DiagRuntime {
     int64_t times[2][entries];
     // two sets of large arrays for storage of log data. when one fills up it jumps to the other, so the first might be written to an sd card
     float tel[2][NumTelemetryFull][entries];  // array for telemetry of all sensors for given timestamp
-    int index = 0, dic = 0, total_registered = 0, runmode;  // start with dictionary 0
+    int index = 0, dic = 0, total_registered = 0;  // start with dictionary 0
     Timer logTimer{100000};  // microseconds per logged reading
     Timer errTimer{175000};
     Timer speedoTimer{2500000}, tachTimer{2500000};  // how much time within which we expect the car will move after hitting the gas
@@ -236,7 +236,7 @@ class DiagRuntime {
             // for (int i=0; i<NumErrTypes; i++)
             //     for (int j=0; j<NumTelemetryFull; j++)
             // // ezread.squintf ("\n");
-            // make_log_entry();
+            // make_log_entry();  // disabled — tel[] and times[] arrays consume permanent RAM for an unused feature; remove arrays if logging stays off
         }
     }
     int errorcount(int errtype) { return registered_errcount[errtype]; }
@@ -275,6 +275,8 @@ class DiagRuntime {
         }
     }
     void set_sensidiots() {
+        // Loop bound _GPIO is the last sensor-group enum value before virtual/aggregate entries.
+        // If the enum is reordered this range silently changes — keep _GPIO at the logical boundary.
         for (int err=0; err<=_GPIO; err++) {
             sensidiots[err] = false;
             for (int typ=0; typ<NumErrTypes; typ++) sensidiots[err] |= err_sens[typ][err];
@@ -432,8 +434,8 @@ class DiagRuntime {
         checkrange(_BrakePosn);
         checkrange(_BrakePres);
 
-        // checks if posn is not changing while pressure is changing and motor is moving (assuming not near max brake)
-        // commented out due to it created brkpos lost error immediately on boot. needs to be cleaned up before useful
+        // Cross-sensor correlation (posn/pressure/motor consistency) is disabled below — caused
+        // brkpos lost error immediately on boot; needs cleanup before it can be re-enabled.
         
         // if ((std::fabs(brake->pc[Out]) > brake->pc[Margin]) && (std::fabs(motor_last_pc) > brake->pc[Margin]) && (signbit(brake->pc[Out]) == signbit(motor_last_pc))) {  // if brake motor is moving
         //     if (pressure->pc() <= 80.0) {  // if not near the max pressure (where position changes very little)
@@ -467,8 +469,7 @@ class DiagRuntime {
         static float baseline_speed = speedo->val();
         bool fail = false;
         checkrange(_Speedo);
-        // commented this b/c ... why?
-        // // checks if speedo isn't zero when stopped, or doesn't increase when we drive
+        // Stopped-speed check disabled (reason unknown). Active code below only checks during acceleration.
         // if (runmode == Standby) {  // || runmode == Hold  // check that the speed is zero when stopped
         //     // if (gunning_last) speedoTimer.reset();       // if we just stopped driving, allow time for car to stop
         //     // else if (speedoTimer.expired()) {            // if it has been enough time since entering standby, we should be stopped
@@ -665,7 +666,7 @@ class BootMonitor {
     LoopTimer* myloop;
     std::string codestatuscard[NumCodeStatuses] = { "confused", "asleep", "booting", "parked", "stopped", "panicking", "in basicmode", "driving" };
     Timer highWaterTimer{30000000};
-    TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4;
+    TaskHandle_t* task1; TaskHandle_t* task2; TaskHandle_t* task3; TaskHandle_t* task4; TaskHandle_t* task5;
     UBaseType_t highWaterBytes;
     bool wrote_panic, wrote_ign, was_panicked = false;
     void flash_codestatus(int _stat) {
@@ -702,8 +703,8 @@ class BootMonitor {
         else if (runmode == Standby) dowrite = StParked;
         flash_codestatus(dowrite);  // write to flash we are in an appropriate place to lose power, so we can detect crashes on boot
     }
-    void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, int sec = -1) {
-        task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;
+    void setup(TaskHandle_t* t1, TaskHandle_t* t2, TaskHandle_t* t3, TaskHandle_t* t4, TaskHandle_t* t5, int sec = -1) {
+        task1 = t1;  task2 = t2;  task3 = t3;  task4 = t4;  task5 = t5;
         if (sec >= 0) timeout_sec = sec;
         ezread.squintf(ezread.highlightcolor, "Boot manager.. \n");
         psram_setup();
@@ -730,7 +731,7 @@ class BootMonitor {
         pet();
         if (codestatus == StBooting) set_codestatus();  // we are not booting any more
         write_uptime();
-        print_high_water(task1, task2, task3, task4);
+        print_high_water(task1, task2, task3, task4, task5);
     }
     void flash_forcewrite(const char* flashid, uint32_t val) {  // force writes a uint value to indicated flashed value. external code must be responsible here to not write unnecessarily!
         myprefs->putUInt(flashid, val);
@@ -752,7 +753,7 @@ class BootMonitor {
         panic_postmortem = (int)myprefs->getUInt("panicstop", (uint32_t)HIGH);
         runmode_postmortem = (int)myprefs->getUInt("runmode", (uint32_t)Fly);
         crashcount = (int)myprefs->getUInt("crashcount", 0);
-        if (codestatus_postmortem != Parked) crashcount++;
+        if (codestatus_postmortem != StParked) crashcount++;
         myprefs->putUInt("crashcount", (uint32_t)crashcount);
         wrote_panic = (codestatus_postmortem == StPanicking);
     }
@@ -775,9 +776,9 @@ class BootMonitor {
         }
         else ezread.squintf("   within the 1st minute of uptime.\n");
     }
-    void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4) {
+    void print_high_water(xTaskHandle* t1, xTaskHandle* t2, xTaskHandle* t3, xTaskHandle* t4, xTaskHandle* t5) {
         if (print_task_stack_usage && highWaterTimer.expireset()) {
-            ezread.squintf("mem minfree(B): heap:%d", xPortGetMinimumEverFreeHeapSize());            
+            ezread.squintf("mem minfree(B): heap:%d", xPortGetMinimumEverFreeHeapSize());
             highWaterBytes = uxTaskGetStackHighWaterMark(*t1) * sizeof(StackType_t);
             ezread.squintf(" temptask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t2) * sizeof(StackType_t);
@@ -785,7 +786,9 @@ class BootMonitor {
             highWaterBytes = uxTaskGetStackHighWaterMark(*t3) * sizeof(StackType_t);
             ezread.squintf(", pushtask:%d", highWaterBytes);
             highWaterBytes = uxTaskGetStackHighWaterMark(*t4) * sizeof(StackType_t);
-            ezread.squintf(", maftask:%d\n", highWaterBytes);
+            ezread.squintf(", maftask:%d", highWaterBytes);
+            highWaterBytes = uxTaskGetStackHighWaterMark(*t5) * sizeof(StackType_t);
+            ezread.squintf(", neotask:%d\n", highWaterBytes);
         }
     }
     void panic_on_crash() {

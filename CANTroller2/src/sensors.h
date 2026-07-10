@@ -93,7 +93,7 @@ class Param {
     float* _max_ptr = &_max_internal;
     void constrain_value() { _val = constrain(_val, *_min_ptr, *_max_ptr); }
   public:
-    Param() { _last = _val; }
+    Param() { _val = 0.0f; _last = 0.0f; }
     Param(float arg_val, float arg_min, float arg_max) {  // creates a regular constrained Param
         _val = arg_val;
         *_min_ptr = arg_min;
@@ -814,7 +814,7 @@ class BrakePositionSensor : public AnalogSensor {
 // pulse timing of a rotational Source (eg tachometer, speedometer).
 class PulseSensor : public Sensor {
   protected:
-    bool _low_pulse = true, _pin_level, _pin_inactive = false, _stopped = false;
+    bool _low_pulse = true, _pin_level, _pin_inactive = false, _stopped = false, _pinlevel_last = false;
     float _ema_tau_min_us = 1000.0f, _ema_tau_max_us = 100000.0f, _ema_alpha_max = 0.95f;  // default ema tau parameters. must be initialized in child classes!
     float _freqfactor = 1.0f;  // a fixed factor to compensate for multiple magnets (val <1) or divider circuitry (val >1).  also, the best gay club in miami
     Timer _pinactivitytimer{1500000};  // timeout we assume pin isn't active if no pulses occur. for display
@@ -872,13 +872,12 @@ class PulseSensor : public Sensor {
 
     float run_ema() override { return scaling_ema_filt(raw(), val(), _us, _ema_tau_us, _ema_alpha_max); }  // override ema calculator
     void set_pin_inactive() {
-        static bool pinlevel_last;
-        if (pinlevel_last != _pin_level) {
+        if (_pinlevel_last != _pin_level) {
             _pinactivitytimer.reset();
             _pin_inactive = false;
         }
         else if (_pinactivitytimer.expired()) _pin_inactive = true;
-        pinlevel_last = _pin_level;
+        _pinlevel_last = _pin_level;
     }
     float us_to_hz(float arg) {
         if (std::isnan(arg)) return 0.0f; // if invalid argument, return zero, a special value meaning we timed out

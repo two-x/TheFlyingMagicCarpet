@@ -80,7 +80,8 @@ class Encoder {
     volatile int isr_time_last;
     volatile int _bounce_lock = EncB;           // which of the encoder A or B inputs is currently untrustworthy due to bouncing 
     static const int _bounce_expire_us = 10000;  // need to let bounce lock expire to reliably catch turn events in either direction on direction reversals
-    volatile int _delta = 0;                     // keeps track of un-handled rotary clicks of the encoder. positive for CW clicks, Negative for CCW. 
+    volatile int _delta = 0;                     // keeps track of un-handled rotary clicks of the encoder. positive for CW clicks, Negative for CCW.
+    portMUX_TYPE _deltaMux = portMUX_INITIALIZER_UNLOCKED;  // protects _delta read-then-clear from ISR lost-update race
     int _a_pin, _b_pin, _sw_pin, _spintime_us = 1000000;  // how many us elapsed between the last two encoder detents? realistic range while spinning is 5 to 100 ms I'd guess
     bool activity = false;
     void read_pins() {
@@ -199,15 +200,19 @@ class Encoder {
     }
     bool* activity_ptr() { return &activity; }
     int rotation(bool accel=true) {  // returns detents spun since last call, accelerated by spin rate or not
+        portENTER_CRITICAL(&_deltaMux);
         int d = _delta;
-        _delta = 0;  // our responsibility to reset this flag after queries
+        _delta = 0;
+        portEXIT_CRITICAL(&_deltaMux);
         if (d) kick_inactivity_timer(HuEncTurn);  // register evidence of user activity
         if (accel) d *= _accel_factor;
         return d;
     }
     int rotdirection() {  // returns 0 if unspun, -1 if spun CCW, or 1 if spun CW
+        portENTER_CRITICAL(&_deltaMux);
         int d = _delta;
-        _delta = 0;       // our responsibility to reset this flag after queries
+        _delta = 0;
+        portEXIT_CRITICAL(&_deltaMux);
         if (d) kick_inactivity_timer(HuEncTurn);  // register evidence of user activity
         return constrain(d, -1, 1);
     }

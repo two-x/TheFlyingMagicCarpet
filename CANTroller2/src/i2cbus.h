@@ -1,8 +1,8 @@
 #pragma once
 #include <Wire.h>   // for i2c bus support
 enum i2c_nodes { I2CBogus=-1, I2CTouch=0, I2CLightbox=1, I2CAirVelo=2, I2CMAP=3, NumI2CSlaves=4 };  // I2CTouch, 
-std::string i2ccard[(int)NumI2CSlaves] = { "touch", "litbox", "airvel", "mapsns" };
-uint8_t known_i2c_addr[(int)NumI2CSlaves] = { 0x38, 0x69, 0x28, 0x18 };
+inline std::string i2ccard[(int)NumI2CSlaves] = { "touch", "litbox", "airvel", "mapsns" };
+inline uint8_t known_i2c_addr[(int)NumI2CSlaves] = { 0x38, 0x69, 0x28, 0x18 };
 
 class I2C {
   private:
@@ -59,6 +59,11 @@ class I2C {
     }
     bool detected(int device) {  // argument is one of the enums
         return _detected[device];
+    }
+    void set_detected(int device, bool state) { _detected[device] = state; }  // for devices (e.g. lightbox) that get periodically re-probed after boot, since they can be hot-plugged/powered independently of us
+    bool probe(uint8_t addr) {  // lightweight single-address presence check (fast NACK if absent), for periodic re-detection without a full bus rescan
+        Wire.beginTransmission(addr);
+        return Wire.endTransmission() == 0;
     }
     void pass_i2c_baton() {
         static int lastsens = I2CMAP;
@@ -123,7 +128,7 @@ class SparkFun_MicroPressure {
 // - (Optional) rst_pin, Reset pin for MPR sensor. Default: -1 (skip)
 // - minimum/maximum PSI, minimum range value of the sensor (in PSI). Default: 0
 // - maximumPSI, maximum range value of the sensor (in pSI). Default: 25
-SparkFun_MicroPressure::SparkFun_MicroPressure(int eoc_pin, int rst_pin, uint8_t minimumPSI, uint8_t maximumPSI) {
+inline SparkFun_MicroPressure::SparkFun_MicroPressure(int eoc_pin, int rst_pin, uint8_t minimumPSI, uint8_t maximumPSI) {
     _eoc = eoc_pin;
     _rst = rst_pin;
     _minPsi = minimumPSI;
@@ -133,7 +138,7 @@ SparkFun_MicroPressure::SparkFun_MicroPressure(int eoc_pin, int rst_pin, uint8_t
 // - deviceAddress, I2C address of the sensor. Default: 0x18
 // - wirePort, sets the I2C bus used for communication. Default: Wire
 // - Returns 0/1: 0: sensor not found, 1: sensor connected  */
-bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
+inline bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
     _addr = deviceAddress;
     _i2cPort = &wirePort;
     if(_eoc != -1) pinMode(_eoc, INPUT);
@@ -149,11 +154,11 @@ bool SparkFun_MicroPressure::begin(uint8_t deviceAddress, TwoWire &wirePort) {
     if (error == 0) return true;  // success
     return false; // fail
 }
-uint8_t SparkFun_MicroPressure::readStatus(void) {
+inline uint8_t SparkFun_MicroPressure::readStatus(void) {
     _i2cPort->requestFrom(_addr, (uint8_t)1); // WIP debugging
     return _i2cPort->read();
 }
-float SparkFun_MicroPressure::readPressure(MapUnits units, bool blocking) {
+inline float SparkFun_MicroPressure::readPressure(MapUnits units, bool blocking) {
     if (_errorflag != MapErrWaiting) {
         // Issue measurement command
         _i2cPort->beginTransmission(_addr);
@@ -238,15 +243,15 @@ class FS3000 {
     bool readData(uint8_t* buf);
     bool checksum(uint8_t* data);
 };
-bool FS3000::begin(TwoWire &wirePort) {
+inline bool FS3000::begin(TwoWire &wirePort) {
     _i2cPort = &wirePort;
     return isConnected();
 }
-bool FS3000::isConnected() {
+inline bool FS3000::isConnected() {
     _i2cPort->beginTransmission(FS3000_DEVICE_ADDRESS);
     return (_i2cPort->endTransmission() == 0);
 }
-void FS3000::setRange(uint8_t range) {
+inline void FS3000::setRange(uint8_t range) {
     _range = range;
     const float mps7[9]  = {0, 1.07f, 2.01f, 3.00f, 3.97f, 4.96f, 5.98f, 6.99f, 7.23f};
     const int   raw7[9]  = {409, 915, 1522, 2066, 2523, 2908, 3256, 3572, 3686};
@@ -257,26 +262,26 @@ void FS3000::setRange(uint8_t range) {
     else if (_range == AIRFLOW_RANGE_15_MPS)
         for (int i = 0; i < 13; i++) { _mpsDataPoint[i] = mps15[i]; _rawDataPoint[i] = raw15[i]; }
 }
-bool FS3000::readData(uint8_t* buf) {
+inline bool FS3000::readData(uint8_t* buf) {
     _i2cPort->requestFrom(FS3000_DEVICE_ADDRESS, (uint8_t)5);
     uint8_t i = 0;
     while (_i2cPort->available() && i < 5) buf[i++] = _i2cPort->read();
     while (_i2cPort->available()) _i2cPort->read();
     return (i == 5);
 }
-bool FS3000::checksum(uint8_t* data) {
+inline bool FS3000::checksum(uint8_t* data) {
     uint8_t sum = 0;
     for (int i = 1; i <= 4; i++) sum += data[i];
     return ((uint8_t)(sum + data[0]) == 0x00);
 }
-uint16_t FS3000::readRaw() {
+inline uint16_t FS3000::readRaw() {
     if (!readData(_buff)) return 0xFFFF;
     if (!checksum(_buff)) return 0xFFFF;
     uint16_t airflowRaw = ((_buff[1] & 0x0F) << 8) | _buff[2];
     if (airflowRaw == 0) return 0xFFFF;  // all-zeros passes checksum by coincidence — definitive I2C failure
     return airflowRaw;  // counts 1-408: live sensor below rated minimum; readMetersPerSecond() clamps to 0.0 mph
 }
-float FS3000::readMetersPerSecond() {
+inline float FS3000::readMetersPerSecond() {
     int airflowRaw = readRaw();
     if (airflowRaw == 0xFFFF) return NAN;
     if (airflowRaw <= 409) return 0.0f;
@@ -288,7 +293,7 @@ float FS3000::readMetersPerSecond() {
     float percentage = (float)(airflowRaw - _rawDataPoint[data_position]) / (float)(_rawDataPoint[data_position+1] - _rawDataPoint[data_position]);
     return _mpsDataPoint[data_position] + percentage * (_mpsDataPoint[data_position+1] - _mpsDataPoint[data_position]);
 }
-float FS3000::readMilesPerHour() { return readMetersPerSecond() * 2.2369362912f; }
+inline float FS3000::readMilesPerHour() { return readMetersPerSecond() * 2.2369362912f; }
 
 // LightingBox - object to manage 12c communications link to our lighting box
 // Our protocol is: 1st nibble of 1st byte contains 4-bit command/request code. The 2nd nibble and any additional bytes contain data, as required by the code
@@ -298,6 +303,9 @@ float FS3000::readMilesPerHour() { return readMetersPerSecond() * 2.2369362912f;
 class LightingBox {  // represents the lighting controller i2c slave endpoint
   private:
     Timer send_timer{250000};
+    Timer rescan_timer{2000000};  // lightbox can be powered on/off independently of us, so periodically re-probe for it rather than trusting only the boot-time scan
+    bool was_detected_init = false;  // becomes true after the first rescan, so we don't print a spurious transition message comparing against a default-initialized was_detected
+    bool was_detected = false;
     int runmode_last = Standby;
     uint16_t speed_last;
     uint8_t status_nibble_last;
@@ -309,8 +317,19 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     void update(float speed) {
         bool sent = false;
         if (i2c->not_my_turn(I2CLightbox)) return;
-        // if (i2c->detected(I2CLightbox) && send_timer.expireset()) {
-        if (send_timer.expireset()) {  // enable for now to test
+        if (rescan_timer.expireset()) {  // cheap (fast-NACK-if-absent) re-check, so hot-plug/unplug gets noticed within a couple seconds either direction
+            bool nowdetected = i2c->probe(_addr);
+            i2c->set_detected(I2CLightbox, nowdetected);
+            if (was_detected_init && nowdetected != was_detected) ezread.squintf(nowdetected ? ezread.highlightcolor : ezread.sadcolor, "Lightbox (i2c 0x%02x) %sdetected\n", _addr, nowdetected ? "" : "no longer ");
+            if (nowdetected && !was_detected) {  // box just came back (or appeared for the first time) - its own state reset when it lost power, so force a full resync instead of relying on our stale "last sent" trackers to skip everything as "unchanged"
+                status_nibble_last = 0xff;  // status nibble only uses its low 4 bits, so this value can never match and will always trigger a resend
+                runmode_last = -1;          // not a valid runmode
+                speed_last = 0xffff;        // not a plausible speed value (would be ~655 mph)
+            }
+            was_detected = nowdetected;
+            was_detected_init = true;
+        }
+        if (i2c->detected(I2CLightbox) && send_timer.expireset()) {  // only attempt the (larger, multi-byte) status sends once we know something's actually there to receive them
             sent = sendstatus();  // send status if it changed since last time
             sent |= sendrunmode(runmode);  // send runmode if it changed since last time
             if (!sent) sent = sendspeed(speed);  // if neither of above was sent, then send speed (to prevent long bus use)
@@ -331,7 +350,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         if (byt == status_nibble_last) return false;  // bail if no change to status occured
         Wire.beginTransmission(_addr);
         Wire.write(byt);
-        Wire.endTransmission(_addr);
+        Wire.endTransmission();
         status_nibble_last = byt;
         return true;
     }
@@ -341,7 +360,7 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         byt |= (uint8_t)(runmode & 0x0f);  // insert runmode in 2nd nibble
         Wire.beginTransmission(_addr);
         Wire.write(byt);
-        Wire.endTransmission(_addr);
+        Wire.endTransmission();
         runmode_last = runmode;
         return true;
     }

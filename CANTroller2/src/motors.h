@@ -664,7 +664,6 @@ class BrakeControl : public JagMotor {
     int feedback = FBHybrid, feedback_last = FBHybrid; // this is the default for sensors to use as feedback
     bool feedback_enabled[NumBrakeSens];
     int openloop_mode = OpenAutoRelHoldable; // if true, when in openloop the brakes release when trigger released. otherwise, control with thrigger using halfway point scheme
-    int ctrlmode = CtrlDisable;
     int dominantsens;
     bool brake_tempsens_exists = false, posn_pid_active = (dominantsens == FBPosition);
     QPID pids[NumBrakeSens]; // brake changes from pressure target to position target as pressures decrease, and vice versa
@@ -681,7 +680,7 @@ class BrakeControl : public JagMotor {
     float open_loop_attenuation_pc = 75.0f, thresh_loop_attenuation_pc = 45.0f, thresh_loop_hysteresis_pc = 2.0f;  // when driving blind i.e. w/o any sensors, what's the max motor speed as a percent
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt, PressureSensor* _pressure, BrakePositionSensor* _brkpos, ThrottleControl* _throttle, TemperatureSensorManager* _tempsens) {  // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         ezread.squintf(ezread.highlightcolor, "Brake (p%d) pid %s, feedback: %s\n", pin, gas_pid_default ? "enabled" : "disabled",  brakefeedbackcard[feedback].c_str());
-        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  throttle = _throttle;  tempsens = _tempsens; 
+        pressure = _pressure;  brkpos = _brkpos;  throttle = _throttle;  tempsens = _tempsens;
         pid_timeout = 40000; // needs to be long enough for motor to cause change in measurement, but higher means less responsive
         JagMotor::setup(_hotrc, _speedo, _batt);
         reverse = true;  // Jag forward (high us) extends piston (releases); positive pc must map to low us (Jag reverse = contracts = presses)
@@ -980,13 +979,14 @@ class BrakeControl : public JagMotor {
         else return calc_open_out(); // returns new pc[Out] value based on target value using simple open loop comparison
     }
     float postprocess_out(float a_outval) { // returns output value constrained to the operational range (or if calibrating, to the absolute range)
-        if (ctrlmode == CtrlPID); // don't mess with the output value that's being controlled internally to a pid. except for an artificial cleanzero unbeknownst to the pid
-        else if (ctrlmode == CtrlCalibrate) a_outval = constrain(a_outval, pc[AbsMin], pc[AbsMax]);
-        else if (enforce_positional_limits                              // IF we're not to exceed actuator position limits
-          && ((a_outval < pc[Stop] && brkpos->val() > brkpos->opmax())  //   AND ( trying to extend while at extension limit
-          || (a_outval > pc[Stop] && brkpos->val() < brkpos->opmin()))) //     OR trying to retract while at retraction limit )
-            a_outval = pc[Stop];                                        // THEN stop the motor
-        else a_outval = constrain(a_outval, pc[OpMin], pc[OpMax]);      // constrain motor value to operational range (in pid mode pids should manage this)
+        if (ctrlmode != CtrlPID) {  // PID manages its own output — don't clamp it here
+            if (ctrlmode == CtrlCalibrate) a_outval = constrain(a_outval, pc[AbsMin], pc[AbsMax]);
+            else if (enforce_positional_limits                              // IF we're not to exceed actuator position limits
+              && ((a_outval < pc[Stop] && brkpos->val() > brkpos->opmax())  //   AND ( trying to extend while at extension limit
+              || (a_outval > pc[Stop] && brkpos->val() < brkpos->opmin()))) //     OR trying to retract while at retraction limit )
+                a_outval = pc[Stop];                                        // THEN stop the motor
+            else a_outval = constrain(a_outval, pc[OpMin], pc[OpMax]);     // constrain motor value to operational range
+        }
         cleanzero(&a_outval, 0.01f); // if (std::fabs(pc[Out]) < 0.01f) pc[Out] = 0.0f; // prevent stupidly small values which i was seeing
         if (ctrlmode == CtrlCalibrate) return a_outval; // calibration: direct output, no rate limiting
         return rate_limiter(a_outval); // PID: external rate limiter smooths hard-stop transitions that bypass compute()'s internal limiter; open-loop: unchanged behavior
@@ -1087,7 +1087,7 @@ class SteeringControl : public JagMotor {
     void setup(Hotrc* _hotrc, Speedometer* _speedo, CarBattery* _batt) { // (int8_t _motor_pin, int8_t _press_pin, int8_t _posn_pin)
         set_ctrlmode(run_motor_ctrlmode[runmode][_SteerMotor]);
         set_out_changerate_pcps(350.0f);
-        ezread.squintf(ezread.highlightcolor, "Steering motor {p%d)\n", pin);
+        ezread.squintf(ezread.highlightcolor, "Steering motor (p%d)\n", pin);
         JagMotor::setup(_hotrc, _speedo, _batt);
     }
     void update() {

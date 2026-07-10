@@ -8,8 +8,8 @@
 #define idiot_lights_animation_duration_ms 6500
 
 // Declared outside of class because https://github.com/Makuna/NeoPixelBus/wiki/FAQ-%2311
-NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(striplength, neopixel_pin);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method,
-NeoPixelAnimator neoanimator(3); // Channel 0 for runmode pulse, Channel 1 for idiot lights, Channel 2 for Cylon
+inline NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(striplength, neopixel_pin);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method,
+inline NeoPixelAnimator neoanimator(3); // Channel 0 for runmode pulse, Channel 1 for idiot lights, Channel 2 for Cylon
 
 static const RgbColor BLACK = RgbColor(0);
 static const uint8_t idiot_light_colors[] = {0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8};
@@ -72,8 +72,9 @@ public:
     }
 };
 // Global idiot lights array
-// When placed inside the NeopixelStrip class, it's first member gets corrupted wtf so it lives out here for now.
-IdiotLight idiotlights[idiot_light_led_count] = {
+// When placed inside the NeopixelStrip class, its first member gets corrupted due to a static-initialization-order
+// issue with NeoPixelAnimator channel allocation, so it lives at file scope. TODO: investigate root cause.
+inline IdiotLight idiotlights[idiot_light_led_count] = {
     IdiotLight(0, RgbColor(0)), IdiotLight(0, RgbColor(0)), IdiotLight(0, RgbColor(0)),
     IdiotLight(0, RgbColor(0)), IdiotLight(0, RgbColor(0)), IdiotLight(0, RgbColor(0)),
     IdiotLight(0, RgbColor(0))
@@ -93,7 +94,7 @@ private:
         neoanimator.StartAnimation(AnimRunmode, runmode_lights_animation_duration_ms, [this](const AnimationParam& param) {
             float lowpower_dimfactor = 0.15f;
 
-            float wave_brightness = ((cos(param.progress * 2 * PI) + 1.0f) * 0.45f) + 0.1f;  // Cosine wave from 0.1 to 1
+            float wave_brightness = ((cos(param.progress * 2 * PI) + 1.0f) * 0.45f) + 0.1f;  // Cosine wave from 0.1 to 1 — PI is Arduino-specific; use M_PI for portability
             if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended
             RgbColor pulse_color = chg_pix_brightness(wave_brightness);
             
@@ -107,15 +108,8 @@ private:
             neoobj.SetPixelColor(1, pulse_color);  // Set pcba backlight pixels to the sin wave 
             if (runmode != LowPower) neoobj.SetPixelColor(2, pulse_color);  // in sleep mode this one does the cylon effect
 
-            // !! This creates a bottomless recursion which will cause a stack overflow! Removing
-            //
-            // // Restart animation when it completes for continuous loop
-            // if (param.progress >= 1.0f) {
-            //     this->startRunmodeAnimation();  
-            // }
-            //
-            // Instead allow the update function to access the animation progress and restart accordingly
-            //   Same change is also made to the other 2 animations below
+            // Restarting the animation from inside its own callback caused bottomless recursion (stack overflow).
+            // The update() function checks param.progress and restarts animations externally instead.
             this->progressAnim[AnimRunmode] = param.progress;
         });
     }
@@ -334,6 +328,7 @@ public:
         }
     }
     void setIdiotLightCriticalAlertMode(int idiot_index, bool panic_mode) {
+        if (idiot_index < 0 || idiot_index >= idiot_light_led_count) return;
         idiotlights[idiot_index].criticalAlertMode = panic_mode;
     }
 

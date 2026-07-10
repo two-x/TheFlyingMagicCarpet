@@ -1,6 +1,6 @@
 // Carpet CANTroller III  main source Code  - see README.md
 #include "objects.h"
-TaskHandle_t temptask = NULL, maftask = NULL, pushtask = NULL, drawtask = NULL;
+TaskHandle_t temptask = NULL, maftask = NULL, pushtask = NULL, drawtask = NULL, neotask = NULL;
 
 void setup() {             // runs once automatically immediately upon boot
     initialize_boot();     // set pins, read the basic switch (only possible w/o console), then start the serial console for boot msgs. run 1st!
@@ -9,13 +9,13 @@ void setup() {             // runs once automatically immediately upon boot
     touch.setup(&lcd, &i2c); // set up touchscreen object. must run before screen driver, which is also driver for touchscreen
     screen.setup();        // start up the screen asap so we can monitor the boot progress on the ezread console. also inits touchscreen
     i2c.reinit_wire();    // LovyanGFX touch init (in screen.setup) reinitializes I2C port 0, breaking Wire — restore it here before i2c sensors are set up
-    xTaskCreatePinnedToCore(push_task, "taskPush", 2048, NULL, 4, &pushtask, CONFIG_ARDUINO_RUNNING_CORE);     // display bus-push task  // 2048 works, 1024 failed
+    xTaskCreatePinnedToCore(push_task, "taskPush", 2048, NULL, 4, &pushtask, 1 - CONFIG_ARDUINO_RUNNING_CORE); // display bus-push task  // 2048 works, 1024 failed // moved off loop()'s core: the screen bus write is slow, and at prio 4 (> loop()'s prio 1) it would otherwise preempt and stall loop() every ~1ms tick
     xTaskCreatePinnedToCore(draw_task, "taskDraw", 4096, NULL, 4, &drawtask, 1 - CONFIG_ARDUINO_RUNNING_CORE); // display drawing task   // 4096 works, 2048 failed
     running_on_devboard = !tempsens.setup();  // initialize onewire bus & temp sensors. The addrs of detected sensors informs if running on vehicle
-    xTaskCreatePinnedToCore(tempsens_task, "taskTemp", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE); // temp sensors read task // 4096 works, 3072 failed,  priority is from 0 to 24=highest    
+    xTaskCreatePinnedToCore(tempsens_task, "taskTemp", 4096, NULL, 6, &temptask, 1 - CONFIG_ARDUINO_RUNNING_CORE); // temp sensors read task // 4096 works, 3072 failed — priority 6 is highest of the tasks sharing this core (draw/push/maf), so it wins contention among them; doesn't affect loop(), which is alone on the other core; ESP-IDF internals run above 24
     set_board_defaults();  // changes some configuration options based on whether we're running on the real car
     run_tests();           // runs some sanity checks to ensure the code is self-consistent - Anders wrote this but it needs expansion
-    watchdog.setup(&temptask, &drawtask, &pushtask, &maftask);  // the watchdog must frequently be pet by the code, or it will assume we crashed & automatically reset it. disabled due to some bug i forgot
+    watchdog.setup(&temptask, &drawtask, &pushtask, &maftask, &neotask);  // the watchdog must frequently be pet by the code, or it will assume we crashed & automatically reset it. disabled due to some bug i forgot
     bootbutton.setup();    // init button on the esp board, for misc use
     hotrc.setup();         // init hotrc remote control handle, source of steering/throttle/brake commands (how we drive the car)
     pot.setup();           // init potentiometer knob which is a user input device, used for adjusting analog values including emulating sensor or motor activity
@@ -27,7 +27,7 @@ void setup() {             // runs once automatically immediately upon boot
     speedo.setup();        // init speedometer, which is based on pulses from magnets on the drive axle passing near a hall effect sensor
     airvelo.setup();       // init i2c air velocity sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
     mapsens.setup();       // init i2c manifold air pressure sensor, to calc mass airflow value needed for proper throttle pid feedback (currently only monitored)
-    xTaskCreatePinnedToCore(maf_task, "taskMAF", 4096, NULL, 4, &maftask, CONFIG_ARDUINO_RUNNING_CORE);  // update mass airflow determination, including reading map and airvelo sensors
+    xTaskCreatePinnedToCore(maf_task, "taskMAF", 4096, NULL, 4, &maftask, 1 - CONFIG_ARDUINO_RUNNING_CORE);  // update mass airflow determination, including reading map and airvelo sensors // moved off loop()'s core: mapsens.update()/airvelo.update() are i2c reads with multi-ms waits (up to ~2ms), and at prio 4 (> loop()'s prio 1) would otherwise stall loop() when they periodically wake
     lightbox.setup();      // init object for the lighting control box (an i2c slave)
     starter.setup();       // init handler for the car starter motor
     gas.setup(&hotrc, &speedo, &tach, &pot, &tempsens);
@@ -35,6 +35,7 @@ void setup() {             // runs once automatically immediately upon boot
     steer.setup(&hotrc, &speedo, &mulebatt);
     sim_setup();           // simulator initialize devices and pot map
     neo.setup();          // init neopixels
+    xTaskCreatePinnedToCore(neo_task, "taskNeo", 4096, NULL, 4, &neotask, 1 - CONFIG_ARDUINO_RUNNING_CORE); // neopixel update/send task // moved off loop()'s core: neoobj.Show() is a blocking write to the RMT hw peripheral (~300-400us), same class of offender as taskTemp/taskMAF
     idiots.setup();        // print idiot lights count to boot log
     diag.setup();          // initialize diagnostic engine
     ignition.setup();      // must be after diag setup
@@ -62,9 +63,9 @@ void loop() {              // arduino-style loop() is like main() but with a bui
     touch.update();        // read touchscreen input and do what it tells us to
     tuner.update();        // if tuning edits are instigated by the encoder or touch, modify the corresponding variable values
     diag.update();         // notice any screwy conditions or suspicious shenanigans - consistent 200us
-    neo.update();          // update/send neopixel colors
-    lightbox.update(speedo.val());  // communicate any relevant data to the lighting controller
+    // neo.update() no longer called here — moved to its own taskNeo (see setup()), since neoobj.Show() blocks on the RMT peripheral
+    // lightbox.update() no longer called here — moved into taskMAF (see objects.h), grouped with the other i2c peripherals off loop()'s core
     // fan.update();          // update vehicle thermostat controlling radiator cooling fan
     ezread.update();       // allow the ezread spam detector to evaporate some old data from its buffer
     looptimer.update();    // looptimer.mark("F");
- }  // vTaskDelay(pdMS_TO_TICKS(1));   // pause continuous execution for 1ms to allow other tasks some cpu time. not sure if this is needed. (is there any way to delay for shorter than a whole damn millisecond)
+ }  // vTaskDelay: not needed — loop() has core CONFIG_ARDUINO_RUNNING_CORE all to itself now (all other tasks are pinned to the opposite core), so yielding here does not help any other task and wastes ~1ms per loop

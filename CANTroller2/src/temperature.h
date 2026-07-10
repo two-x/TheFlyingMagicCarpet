@@ -8,7 +8,7 @@ enum class loc { TempAmbient=0, TempEngine, TempWheelFL, TempWheelFR, TempWheelR
 enum temp_categories { CatUnknown=0, CatAmbient=1, CatEngine=2, CatWheel=3, CatBrake=4, NumTempCategories=5 };  // 
 enum brakemotor_types { Nil=-1, Thomson=0, MotorFactoryStore=1, GoMotorWorld1=2, GoMotorWorld2=3, NumBrakeMotorTypes=4 };
     
-float temp_lims_f[NumTempCategories][NumMotorVals] {
+inline float temp_lims_f[NumTempCategories][NumMotorVals] {
     // changed opmin values all to 40 to avoid idiot lights. engine opmin was 125, wheel was 50, brake was 45
     // alarm value is where idiot lights light up 
     {  40.0f,  77.0f, 135.0f, 120.0f, NAN, -67.0f, 257.0f, 2.0f },  // [CatUnknown] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
@@ -30,7 +30,7 @@ private:
     int category = CatUnknown;
 public:
     TemperatureSensor(loc location, const DeviceAddress& address, DallasTemperature* tempsensebus)
-   : _location(location), _address(address), _tempsensebus(tempsensebus), _temperature(-999) {}
+   : _location(location), _address(address), _tempsensebus(tempsensebus), _temperature(NAN) {}
 
     TemperatureSensor() = delete; // always create with a pointer to the tempsensorbus
     float* degf[NumMotorVals] = { nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr, nanptr };
@@ -144,7 +144,7 @@ public:
 private:
     // Replace DeviceAddress with std::array<uint8_t, 8>
     using DeviceAddress = std::array<uint8_t, 8>;
-    bool brake_assigned;
+    bool brake_assigned = false;
     unsigned long last_read_request_time;
     int sensor_index;
     int lost_sensors = 0;
@@ -193,7 +193,7 @@ private:
         DeviceAddress gmw1_brake_address = {0x28, 0xf0, 0x03, 0xb6, 0x5c, 0x21, 0x01, 0x21};
         DeviceAddress gmw2_brake_address = {0x28, 0xb5, 0x1d, 0x9c, 0x4b, 0x20, 0x01, 0xfe};
         
-        bool brake_assigned = false;
+        brake_assigned = false;
 
         // First handle brake sensors
         for (auto& detected_address : detected_addresses) {
