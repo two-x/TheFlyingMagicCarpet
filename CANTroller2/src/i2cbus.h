@@ -68,6 +68,14 @@ class I2C {
     bool detected(int device) {  // argument is one of the enums
         return _detected[device];
     }
+    // For a device whose own real traffic (not a dedicated probe) can tell us whether it's present - eg LightingBox, which controls both
+    // ends of the protocol and can just check Wire.endTransmission()'s result on its regular sends. No separate periodic probing needed:
+    // if a send ACKs, it's there; if not, it isn't - "who cares" why, it'll be picked up again next time something is sent.
+    void set_detected(int device, bool state) {
+        if (state != _detected[device])
+            ezread.squintf(state ? ezread.gladcolor : ezread.sadcolor, "%s %sdetected at 0x%02x\n", i2ccard[device].c_str(), state ? "" : "no longer ", _devaddrs[device]);
+        _detected[device] = state;
+    }
 };
 
 // map.h - an i2c sensor to track the air pressure in our intake manifold. This, together with the air velocity
@@ -287,26 +295,25 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
   private:
     Timer send_timer{250000};
     int runmode_last = Standby;
-    uint16_t speed_last;
     uint8_t status_nibble_last;
     I2C* i2c;
     uint8_t _addr = known_i2c_addr[I2CLightbox];
     // DiagRuntime* diag;
   public:
     LightingBox(I2C* _i2c) : i2c{_i2c} {}  // LightingBox(DiagRuntime* _diag) : diag(_diag) {}
-    // Detection is boot-time only (like touch/mapsens/airvelo) - no periodic re-probing. A previous version periodically re-probed this address to support
-    // hot-plugging the box at runtime, but that probe (NACK'ing when the box was absent) turned out to occasionally trigger a slow ESP32 i2c-driver recovery
-    // path that could stall the whole physical bus for the better part of a second, corrupting the touchscreen driver and other sensors along with it. Not
-    // worth the hot-plug convenience given that risk - if the box is absent at boot, it just stays undetected (and silent, since sends below are gated on
-    // detection) until the next boot.
+    // No dedicated hot-plug probe needed: we control both ends of this protocol, so sendspeed() below always actually transmits (unlike
+    // sendstatus/sendrunmode, which only send on a real change) and its own Wire.endTransmission() result IS the detection signal - ACKs
+    // mean it's there, NACKs mean it isn't, and it's retried again next send_timer tick regardless. This used to be a separate periodic
+    // probe, which was tried once before and reverted because a NACK'd probe could occasionally trigger a slow ESP32 i2c-driver recovery
+    // path that stalled the whole bus for the better part of a second - back when touch used its own independent, uncoordinated i2c driver
+    // stack, a stall here could corrupt touch's concurrent reads. Now that touch and Wire share one driver stack fully serialized by
+    // I2C::_busmutex (see i2cbus.h), a slow recovery here can only make other i2c consumers briefly wait on the mutex, not get corrupted.
     void update(float speed) {
-        bool sent = false;
-        if (i2c->detected(I2CLightbox) && send_timer.expireset()) {  // only attempt sends once we know something's actually there to receive them
-            sent = sendstatus();  // send status if it changed since last time
+        if (send_timer.expireset()) {
+            bool sent = sendstatus();  // send status if it changed since last time
             sent |= sendrunmode(runmode);  // send runmode if it changed since last time
-            if (!sent) sent = sendspeed(speed);  // if neither of above was sent, then send speed (to prevent long bus use)
+            if (!sent) sendspeed(speed);  // if neither of above was sent, then send speed (to prevent long bus use) - always transmits, doubling as the detection heartbeat
         }
-        return;
     }
     void setup() {
         ezread.squintf(ezread.highlightcolor, "Lightbox (i2c 0x%02x) init\n", _addr);  // ezread.squintf("Lighting box serial comm..\n");
@@ -322,8 +329,9 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         i2c->lock();
         Wire.beginTransmission(_addr);
         Wire.write(byt);
-        Wire.endTransmission();
+        uint8_t error = Wire.endTransmission();
         i2c->unlock();
+        i2c->set_detected(I2CLightbox, error == 0);
         status_nibble_last = byt;
         return true;
     }
@@ -334,24 +342,24 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         i2c->lock();
         Wire.beginTransmission(_addr);
         Wire.write(byt);
-        Wire.endTransmission();
+        uint8_t error = Wire.endTransmission();
         i2c->unlock();
+        i2c->set_detected(I2CLightbox, error == 0);
         runmode_last = runmode;
         return true;
     }
-    bool sendspeed(float _speed) {
+    bool sendspeed(float _speed) {  // always actually transmits (no bail-if-unchanged) - this is the detection heartbeat, see update()
         uint8_t byt = 0x20;  // command template for speed update
         uint16_t speed = (uint16_t)(_speed * 100.0f);
-        if (speed == speed_last) return false;  // bail if speed has not changed
         byt |= ((uint8_t)(speed >> 8) & 0x0f);
         i2c->lock();
         Wire.beginTransmission(_addr);
         Wire.write(byt);
         byt = (uint8_t)(speed & 0xff);
         Wire.write(byt);
-        Wire.endTransmission();
+        uint8_t error = Wire.endTransmission();
         i2c->unlock();
-        speed_last = speed;
+        i2c->set_detected(I2CLightbox, error == 0);
         return true;
     }
 };
