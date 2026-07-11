@@ -1,5 +1,6 @@
 #pragma once
 #include "FunctionalInterrupt.h"
+#include <TouchDrv.hpp>  // Wire-based FT5206/FT6206/FT6236/FT6336 touch driver (SensorLib, class TouchDrvFT6X36) - see Touchscreen class below
 class MomentarySwitch {
   private:
     int _sw_action = SwNone;               // flag for encoder handler to know an encoder switch action needs to be handled
@@ -244,8 +245,13 @@ class Encoder {
 class Touchscreen {
   private:
     I2C* _i2c;
-    LGFX* _tft;
-    int corners[2][2] = { { -100, 319 },  { 0, 174 } }; // [Horz/Vert][min/max]  // read resistance values from upper-left and lower-right corners of screen, for calibration
+    TouchDrvFT6X36 _touchdrv;  // Wire-based (SensorLib) - shares the single Wire i2c driver stack with airvelo/mapsens/lightbox instead of
+                                // LovyanGFX's own independent i2c engine, which used to fight Wire for the same physical bus/peripheral
+    // [Horz/Vert][min/max] - raw touch chip coordinate range mapped to each screen axis, for calibration. Measured directly (see get_touch_debounced()'s
+    // chip.x/chip.y -> raw[Horz]/raw[Vert] swap below): chip.x tracks screen Vert directly (0 at top, 239 at bottom, not inverted); chip.y tracks
+    // screen Horz inverted (319 at left, 0 at right). Replaces the old LovyanGFX-corrected-coordinate-space calibration, which no longer applies
+    // now that touch reads the chip's native coordinates directly (no more offset_rotation=2 correction happening upstream).
+    int corners[2][2] = { { 319, 0 },  { 0, 239 } };
     bool longpress_possible = true, recent_tap = false, doubletap_possible = false;  // ts_tapped = false, ts_doubletapped = false, ts_longpressed = false;
     bool lasttouch = false, printEnabled = true, swipe_possible = true;  // , nowtouch = false, nowtouch2 = false;
     int fd_exponent = 0, fd_exponent_max = 14, tlast_x, tlast_y, keyrepeats = 0;
@@ -268,8 +274,16 @@ class Touchscreen {
     // lcd.setTouch(touch_cal_data);
     void get_touch_debounced() {  // this updates nowtouch, rejecting any spurious touch or un-touch blips shorter than filterTimer timeout
         static bool filtertimer_active;
-        uint8_t count = _tft->getTouch(&(raw[Horz]), &(raw[Vert]));
-        bool triggered = (count > 0);
+        _i2c->lock();  // shares the Wire i2c driver stack with airvelo/mapsens/lightbox - see I2C::_busmutex
+        const TouchPoints& pts = _touchdrv.getTouchPoints();
+        _i2c->unlock();
+        bool triggered = pts.hasPoints();
+        if (triggered) {
+            // swapped vs the chip's own x/y - confirmed via swipe testing that the raw chip's native axes are rotated 90 degrees relative to the
+            // screen (see corners[] comment above) now that LovyanGFX's touch-specific offset_rotation=2 correction is gone
+            raw[Horz] = pts.getPoint(0).y;
+            raw[Vert] = pts.getPoint(0).x;
+        }
         // Serial.printf("n:%d t:%d\n", nowtouch, touch_triggered);
         if (nowtouch != triggered) {            // if the hardware returned opposite our current filtered state, get triggered
             if (!filtertimer_active) {       // if we're not already waiting for validity
@@ -307,14 +321,18 @@ class Touchscreen {
     int idelta, id;         // id is edit amount as integer for locally made edits. idelta is edit amount as integer for passing off to tuner object.
     bool increment_datapage = false, increment_sel = false, detected = false;
     Touchscreen() {}
-    void setup(LGFX* tft, I2C* i2c) {
+    void setup(I2C* i2c) {
         if (!display_enabled) return;
-        _tft = tft;
         _i2c = i2c;
         disp_size[Horz] = disp_width_pix;
         disp_size[Vert] = disp_height_pix;
         detected = i2c->detected(I2CTouch);
         ezread.squintf(ezread.highlightcolor, "Touchscreen.. captouch panel %sdetected\n", (detected) ? "" : "not ");
+        if (detected) {
+            _i2c->lock();
+            _touchdrv.begin(Wire, known_i2c_addr[I2CTouch], i2c_sda_pin, i2c_scl_pin);
+            _i2c->unlock();
+        }
         if (   (senseTimer.timeout() >= filterTimer.timeout()) || (filterTimer.timeout() >= twotapTimer.timeout())  // checks all the timeouts are in length order
             || (filterTimer.timeout() >= repeat_timeout)       || (filterTimer.timeout() >= accel_timeout)
             || (twotapTimer.timeout() >= longpress_timeout)    || (swipe_timeout >= longpress_timeout)

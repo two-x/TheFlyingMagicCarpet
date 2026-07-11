@@ -12,6 +12,11 @@ class I2C {
     uint8_t _devaddrs[NumI2CSlaves];  // addresses of known devices, ordered per enum
     bool _detected[NumI2CSlaves];  // detection status of known devices, ordered per enum
     Timer scanTimer;
+    // Touch (SensorLib's TouchDrvFT6X36, see inputs.h) and airvelo/map/lightbox all now go through the same single Wire i2c driver
+    // stack, sharing the exact same physical bus (see i2c_sda_pin/i2c_scl_pin in globals.h - one bus, four devices). Wire itself is
+    // not thread/task-safe across cores, so this mutex serializes every actual transaction: every Wire call (i2cbus.h/sensors.h) and
+    // the touch driver's own read (inputs.h) all take it via lock()/unlock() before touching the bus.
+    SemaphoreHandle_t _busmutex;
     void fill_det_array() {
         for (int sl = 0; sl<NumI2CSlaves; sl++) {
             _detected[sl] = false;
@@ -20,7 +25,9 @@ class I2C {
         }
     }
   public:
-    I2C(int sda_pin_arg, int scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) {}
+    I2C(int sda_pin_arg, int scl_pin_arg) : _sda_pin(sda_pin_arg), _scl_pin(scl_pin_arg) { _busmutex = xSemaphoreCreateMutex(); }
+    void lock() { xSemaphoreTake(_busmutex, portMAX_DELAY); }
+    void unlock() { xSemaphoreGive(_busmutex); }
     int setup(uint8_t touch_addr, uint8_t lightbox_addr, uint8_t airvelo_addr, uint8_t map_addr) {
         _devaddrs[I2CTouch] = touch_addr;
         _devaddrs[I2CLightbox] = lightbox_addr;
@@ -30,6 +37,7 @@ class I2C {
         delay(1);  // attempt to force print to happen before init
         scanTimer.reset();
         if (disabled) return 0;
+        lock();
         Wire.begin(_sda_pin, _scl_pin, i2c_frequency);  // I2c bus needed for airflow sensor
         Wire.setTimeOut(25);  // set ms to move on if a device holds SCL for too long. default = 50
         byte error, address;
@@ -47,6 +55,7 @@ class I2C {
                 ezread.squintf(ezread.madcolor, "  error device addr 0x%s%x\n", (address < 16) ? "0" : "", address);
             }
         }
+        unlock();
         if (scanTimer.elapsed() > 5000000) ezread.squintf(ezread.madcolor, "  err: i2c timeout & fail bus scan\n");
         if (_devicecount == 0) ezread.squintf(ezread.sadcolor, "  no devices found\n");
         fill_det_array();
@@ -58,10 +67,6 @@ class I2C {
     }
     bool detected(int device) {  // argument is one of the enums
         return _detected[device];
-    }
-    void reinit_wire() {  // call after any library (e.g. LovyanGFX touch) that may reinitialize I2C port 0
-        Wire.begin(_sda_pin, _scl_pin, i2c_frequency);
-        Wire.setTimeOut(25);
     }
 };
 
@@ -314,9 +319,11 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         uint8_t alarm = 0;  // (diag->worst_sensor(4) != _None);
         byt |= (uint8_t)syspower.val() | (uint8_t)(panicstop << 1) | (uint8_t)(warning << 2) | (alarm << 3);  // insert status bits nibble
         if (byt == status_nibble_last) return false;  // bail if no change to status occured
+        i2c->lock();
         Wire.beginTransmission(_addr);
         Wire.write(byt);
         Wire.endTransmission();
+        i2c->unlock();
         status_nibble_last = byt;
         return true;
     }
@@ -324,9 +331,11 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         uint8_t byt = 0x10;  // command template for runmode update
         if (runmode == runmode_last) return false;  // bail if no change to runmode occured
         byt |= (uint8_t)(runmode & 0x0f);  // insert runmode in 2nd nibble
+        i2c->lock();
         Wire.beginTransmission(_addr);
         Wire.write(byt);
         Wire.endTransmission();
+        i2c->unlock();
         runmode_last = runmode;
         return true;
     }
@@ -335,11 +344,13 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
         uint16_t speed = (uint16_t)(_speed * 100.0f);
         if (speed == speed_last) return false;  // bail if speed has not changed
         byt |= ((uint8_t)(speed >> 8) & 0x0f);
+        i2c->lock();
         Wire.beginTransmission(_addr);
         Wire.write(byt);
         byt = (uint8_t)(speed & 0xff);
         Wire.write(byt);
         Wire.endTransmission();
+        i2c->unlock();
         speed_last = speed;
         return true;
     }

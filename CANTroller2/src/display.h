@@ -16,7 +16,7 @@
 std::string side_menu_buttons[5] = { "PAG", "SEL", "+  ", "-  ", "ANI" };  // pad shorter names with spaces on the right
 std::string top_menu_buttons[4]  = { "CAL", "SIM", "CH4", "IGN" };
 std::string ch4_menu_buttons[NumRunModes] = { "CH4", "WAKE", "SLEEP", "START", "DMODE", "CRUIS", "FLY", "CH4" }; // Basic, LowPwr, Stndby, Stall, Hold, Fly, Cruise, Cal
-std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airvel", "mapsns", "engtmp", "batery", "startr", "basic", "ign", "syspwr" };
+std::string sensorcard[14] = { "none", "joy", "bkpres", "brkpos", "speedo", "tach", "airvel", "mapsns", "batery", "engtmp", "basic", "startr", "ign", "syspwr" };  // labels the sens enum (sensors.h) - indices 8-11 are mulebatt/engtemp/basicsw/starter, in that order; 12-13 (ign/syspwr) are leftover from before those were split out of the sens enum
 std::string uicontextcard[NumContextsUI] = { "ezread", "chasis", "animat" };
 // std::string pcbaglowcard[GlowNumModes] = { "off", "simple", "heart", "xfade", "sine" };
 #define __________ "      \xf9"

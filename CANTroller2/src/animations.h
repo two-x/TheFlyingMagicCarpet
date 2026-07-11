@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include <cstring>
 
 #define disp_apppanel_x 150
 #define disp_apppanel_y 43  // was 48
@@ -260,9 +261,12 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         seasontimer.set(seasontime);
         shape = rn(Rotate);
     }
-    void reset(LGFX_Sprite* sp0, LGFX_Sprite* sp1, viewport* _vp) {
+    void reset(LGFX_Sprite* sp0, LGFX_Sprite* sp1, viewport* _vp, bool randomize=true) {
         vp = _vp;
-        change_pattern(-2);  // randomize new pattern whenever turned off and on
+        shdone = 1;  // ensure a fresh full run of shape changes before update() next signals completion (see change_pattern()/update())
+        if (randomize) change_pattern(-2);  // pick a new random starting shape (used for the automatic idle-driven cycle) - the caller (eg
+                                             // cycle_anim(), for user swipe navigation) passes false when it has already explicitly chosen
+                                             // a specific starting shape itself right after calling change_saver(), which this must not clobber
         scaler = std::max(1, (vp->w + vp->h)/200);
         _is_running = true;
     }
@@ -296,7 +300,10 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         // pot_timing();
         if (cycletimer.expired()) {
             ++cycle %= num_cycles;
-            if (cycle == 0) change_pattern(-1);
+            if (cycle == 0) {
+                ++shdone %= 7;  // counts progress toward this run's completion - only this natural internal advance counts (see change_pattern())
+                change_pattern(-1);
+            }
             cycletimer.set((cycletime / ((cycle == 2) ? 5 : 1)) << (shape == Worm));
         }  // Serial.printf("[c%d] ", cycle);
         if (seasontimer.expired()) {
@@ -310,7 +317,11 @@ class EraserSaver {  // draws colorful patterns to exercise video buffering perf
         return shdone;
     }
     int change_pattern(int newpat = -1) {  // pass non-negative value for a specific pattern, or  -1 for cycle, -2 for random, -3 for cycle backwards  // XX , -4 for autocycle (retains saver timeout)
-        ++shdone %= 7;
+        // shdone (this run's completion progress) is deliberately NOT bumped here - it's only incremented at update()'s internal cycletimer-driven
+        // call site. this function is also called with an explicit shape (by cycle_anim(), for user swipe navigation) or with -2 (by reset(), for
+        // the automatic idle-driven cycle's fresh random start) - bumping shdone here too used to make still_running (== shdone) hit 0 far more
+        // often than once per full 7-shape run, causing eraser/collision to alternate on nearly every single shape change instead of cycling
+        // through all of erasersaver's shapes before moving to collisionsaver.
         int last_pat = shape;
         has_eraser = !(bool)rn(3);
         if (0 <= newpat && newpat < NumSaverShapes) shape = newpat;  //
@@ -663,41 +674,55 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
     LGFX_Sprite* nowspr_ptr;
     viewport* vp;
     EZReadConsole* ez;
-    void draw_scrollbar(LGFX_Sprite* spr, uint8_t color) {  // this runs but is not finished and doesn't do anything
-        int cent = (int)((float)vp->h * 0.125f) - 6;
-        for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
-        cent = (int)((float)vp->h * 0.375f) - 6;
-        for (int arrow=0; arrow<3; arrow++) {
-            int my_y = cent + arrow * 5 - 4;    
-            for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, my_y + i, i + 1, color);
-        }
-        cent = (int)((float)vp->h * 0.625f) - 6;
-        for (int arrow=0; arrow<3; arrow++) {
-            int my_y = cent + arrow * 5 - 4;    
-            for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, my_y, i + 1, color);
-        }
-        // int cent = vp->h / 8 - 6;
-        // for (int i=0; i<3; i++) spr->drawFastVLine(vp->x + i, cent + 12 - (i + 1) * 4, (i + 1) * 4, color);
+    static constexpr int max_snapshot_lines = 64;  // generous upper bound on rows the console area could ever fit
+    static constexpr int max_snapshot_linelen = 100;  // matches ezprint_core's own temp[100] bound, so no truncation vs what's actually stored
+    void draw_scrollbar(LGFX_Sprite* spr, uint8_t color) {  // skinny capsule-shaped track spanning the console, plus a bright thumb showing where in the scrolled-back history we're currently viewing
+        int track_h = vp->h;
+        spr->fillRoundRect(vp->x, vp->y, scrollbar_width, track_h, scrollbar_width / 2, color);  // dim oval track, full height of the console
+        xSemaphoreTake(ez->_bufMux, portMAX_DELAY);  // see EZReadConsole::_bufMux - keeps this read consistent with any concurrent print()/lookback()
+        int max_offset = ez->has_wrapped ? ez->bufferSize - 1 : ez->current_index;  // how far back scrolling can currently go
+        int safe_offset = constrain(ez->offset, 0, max_offset);
+        xSemaphoreGive(ez->_bufMux);
+        if (max_offset <= 0) return;  // no history yet to scroll through - just show the empty track
+        float frac = (float)safe_offset / max_offset;  // 0 = newest (bottom of track), 1 = oldest (top of track)
+        int thumb_h = std::max(scrollbar_width, track_h / 8);  // bright thumb, a small fraction of the track's height
+        int thumb_y = vp->y + (int)((track_h - thumb_h) * frac);  // slides from bottom to top as frac goes 0 -> 1
+        spr->fillRoundRect(vp->x, thumb_y, scrollbar_width, thumb_h, scrollbar_width / 2, WHT);  // bright spot marking current scroll position
     }
     void draw(LGFX_Sprite* spr) {
-        draw_scrollbar(spr, LGRY);  // currently draws just a very skinny blank column a few pixels wide at the left side 
+        draw_scrollbar(spr, LGRY);
         spr->fillSprite(BLK);
         spr->setTextWrap(false);
         spr->setFont(&fonts::TomThumb);
         spr->setTextDatum(textdatum_t::top_left);
         int max_lines = 1 + (vp->h + 4 + row_padding_pix) / font_height;  // this math is probably wrong in general case, i found workable constants iteratively. must debug if window size changes
         if (max_lines <= 0) return;
+        max_lines = std::min(max_lines, max_snapshot_lines);  // clamp to our fixed snapshot buffers below
+
+        // snapshot the lines/colors we need under the lock (kept brief - no rendering happens while locked), then draw from
+        // the local copy afterward. ez->textlines[]/current_index/has_wrapped can be mutated concurrently by printf/squintf/
+        // debugf calls from other tasks (see EZReadConsole::_bufMux) - reading them directly here previously risked a torn
+        // std::string (garbled text) or an inconsistent index (a blank console that persisted until the next print, since
+        // draw() only re-runs on a dirty edge, not every frame).
+        static char linebuf[max_snapshot_lines][max_snapshot_linelen + 1];
+        static uint8_t colorbuf[max_snapshot_lines];
+        xSemaphoreTake(ez->_bufMux, portMAX_DELAY);
         int max_offset = ez->has_wrapped ? ez->bufferSize - 1 : ez->current_index;  // clamp offset to available history
         int safe_offset = constrain(ez->offset, 0, max_offset);
         int newest_line = (ez->current_index - safe_offset + ez->bufferSize) % ez->bufferSize; // start from the newest visible line (working backward)
         for (int i = max_lines - 1; i >= 0; --i) {
             int idx = (newest_line - (max_lines - 1 - i) + ez->bufferSize) % ez->bufferSize;
-            std::string& nowline = ez->textlines[idx];
-            if (nowline.empty()) continue;
+            strncpy(linebuf[i], ez->textlines[idx].c_str(), max_snapshot_linelen);
+            linebuf[i][max_snapshot_linelen] = '\0';
+            colorbuf[i] = ez->linecolors[idx];
+        }
+        xSemaphoreGive(ez->_bufMux);
+        for (int i = max_lines - 1; i >= 0; --i) {
+            if (!linebuf[i][0]) continue;
             int y = vp->y + i * font_height;
-            spr->setTextColor(ez->linecolors[idx]);
+            spr->setTextColor(colorbuf[i]);
             spr->setCursor(_main_x, y);
-            spr->print(nowline.c_str());
+            spr->print(linebuf[i]);
         }
     }
   public:
@@ -708,8 +733,16 @@ class EZReadDrawer {  // never has any terminal application been easier on the e
         linelength = (int)(vp->w / disp_font_width);  // needs update to handle tomthumb font ??  seems to work ok tho
     }
     void update(LGFX_Sprite* spr, bool force=false) {
-        if (ez->offsettimer.expired()) {
+        // must be expireset(), not expired(): expired() doesn't reset the timer, so once it first fires (60s after boot, since nothing else resets
+        // this timer unless the user is actively scrolled back in ezread's history) this whole block - including forcing dirty=true - would run on
+        // EVERY single call forever after, forcing a full console redraw on every draw_task cycle indefinitely instead of only when content actually
+        // changes. That's a large, sustained, gratuitous jump in CPU/SPI-bus load on draw_task's core (shared with push/temp/maf/neo tasks) starting
+        // at a fixed, predictable time after boot and never recovering - a strong suspect for hardware-adjacent symptoms (eg touch) that degrade at a
+        // consistent time post-boot and don't clear on their own.
+        if (ez->offsettimer.expireset()) {
+            xSemaphoreTake(ez->_bufMux, portMAX_DELAY);
             ez->offset = 0;
+            xSemaphoreGive(ez->_bufMux);
             dirty = true;
         }
         if (dirty || force || ez->dirty) draw(spr);
@@ -818,16 +851,17 @@ class PanelAppManager {
         if (swipe == DirLeft) changeit--;  // swipe left for previous animation
         else if (swipe == DirRight) changeit++;  // swipe right for next animation
 
-        if (touch->doubletap()) { // temporary alternate touch method since swiping is broken
-            if (touch->touch_pt(Horz) >= (disp_width_pix >> 1)) changeit++; // doubletap on right half to cycle fwd
-            else changeit--;                                                // or on left half to cycle back
-        }
+        // wakes up out of the fullscreen animation back to standby, same as the encoder-shortpress handler in run_standbyMode() - NOT the same as a
+        // ch4 press: ch4 during standby actually requests sleep_request=ReqOn, which moves runmode to LowPower and cuts syspower - and since
+        // run_lowpowerMode() only wakes on ch4/encoder (never touch), that would strand the touch controller powered off and unresponsive until
+        // one of those was pressed. this was a real regression: doubletapping the screensaver was cutting touch's own power out from under it.
+        if (touch->doubletap()) autosaver_request = ReqOff;
         if (bootbutton.shortpress()) changeit++;  // boot button also cycles, always forward
         return changeit;
     }
   public:
     int sec, psec, _width, _height, _myfps = 0, frame_count = 0;
-    bool anim_reset_request = false;
+    bool anim_reset_request = false, anim_reset_randomize = true;
     PanelAppManager(EZReadDrawer* _ez) : ezdraw(_ez) {}
     void set_vp(int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
         vp.x = _cornerx;
@@ -839,7 +873,7 @@ class PanelAppManager {
         if (changeit == DirNone) return;    // do nothing
         changeit = constrain(changeit, DirRev, DirFwd);
         if (nowsaver == Collisions) {  // if on ball saver
-            change_saver();  // switch to eraser saver
+            change_saver(false);  // switch to eraser saver - don't randomize, we're about to explicitly choose the shape below
             eSaver.change_pattern((changeit == DirFwd) ? 0 : eSaver.num_shapes - 2);  // go to first or last erasersaver pattern - Rotate (num_shapes-1, runs all shapes in sequence, hyperactive/processor-intensive) is deliberately excluded from manual cycling too; Worm (num_shapes-2) is the last reachable one
             return;
         }
@@ -851,9 +885,11 @@ class PanelAppManager {
         if (eSaver.shape == 0) change_saver();  // requesting to go below 1st erasersaver pattern switches to ball saver
         else eSaver.change_pattern(-3);  // erasersaver goes back one pattern
     }
-    void change_saver() {  // switch back and forth between ball saver / eraser saver
+    void change_saver(bool randomize=true) {  // switch back and forth between ball saver / eraser saver. randomize=false when the caller is about
+                                               // to explicitly set erasersaver's next shape itself (see cycle_anim()) and reset() mustn't override it
         ++nowsaver %= NumSaverMenu;
         anim_reset_request = true;
+        anim_reset_randomize = randomize;
         still_running = 1;
     }
     void setup(LGFX* _lgfx, Simulator* _sim, Touchscreen* _touch, int _cornerx, int _cornery, int _sprwidth, int _sprheight) {
@@ -871,9 +907,10 @@ class PanelAppManager {
         Serial.printf("set up\n");
     }
     void reset() {
-        if (nowsaver == Eraser) eSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
+        if (nowsaver == Eraser) eSaver.reset(&framebuf[flip], &framebuf[!flip], &vp, anim_reset_randomize);
         else if (nowsaver == Collisions) cSaver.reset(&framebuf[flip], &framebuf[!flip], &vp);
         anim_reset_request = false;
+        anim_reset_randomize = true;  // restore default so a later change_saver() call that doesn't specify otherwise still randomizes as before
     }
     float update(LGFX_Sprite* spr, bool argdirty=false) {
         if ((ui_app_last != ScreensaverUI) && (ui_app == ScreensaverUI)) cycle_anim(DirFwd);  // next saver.  ptrsaver->reset();

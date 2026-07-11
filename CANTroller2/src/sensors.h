@@ -112,9 +112,9 @@ class Param {
     // note: if using external limits, it's (currently) possible to get stale values, since there is no
     //       callback mechanism in place. We could get around this by calling constrain_value() on every
     //       get() call, but that seems like overkill...
-    void set_limits(float arg_min, float arg_max) {  // use if min/max are kept in-class
+    void set_limits(float arg_min, float arg_max, bool verbose=true) {  // use if min/max are kept in-class
         if (arg_min > arg_max) {
-            ezread.squintf("Err: Param set_limits(): %lf (min) is >= %lf (max)\n", arg_min, arg_max);
+            if (verbose) ezread.squintf("Err: Param set_limits(): %lf (min) is >= %lf (max)\n", arg_min, arg_max);
             return;
         }
         *_min_ptr = arg_min;
@@ -130,19 +130,16 @@ class Param {
         _max_ptr = arg_max_ptr;
         constrain_value();
     }
-    // return value indicates if the value actually changed or not
+    // return value indicates if the *stored* value actually changed or not - compares post-constrain, since a value that gets clamped
+    // back to where it already was (eg set()'ing out-of-range on an already-pinned-at-the-limit Param) is not a real change
     bool set(float arg_val) {
-        bool ret = true;
         _last = _val;
-        if (std::isnan(arg_val) && std::isnan(_last)) ret = false;
-        else if (!std::isnan(arg_val)) {  // arg_val is a valid number
-            cleanzero(&arg_val);  // avoid stupidly low near-zero values that happens sometimes
-            if (!std::isnan(_val) && iszero(_val - arg_val)) ret = false;  // both valid: check equality
-        }
-        // else: arg_val=NAN, _val=valid → ret stays true (IS a change), no iszero(NAN) spam
+        if (!std::isnan(arg_val)) cleanzero(&arg_val);  // avoid stupidly low near-zero values that happens sometimes
         _val = arg_val;
-        if (!std::isnan(_val)) constrain_value();
-        return ret;
+        if (!std::isnan(_val)) constrain_value();  // clamp into range before comparing, so the checks below reflect the actual stored value
+        if (std::isnan(_val) && std::isnan(_last)) return false;  // nan -> nan: no change
+        if (std::isnan(_val) != std::isnan(_last)) return true;   // nan <-> valid (either direction): always a change
+        return !iszero(_val - _last);                              // both valid: compare the actual stored values
     }
     // bool add(float arg_add) { return set(_val + arg_add); }
     float val() { return _val; }
@@ -518,9 +515,17 @@ class AirVeloSensor : public I2CSensor {
   protected:
     FS3000 _sensor;
     float read_i2c_sensor() {
-        return _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015
+        _i2c->lock();  // shared physical bus with the touch controller's own independent i2c engine - see I2C::_busmutex
+        float ret = _sensor.readMilesPerHour();  // note, this returns a float from 0-33.55 for the FS3000-1015
+        _i2c->unlock();
+        return ret;
     }
-    void reinit_sensor() override { _sensor.begin(); _sensor.setRange(AIRFLOW_RANGE_15_MPS); }
+    void reinit_sensor() override {
+        _i2c->lock();
+        _sensor.begin();
+        _sensor.setRange(AIRFLOW_RANGE_15_MPS);
+        _i2c->unlock();
+    }
     void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:
     static constexpr uint8_t addr = 0x28;
@@ -540,8 +545,10 @@ class AirVeloSensor : public I2CSensor {
         set_oplim(0.0f, 27.36f);  // 620/2 cm3/rot * 4800 rot/min * 60 min/hr * 1/160934 mi/cm * 1/pi * 1/((2 in * 2.54 cm/in) / 2)^2) 1/cm2  = 27.36 mi/hr (mph
         set_ema_alpha(0.2f);
         if (_detected) {
+            _i2c->lock();
             _sensor.begin();  // sets _i2cPort even if ACK check fails; do not trust return value — scan already confirmed device
             _sensor.setRange(AIRFLOW_RANGE_15_MPS);
+            _i2c->unlock();
             _responding = true;  // trust scan detection; begin()'s ACK check can fail if Wire was reinitialized (e.g., by LovyanGFX) since the scan
         }
         I2CSensor::postsetup();  // must be run last
@@ -556,8 +563,10 @@ class MAPSensor : public I2CSensor {
 
     float read_i2c_sensor() {
         if (!_detected) return NAN;
+        _i2c->lock();  // shared physical bus with the touch controller's own independent i2c engine - see I2C::_busmutex
         float reading = _sensor.readPressure(MapUnitATM, false); // non-blocking: avoids 6.5ms block and delay(1) thread-safety issue; _mapretry_timeout gives sensor time to convert
         int err_status = _sensor.err_status();
+        _i2c->unlock();
         if (err_status == MapErrWaiting) _update_period = _mapretry_timeout;  // last request still processing, recheck soon for result
         else {
             // check for errors before committing new reading
@@ -575,7 +584,12 @@ class MAPSensor : public I2CSensor {
         // ezread.squintf("m:%.3lf\n", _goodreading);
         return _goodreading;
     }
-    void reinit_sensor() override { _sensor.begin(known_i2c_addr[I2CMAP]); _goodreading = NAN; }  // also clear any (should-be-impossible, but just in case) bad seed so the strict op-range gate gets a clean shot at re-seeding
+    void reinit_sensor() override {
+        _i2c->lock();
+        _sensor.begin(known_i2c_addr[I2CMAP]);
+        _i2c->unlock();
+        _goodreading = NAN;  // also clear any (should-be-impossible, but just in case) bad seed so the strict op-range gate gets a clean shot at re-seeding
+    }
 
     void set_val_from_sim() override { _si.set(_default_value_si); } // sensor has no adjuster in the ui, so when simulating lock value to avoid errors
   public:
@@ -596,7 +610,9 @@ class MAPSensor : public I2CSensor {
         set_oplim(0.68f, 1.02f);  // set in atm empirically
         set_ema_alpha(0.2f);
         if (_detected) {
+            _i2c->lock();
             _sensor.begin(known_i2c_addr[I2CMAP]);  // sets _i2cPort; do not trust return value
+            _i2c->unlock();
             _responding = true;  // trust scan detection; begin()'s ACK check can fail if Wire was reinitialized since scan
         }
         I2CSensor::postsetup();  // must be run last

@@ -562,16 +562,24 @@ class EZReadConsole {
     Timer updatetimer{20000};
     // int boot_graceperiod_timeout_us = 3500000;  // spam detection is suspended for this long after intitial boot
   public:
+    // protects textlines[]/linecolors[]/current_index/has_wrapped/offset: written here (from whatever task calls printf/squintf/debugf/lookback,
+    // eg loop() or the temp/maf sensor tasks) and read by EZReadDrawer::draw() (which runs on draw_task, pinned to the opposite core from loop()).
+    // without this, draw() could read a std::string mid-assignment (torn/garbled text) or compute current_index inconsistently (blank screen
+    // that persists until the next dirty-triggering event, since draw() only re-runs when something is marked dirty).
+    // NOTE: this must be a real FreeRTOS mutex, not a portENTER_CRITICAL spinlock - the protected code below does std::string concatenation/
+    // substr(), which can heap-allocate. Doing that while a critical section has interrupts disabled (and the other core spinning on the same
+    // lock) risks deadlocking against the heap allocator's own internal locking - this is suspected to have caused an actual hang/reboot.
+    SemaphoreHandle_t _bufMux;
     bool ezread_serial_console_enabled = console_enabled;  // when true then ezread.squintf() does the same thing as ezread.printf()
     bool dirty = true, has_wrapped = false, graceperiod = true, graceperiod_valid = true;  // on boot spam detector is in a grace period for the boot messages, boot graceperiod ends
     Timer offsettimer{60000000};  // if scrolled to see history, after a delay jump back to showing most current line
-    EZReadConsole() {}
+    EZReadConsole() { _bufMux = xSemaphoreCreateMutex(); }
     static constexpr int num_lines = 300;
     static constexpr int bufferSize = num_lines;
     int maxlength=40, last_drawn = bufferSize; // size_t bufferSize; // Size of the ring buffer
     std::string textlines[bufferSize];
     int newest_content = bufferSize, current_index = 0, offset = 0;
-    uint8_t linecolors[num_lines], color, usecolor;
+    uint8_t linecolors[num_lines];
     uint8_t defaultcolor = LGRY, gladcolor = LGRN, sadcolor = ORG, madcolor = RED, announcecolor = LPUR, highlightcolor = DCYN;    // std::vector<std::string> textlines; // Ring buffer array
     bool spam_active = false, spam_notice_shown = false;
     float avg_spamrate_cps = 0.0f, window_accum_char = 0.0f;  // variables to dynamically manage moving average
@@ -605,8 +613,10 @@ class EZReadConsole {
         }
     }
     void lookback(int off) {
+        xSemaphoreTake(_bufMux, portMAX_DELAY);
         int offset_old = offset;
         offset = constrain(off, 0, bufferSize);  //  - ez->num_lines);
+        xSemaphoreGive(_bufMux);
         if (offset) offsettimer.reset();
         if (offset != offset_old) dirty = true;
     }
@@ -635,15 +645,19 @@ class EZReadConsole {
         va_end(args_copy);
         if (!should_allow_output(strlen(preview))) return;  // if suppression is active then disregard this call altogether, abandoning the data
         char temp[100];
-        color = _color;
         vsnprintf(temp, sizeof(temp), format, args);
         std::string str = temp;
         std::string::size_type start = 0;
         std::string::size_type end = str.find_first_of("\r\n");
+        // this mutates textlines[]/linecolors[]/current_index/has_wrapped, which EZReadDrawer::draw() also reads from draw_task
+        // (pinned to the opposite core from whatever task is calling us) - lock it so draw() never sees a torn string or an
+        // index caught mid-update, which previously could show garbled text or (combined with draw() only re-running on a
+        // dirty edge) a blank console that persisted until the next print or the 60s scroll-reset timer.
+        xSemaphoreTake(_bufMux, portMAX_DELAY);
         textlines[current_index] = "";  // erase the current buffer entry (b/c old data will wrap around the ring buffer)
         while (end != std::string::npos) {  // if string contains at least one newline, chop off up to the first one and tack onto current line, and enqueue
             textlines[current_index] += str.substr(start, end - start);  // Append content up to the first newline
-            linecolors[current_index] = color;  // Set color for this line
+            linecolors[current_index] = _color;  // Set color for this line
             start = end + 1;
             end = str.find_first_of("\r\n", start);
             textlines[current_index] = remove_nonprintable(textlines[current_index]);
@@ -653,8 +667,9 @@ class EZReadConsole {
         if (start < str.size()) {
             textlines[current_index] += str.substr(start);  // Append the remaining part of the string
             textlines[current_index] = remove_nonprintable(textlines[current_index]);
-            linecolors[current_index] = color;
+            linecolors[current_index] = _color;
         }
+        xSemaphoreGive(_bufMux);
         dirty = true;
     }
     void squintf_core(uint8_t color, const char* format, va_list args) {  // core implementation for squintf overloads below

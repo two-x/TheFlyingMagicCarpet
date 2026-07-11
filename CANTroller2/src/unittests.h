@@ -71,7 +71,6 @@ class UnitTests {
     #define UT_CARD_COMPLETE(arr, count) check_card_complete(arr, count, #arr, __FILE__, __LINE__)
 
     void test_utility_functions() {  // globals.h
-        ezread.squintf(ezread.highlightcolor, "Testing utility functions..\n");
         // iszero()
         UT_CHECK(iszero(0.0f));
         UT_CHECK(iszero(0.00001f));
@@ -120,7 +119,6 @@ class UnitTests {
     }
 
     void test_Timer() {  // globals.h
-        ezread.squintf(ezread.highlightcolor, "Testing Timer class..\n");
         Timer t1(100000);  // 100ms timeout
         UT_CHECK(t1.timeout() == 100000);
         UT_CHECK(!t1.expired());  // freshly created, shouldn't be expired
@@ -139,7 +137,6 @@ class UnitTests {
     }
 
     void test_Param() {  // sensors.h
-        ezread.squintf(ezread.highlightcolor, "Testing Param class..\n");
         // default constructor
         Param p1;
         UT_CHECK(p1.val() == 0.0f);
@@ -167,10 +164,11 @@ class UnitTests {
         UT_CHECK_SAFETY(p3.min() == 0.0f && p3.max() == 2.0f);
         // set_limits() rejects an inverted range rather than accepting nonsense limits
         Param p4(5.0f, 0.0f, 10.0f);
-        p4.set_limits(8.0f, 3.0f);  // min > max: invalid, should be rejected (logged, not applied)
+        p4.set_limits(8.0f, 3.0f, false);  // min > max: invalid, should be rejected (logged, not applied)
         UT_CHECK_SAFETY(p4.min() == 0.0f && p4.max() == 10.0f);  // limits unchanged from before the rejected call
-        // externally shared limits: two Params can reference the same live min/max
-        Param plo(2.0f), phi(8.0f);
+        // externally shared limits: two Params can reference the same live min/max - plo/phi need an actual range (not the value-only
+        // constant-Param constructor) since the test below calls plo.set() expecting it to really take effect
+        Param plo(2.0f, 0.0f, 100.0f), phi(8.0f, 0.0f, 100.0f);
         Param p5(5.0f, plo.ptr(), phi.ptr());
         UT_CHECK(p5.min() == 2.0f && p5.max() == 8.0f);
         plo.set(4.0f);  // change the referenced limit...
@@ -189,7 +187,6 @@ class UnitTests {
             using PulseSensor::us_to_hz;
             using PulseSensor::scaling_ema_filt;
         } acc;
-        ezread.squintf(ezread.highlightcolor, "Testing PulseSensor math (us_to_hz, scaling_ema_filt)..\n");
         UT_CHECK(std::fabs(acc.us_to_hz(1000.0f) - 1000.0f) < 0.001f);      // 1000us period -> 1000Hz
         UT_CHECK(std::fabs(acc.us_to_hz(1000000.0f) - 1.0f) < 0.001f);      // 1s period -> 1Hz
         UT_CHECK(std::isnan(acc.us_to_hz(0.0f)));                          // zero period is invalid -> nan
@@ -200,7 +197,6 @@ class UnitTests {
     }
 
     void test_color_conversions() {  // idiots.h
-        ezread.squintf(ezread.highlightcolor, "Testing color format conversions..\n");
         // full-scale white and black are the least ambiguous cases to hand-verify (every bit lane either fully set or fully clear)
         UT_CHECK(color_to_565((uint32_t)0xFFFFFF) == 0xFFFF);
         UT_CHECK(color_to_332((uint32_t)0xFFFFFF) == 0xFF);
@@ -222,7 +218,6 @@ class UnitTests {
     }
 
     void test_massairflow() {  // objects.h - passing all 3 args explicitly bypasses live sensor/temp reads, making this deterministic
-        ezread.squintf(ezread.highlightcolor, "Testing massairflow()..\n");
         UT_CHECK(massairflow(1.0f, 0.0f, 68.0f) == 0.0f);  // zero air velocity must give exactly zero flow, regardless of pressure
         float low = massairflow(1.0f, 5.0f, 68.0f);
         float high = massairflow(1.0f, 10.0f, 68.0f);
@@ -236,7 +231,6 @@ class UnitTests {
     }
 
     void test_enum_card_arrays() {  // globals.h, motors.h, i2cbus.h, sensors.h, display.h, diag.h - lookup arrays indexed by an enum's Num* sentinel
-        ezread.squintf(ezread.highlightcolor, "Testing enum-labeled lookup arrays for missing/misordered entries..\n");
         UT_CARD_COMPLETE(modecard, NumRunModes);
         UT_CARD_COMPLETE(requestcard, NumReqs);
         UT_CARD_COMPLETE(motorctrlcard, NumMotorCtrls);
@@ -266,7 +260,6 @@ class UnitTests {
     }
 
     void test_runmode_tables() {  // globals.h - per-runmode initial ctrlmode/action tables for gas/brake/steer
-        ezread.squintf(ezread.highlightcolor, "Testing runmode-indexed tables..\n");
         // every (runmode, actuator) entry must be a valid enum value - catches a typo'd/garbage value, though not a silently-zero-filled missing
         // row (both CtrlDisable and ActionCruise happen to be enum value 0, so a truly missing row wouldn't fail these bounds checks - see the
         // recommendation about compiler-counted array sizes in the boot summary for a way to close that gap for real)
@@ -287,7 +280,6 @@ class UnitTests {
         // `sens` enum lost its trailing ignition/syspower members (see the enum's own trailing comment), sensorcard wasn't fully updated to match -
         // mulebatt/engtemp/basicsw/starter's labels got scrambled relative to the enum starting at index 8. Tagged safety: a wrong label here could
         // lead an operator to believe they're looking at/simulating a different sensor than they actually are.
-        ezread.squintf(ezread.highlightcolor, "Testing sensorcard[] against the sens enum..\n");
         UT_CHECK_SAFETY(sensorcard[static_cast<int>(sens::none)] == "none");
         UT_CHECK_SAFETY(sensorcard[static_cast<int>(sens::joy)] == "joy");
         UT_CHECK_SAFETY(sensorcard[static_cast<int>(sens::pressure)] == "bkpres");
@@ -303,7 +295,6 @@ class UnitTests {
     }
 
     void test_QPID() {  // motors.h - the shared PID controller class used by gas/brake/steer
-        ezread.squintf(ezread.highlightcolor, "Testing QPID class..\n");
         // NOTE: QPID::init() never explicitly sets lastin/lasterr - it relies on the class only ever being instantiated inside a static global
         // object (true everywhere in this codebase today), where C++ zero-initializes those members before the constructor runs. A QPID built on
         // the stack or heap would read uninitialized memory on its first compute(). Using `static` locals here to match real usage and avoid
@@ -330,7 +321,7 @@ class UnitTests {
     }
 
   public:
-    void setup() {
+    void run_all() {
         ezread.squintf(ezread.highlightcolor, "Running unit tests..\n");
         test_utility_functions();
         test_Timer();

@@ -43,7 +43,10 @@ class LGFX : public lgfx::LGFX_Device {
     lgfx::Bus_SPI           _bus_instance;       // SPI bus instance // Prepare an instance that matches the type of bus that connects the panel.
     // lgfx::Bus_I2C        _bus_instance;       // I2C bus instance
     // lgfx::Light_PWM      _light_instance;     // Prepare an instance if backlight control is possible. (Delete if unnecessary)
-    lgfx::Touch_FT5x06      _touch_instance; // FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436
+    // Touch is deliberately NOT configured here anymore (was lgfx::Touch_FT5x06, i2c_port=0) - it used LovyanGFX's own independent i2c engine,
+    // sharing the exact same physical bus (pins) as airvelo/mapsens/lightbox (Wire) but as a second, uncoordinated driver stack that reconfigured
+    // the shared i2c peripheral out from under Wire. See Touchscreen class (inputs.h), which now reads touch via SensorLib's TouchDrvFT6X36
+    // over the same Wire instance the other i2c devices use - one driver stack total, so the bus mutex actually protects everything correctly.
   public:
     LGFX(void) {}  // Create a constructor and configure various settings here.  If you change the class name, please specify the same name for the constructor.
     void init() {
@@ -92,22 +95,9 @@ class LGFX : public lgfx::LGFX_Device {
             // cfg.memory_height =   disp_width_pix;  // Maximum height supported by driver IC
             _panel_instance.config(cfg);
         }
-        {                                         // Configure touch screen control settings. (Delete if unnecessary)
-            auto cfg = _touch_instance.config();
-            cfg.x_max = (int)(disp_width_pix-1);  // Maximum X value obtained from touch screen (raw value)
-            cfg.y_max = (int)(disp_height_pix-1); // Maximum Y value obtained from touch screen (raw value)
-            cfg.x_min           = 0;              // Minimum X value obtained from touch screen (raw value)
-            cfg.y_min           = 0;              // Minimum Y value obtained from touch screen (raw value)
-            cfg.offset_rotation = 2;              // Adjustment when the display and touch direction do not match. Set as a value from 0 to 7
-            cfg.bus_shared      = false;          // Set true if using the same bus as the screen
-            cfg.i2c_port        = 0;              // Select I2C to use (0 or 1)
-            cfg.i2c_addr        = 0x38;           // I2C device address number
-            cfg.pin_sda         = i2c_sda_pin;    // SDA pin number
-            cfg.pin_scl         = i2c_scl_pin;    // SCL pin number
-            cfg.freq            = i2c_frequency;  // Set I2C clock (in Hz) (was set to 400000) trying 100000 to see if we get less i2c errors
-            _touch_instance.config(cfg);
-            _panel_instance.setTouch(&_touch_instance);  // Place the touch screen on the panel
-        }
+        // touch config removed - see Touchscreen class (inputs.h) for the new Wire-based touch driver setup. Note the old config here had
+        // cfg.offset_rotation = 2 (vs the panel's own offset_rotation = 8 above) - Touchscreen's corners[] calibration may need re-tuning
+        // now that raw touch coordinates come directly from the chip instead of pre-rotated by LovyanGFX.
         // {  // Configure backlight control settings. (Delete if unnecessary)
         //     auto cfg = _light_instance.config();    // Gets the structure for backlight settings.
         //     cfg.pin_bl = 32;            // Backlight pin number
