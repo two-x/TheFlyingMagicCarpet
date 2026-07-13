@@ -33,10 +33,11 @@
 #define ENCODER_B_PIN 4
 
 // DMX constants
-#define NUM_MEGABAR_LEDS 13
+#define NUM_MEGABAR_LEDS 12
+#define NUM_SHOW_MEGABAR_LEDS NUM_MEGABAR_LEDS + 1 // the front light is doubled
 #define NUM_CHINA_LEDS 8
-#define NUM_DMX_LEDS NUM_MEGABAR_LEDS + NUM_CHINA_LEDS
-#define SIZEOF_MEGABAR_LEDS ( NUM_MEGABAR_LEDS * sizeof( CRGB ) )
+#define NUM_DMX_LEDS NUM_SHOW_MEGABAR_LEDS + NUM_CHINA_LEDS
+#define SIZEOF_MEGABAR_LEDS ( NUM_SHOW_MEGABAR_LEDS * sizeof( CRGB ) )
 #define SIZEOF_CHINA_LEDS ( NUM_CHINA_LEDS * sizeof( CRGBWUA ) )
 #define TOTAL_DMX_SIZE ( SIZEOF_MEGABAR_LEDS + SIZEOF_CHINA_LEDS )
 
@@ -117,8 +118,10 @@ class MagicCarpet {
     * They're declared separately to make them easy to work with, but treated as a
     * single continguous array when passed into dmx_send.
     */
-   CRGB megabarLeds[ NUM_MEGABAR_LEDS ];
+   CRGB megabarShowLeds[ NUM_SHOW_MEGABAR_LEDS ];
    CRGBWUA chinaLeds[ NUM_CHINA_LEDS ];
+
+   CRGB* megabarLeds = megabarShowLeds + 1;
 
    // neopixel leds
    CRGBW ropeLeds[ NUM_NEO_LEDS_ACTUAL ];
@@ -194,15 +197,17 @@ class MagicCarpet {
       LedUtil::reverse( ropeLeds, SIZEOF_SMALL_NEO );
       LedUtil::reverse( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO, SIZEOF_SMALL_NEO );
 
+      megabarShowLeds[0] = megabarLeds[0]; // the front light is doubled, we are too lazy to change the addressing on the car
+
       // we don't have to pass the china light array separately. Instead, we treat
       // both arrays as a single big array, since they're contiguous in memory.
-      dmx_send( ( uint8_t * ) megabarLeds );
+      dmx_send( ( uint8_t * ) megabarShowLeds );
 
       FastLED.show();
    }
 
    void clearMegabars() {
-      memset( megabarLeds, 0, SIZEOF_MEGABAR_LEDS );
+      memset( megabarShowLeds, 0, SIZEOF_MEGABAR_LEDS );
    }
 
    void clearChinas() {
