@@ -2,7 +2,7 @@
 #include <NeoPixelBus.h>
 #include <NeoPixelAnimator.h>
 #include "idiots.h"
-#define striplength 10
+#define striplength 10  // car has 10 physical pixels (this was already correct); devboard has fewer (8) - see idiot_light_led_count/offset below for the actual missing-2-lights bug
 #define idiot_light_led_offset 3  // Offset for idiot lights in the strip, after the heartbeat LEDs
 #define runmode_lights_animation_duration_ms 6000
 #define idiot_lights_animation_duration_ms 6500

@@ -52,8 +52,8 @@ class IdiotLights {
     };
     bool* vals[iconcount] = {
         // row 1 onscreen.  the 1st 7 of these are true hazard lights (lit only on error), also copied onto the last 7 neopixel idiot lights
-        &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.eng_alarm_active, &diag.brake_alarm_active, &diag.wheel_alarm_active, &panicstop,
-        hotrc.radiolost_ptr(), hotrc.radiolost_untested_ptr(), &brake.autostopping, &brake.autoholding, &parking, &releasing,
+        &diag.err_sens_alarm[ErrLost], &diag.err_sens_alarm[ErrRange], &diag.eng_alarm_active, &diag.brake_alarm_active, &diag.wheel_alarm_active, hotrc.radiolost_ptr(),
+        hotrc.radiolost_untested_ptr(), &panicstop, &brake.autostopping, &brake.autoholding, &parking, &releasing,
         // row 2 onscreen.  these are all just informational values
         &cruise_adjusting, &car_hasnt_moved, &starter.motor, &brake.posn_pid_active, &brake.no_feedback, speedo.pin_level_ptr(),
         tach.pin_level_ptr(), speedo.stopped_ptr(), tach.stopped_ptr(), &nowtouch, &shutting_down, &running_on_devboard,
@@ -69,9 +69,9 @@ class IdiotLights {
         { 0x7f, 0x7f, 0x6b, 0x6b, 0x00, 0x70, 0x10, 0x10, 0x77, 0x65, 0x07, },  // "En" w/ degree symbol        // &diag.err_sens[ErrRange][_TempEng]
         { 0x7f, 0x49, 0x49, 0x36, 0x36, 0x00, 0x78, 0x10, 0x37, 0x25, 0x07, },  // "Br" w/ degree symbol        // &diag.err_sens[ErrRange][_TempBrake]
         { 0x7f, 0x30, 0x18, 0x30, 0x7f, 0x00, 0x7e, 0x10, 0x77, 0x65, 0x07, },  // "Wh" w/ degree symbol        // &wheeltemperr
-        { 0x7f, 0x7f, 0x09, 0x09, 0x77, 0x16, 0x70, 0x60, 0x00, 0x6f, 0x6f, },  // "Pn!"                        // &panicstop
         { 0x7a, 0x7f, 0x4f, 0x17, 0x06, 0x00, 0x22, 0x1c, 0x00, 0x41, 0x3e, },  // hotrc w/ radio waves         // hotrc.radiolost_ptr()
         { 0x7a, 0x7f, 0x4f, 0x17, 0x06, 0x00, 0x02, 0x03, 0x51, 0x5d, 0x06, },  // hotrc w/ "?"                 // hotrc.radiolost_untested_ptr()
+        { 0x7f, 0x7f, 0x09, 0x09, 0x77, 0x16, 0x70, 0x60, 0x00, 0x6f, 0x6f, },  // "Pn!"                        // &panicstop
         { 0x3e, 0x49, 0x1c, 0x00, 0x6e, 0x6b, 0x3b, 0x00, 0x1c, 0x49, 0x3e, },  // brake assembly w/ "S"        // &brake.autostopping
         { 0x3e, 0x49, 0x1c, 0x00, 0x7f, 0x18, 0x7f, 0x00, 0x1c, 0x49, 0x3e, },  // brake assembly w/ "H"        // &brake.autoholding
         { 0x3e, 0x63, 0x01, 0x7d, 0x7d, 0x15, 0x15, 0x1d, 0x09, 0x63, 0x3e, },  // opencircle-"P"               // &parking
