@@ -940,12 +940,10 @@ class PanelAppManager {
             else if (nowsaver == Collisions) {
                 // Collision's background gradient shifts hue every frame, changing nearly every pixel on screen - Display::diffpush() diffs
                 // row-by-row and batches each contiguous run of changed pixels into one DMA transfer, so a near-full-screen change degrades
-                // that into ~240 near-full-row transfers every single frame. Combined with zero framerate throttling, that was overwhelming
-                // draw_task/push_task badly enough to trip the task watchdog and reboot the board (confirmed via two crash backtraces landing
-                // in CollisionsSaver::drawfunc() and Display::diffpush() respectively - both are the same underlying cause, whichever task
-                // happened to fall behind first). Throttling specifically here (not for Eraser, which doesn't have this problem) fixes it
-                // without touching CollisionsSaver's own rendering.
-                refresh_limit_us = 33333;  // cap at ~30fps while collision saver's gradient background is active
+                // that into ~240 near-full-row transfers every single frame, which used to overwhelm draw_task/push_task badly enough to trip
+                // the task watchdog and reboot the board. Previously mitigated here with a hard 30fps cap specifically for Collision Saver;
+                // now relying instead on draw_task's own generic self-regulating backoff (see draw_task in this file) to absorb this, so
+                // testing that safeguard actually covers this case - unthrottled again, same as Eraser.
                 still_running = cSaver.update(spr, &vp);  // if ((bool)still_running)
                 if (touch_valid && touch->held()) cSaver.touch(spr, touch->touch_pt(Horz), touch->touch_pt(Vert));
             }

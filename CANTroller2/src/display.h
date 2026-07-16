@@ -1237,13 +1237,22 @@ static void draw_task(void *parameter) {
         while ((runmode == LowPower) && !powering_down) vTaskDelay(pdMS_TO_TICKS(200));
         if ((runmode != LowPower) && (lastmode == LowPower)) reset_request = true;  // screen.reset();
         // if ((esp_timer_get_time() - screen_refresh_time > refresh_limit_us) || !limit_framerate || auto_saver_enabled) {
+        int64_t frame_start_us = esp_timer_get_time();
         if (xSemaphoreTake(easelbuf_sem, portMAX_DELAY) == pdTRUE) {  // grab the easel once it's available
             screen_refresh_time = esp_timer_get_time();
             screen.do_draw();
             xSemaphoreGive(easelbuf_sem);  // give away the easel so it can be processed & sent to the screen
         }
-        vTaskDelay(pdMS_TO_TICKS(1 + ((int)limit_framerate * refresh_limit_us / 1000.0f)));  //   || sim.enabled()
-        // if (limit_framerate && !auto_saver_enabled) vTaskDelay(pdMS_TO_TICKS((int)(refresh_limit_us / 1000 - 1)));  //   || sim.enabled()
+        // Self-regulating backoff: nothing in draw_task is timing-critical, so however long that frame just took, yield at
+        // LEAST that long again before starting the next one (never just the fixed framerate-cap delay). This caps draw_task
+        // at roughly half of this core's cycles in the worst case, guaranteeing tempsens_task/maf_task/neo_task/push_task
+        // (which share this core - see cantroller2.cpp) and the idle task (which feeds the watchdog) always get a
+        // proportional turn, regardless of *why* a frame was slow - a general safety net, not specific to any one cause
+        // (the diffpush/Collision-Saver overload that used to crash the board is one instance this would also cover).
+        int64_t frame_us = esp_timer_get_time() - frame_start_us;
+        int base_delay_ms = 1 + ((int)limit_framerate * refresh_limit_us / 1000.0f);
+        int delay_ms = std::max(base_delay_ms, (int)(frame_us / 1000));
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
         lastmode = runmode;
     }
 }
