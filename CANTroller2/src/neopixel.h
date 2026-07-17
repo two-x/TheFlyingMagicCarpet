@@ -11,6 +11,15 @@
 inline NeoPixelBus<NeoGrbFeature, NeoSk6812Method> neoobj(striplength, neopixel_pin);  // NeoWs2812Method, NeoWs2812xMethod, NeoSk6812Method, NeoEsp32Rmt0Ws2812xMethod, NeoEsp32I2s1800KbpsMethod, NeoEsp32I2s1Sk6812Method,
 inline NeoPixelAnimator neoanimator(3); // Channel 0 for runmode pulse, Channel 1 for idiot lights, Channel 2 for Cylon
 
+// NeoPixelBus's standard gamma lookup table (NeoGammaTableMethod is its precomputed sRGB-ish table, cheaper at runtime
+// than NeoGammaEquationMethod's powf() call). Human brightness perception is nonlinear but PWM duty cycle - what the LED
+// driver actually controls - is linear, so an uncorrected 50% RGB value looks much brighter than 50% perceived brightness.
+// Every pixel write in this file goes through this single choke point so the whole strip is gamma-correct everywhere.
+inline NeoGamma<NeoGammaTableMethod> neoGammaCorrection;
+inline void neoSetPixelColor(int index, RgbColor color) {
+    neoobj.SetPixelColor(index, neoGammaCorrection.Correct(color));
+}
+
 static const RgbColor BLACK = RgbColor(0);
 static const uint8_t idiot_light_colors[] = {0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8};
 
@@ -102,15 +111,15 @@ private:
             if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended
             RgbColor pulse_color = chg_pix_brightness(wave_brightness);
             
-            neoobj.SetPixelColor(0, pulse_color);  // Set the esp on-board & box backlight pixels to the cos wave (they are both pixel 0)
+            neoSetPixelColor(0, pulse_color);  // Set the esp on-board & box backlight pixels to the cos wave (they are both pixel 0)
 
             wave_brightness = ((sin(param.progress * 2 * PI) + 1.0f) * 0.45f) + 0.1f;  // Sine wave from 0.1 to 1
             if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended
             pulse_color = chg_pix_brightness(wave_brightness);
             
             // Set the pcba backlight and external strip "mode" pixels (leftmost on the idiotlight strip) to the sin wave
-            neoobj.SetPixelColor(1, pulse_color);  // Set pcba backlight pixels to the sin wave 
-            if (runmode != LowPower) neoobj.SetPixelColor(2, pulse_color);  // in sleep mode this one does the cylon effect
+            neoSetPixelColor(1, pulse_color);  // Set pcba backlight pixels to the sin wave 
+            if (runmode != LowPower) neoSetPixelColor(2, pulse_color);  // in sleep mode this one does the cylon effect
 
             // Restarting the animation from inside its own callback caused bottomless recursion (stack overflow).
             // The update() function checks param.progress and restarts animations externally instead.
@@ -138,20 +147,20 @@ private:
                         if (bit_on) c = neoidiots[0].solidColor;
                         else if (bit_phase < 0.12f) c = RgbColor(8, 20, 50);  // dim flicker marks a 0-bit
                     }
-                    neoobj.SetPixelColor(neoidiots[0].led, c);
+                    neoSetPixelColor(neoidiots[0].led, c);
                 }
 
                 // Light 1 — Duty-cycle value: fixed 4 Hz, on-fraction = demo_val (0%=min, 100%=max)
                 {
                     bool on = fmodf(t * 4.0f, 1.0f) < demo_val;
-                    neoobj.SetPixelColor(neoidiots[1].led, on ? neoidiots[1].solidColor : BLACK);
+                    neoSetPixelColor(neoidiots[1].led, on ? neoidiots[1].solidColor : BLACK);
                 }
 
                 // Light 2 — Danger strobe overlay: amber base + brief white flashes; rate 0.5→8 Hz as danger grows
                 {
                     float freq = 0.5f + demo_val * 7.5f;
                     bool strobe = fmodf(t * freq, 1.0f) < 0.06f;
-                    neoobj.SetPixelColor(neoidiots[2].led, strobe ? RgbColor(255, 255, 255) : neoidiots[2].solidColor);
+                    neoSetPixelColor(neoidiots[2].led, strobe ? RgbColor(255, 255, 255) : neoidiots[2].solidColor);
                 }
 
                 // Light 3 — Blackout count 1-4: steady violet with N brief black dips per 2s cycle
@@ -163,21 +172,21 @@ private:
                         float gap_start = 0.15f + n * 0.22f;
                         if (sub >= gap_start && sub < gap_start + 0.08f) { c = BLACK; break; }
                     }
-                    neoobj.SetPixelColor(neoidiots[3].led, c);
+                    neoSetPixelColor(neoidiots[3].led, c);
                 }
 
                 // Light 4 — Blink-rate urgency: 50% duty, rate scales 0.3 Hz (calm) → 6 Hz (critical)
                 {
                     float freq = 0.3f + demo_val * 5.7f;
                     bool on = fmodf(t * freq, 1.0f) < 0.5f;
-                    neoobj.SetPixelColor(neoidiots[4].led, on ? neoidiots[4].solidColor : BLACK);
+                    neoSetPixelColor(neoidiots[4].led, on ? neoidiots[4].solidColor : BLACK);
                 }
 
                 // Light 5 — Dual-color alternating: cyan/orange swap at 1→5 Hz; fast rate = high urgency/ambiguity
                 {
                     float freq = 1.0f + demo_val * 4.0f;
                     bool first = fmodf(t * freq, 1.0f) < 0.5f;
-                    neoobj.SetPixelColor(neoidiots[5].led, first ? RgbColor(0, 200, 200) : RgbColor(255, 80, 0));
+                    neoSetPixelColor(neoidiots[5].led, first ? RgbColor(0, 200, 200) : RgbColor(255, 80, 0));
                 }
 
                 // Light 6 — Color-temperature hue shift: green→yellow→red encodes value proximity to limit
@@ -192,7 +201,7 @@ private:
                         r = (uint8_t)(210.0f + f * 30.0f);
                         g = (uint8_t)((1.0f - f) * 200.0f);
                     }
-                    neoobj.SetPixelColor(neoidiots[6].led, RgbColor(r, g, 0));
+                    neoSetPixelColor(neoidiots[6].led, RgbColor(r, g, 0));
                 }
 
                 this->progressAnim[AnimIdiots] = param.progress;
@@ -208,24 +217,24 @@ private:
                         // First second: 3 rapid pulses
                         float pulse_phase = fmod(cycle_time * 3.0f, 1.0f);  // 3 pulses per second
                         bool flash_on = pulse_phase < 0.5f;  // 50% duty cycle per pulse
-                        neoobj.SetPixelColor(neoidiots[i].led, flash_on ? RgbColor(255, 255, 255) : neoidiots[i].solidColor);
+                        neoSetPixelColor(neoidiots[i].led, flash_on ? RgbColor(255, 255, 255) : neoidiots[i].solidColor);
                     } else {
                         // Next 2 seconds: break (off)
-                        neoobj.SetPixelColor(neoidiots[i].led, neoidiots[i].solidColor);
+                        neoSetPixelColor(neoidiots[i].led, neoidiots[i].solidColor);
                     }
                 } else if (neoidiots[i].solidOnMode) {
                     if (neoidiots[i].hasFlashColors()) {
                         // Flash mode: cycle through non-black colors with timing
                         float time_seconds = param.progress * (idiot_lights_animation_duration_ms / 1000.0f);
                         RgbColor flash_color = neoidiots[i].getFlashColor(time_seconds);
-                        neoobj.SetPixelColor(neoidiots[i].led, flash_color);
+                        neoSetPixelColor(neoidiots[i].led, flash_color);
                     } else {
                         // Standard solid color mode
-                        neoobj.SetPixelColor(neoidiots[i].led, neoidiots[i].solidColor);
+                        neoSetPixelColor(neoidiots[i].led, neoidiots[i].solidColor);
                     }
                 } else {
                     // If not in warning mode, turn off the LED
-                    neoobj.SetPixelColor(neoidiots[i].led, BLACK);
+                    neoSetPixelColor(neoidiots[i].led, BLACK);
                 }
             }
             this->progressAnim[AnimIdiots] = param.progress;
@@ -286,7 +295,7 @@ private:
                 float t = (effect_length > 1) ? (float)i / (float)(effect_length - 1) : 0.0f;
                 int32_t hue_raw = (int32_t)hue_left + (int32_t)lroundf(hue_delta * t);
                 uint16_t hue = (uint16_t)(((hue_raw % 65536) + 65536) % 65536);
-                neoobj.SetPixelColor(i + effect_offset,
+                neoSetPixelColor(i + effect_offset,
                     brightness > 0.004f ? color_to_neo(hsv_to_rgb<uint32_t>(hue, cylon_sat, (uint8_t)(brightness * 255.0f))) : BLACK);
             }
             this->progressAnim[AnimCylon] = param.progress;
@@ -294,13 +303,13 @@ private:
     }
     void clear() {
         for (int i = 0; i < striplength; i++) {
-            neoobj.SetPixelColor(i, RgbColor(0, 0, 0));
+            neoSetPixelColor(i, RgbColor(0, 0, 0));
         }
         neoobj.Show();
     }
     void setPixelColor(int index, RgbColor color) {
         if (index >= 0 && index < striplength) {
-            neoobj.SetPixelColor(index, color);
+            neoSetPixelColor(index, color);
         }
     }
 
@@ -316,7 +325,7 @@ public:
             neoidiots[i].led = led;
             neoidiots[i].solidColor = color_to_neo(idiot_light_colors[i]);
             if (_verbose) ezread.squintf("NeoIdiot %d initialized with LED %d and color %d\n", i, neoidiots[i].led, neoidiots[i].solidColor);
-            neoobj.SetPixelColor(neoidiots[i].led, neoidiots[i].solidColor);
+            neoSetPixelColor(neoidiots[i].led, neoidiots[i].solidColor);
         }
         neoobj.Show();
         // test_pattern();   // removing bootup test pattern
@@ -330,16 +339,16 @@ public:
         for (int color = 0; color < 3; color++) {
             for (int i = 0; i < striplength; i++) {
                 switch(color) {
-                    case 0: neoobj.SetPixelColor(i, RgbColor(255, 0, 0)); break;   // Red
-                    case 1: neoobj.SetPixelColor(i, RgbColor(0, 255, 0)); break;   // Green
-                    case 2: neoobj.SetPixelColor(i, RgbColor(0, 0, 255)); break;   // Blue
+                    case 0: neoSetPixelColor(i, RgbColor(255, 0, 0)); break;   // Red
+                    case 1: neoSetPixelColor(i, RgbColor(0, 255, 0)); break;   // Green
+                    case 2: neoSetPixelColor(i, RgbColor(0, 0, 255)); break;   // Blue
                 }
             }
             neoobj.Show();
             delay(333);
         }
         for (int i = 0; i < striplength; i++) {
-            neoobj.SetPixelColor(i, RgbColor(0, 0, 0));
+            neoSetPixelColor(i, RgbColor(0, 0, 0));
         }
         neoobj.Show();
     }
@@ -434,9 +443,9 @@ public:
                         if (sfreq > 0.0f) {
                             uint32_t phase_ms = millis() % (uint32_t)(1000.0f / sfreq);
                             RgbColor base = neoidiots[i].solidOnMode ? neoidiots[i].solidColor : BLACK;
-                            neoobj.SetPixelColor(neoidiots[i].led, (phase_ms < 60) ? RgbColor(255, 255, 255) : base);
+                            neoSetPixelColor(neoidiots[i].led, (phase_ms < 60) ? RgbColor(255, 255, 255) : base);
                         } else {
-                            neoobj.SetPixelColor(neoidiots[i].led,
+                            neoSetPixelColor(neoidiots[i].led,
                                 neoidiots[i].solidOnMode ? neoidiots[i].solidColor : BLACK);
                         }
                     }
