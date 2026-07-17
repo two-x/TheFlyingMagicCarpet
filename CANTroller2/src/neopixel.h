@@ -85,8 +85,10 @@ private:
     RgbColor runmode_color = RgbColor(0, 0, 0);
     bool _verbose = false;
     float progressAnim[(int)NumAnims] = { 0.0f, 0.0f, 0.0f };
-    uint16_t _cylonHueStart = 0;       // randomized fresh each time Cylon (LowPower/"Knight Rider") genuinely restarts - see runmode-change block below
-    int64_t _cylonHueStartTime = 0;    // esp_timer_get_time() at that same moment - t=0 reference for the 1-minute hue cycle
+    uint16_t _cylonHueStart = 0;       // randomized fresh each time Cylon (LowPower/"Knight Rider") genuinely restarts - see runmode-change block below - left-half starting hue
+    uint16_t _cylonHueStartRight = 0;  // same, but for the right half of the strip, which cycles the opposite direction at a different period
+    int64_t _cylonHueStartTime = 0;    // esp_timer_get_time() at that same moment - t=0 reference for both the hue and saturation cycles
+    float _cylonSatPhaseStart = 0.0f;  // randomized fresh (0..1) alongside _cylonHueStart - starting phase within the saturation cycle
 
     RgbColor chg_pix_brightness(float new_brt) {
         return RgbColor(this->runmode_color.R * new_brt, this->runmode_color.G * new_brt, this->runmode_color.B * new_brt);
@@ -250,17 +252,29 @@ private:
             }
 
             // Hue drifts continuously with wall-clock time (independent of this sweep's own ~2.75s restart cycle, so the
-            // color doesn't jump/reset every sweep) - one full trip around the color spectrum every 3 minutes, starting
-            // from _cylonHueStart (randomized fresh on genuine Cylon start, see the runmode-change block below).
-            constexpr int64_t hue_cycle_us = 180000000LL;  // 3 minutes per full hue cycle
+            // color doesn't jump/reset every sweep) - the left END of the strip cycles forward around the spectrum every
+            // 8 minutes, the right END cycles the opposite direction every 6 minutes, starting from _cylonHueStart /
+            // _cylonHueStartRight respectively (randomized fresh on genuine Cylon start, see the runmode-change block below).
+            // Pixels in between are hue-interpolated (see hue_delta below) for a continuous fade with no seam at the middle.
+            constexpr int64_t hue_cycle_us_left = 480000000LL;   // 8 minutes per full hue cycle, left half
+            constexpr int64_t hue_cycle_us_right = 360000000LL; // 6 minutes per full hue cycle, right half, opposite direction
             int64_t elapsed_us = esp_timer_get_time() - _cylonHueStartTime;
-            uint16_t hue = (uint16_t)((_cylonHueStart + (uint32_t)((elapsed_us % hue_cycle_us) * 65536LL / hue_cycle_us)) % 65536);
+            uint16_t hue_left = (uint16_t)((_cylonHueStart + (uint32_t)((elapsed_us % hue_cycle_us_left) * 65536LL / hue_cycle_us_left)) % 65536);
+            uint32_t right_delta = (uint32_t)((elapsed_us % hue_cycle_us_right) * 65536LL / hue_cycle_us_right);
+            uint16_t hue_right = (uint16_t)(((uint32_t)_cylonHueStartRight - right_delta) % 65536);
+            // Shortest signed hue distance from left to right (wraps correctly since 65536 == 2^16): reinterpreting the
+            // wrapped uint16_t difference as int16_t picks whichever direction around the color wheel is the short way,
+            // so pixels between the two ends fade continuously with no visible seam.
+            int16_t hue_delta = (int16_t)(uint16_t)(hue_right - hue_left);
 
-            // Saturation oscillates smoothly (sine wave, so no jump at the wrap point) between 75% and 100% of full,
-            // independent of the hue cycle above - one full oscillation every 5 minutes.
+            // Saturation oscillates smoothly (sine wave, so no jump at the wrap point) between 79% and 100% of full,
+            // independent of the hue cycle above - one full oscillation every 5 minutes, starting from a random phase
+            // (_cylonSatPhaseStart, randomized fresh on genuine Cylon start, see the runmode-change block below).
             constexpr int64_t sat_cycle_us = 300000000LL;  // 5 minutes per full saturation oscillation
-            float sat_phase = (float)(elapsed_us % sat_cycle_us) / (float)sat_cycle_us;  // 0..1
-            float sat_frac = 0.75f + 0.25f * (0.5f + 0.5f * sinf(sat_phase * 6.283185307f));
+            constexpr float sat_min = 0.79f;
+            constexpr float sat_max = 1.0f;
+            float sat_phase = _cylonSatPhaseStart + (float)(elapsed_us % sat_cycle_us) / (float)sat_cycle_us;  // 0..~2
+            float sat_frac = sat_min + (sat_max - sat_min) * (0.5f + 0.5f * sinf(sat_phase * 6.283185307f));
             uint8_t cylon_sat = (uint8_t)(255 * sat_frac);
 
             for (int i = 0; i < effect_length; i++) {
@@ -269,6 +283,9 @@ private:
                 float sigma = (d >= 0.0f) ? 0.65f : 1.5f;
                 float brightness = expf(-(d * d) / (sigma * sigma));
 
+                float t = (effect_length > 1) ? (float)i / (float)(effect_length - 1) : 0.0f;
+                int32_t hue_raw = (int32_t)hue_left + (int32_t)lroundf(hue_delta * t);
+                uint16_t hue = (uint16_t)(((hue_raw % 65536) + 65536) % 65536);
                 neoobj.SetPixelColor(i + effect_offset,
                     brightness > 0.004f ? color_to_neo(hsv_to_rgb<uint32_t>(hue, cylon_sat, (uint8_t)(brightness * 255.0f))) : BLACK);
             }
@@ -388,6 +405,8 @@ public:
                 if (runmode == LowPower) {
                     neoanimator.StopAnimation(AnimIdiots);
                     _cylonHueStart = (uint16_t)rn(65536);  // fresh random starting hue each genuine entry into Cylon (not on every ~2.75s sweep restart)
+                    _cylonHueStartRight = (uint16_t)rn(65536);  // independent random starting hue for the right half
+                    _cylonSatPhaseStart = (float)rn(65536) / 65536.0f;  // fresh random starting saturation phase, same occasion
                     _cylonHueStartTime = esp_timer_get_time();
                     startCylonAnimation();
                 } else {
