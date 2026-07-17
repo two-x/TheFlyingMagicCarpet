@@ -85,6 +85,8 @@ private:
     RgbColor runmode_color = RgbColor(0, 0, 0);
     bool _verbose = false;
     float progressAnim[(int)NumAnims] = { 0.0f, 0.0f, 0.0f };
+    uint16_t _cylonHueStart = 0;       // randomized fresh each time Cylon (LowPower/"Knight Rider") genuinely restarts - see runmode-change block below
+    int64_t _cylonHueStartTime = 0;    // esp_timer_get_time() at that same moment - t=0 reference for the 1-minute hue cycle
 
     RgbColor chg_pix_brightness(float new_brt) {
         return RgbColor(this->runmode_color.R * new_brt, this->runmode_color.G * new_brt, this->runmode_color.B * new_brt);
@@ -247,6 +249,20 @@ private:
                 moving_forward = false;
             }
 
+            // Hue drifts continuously with wall-clock time (independent of this sweep's own ~2.75s restart cycle, so the
+            // color doesn't jump/reset every sweep) - one full trip around the color spectrum every 3 minutes, starting
+            // from _cylonHueStart (randomized fresh on genuine Cylon start, see the runmode-change block below).
+            constexpr int64_t hue_cycle_us = 180000000LL;  // 3 minutes per full hue cycle
+            int64_t elapsed_us = esp_timer_get_time() - _cylonHueStartTime;
+            uint16_t hue = (uint16_t)((_cylonHueStart + (uint32_t)((elapsed_us % hue_cycle_us) * 65536LL / hue_cycle_us)) % 65536);
+
+            // Saturation oscillates smoothly (sine wave, so no jump at the wrap point) between 75% and 100% of full,
+            // independent of the hue cycle above - one full oscillation every 5 minutes.
+            constexpr int64_t sat_cycle_us = 300000000LL;  // 5 minutes per full saturation oscillation
+            float sat_phase = (float)(elapsed_us % sat_cycle_us) / (float)sat_cycle_us;  // 0..1
+            float sat_frac = 0.75f + 0.25f * (0.5f + 0.5f * sinf(sat_phase * 6.283185307f));
+            uint8_t cylon_sat = (uint8_t)(255 * sat_frac);
+
             for (int i = 0; i < effect_length; i++) {
                 float raw_d = (float)i - position;
                 float d = moving_forward ? raw_d : -raw_d;  // d > 0: ahead, d < 0: trail
@@ -254,7 +270,7 @@ private:
                 float brightness = expf(-(d * d) / (sigma * sigma));
 
                 neoobj.SetPixelColor(i + effect_offset,
-                    brightness > 0.004f ? RgbColor((uint8_t)(brightness * 255.0f), 0, 0) : BLACK);
+                    brightness > 0.004f ? color_to_neo(hsv_to_rgb<uint32_t>(hue, cylon_sat, (uint8_t)(brightness * 255.0f))) : BLACK);
             }
             this->progressAnim[AnimCylon] = param.progress;
         });
@@ -371,6 +387,8 @@ public:
                 
                 if (runmode == LowPower) {
                     neoanimator.StopAnimation(AnimIdiots);
+                    _cylonHueStart = (uint16_t)rn(65536);  // fresh random starting hue each genuine entry into Cylon (not on every ~2.75s sweep restart)
+                    _cylonHueStartTime = esp_timer_get_time();
                     startCylonAnimation();
                 } else {
                     neoanimator.StopAnimation(AnimCylon);
