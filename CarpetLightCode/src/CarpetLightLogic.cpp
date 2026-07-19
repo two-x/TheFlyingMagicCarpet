@@ -40,28 +40,41 @@ void setup() {
 void loop() {
    static uint32_t clock;
 
-   //Serial.println( carpet->pot->read() );
+   /*Serial.print("pot: ");
+   Serial.print( carpet->pot->read() );
+   Serial.print(" encoder a: ");
+   Serial.print(digitalReadDirect(ENCODER_A_PIN));
+   Serial.print(" encoder b: ");
+   Serial.print(digitalReadDirect(ENCODER_B_PIN));
+   Serial.print(" switch: ");
+   Serial.print(digitalReadDirect(BUTTON_PIN)); 
+   Serial.print("\n");
+   Serial.flush();*/
 
+   static int last = millis();
+   bool should_print = millis() - last > 400;
    clock = millis();
 
    AudioBoard::pollFrequencies( clock );
 
-   if ( true ) {
-      // Serial.println("millis");
-      // Serial.println( clock );
-      // Serial.println("output");
-      // Serial.println( AudioBoard::bin_low );
-      // Serial.println( AudioBoard::bin_mid );
-      // Serial.println( AudioBoard::bin_high );
-      // Serial.println("input");
-      // Serial.println( AudioBoard::Frequencies_Mono[0] );
-      // Serial.println( AudioBoard::Frequencies_Mono[1] );
-      // Serial.println( AudioBoard::Frequencies_Mono[2] );
-      // Serial.println( AudioBoard::Frequencies_Mono[4] );
-      // Serial.println( AudioBoard::Frequencies_Mono[5] );
-      // Serial.println( AudioBoard::Frequencies_Mono[6] );
-      // Serial.println( AudioBoard::Frequencies_Mono[7] );
+   if ( false && should_print ) {
+      last = millis();
+      Serial.println("millis");
+      Serial.println( clock );
+      Serial.println("output");
+      Serial.println( AudioBoard::bin_low );
+      Serial.println( AudioBoard::bin_mid );
+      Serial.println( AudioBoard::bin_high );
+      Serial.println("input");
+      Serial.println( AudioBoard::Frequencies_Mono[0] );
+      Serial.println( AudioBoard::Frequencies_Mono[1] );
+      Serial.println( AudioBoard::Frequencies_Mono[2] );
+      Serial.println( AudioBoard::Frequencies_Mono[3] );
+      Serial.println( AudioBoard::Frequencies_Mono[4] );
+      Serial.println( AudioBoard::Frequencies_Mono[5] );
+      Serial.println( AudioBoard::Frequencies_Mono[6] );
    }
+
 
    // CRGB clr2 = CRGB::Red;
    // CRGB clr1 = CRGB::Cyan;
@@ -94,7 +107,7 @@ void loop() {
    // Serial.println( currMode );
    // Serial.println( "delta" );
    // Serial.println( delta );
-   // Serial.println( "button" );
+   //Serial.println( "button" );
    // Serial.println( carpet->button->isDown() );
    if ( currMode != prevMode ) {
       delete currLightShow;
@@ -103,9 +116,9 @@ void loop() {
          case 0:
             currLightShow = new NightriderShow( carpet );
             break;
-         case 1:
-            currLightShow = new FlameShow( carpet );
-            break;
+         //case 1:
+         //   currLightShow = new FlameShow( carpet );
+         //   break;
          // case 2:
          //    currLightShow = new DemoShow( carpet );
          //    break;

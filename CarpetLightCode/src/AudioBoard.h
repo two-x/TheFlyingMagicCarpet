@@ -24,7 +24,9 @@
 #define ARR 8
 #define SGAIN 25
 
-inline int scale( int x ) { return 255 - ( ( 255 * x ) / 1023 ); }
+#define NORMALIZED_AUDIO 0
+
+inline int scale( int x ) { return ( ( 255 * x ) / 1023 ); }
 
 class AudioBoard {
  public:
@@ -71,9 +73,17 @@ class AudioBoard {
 
    //analogRead returns 0-1023, and analogWrite works 0-255. Make sure there's no rollover.
    static void Clipping_Basic() {
-      bin_low = scale( bin_low );
-      bin_mid = scale( bin_mid );
-      bin_high = scale( bin_high );
+      if (NORMALIZED_AUDIO) {
+        // normalize - take the total amount of output in the bins and average it
+        int total = bin_high + bin_low + bin_mid;
+        bin_low = (bin_low * 255) / total;
+        bin_mid = ( bin_mid * 255) / total;
+        bin_high = (bin_high * 255) / total;
+      } else {
+        bin_low = scale(bin_low);
+        bin_mid = scale(bin_mid);
+        bin_high = scale( bin_high );
+      }
    }
 
    static void Noisefloor_Compensate(){

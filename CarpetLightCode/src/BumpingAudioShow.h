@@ -79,83 +79,182 @@ class NightriderShow : public LightShow {
 
       const uint8_t val1 = carpet->pot->read() / 4;
       const uint8_t val2 = ( val1 + 128 ) % 255;
-      const CRGB clr1 = CHSV( val1, 255, 255 );
-      const CRGB clr2 = CHSV( val2, 255, 255 );
+      //const CRGB clr1 = CHSV( val1, 255, 255 );
+      //const CRGB clr2 = CHSV( val2, 255, 255 );;
+      CRGB clr1 = CRGB(0,0,255);
+      CRGB clr2 = CRGB(255,0,0);
+      CRGB clr3 = CRGB(0,255,0);
+      // Serial.println( "potval" );
+      // Serial.println( val1 );
+      // const CRGBW clr1 = topC[val1];
+      // const CRGBW clr2 = bottomC[val1];
+      // Serial.println( "CRGB1" );
+      // Serial.println( clr1.r );
+      // Serial.println( clr1.g );
+      // Serial.println( clr1.b );
+      // Serial.println( clr1.w );
+      // Serial.println( "CRGB2" );
+      // Serial.println( clr2.r );
+      // Serial.println( clr2.g );
+      // Serial.println( clr2.b );
+      // Serial.println( clr2.w );
+      // int diffIndex = scaleTo255( diff, rate, 0 );
 
       for ( int i = FRONT; i < FRONT_RIGHT; ++i ) {
          int i_adj = i - FRONT;
-         int val = scaleTo255( abs(littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+        int val = scaleTo255( abs(littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Red;
       }
       for ( int i = FRONT_RIGHT; i < RIGHT; ++i ) {
          int i_adj = i - FRONT_RIGHT;
          int val = scaleTo255( abs( bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Green;
       }
       for ( int i = RIGHT; i < BACK_RIGHT; ++i ) {
          int i_adj = i - RIGHT;
          int val = scaleTo255( abs(bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Blue;
       }
       for ( int i = BACK_RIGHT; i < BACK; ++i ) {
          int i_adj = i - BACK_RIGHT;
-         int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Yellow;
       }
       for ( int i = BACK; i < BACK_LEFT; ++i ) {
          int i_adj = i - BACK;
-         int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Orange;
       }
       for ( int i = BACK_LEFT; i < LEFT; ++i ) {
          int i_adj = i - BACK_LEFT;
          int val = scaleTo255( abs( bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Purple;
       }
       for ( int i = LEFT; i < FRONT_LEFT; ++i ) {
          int i_adj = i - LEFT;
          int val = scaleTo255( abs(bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Pink;
       }
       for ( int i = FRONT_LEFT; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          int i_adj = i - FRONT_LEFT;
-         int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Grey;
       }
       for ( int i = 0; i < FRONT; ++i ) {
          int i_adj = i + SIZEOF_LARGE_NEO_CORNER;
-         int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
          carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         // carpet->ropeLeds[i] = CRGB::Grey;
       }
       
 
       LedUtil::reverse( carpet->ropeLeds + FRONT, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
-      LedUtil::reverse( carpet->ropeLeds + BACK, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
+       LedUtil::reverse( carpet->ropeLeds + BACK, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
       LedUtil::reverse( carpet->ropeLeds + RIGHT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
       LedUtil::reverse( carpet->ropeLeds + LEFT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
 
+      CRGB dmxclr;
+      // int dmxval = AudioBoard::getLow();
+      // Serial.println( dmxval );
       int lowval = AudioBoard::getLow();
       static int lastlow = lowval;
+      Serial.print("lowval: ");
+      Serial.println(lowval);
+      Serial.flush();
       if (lowval > 80 && lowval > lastlow) {
-         lastlow = lowval;
+       lastlow = lowval;
       } else {
-         lastlow = lastlow > 15 ? lastlow - 15 : 0;
+ 
+       lastlow = lastlow > 15 ? lastlow - 15 : 0;
       }
-      CRGB dmxclr1 = blend( clr1, clr2, lastlow );
-      LedUtil::fill( carpet->megabarLeds, dmxclr1, NUM_MEGABAR_LEDS );
+      Serial.print("lastlow: ");
+      Serial.println(lastlow);
+      Serial.flush();
+      dmxclr = blend( CRGB::Black, clr2, lastlow );
+      carpet->megabarLeds[1] = dmxclr;
+      carpet->megabarLeds[2] = dmxclr;
+      carpet->megabarLeds[4] = dmxclr;
+      carpet->megabarLeds[5] = dmxclr;
+      carpet->megabarLeds[7] = dmxclr;
+      carpet->megabarLeds[8] = dmxclr;
+      carpet->megabarLeds[10] = dmxclr;
+      carpet->megabarLeds[11] = dmxclr;
 
-      int highval = AudioBoard::getHigh();
-      static int lasthigh = highval;
+
+      int highval = AudioBoard::getHigh() > 150 ? AudioBoard::getHigh() : 0;
+      Serial.print("highval: ");
+      Serial.println(highval);
+      /*static int lasthigh = highval;
+      Serial.print("lasthigh: ");
+      Serial.println(highval);
+      Serial.flush();
       if (highval > 100 && highval > lasthigh) {
-         lasthigh = highval;
+       lasthigh = highval;
       } else {
-         lasthigh = lasthigh > 25 ? lasthigh - 25 : 0;
+       lasthigh = lasthigh > 15 ? lasthigh - 15 : 0;
       }
-      CRGBW dmxclr2 = blend( clr1, clr2, lastlow );
-      dmxclr2.w = lasthigh;
-      LedUtil::fill( carpet->chinaLeds, dmxclr2, NUM_CHINA_LEDS );
+      Serial.print("lasthigh: ");
+      Serial.println(lasthigh);
+      Serial.flush();*/
+      // dmxclr = blend( dmxclr, clr1, highval );
+      dmxclr = blend( CRGB::Black, clr1, highval );
+      
+      carpet->megabarLeds[0] = dmxclr;
+      carpet->megabarLeds[3] = dmxclr;
+      carpet->megabarLeds[6] = dmxclr;
+      carpet->megabarLeds[9] = dmxclr;
 
-      /*
+
+
+      //CRGB dmxclr = blend( clr1, clr2, lowval);
+      //dmxclr = blend( clr2, clr3, highval);
+      //dmxclr = CRGB(lowval,highval,30);
+
+
+
+      /*int midval = AudioBoard::getMid();
+      int highval = AudioBoard::getHigh();
+      static int maxlow = 0;
+      static int minlow = 255;
+      maxlow = max(maxlow, lowval);
+      Serial.println("maxlow");
+      Serial.println(maxlow);
+      minlow = min(minlow, lowval);
+      Serial.println("minlow");
+      Serial.println(minlow);
+      // lowval = lowval > 75 ? lowval - 75 : 0;
+      // midval = midval > 75 ? midval - 75 : 0;
+     //  highval = highval > 75 ? highval - 75 : 0;
+      // CRGB dmxclr = (lowval > midval && lowval >= highval) ? CRGB::Red :(highval > midval) ? CRGB::Green : CRGB::Blue;
+      float avg = lowval + midval + highval;
+      int dmxred = (255 * ( ((float) lowval) / avg));
+      int dmxblue = (255 * ( ((float) midval) / avg));
+      int dmxgreen = (255 * ( ((float) highval) / avg));
+      Serial.println("dmxred:");
+      Serial.println(dmxred);
+      Serial.println("dmxblue:");
+      Serial.println(dmxblue);
+      Serial.println("dmxgreen:");
+      Serial.println(dmxgreen);
+      //CRGB dmxclr(dmxred, 0, dmxgreen);
+      Serial.println("low: ");
+      Serial.println(lowval);
+      Serial.println("mid");
+      Serial.println(midval);
+      Serial.println("high");
+      Serial.println(highval);*/
+      // CRGB dmxclr(lowval, midval, highval);
+      //LedUtil::fill( carpet->megabarLeds, dmxclr, NUM_MEGABAR_LEDS );
+      //LedUtil::fill( carpet->chinaLeds, dmxclr, NUM_CHINA_LEDS );
+
       static uint8_t white = 0;
       if ( carpet->button->isDown() ) {
          if ( white < 255 ) {
@@ -169,6 +268,5 @@ class NightriderShow : public LightShow {
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          carpet->ropeLeds[ i ].w = white;
       }
-      */
    }
 };
