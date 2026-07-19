@@ -1,4 +1,4 @@
-/* NightriderShow.h
+/* EqualizerShow.h
  *
  * A basic version of the Nightrider light effect, which is just a simple chase that
  * starts in the corners and bounces off the middles. Lame, but it lights up the
@@ -30,9 +30,9 @@ const CRGB bottomC[] {
  CRGB( 248, 247, 5 ),
 };
 
-class NightriderShow : public LightShow {
+class EqualizerShow : public LightShow {
  public:
-   NightriderShow( MagicCarpet * carpetArg ) : LightShow( carpetArg ) {}
+   EqualizerShow( MagicCarpet * carpetArg ) : LightShow( carpetArg ) {}
 
    void start() {
       for ( int i = NEO3_OFFSET; i < NEO4_OFFSET; ++i ) {
@@ -77,17 +77,17 @@ class NightriderShow : public LightShow {
          }
       }
 
-      const uint8_t val1 = carpet->pot->read() / 4;
-      const uint8_t val2 = ( val1 + 128 ) % 255;
+      //const uint8_t val1 = carpet->pot->read() / 4;
+      //const uint8_t val2 = ( val1 + 128 ) % 255;
       //const CRGB clr1 = CHSV( val1, 255, 255 );
       //const CRGB clr2 = CHSV( val2, 255, 255 );;
       CRGB clr1 = CRGB(0,0,255);
       CRGB clr2 = CRGB(255,0,0);
-      CRGB clr3 = CRGB(0,255,0);
+      // CRGB clr3 = CRGB(0,255,0);
       // Serial.println( "potval" );
       // Serial.println( val1 );
-      // const CRGBW clr1 = topC[val1];
-      // const CRGBW clr2 = bottomC[val1];
+      //const CRGBW clr1 = topC[val1];
+      //const CRGBW clr2 = bottomC[val1];
       // Serial.println( "CRGB1" );
       // Serial.println( clr1.r );
       // Serial.println( clr1.g );

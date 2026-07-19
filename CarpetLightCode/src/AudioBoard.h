@@ -74,11 +74,13 @@ class AudioBoard {
    //analogRead returns 0-1023, and analogWrite works 0-255. Make sure there's no rollover.
    static void Clipping_Basic() {
       if (NORMALIZED_AUDIO) {
-        // normalize - take the total amount of output in the bins and average it
-        int total = bin_high + bin_low + bin_mid;
-        bin_low = (bin_low * 255) / total;
-        bin_mid = ( bin_mid * 255) / total;
-        bin_high = (bin_high * 255) / total;
+        // normalize - there's always some noise
+        const int nmin = 30;
+        const int nmax = 800;
+        // map the operational range into the output
+        bin_low = ((int64_t)(bin_low - nmin) * (255)) / (nmax - nmin);
+        bin_mid = ((int64_t)(bin_mid - nmin) * (255)) / (nmax - nmin);
+        bin_high = ((int64_t)(bin_high - nmin) * (255)) / (nmax - nmin);
       } else {
         bin_low = scale(bin_low);
         bin_mid = scale(bin_mid);
@@ -232,16 +234,16 @@ class AudioBoard {
      }
    }
 
-   static uint8_t getLow() {
-      return bin_low;
+   static uint8_t getLow( int threshold = 255 ) {
+      return bin_low < threshold ? bin_low : 0;
    }
 
-   static uint8_t getMid() {
-      return bin_mid;
+   static uint8_t getMid( int threshold = 255 ) {
+      return bin_mid < threshold ? bin_mid : 0;
    }
 
-   static uint8_t getHigh() {
-      return bin_high;
+   static uint8_t getHigh( int threshold = 255 ) {
+      return bin_mid < threshold ? bin_mid : 0;
    }
 
    static void setup() {

@@ -10,6 +10,7 @@
 
 #include "LightShow.h"
 
+/*
 const CRGB topC[] {
    CRGB( 0, 255, 127), // summer day
    CRGB( 178, 118, 50), // end summer day
@@ -29,6 +30,7 @@ const CRGB bottomC[] {
  CRGB( 182, 35, 99 ),
  CRGB( 248, 247, 5 ),
 };
+*/
 
 class NightriderShow : public LightShow {
  public:
@@ -44,8 +46,8 @@ class NightriderShow : public LightShow {
       static const CRGBPalette256 clr( CRGB::Red, CRGB::Black );
       static uint32_t timestamp = time;
       static const uint32_t rate = 300; // move the lights every 200ms
-      static const uint32_t littleRate = rate;
-      static const uint32_t bigRate = ( littleRate * SIZEOF_LARGE_NEO ) / SIZEOF_SMALL_NEO;
+      //static const uint32_t littleRate = rate;
+      //static const uint32_t bigRate = ( littleRate * SIZEOF_LARGE_NEO ) / SIZEOF_SMALL_NEO;
       static uint8_t bigPos = 0;
       static uint8_t littlePos = 0;
       static uint8_t bigPosDir = 1;

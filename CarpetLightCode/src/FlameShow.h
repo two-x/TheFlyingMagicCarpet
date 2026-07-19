@@ -32,8 +32,8 @@ class FlameShow : public LightShow {
    static const uint8_t baseCoolingRate = 10;
    static const uint8_t baseSparkingRate = 15; // maybe set this based on music?
 
-   uint8_t currTemperature[ NUM_NEO_LEDS ] = { 0 };
-   uint8_t prevTemperature[ NUM_NEO_LEDS ] = { 0 };
+   uint8_t currTemperature[ NUM_NEO_LEDS_ACTUAL ] = { 0 };
+   uint8_t prevTemperature[ NUM_NEO_LEDS_ACTUAL ] = { 0 };
 
  public:
 
@@ -41,7 +41,7 @@ class FlameShow : public LightShow {
 
    void start() {
       CRGB clr = ColorFromPalette( flames, 0 );
-      LedUtil::fill( carpet->ropeLeds, clr, NUM_NEO_LEDS );
+      LedUtil::fill( carpet->ropeLeds, clr, NUM_NEO_LEDS_ACTUAL );
    }
 
    void update( uint32_t time ) {
@@ -74,14 +74,14 @@ class FlameShow : public LightShow {
       if ( time - timestamp > rate ) {
          timestamp = time;
          // cool everything
-         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+         for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
             prevTemperature[ i ] = qsub8( prevTemperature[ i ], coolingRate );
          }
 
          // disperse heat
-         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
-            uint16_t lw = i > 0 ? i - 1 : NUM_NEO_LEDS - 1;
-            uint16_t hi = i < NUM_NEO_LEDS - 1 ? i + i : 0;
+         for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
+            uint16_t lw = i > 0 ? i - 1 : NUM_NEO_LEDS_ACTUAL - 1;
+            uint16_t hi = i < NUM_NEO_LEDS_ACTUAL - 1 ? i + i : 0;
             currTemperature[ i ] = ( prevTemperature[ lw ] +
                                      prevTemperature[ hi ] +
                                      prevTemperature[ i ] ) / 3;
@@ -89,7 +89,7 @@ class FlameShow : public LightShow {
 
          // add sparks
          // TODO: this isn't enough for us, we'll want to spread our sparks out around the car
-         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+         for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
             if ( random8() < sparkingRate ) {
                currTemperature[ i ] = qadd8( currTemperature[ i ],
                                              random8( 160, 255 ) );
@@ -97,7 +97,7 @@ class FlameShow : public LightShow {
          }
 
          // assign color
-         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+         for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
             if ( mode ) {
                carpet->ropeLeds[ i ] = ColorFromPalette( flames, currTemperature[ i ] );
             } else {
@@ -106,12 +106,14 @@ class FlameShow : public LightShow {
          }
 
          // store prev color for next round
-         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+         for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
             prevTemperature[ i ] = currTemperature[ i ];
          }
       } else {
+         // NOTE: i don't think this is needed? wont the lights just keep thier color...?
          // assign color
-         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+         /*
+         for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
             CRGB newclr, oldclr;
             if ( mode ) {
                newclr = ColorFromPalette( flames, currTemperature[ i ] );
@@ -124,10 +126,11 @@ class FlameShow : public LightShow {
             // Serial.println( val );
             carpet->ropeLeds[ i ] = blend( newclr, oldclr, val );
          }
+         */
       }
 
       int dmxval = AudioBoard::getLow();
-      // Serial.println( dmxval );
+      //Serial.println( dmxval );
       CRGB dmxclr;
       if ( mode ) {
          dmxclr = ColorFromPalette( flames, dmxval );

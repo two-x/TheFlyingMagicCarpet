@@ -14,6 +14,7 @@
 #include "DemoShow.h"
 #include "FlameShow.h"
 #include "NightriderShow.h"
+#include "BumpingAudioShow.h"
 
 // The Flying Magic Carpet (TM)
 MagicCarpet * carpet;
@@ -30,7 +31,6 @@ void setup() {
 
    // TODO: i don't think i like this, lets use a static class instead.
    // currLightShow = new DemoShow( carpet );
-
    // currLightShow = new FlameShow( carpet );
    currLightShow = new NightriderShow( carpet );
 
@@ -95,20 +95,19 @@ void loop() {
    // }
 
    // read encoder
-   static const uint8_t numModes = 2;
+   static const uint8_t numModes = 3;
    static uint8_t currMode = 0;
    static uint8_t prevMode = currMode;
 
-   // FIXME: don't turn the encoder backwards....
    int delta = carpet->encoder->readPositionDelta() % numModes;
    carpet->encoder->resetPositionDelta();
    currMode = ( currMode + delta ) % numModes;
-   // Serial.println( "currMode" );
-   // Serial.println( currMode );
-   // Serial.println( "delta" );
-   // Serial.println( delta );
+   Serial.print( "currMode " );
+   Serial.println( currMode );
+   //Serial.println( "delta" );
+   //Serial.println( delta );
    //Serial.println( "button" );
-   // Serial.println( carpet->button->isDown() );
+   //Serial.println( carpet->button->isDown() );
    if ( currMode != prevMode ) {
       delete currLightShow;
       // based on diff, switch between existing light shows
@@ -116,12 +115,12 @@ void loop() {
          case 0:
             currLightShow = new NightriderShow( carpet );
             break;
-         //case 1:
-         //   currLightShow = new FlameShow( carpet );
-         //   break;
-         // case 2:
-         //    currLightShow = new DemoShow( carpet );
-         //    break;
+         case 1:
+            currLightShow = new FlameShow( carpet );
+            break;
+         case 2:
+             currLightShow = new EqualizerShow( carpet );
+             break;
          default:
             // we fucked up, just reset
             // carpet->error(); // uncomment for debugging
