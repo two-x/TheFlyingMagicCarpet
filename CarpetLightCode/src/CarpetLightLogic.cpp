@@ -57,6 +57,8 @@ void loop() {
 
    AudioBoard::pollFrequencies( clock );
 
+   carpet->encoder->update(); // refresh button short/long press state
+
    if ( false && should_print ) {
       last = millis();
       Serial.println("millis");
@@ -94,14 +96,14 @@ void loop() {
    //    Serial.println( carpet->ropeLeds[ j ].b );
    // }
 
-   // read encoder
+   // cycle light shows on each short press of the button
    static const uint8_t numModes = 3;
    static uint8_t currMode = 0;
    static uint8_t prevMode = currMode;
 
-   int delta = carpet->encoder->readPositionDelta() % numModes;
-   carpet->encoder->resetPositionDelta();
-   currMode = ( currMode + delta ) % numModes;
+   if ( carpet->encoder->button.shortpress() ) {
+      currMode = ( currMode + 1 ) % numModes;
+   }
    Serial.print( "currMode " );
    Serial.println( currMode );
    //Serial.println( "delta" );

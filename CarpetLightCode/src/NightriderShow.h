@@ -9,6 +9,7 @@
  */
 
 #include "LightShow.h"
+#include <math.h>
 
 /*
 const CRGB topC[] {
@@ -79,7 +80,43 @@ class NightriderShow : public LightShow {
          }
       }
 
-      const uint8_t val1 = carpet->pot->read() / 4;
+      // variation select: each encoder detent moves to the next variation
+      static const uint8_t numVariations = 2;
+      static uint8_t variation = 0;
+      int varDelta = carpet->encoder->readPositionDelta();
+      carpet->encoder->resetPositionDelta();
+      if ( varDelta != 0 ) {
+         int newVariation = ( (int)variation + varDelta ) % (int)numVariations;
+         if ( newVariation < 0 ) newVariation += numVariations;
+         variation = (uint8_t)newVariation;
+      }
+
+      uint8_t val1;
+      static float autoHue = 0.0f;    // 0-255 continuous hue position, used by variation 2
+      static uint32_t lastAutoTime = time;
+      if ( variation == 0 ) {
+         // variation 1: pot directly selects the color pair, as before
+         val1 = carpet->pot->read() / 4;
+         lastAutoTime = time; // keep the clock fresh so variation 2 doesn't jump on reentry
+      } else {
+         // variation 2: color automatically slides through the spectrum at a
+         // constant rate, as if the pot from variation 1 were being turned
+         // continuously. the pot instead sets the period of one full cycle:
+         // 20 min at its lowest reading down to 1 sec at its highest, mapped
+         // exponentially since a linear map would cram nearly all the usable
+         // range into a sliver near one end of the pot's travel.
+         static const uint32_t slowestPeriodMs = 20UL * 60UL * 1000UL; // 20 min
+         static const uint32_t fastestPeriodMs = 1000UL;               // 1 sec
+         float potFrac = carpet->pot->read() / (float)MAX_VOLTAGE;     // 0..1
+         uint32_t periodMs = (uint32_t)( slowestPeriodMs *
+               pow( (double)fastestPeriodMs / (double)slowestPeriodMs, potFrac ) );
+
+         uint32_t dtMs = time - lastAutoTime;
+         lastAutoTime = time;
+         autoHue += ( (float)dtMs / (float)periodMs ) * 255.0f;
+         while ( autoHue >= 255.0f ) autoHue -= 255.0f;
+         val1 = (uint8_t)autoHue;
+      }
       const uint8_t val2 = ( val1 + 128 ) % 255;
       const CRGB clr1 = CHSV( val1, 255, 255 );
       const CRGB clr2 = CHSV( val2, 255, 255 );
@@ -159,7 +196,7 @@ class NightriderShow : public LightShow {
 
       /*
       static uint8_t white = 0;
-      if ( carpet->button->isDown() ) {
+      if ( carpet->encoder->button.isDown() ) {
          if ( white < 255 ) {
             ++white;
          }

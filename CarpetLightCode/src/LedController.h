@@ -9,6 +9,8 @@
 #ifndef __LED_CONTROLLER_H
 #define __LED_CONTROLLER_H
 
+#include "Utilities.h"
+
 // max voltage from an analog input pin
 #define MAX_VOLTAGE 1023
 
@@ -38,48 +40,81 @@ class Potentiometer {
    uint8_t pin_;
 };
 
-namespace PushButtonImpl {
+enum ButtonPress { PressNone = 0, PressShort = 1, PressLong = 2, PressExtraLong = 3 };
 
-bool down_;
-uint8_t buttonPin_;
-uint32_t lastChangeTimestamp_;
-
-void callback() {
-   down_ = !digitalReadDirect( buttonPin_ );
-   lastChangeTimestamp_ = millis();
-}
-
-} // end namespace PushButtonImpl
-
+// Polled, not interrupt-driven: press timing thresholds are coarse (hundreds of
+// ms), so a per-loop update() is plenty responsive. The press is classified only
+// once, at release, by how long the timer had been running -- nothing fires
+// while the button is still held down.
 class PushButton {
-   friend PushButton * getPushButton( uint8_t pin );
  public:
+   void setup( uint8_t pin ) {
+      pin_ = pin;
+      pinMode( pin_, INPUT );
+      digitalWriteDirect( pin_, LOW );
+      down_ = false;
+   }
+
+   // call once per main loop iteration to refresh press state
+   void update() {
+      bool nowDown = !digitalReadDirect( pin_ ); // active low
+      if ( nowDown && !down_ ) {
+         pressTimer_.reset(); // press just started
+      } else if ( !nowDown && down_ ) {
+         // just released -- classify the whole press by how long it lasted
+         uint32_t heldMillis = pressTimer_.elapsed();
+         if ( heldMillis >= extraLongPressMillis_ ) {
+            action_ = PressExtraLong;
+         } else if ( heldMillis >= longPressMillis_ ) {
+            action_ = PressLong;
+         } else {
+            action_ = PressShort;
+         }
+      }
+      down_ = nowDown;
+   }
+
    bool isDown() {
-      return PushButtonImpl::down_;
+      return down_;
    }
 
-   uint32_t durationInMillis() {
-      return millis() - PushButtonImpl::lastChangeTimestamp_;
+   // returns true once per short press; clears the flag unless autoreset is false
+   bool shortpress( bool autoreset = true ) {
+      bool ret = ( action_ == PressShort );
+      if ( ret && autoreset ) action_ = PressNone;
+      return ret;
    }
+
+   // returns true once per long press; clears the flag unless autoreset is false
+   bool longpress( bool autoreset = true ) {
+      bool ret = ( action_ == PressLong );
+      if ( ret && autoreset ) action_ = PressNone;
+      return ret;
+   }
+
+   // returns true once per extra-long press; clears the flag unless autoreset is false
+   bool extralongpress( bool autoreset = true ) {
+      bool ret = ( action_ == PressExtraLong );
+      if ( ret && autoreset ) action_ = PressNone;
+      return ret;
+   }
+
+   void setLongPressMillis( uint32_t ms ) {
+      longPressMillis_ = ms;
+   }
+
+   void setExtraLongPressMillis( uint32_t ms ) {
+      extraLongPressMillis_ = ms;
+   }
+
  private:
-   PushButton() {}; // define constructor as private to force factory to be used
+   uint8_t pin_;
+   bool down_ = false;
+   int action_ = PressNone;
+   Timer pressTimer_;
+   uint32_t longPressMillis_ = 300;       // held at least this long (ms) -> long press
+   uint32_t extraLongPressMillis_ = 1500; // held at least this long (ms) -> extra-long press
 };
-
-PushButton * getPushButton( uint8_t pin ) {
-   static PushButton pb;
-   static bool first = true;
-   if ( first ) {
-      PushButtonImpl::buttonPin_ = pin;
-      PushButtonImpl::down_ = true;
-      PushButtonImpl::lastChangeTimestamp_ = millis();
-      pinMode( pin, INPUT );
-      digitalWriteDirect( pin, LOW );
-      uint8_t interrupt = digitalPinToInterrupt( pin );
-      attachInterrupt( interrupt, PushButtonImpl::callback, CHANGE );
-      first = false;
-   }
-   return &pb;
-}
 
 namespace EncoderImpl {
 
@@ -113,8 +148,10 @@ void callbackB() {
 } // end namespace EncoderImpl
 
 class Encoder {
-   friend Encoder * getEncoder( uint8_t pinA, uint8_t pinB );
+   friend Encoder * getEncoder( uint8_t pinA, uint8_t pinB, uint8_t pinSw );
  public:
+   PushButton button; // the encoder's own integrated shaft-click switch
+
    int readPositionDelta() {
       return EncoderImpl::pos_;
    }
@@ -123,11 +160,17 @@ class Encoder {
       EncoderImpl::resetPosition();
    }
 
+   // call once per main loop iteration to refresh button press state.
+   // rotation is handled by the A/B interrupts and needs no polling.
+   void update() {
+      button.update();
+   }
+
  private:
    Encoder() {}; // define constructor as private to force factory to be used
 };
 
-Encoder * getEncoder( uint8_t pinA, uint8_t pinB ) {
+Encoder * getEncoder( uint8_t pinA, uint8_t pinB, uint8_t pinSw ) {
    static Encoder enc;
    static bool first = true;
    if ( first ) {
@@ -142,6 +185,7 @@ Encoder * getEncoder( uint8_t pinA, uint8_t pinB ) {
       attachInterrupt( interruptB, EncoderImpl::callbackB, CHANGE );
       EncoderImpl::a_ = digitalReadDirect( EncoderImpl::pinA_ );
       EncoderImpl::b_ = digitalReadDirect( EncoderImpl::pinB_ );
+      enc.button.setup( pinSw );
       first = false;
    }
    return &enc;

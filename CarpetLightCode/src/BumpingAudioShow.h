@@ -255,8 +255,10 @@ class EqualizerShow : public LightShow {
       //LedUtil::fill( carpet->megabarLeds, dmxclr, NUM_MEGABAR_LEDS );
       //LedUtil::fill( carpet->chinaLeds, dmxclr, NUM_CHINA_LEDS );
 
+      // disabled: button now drives global show-cycling, not this show's white glow
+      /*
       static uint8_t white = 0;
-      if ( carpet->button->isDown() ) {
+      if ( carpet->encoder->button.isDown() ) {
          if ( white < 255 ) {
             ++white;
          }
@@ -268,5 +270,6 @@ class EqualizerShow : public LightShow {
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          carpet->ropeLeds[ i ].w = white;
       }
+      */
    }
 };

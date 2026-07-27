@@ -49,16 +49,14 @@ class FlameShow : public LightShow {
       static uint32_t rate = 10;
       static const uint8_t numModes = 2;
       static uint8_t mode = 0;
-      static bool isHeld = false;
 
-      // pick color
-      if ( carpet->button->isDown() ) {
-         if ( !isHeld ) {
-            ++mode %= numModes;
-            isHeld = true;
-         }
-      } else {
-         isHeld = false;
+      // pick color: each encoder detent cycles to the next color combo
+      int delta = carpet->encoder->readPositionDelta();
+      carpet->encoder->resetPositionDelta();
+      if ( delta != 0 ) {
+         int newMode = ( (int)mode + delta ) % (int)numModes;
+         if ( newMode < 0 ) newMode += numModes;
+         mode = (uint8_t)newMode;
       }
 
 

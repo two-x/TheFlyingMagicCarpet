@@ -28,7 +28,7 @@
 
 // Controller constants
 #define POT_ANALOG_PIN 3
-#define BUTTON_PIN 3
+#define ENCODER_SW_PIN 3 // FIXME: same pin number as POT_ANALOG_PIN, likely a wiring/config bug
 #define ENCODER_A_PIN 5
 #define ENCODER_B_PIN 4
 
@@ -125,8 +125,7 @@ class MagicCarpet {
 
    // controls
    LedControl::Potentiometer * pot;
-   LedControl::PushButton * button;
-   LedControl::Encoder * encoder;
+   LedControl::Encoder * encoder; // includes the encoder's integrated shaft-click button (encoder->button)
 
    void setup() {
       // seed random so we always get different random patterns
@@ -138,8 +137,7 @@ class MagicCarpet {
 
       // set up the controller
       pot = new LedControl::Potentiometer( POT_ANALOG_PIN );
-      button = LedControl::getPushButton( BUTTON_PIN );
-      encoder = LedControl::getEncoder( ENCODER_A_PIN, ENCODER_B_PIN );
+      encoder = LedControl::getEncoder( ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN );
 
       // add dmx leds
       dmx_init( TOTAL_DMX_SIZE );
