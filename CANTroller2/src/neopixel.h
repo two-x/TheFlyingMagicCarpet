@@ -19,6 +19,14 @@ inline NeoGamma<NeoGammaTableMethod> neoGammaCorrection;
 inline void neoSetPixelColor(int index, RgbColor color) {
     neoobj.SetPixelColor(index, neoGammaCorrection.Correct(color));
 }
+// For cases needing an extra linear dim on top (e.g. LowPower mode's dimmer backlight pulse): gamma-correct the
+// FULL-brightness color first, then scale the already-linearized result. Scaling before gamma correction instead
+// would squash the whole animated range down into the gamma table's flat near-zero region (its first ~16 entries
+// are all 0), collapsing a smooth fade into a couple of visible steps.
+inline void neoSetPixelColorDimmed(int index, RgbColor color, float linear_dim) {
+    RgbColor corrected = neoGammaCorrection.Correct(color);
+    neoobj.SetPixelColor(index, RgbColor((uint8_t)(corrected.R * linear_dim), (uint8_t)(corrected.G * linear_dim), (uint8_t)(corrected.B * linear_dim)));
+}
 
 static const RgbColor BLACK = RgbColor(0);
 static const uint8_t idiot_light_colors[] = {0x63, 0xa3, 0xc2, 0xc0, 0xec, 0xf4, 0xd8};
@@ -108,18 +116,19 @@ private:
             float lowpower_dimfactor = 0.15f;
 
             float wave_brightness = ((cos(param.progress * 2 * PI) + 1.0f) * 0.45f) + 0.1f;  // Cosine wave from 0.1 to 1 — PI is Arduino-specific; use M_PI for portability
-            if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended
             RgbColor pulse_color = chg_pix_brightness(wave_brightness);
-            
-            neoSetPixelColor(0, pulse_color);  // Set the esp on-board & box backlight pixels to the cos wave (they are both pixel 0)
+            // Keep controlbox dimmer when car is unattended - applied post-gamma (see neoSetPixelColorDimmed) so the
+            // wave still sweeps the gamma table's full range and fades smoothly instead of collapsing into its near-zero deadzone.
+            if (runmode == LowPower) neoSetPixelColorDimmed(0, pulse_color, lowpower_dimfactor);
+            else neoSetPixelColor(0, pulse_color);  // Set the esp on-board & box backlight pixels to the cos wave (they are both pixel 0)
 
             wave_brightness = ((sin(param.progress * 2 * PI) + 1.0f) * 0.45f) + 0.1f;  // Sine wave from 0.1 to 1
-            if (runmode == LowPower) wave_brightness *= lowpower_dimfactor;  // Keep controlbox dimmer when car is unattended
             pulse_color = chg_pix_brightness(wave_brightness);
-            
-            // Set the pcba backlight and external strip "mode" pixels (leftmost on the idiotlight strip) to the sin wave
-            neoSetPixelColor(1, pulse_color);  // Set pcba backlight pixels to the sin wave 
-            if (runmode != LowPower) neoSetPixelColor(2, pulse_color);  // in sleep mode this one does the cylon effect
+
+            // Set the pcba backlight and external strip "mode" pixels (leftmost on the idiotlight strip) to the sin wave.
+            // Pixel 2 is skipped in LowPower mode since Cylon owns it there instead.
+            if (runmode == LowPower) neoSetPixelColorDimmed(1, pulse_color, lowpower_dimfactor);
+            else { neoSetPixelColor(1, pulse_color); neoSetPixelColor(2, pulse_color); }
 
             // Restarting the animation from inside its own callback caused bottomless recursion (stack overflow).
             // The update() function checks param.progress and restarts animations externally instead.

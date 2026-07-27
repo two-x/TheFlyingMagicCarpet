@@ -8,7 +8,7 @@ CarpetLightCode/.pio/build/project.checksum
 .pio/
 .vscode/c_cpp_properties.json
 .vscode/launch.json
- ../CarpetLightCode/.vscode/*
+../CarpetLightCode/.vscode/*
 **/.pio/
 **/build/
 *.elf
