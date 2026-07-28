@@ -252,6 +252,14 @@ class MagicCarpet {
       memset( chinaLeds, 0, SIZEOF_CHINA_LEDS );
    }
 
+   // china fixtures are 6-channel RGBWUA -- CRGBWUA::u (aliased "black" in
+   // the union, see CRGBW.h) is the UV/blacklight channel. Full on or full
+   // off, independent of whatever else china is currently showing.
+   void setBlacklight( bool on ) {
+      uint8_t level = on ? 255 : 0;
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) chinaLeds[ i ].u = level;
+   }
+
    void clearRope() {
       memset( ropeLeds, 0, SIZEOF_NEO_LEDS );
       memset( ropeShowLeds, 0, SIZEOF_NEO_SHOW_LEDS );
@@ -341,9 +349,14 @@ class MagicCarpet {
    // (0%) to frontCornerIdx (100%) as percent varies, always 10 LEDs wide.
    // each lit LED's color reflects its OWN position along the whole side
    // (red at the back corner, green at the front corner), not the window's
-   // position, so the lit window's hue shifts as it slides.
+   // position, so the lit window's hue shifts as it slides. segmentLen is
+   // derived from the two corner indices passed in, not hardcoded to the
+   // full 352-LED channel -- callers are expected to pass the true-corner
+   // constants (FRONT_RIGHT/BACK_RIGHT, BACK_LEFT/FRONT_LEFT), which land 33
+   // LEDs in from each end of the physical channel (SIZEOF_LARGE_NEO_CORNER),
+   // so the window doesn't wrap into the front/back edge LEDs at either end.
    void renderSideIndicator( int backCornerIdx, int frontCornerIdx, float percent ) {
-      static const int segmentLen = SIZEOF_LARGE_NEO; // 352
+      const int segmentLen = abs( frontCornerIdx - backCornerIdx ) + 1;
       static const int windowWidth = 10;
       int direction = ( frontCornerIdx > backCornerIdx ) ? 1 : -1;
       float t = constrain( percent, 0.0f, 100.0f ) / 100.0f;
@@ -372,9 +385,10 @@ class MagicCarpet {
    // whole segment goes solid white. trebleLevel/midLevel/bassLevel are
    // 0-255 (AudioBoard::getHigh/getMid/getLow range).
    //
-   // Each side strip (352 LEDs, back corner to front corner) shows a 10-LED
-   // window at the position corresponding to liveNoiseFloorPercent (0-100):
-   // at the back corner at 0%, sliding to the front corner at 100%.
+   // Each side strip, true corner to true corner (286 LEDs -- the 352-LED
+   // physical channel minus 33 at each end, see renderSideIndicator()) shows
+   // a 10-LED window at the position corresponding to liveNoiseFloorPercent
+   // (0-100): at the back corner at 0%, sliding to the front corner at 100%.
    //
    // fullSpectrumLevel (0-255, AudioBoard::getFullSpectrum() -- already
    // silence-gated and auto-gain-scaled if enabled) sets all megabars' blue
@@ -400,12 +414,60 @@ class MagicCarpet {
          }
       }
 
-      // right side: back corner near SIZEOF_SMALL_NEO+SIZEOF_LARGE_NEO-1, front corner near SIZEOF_SMALL_NEO
-      renderSideIndicator( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO - 1, SIZEOF_SMALL_NEO, liveNoiseFloorPercent );
-      // left side: back corner near SIZEOF_SMALL_NEO*2+SIZEOF_LARGE_NEO, front corner at the far end of the array
-      renderSideIndicator( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO, NUM_NEO_LEDS_ACTUAL - 1, liveNoiseFloorPercent );
+      // right side: true corner to true corner (see renderSideIndicator's comment) --
+      // this stops 33 LEDs short of each end of the 352-LED channel, so it
+      // doesn't wrap into the front/back edges near the corners
+      renderSideIndicator( BACK_RIGHT, FRONT_RIGHT, liveNoiseFloorPercent );
+      // left side: true corner to true corner
+      renderSideIndicator( BACK_LEFT, FRONT_LEFT, liveNoiseFloorPercent );
 
       LedUtil::fill( megabarLeds, CRGB( 0, 0, fullSpectrumLevel ), NUM_MEGABAR_LEDS );
+   }
+
+   // power-saving A/B test: front half of the rig (rope's front edge + front
+   // half of both sides, china[0..3]) shows the given HSV color rendered
+   // straight to RGB (w=0); the back half (rope's back edge + back half of
+   // both sides, china[4..7]) shows the same color translated to RGBW by
+   // moving the shared min(r,g,b) out of the color channels and into the
+   // white channel -- same hue/brightness, less color-LED power. Megabars
+   // are off; unlike the other config previews this one deliberately ignores
+   // the committed global/headlight/china brightness ceiling (hue/sat/
+   // brightness here are already a full manual color spec, not a dimming
+   // level) -- see README.md.
+   void showPowerTest( uint8_t hue, uint8_t sat, uint8_t val ) {
+      clearMegabars();
+
+      CRGB straightClr = CHSV( hue, sat, val );
+      uint8_t minCh = min( straightClr.r, min( straightClr.g, straightClr.b ) );
+      CRGBW savingClr;
+      savingClr.r = straightClr.r - minCh;
+      savingClr.g = straightClr.g - minCh;
+      savingClr.b = straightClr.b - minCh;
+      savingClr.w = minCh;
+
+      // front half = front edge + front half of each side, forming an
+      // upside-down U to the carpet's front-to-back center line
+      int frontBoundaryRight = SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO_HALF;
+      int frontBoundaryLeft = ( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO ) + SIZEOF_LARGE_NEO_HALF;
+      for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
+         bool frontHalf = ( i < frontBoundaryRight ) || ( i >= frontBoundaryLeft );
+         if ( frontHalf ) {
+            ropeLeds[ i ] = straightClr;
+            ropeLeds[ i ].w = 0;
+         } else {
+            ropeLeds[ i ] = savingClr;
+         }
+      }
+
+      // china[0..3] are the front-corner pairs, china[4..7] the back-corner pairs
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
+         if ( i < 4 ) {
+            chinaLeds[ i ] = straightClr;
+            chinaLeds[ i ].w = 0;
+         } else {
+            chinaLeds[ i ] = savingClr;
+         }
+      }
    }
 
    // scales every light array in-place per the configured global/headlight/

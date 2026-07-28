@@ -27,17 +27,31 @@ static uint8_t currMode = 0;
 static uint8_t prevMode = currMode;
 static uint8_t currVariation[ numModes ] = { 0, 0, 0, 0 };
 static bool lightsOn = true; // always boots on; toggled by an extra-long press
+static bool blacklightOn = false; // always boots off; toggled by a double press in ModeShow -- not persisted, same as lightsOn
 
 // config mode cycle: long-press (from ModeShow) always lands on ModeConfigGlobal;
 // each medium-press advances to the next one, wrapping back around. Each
 // top-level setting can have multiple "subsettings" (only Audio has more than
 // one right now); short-press cycles those. Double-press commits whichever
 // subsetting is currently showing. Long-press is the only way to cancel.
-enum AppMode { ModeShow, ModeConfigGlobal, ModeConfigHeadlight, ModeConfigChina, ModeConfigAudio };
+enum AppMode { ModeShow, ModeConfigGlobal, ModeConfigHeadlight, ModeConfigChina, ModeConfigAudio, ModeConfigPowerTest };
 static AppMode appMode = ModeShow;
-static uint8_t configSubsetting = 0; // Audio: 0 = noise floor, 1 = auto-gain enable
+static uint8_t configSubsetting = 0; // Audio: 0 = noise floor, 1 = auto-gain enable. PowerTest: 0 = hue, 1 = saturation, 2 = brightness
 static float noiseFloorPercent = 0.0f; // committed value; audio below this is "silence" -- see AudioBoard.h
 static bool liveAutoGainEnabled = false; // live (not-yet-committed) auto-gain toggle state, Audio subsetting 1
+
+// PowerTest: an HSV test color, dialed in with the encoder (rotation edits
+// whichever of hue/sat/brightness the current subsetting selects), used to
+// visually compare a straight HSV->RGB rendering against an RGBW power-saving
+// translation of the same color -- see MagicCarpet::showPowerTest(). The 3
+// live fields persist across subsetting cycling within one visit to this
+// screen (so dialing hue, then sat, then brightness edits one composite
+// color), and re-sync to the committed color each time the screen is freshly
+// entered (see enterConfigMode()) -- no explicit revert-on-cancel is needed
+// beyond that, since these live fields have no effect on anything outside
+// this screen.
+static uint8_t committedTestHue = 0, committedTestSat = 255, committedTestBrightness = 255;
+static uint8_t liveTestHue = 0, liveTestSat = 255, liveTestBrightness = 255;
 
 // static Timer audioThresholdPrintTimer( 1000 ); // uncomment for periodic live-value debug output
 
@@ -56,13 +70,14 @@ static bool configPotTakenOver = false;
 
 uint8_t numSubsettingsFor( AppMode mode ) {
    if ( mode == ModeConfigAudio ) return 2;
+   if ( mode == ModeConfigPowerTest ) return 3;
    return 1;
 }
 
 // re-syncs every takeover tracker to "nothing has changed yet" -- call
 // whenever a new top-level setting or a new subsetting is entered
 void resetTakeoverState() {
-   configEntryPotRaw = carpet->pot->read();
+   configEntryPotRaw = carpet->pot->readLive(); // config screens always see the true live pot, never the low-power simulation
    configPotTakenOver = false;
    carpet->encoder->resetPositionDelta();
    liveAutoGainEnabled = AudioBoard::getAutoGainEnabled();
@@ -72,6 +87,12 @@ void enterConfigMode( AppMode mode ) {
    appMode = mode;
    configSubsetting = 0;
    resetTakeoverState();
+   if ( mode == ModeConfigPowerTest ) {
+      // fresh visit -- start editing from the last committed color
+      liveTestHue = committedTestHue;
+      liveTestSat = committedTestSat;
+      liveTestBrightness = committedTestBrightness;
+   }
 }
 
 void cycleSubsetting() {
@@ -84,7 +105,8 @@ AppMode nextConfigMode( AppMode mode ) {
       case ModeConfigGlobal:    return ModeConfigHeadlight;
       case ModeConfigHeadlight: return ModeConfigChina;
       case ModeConfigChina:     return ModeConfigAudio;
-      case ModeConfigAudio:     return ModeConfigGlobal;
+      case ModeConfigAudio:     return ModeConfigPowerTest;
+      case ModeConfigPowerTest: return ModeConfigGlobal;
       default:                 return ModeConfigGlobal;
    }
 }
@@ -92,7 +114,7 @@ AppMode nextConfigMode( AppMode mode ) {
 // maps the live pot reading linearly to a percent in [minPercent,maxPercent].
 // fullRange=false restricts to the pot's top half (used by global brightness).
 float potToPercent( float minPercent, float maxPercent, bool fullRange ) {
-   uint16_t potRaw = carpet->pot->read();
+   uint16_t potRaw = carpet->pot->readLive(); // config screens always see the true live pot, never the low-power simulation
    float frac;
    if ( fullRange ) {
       frac = potRaw / (float)MAX_VOLTAGE;
@@ -160,7 +182,10 @@ void printWelcome() {
    Serial.print( "  Headlight=" ); Serial.print( (int)( carpet->getHeadlightBrightness() + 0.5f ) ); Serial.print( "%" );
    Serial.print( "  China=" ); Serial.print( (int)( carpet->getChinaBrightness() + 0.5f ) ); Serial.print( "%" );
    Serial.print( "  NoiseFloor=" ); Serial.print( (int)( noiseFloorPercent + 0.5f ) ); Serial.print( "%" );
-   Serial.print( "  AutoGain=" ); Serial.println( AudioBoard::getAutoGainEnabled() ? "on" : "off" );
+   Serial.print( "  AutoGain=" ); Serial.print( AudioBoard::getAutoGainEnabled() ? "on" : "off" );
+   Serial.print( "  TestColor=H:" ); Serial.print( committedTestHue );
+   Serial.print( " S:" ); Serial.print( committedTestSat );
+   Serial.print( " V:" ); Serial.println( committedTestBrightness );
    Serial.print( "SpeedLink (CANTroller2 @0x69): " );
    Serial.println( SpeedLink::isFresh() ? "host detected" : "no host detected" );
 }
@@ -185,6 +210,9 @@ void setup() {
    noiseFloorPercent = Nvm::loadedNoiseFloor();
    AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
    AudioBoard::setAutoGainEnabled( Nvm::loadedAutoGainEnabled() );
+   committedTestHue = liveTestHue = Nvm::loadedTestHue();
+   committedTestSat = liveTestSat = Nvm::loadedTestSat();
+   committedTestBrightness = liveTestBrightness = Nvm::loadedTestBrightness();
 
    currLightShow = makeShow( currMode, currVariation[ currMode ] );
    currLightShow->start();
@@ -221,13 +249,14 @@ void loop() {
    bool didExtraLong = carpet->encoder->button.extralongpress();
    bool didDouble = carpet->encoder->button.doublepress();
 
-   if ( appMode == ModeConfigGlobal || appMode == ModeConfigHeadlight || appMode == ModeConfigChina || appMode == ModeConfigAudio ) {
-      // these 4 screens take over the whole visual with a live preview
+   if ( appMode == ModeConfigGlobal || appMode == ModeConfigHeadlight || appMode == ModeConfigChina ||
+        appMode == ModeConfigAudio || appMode == ModeConfigPowerTest ) {
+      // these 5 screens take over the whole visual with a live preview
 
-      // Audio subsetting 1 (auto-gain toggle) reads encoder rotation -- this
-      // has to happen BEFORE currLightShow->update() below, since the active
-      // show also consumes encoder rotation for its own variation selection
-      // and would otherwise eat it first.
+      // Audio subsetting 1 (auto-gain toggle) and PowerTest (all 3 subsettings)
+      // read encoder rotation -- this has to happen BEFORE currLightShow->update()
+      // below, since the active show also consumes encoder rotation for its own
+      // variation selection and would otherwise eat it first.
       if ( appMode == ModeConfigAudio && configSubsetting == 1 ) {
          int delta = carpet->encoder->readPositionDelta();
          if ( delta != 0 ) {
@@ -237,6 +266,19 @@ void loop() {
             // if this is backwards on the actual hardware (readPositionDelta's
             // sign depends on encoder wiring, unverified), just flip this test.
             liveAutoGainEnabled = ( delta > 0 );
+         }
+      } else if ( appMode == ModeConfigPowerTest ) {
+         int delta = carpet->encoder->readPositionDelta();
+         if ( delta != 0 ) {
+            carpet->encoder->resetPositionDelta();
+            static const int STEP = 4; // per detent; tune to taste
+            if ( configSubsetting == 0 ) {
+               liveTestHue = (uint8_t)( liveTestHue + delta * STEP ); // hue wraps naturally (uint8_t overflow)
+            } else if ( configSubsetting == 1 ) {
+               liveTestSat = (uint8_t)constrain( (int)liveTestSat + delta * STEP, 0, 255 );
+            } else {
+               liveTestBrightness = (uint8_t)constrain( (int)liveTestBrightness + delta * STEP, 0, 255 );
+            }
          }
       }
 
@@ -252,7 +294,7 @@ void loop() {
       } else if ( appMode == ModeConfigChina ) {
          livePercent = livePercentFor( 0.0f, 100.0f, true, carpet->getChinaBrightness() );
          carpet->showChinaPreview( livePercent );
-      } else { // ModeConfigAudio
+      } else if ( appMode == ModeConfigAudio ) {
          float sideIndicatorPercent;
          if ( configSubsetting == 0 ) {
             livePercent = livePercentFor( 0.0f, 100.0f, true, noiseFloorPercent );
@@ -277,6 +319,8 @@ void loop() {
                configSubsetting == 1 ? liveAutoGainEnabled : AudioBoard::getAutoGainEnabled() );
          carpet->showAudioMeter( AudioBoard::getHigh(), AudioBoard::getMid(), AudioBoard::getLow(),
                                  sideIndicatorPercent, fullSpectrumLevel );
+      } else { // ModeConfigPowerTest
+         carpet->showPowerTest( liveTestHue, liveTestSat, liveTestBrightness );
       }
 
       if ( didDouble ) {
@@ -293,16 +337,26 @@ void loop() {
             carpet->setChinaBrightness( livePercent );
             Nvm::saveChinaBrightness( (uint8_t)( livePercent + 0.5f ) );
             printPercentSetting( "China brightness", livePercent );
-         } else if ( configSubsetting == 0 ) { // ModeConfigAudio, noise floor
+         } else if ( appMode == ModeConfigAudio && configSubsetting == 0 ) { // noise floor
             noiseFloorPercent = livePercent;
             Nvm::saveNoiseFloor( (uint8_t)( noiseFloorPercent + 0.5f ) );
             AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
             printPercentSetting( "Noise floor", noiseFloorPercent );
-         } else { // ModeConfigAudio, auto-gain enable
+         } else if ( appMode == ModeConfigAudio ) { // auto-gain enable
             AudioBoard::setAutoGainEnabled( liveAutoGainEnabled );
             Nvm::saveAutoGainEnabled( liveAutoGainEnabled );
             Serial.print( "Auto-gain: " );
             Serial.println( liveAutoGainEnabled ? "on" : "off" );
+         } else { // ModeConfigPowerTest -- commits the whole hue/sat/brightness triple at once
+            committedTestHue = liveTestHue;
+            committedTestSat = liveTestSat;
+            committedTestBrightness = liveTestBrightness;
+            Nvm::saveTestHue( committedTestHue );
+            Nvm::saveTestSat( committedTestSat );
+            Nvm::saveTestBrightness( committedTestBrightness );
+            Serial.print( "Power test color: H=" ); Serial.print( committedTestHue );
+            Serial.print( " S=" ); Serial.print( committedTestSat );
+            Serial.print( " V=" ); Serial.println( committedTestBrightness );
          }
          carpet->flashRope( 1 ); // confirms the setting was committed
          appMode = ModeShow;
@@ -322,6 +376,7 @@ void loop() {
       // ModeShow
 
       if ( didExtraLong ) lightsOn = !lightsOn;
+      if ( didDouble ) blacklightOn = !blacklightOn; // china UV channel, full on/off -- see MagicCarpet::setBlacklight()
       if ( didLong ) enterConfigMode( ModeConfigGlobal );
       if ( didShort ) {
          currMode = ( currMode + 1 ) % numModes;
@@ -335,6 +390,10 @@ void loop() {
          prevMode = currMode;
       }
 
+      // low-power pot simulation only applies here, never during config
+      // screens -- see LedController.h's Potentiometer::updateLowPower()
+      carpet->pot->updateLowPower( SpeedLink::isLowPower() );
+
       currLightShow->update( clock );
 
       // persist a show's variation the moment it actually changes
@@ -345,8 +404,9 @@ void loop() {
       }
 
       carpet->applyBrightnessCeiling();
+      carpet->setBlacklight( blacklightOn );
 
-      if ( !lightsOn ) carpet->clear(); // master override -- still let shows run "invisibly" underneath
+      if ( !lightsOn ) carpet->clear(); // master override -- still let shows run "invisibly" underneath (also zeroes blacklight)
    }
 
    carpet->show();

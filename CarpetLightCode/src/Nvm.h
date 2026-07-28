@@ -15,7 +15,7 @@
 namespace Nvm {
 
 static DueFlashStorage flash;
-static const uint8_t MAGIC = 0x40; // bump this if State's layout ever changes
+static const uint8_t MAGIC = 0x41; // bump this if State's layout ever changes
 static const uint8_t MAX_SHOWS = 8; // headroom for future shows, no relayout needed
 
 // all brightness/threshold fields are percentages (0-100), never raw 0-255
@@ -29,6 +29,9 @@ struct State {
    uint8_t chinaBrightnessPercent;     // 0-100, default 100 (unrestricted)
    uint8_t noiseFloorPercent;          // 0-100, default 0 -- audio below this is "silence" (see AudioBoard.h)
    uint8_t autoGainEnabled;            // 0/1, default 0 (off) -- see AudioBoard.h
+   uint8_t testHue;                    // 0-255, default 0 -- power-saving test color (see CarpetLightLogic.cpp)
+   uint8_t testSat;                    // 0-255, default 255
+   uint8_t testBrightness;             // 0-255, default 255
 };
 
 static State state;
@@ -46,6 +49,9 @@ inline void load() {
       state.chinaBrightnessPercent = 100;
       state.noiseFloorPercent = 0;
       state.autoGainEnabled = 0;
+      state.testHue = 0;
+      state.testSat = 255;
+      state.testBrightness = 255;
       flash.write( 0, (byte *)&state, sizeof( State ) );
    }
 }
@@ -76,6 +82,18 @@ inline uint8_t loadedNoiseFloor() {
 
 inline bool loadedAutoGainEnabled() {
    return state.autoGainEnabled != 0;
+}
+
+inline uint8_t loadedTestHue() {
+   return state.testHue;
+}
+
+inline uint8_t loadedTestSat() {
+   return state.testSat;
+}
+
+inline uint8_t loadedTestBrightness() {
+   return state.testBrightness;
 }
 
 inline void saveShow( uint8_t show ) {
@@ -111,6 +129,21 @@ inline void saveNoiseFloor( uint8_t percent ) {
 
 inline void saveAutoGainEnabled( bool enabled ) {
    state.autoGainEnabled = enabled ? 1 : 0;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveTestHue( uint8_t hue ) {
+   state.testHue = hue;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveTestSat( uint8_t sat ) {
+   state.testSat = sat;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveTestBrightness( uint8_t brightness ) {
+   state.testBrightness = brightness;
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 
