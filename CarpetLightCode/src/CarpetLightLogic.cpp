@@ -15,41 +15,68 @@
 #include "FlameShow.h"
 #include "NightriderShow.h"
 #include "BumpingAudioShow.h"
+#include "SpeedStripesShow.h"
 
 // The Flying Magic Carpet (TM)
 MagicCarpet * carpet;
 
 LightShow * currLightShow;
 
-static const uint8_t numModes = 3;
+static const uint8_t numModes = 4;
 static uint8_t currMode = 0;
 static uint8_t prevMode = currMode;
-static uint8_t currVariation[ numModes ] = { 0, 0, 0 };
+static uint8_t currVariation[ numModes ] = { 0, 0, 0, 0 };
 static bool lightsOn = true; // always boots on; toggled by an extra-long press
 
 // config mode cycle: long-press (from ModeShow) always lands on ModeConfigGlobal;
-// each double-press advances to the next one, wrapping back around.
+// each medium-press advances to the next one, wrapping back around. Each
+// top-level setting can have multiple "subsettings" (only Audio has more than
+// one right now); short-press cycles those. Double-press commits whichever
+// subsetting is currently showing. Long-press is the only way to cancel.
 enum AppMode { ModeShow, ModeConfigGlobal, ModeConfigHeadlight, ModeConfigChina, ModeConfigAudio };
 static AppMode appMode = ModeShow;
-static float audioThresholdPercent = 0.0f; // not yet applied to anything; see loop() below
+static uint8_t configSubsetting = 0; // Audio: 0 = noise floor, 1 = auto-gain enable
+static float noiseFloorPercent = 0.0f; // committed value; audio below this is "silence" -- see AudioBoard.h
+static bool liveAutoGainEnabled = false; // live (not-yet-committed) auto-gain toggle state, Audio subsetting 1
+
 // static Timer audioThresholdPrintTimer( 1000 ); // uncomment for periodic live-value debug output
 
 // TEMPORARY: raw spectrum-shield hardware diagnostic. Remove (or comment out,
 // per usual) once the audio-input hardware issue is sorted -- see AudioBoard.h.
 static Timer rawAudioDiagTimer( 300 );
 
-// soft pot takeover: entering a config screen shouldn't make the preview jump
-// to wherever the pot physically happens to be sitting. instead it holds at
-// the already-committed value until the pot moves noticeably (2% of its full
-// range) from where it was on entry -- then it hands over to live tracking.
+// soft takeover: entering a config screen (or subsetting) shouldn't make the
+// preview jump to wherever the pot/encoder physically happens to be sitting.
+// It holds at the already-committed value until the pot moves noticeably (2%
+// of its full range) or the encoder is twisted at all since entry -- then it
+// hands over to live tracking.
 static const uint16_t POT_TAKEOVER_THRESHOLD = (uint16_t)( 0.02f * MAX_VOLTAGE + 0.5f );
 static uint16_t configEntryPotRaw = 0;
 static bool configPotTakenOver = false;
 
-void enterConfigMode( AppMode mode ) {
-   appMode = mode;
+uint8_t numSubsettingsFor( AppMode mode ) {
+   if ( mode == ModeConfigAudio ) return 2;
+   return 1;
+}
+
+// re-syncs every takeover tracker to "nothing has changed yet" -- call
+// whenever a new top-level setting or a new subsetting is entered
+void resetTakeoverState() {
    configEntryPotRaw = carpet->pot->read();
    configPotTakenOver = false;
+   carpet->encoder->resetPositionDelta();
+   liveAutoGainEnabled = AudioBoard::getAutoGainEnabled();
+}
+
+void enterConfigMode( AppMode mode ) {
+   appMode = mode;
+   configSubsetting = 0;
+   resetTakeoverState();
+}
+
+void cycleSubsetting() {
+   configSubsetting = ( configSubsetting + 1 ) % numSubsettingsFor( appMode );
+   resetTakeoverState();
 }
 
 AppMode nextConfigMode( AppMode mode ) {
@@ -104,6 +131,8 @@ LightShow * makeShow( uint8_t mode, uint8_t variation ) {
          return new FlameShow( carpet, variation );
       case 2:
          return new EqualizerShow( carpet );
+      case 3:
+         return new SpeedStripesShow( carpet, variation );
       default:
          // we fucked up, just reset
          // carpet->error(); // uncomment for debugging
@@ -116,6 +145,7 @@ const char * showName( uint8_t mode ) {
       case 0:  return "Nightrider";
       case 1:  return "Flame";
       case 2:  return "Equalizer";
+      case 3:  return "SpeedStripes";
       default: return "?";
    }
 }
@@ -129,7 +159,10 @@ void printWelcome() {
    Serial.print( "  Global=" ); Serial.print( (int)( carpet->getGlobalBrightness() + 0.5f ) ); Serial.print( "%" );
    Serial.print( "  Headlight=" ); Serial.print( (int)( carpet->getHeadlightBrightness() + 0.5f ) ); Serial.print( "%" );
    Serial.print( "  China=" ); Serial.print( (int)( carpet->getChinaBrightness() + 0.5f ) ); Serial.print( "%" );
-   Serial.print( "  Audio=" ); Serial.print( (int)( audioThresholdPercent + 0.5f ) ); Serial.println( "%" );
+   Serial.print( "  NoiseFloor=" ); Serial.print( (int)( noiseFloorPercent + 0.5f ) ); Serial.print( "%" );
+   Serial.print( "  AutoGain=" ); Serial.println( AudioBoard::getAutoGainEnabled() ? "on" : "off" );
+   Serial.print( "SpeedLink (CANTroller2 @0x69): " );
+   Serial.println( SpeedLink::isFresh() ? "host detected" : "no host detected" );
 }
 
 void setup() {
@@ -149,10 +182,17 @@ void setup() {
    carpet->setGlobalBrightness( Nvm::loadedGlobalBrightness() );
    carpet->setHeadlightBrightness( Nvm::loadedHeadlightBrightness() );
    carpet->setChinaBrightness( Nvm::loadedChinaBrightness() );
-   audioThresholdPercent = Nvm::loadedAudioThreshold();
+   noiseFloorPercent = Nvm::loadedNoiseFloor();
+   AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
+   AudioBoard::setAutoGainEnabled( Nvm::loadedAutoGainEnabled() );
 
    currLightShow = makeShow( currMode, currVariation[ currMode ] );
    currLightShow->start();
+
+   // give CANTroller2 a moment to send its first speed packet (it ticks
+   // roughly every 250ms) so the boot banner can report whether the host is
+   // actually present, instead of always saying "no host" before one arrives
+   delay( 600 );
 
    printWelcome();
 }
@@ -184,9 +224,25 @@ void loop() {
    if ( appMode == ModeConfigGlobal || appMode == ModeConfigHeadlight || appMode == ModeConfigChina || appMode == ModeConfigAudio ) {
       // these 4 screens take over the whole visual with a live preview
 
+      // Audio subsetting 1 (auto-gain toggle) reads encoder rotation -- this
+      // has to happen BEFORE currLightShow->update() below, since the active
+      // show also consumes encoder rotation for its own variation selection
+      // and would otherwise eat it first.
+      if ( appMode == ModeConfigAudio && configSubsetting == 1 ) {
+         int delta = carpet->encoder->readPositionDelta();
+         if ( delta != 0 ) {
+            carpet->encoder->resetPositionDelta();
+            // direction picks the state directly, not a toggle: right (positive
+            // delta) always turns on, left (negative delta) always turns off.
+            // if this is backwards on the actual hardware (readPositionDelta's
+            // sign depends on encoder wiring, unverified), just flip this test.
+            liveAutoGainEnabled = ( delta > 0 );
+         }
+      }
+
       currLightShow->update( clock ); // keep the show progressing "invisibly" so it doesn't jump on cancel
 
-      float livePercent;
+      float livePercent = 0.0f;
       if ( appMode == ModeConfigGlobal ) {
          livePercent = livePercentFor( 0.0f, 100.0f, false, carpet->getGlobalBrightness() ); // pot's bottom half unused
          carpet->showSolidRed( livePercent );
@@ -197,10 +253,15 @@ void loop() {
          livePercent = livePercentFor( 0.0f, 100.0f, true, carpet->getChinaBrightness() );
          carpet->showChinaPreview( livePercent );
       } else { // ModeConfigAudio
-         livePercent = livePercentFor( 0.0f, 100.0f, true, audioThresholdPercent );
-         // if ( audioThresholdPrintTimer.expireset() ) {
-         //    printPercentSetting( "audio threshold (live)", livePercent );
-         // }
+         float sideIndicatorPercent;
+         if ( configSubsetting == 0 ) {
+            livePercent = livePercentFor( 0.0f, 100.0f, true, noiseFloorPercent );
+            AudioBoard::setNoiseFloorPercent( livePercent ); // live feedback while adjusting; reverted below if not committed
+            sideIndicatorPercent = livePercent;
+         } else {
+            sideIndicatorPercent = liveAutoGainEnabled ? 100.0f : 0.0f; // side lights double as an on/off indicator here
+         }
+
          // TEMPORARY diagnostic: all 7 raw (unprocessed, 0-1023) spectrum-shield
          // bins, to check whether the hardware is responding to input at all,
          // independent of the 3 bins the VU meter actually displays.
@@ -211,10 +272,15 @@ void loop() {
                Serial.print( i < 6 ? ", " : "\n" );
             }
          }
-         carpet->showAudioMeter( AudioBoard::getHigh(), AudioBoard::getMid(), AudioBoard::getLow(), livePercent );
+
+         uint8_t fullSpectrumLevel = AudioBoard::getFullSpectrum(
+               configSubsetting == 1 ? liveAutoGainEnabled : AudioBoard::getAutoGainEnabled() );
+         carpet->showAudioMeter( AudioBoard::getHigh(), AudioBoard::getMid(), AudioBoard::getLow(),
+                                 sideIndicatorPercent, fullSpectrumLevel );
       }
 
-      if ( didShort ) {
+      if ( didDouble ) {
+         // commit whichever subsetting is currently showing
          if ( appMode == ModeConfigGlobal ) {
             carpet->setGlobalBrightness( livePercent );
             Nvm::saveGlobalBrightness( (uint8_t)( livePercent + 0.5f ) );
@@ -227,17 +293,28 @@ void loop() {
             carpet->setChinaBrightness( livePercent );
             Nvm::saveChinaBrightness( (uint8_t)( livePercent + 0.5f ) );
             printPercentSetting( "China brightness", livePercent );
-         } else { // ModeConfigAudio
-            audioThresholdPercent = livePercent;
-            Nvm::saveAudioThreshold( (uint8_t)( audioThresholdPercent + 0.5f ) );
-            printPercentSetting( "Audio threshold", audioThresholdPercent );
+         } else if ( configSubsetting == 0 ) { // ModeConfigAudio, noise floor
+            noiseFloorPercent = livePercent;
+            Nvm::saveNoiseFloor( (uint8_t)( noiseFloorPercent + 0.5f ) );
+            AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
+            printPercentSetting( "Noise floor", noiseFloorPercent );
+         } else { // ModeConfigAudio, auto-gain enable
+            AudioBoard::setAutoGainEnabled( liveAutoGainEnabled );
+            Nvm::saveAutoGainEnabled( liveAutoGainEnabled );
+            Serial.print( "Auto-gain: " );
+            Serial.println( liveAutoGainEnabled ? "on" : "off" );
          }
          carpet->flashRope( 1 ); // confirms the setting was committed
          appMode = ModeShow;
-      } else if ( didDouble ) {
+      } else if ( didMedium ) {
+         if ( appMode == ModeConfigAudio && configSubsetting == 0 ) AudioBoard::setNoiseFloorPercent( noiseFloorPercent ); // revert live preview
          carpet->flashRope( 2 ); // confirms advancing to the next config setting
          enterConfigMode( nextConfigMode( appMode ) );
-      } else if ( didMedium || didLong ) {
+      } else if ( didShort ) {
+         if ( appMode == ModeConfigAudio && configSubsetting == 0 ) AudioBoard::setNoiseFloorPercent( noiseFloorPercent ); // revert live preview
+         cycleSubsetting();
+      } else if ( didLong ) {
+         if ( appMode == ModeConfigAudio && configSubsetting == 0 ) AudioBoard::setNoiseFloorPercent( noiseFloorPercent ); // revert live preview
          appMode = ModeShow; // cancel, no save
       }
 

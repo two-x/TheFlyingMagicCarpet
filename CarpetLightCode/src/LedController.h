@@ -225,7 +225,7 @@ class PushButton {
    uint32_t mediumPressMillis_ = 300;       // held at least this long (ms) -> medium press
    uint32_t longPressMillis_ = 1500;        // held at least this long (ms) -> long press
    uint32_t extraLongPressMillis_ = 3000;   // held at least this long (ms) -> extra-long press
-   uint32_t doublePressWindowMillis_ = 400; // a second press must start within this long of release
+   uint32_t doublePressWindowMillis_ = 250; // a second press must start within this long of release
 };
 
 namespace EncoderImpl {

@@ -15,7 +15,7 @@
 namespace Nvm {
 
 static DueFlashStorage flash;
-static const uint8_t MAGIC = 0x39; // bump this if State's layout ever changes
+static const uint8_t MAGIC = 0x40; // bump this if State's layout ever changes
 static const uint8_t MAX_SHOWS = 8; // headroom for future shows, no relayout needed
 
 // all brightness/threshold fields are percentages (0-100), never raw 0-255
@@ -27,7 +27,8 @@ struct State {
    uint8_t globalBrightnessPercent;    // 0-100, default 100 (unrestricted)
    uint8_t headlightBrightnessPercent; // 50-100, per-fixture, default 50 (see MagicCarpet.h)
    uint8_t chinaBrightnessPercent;     // 0-100, default 100 (unrestricted)
-   uint8_t audioThresholdPercent;      // 0-100, default 0; not yet applied to anything
+   uint8_t noiseFloorPercent;          // 0-100, default 0 -- audio below this is "silence" (see AudioBoard.h)
+   uint8_t autoGainEnabled;            // 0/1, default 0 (off) -- see AudioBoard.h
 };
 
 static State state;
@@ -43,7 +44,8 @@ inline void load() {
       state.globalBrightnessPercent = 100;
       state.headlightBrightnessPercent = 50;
       state.chinaBrightnessPercent = 100;
-      state.audioThresholdPercent = 0;
+      state.noiseFloorPercent = 0;
+      state.autoGainEnabled = 0;
       flash.write( 0, (byte *)&state, sizeof( State ) );
    }
 }
@@ -68,8 +70,12 @@ inline uint8_t loadedChinaBrightness() {
    return state.chinaBrightnessPercent;
 }
 
-inline uint8_t loadedAudioThreshold() {
-   return state.audioThresholdPercent;
+inline uint8_t loadedNoiseFloor() {
+   return state.noiseFloorPercent;
+}
+
+inline bool loadedAutoGainEnabled() {
+   return state.autoGainEnabled != 0;
 }
 
 inline void saveShow( uint8_t show ) {
@@ -98,8 +104,13 @@ inline void saveChinaBrightness( uint8_t percent ) {
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 
-inline void saveAudioThreshold( uint8_t percent ) {
-   state.audioThresholdPercent = percent;
+inline void saveNoiseFloor( uint8_t percent ) {
+   state.noiseFloorPercent = percent;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveAutoGainEnabled( bool enabled ) {
+   state.autoGainEnabled = enabled ? 1 : 0;
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 

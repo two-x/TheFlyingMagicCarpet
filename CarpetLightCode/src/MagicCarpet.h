@@ -26,6 +26,7 @@
 #include "AudioBoard.h"
 #include "ArmDmx.h"
 #include "Nvm.h"
+#include "SpeedLink.h"
 
 // Controller constants
 #define POT_ANALOG_PIN 3
@@ -182,6 +183,7 @@ class MagicCarpet {
       Nvm::load(); // recall persisted show/variation selection before anything else needs it
 
       AudioBoard::setup();
+      SpeedLink::setup(); // Wire1 I2C slave, receives vehicle speed from CANTroller2
 
       digitalWrite( 2, HIGH );
 
@@ -357,10 +359,11 @@ class MagicCarpet {
       }
    }
 
-   // audio-threshold configuration screen: a 3-band VU meter across the front
-   // rope strip (ropeLeds[0..SIZEOF_SMALL_NEO-1], 156 LEDs), plus a 10-LED
-   // position indicator sliding along each side strip showing the live
-   // threshold percent. All other rope, plus megabar and china, are blanked.
+   // audio configuration screen: a 3-band VU meter across the front rope
+   // strip (ropeLeds[0..SIZEOF_SMALL_NEO-1], 156 LEDs), a 10-LED position
+   // indicator sliding along each side strip showing the live noise-floor
+   // percent, and all megabars glowing blue proportional to the current
+   // full-spectrum audio level. China is blanked.
    //
    // The front strip splits into 3 equal 52-LED segments in array order:
    // treble, mid, bass. Each segment shows a dim (50%) green->yellow->red
@@ -370,11 +373,15 @@ class MagicCarpet {
    // 0-255 (AudioBoard::getHigh/getMid/getLow range).
    //
    // Each side strip (352 LEDs, back corner to front corner) shows a 10-LED
-   // window at the position corresponding to liveThresholdPercent (0-100):
+   // window at the position corresponding to liveNoiseFloorPercent (0-100):
    // at the back corner at 0%, sliding to the front corner at 100%.
-   void showAudioMeter( uint8_t trebleLevel, uint8_t midLevel, uint8_t bassLevel, float liveThresholdPercent ) {
+   //
+   // fullSpectrumLevel (0-255, AudioBoard::getFullSpectrum() -- already
+   // silence-gated and auto-gain-scaled if enabled) sets all megabars' blue
+   // brightness uniformly.
+   void showAudioMeter( uint8_t trebleLevel, uint8_t midLevel, uint8_t bassLevel,
+                        float liveNoiseFloorPercent, uint8_t fullSpectrumLevel ) {
       clearRope();
-      clearMegabars();
       clearChinas();
       static const int segmentLen = SIZEOF_SMALL_NEO / 3; // 52
       uint8_t levels[ 3 ] = { trebleLevel, midLevel, bassLevel };
@@ -394,9 +401,11 @@ class MagicCarpet {
       }
 
       // right side: back corner near SIZEOF_SMALL_NEO+SIZEOF_LARGE_NEO-1, front corner near SIZEOF_SMALL_NEO
-      renderSideIndicator( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO - 1, SIZEOF_SMALL_NEO, liveThresholdPercent );
+      renderSideIndicator( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO - 1, SIZEOF_SMALL_NEO, liveNoiseFloorPercent );
       // left side: back corner near SIZEOF_SMALL_NEO*2+SIZEOF_LARGE_NEO, front corner at the far end of the array
-      renderSideIndicator( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO, NUM_NEO_LEDS_ACTUAL - 1, liveThresholdPercent );
+      renderSideIndicator( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO, NUM_NEO_LEDS_ACTUAL - 1, liveNoiseFloorPercent );
+
+      LedUtil::fill( megabarLeds, CRGB( 0, 0, fullSpectrumLevel ), NUM_MEGABAR_LEDS );
    }
 
    // scales every light array in-place per the configured global/headlight/

@@ -7,6 +7,8 @@
 #ifndef __AUDIO_BOARD_H
 #define __AUDIO_BOARD_H
 
+#include "Utilities.h"
+
 //****************TUNABLE SYSTEM PARAMTERS************************
 //all the other art cars might need different values.
 
@@ -221,6 +223,87 @@ class AudioBoard {
       }
    }
 
+   /* --- full-spectrum level, rolling peak / auto-gain, rolling average /
+    * noise-floor silence detection ---
+    *
+    * "Full spectrum" = the max of all 7 raw hardware bins (not just the 3
+    * curated into bin_low/mid/high), scaled to 0-255.
+    *
+    * Auto-gain: a rolling max over the trailing 4s (rollingPeak_, recomputed
+    * from a timestamped ring buffer every poll) sets a slow-moving gain
+    * (255/rollingPeak_) so quiet passages still reach full scale. Applying
+    * that gain to a sample louder than anything seen in the last 4s would
+    * clip above 255 -- clamping the result to 255 is exactly "reduce the
+    * scaling factor so this instant peaks at the max value", just computed
+    * as a clamp rather than by solving for an adjusted per-sample gain (same
+    * result).
+    *
+    * Silence detection: a separate EMA average (also ~4s time constant)
+    * tracks a running level. If that average stays below the noise floor for
+    * a full 4s straight, audio is considered off and every level getter
+    * (getLow/getMid/getHigh/getFullSpectrum) returns 0 until the average
+    * rises back above the floor (which un-silences immediately, no delay).
+    * The noise floor is compared against the RAW average, not the gained
+    * value, so auto-gain can never mask silence.
+    */
+   static const uint16_t PEAK_WINDOW_MS = 4000;
+   static const uint8_t PEAK_BUFFER_SIZE = 150; // ~4s of samples at the ~30ms poll rate, with margin
+
+   static uint8_t peakSamples_[ PEAK_BUFFER_SIZE ];
+   static uint32_t peakTimestamps_[ PEAK_BUFFER_SIZE ];
+   static uint8_t peakHead_;
+   static uint8_t peakCount_;
+   static uint8_t rollingPeak_;
+
+   static bool autoGainEnabled_;
+   static float noiseFloorPercent_; // 0-100
+
+   static float emaAverage_;
+   static uint32_t lastPollTime_;
+   static Timer silenceTimer_; // time spent continuously below the noise floor
+   static bool silent_;
+
+   static uint8_t rawFullSpectrum() {
+      uint16_t maxVal = 0;
+      for ( int i = 0; i < 7; ++i ) {
+         if ( (uint16_t)Frequencies_Mono[ i ] > maxVal ) maxVal = Frequencies_Mono[ i ];
+      }
+      return (uint8_t)scale( maxVal );
+   }
+
+   static void updateAutoGainAndSilence( uint32_t nowMs ) {
+      uint8_t raw = rawFullSpectrum();
+
+      // rolling peak: sliding 4s window max, via a timestamped ring buffer
+      peakSamples_[ peakHead_ ] = raw;
+      peakTimestamps_[ peakHead_ ] = nowMs;
+      peakHead_ = ( peakHead_ + 1 ) % PEAK_BUFFER_SIZE;
+      if ( peakCount_ < PEAK_BUFFER_SIZE ) peakCount_++;
+      uint8_t peak = 0;
+      for ( uint8_t i = 0; i < peakCount_; ++i ) {
+         if ( nowMs - peakTimestamps_[ i ] <= PEAK_WINDOW_MS && peakSamples_[ i ] > peak ) {
+            peak = peakSamples_[ i ];
+         }
+      }
+      rollingPeak_ = peak;
+
+      // rolling average via EMA, tuned for a ~4s time constant regardless of
+      // the actual (slightly variable) interval between polls
+      uint32_t dt = ( lastPollTime_ == 0 ) ? 30 : ( nowMs - lastPollTime_ );
+      lastPollTime_ = nowMs;
+      float alpha = (float)dt / ( (float)PEAK_WINDOW_MS + (float)dt );
+      emaAverage_ = emaAverage_ + alpha * ( (float)raw - emaAverage_ );
+
+      // noise-floor silence detection, on the RAW (un-gained) average
+      uint8_t noiseFloorRaw = (uint8_t)( constrain( noiseFloorPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f );
+      if ( emaAverage_ >= noiseFloorRaw ) {
+         silenceTimer_.reset();
+         silent_ = false;
+      } else if ( silenceTimer_.elapsed() >= PEAK_WINDOW_MS ) {
+         silent_ = true;
+      }
+   }
+
  public:
 
    static void pollFrequencies( uint32_t time ) {
@@ -231,19 +314,57 @@ class AudioBoard {
         Read_Frequencies();
         Into_3_Bins();
         Clipping_Basic();
+        updateAutoGainAndSilence( time );
      }
    }
 
    static uint8_t getLow( int threshold = 255 ) {
+      if ( silent_ ) return 0;
       return bin_low < threshold ? bin_low : 0;
    }
 
    static uint8_t getMid( int threshold = 255 ) {
+      if ( silent_ ) return 0;
       return bin_mid < threshold ? bin_mid : 0;
    }
 
    static uint8_t getHigh( int threshold = 255 ) {
+      if ( silent_ ) return 0;
       return bin_high < threshold ? bin_high : 0;
+   }
+
+   // "current full-spectrum audio level" -- silence-gated, and auto-gained if
+   // enabled (raw otherwise). This is what drives the audio-screen's megabar
+   // glow, and is the intended general-purpose "how loud is it right now" call.
+   static uint8_t getFullSpectrum() {
+      return getFullSpectrum( autoGainEnabled_ );
+   }
+
+   // same, but with auto-gain explicitly overridden rather than using the
+   // committed autoGainEnabled_ flag -- lets the config screen preview what
+   // auto-gain (enabled or disabled) would look like without mutating any
+   // committed state, so cancelling a live preview needs no revert step.
+   static uint8_t getFullSpectrum( bool useAutoGain ) {
+      if ( silent_ ) return 0;
+      uint8_t raw = rawFullSpectrum();
+      if ( !useAutoGain || rollingPeak_ == 0 ) return raw;
+      float gained = (float)raw * ( 255.0f / (float)rollingPeak_ );
+      if ( gained > 255.0f ) gained = 255.0f; // clip prevention, see comment above
+      return (uint8_t)( gained + 0.5f );
+   }
+
+   static void setAutoGainEnabled( bool enabled ) {
+      autoGainEnabled_ = enabled;
+   }
+   static bool getAutoGainEnabled() {
+      return autoGainEnabled_;
+   }
+
+   static void setNoiseFloorPercent( float percent ) {
+      noiseFloorPercent_ = constrain( percent, 0.0f, 100.0f );
+   }
+   static float getNoiseFloorPercent() {
+      return noiseFloorPercent_;
    }
 
    static void setup() {
@@ -271,5 +392,17 @@ int AudioBoard::Frequencies_Mono[7];
 int AudioBoard::bin_low = 0;
 int AudioBoard::bin_mid = 0;
 int AudioBoard::bin_high = 0;
+
+uint8_t AudioBoard::peakSamples_[ AudioBoard::PEAK_BUFFER_SIZE ];
+uint32_t AudioBoard::peakTimestamps_[ AudioBoard::PEAK_BUFFER_SIZE ];
+uint8_t AudioBoard::peakHead_ = 0;
+uint8_t AudioBoard::peakCount_ = 0;
+uint8_t AudioBoard::rollingPeak_ = 0;
+bool AudioBoard::autoGainEnabled_ = false;
+float AudioBoard::noiseFloorPercent_ = 0.0f;
+float AudioBoard::emaAverage_ = 0.0f;
+uint32_t AudioBoard::lastPollTime_ = 0;
+Timer AudioBoard::silenceTimer_;
+bool AudioBoard::silent_ = false;
 
 #endif
