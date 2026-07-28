@@ -21,19 +21,43 @@ MagicCarpet * carpet;
 
 LightShow * currLightShow;
 
+static const uint8_t numModes = 3;
+static uint8_t currMode = 0;
+static uint8_t prevMode = currMode;
+static uint8_t currVariation[ numModes ] = { 0, 0, 0 };
+static bool lightsOn = true; // always boots on; toggled by an extra-long press
+
+LightShow * makeShow( uint8_t mode, uint8_t variation ) {
+   switch ( mode ) {
+      case 0:
+         return new NightriderShow( carpet, variation );
+      case 1:
+         return new FlameShow( carpet, variation );
+      case 2:
+         return new EqualizerShow( carpet );
+      default:
+         // we fucked up, just reset
+         // carpet->error(); // uncomment for debugging
+         return new NightriderShow( carpet, variation );
+   }
+}
+
 void setup() {
    Serial.begin(9600);
    // AudioBoard::setup();
 
    // setup the carpet
    carpet = theMagicCarpet();
-   carpet->setup();
+   carpet->setup(); // also loads persisted show/variation state from flash (Nvm::load())
 
-   // TODO: i don't think i like this, lets use a static class instead.
-   // currLightShow = new DemoShow( carpet );
-   // currLightShow = new FlameShow( carpet );
-   currLightShow = new NightriderShow( carpet );
+   currMode = Nvm::loadedShow();
+   if ( currMode >= numModes ) currMode = 0; // guard against stale/out-of-range flash data
+   for ( uint8_t i = 0; i < numModes; ++i ) {
+      currVariation[ i ] = Nvm::loadedVariation( i );
+   }
+   prevMode = currMode;
 
+   currLightShow = makeShow( currMode, currVariation[ currMode ] );
    currLightShow->start();
 }
 
@@ -57,7 +81,20 @@ void loop() {
 
    AudioBoard::pollFrequencies( clock );
 
-   carpet->encoder->update(); // refresh button short/long press state
+   carpet->encoder->update(); // refresh button short/medium/long/extra-long press state
+
+   // press-hold feedback: flash the perimeter as thresholds are crossed, live
+   if ( carpet->encoder->button.crossedMediumThreshold() ) {
+      carpet->flashRope( 1 );
+   }
+   if ( carpet->encoder->button.crossedLongThreshold() ) {
+      carpet->flashRope( 2 );
+   }
+
+   // extra-long press toggles the whole rig on/off; valid the instant it's crossed
+   if ( carpet->encoder->button.extralongpress() ) {
+      lightsOn = !lightsOn;
+   }
 
    if ( false && should_print ) {
       last = millis();
@@ -97,43 +134,29 @@ void loop() {
    // }
 
    // cycle light shows on each short press of the button
-   static const uint8_t numModes = 3;
-   static uint8_t currMode = 0;
-   static uint8_t prevMode = currMode;
-
    if ( carpet->encoder->button.shortpress() ) {
       currMode = ( currMode + 1 ) % numModes;
+      Nvm::saveShow( currMode );
    }
    Serial.print( "currMode " );
    Serial.println( currMode );
-   //Serial.println( "delta" );
-   //Serial.println( delta );
-   //Serial.println( "button" );
-   //Serial.println( carpet->button->isDown() );
    if ( currMode != prevMode ) {
       delete currLightShow;
-      // based on diff, switch between existing light shows
-      switch ( currMode ) {
-         case 0:
-            currLightShow = new NightriderShow( carpet );
-            break;
-         case 1:
-            currLightShow = new FlameShow( carpet );
-            break;
-         case 2:
-             currLightShow = new EqualizerShow( carpet );
-             break;
-         default:
-            // we fucked up, just reset
-            // carpet->error(); // uncomment for debugging
-            currMode = 0;
-            currLightShow = new NightriderShow( carpet );
-      }
+      currLightShow = makeShow( currMode, currVariation[ currMode ] );
       currLightShow->start();
       prevMode = currMode;
    }
 
    currLightShow->update( clock );
+
+   // persist a show's variation the moment it actually changes
+   uint8_t variation = currLightShow->variation();
+   if ( variation != currVariation[ currMode ] ) {
+      currVariation[ currMode ] = variation;
+      Nvm::saveVariation( currMode, variation );
+   }
+
+   if ( !lightsOn ) carpet->clear(); // master override -- still let shows run "invisibly" underneath
 
    carpet->show();
 }

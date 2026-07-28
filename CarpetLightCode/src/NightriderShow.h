@@ -34,8 +34,17 @@ const CRGB bottomC[] {
 */
 
 class NightriderShow : public LightShow {
+ private:
+   static const uint8_t numVariations_ = 2;
+   uint8_t variation_;
+
  public:
-   NightriderShow( MagicCarpet * carpetArg ) : LightShow( carpetArg ) {}
+   NightriderShow( MagicCarpet * carpetArg, uint8_t initialVariation = 0 )
+      : LightShow( carpetArg ), variation_( initialVariation % numVariations_ ) {}
+
+   uint8_t variation() {
+      return variation_;
+   }
 
    void start() {
       for ( int i = NEO3_OFFSET; i < NEO4_OFFSET; ++i ) {
@@ -81,20 +90,18 @@ class NightriderShow : public LightShow {
       }
 
       // variation select: each encoder detent moves to the next variation
-      static const uint8_t numVariations = 2;
-      static uint8_t variation = 0;
       int varDelta = carpet->encoder->readPositionDelta();
       carpet->encoder->resetPositionDelta();
       if ( varDelta != 0 ) {
-         int newVariation = ( (int)variation + varDelta ) % (int)numVariations;
-         if ( newVariation < 0 ) newVariation += numVariations;
-         variation = (uint8_t)newVariation;
+         int newVariation = ( (int)variation_ + varDelta ) % (int)numVariations_;
+         if ( newVariation < 0 ) newVariation += numVariations_;
+         variation_ = (uint8_t)newVariation;
       }
 
       uint8_t val1;
       static float autoHue = 0.0f;    // 0-255 continuous hue position, used by variation 2
       static uint32_t lastAutoTime = time;
-      if ( variation == 0 ) {
+      if ( variation_ == 0 ) {
          // variation 1: pot directly selects the color pair, as before
          val1 = carpet->pot->read() / 4;
          lastAutoTime = time; // keep the clock fresh so variation 2 doesn't jump on reentry

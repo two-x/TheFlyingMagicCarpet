@@ -188,6 +188,9 @@ class LightShow {
    LightShow( MagicCarpet * carpetArg ) : carpet( carpetArg ) {}
    virtual void start() = 0;
    virtual void update( uint32_t timestamp ) = 0;
+   // current variation index, for shows with more than one (encoder-selected).
+   // shows without variations can leave this as the default.
+   virtual uint8_t variation() { return 0; }
    virtual ~LightShow() {}
 };
 

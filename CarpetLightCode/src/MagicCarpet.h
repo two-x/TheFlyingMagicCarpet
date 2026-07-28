@@ -25,6 +25,7 @@
 #include "LedController.h"
 #include "AudioBoard.h"
 #include "ArmDmx.h"
+#include "Nvm.h"
 
 // Controller constants
 #define POT_ANALOG_PIN 3
@@ -131,6 +132,8 @@ class MagicCarpet {
       // seed random so we always get different random patterns
       randomSeed( analogRead( 0 ) );
 
+      Nvm::load(); // recall persisted show/variation selection before anything else needs it
+
       AudioBoard::setup();
 
       digitalWrite( 2, HIGH );
@@ -217,6 +220,25 @@ class MagicCarpet {
       clearMegabars();
       clearChinas();
       clearRope();
+   }
+
+   // flashes the perimeter rope LEDs white `count` times, as button-hold
+   // feedback. each flash is 55ms, padded by 15ms of black before and after;
+   // multiple flashes are separated by an additional 150ms. blocking, since
+   // this is only ever a brief pause during a press the user is still holding.
+   void flashRope( uint8_t count ) {
+      for ( uint8_t i = 0; i < count; ++i ) {
+         clearRope();
+         show();
+         delay( 15 );
+         for ( int j = 0; j < NUM_NEO_LEDS_ACTUAL; ++j ) ropeLeds[ j ].w = 255;
+         show();
+         delay( 55 );
+         clearRope();
+         show();
+         delay( 15 );
+         if ( i + 1 < count ) delay( 150 );
+      }
    }
 
    void error() {

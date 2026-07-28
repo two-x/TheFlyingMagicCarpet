@@ -40,12 +40,13 @@ class Potentiometer {
    uint8_t pin_;
 };
 
-enum ButtonPress { PressNone = 0, PressShort = 1, PressLong = 2, PressExtraLong = 3 };
+enum ButtonPress { PressNone = 0, PressShort = 1, PressMedium = 2, PressLong = 3, PressExtraLong = 4 };
 
 // Polled, not interrupt-driven: press timing thresholds are coarse (hundreds of
-// ms), so a per-loop update() is plenty responsive. The press is classified only
-// once, at release, by how long the timer had been running -- nothing fires
-// while the button is still held down.
+// ms), so a per-loop update() is plenty responsive. Short/medium/long are
+// classified only at release, by how long the timer had been running. The one
+// exception is extra-long, which becomes valid live, the instant the held
+// duration crosses its threshold -- it doesn't wait for release.
 class PushButton {
  public:
    void setup( uint8_t pin ) {
@@ -58,17 +59,45 @@ class PushButton {
    // call once per main loop iteration to refresh press state
    void update() {
       bool nowDown = !digitalReadDirect( pin_ ); // active low
-      if ( nowDown && !down_ ) {
-         pressTimer_.reset(); // press just started
-      } else if ( !nowDown && down_ ) {
-         // just released -- classify the whole press by how long it lasted
-         uint32_t heldMillis = pressTimer_.elapsed();
-         if ( heldMillis >= extraLongPressMillis_ ) {
-            action_ = PressExtraLong;
-         } else if ( heldMillis >= longPressMillis_ ) {
-            action_ = PressLong;
+      if ( nowDown ) {
+         if ( !down_ ) {
+            // press just started
+            pressTimer_.reset();
+            extraLongFired_ = false;
+            mediumThresholdFired_ = false;
+            longThresholdFired_ = false;
          } else {
-            action_ = PressShort;
+            // still held -- live one-shot threshold crossings, for UI feedback
+            // and for extra-long, which must be valid without waiting for release
+            uint32_t heldMillis = pressTimer_.elapsed();
+            if ( !mediumThresholdFired_ && heldMillis >= mediumPressMillis_ ) {
+               mediumThresholdFired_ = true;
+               crossedMediumFlag_ = true;
+            }
+            if ( !longThresholdFired_ && heldMillis >= longPressMillis_ ) {
+               longThresholdFired_ = true;
+               crossedLongFlag_ = true;
+            }
+            if ( !extraLongFired_ && heldMillis >= extraLongPressMillis_ ) {
+               extraLongFired_ = true;
+               action_ = PressExtraLong;
+            }
+         }
+      } else if ( down_ ) {
+         // just released -- classify by how long it lasted, unless extra-long
+         // already fired live during this same hold
+         if ( !extraLongFired_ ) {
+            uint32_t heldMillis = pressTimer_.elapsed();
+            if ( heldMillis >= extraLongPressMillis_ ) {
+               action_ = PressExtraLong; // safety net: covers a release polled in
+                                          // the same update() call that crossed 3s
+            } else if ( heldMillis >= longPressMillis_ ) {
+               action_ = PressLong;
+            } else if ( heldMillis >= mediumPressMillis_ ) {
+               action_ = PressMedium;
+            } else {
+               action_ = PressShort;
+            }
          }
       }
       down_ = nowDown;
@@ -85,6 +114,13 @@ class PushButton {
       return ret;
    }
 
+   // returns true once per medium press; clears the flag unless autoreset is false
+   bool mediumpress( bool autoreset = true ) {
+      bool ret = ( action_ == PressMedium );
+      if ( ret && autoreset ) action_ = PressNone;
+      return ret;
+   }
+
    // returns true once per long press; clears the flag unless autoreset is false
    bool longpress( bool autoreset = true ) {
       bool ret = ( action_ == PressLong );
@@ -92,11 +128,32 @@ class PushButton {
       return ret;
    }
 
-   // returns true once per extra-long press; clears the flag unless autoreset is false
+   // returns true once per extra-long press (valid while still held); clears
+   // the flag unless autoreset is false
    bool extralongpress( bool autoreset = true ) {
       bool ret = ( action_ == PressExtraLong );
       if ( ret && autoreset ) action_ = PressNone;
       return ret;
+   }
+
+   // one-shot: true for a single update() call, right as a held press crosses
+   // the medium-press threshold. meant for live UI feedback (e.g. a flash).
+   bool crossedMediumThreshold( bool autoreset = true ) {
+      bool ret = crossedMediumFlag_;
+      if ( ret && autoreset ) crossedMediumFlag_ = false;
+      return ret;
+   }
+
+   // one-shot: true for a single update() call, right as a held press crosses
+   // the long-press threshold. meant for live UI feedback (e.g. a flash).
+   bool crossedLongThreshold( bool autoreset = true ) {
+      bool ret = crossedLongFlag_;
+      if ( ret && autoreset ) crossedLongFlag_ = false;
+      return ret;
+   }
+
+   void setMediumPressMillis( uint32_t ms ) {
+      mediumPressMillis_ = ms;
    }
 
    void setLongPressMillis( uint32_t ms ) {
@@ -112,8 +169,14 @@ class PushButton {
    bool down_ = false;
    int action_ = PressNone;
    Timer pressTimer_;
-   uint32_t longPressMillis_ = 300;       // held at least this long (ms) -> long press
-   uint32_t extraLongPressMillis_ = 1500; // held at least this long (ms) -> extra-long press
+   bool extraLongFired_ = false;
+   bool mediumThresholdFired_ = false;
+   bool longThresholdFired_ = false;
+   bool crossedMediumFlag_ = false;
+   bool crossedLongFlag_ = false;
+   uint32_t mediumPressMillis_ = 300;     // held at least this long (ms) -> medium press
+   uint32_t longPressMillis_ = 1500;      // held at least this long (ms) -> long press
+   uint32_t extraLongPressMillis_ = 3000; // held at least this long (ms) -> extra-long press
 };
 
 namespace EncoderImpl {

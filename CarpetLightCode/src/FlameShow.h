@@ -31,13 +31,20 @@ class FlameShow : public LightShow {
    // TODO: tune this
    static const uint8_t baseCoolingRate = 10;
    static const uint8_t baseSparkingRate = 15; // maybe set this based on music?
+   static const uint8_t numModes_ = 2;
 
    uint8_t currTemperature[ NUM_NEO_LEDS_ACTUAL ] = { 0 };
    uint8_t prevTemperature[ NUM_NEO_LEDS_ACTUAL ] = { 0 };
+   uint8_t mode_;
 
  public:
 
-   FlameShow( MagicCarpet * carpetArg ) : LightShow( carpetArg ) {}
+   FlameShow( MagicCarpet * carpetArg, uint8_t initialVariation = 0 )
+      : LightShow( carpetArg ), mode_( initialVariation % numModes_ ) {}
+
+   uint8_t variation() {
+      return mode_;
+   }
 
    void start() {
       CRGB clr = ColorFromPalette( flames, 0 );
@@ -47,16 +54,14 @@ class FlameShow : public LightShow {
    void update( uint32_t time ) {
       static uint32_t timestamp = 0;
       static uint32_t rate = 10;
-      static const uint8_t numModes = 2;
-      static uint8_t mode = 0;
 
       // pick color: each encoder detent cycles to the next color combo
       int delta = carpet->encoder->readPositionDelta();
       carpet->encoder->resetPositionDelta();
       if ( delta != 0 ) {
-         int newMode = ( (int)mode + delta ) % (int)numModes;
-         if ( newMode < 0 ) newMode += numModes;
-         mode = (uint8_t)newMode;
+         int newMode = ( (int)mode_ + delta ) % (int)numModes_;
+         if ( newMode < 0 ) newMode += numModes_;
+         mode_ = (uint8_t)newMode;
       }
 
 
@@ -96,7 +101,7 @@ class FlameShow : public LightShow {
 
          // assign color
          for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-            if ( mode ) {
+            if ( mode_ ) {
                carpet->ropeLeds[ i ] = ColorFromPalette( flames, currTemperature[ i ] );
             } else {
                carpet->ropeLeds[ i ] = ColorFromPalette( waterflames, currTemperature[ i ] );
@@ -130,7 +135,7 @@ class FlameShow : public LightShow {
       int dmxval = AudioBoard::getLow();
       //Serial.println( dmxval );
       CRGB dmxclr;
-      if ( mode ) {
+      if ( mode_ ) {
          dmxclr = ColorFromPalette( flames, dmxval );
       } else {
          dmxclr = ColorFromPalette( waterflames, dmxval );
