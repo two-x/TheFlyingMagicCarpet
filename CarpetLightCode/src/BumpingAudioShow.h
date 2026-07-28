@@ -35,7 +35,7 @@ class EqualizerShow : public LightShow {
    EqualizerShow( MagicCarpet * carpetArg ) : LightShow( carpetArg ) {}
 
    void start() {
-      for ( int i = NEO3_OFFSET; i < NEO4_OFFSET; ++i ) {
+      for ( int i = NEO3_OFFSET; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          carpet->ropeLeds[ i ] = CRGB::Black;
       }
    }
@@ -166,18 +166,17 @@ class EqualizerShow : public LightShow {
       // Serial.println( dmxval );
       int lowval = AudioBoard::getLow();
       static int lastlow = lowval;
-      Serial.print("lowval: ");
-      Serial.println(lowval);
-      Serial.flush();
+      // Serial.print("lowval: ");
+      // Serial.println(lowval);
+      // Serial.flush();
       if (lowval > 80 && lowval > lastlow) {
        lastlow = lowval;
       } else {
- 
        lastlow = lastlow > 15 ? lastlow - 15 : 0;
       }
-      Serial.print("lastlow: ");
-      Serial.println(lastlow);
-      Serial.flush();
+      // Serial.print("lastlow: ");
+      // Serial.println(lastlow);
+      // Serial.flush();
       dmxclr = blend( CRGB::Black, clr2, lastlow );
       carpet->megabarLeds[1] = dmxclr;
       carpet->megabarLeds[2] = dmxclr;
@@ -190,8 +189,8 @@ class EqualizerShow : public LightShow {
 
 
       int highval = AudioBoard::getHigh() > 150 ? AudioBoard::getHigh() : 0;
-      Serial.print("highval: ");
-      Serial.println(highval);
+      // Serial.print("highval: ");
+      // Serial.println(highval);
       /*static int lasthigh = highval;
       Serial.print("lasthigh: ");
       Serial.println(highval);

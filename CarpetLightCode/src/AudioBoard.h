@@ -243,7 +243,7 @@ class AudioBoard {
    }
 
    static uint8_t getHigh( int threshold = 255 ) {
-      return bin_mid < threshold ? bin_mid : 0;
+      return bin_high < threshold ? bin_high : 0;
    }
 
    static void setup() {

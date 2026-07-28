@@ -47,7 +47,7 @@ class NightriderShow : public LightShow {
    }
 
    void start() {
-      for ( int i = NEO3_OFFSET; i < NEO4_OFFSET; ++i ) {
+      for ( int i = NEO3_OFFSET; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          carpet->ropeLeds[ i ] = CRGB::Black;
       }
    }

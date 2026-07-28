@@ -27,6 +27,75 @@ static uint8_t prevMode = currMode;
 static uint8_t currVariation[ numModes ] = { 0, 0, 0 };
 static bool lightsOn = true; // always boots on; toggled by an extra-long press
 
+// config mode cycle: long-press (from ModeShow) always lands on ModeConfigGlobal;
+// each double-press advances to the next one, wrapping back around.
+enum AppMode { ModeShow, ModeConfigGlobal, ModeConfigHeadlight, ModeConfigChina, ModeConfigAudio };
+static AppMode appMode = ModeShow;
+static float audioThresholdPercent = 0.0f; // not yet applied to anything; see loop() below
+// static Timer audioThresholdPrintTimer( 1000 ); // uncomment for periodic live-value debug output
+
+// TEMPORARY: raw spectrum-shield hardware diagnostic. Remove (or comment out,
+// per usual) once the audio-input hardware issue is sorted -- see AudioBoard.h.
+static Timer rawAudioDiagTimer( 300 );
+
+// soft pot takeover: entering a config screen shouldn't make the preview jump
+// to wherever the pot physically happens to be sitting. instead it holds at
+// the already-committed value until the pot moves noticeably (2% of its full
+// range) from where it was on entry -- then it hands over to live tracking.
+static const uint16_t POT_TAKEOVER_THRESHOLD = (uint16_t)( 0.02f * MAX_VOLTAGE + 0.5f );
+static uint16_t configEntryPotRaw = 0;
+static bool configPotTakenOver = false;
+
+void enterConfigMode( AppMode mode ) {
+   appMode = mode;
+   configEntryPotRaw = carpet->pot->read();
+   configPotTakenOver = false;
+}
+
+AppMode nextConfigMode( AppMode mode ) {
+   switch ( mode ) {
+      case ModeConfigGlobal:    return ModeConfigHeadlight;
+      case ModeConfigHeadlight: return ModeConfigChina;
+      case ModeConfigChina:     return ModeConfigAudio;
+      case ModeConfigAudio:     return ModeConfigGlobal;
+      default:                 return ModeConfigGlobal;
+   }
+}
+
+// maps the live pot reading linearly to a percent in [minPercent,maxPercent].
+// fullRange=false restricts to the pot's top half (used by global brightness).
+float potToPercent( float minPercent, float maxPercent, bool fullRange ) {
+   uint16_t potRaw = carpet->pot->read();
+   float frac;
+   if ( fullRange ) {
+      frac = potRaw / (float)MAX_VOLTAGE;
+   } else {
+      uint16_t mid = MAX_VOLTAGE / 2;
+      frac = ( potRaw <= mid ) ? 0.0f : ( (float)( potRaw - mid ) / (float)( MAX_VOLTAGE - mid ) );
+   }
+   return minPercent + frac * ( maxPercent - minPercent );
+}
+
+// the live value a config screen should currently show: the committed value,
+// until the pot has moved POT_TAKEOVER_THRESHOLD from its reading when this
+// screen was entered -- then it switches to tracking the pot live.
+float livePercentFor( float minPercent, float maxPercent, bool fullRange, float committedPercent ) {
+   if ( !configPotTakenOver ) {
+      uint16_t potRaw = carpet->pot->read();
+      uint16_t diff = ( potRaw > configEntryPotRaw ) ? ( potRaw - configEntryPotRaw ) : ( configEntryPotRaw - potRaw );
+      if ( diff >= POT_TAKEOVER_THRESHOLD ) configPotTakenOver = true;
+   }
+   if ( !configPotTakenOver ) return committedPercent;
+   return potToPercent( minPercent, maxPercent, fullRange );
+}
+
+void printPercentSetting( const char * name, float percent ) {
+   Serial.print( name );
+   Serial.print( ": " );
+   Serial.print( (int)( percent + 0.5f ) );
+   Serial.println( "%" );
+}
+
 LightShow * makeShow( uint8_t mode, uint8_t variation ) {
    switch ( mode ) {
       case 0:
@@ -40,6 +109,27 @@ LightShow * makeShow( uint8_t mode, uint8_t variation ) {
          // carpet->error(); // uncomment for debugging
          return new NightriderShow( carpet, variation );
    }
+}
+
+const char * showName( uint8_t mode ) {
+   switch ( mode ) {
+      case 0:  return "Nightrider";
+      case 1:  return "Flame";
+      case 2:  return "Equalizer";
+      default: return "?";
+   }
+}
+
+// vertically compact: one banner line, one line with every config setting's
+// current value, instead of a line per value
+void printWelcome() {
+   Serial.println( "=== Flying Magic Carpet ===" );
+   Serial.print( "Show=" ); Serial.print( showName( currMode ) );
+   Serial.print( "(var " ); Serial.print( currVariation[ currMode ] ); Serial.print( ")" );
+   Serial.print( "  Global=" ); Serial.print( (int)( carpet->getGlobalBrightness() + 0.5f ) ); Serial.print( "%" );
+   Serial.print( "  Headlight=" ); Serial.print( (int)( carpet->getHeadlightBrightness() + 0.5f ) ); Serial.print( "%" );
+   Serial.print( "  China=" ); Serial.print( (int)( carpet->getChinaBrightness() + 0.5f ) ); Serial.print( "%" );
+   Serial.print( "  Audio=" ); Serial.print( (int)( audioThresholdPercent + 0.5f ) ); Serial.println( "%" );
 }
 
 void setup() {
@@ -56,32 +146,24 @@ void setup() {
       currVariation[ i ] = Nvm::loadedVariation( i );
    }
    prevMode = currMode;
+   carpet->setGlobalBrightness( Nvm::loadedGlobalBrightness() );
+   carpet->setHeadlightBrightness( Nvm::loadedHeadlightBrightness() );
+   carpet->setChinaBrightness( Nvm::loadedChinaBrightness() );
+   audioThresholdPercent = Nvm::loadedAudioThreshold();
 
    currLightShow = makeShow( currMode, currVariation[ currMode ] );
    currLightShow->start();
+
+   printWelcome();
 }
 
 void loop() {
    static uint32_t clock;
-
-   /*Serial.print("pot: ");
-   Serial.print( carpet->pot->read() );
-   Serial.print(" encoder a: ");
-   Serial.print(digitalReadDirect(ENCODER_A_PIN));
-   Serial.print(" encoder b: ");
-   Serial.print(digitalReadDirect(ENCODER_B_PIN));
-   Serial.print(" switch: ");
-   Serial.print(digitalReadDirect(BUTTON_PIN)); 
-   Serial.print("\n");
-   Serial.flush();*/
-
-   static int last = millis();
-   bool should_print = millis() - last > 400;
    clock = millis();
 
    AudioBoard::pollFrequencies( clock );
 
-   carpet->encoder->update(); // refresh button short/medium/long/extra-long press state
+   carpet->encoder->update(); // refresh button short/medium/long/extra-long/double press state
 
    // press-hold feedback: flash the perimeter as thresholds are crossed, live
    if ( carpet->encoder->button.crossedMediumThreshold() ) {
@@ -91,72 +173,104 @@ void loop() {
       carpet->flashRope( 2 );
    }
 
-   // extra-long press toggles the whole rig on/off; valid the instant it's crossed
-   if ( carpet->encoder->button.extralongpress() ) {
-      lightsOn = !lightsOn;
+   // consume every press type exactly once per loop, regardless of mode, so a
+   // press irrelevant to the current mode doesn't go stale and misfire later
+   bool didShort = carpet->encoder->button.shortpress();
+   bool didMedium = carpet->encoder->button.mediumpress();
+   bool didLong = carpet->encoder->button.longpress();
+   bool didExtraLong = carpet->encoder->button.extralongpress();
+   bool didDouble = carpet->encoder->button.doublepress();
+
+   if ( appMode == ModeConfigGlobal || appMode == ModeConfigHeadlight || appMode == ModeConfigChina || appMode == ModeConfigAudio ) {
+      // these 4 screens take over the whole visual with a live preview
+
+      currLightShow->update( clock ); // keep the show progressing "invisibly" so it doesn't jump on cancel
+
+      float livePercent;
+      if ( appMode == ModeConfigGlobal ) {
+         livePercent = livePercentFor( 0.0f, 100.0f, false, carpet->getGlobalBrightness() ); // pot's bottom half unused
+         carpet->showSolidRed( livePercent );
+      } else if ( appMode == ModeConfigHeadlight ) {
+         livePercent = livePercentFor( 50.0f, 100.0f, true, carpet->getHeadlightBrightness() );
+         carpet->showHeadlightPreview( livePercent );
+      } else if ( appMode == ModeConfigChina ) {
+         livePercent = livePercentFor( 0.0f, 100.0f, true, carpet->getChinaBrightness() );
+         carpet->showChinaPreview( livePercent );
+      } else { // ModeConfigAudio
+         livePercent = livePercentFor( 0.0f, 100.0f, true, audioThresholdPercent );
+         // if ( audioThresholdPrintTimer.expireset() ) {
+         //    printPercentSetting( "audio threshold (live)", livePercent );
+         // }
+         // TEMPORARY diagnostic: all 7 raw (unprocessed, 0-1023) spectrum-shield
+         // bins, to check whether the hardware is responding to input at all,
+         // independent of the 3 bins the VU meter actually displays.
+         if ( rawAudioDiagTimer.expireset() ) {
+            Serial.print( "raw bins: " );
+            for ( int i = 0; i < 7; ++i ) {
+               Serial.print( AudioBoard::Frequencies_Mono[ i ] );
+               Serial.print( i < 6 ? ", " : "\n" );
+            }
+         }
+         carpet->showAudioMeter( AudioBoard::getHigh(), AudioBoard::getMid(), AudioBoard::getLow(), livePercent );
+      }
+
+      if ( didShort ) {
+         if ( appMode == ModeConfigGlobal ) {
+            carpet->setGlobalBrightness( livePercent );
+            Nvm::saveGlobalBrightness( (uint8_t)( livePercent + 0.5f ) );
+            printPercentSetting( "Global brightness", livePercent );
+         } else if ( appMode == ModeConfigHeadlight ) {
+            carpet->setHeadlightBrightness( livePercent );
+            Nvm::saveHeadlightBrightness( (uint8_t)( livePercent + 0.5f ) );
+            printPercentSetting( "Headlight brightness", livePercent );
+         } else if ( appMode == ModeConfigChina ) {
+            carpet->setChinaBrightness( livePercent );
+            Nvm::saveChinaBrightness( (uint8_t)( livePercent + 0.5f ) );
+            printPercentSetting( "China brightness", livePercent );
+         } else { // ModeConfigAudio
+            audioThresholdPercent = livePercent;
+            Nvm::saveAudioThreshold( (uint8_t)( audioThresholdPercent + 0.5f ) );
+            printPercentSetting( "Audio threshold", audioThresholdPercent );
+         }
+         carpet->flashRope( 1 ); // confirms the setting was committed
+         appMode = ModeShow;
+      } else if ( didDouble ) {
+         carpet->flashRope( 2 ); // confirms advancing to the next config setting
+         enterConfigMode( nextConfigMode( appMode ) );
+      } else if ( didMedium || didLong ) {
+         appMode = ModeShow; // cancel, no save
+      }
+
+   } else {
+      // ModeShow
+
+      if ( didExtraLong ) lightsOn = !lightsOn;
+      if ( didLong ) enterConfigMode( ModeConfigGlobal );
+      if ( didShort ) {
+         currMode = ( currMode + 1 ) % numModes;
+         Nvm::saveShow( currMode );
+      }
+
+      if ( currMode != prevMode ) {
+         delete currLightShow;
+         currLightShow = makeShow( currMode, currVariation[ currMode ] );
+         currLightShow->start();
+         prevMode = currMode;
+      }
+
+      currLightShow->update( clock );
+
+      // persist a show's variation the moment it actually changes
+      uint8_t variation = currLightShow->variation();
+      if ( variation != currVariation[ currMode ] ) {
+         currVariation[ currMode ] = variation;
+         Nvm::saveVariation( currMode, variation );
+      }
+
+      carpet->applyBrightnessCeiling();
+
+      if ( !lightsOn ) carpet->clear(); // master override -- still let shows run "invisibly" underneath
    }
-
-   if ( false && should_print ) {
-      last = millis();
-      Serial.println("millis");
-      Serial.println( clock );
-      Serial.println("output");
-      Serial.println( AudioBoard::bin_low );
-      Serial.println( AudioBoard::bin_mid );
-      Serial.println( AudioBoard::bin_high );
-      Serial.println("input");
-      Serial.println( AudioBoard::Frequencies_Mono[0] );
-      Serial.println( AudioBoard::Frequencies_Mono[1] );
-      Serial.println( AudioBoard::Frequencies_Mono[2] );
-      Serial.println( AudioBoard::Frequencies_Mono[3] );
-      Serial.println( AudioBoard::Frequencies_Mono[4] );
-      Serial.println( AudioBoard::Frequencies_Mono[5] );
-      Serial.println( AudioBoard::Frequencies_Mono[6] );
-   }
-
-
-   // CRGB clr2 = CRGB::Red;
-   // CRGB clr1 = CRGB::Cyan;
-
-   // for ( int j = NEO6_OFFSET; j < NEO6_OFFSET + 7; ++j ) {
-   //    carpet->ropeLeds[ j ] = blend( clr1, clr2, scaleTo255( AudioBoard::Frequencies_Mono[j], 1024, 0 ) );
-   // }
-   // carpet->ropeLeds[ NEO6_OFFSET + 7 ] = blend( clr1, clr2, AudioBoard::getLow() );
-   // carpet->ropeLeds[ NEO6_OFFSET + 8 ] = blend( clr1, clr2, AudioBoard::getMid() );
-   // carpet->ropeLeds[ NEO6_OFFSET + 9 ] = blend( clr1, clr2, AudioBoard::getHigh() );
-
-   // for ( int j = NEO6_OFFSET + 7; j < NEO6_OFFSET + 10; ++j ) {
-   //    Serial.print( "freqcolor" );
-   //    Serial.println( j );
-   //    Serial.println( carpet->ropeLeds[ j ].r );
-   //    Serial.println( carpet->ropeLeds[ j ].g );
-   //    Serial.println( carpet->ropeLeds[ j ].b );
-   // }
-
-   // cycle light shows on each short press of the button
-   if ( carpet->encoder->button.shortpress() ) {
-      currMode = ( currMode + 1 ) % numModes;
-      Nvm::saveShow( currMode );
-   }
-   Serial.print( "currMode " );
-   Serial.println( currMode );
-   if ( currMode != prevMode ) {
-      delete currLightShow;
-      currLightShow = makeShow( currMode, currVariation[ currMode ] );
-      currLightShow->start();
-      prevMode = currMode;
-   }
-
-   currLightShow->update( clock );
-
-   // persist a show's variation the moment it actually changes
-   uint8_t variation = currLightShow->variation();
-   if ( variation != currVariation[ currMode ] ) {
-      currVariation[ currMode ] = variation;
-      Nvm::saveVariation( currMode, variation );
-   }
-
-   if ( !lightsOn ) carpet->clear(); // master override -- still let shows run "invisibly" underneath
 
    carpet->show();
 }

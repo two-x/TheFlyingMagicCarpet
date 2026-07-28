@@ -43,16 +43,16 @@
 
 // Neopixel constants
 // TODO: convert the user-facing values to constexpr global vars
+//
+// NUM_NEOPIXEL_STRIPS/NEO_PIN4-7 intentionally stay at 8 below even though
+// only 4 rope strips physically exist -- do NOT "fix" this to 4, it'll
+// silently corrupt memory. See README.md, "Perimeter rope lights".
 #define SIZEOF_SMALL_NEO 156 // 108
 #define SIZEOF_LARGE_NEO 352 // 145
 #define SIZEOF_SMALL_NEO_HALF 78
 #define SIZEOF_LARGE_NEO_HALF 176
 #define SIZEOF_LARGE_NEO_CORNER 33
 #define NUM_NEOPIXEL_STRIPS 8
-#define NUM_NEO_SMALL_LEDS ( NUM_NEOPIXEL_STRIPS / 2 )
-#define NUM_NEO_LARGE_LEDS NUM_NEO_SMALL_LEDS
-#define NUM_NEO_LEDS ( ( SIZEOF_SMALL_NEO * NUM_NEO_SMALL_LEDS ) + \
-                       ( SIZEOF_LARGE_NEO * NUM_NEO_LARGE_LEDS ) )
 #define NUM_NEO_LEDS_ACTUAL ((SIZEOF_SMALL_NEO * 2) + (SIZEOF_LARGE_NEO * 2))
 #define NUM_NEO_LEDS_PER_STRIP LedUtil::resizeCRGBW( SIZEOF_LARGE_NEO )
 #define NUM_NEO_SHOW_LEDS ( NUM_NEO_LEDS_PER_STRIP * NUM_NEOPIXEL_STRIPS )
@@ -63,11 +63,6 @@
 #define NEO1_OFFSET SIZEOF_SMALL_NEO // large
 #define NEO2_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO ) // large
 #define NEO3_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO * 2 ) // small
-#define NEO4_OFFSET ( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO * 2 ) // small
-#define NEO5_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 2 ) // large
-#define NEO6_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 3 ) // large
-#define NEO7_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 4 ) // small
-// The pin order for the port bank we are using is: 25,26,27,28,14,15,29,11
 #define NEO_PORT_BANK ( WS2811_PORTD )
 #define NEO_PIN0 25
 #define NEO_PIN1 26
@@ -104,6 +99,10 @@
 #define NINE LEFT
 #define TEN_THIRTY FRONT_LEFT
 
+// index of the center-front megabar pair (addr 01, two physical fixtures,
+// same DMX address) -- see README.md, "Megabars"
+#define HEADLIGHT_INDEX 0
+
 class MagicCarpet {
  private:
 
@@ -111,6 +110,32 @@ class MagicCarpet {
     * values to accomodate the white value. See CRGBW.h for more details.
     */
    CRGB ropeShowLeds[ NUM_NEO_SHOW_LEDS ];
+
+   // see README.md, "Brightness system"
+   float globalBrightness_ = 100.0f;   // 0-100
+   float headlightBrightness_ = 50.0f; // 50-100, per-fixture (see README -- default
+                                        // 50% per fixture makes the combined pair
+                                        // match one normal megabar's brightness)
+   float chinaBrightness_ = 100.0f;    // 0-100
+
+   // converts a percentage (0-100) into a raw linear-domain 0-255 value.
+   // the only place a percent should ever become a raw hardware value.
+   static uint8_t percentToRaw( float percent ) {
+      percent = constrain( percent, 0.0f, 100.0f );
+      return (uint8_t)( ( percent / 100.0f ) * 255.0f + 0.5f );
+   }
+
+   // like delay(), but keeps the button's state machine alive throughout --
+   // a plain delay() goes totally blind to button input for its duration,
+   // which for flashRope()'s multi-flash sequences (up to ~460ms) is long
+   // enough to drop part of a rapid follow-up double-press.
+   void delayPolling( uint32_t ms ) {
+      uint32_t start = millis();
+      do {
+         encoder->button.update();
+         delay( 1 );
+      } while ( millis() - start < ms );
+   }
 
  public:
 
@@ -127,6 +152,28 @@ class MagicCarpet {
    // controls
    LedControl::Potentiometer * pot;
    LedControl::Encoder * encoder; // includes the encoder's integrated shaft-click button (encoder->button)
+
+   // brightness, in percent -- see the comment on the private fields above
+   void setGlobalBrightness( float percent ) {
+      globalBrightness_ = constrain( percent, 0.0f, 100.0f );
+   }
+   float getGlobalBrightness() {
+      return globalBrightness_;
+   }
+
+   void setHeadlightBrightness( float percent ) {
+      headlightBrightness_ = constrain( percent, 50.0f, 100.0f );
+   }
+   float getHeadlightBrightness() {
+      return headlightBrightness_;
+   }
+
+   void setChinaBrightness( float percent ) {
+      chinaBrightness_ = constrain( percent, 0.0f, 100.0f );
+   }
+   float getChinaBrightness() {
+      return chinaBrightness_;
+   }
 
    void setup() {
       // seed random so we always get different random patterns
@@ -165,7 +212,6 @@ class MagicCarpet {
       LedUtil::reverse( ropeLeds, SIZEOF_SMALL_NEO );
       // LedUtil::reverse( ropeLeds + NEO2_OFFSET, SIZEOF_LARGE_NEO );
       LedUtil::reverse( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO, SIZEOF_SMALL_NEO );
-      // LedUtil::reverse( ropeLeds + NEO6_OFFSET, SIZEOF_LARGE_NEO );
 
       LedUtil::convertNeoArray( ropeLeds, ropeShowLeds,
                                 SIZEOF_SMALL_NEO );
@@ -184,12 +230,6 @@ class MagicCarpet {
       LedUtil::convertNeoArray( ropeLeds + (SIZEOF_SMALL_NEO * 2) + SIZEOF_LARGE_NEO,
                                 ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 5,
                                 SIZEOF_LARGE_NEO );
-      // LedUtil::convertNeoArray( ropeLeds + NEO6_OFFSET,
-      //                           ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 6,
-      //                           SIZEOF_LARGE_NEO );
-      // LedUtil::convertNeoArray( ropeLeds + NEO7_OFFSET,
-      //                           ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 7,
-      //                           SIZEOF_SMALL_NEO );
 
       // make sure to reverse the values so the user has a consistent view
       LedUtil::reverse( ropeLeds, SIZEOF_SMALL_NEO );
@@ -224,20 +264,167 @@ class MagicCarpet {
 
    // flashes the perimeter rope LEDs white `count` times, as button-hold
    // feedback. each flash is 55ms, padded by 15ms of black before and after;
-   // multiple flashes are separated by an additional 150ms. blocking, since
+   // multiple flashes are separated by an additional 85ms. blocking, since
    // this is only ever a brief pause during a press the user is still holding.
    void flashRope( uint8_t count ) {
       for ( uint8_t i = 0; i < count; ++i ) {
          clearRope();
          show();
-         delay( 15 );
+         delayPolling( 15 );
          for ( int j = 0; j < NUM_NEO_LEDS_ACTUAL; ++j ) ropeLeds[ j ].w = 255;
          show();
-         delay( 55 );
+         delayPolling( 55 );
          clearRope();
          show();
-         delay( 15 );
-         if ( i + 1 < count ) delay( 150 );
+         delayPolling( 15 );
+         if ( i + 1 < count ) delayPolling( 85 );
+      }
+   }
+
+   // renders the whole rig as solid red at the given brightness PERCENT
+   // (0-100), for the global-brightness configuration preview. rope leds are
+   // gamma-corrected automatically inside show(); megabar/china deliberately
+   // are NOT gamma-corrected here (or anywhere else in this class) -- gamma
+   // correction is a nonlinear curve, and applying it after scaling would
+   // throw off the linear brightness math these previews rely on (see
+   // applyBrightnessCeiling(), which is equally gamma-free for the same
+   // reason). Only FlameShow gamma-corrects its own megabar output; that's a
+   // pre-existing inconsistency, not something to match here.
+   void showSolidRed( float percent ) {
+      uint8_t linearBrightness = percentToRaw( percent );
+      for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
+         ropeLeds[ i ] = CRGB::Black;
+         ropeLeds[ i ].r = linearBrightness;
+      }
+      LedUtil::fill( megabarLeds, CRGB( linearBrightness, 0, 0 ), NUM_MEGABAR_LEDS );
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
+         chinaLeds[ i ] = CRGB( linearBrightness, 0, 0 );
+         chinaLeds[ i ].w = 0;
+      }
+   }
+
+   // preview for the headlight-brightness setting: rope and china off, all
+   // other megabars shown at the (already-committed) global brightness as a
+   // fixed reference, and the headlight shown at global brightness scaled by
+   // liveHeadlightPercent (the not-yet-committed value being adjusted) -- so
+   // the two can be visually compared side by side.
+   void showHeadlightPreview( float liveHeadlightPercent ) {
+      clearRope();
+      clearChinas();
+      uint8_t globalRaw = percentToRaw( globalBrightness_ );
+      uint8_t headlightRaw = scale8( globalRaw, percentToRaw( liveHeadlightPercent ) );
+      LedUtil::fill( megabarLeds, CRGB( globalRaw, 0, 0 ), NUM_MEGABAR_LEDS );
+      megabarLeds[ HEADLIGHT_INDEX ] = CRGB( headlightRaw, 0, 0 );
+   }
+
+   // preview for the china-brightness setting: rope off, megabars shown at
+   // their normal effective brightness (respecting the committed headlight
+   // setting) as a fixed reference, and china shown at global brightness
+   // scaled by liveChinaPercent (the not-yet-committed value being adjusted)
+   // -- so the two can be visually compared side by side.
+   void showChinaPreview( float liveChinaPercent ) {
+      clearRope();
+      uint8_t globalRaw = percentToRaw( globalBrightness_ );
+      uint8_t headlightRaw = scale8( globalRaw, percentToRaw( headlightBrightness_ ) );
+      uint8_t chinaRaw = scale8( globalRaw, percentToRaw( liveChinaPercent ) );
+      LedUtil::fill( megabarLeds, CRGB( globalRaw, 0, 0 ), NUM_MEGABAR_LEDS );
+      megabarLeds[ HEADLIGHT_INDEX ] = CRGB( headlightRaw, 0, 0 );
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
+         chinaLeds[ i ] = CRGB( chinaRaw, 0, 0 );
+         chinaLeds[ i ].w = 0;
+      }
+   }
+
+   // lights a 10-LED window on one side strip, sliding from backCornerIdx
+   // (0%) to frontCornerIdx (100%) as percent varies, always 10 LEDs wide.
+   // each lit LED's color reflects its OWN position along the whole side
+   // (red at the back corner, green at the front corner), not the window's
+   // position, so the lit window's hue shifts as it slides.
+   void renderSideIndicator( int backCornerIdx, int frontCornerIdx, float percent ) {
+      static const int segmentLen = SIZEOF_LARGE_NEO; // 352
+      static const int windowWidth = 10;
+      int direction = ( frontCornerIdx > backCornerIdx ) ? 1 : -1;
+      float t = constrain( percent, 0.0f, 100.0f ) / 100.0f;
+      int maxOffset = segmentLen - windowWidth;
+      int windowOffset = (int)( t * maxOffset + 0.5f );
+      for ( int k = 0; k < windowWidth; ++k ) {
+         int localOffset = windowOffset + k;
+         int idx = backCornerIdx + direction * localOffset;
+         float f = (float)localOffset / (float)( segmentLen - 1 ); // 0=back(red) .. 1=front(green)
+         uint8_t hue = (uint8_t)( f * 96.0f );
+         ropeLeds[ idx ] = CHSV( hue, 255, 255 );
+         ropeLeds[ idx ].w = 0;
+      }
+   }
+
+   // audio-threshold configuration screen: a 3-band VU meter across the front
+   // rope strip (ropeLeds[0..SIZEOF_SMALL_NEO-1], 156 LEDs), plus a 10-LED
+   // position indicator sliding along each side strip showing the live
+   // threshold percent. All other rope, plus megabar and china, are blanked.
+   //
+   // The front strip splits into 3 equal 52-LED segments in array order:
+   // treble, mid, bass. Each segment shows a dim (50%) green->yellow->red
+   // reference gradient across its length, with a bright white fill from the
+   // segment's start up to the live level's position -- at max level the
+   // whole segment goes solid white. trebleLevel/midLevel/bassLevel are
+   // 0-255 (AudioBoard::getHigh/getMid/getLow range).
+   //
+   // Each side strip (352 LEDs, back corner to front corner) shows a 10-LED
+   // window at the position corresponding to liveThresholdPercent (0-100):
+   // at the back corner at 0%, sliding to the front corner at 100%.
+   void showAudioMeter( uint8_t trebleLevel, uint8_t midLevel, uint8_t bassLevel, float liveThresholdPercent ) {
+      clearRope();
+      clearMegabars();
+      clearChinas();
+      static const int segmentLen = SIZEOF_SMALL_NEO / 3; // 52
+      uint8_t levels[ 3 ] = { trebleLevel, midLevel, bassLevel };
+      for ( int seg = 0; seg < 3; ++seg ) {
+         int filledCount = ( (int)levels[ seg ] * segmentLen + 127 ) / 255; // round
+         for ( int p = 0; p < segmentLen; ++p ) {
+            int i = seg * segmentLen + p;
+            if ( p < filledCount ) {
+               ropeLeds[ i ] = CRGB::Black;
+               ropeLeds[ i ].w = 255;
+            } else {
+               uint8_t hue = (uint8_t)( 96 - ( 96 * p ) / ( segmentLen - 1 ) ); // green(96) -> red(0)
+               ropeLeds[ i ] = CHSV( hue, 255, 128 ); // 128 = 50% brightness
+               ropeLeds[ i ].w = 0;
+            }
+         }
+      }
+
+      // right side: back corner near SIZEOF_SMALL_NEO+SIZEOF_LARGE_NEO-1, front corner near SIZEOF_SMALL_NEO
+      renderSideIndicator( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO - 1, SIZEOF_SMALL_NEO, liveThresholdPercent );
+      // left side: back corner near SIZEOF_SMALL_NEO*2+SIZEOF_LARGE_NEO, front corner at the far end of the array
+      renderSideIndicator( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO, NUM_NEO_LEDS_ACTUAL - 1, liveThresholdPercent );
+   }
+
+   // scales every light array in-place per the configured global/headlight/
+   // china brightness percentages (linear domain), capping all light shows'
+   // output. call once per frame, after a show writes its output and before
+   // show() pushes it to hardware.
+   void applyBrightnessCeiling() {
+      uint8_t globalRaw = percentToRaw( globalBrightness_ );
+      uint8_t headlightRaw = scale8( globalRaw, percentToRaw( headlightBrightness_ ) );
+      uint8_t chinaRaw = scale8( globalRaw, percentToRaw( chinaBrightness_ ) );
+
+      for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
+         ropeLeds[ i ].r = scale8( ropeLeds[ i ].r, globalRaw );
+         ropeLeds[ i ].g = scale8( ropeLeds[ i ].g, globalRaw );
+         ropeLeds[ i ].b = scale8( ropeLeds[ i ].b, globalRaw );
+         ropeLeds[ i ].w = scale8( ropeLeds[ i ].w, globalRaw );
+      }
+      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
+         uint8_t raw = ( i == HEADLIGHT_INDEX ) ? headlightRaw : globalRaw;
+         megabarLeds[ i ].r = scale8( megabarLeds[ i ].r, raw );
+         megabarLeds[ i ].g = scale8( megabarLeds[ i ].g, raw );
+         megabarLeds[ i ].b = scale8( megabarLeds[ i ].b, raw );
+      }
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
+         chinaLeds[ i ].r = scale8( chinaLeds[ i ].r, chinaRaw );
+         chinaLeds[ i ].g = scale8( chinaLeds[ i ].g, chinaRaw );
+         chinaLeds[ i ].b = scale8( chinaLeds[ i ].b, chinaRaw );
+         chinaLeds[ i ].w = scale8( chinaLeds[ i ].w, chinaRaw );
       }
    }
 
@@ -246,11 +433,11 @@ class MagicCarpet {
          static CRGB clr = CRGB::Black;
          static CRGBWUA chinaClr = clr;
          chinaClr.a = 255;
-         LedUtil::fill( ropeLeds, CRGB::Red, NUM_NEO_LEDS );
+         LedUtil::fill( ropeLeds, CRGB::Red, NUM_NEO_LEDS_ACTUAL );
          LedUtil::fill( megabarLeds, CRGB::Yellow, NUM_DMX_LEDS );
          LedUtil::fill( chinaLeds, chinaClr, NUM_CHINA_LEDS );
          FastLED.delay( 1000 );
-         LedUtil::fill( ropeLeds, clr, NUM_NEO_LEDS );
+         LedUtil::fill( ropeLeds, clr, NUM_NEO_LEDS_ACTUAL );
          LedUtil::fill( megabarLeds, clr, NUM_DMX_LEDS );
          LedUtil::fill( chinaLeds, clr, NUM_CHINA_LEDS );
          FastLED.delay( 1000 );

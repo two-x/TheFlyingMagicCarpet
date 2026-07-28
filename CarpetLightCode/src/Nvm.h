@@ -15,13 +15,19 @@
 namespace Nvm {
 
 static DueFlashStorage flash;
-static const uint8_t MAGIC = 0x37; // bump this if State's layout ever changes
+static const uint8_t MAGIC = 0x39; // bump this if State's layout ever changes
 static const uint8_t MAX_SHOWS = 8; // headroom for future shows, no relayout needed
 
+// all brightness/threshold fields are percentages (0-100), never raw 0-255
+// hardware values -- see MagicCarpet's setGlobalBrightness()/etc.
 struct State {
    uint8_t magic;
    uint8_t currShow;
    uint8_t variation[ MAX_SHOWS ];
+   uint8_t globalBrightnessPercent;    // 0-100, default 100 (unrestricted)
+   uint8_t headlightBrightnessPercent; // 50-100, per-fixture, default 50 (see MagicCarpet.h)
+   uint8_t chinaBrightnessPercent;     // 0-100, default 100 (unrestricted)
+   uint8_t audioThresholdPercent;      // 0-100, default 0; not yet applied to anything
 };
 
 static State state;
@@ -34,6 +40,10 @@ inline void load() {
       state.magic = MAGIC;
       state.currShow = 0;
       for ( uint8_t i = 0; i < MAX_SHOWS; ++i ) state.variation[ i ] = 0;
+      state.globalBrightnessPercent = 100;
+      state.headlightBrightnessPercent = 50;
+      state.chinaBrightnessPercent = 100;
+      state.audioThresholdPercent = 0;
       flash.write( 0, (byte *)&state, sizeof( State ) );
    }
 }
@@ -46,6 +56,22 @@ inline uint8_t loadedVariation( uint8_t show ) {
    return show < MAX_SHOWS ? state.variation[ show ] : 0;
 }
 
+inline uint8_t loadedGlobalBrightness() {
+   return state.globalBrightnessPercent;
+}
+
+inline uint8_t loadedHeadlightBrightness() {
+   return state.headlightBrightnessPercent;
+}
+
+inline uint8_t loadedChinaBrightness() {
+   return state.chinaBrightnessPercent;
+}
+
+inline uint8_t loadedAudioThreshold() {
+   return state.audioThresholdPercent;
+}
+
 inline void saveShow( uint8_t show ) {
    state.currShow = show;
    flash.write( 0, (byte *)&state, sizeof( State ) );
@@ -54,6 +80,26 @@ inline void saveShow( uint8_t show ) {
 inline void saveVariation( uint8_t show, uint8_t variation ) {
    if ( show >= MAX_SHOWS ) return;
    state.variation[ show ] = variation;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveGlobalBrightness( uint8_t percent ) {
+   state.globalBrightnessPercent = percent;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveHeadlightBrightness( uint8_t percent ) {
+   state.headlightBrightnessPercent = percent;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveChinaBrightness( uint8_t percent ) {
+   state.chinaBrightnessPercent = percent;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveAudioThreshold( uint8_t percent ) {
+   state.audioThresholdPercent = percent;
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 

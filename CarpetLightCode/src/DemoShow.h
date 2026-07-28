@@ -32,7 +32,7 @@ class DemoShow : public LightShow {
       static uint32_t ropeTime = 0;
       static uint32_t dmxTime = 0;
       static int loc = 0;
-      static int end = NUM_NEO_LEDS;
+      static int end = NUM_NEO_LEDS_ACTUAL;
       static CRGB clr = CRGB::Green;
       static CRGB oldclr = CRGB::Red;
 
@@ -40,12 +40,12 @@ class DemoShow : public LightShow {
       if ( true || timestamp - ropeTime > 200 ) {
          ropeTime = timestamp;
          if ( end == 0 ) {
-           end = NUM_NEO_LEDS;
+           end = NUM_NEO_LEDS_ACTUAL;
            oldclr = clr;
            clr = CHSV( random8(), 255, 255 );
            return;
          }
-         for ( int i = 0; i < NUM_NEO_LEDS; ++i ) {
+         for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
            if ( i == loc ) {
              carpet->ropeLeds[i] = clr;
              break;
