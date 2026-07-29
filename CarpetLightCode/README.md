@@ -53,6 +53,8 @@ In code, `megabarLeds[HEADLIGHT_INDEX]` (index `[0]`, addr 01) is called the **h
 
 Very bright, mounted in pairs at the 4 corners. Aimed primarily **straight down** (unlike the megabars), but X/Y aim still matters — each beam scatters well past its bright spot in the direction it's aimed. Together they flood the ground under the whole perimeter, making the platform look like it's floating on a cushion of light.
 
+The 2 extra channels beyond RGBW are `CRGBWUA::u` (**UV/blacklight** — confirmed; RGBWUA is a standard 6-channel fixture layout, and the union in `CRGBW.h` aliases `u` as `black`) and `.a` (amber, unconfirmed — still a guess, `CRGBW.h` has it marked `// TODO: figure out what a is for...`).
+
 At each corner, the 2 fixtures split duty: one lights the edge running one way from that corner, the other lights the edge running the other way. Each bright spot lands ~1/3 of the way along its assigned edge, measured **from its own corner toward the far corner** (light continues to scatter further past that point, toward the far corner).
 
 | Index | Addr | Corner | Aimed along | Bright spot |
@@ -111,15 +113,16 @@ The rope perimeter flashes white as UI feedback (`MagicCarpet::flashRope()` — 
 
 - **Short press**: cycles to the next light show (Nightrider → Flame → Equalizer → SpeedStripes → ...). Persisted to flash immediately.
 - **Extra-long press**: toggles the whole rig on/off. Always boots **on** — this one is intentionally *not* persisted.
+- **Double press**: toggles blacklight (china's UV channel, `CRGBWUA::u` — see "China lights" above) full on/off, independent of whatever the active show is doing. Always boots **off**, also not persisted (same as the on/off toggle above). Turning the whole rig off (extra-long press) also zeroes the blacklight.
 - **Long press**: enters configuration mode (see below).
 - **Encoder rotation**: per-show, selects that show's own variation (not global) — e.g. `NightriderShow` has 2 variations (pot picks a live hue pair, vs. hue auto-cycles at a pot-controlled rate), `FlameShow` has 2 (flames vs. waterflames palette, toggled per detent). Each show's current variation is persisted per-show, so switching shows and back recalls where you left it.
 - **Pot**: meaning depends on the active show's current variation (e.g. live hue, animation speed, palette rate) — see each show's own code.
 
 ### Configuration mode
 
-A 4-screen cycle, and each screen can have multiple **subsettings** (only Audio has more than one right now — 2: noise floor, auto-gain enable). Button roles inside config mode:
+A 5-screen cycle, and each screen can have multiple **subsettings** (Audio has 2: noise floor, auto-gain enable; PowerTest has 3: hue, saturation, brightness). Button roles inside config mode:
 
-- **Medium press**: advances to the next screen (Global → Headlight → China → Audio → Global), no save. (This *replaces* medium press's old role of cancelling — a normal-mode medium press, and a config-mode medium press, no longer cancel anything.)
+- **Medium press**: advances to the next screen (Global → Headlight → China → Audio → PowerTest → Global), no save. (This *replaces* medium press's old role of cancelling — a normal-mode medium press, and a config-mode medium press, no longer cancel anything.)
 - **Double press**: commits whichever subsetting is currently showing, saves it to flash, prints it to the console, flashes once, and exits to normal mode.
 - **Short press**: cycles to the next subsetting *within* the current screen (a no-op on the 3 screens that only have one).
 - **Long press**: the *only* thing that cancels now — exits without saving, from any screen/subsetting. (Long press still also does double duty from normal mode: it's what enters config mode in the first place, always landing on screen 1.)
@@ -135,14 +138,24 @@ The active light show keeps running "invisibly" underneath the whole time config
 | 3 | China brightness | (none) | Pot, 0-100% (full pot) | Rope off; megabars solid red at their normal effective brightness (committed global + headlight); china solid red at global × live china |
 | 4a | Audio: noise floor | 0 | Pot, 0-100% (full pot) | See below |
 | 4b | Audio: auto-gain enable | 1 | Encoder, right = on, left = off | See below |
+| 5a | PowerTest: hue | 0 | Encoder rotation | See below |
+| 5b | PowerTest: saturation | 1 | Encoder rotation | See below |
+| 5c | PowerTest: brightness | 2 | Encoder rotation | See below |
 
 **Audio screen visual** (`MagicCarpet::showAudioMeter()`, same for both subsettings): rope is otherwise entirely off, china is blanked; the front strip, both sides, and all megabars light up.
 
 - **Front strip** (156 LEDs) splits into 3 equal 52-LED segments in array order: treble, mid, bass (`AudioBoard::getHigh()`/`getMid()`/`getLow()`, 0-255 each, silence-gated but never auto-gained — see "Audio processing" below). Each segment shows a dim (50%) reference gradient across its length — green → yellow/orange (center) → red — with a bright white fill from the segment's start up to the current level's position; a segment goes fully solid white at max level. (Fixed a real pre-existing bug in `AudioBoard::getHigh()` along the way — it was returning `bin_mid` instead of `bin_high`, a copy-paste error that also affected `NightriderShow` and `EqualizerShow`.)
-- **Each side strip** (352 LEDs, back corner to front corner) shows a 10-LED window, always exactly 10 LEDs lit, colored by its own position along the side (red at back, green at front) rather than a fixed color. On subsetting 4a it tracks the live noise-floor percent (back corner = 0%, front corner = 100%). On subsetting 4b it just snaps to one end as an on/off indicator: back corner (0%) = auto-gain off, front corner (100%) = on. Left and right mirror each other.
+- **Each side strip, true corner to true corner** (286 LEDs — the 352-LED physical channel minus 33 LEDs at each end, so it doesn't wrap into the front/back edges near the corners; see `renderSideIndicator()`) shows a 10-LED window, always exactly 10 LEDs lit, colored by its own position along the side (red at back, green at front) rather than a fixed color. On subsetting 4a it tracks the live noise-floor percent (back corner = 0%, front corner = 100%). On subsetting 4b it just snaps to one end as an on/off indicator: back corner (0%) = auto-gain off, front corner (100%) = on. Left and right mirror each other.
 - **All 12 megabars** glow blue, brightness proportional to `AudioBoard::getFullSpectrum()` (silence-gated, auto-gained if enabled) — a live readout of "how loud is it right now," independent of which subsetting is active. While adjusting subsetting 4b specifically, this reflects the *live* (not-yet-committed) auto-gain toggle state rather than the last-committed one, via `AudioBoard::getFullSpectrum(bool)`'s override parameter — this sidesteps needing to revert anything if you cancel out of that subsetting without committing.
 
 Noise floor's live value *is* temporarily applied to `AudioBoard` while you're adjusting it (so the VU meter/megabar glow actually go quiet as live feedback while you raise it past the ambient level) — and explicitly reverted back to the committed value if you leave subsetting 4a any way other than committing (cycling away, advancing, or cancelling). Auto-gain doesn't need this treatment at all, per the override-parameter approach above.
+
+**PowerTest screen** (`MagicCarpet::showPowerTest()`): an A/B test comparing a straight HSV→RGB rendering of a live-editable color against an RGBW power-saving translation of that same color, to gauge how much the translation actually saves and whether it still reads as "the same color." Megabars are off. Unlike every other config screen, this one is driven entirely by the **encoder**, not the pot — rotation edits whichever of hue/saturation/brightness the current subsetting (5a/5b/5c) selects, in steps of 4 per detent; hue wraps around, saturation/brightness clamp at 0/255. All 3 fields are edited as one composite color: cycling 5a→5b→5c with short-press keeps whatever you've dialed into the other two, and double-press commits and persists all 3 at once (`Nvm::saveTestHue/Sat/Brightness`). This screen deliberately ignores the committed global/headlight/china brightness ceiling — hue/sat/brightness here are already a full manual color spec, not a dimming level, so what you see is the two renderings compared at face value.
+
+The rig splits into a front half and a back half, forming an upside-down U (front edge + the front half of both sides) down to the carpet's front-to-back center line:
+
+- **Front half** — rope's front edge, rope's front half of both sides, and china `[0..3]` (the two front-corner pairs) — renders the color straight: `CHSV(hue,sat,val)` converted to RGB, white channel off.
+- **Back half** — rope's back edge, rope's back half of both sides, and china `[4..7]` (the two back-corner pairs) — renders the **power-saving translation**: take `min(r,g,b)` from the straight color, subtract it from each of r/g/b (so the smallest channel bottoms out at 0), and add that same amount to the white channel instead. Same apparent hue and brightness, less of it coming from the color LEDs.
 
 ## Audio processing (`AudioBoard.h`)
 
@@ -160,7 +173,33 @@ Note CANTroller2 only ever transmits 12 bits of speed (the top nibble of its 16-
 
 `SpeedLink::getSpeedMph()` returns the last received value; `SpeedLink::isFresh()` reports whether a packet has arrived recently (within 2s by default), so a speed-reactive show can fall back to "stopped" if the link drops instead of freezing on a stale value.
 
-**`SpeedStripesShow`**: only the two long side rope strips physically run front-to-back along the car's length (the front/back edges don't — see "Perimeter rope lights" above), so this show is confined to those two strips; megabars, china, and the front/back rope edges are blanked, same approach as the audio meter above. Each side strip (352 LEDs) is divided into 4 alternating lit/dark bands of 88 LEDs each — a quarter of the car's length wide. The band pattern continuously scrolls from front toward back at a rate proportional to the live speed reading (`LEDS_PER_MPH_PER_SEC` in the show, a to-taste constant), giving a sense of forward motion; at a standstill, or if the telemetry link is stale, the bands sit still. The pot picks the stripe color, same convention as `NightriderShow`'s variation 0.
+`SpeedLink` also tracks CANTroller2's runmode packets (`0x1R`, sent only on change) via `getRunmode()`/`isLowPower()`. Runmode `1` is `LowPower` (CANTroller2's `globals.h`: `Basic=0, LowPower=1, Standby=2, Stall=3, Hold=4, Fly=5, Cruise=6, Cal=7`).
+
+### Low power mode
+
+Every light show derives its behavior from the live pot reading (`carpet->pot->read()`), so rather than teaching each show about low power, the simulation lives one layer down, in `LedControl::Potentiometer` (`LedController.h`) — every show gets it for free, with no show-file changes:
+
+- **Entering low power** (`SpeedLink::isLowPower()` goes true): `Potentiometer::read()` stops returning the real pot value and instead returns a synthetic value that fades from the pot's actual reading *at the moment low power engaged* down to 0 over 20 seconds, then holds at 0 — same as if someone slowly turned the pot down and left it there.
+- **Manual override**: if the real pot moves more than ~2% away from that captured starting position at any point during the fade or the zero-hold, the simulation cancels for the rest of this low-power episode and `read()` goes back to returning the true live value — a real turn always wins. This is edge-triggered: the cancellation sticks even though the vehicle keeps reporting `LowPower` every subsequent loop; only a fresh rising edge (low power ends, then re-engages) re-arms the fade.
+- **Exiting low power** (any runmode other than `LowPower` arrives): the simulation cancels immediately, same as a manual override, snapping straight back to live tracking (no fade back up).
+
+This only runs while `ModeShow` is active (`carpet->pot->updateLowPower()` is only called from that branch of `loop()`) — config screens always read the pot live via a separate `Potentiometer::readLive()`, so adjusting brightness/audio/color settings is never affected by low-power state.
+
+**`SpeedStripesShow`**: the two long side rope strips are the only fixtures that physically run front-to-back along the car's 16ft length (the front/back rope edges don't, and stay off — see "Perimeter rope lights" above). Each side strip (352 LEDs) is divided into 4 bands of 88 LEDs each — a quarter of the car's length (4ft) — that alternate lit/dark with a smoothed (not hard-edged) transition between them. The pattern continuously scrolls from front toward back at a rate proportional to the live speed reading (`LEDS_PER_MPH_PER_SEC` in the show, a to-taste constant), giving a sense of forward motion; at a standstill, or if the telemetry link is stale, the bands sit still. The pot picks the stripe color, same convention as `NightriderShow`'s variation 0.
+
+Every other fixture with any meaningful along-the-length position joins in, sampling that same scrolling pattern at its own physical position — so a given stripe's color matches everywhere it's visible at once (underneath via china, out to the sides via megabars, on top via rope). The sampling function is periodic and defined for any position, including points beyond the car's own front/back corners, so the fixtures pointed forward/backward can preview a stripe approaching and show it receding without any special-casing:
+
+| Fixture(s) | Position sampled |
+| --- | --- |
+| Megabars `[11,0,1]` (front 3, incl. headlight) | 4ft ahead of the front corner — a preview, well before the stripe arrives |
+| China `[1,2]` (aimed along the front edge) | 1ft ahead of the front corner — picks the same stripe up just as it's about to cross onto the carpet |
+| Megabars `[5,6,7]` (rear 3) | 4ft behind the back corner — mirrors the front, for the stripe that just left |
+| China `[5,6]` (aimed along the back edge) | 1ft behind the back corner — mirrors the front |
+| China `[0]`/`[3]` (front-right/front-left, aimed along a side edge) | 1/3 of the way back from the front |
+| China `[7]`/`[4]` (back-right/back-left, aimed along a side edge) | 2/3 of the way back from the front |
+| Megabars `[2,10]` / `[3,9]` / `[4,8]` (remaining 3 per side) | Same 1/3, 1/2, 2/3 partition by angle — `[2]`/`[10]` line up with the 1/3 china, `[4]`/`[8]` with the 2/3 china |
+
+All of the above (16ft/12ft carpet dimensions, the 4ft/1ft preview distances, and the fade steepness) are hardcoded per user-measured/user-specified values in `SpeedStripesShow.h` — adjust the constants there if the carpet's dimensions ever change.
 
 ## Future direction
 
