@@ -113,9 +113,9 @@ The rope perimeter flashes white as UI feedback (`MagicCarpet::flashRope()` — 
 
 - **Short press**: cycles to the next light show (Nightrider → Flame → Equalizer → SpeedStripes → ...). Persisted to flash immediately.
 - **Extra-long press**: toggles the whole rig on/off. Always boots **on** — this one is intentionally *not* persisted.
-- **Double press**: toggles blacklight (china's UV channel, `CRGBWUA::u` — see "China lights" above) full on/off, independent of whatever the active show is doing. Always boots **off**, also not persisted (same as the on/off toggle above). Turning the whole rig off (extra-long press) also zeroes the blacklight.
+- **Double press**: toggles blacklight (china's UV channel, `CRGBWUA::u` — see "China lights" above) full on/off, independent of whatever the active show is doing — **except while the Equalizer show is active**, where double press instead toggles that show's own triple-strobe setting (see "Equalizer show variations" below); blacklight isn't reachable by double press during Equalizer. Both toggles boot **off**; the blacklight toggle isn't persisted (same as the on/off toggle above), but the Equalizer strobe toggle *is* persisted (`Nvm::saveEqualizerStrobeEnabled()`). Turning the whole rig off (extra-long press) also zeroes the blacklight.
 - **Long press**: enters configuration mode (see below).
-- **Encoder rotation**: per-show, selects that show's own variation (not global) — e.g. `NightriderShow` has 2 variations (pot picks a live hue pair, vs. hue auto-cycles at a pot-controlled rate), `FlameShow` has 2 (flames vs. waterflames palette, toggled per detent). Each show's current variation is persisted per-show, so switching shows and back recalls where you left it.
+- **Encoder rotation**: per-show, selects that show's own variation (not global) — e.g. `NightriderShow` has 2 variations (pot picks a live hue pair, vs. hue auto-cycles at a pot-controlled rate), `FlameShow` has 2 (flames vs. waterflames palette, toggled per detent), `EqualizerShow` has 2 (see below). Each show's current variation is persisted per-show, so switching shows and back recalls where you left it.
 - **Pot**: meaning depends on the active show's current variation (e.g. live hue, animation speed, palette rate) — see each show's own code.
 
 ### Configuration mode
@@ -157,6 +157,19 @@ The rig splits into a front half and a back half, forming an upside-down U (fron
 - **Front half** — rope's front edge, rope's front half of both sides, and china `[0..3]` (the two front-corner pairs) — renders the color straight: `CHSV(hue,sat,val)` converted to RGB, white channel off.
 - **Back half** — rope's back edge, rope's back half of both sides, and china `[4..7]` (the two back-corner pairs) — renders the **power-saving translation**: take `min(r,g,b)` from the straight color, subtract it from each of r/g/b (so the smallest channel bottoms out at 0), and add that same amount to the white channel instead. Same apparent hue and brightness, less of it coming from the color LEDs.
 
+## Equalizer show variations (`BumpingAudioShow.h`, `EqualizerShow`)
+
+2 variations, cycled by encoder rotation like any other show:
+
+- **Variation 0** (default): the original bouncing-chase pattern (unrelated to audio) on the rope, with megabars tinted by bass (red, `getLow()`) and treble (blue, `getHigh()`) using an attack/decay peak-hold (jumps up fast past a level-80 threshold, decays 15/frame otherwise).
+- **Variation 1**: a dual VU meter, based across the whole front/back of the car rather than a single corner. Bass is based on the *entire back edge* (always lit, not just the two back corners) and grows forward along both sides as it rises (red); treble is based on the entire front edge and grows backward along both sides (blue) — same red=bass/blue=treble convention as variation 0, and the same attack/decay peak-hold ballistics, just kept as separate state. `RIGHT`/`LEFT` are already the exact midpoints of each side run (see the positional constants in `MagicCarpet.h`), so each meter's 100%-level reach along the sides is set to 15% of the true-corner-to-center half-length *past* that midpoint — meaning maxed-out bass and treble simultaneously cross by about that much right around the middle of the car. Where they overlap, the two colors blend 50/50. Brightness of each meter (base edge and side fill alike) scales directly with its current level, not just how far it reaches — a quiet meter is dim, not just short. Megabars and china are off in this variation.
+
+**Triple-strobe** (either variation): toggled by a double press while Equalizer is active (see "Normal mode" above) — nonvolatile. When enabled, a qualifying bass hit (same `getLow() > 80` attack threshold used for the peak-hold above) flashes all 8 china and the 8 megabars nearest the 4 corners (every megabar except the headlight/left/back/right cardinals — i.e. all except index `0`/`3`/`6`/`9`) full white for 3 pulses, 30ms on each, 20ms gaps between.
+
+Hit suppression prevents the strobe from machine-gunning during a sustained loud passage: the level of the hit that caused the last strobe is remembered, and any further hit that doesn't exceed it is suppressed as long as it's within 3 seconds of the last qualifying hit (strobed or suppressed). A gap of 3+ seconds with no qualifying hits at all clears that memory, so the next hit always strobes fresh regardless of its level.
+
+**Slow desaturation cycle** (both variations): every base color (`clr1`/`clr2` in variation 0, `bassClr`/`trebleClr` in variation 1) has its saturation drift from 100% down to 85% and back over a smooth 30-second sine cycle (`currentSatFraction()`), rather than staying fixed -- a slow, subtle "breathing" of color intensity. `desaturate()` holds hue and value fixed and only raises the minimum channel, so it's exact for these fully-saturated base colors and a no-op on anything already less saturated (e.g. the strobe's white flash, or the "crossing" blend zone once it's already partway desaturated).
+
 ## Audio processing (`AudioBoard.h`)
 
 - **Full-spectrum level**: `getFullSpectrum()` is the max of all 7 raw hardware bins (not just the 3 curated into `bin_low`/`bin_mid`/`bin_high` for the VU meter), scaled to 0-255. This is the "how loud is it right now" signal auto-gain and the megabar glow are built on.
@@ -167,7 +180,7 @@ The rig splits into a front half and a back half, forming an upside-down U (fron
 
 ## Vehicle speed link (`SpeedLink.h`) and `SpeedStripesShow`
 
-The Due's second I2C bus (`Wire1` — physically the `SDA1`/`SCL1` pins nearest the USB connectors, distinct from the primary `Wire` bus) runs as an I2C **slave** at address `0x69`, receiving vehicle telemetry from CANTroller2 (the sibling project, acting as I2C master over its own separate `Wire` bus). Protocol (see CANTroller2's `src/i2cbus.h`, `LightingBox`): no checksum/length byte, I2C START/STOP delimits each packet, top nibble of the first byte is a command code — `0x0`=status flags (1 byte, ignored here), `0x1`=runmode (1 byte, ignored here), `0x2`=speed update (2 bytes: low nibble of byte 1 + all of byte 2 form a 12-bit hundredths-of-mph value). Only the speed packet has any effect currently.
+The Due's primary I2C bus (`Wire` — pins 20 (SDA)/21 (SCL) on the communication port header; confirmed against `framework-arduino-sam`'s `variant.h`. `Wire1`, the separate `SDA1`/`SCL1` pins near the USB connectors, is *not* used here) runs as an I2C **slave** at address `0x69`, receiving vehicle telemetry from CANTroller2 (the sibling project, acting as I2C master over its own separate `Wire` bus). Protocol (see CANTroller2's `src/i2cbus.h`, `LightingBox`): no checksum/length byte, I2C START/STOP delimits each packet, top nibble of the first byte is a command code — `0x0`=status flags (1 byte, ignored here), `0x1`=runmode (1 byte — see "Low power mode" below), `0x2`=speed update (2 bytes: low nibble of byte 1 + all of byte 2 form a 12-bit hundredths-of-mph value).
 
 Note CANTroller2 only ever transmits 12 bits of speed (the top nibble of its 16-bit internal value is discarded on the sending side), so the max representable speed is `0x0FFF` = 40.95 mph — a limitation of the sending side, not something fixable from here.
 
@@ -200,6 +213,8 @@ Every other fixture with any meaningful along-the-length position joins in, samp
 | Megabars `[2,10]` / `[3,9]` / `[4,8]` (remaining 3 per side) | Same 1/3, 1/2, 2/3 partition by angle — `[2]`/`[10]` line up with the 1/3 china, `[4]`/`[8]` with the 2/3 china |
 
 All of the above (16ft/12ft carpet dimensions, the 4ft/1ft preview distances, and the fade steepness) are hardcoded per user-measured/user-specified values in `SpeedStripesShow.h` — adjust the constants there if the carpet's dimensions ever change.
+
+**Stopped mode**: whenever speed is 0, or `SpeedLink` hasn't heard from the vehicle in over 4 seconds (its own staleness threshold — stricter than `isFresh()`'s 2s default), the front-to-back scroll/preview behavior above is replaced entirely by the same 4-band pattern spinning clockwise around the carpet's true center at ~0.25Hz (one revolution every 4s). This uses real geometry, not an index approximation: the carpet is a 16ft × 12ft rectangle, so each rope LED's and each china fixture's actual (x,y) position is computed from its documented corner/edge location (`ropeAngleDeg()`/`chinaAngleDeg()`), then converted to a compass-style angle from center (front=0°, right=90°, back=180°, left=270°, matching the megabar ring's existing angle convention — megabars need no lookup, they're already `idx × 30°`). Unlike the moving mode, the full rope loop lights up, including the front/back edges (which stay off while moving, since they don't run front-to-back).
 
 ## Future direction
 

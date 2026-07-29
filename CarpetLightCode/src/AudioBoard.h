@@ -12,6 +12,10 @@
 //****************TUNABLE SYSTEM PARAMTERS************************
 //all the other art cars might need different values.
 
+// OBSOLETE: only consumed by Noisefloor_Compensate() below, which is never
+// called anywhere in this codebase (verified -- no call sites exist outside
+// its own definition). Superseded by the percent-based, time-gated silence
+// detection in updateAutoGainAndSilence() / setNoiseFloorPercent().
 #define NOISE_FLOOR_LOW 75
 #define NOISE_FLOOR_MID 75
 #define NOISE_FLOOR_HIGH 75
@@ -23,8 +27,8 @@
 #define LOW_OUTPUT 9
 #define MID_OUTPUT 10
 #define HIGH_OUTPUT 11
-#define ARR 8
-#define SGAIN 25
+#define ARR 8       // OBSOLETE: only used by Normalize() below, which is never called -- see its comment
+#define SGAIN 25    // OBSOLETE: only used by Normalize() below, which is never called -- see its comment
 
 #define NORMALIZED_AUDIO 0
 
@@ -38,12 +42,17 @@ class AudioBoard {
 
    static void Read_Frequencies(){
       //Read frequencies for each band
+      // STROBE/RESET are inverted by hardware between the Due and the chip
+      // (an inverting buffer sits in between) -- every HIGH/LOW below is
+      // deliberately the opposite of the chip's own datasheet levels, so
+      // that what actually reaches the chip is correct. See also setup().
       for ( int freq_amp = 0; freq_amp < 7 ; ++freq_amp ) {
         Frequencies_Mono[freq_amp] = analogRead(DC_One);
-        digitalWrite(STROBE, LOW); //toggle pin of spectrum shield to get next bin value
+        delayMicroseconds( 15 );
+        digitalWrite(STROBE, HIGH); //toggle pin of spectrum shield to get next bin value -- inverted: chip actually sees LOW here
         delayMicroseconds( 100 );
-        digitalWrite(STROBE, HIGH);
-        delayMicroseconds( 100 );
+        digitalWrite(STROBE, LOW); // inverted: chip actually sees HIGH here
+        delayMicroseconds( 85 ); // datasheet min for read after hi edge on strobe is 63-67us
       }
    }
 
@@ -90,6 +99,13 @@ class AudioBoard {
       }
    }
 
+   // OBSOLETE -- never called anywhere in this codebase (verified: no call
+   // sites exist outside this definition). A flat per-band cutoff against the
+   // hardcoded 0-255 NOISE_FLOOR_LOW/MID/HIGH constants above. Superseded by
+   // the percent-based, 4-second-continuous silence detection in
+   // updateAutoGainAndSilence() (see getLow()/getMid()/getHigh(), which
+   // already silence-gate via that newer mechanism instead). Left in place
+   // for reference; safe to delete.
    static void Noisefloor_Compensate(){
    //here at my desk, I see that the 'floor' of each channel is between 60-70. Let's try a simple offset, plus clip so the value is never lower than 0
    /****
@@ -128,6 +144,25 @@ class AudioBoard {
    //
    //
    //whatever algorithm is used, it should have a few tunable parameters. Maybe 'gain change rate' and 'target amplitude' if it's servoing gain around.
+   //
+   // OBSOLETE -- never called anywhere in this codebase (verified: no call
+   // sites exist outside this definition). This is an earlier attempt at
+   // auto-gain control: a threshold-based integrator that nudges 3 separate
+   // per-band gains (low_gain/mid_gain/high_gain, plus a combined `gain`) up
+   // or down by 1 per poll, based on whether an 8-sample rolling average
+   // (ARR) is above/below fixed 100/200 thresholds -- and it operates on
+   // bin_low/bin_mid/bin_high (the 3 curated VU-meter bins).
+   //
+   // The LIVE auto-gain system (updateAutoGainAndSilence()/getFullSpectrum(),
+   // below) is a different design operating on a different signal: it uses a
+   // true rolling-4-second-peak ratio (255/rollingPeak_) rather than a
+   // threshold integrator, and applies to rawFullSpectrum() (the max of all 7
+   // raw bins), not bin_low/mid/high. Because they touch different variables,
+   // simply re-enabling this function wouldn't corrupt the live system's
+   // state -- but it WOULD reintroduce a second, independently-designed AGC
+   // scheme running in parallel, covering a different signal than the live
+   // one. Don't re-enable this without accounting for that overlap. Left in
+   // place for reference; safe to delete.
    static void Normalize(){
       static int low_hist[ARR], mid_hist[ARR], high_hist[ARR];
       static int low_average, mid_average, high_average = 0;
@@ -245,6 +280,12 @@ class AudioBoard {
     * rises back above the floor (which un-silences immediately, no delay).
     * The noise floor is compared against the RAW average, not the gained
     * value, so auto-gain can never mask silence.
+    *
+    * This is the ONLY active gain-control/silence-detection logic in this
+    * file. Normalize() and Noisefloor_Compensate() (above) are an earlier,
+    * unrelated attempt at the same general goal -- both are obsolete and
+    * never called; see their own comments for why they don't conflict with
+    * this one.
     */
    static const uint16_t PEAK_WINDOW_MS = 4000;
    static const uint8_t PEAK_BUFFER_SIZE = 150; // ~4s of samples at the ~30ms poll rate, with margin
@@ -369,22 +410,26 @@ class AudioBoard {
 
    static void setup() {
       //Set spectrum Shield pin configurations
+      // STROBE/RESET are inverted by hardware between the Due and the chip
+      // (an inverting buffer sits in between), so every level below is
+      // deliberately the opposite of the chip's own datasheet/reset-sequence
+      // levels -- what actually reaches the chip is correct.
       pinMode(STROBE, OUTPUT);
       pinMode(RESET, OUTPUT);
       pinMode(DC_One, INPUT);
-      digitalWrite(STROBE, HIGH);
-      digitalWrite(RESET, HIGH);
+      digitalWrite(STROBE, LOW);  // inverted: chip actually sees HIGH here
+      digitalWrite(RESET, LOW);   // inverted: chip actually sees HIGH here
 
       //Initialize Spectrum Analyzers
-      digitalWrite(STROBE, HIGH);
+      digitalWrite(STROBE, LOW);  // inverted: chip actually sees HIGH here
       delayMicroseconds(100);
-      digitalWrite(RESET, LOW);
+      digitalWrite(RESET, HIGH);  // inverted: chip actually sees LOW here
       delayMicroseconds(100);
-      digitalWrite(STROBE, LOW);
+      digitalWrite(STROBE, HIGH); // inverted: chip actually sees LOW here
       delayMicroseconds(100);
-      digitalWrite(STROBE, HIGH);
+      digitalWrite(STROBE, LOW);  // inverted: chip actually sees HIGH here
       delayMicroseconds(100);
-      digitalWrite(RESET, HIGH);
+      digitalWrite(RESET, LOW);   // inverted: chip actually sees HIGH here
    }
 };
 

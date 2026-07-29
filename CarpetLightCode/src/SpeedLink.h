@@ -1,10 +1,12 @@
 /* SpeedLink.h
  *
  *    I2C slave interface to CANTroller2 (the vehicle's main control system,
- *    a separate board acting as I2C master). Listens on Wire1 -- the Due's
- *    second I2C bus, physically the SDA1/SCL1 pins nearest the USB
- *    connectors -- at address 0x69, matching CANTroller2's known_i2c_addr
- *    table (see its src/i2cbus.h).
+ *    a separate board acting as I2C master). Listens on Wire -- the Due's
+ *    primary I2C bus, pins 20 (SDA)/21 (SCL) on the communication port
+ *    header (confirmed against framework-arduino-sam's variant.h: PIN_WIRE_SDA/
+ *    PIN_WIRE_SCL = 20/21; Wire1 is the separate SDA1/SCL1 pins near the USB
+ *    connectors, pins 70/71, no longer used here) -- at address 0x69,
+ *    matching CANTroller2's known_i2c_addr table (see its src/i2cbus.h).
  *
  *    Packet format (CANTroller2's i2cbus.h, LightingBox class), no
  *    checksum/length byte -- I2C START/STOP delimits each packet:
@@ -38,23 +40,23 @@ class SpeedLink {
    static volatile uint8_t runmode_;
 
    static void onReceive( int numBytes ) {
-      if ( numBytes < 1 || !Wire1.available() ) return;
-      uint8_t byte1 = Wire1.read();
+      if ( numBytes < 1 || !Wire.available() ) return;
+      uint8_t byte1 = Wire.read();
       uint8_t cmd = ( byte1 >> 4 ) & 0x0F;
-      if ( cmd == 0x2 && Wire1.available() ) {
-         uint8_t byte2 = Wire1.read();
+      if ( cmd == 0x2 && Wire.available() ) {
+         uint8_t byte2 = Wire.read();
          speedHundredthsMph_ = ( (uint16_t)( byte1 & 0x0F ) << 8 ) | byte2;
          lastUpdateMillis_ = millis();
       } else if ( cmd == 0x1 ) {
          runmode_ = byte1 & 0x0F;
       }
-      while ( Wire1.available() ) Wire1.read(); // drain anything unexpected/extra
+      while ( Wire.available() ) Wire.read(); // drain anything unexpected/extra
    }
 
  public:
    static void setup() {
-      Wire1.begin( LIGHTBOX_I2C_ADDR );
-      Wire1.onReceive( onReceive );
+      Wire.begin( LIGHTBOX_I2C_ADDR );
+      Wire.onReceive( onReceive );
    }
 
    static uint16_t getSpeedHundredthsMph() {

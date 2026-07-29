@@ -152,7 +152,7 @@ LightShow * makeShow( uint8_t mode, uint8_t variation ) {
       case 1:
          return new FlameShow( carpet, variation );
       case 2:
-         return new EqualizerShow( carpet );
+         return new EqualizerShow( carpet, variation, Nvm::loadedEqualizerStrobeEnabled() );
       case 3:
          return new SpeedStripesShow( carpet, variation );
       default:
@@ -185,7 +185,8 @@ void printWelcome() {
    Serial.print( "  AutoGain=" ); Serial.print( AudioBoard::getAutoGainEnabled() ? "on" : "off" );
    Serial.print( "  TestColor=H:" ); Serial.print( committedTestHue );
    Serial.print( " S:" ); Serial.print( committedTestSat );
-   Serial.print( " V:" ); Serial.println( committedTestBrightness );
+   Serial.print( " V:" ); Serial.print( committedTestBrightness );
+   Serial.print( "  EqStrobe=" ); Serial.println( Nvm::loadedEqualizerStrobeEnabled() ? "on" : "off" );
    Serial.print( "SpeedLink (CANTroller2 @0x69): " );
    Serial.println( SpeedLink::isFresh() ? "host detected" : "no host detected" );
 }
@@ -376,7 +377,18 @@ void loop() {
       // ModeShow
 
       if ( didExtraLong ) lightsOn = !lightsOn;
-      if ( didDouble ) blacklightOn = !blacklightOn; // china UV channel, full on/off -- see MagicCarpet::setBlacklight()
+      if ( didDouble ) {
+         if ( currMode == 2 ) {
+            // Equalizer show active: double press toggles its triple-strobe
+            // setting instead of blacklight (see EqualizerShow::updateStrobe())
+            EqualizerShow * eq = static_cast<EqualizerShow *>( currLightShow );
+            bool newState = !eq->getStrobeEnabled();
+            eq->setStrobeEnabled( newState );
+            Nvm::saveEqualizerStrobeEnabled( newState );
+         } else {
+            blacklightOn = !blacklightOn; // china UV channel, full on/off -- see MagicCarpet::setBlacklight()
+         }
+      }
       if ( didLong ) enterConfigMode( ModeConfigGlobal );
       if ( didShort ) {
          currMode = ( currMode + 1 ) % numModes;

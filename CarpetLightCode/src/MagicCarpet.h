@@ -183,7 +183,7 @@ class MagicCarpet {
       Nvm::load(); // recall persisted show/variation selection before anything else needs it
 
       AudioBoard::setup();
-      SpeedLink::setup(); // Wire1 I2C slave, receives vehicle speed from CANTroller2
+      SpeedLink::setup(); // Wire I2C slave (pins 20/21), receives vehicle telemetry from CANTroller2
 
       digitalWrite( 2, HIGH );
 
