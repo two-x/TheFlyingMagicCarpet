@@ -191,6 +191,10 @@ class LightShow {
    // current variation index, for shows with more than one (encoder-selected).
    // shows without variations can leave this as the default.
    virtual uint8_t variation() { return 0; }
+   // short (<30 char), human-readable name for the CURRENT variation() value
+   // -- used for the console print on selection (see CarpetLightLogic.cpp).
+   // shows without meaningful variations can leave this as the default.
+   virtual const char * variationName() { return "default"; }
    virtual ~LightShow() {}
 };
 

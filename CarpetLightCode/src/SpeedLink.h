@@ -28,6 +28,7 @@
 #define __SPEED_LINK_H
 
 #include <Wire.h>
+#include "Utilities.h"
 
 #define LIGHTBOX_I2C_ADDR 0x69
 #define RUNMODE_LOW_POWER 1 // CANTroller2's globals.h: enum runmode { Basic=0, LowPower=1, ... }
@@ -36,7 +37,8 @@
 class SpeedLink {
  private:
    static volatile uint16_t speedHundredthsMph_;
-   static volatile uint32_t lastUpdateMillis_;
+   static volatile bool everReceived_; // sentinel: Timer has no "unset" state of its own
+   static Timer lastUpdateTimer_;      // Timer's own start/tout fields are volatile, so this is ISR-safe
    static volatile uint8_t runmode_;
 
    static void onReceive( int numBytes ) {
@@ -46,7 +48,8 @@ class SpeedLink {
       if ( cmd == 0x2 && Wire.available() ) {
          uint8_t byte2 = Wire.read();
          speedHundredthsMph_ = ( (uint16_t)( byte1 & 0x0F ) << 8 ) | byte2;
-         lastUpdateMillis_ = millis();
+         everReceived_ = true;
+         lastUpdateTimer_.reset();
       } else if ( cmd == 0x1 ) {
          runmode_ = byte1 & 0x0F;
       }
@@ -71,7 +74,7 @@ class SpeedLink {
    // speed-reactive show fall back to "stopped" behavior if the link drops
    // instead of freezing on the last received value forever
    static bool isFresh( uint32_t staleMs = 2000 ) {
-      return lastUpdateMillis_ != 0 && ( millis() - lastUpdateMillis_ ) < staleMs;
+      return everReceived_ && !lastUpdateTimer_.elapsed( staleMs );
    }
 
    // last received runmode, or RUNMODE_UNKNOWN before the first runmode
@@ -88,7 +91,8 @@ class SpeedLink {
 };
 
 volatile uint16_t SpeedLink::speedHundredthsMph_ = 0;
-volatile uint32_t SpeedLink::lastUpdateMillis_ = 0;
+volatile bool SpeedLink::everReceived_ = false;
+Timer SpeedLink::lastUpdateTimer_;
 volatile uint8_t SpeedLink::runmode_ = RUNMODE_UNKNOWN;
 
 #endif

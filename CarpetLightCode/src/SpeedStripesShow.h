@@ -38,9 +38,17 @@
  *    periodic sampling function -- valid at any real value, including the
  *    "ahead of the front corner" / "behind the back corner" positions the
  *    front/rear fixtures use, no special-casing needed. Stripe edges are a
- *    smoothed (tanh-shaped) square wave rather than a hard cut, per request
- *    -- FADE_STEEPNESS in sampleWave() controls how soft that transition
- *    looks; lower is softer/more sinusoidal, higher is closer to a hard edge.
+ *    smoothed (tanh-shaped) square wave rather than a hard cut -- FADE_STEEPNESS
+ *    in sampleWave() controls how soft that transition looks; lower is
+ *    softer/more analog, higher is closer to a hard edge.
+ *
+ *    Color: rather than one fixed hue, each lit band samples a position on a
+ *    4-color palette (colorPalette_, freshly randomized every ~20s -- see
+ *    regeneratePaletteIfDue()), mapped across the same period as the on/off
+ *    band envelope. So color continuously flows/fades as the pattern moves,
+ *    instead of the whole show being a single static hue -- this applies in
+ *    both moving and stopped mode. A slow desaturation cycle (100%->85%->100%
+ *    over 30s, same technique as EqualizerShow) breathes on top of that.
  *
  *    Stopped mode: whenever speed is 0, or no speed packet has arrived in
  *    over 4 seconds (SpeedLink gone stale), the front-to-back scroll/preview
@@ -65,18 +73,77 @@ class SpeedStripesShow : public LightShow {
    static const int stripeWidth_ = SIZEOF_LARGE_NEO / 4; // 88 LEDs = 4ft, a quarter of the car's 16ft length
    float scrollOffset_ = 0.0f;       // LEDs, grows over time as the moving pattern scrolls front->back
    float rotationPhaseDeg_ = 0.0f;   // degrees, grows over time as the stopped pattern spins clockwise
-   uint32_t lastUpdateMillis_ = 0;
+   Timer frameTimer_;                // tracks dt between update() calls
 
-   // smoothly-faded color (no hard edges) for an alternating lit/dark
-   // pattern at a given position along some periodic axis (period in the
-   // same units as pos -- LEDs for the moving mode, degrees for the spin).
-   // valid for any real pos, the wave is periodic so it "just works" for
-   // positions beyond a strip's own physical range too.
-   CRGB sampleWave( float pos, float period, const CRGB & clr ) {
-      static const float FADE_STEEPNESS = 3.0f; // higher = harder edges, lower = softer/more sinusoidal
-      float wave = tanhf( FADE_STEEPNESS * sinf( 2.0f * PI * pos / period ) ); // smoothed square wave, -1..1
-      uint8_t brightness = (uint8_t)( ( 0.5f + 0.5f * wave ) * 255.0f + 0.5f );
-      CRGB result = clr;
+   CRGBPalette16 colorPalette_;   // 4 randomly-chosen colors, blended across 16 stops
+   Timer paletteRegenTimer_;      // periodic re-randomization -- armed in start(), which also builds the first one
+
+   // slow rolling desaturation, same technique as EqualizerShow's
+   // currentSatFraction()/desaturate(): saturation drifts from 100% down to
+   // 85% and back over a smooth 30-second sine cycle.
+   static float currentSatFraction( uint32_t time ) {
+      static const uint32_t periodMs = 30000;
+      float phase = (float)( time % periodMs ) / (float)periodMs;
+      return 0.925f + 0.075f * cosf( 2.0f * PI * phase );
+   }
+
+   static CRGB desaturate( CRGB clr, float satFraction ) {
+      uint8_t maxC = max( clr.r, max( clr.g, clr.b ) );
+      if ( maxC == 0 ) return clr;
+      uint8_t minFloor = (uint8_t)( maxC * ( 1.0f - satFraction ) + 0.5f );
+      if ( clr.r < minFloor ) clr.r = minFloor;
+      if ( clr.g < minFloor ) clr.g = minFloor;
+      if ( clr.b < minFloor ) clr.b = minFloor;
+      return clr;
+   }
+
+   // picks 4 fresh random fully-saturated hues and rebuilds colorPalette_ as
+   // a smooth blend across them -- "chosen randomly", per request.
+   // CRGBPalette16(c1,c2,c3,c4) itself handles the "fade into each other"
+   // part, evenly blending all 16 stops across the 4 given colors. Called
+   // once immediately in start(), then periodically (~20s) from update()
+   // via paletteRegenTimer_.expireset().
+   void regeneratePalette() {
+      CRGB c1 = CHSV( random8(), 255, 255 );
+      CRGB c2 = CHSV( random8(), 255, 255 );
+      CRGB c3 = CHSV( random8(), 255, 255 );
+      CRGB c4 = CHSV( random8(), 255, 255 );
+      colorPalette_ = CRGBPalette16( c1, c2, c3, c4 );
+   }
+
+   // smoothly-faded brightness envelope (no hard edges) for the alternating
+   // lit/dark pattern at a given position along some periodic axis (period
+   // in the same units as pos -- LEDs for the moving mode, degrees for the
+   // spin), combined with a color sampled from colorPalette_ at that same
+   // position -- so the lit bands don't just switch on/off, their color
+   // continuously flows as the pattern moves. Valid for any real pos; both
+   // the wave and the palette wrap-around are periodic, so it "just works"
+   // for positions beyond a strip's own physical range too.
+   //
+   // satFraction is passed in precomputed (once per frame by the caller, via
+   // currentSatFraction()), not recomputed here -- this function runs per-LED
+   // (over 1000x/frame in renderSpin()), and the Due's SAM3X8E (Cortex-M3) has
+   // no hardware FPU, so every avoidable float transcendental call here
+   // (this used to include a per-call cosf() via desaturate(), plus sinf()+
+   // tanhf() for the wave) is a real, measurable per-frame cost -- this was
+   // the actual cause of a reported "everything feels choppy" regression,
+   // since this show's update() keeps running in the background even while a
+   // config screen is on-screen. sin8() (FastLED's table-based fast sine)
+   // plus a cheap integer contrast boost replaces sinf()+tanhf() for the
+   // brightness envelope.
+   CRGB sampleWave( float pos, float period, float satFraction ) {
+      float wrapped = fmodf( pos, period );
+      if ( wrapped < 0.0f ) wrapped += period;
+      uint8_t phase8 = (uint8_t)( ( wrapped / period ) * 255.0f );
+
+      static const int16_t FADE_CONTRAST = 2; // lower = softer/more analog, higher = closer to a hard edge
+      int16_t centered = ( (int16_t)sin8( phase8 ) - 128 ) * FADE_CONTRAST;
+      if ( centered > 127 ) centered = 127;
+      if ( centered < -128 ) centered = -128;
+      uint8_t brightness = (uint8_t)( centered + 128 );
+
+      CRGB result = ColorFromPalette( colorPalette_, phase8 );
+      result = desaturate( result, satFraction );
       result.nscale8( brightness );
       return result;
    }
@@ -88,11 +155,11 @@ class SpeedStripesShow : public LightShow {
       return ( SIZEOF_LARGE_NEO - 1 ) * ( 1.0f - frac );
    }
 
-   void renderSide( int backCornerIdx, int frontCornerIdx, const CRGB & clr ) {
+   void renderSide( int backCornerIdx, int frontCornerIdx, float satFraction ) {
       int direction = ( frontCornerIdx > backCornerIdx ) ? 1 : -1;
       for ( int localOffset = 0; localOffset < SIZEOF_LARGE_NEO; ++localOffset ) {
          int idx = backCornerIdx + direction * localOffset;
-         carpet->ropeLeds[ idx ] = sampleWave( (float)localOffset + scrollOffset_, stripeWidth_ * 2.0f, clr );
+         carpet->ropeLeds[ idx ] = sampleWave( (float)localOffset + scrollOffset_, stripeWidth_ * 2.0f, satFraction );
          carpet->ropeLeds[ idx ].w = 0;
       }
    }
@@ -148,23 +215,37 @@ class SpeedStripesShow : public LightShow {
       }
    }
 
+   // ropeAngleDeg()/chinaAngleDeg() are pure geometry -- fixed for the whole
+   // show, independent of time or speed -- but renderSpin() needs the rope
+   // one for all 1016 LEDs every frame. Calling atan2f() that often (1016x/
+   // frame) on the Due's FPU-less Cortex-M3 was expensive enough to be
+   // noticeable elsewhere in the system (see sampleWave()'s comment), so
+   // it's computed once here, in start(), and cached instead.
+   float ropeAngleCache_[ NUM_NEO_LEDS_ACTUAL ];
+   float chinaAngleCache_[ NUM_CHINA_LEDS ];
+
+   void cacheAngles() {
+      for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) ropeAngleCache_[ i ] = ropeAngleDeg( i );
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) chinaAngleCache_[ i ] = chinaAngleDeg( i );
+   }
+
    // stopped-mode render: the same 4-band pattern, spun clockwise around the
    // carpet's true center at rotationPhaseDeg_'s current phase. Every rope
    // LED (the full loop, unlike the moving mode which leaves the front/back
    // edges off), every megabar, and every china fixture samples the wave at
    // its own true angular position -- minus the phase, so increasing phase
    // moves the pattern toward increasing angle, i.e. clockwise.
-   void renderSpin( const CRGB & clr ) {
+   void renderSpin( float satFraction ) {
       static const float period = 180.0f; // 2 bands (90 deg each) per half-turn, 4 total per full turn
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-         carpet->ropeLeds[ i ] = sampleWave( ropeAngleDeg( i ) - rotationPhaseDeg_, period, clr );
+         carpet->ropeLeds[ i ] = sampleWave( ropeAngleCache_[ i ] - rotationPhaseDeg_, period, satFraction );
          carpet->ropeLeds[ i ].w = 0;
       }
       for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
-         carpet->megabarLeds[ i ] = sampleWave( (float)( i * 30 ) - rotationPhaseDeg_, period, clr );
+         carpet->megabarLeds[ i ] = sampleWave( (float)( i * 30 ) - rotationPhaseDeg_, period, satFraction );
       }
       for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
-         carpet->chinaLeds[ i ] = sampleWave( chinaAngleDeg( i ) - rotationPhaseDeg_, period, clr );
+         carpet->chinaLeds[ i ] = sampleWave( chinaAngleCache_[ i ] - rotationPhaseDeg_, period, satFraction );
          carpet->chinaLeds[ i ].w = 0;
       }
    }
@@ -179,17 +260,20 @@ class SpeedStripesShow : public LightShow {
       carpet->clearChinas();
       scrollOffset_ = 0.0f;
       rotationPhaseDeg_ = 0.0f;
-      lastUpdateMillis_ = 0;
+      frameTimer_.reset();
+      regeneratePalette();
+      static const uint32_t REGEN_MS = 20000;
+      paletteRegenTimer_.set( REGEN_MS );
+      cacheAngles(); // one-time cost per activation, not per-frame -- see cacheAngles()'s comment
    }
 
    void update( uint32_t time ) {
-      if ( lastUpdateMillis_ == 0 ) lastUpdateMillis_ = time;
-      float dtSec = (float)( time - lastUpdateMillis_ ) / 1000.0f;
-      lastUpdateMillis_ = time;
+      float dtSec = (float)frameTimer_.elapsed() / 1000.0f;
+      frameTimer_.reset();
 
-      // pot picks the pattern color, same convention as NightriderShow variation 0
-      uint8_t hue = carpet->pot->read() / 4;
-      CRGB clr = CHSV( hue, 255, 255 );
+      if ( paletteRegenTimer_.expireset() ) regeneratePalette();
+      // computed once per frame, not per-LED -- see sampleWave()'s comment
+      float satFraction = currentSatFraction( time );
 
       // "stopped": speed is 0, or SpeedLink hasn't heard from the vehicle in
       // over 4 seconds (its own staleness threshold, not the 2s default)
@@ -201,7 +285,7 @@ class SpeedStripesShow : public LightShow {
          static const float DEG_PER_SEC = 90.0f; // 0.25Hz = 1 revolution / 4s = 90 deg/s
          rotationPhaseDeg_ += DEG_PER_SEC * dtSec;
          while ( rotationPhaseDeg_ >= 360.0f ) rotationPhaseDeg_ -= 360.0f;
-         renderSpin( clr );
+         renderSpin( satFraction );
          return;
       }
 
@@ -217,9 +301,9 @@ class SpeedStripesShow : public LightShow {
       }
 
       // right side: back corner near SIZEOF_SMALL_NEO+SIZEOF_LARGE_NEO, front corner near SIZEOF_SMALL_NEO
-      renderSide( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO - 1, SIZEOF_SMALL_NEO, clr );
+      renderSide( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO - 1, SIZEOF_SMALL_NEO, satFraction );
       // left side: back corner near SIZEOF_SMALL_NEO*2+SIZEOF_LARGE_NEO, front corner at the far end of the array
-      renderSide( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO, NUM_NEO_LEDS_ACTUAL - 1, clr );
+      renderSide( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO, NUM_NEO_LEDS_ACTUAL - 1, satFraction );
 
       carpet->clearMegabars();
       carpet->clearChinas();
@@ -229,20 +313,20 @@ class SpeedStripesShow : public LightShow {
       static const float EDGE_APPROACH_FT = 1.0f; // china "about 1ft from edge" pickup point
 
       // front: megabars preview a stripe-width (4ft) out; china pick it up right at the 1ft mark
-      CRGB frontLeadClr = sampleWave( ( SIZEOF_LARGE_NEO - 1 ) + stripeWidth_ + scrollOffset_, period, clr );
+      CRGB frontLeadClr = sampleWave( ( SIZEOF_LARGE_NEO - 1 ) + stripeWidth_ + scrollOffset_, period, satFraction );
       carpet->megabarLeds[ 11 ] = frontLeadClr;
       carpet->megabarLeds[ 0 ]  = frontLeadClr; // headlight -- brightness still governed separately, see MagicCarpet
       carpet->megabarLeds[ 1 ]  = frontLeadClr;
-      CRGB frontEdgeClr = sampleWave( ( SIZEOF_LARGE_NEO - 1 ) + LEDS_PER_FOOT * EDGE_APPROACH_FT + scrollOffset_, period, clr );
+      CRGB frontEdgeClr = sampleWave( ( SIZEOF_LARGE_NEO - 1 ) + LEDS_PER_FOOT * EDGE_APPROACH_FT + scrollOffset_, period, satFraction );
       carpet->chinaLeds[ 1 ] = frontEdgeClr; carpet->chinaLeds[ 1 ].w = 0;
       carpet->chinaLeds[ 2 ] = frontEdgeClr; carpet->chinaLeds[ 2 ].w = 0;
 
       // rear: mirror of the above, behind the back corner
-      CRGB rearLeadClr = sampleWave( -(float)stripeWidth_ + scrollOffset_, period, clr );
+      CRGB rearLeadClr = sampleWave( -(float)stripeWidth_ + scrollOffset_, period, satFraction );
       carpet->megabarLeds[ 5 ] = rearLeadClr;
       carpet->megabarLeds[ 6 ] = rearLeadClr;
       carpet->megabarLeds[ 7 ] = rearLeadClr;
-      CRGB rearEdgeClr = sampleWave( -LEDS_PER_FOOT * EDGE_APPROACH_FT + scrollOffset_, period, clr );
+      CRGB rearEdgeClr = sampleWave( -LEDS_PER_FOOT * EDGE_APPROACH_FT + scrollOffset_, period, satFraction );
       carpet->chinaLeds[ 5 ] = rearEdgeClr; carpet->chinaLeds[ 5 ].w = 0;
       carpet->chinaLeds[ 6 ] = rearEdgeClr; carpet->chinaLeds[ 6 ].w = 0;
 
@@ -250,9 +334,9 @@ class SpeedStripesShow : public LightShow {
       float pos13 = localOffsetForFracBackFromFront( 1.0f / 3.0f ) + scrollOffset_;
       float pos12 = localOffsetForFracBackFromFront( 0.5f ) + scrollOffset_;
       float pos23 = localOffsetForFracBackFromFront( 2.0f / 3.0f ) + scrollOffset_;
-      CRGB clr13 = sampleWave( pos13, period, clr );
-      CRGB clr12 = sampleWave( pos12, period, clr );
-      CRGB clr23 = sampleWave( pos23, period, clr );
+      CRGB clr13 = sampleWave( pos13, period, satFraction );
+      CRGB clr12 = sampleWave( pos12, period, satFraction );
+      CRGB clr23 = sampleWave( pos23, period, satFraction );
 
       // side china: front one on each side at 1/3 back from front, rear one at 2/3
       carpet->chinaLeds[ 0 ] = clr13; carpet->chinaLeds[ 0 ].w = 0; // front-right, right edge

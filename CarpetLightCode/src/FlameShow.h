@@ -31,11 +31,57 @@ class FlameShow : public LightShow {
    // TODO: tune this
    static const uint8_t baseCoolingRate = 10;
    static const uint8_t baseSparkingRate = 15; // maybe set this based on music?
-   static const uint8_t numModes_ = 2;
+   static const uint8_t numModes_ = 4;
+
+   // variations 2/3 ("shifting hues" / "hue to white"): smoothly ramps
+   // toward a freshly-randomized target every ~0.8-1.2s rather than jumping
+   // -- same technique as LighthouseShow's beam hue rate, duplicated here
+   // rather than shared (this codebase's convention: small per-show
+   // helpers, not a shared header). Built on Timer rather than raw
+   // millis()-diffing.
+   struct RandomWalk {
+      float rampStart = 0.0f;
+      float rampTarget = 0.0f;
+      Timer tickTimer;
+      bool initialized = false;
+
+      float value( float minVal, float maxVal, float maxStep ) {
+         if ( !initialized ) {
+            initialized = true;
+            tickTimer.set( 800 + random( 400 ) );
+            rampStart = rampTarget = minVal + ( maxVal - minVal ) * 0.5f;
+         }
+         if ( tickTimer.expired() ) {
+            rampStart = rampTarget;
+            float step = ( (float)random( -1000, 1001 ) / 1000.0f ) * maxStep;
+            rampTarget = constrain( rampStart + step, minVal, maxVal );
+            tickTimer.set( 800 + random( 400 ) );
+         }
+         float frac = (float)tickTimer.elapsed() / (float)tickTimer.timeout();
+         if ( frac > 1.0f ) frac = 1.0f;
+         return rampStart + ( rampTarget - rampStart ) * frac;
+      }
+   };
+   RandomWalk hueRateWalk_;
+   float shiftHue_ = 0.0f;   // 0-255, only ever increases (same "always one direction" rule as Lighthouse)
+   Timer hueFrameTimer_;     // tracks dt between update() calls for the hue drift
+   CRGBPalette16 shiftingPalette_;  // rebuilt once per update() call, not per-LED -- see paletteColor()
 
    uint8_t currTemperature[ NUM_NEO_LEDS_ACTUAL ] = { 0 };
    uint8_t prevTemperature[ NUM_NEO_LEDS_ACTUAL ] = { 0 };
    uint8_t mode_;
+
+   // floodlight sparkle: china is treated as equivalent to megabars (same
+   // treatment for both), per request. Independent per-fixture "heat" that
+   // cools every cycle and gets exactly 2 fresh random sparks per cycle,
+   // same cooling rate (so pulses last the same "width"/duration) and same
+   // cycle cadence as the rope's own cool/spark step below (so pulse
+   // frequency matches the rope's, which is the pot-adjustable delay() at
+   // the bottom of update()). Rendered as a blend on top of the existing
+   // audio-tinted dmxclr fill, using heat itself as the blend fraction, so
+   // a spark rises and fades smoothly rather than snapping on/off.
+   uint8_t megabarHeat[ NUM_MEGABAR_LEDS ] = { 0 };
+   uint8_t chinaHeat[ NUM_CHINA_LEDS ] = { 0 };
 
  public:
 
@@ -44,6 +90,28 @@ class FlameShow : public LightShow {
 
    uint8_t variation() {
       return mode_;
+   }
+
+   const char * variationName() {
+      if ( mode_ == 0 ) return "waterflames";
+      if ( mode_ == 1 ) return "flames";
+      if ( mode_ == 2 ) return "shifting hues";
+      return "hue to white";
+   }
+
+   // mode_==0/1 use the fixed 256-entry palettes above. mode_==2/3 use
+   // shiftingPalette_ (full saturation, fixed -- "as it is now"), rebuilt
+   // once per update() call in update() itself, not here, so this stays
+   // cheap to call per-LED:
+   //   mode_==2: a 4-stop dark->bright glow all sharing one
+   //             continuously-drifting hue.
+   //   mode_==3: the same continuously-drifting hue at one end, fading to
+   //             fixed white at the other -- "one color travels the hue
+   //             spectrum... the other is always white".
+   CRGB paletteColor( uint8_t index ) {
+      if ( mode_ == 0 ) return ColorFromPalette( waterflames, index );
+      if ( mode_ == 1 ) return ColorFromPalette( flames, index );
+      return ColorFromPalette( shiftingPalette_, index );
    }
 
    void start() {
@@ -65,7 +133,33 @@ class FlameShow : public LightShow {
       }
 
 
+      // read once, reused below both for the sparkle-cycle delay (as
+      // before) AND to scale variations 2/3's max hue rate (new) -- the pot
+      // does both jobs at once, per request
       uint16_t potval = scaleTo255( carpet->pot->read(), 1023, 0 );
+
+      // variations 2/3's hue drift -- advances every call (not just
+      // rate-gated fire-sim cycles) so it stays smooth regardless of the
+      // sparkle cadence. Pot scales the max rate: fully down -> 50% of the
+      // base max, fully up -> 100% -- direction and the random-walk
+      // mechanism are unchanged, just the ceiling it wanders within.
+      float hueDtSec = (float)hueFrameTimer_.elapsed() / 1000.0f;
+      hueFrameTimer_.reset();
+      static const float BASE_MAX_HUE_RATE = 255.0f / 20.0f; // full spectrum in as little as 20s, same as LighthouseShow
+      float potFrac = potval / 255.0f; // 0..1
+      float maxHueRate = BASE_MAX_HUE_RATE * ( 0.5f + 0.5f * potFrac );
+      float hueRate = hueRateWalk_.value( 0.0f, maxHueRate, maxHueRate * 0.1f ); // never negative -- always one direction
+      shiftHue_ += hueRate * hueDtSec;
+      while ( shiftHue_ >= 256.0f ) shiftHue_ -= 256.0f;
+      uint8_t shiftHueByte = (uint8_t)shiftHue_;
+      if ( mode_ == 3 ) {
+         // one color (the drifting hue) fading to the other (fixed white)
+         CRGB driftClr = CHSV( shiftHueByte, 255, 255 );
+         shiftingPalette_ = CRGBPalette16( driftClr, driftClr, CRGB::White, CRGB::White );
+      } else {
+         shiftingPalette_ = CRGBPalette16( CHSV( shiftHueByte, 255, 60 ), CHSV( shiftHueByte, 255, 140 ),
+                                           CHSV( shiftHueByte, 255, 220 ), CHSV( shiftHueByte, 255, 255 ) );
+      }
 
       // uint8_t coolingRate = baseCoolingRate + potval;
       // uint8_t sparkingRate = baseSparkingRate + potval;
@@ -99,13 +193,30 @@ class FlameShow : public LightShow {
             }
          }
 
+         // floodlight sparkle (see the class member comment): same cooling
+         // rate as the rope, same cadence (this whole block). Spark count is
+         // proportional, not fixed: the fraction of floodlights sparkling
+         // per cycle equals the fraction of rope LEDs sparkling per cycle
+         // (sparkingRate/255, the same per-LED probability used just above),
+         // applied to each fixture count and rounded to the nearest whole
+         // fixture -- floods are still chosen at random.
+         for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) megabarHeat[ i ] = qsub8( megabarHeat[ i ], coolingRate );
+         for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) chinaHeat[ i ] = qsub8( chinaHeat[ i ], coolingRate );
+         float sparkFraction = (float)sparkingRate / 255.0f;
+         int megabarSparkCount = (int)( NUM_MEGABAR_LEDS * sparkFraction + 0.5f );
+         int chinaSparkCount = (int)( NUM_CHINA_LEDS * sparkFraction + 0.5f );
+         for ( int s = 0; s < megabarSparkCount; ++s ) {
+            uint8_t idx = random8( NUM_MEGABAR_LEDS );
+            megabarHeat[ idx ] = qadd8( megabarHeat[ idx ], random8( 160, 255 ) );
+         }
+         for ( int s = 0; s < chinaSparkCount; ++s ) {
+            uint8_t idx = random8( NUM_CHINA_LEDS );
+            chinaHeat[ idx ] = qadd8( chinaHeat[ idx ], random8( 160, 255 ) );
+         }
+
          // assign color
          for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-            if ( mode_ ) {
-               carpet->ropeLeds[ i ] = ColorFromPalette( flames, currTemperature[ i ] );
-            } else {
-               carpet->ropeLeds[ i ] = ColorFromPalette( waterflames, currTemperature[ i ] );
-            }
+            carpet->ropeLeds[ i ] = paletteColor( currTemperature[ i ] );
          }
 
          // store prev color for next round
@@ -134,15 +245,27 @@ class FlameShow : public LightShow {
 
       int dmxval = AudioBoard::getLow();
       //Serial.println( dmxval );
-      CRGB dmxclr;
-      if ( mode_ ) {
-         dmxclr = ColorFromPalette( flames, dmxval );
-      } else {
-         dmxclr = ColorFromPalette( waterflames, dmxval );
-      }
+      CRGB dmxclr = paletteColor( dmxval );
       LedUtil::gammaCorrect( dmxclr );
       LedUtil::fill( carpet->megabarLeds, dmxclr, NUM_MEGABAR_LEDS );
       LedUtil::fill( carpet->chinaLeds, dmxclr, NUM_CHINA_LEDS );
+
+      // floodlight sparkle: blend each fixture's spark color on top of the
+      // audio-tinted base, using heat itself as the blend fraction -- 0
+      // stays the base color, 255 is a fully bright spark, so a pulse rises
+      // and fades smoothly instead of snapping on/off. Same color source
+      // (the active palette) and same gamma correction as the base, for
+      // consistency -- see the megabarHeat_/chinaHeat_ member comment.
+      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
+         CRGB sparkClr = paletteColor( megabarHeat[ i ] );
+         LedUtil::gammaCorrect( sparkClr );
+         carpet->megabarLeds[ i ] = blend( carpet->megabarLeds[ i ], sparkClr, megabarHeat[ i ] );
+      }
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
+         CRGB sparkClr = paletteColor( chinaHeat[ i ] );
+         LedUtil::gammaCorrect( sparkClr );
+         carpet->chinaLeds[ i ] = blend( (CRGB)carpet->chinaLeds[ i ], sparkClr, chinaHeat[ i ] );
+      }
 
       // use this instead of the rate
       delay( potval );

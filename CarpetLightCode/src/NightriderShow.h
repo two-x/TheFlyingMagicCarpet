@@ -46,6 +46,10 @@ class NightriderShow : public LightShow {
       return variation_;
    }
 
+   const char * variationName() {
+      return variation_ == 0 ? "manual hue" : "auto hue cycle";
+   }
+
    void start() {
       for ( int i = NEO3_OFFSET; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          carpet->ropeLeds[ i ] = CRGB::Black;

@@ -49,15 +49,16 @@ class EqualizerShow : public LightShow {
    // by a double press while this show is active (see CarpetLightLogic.cpp)
    bool strobeEnabled_;
    bool strobeActive_ = false;
-   uint32_t strobeStartMillis_ = 0;
+   Timer strobeTimer_;
    int lastBassForTrigger_ = 0;
 
    // hit-suppression state: once a hit strobes, its level is remembered, and
    // any further hit that doesn't exceed it is suppressed as long as it's
-   // within 5s of the last qualifying hit (strobed or suppressed) -- a gap of
-   // 5s with no hits at all clears this, so the next hit always strobes
+   // within 3s of the last qualifying hit (strobed or suppressed) -- a gap of
+   // 3s with no hits at all clears this, so the next hit always strobes
    // fresh, regardless of level. See updateStrobe().
-   uint32_t lastHitMillis_ = 0; // 0 = no hit seen yet
+   bool hadHit_ = false;     // Timer has no "unset" state of its own
+   Timer lastHitTimer_;      // timeout armed to SILENCE_RESET_MS on the first hit
    int suppressionPeak_ = 0;
 
  public:
@@ -66,6 +67,10 @@ class EqualizerShow : public LightShow {
 
    uint8_t variation() {
       return variation_;
+   }
+
+   const char * variationName() {
+      return variation_ == 0 ? "chase" : "VU meter";
    }
 
    bool getStrobeEnabled() {
@@ -465,21 +470,22 @@ class EqualizerShow : public LightShow {
 
       if ( isHit ) {
          static const uint32_t SILENCE_RESET_MS = 3000;
-         bool silenceExpired = ( lastHitMillis_ == 0 ) || ( time - lastHitMillis_ > SILENCE_RESET_MS );
+         bool silenceExpired = !hadHit_ || lastHitTimer_.elapsed( SILENCE_RESET_MS );
          bool exceedsPeak = bassRaw > suppressionPeak_;
          if ( !strobeActive_ && ( silenceExpired || exceedsPeak ) ) {
             strobeActive_ = true;
-            strobeStartMillis_ = time;
+            strobeTimer_.reset();
             suppressionPeak_ = bassRaw;
          }
-         lastHitMillis_ = time;
+         hadHit_ = true;
+         lastHitTimer_.reset();
       }
 
       if ( !strobeActive_ ) return;
 
       static const uint32_t onMs = 30, gapMs = 20;
       static const uint32_t pulseStart[3] = { 0, onMs + gapMs, 2 * ( onMs + gapMs ) };
-      uint32_t elapsed = time - strobeStartMillis_;
+      uint32_t elapsed = strobeTimer_.elapsed();
       if ( elapsed >= pulseStart[ 2 ] + onMs ) {
          strobeActive_ = false; // sequence finished -- this frame renders normally
          return;

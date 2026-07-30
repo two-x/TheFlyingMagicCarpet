@@ -16,16 +16,17 @@
 #include "NightriderShow.h"
 #include "BumpingAudioShow.h"
 #include "SpeedStripesShow.h"
+#include "LighthouseShow.h"
 
 // The Flying Magic Carpet (TM)
 MagicCarpet * carpet;
 
 LightShow * currLightShow;
 
-static const uint8_t numModes = 4;
+static const uint8_t numModes = 5;
 static uint8_t currMode = 0;
 static uint8_t prevMode = currMode;
-static uint8_t currVariation[ numModes ] = { 0, 0, 0, 0 };
+static uint8_t currVariation[ numModes ] = { 0, 0, 0, 0, 0 };
 static bool lightsOn = true; // always boots on; toggled by an extra-long press
 static bool blacklightOn = false; // always boots off; toggled by a double press in ModeShow -- not persisted, same as lightsOn
 
@@ -155,6 +156,8 @@ LightShow * makeShow( uint8_t mode, uint8_t variation ) {
          return new EqualizerShow( carpet, variation, Nvm::loadedEqualizerStrobeEnabled() );
       case 3:
          return new SpeedStripesShow( carpet, variation );
+      case 4:
+         return new LighthouseShow( carpet, variation );
       default:
          // we fucked up, just reset
          // carpet->error(); // uncomment for debugging
@@ -168,6 +171,7 @@ const char * showName( uint8_t mode ) {
       case 1:  return "Flame";
       case 2:  return "Equalizer";
       case 3:  return "SpeedStripes";
+      case 4:  return "Lighthouse";
       default: return "?";
    }
 }
@@ -400,6 +404,7 @@ void loop() {
          currLightShow = makeShow( currMode, currVariation[ currMode ] );
          currLightShow->start();
          prevMode = currMode;
+         Serial.print( "Show: " ); Serial.println( showName( currMode ) ); // short, human-readable, on selection
       }
 
       // low-power pot simulation only applies here, never during config
@@ -413,6 +418,7 @@ void loop() {
       if ( variation != currVariation[ currMode ] ) {
          currVariation[ currMode ] = variation;
          Nvm::saveVariation( currMode, variation );
+         Serial.print( showName( currMode ) ); Serial.print( ": " ); Serial.println( currLightShow->variationName() );
       }
 
       carpet->applyBrightnessCeiling();

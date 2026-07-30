@@ -19,6 +19,8 @@
 #include <FastLED.h>
 #endif
 
+#include "Utilities.h"
+
 // Units are in timer ticks. 
 #define DMX_BRKTIME       (100)       // Time to hold serial in break before mark
 #define DMX_MARKTIME      (25)         // Time to hold serial in mark after break
@@ -49,9 +51,8 @@ void dmx_init(size_t buflen) {
 
 void dmx_send(uint8_t *buf) {
   static const uint32_t minResetTime = 2;
-  static uint32_t timeSinceLastSend = 0;
-  while ( millis() - timeSinceLastSend < minResetTime );
-  timeSinceLastSend = millis();
+  static Timer sendTimer( minResetTime );
+  while ( !sendTimer.expireset() ); // spin until minResetTime has passed since the last send, then reset
   _dmx_buf[0] = 0;
   memcpy(_dmx_buf+1, buf, dmx_buflen);
   DMX_UART->US_CR |= US_CR_STTBRK;   // Start break

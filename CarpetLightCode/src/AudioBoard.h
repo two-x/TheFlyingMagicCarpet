@@ -300,7 +300,7 @@ class AudioBoard {
    static float noiseFloorPercent_; // 0-100
 
    static float emaAverage_;
-   static uint32_t lastPollTime_;
+   static Timer pollTimer_; // tracks dt between updateAutoGainAndSilence() calls
    static Timer silenceTimer_; // time spent continuously below the noise floor
    static bool silent_;
 
@@ -330,8 +330,8 @@ class AudioBoard {
 
       // rolling average via EMA, tuned for a ~4s time constant regardless of
       // the actual (slightly variable) interval between polls
-      uint32_t dt = ( lastPollTime_ == 0 ) ? 30 : ( nowMs - lastPollTime_ );
-      lastPollTime_ = nowMs;
+      uint32_t dt = pollTimer_.elapsed();
+      pollTimer_.reset();
       float alpha = (float)dt / ( (float)PEAK_WINDOW_MS + (float)dt );
       emaAverage_ = emaAverage_ + alpha * ( (float)raw - emaAverage_ );
 
@@ -446,7 +446,7 @@ uint8_t AudioBoard::rollingPeak_ = 0;
 bool AudioBoard::autoGainEnabled_ = false;
 float AudioBoard::noiseFloorPercent_ = 0.0f;
 float AudioBoard::emaAverage_ = 0.0f;
-uint32_t AudioBoard::lastPollTime_ = 0;
+Timer AudioBoard::pollTimer_;
 Timer AudioBoard::silenceTimer_;
 bool AudioBoard::silent_ = false;
 

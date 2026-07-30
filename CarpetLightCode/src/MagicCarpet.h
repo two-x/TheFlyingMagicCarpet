@@ -131,11 +131,11 @@ class MagicCarpet {
    // which for flashRope()'s multi-flash sequences (up to ~460ms) is long
    // enough to drop part of a rapid follow-up double-press.
    void delayPolling( uint32_t ms ) {
-      uint32_t start = millis();
+      Timer waitTimer( ms );
       do {
          encoder->button.update();
          delay( 1 );
-      } while ( millis() - start < ms );
+      } while ( !waitTimer.expired() );
    }
 
  public:
