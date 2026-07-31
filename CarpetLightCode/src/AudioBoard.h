@@ -36,9 +36,13 @@
 inline int scale( int x ) { return ( ( 255 * x ) / 1023 ); }
 inline uint8_t rawToPercent( uint8_t raw ) { return (uint8_t)( ( (uint16_t)raw * 100 + 127 ) / 255 ); }
 
-// which of the 3 curated bands a getter call is asking about -- see
-// AudioBoard's raw/normal/hit getters below.
-enum AudioBand { BandLow, BandMid, BandHigh };
+// which band a getter call is asking about -- see AudioBoard's raw/normal/
+// hit getters below. BandFull is the overall full-spectrum signal (max of
+// all 7 raw hardware bins, same source as the older getFullSpectrum()), not
+// one of the 3 curated VU-meter bins -- it's also every getter's default
+// when called with no argument at all.
+enum AudioBand { BandLow, BandMid, BandHigh, BandFull };
+static const uint8_t NUM_AUDIO_BANDS = 4;
 
 class AudioBoard {
  public:
@@ -85,9 +89,9 @@ class AudioBoard {
    //             that would affect how accurately raw/normal track the
    //             true instantaneous level at a given poll rate, but not
    //             hit's own decay timing, which never looks at poll count.)
-   static uint8_t rawLevel_[ 3 ];
-   static uint8_t normalLevel_[ 3 ];
-   static float hitLevel_[ 3 ]; // float for sub-integer decay precision; read back rounded
+   static uint8_t rawLevel_[ NUM_AUDIO_BANDS ];
+   static uint8_t normalLevel_[ NUM_AUDIO_BANDS ];
+   static float hitLevel_[ NUM_AUDIO_BANDS ]; // float for sub-integer decay precision; read back rounded
    static float hitDecayMs_;    // ms to decay from 255 to 0, adjustable + persisted, default 300
    static Timer hitTimer_;      // tracks dt between updateHitTracking() calls
 
@@ -100,16 +104,16 @@ class AudioBoard {
    // erroneously report as "just happened" much later, whenever the caller
    // finally does poll it.
    static const uint32_t NEW_HIT_TIMEOUT_MS = 1000;
-   static bool hitWasAbove_[ 3 ];
-   static bool newHitPending_[ 3 ];
-   static Timer newHitPendingTimer_[ 3 ];
+   static bool hitWasAbove_[ NUM_AUDIO_BANDS ];
+   static bool newHitPending_[ NUM_AUDIO_BANDS ];
+   static Timer newHitPendingTimer_[ NUM_AUDIO_BANDS ];
 
    static void updateHitTracking() {
       uint32_t dtMs = hitTimer_.elapsed();
       hitTimer_.reset();
       uint8_t peakRaw = getPeakThresholdRaw();
       float decayAmount = ( 255.0f / hitDecayMs_ ) * (float)dtMs;
-      for ( int b = 0; b < 3; ++b ) {
+      for ( int b = 0; b < NUM_AUDIO_BANDS; ++b ) {
          bool isAbove = normalLevel_[ b ] >= peakRaw;
          if ( isAbove ) {
             hitLevel_[ b ] = normalLevel_[ b ];
@@ -132,19 +136,46 @@ class AudioBoard {
    // the last time this same function was called, false otherwise -- a
    // one-shot, consumed-on-read edge trigger (same "ask once, get it once"
    // convention as Button::shortpress()/etc.), not a level test.
-   static bool newHit( AudioBand band ) { bool v = newHitPending_[ band ]; newHitPending_[ band ] = false; return v; }
+   // band defaults to BandFull (the overall spectrum) when called with no argument
+   static bool newHit( AudioBand band = BandFull ) { bool v = newHitPending_[ band ]; newHitPending_[ band ] = false; return v; }
 
-   static uint8_t getRawPercent( AudioBand band ) { return rawToPercent( rawLevel_[ band ] ); }
-   static bool getRawNonzero( AudioBand band ) { return rawLevel_[ band ] > 0; }
-   static uint8_t getNormalPercent( AudioBand band ) { return rawToPercent( normalLevel_[ band ] ); }
-   static bool getNormalNonzero( AudioBand band ) { return normalLevel_[ band ] > 0; }
-   static uint8_t getHitPercent( AudioBand band ) { return rawToPercent( (uint8_t)( hitLevel_[ band ] + 0.5f ) ); }
+   static uint8_t getRawPercent( AudioBand band = BandFull ) { return rawToPercent( rawLevel_[ band ] ); }
+   static bool getRawNonzero( AudioBand band = BandFull ) { return rawLevel_[ band ] > 0; }
+   static uint8_t getNormalPercent( AudioBand band = BandFull ) { return rawToPercent( normalLevel_[ band ] ); }
+   static bool getNormalNonzero( AudioBand band = BandFull ) { return normalLevel_[ band ] > 0; }
+   static uint8_t getHitPercent( AudioBand band = BandFull ) { return rawToPercent( (uint8_t)( hitLevel_[ band ] + 0.5f ) ); }
    // true whenever this band's hit level is currently above the live peak
    // threshold, false otherwise -- NOT a plain nonzero test (hit stays
    // nonzero throughout its whole decay tail after dropping back below
    // threshold, which shouldn't still read as "a hit" once it's decayed
    // past the same crossing point everything else here uses).
-   static bool getHitNonzero( AudioBand band ) { return hitLevel_[ band ] > getPeakThresholdRaw(); }
+   static bool getHitNonzero( AudioBand band = BandFull ) { return hitLevel_[ band ] > getPeakThresholdRaw(); }
+
+   // RMS ("root mean square") combination of all 7 raw hardware bins -- an
+   // alternative "how loud overall" reading to BandFull's max-of-7 (which
+   // tracks whichever single band is loudest right now, favoring
+   // transients). RMS instead represents overall acoustic energy across the
+   // whole spectrum: broadband/noisy sound reads louder here than a single
+   // narrow tone at the same peak, which max() alone can't distinguish.
+   // Deliberately NOT polled/tracked every frame like raw/normal/hit above
+   // -- sqrtf() is real cost on this FPU-less board, so it's only computed
+   // fresh from Frequencies_Mono[] the instant one of these is actually
+   // called, not paid for on every poll whether anyone's asking or not.
+   static uint8_t getRmsPercent() {
+      uint32_t sumSquares = 0;
+      for ( int i = 0; i < 7; ++i ) {
+         uint8_t v = (uint8_t)scale( Frequencies_Mono[ i ] );
+         sumSquares += (uint32_t)v * (uint32_t)v;
+      }
+      float rms = sqrtf( (float)sumSquares / 7.0f );
+      return rawToPercent( (uint8_t)( rms + 0.5f ) );
+   }
+   static bool getRmsNonzero() {
+      for ( int i = 0; i < 7; ++i ) {
+         if ( Frequencies_Mono[ i ] > 0 ) return true;
+      }
+      return false;
+   }
 
    // adjustable range is 0ms (instant decay) to 1000ms (1 full second) --
    // per request, set live via the Audio config screen's decay-rate
@@ -154,6 +185,11 @@ class AudioBoard {
    // update, i.e. genuinely instant decay, no divide-by-zero fault.
    static void setHitDecayMs( float ms ) { hitDecayMs_ = constrain( ms, 0.0f, 1000.0f ); }
    static float getHitDecayMs() { return hitDecayMs_; }
+
+   // 0-1000ms, adjustable + persisted, default 0 (freshest sample, maximal
+   // "predictive" lead) -- see the foresight block above for what this does.
+   static void setAudioForesightMs( float ms ) { audioForesightMs_ = constrain( ms, 0.0f, (float)FORESIGHT_BUFFER_MS ); }
+   static float getAudioForesightMs() { return audioForesightMs_; }
 
    static void Read_Frequencies(){
       //Read frequencies for each band
@@ -428,6 +464,65 @@ class AudioBoard {
       return (uint8_t)scale( maxVal );
    }
 
+   // --- audio foresight ---
+   //
+   // The MSGEQ7/DSP pipeline "sees" a waveform before that same sound
+   // actually reaches the speakers -- audioForesightMs_ is how many
+   // milliseconds ahead of the audible output our reading currently is.
+   // Every band's raw sample is buffered into a short per-band ring buffer
+   // (history, timestamped) as it's measured; what pollFrequencies() then
+   // exposes as rawLevel_[band] is looked up from that history at
+   // "now - audioForesightMs_" rather than the just-measured value directly
+   // -- i.e. holding our own reaction back so it lines up with when the
+   // sound is actually heard, instead of reacting the instant we merely see
+   // it. Default 0ms (use the freshest sample) keeps the natural "lights
+   // react slightly before the beat is heard" effect that comes for free
+   // from the DSP's own inherent look-ahead; dialing foresight UP trades
+   // that predictive lead away for tighter sync with the true acoustic
+   // output. Only the exposed raw/normal/hit values are delayed this way --
+   // updateAutoGainAndSilence()'s own internal AGC/silence tracking
+   // (rollingPeak_/emaAverage_/silent_ above) deliberately keeps working off
+   // the true instantaneous signal, since that's a control loop, not
+   // something a person perceives directly, and delaying it too would just
+   // add unnecessary lag to the gain/silence response.
+   static const uint16_t FORESIGHT_BUFFER_MS = 1000; // must cover the full 0-1000ms adjustable range
+   static const uint8_t FORESIGHT_BUFFER_SIZE = 50; // ~1s of samples at the ~30ms poll rate, with margin (same convention as PEAK_BUFFER_SIZE)
+   static uint8_t rawHistory_[ NUM_AUDIO_BANDS ][ FORESIGHT_BUFFER_SIZE ]; // band-major; all 4 bands share one timestamp array below since they're always sampled together
+   static uint32_t historyTimestamps_[ FORESIGHT_BUFFER_SIZE ];
+   static uint8_t historyHead_;
+   static uint8_t historyCount_;
+   static float audioForesightMs_; // 0-1000, adjustable + persisted, default 0
+
+   // pushes this poll's just-measured raw samples (one per band) into the
+   // ring buffer
+   static void pushRawHistory( uint8_t freshLow, uint8_t freshMid, uint8_t freshHigh, uint8_t freshFull, uint32_t nowMs ) {
+      rawHistory_[ BandLow ][ historyHead_ ] = freshLow;
+      rawHistory_[ BandMid ][ historyHead_ ] = freshMid;
+      rawHistory_[ BandHigh ][ historyHead_ ] = freshHigh;
+      rawHistory_[ BandFull ][ historyHead_ ] = freshFull;
+      historyTimestamps_[ historyHead_ ] = nowMs;
+      historyHead_ = ( historyHead_ + 1 ) % FORESIGHT_BUFFER_SIZE;
+      if ( historyCount_ < FORESIGHT_BUFFER_SIZE ) historyCount_++;
+   }
+
+   // returns whichever buffered sample's timestamp is closest to
+   // "nowMs - audioForesightMs_" -- a linear scan, same style as the
+   // windowed-max scan updateAutoGainAndSilence() already does over
+   // peakSamples_/peakTimestamps_ above (order within the buffer doesn't
+   // matter for either kind of scan, only which timestamp is closest/
+   // largest, so no circular-order bookkeeping is needed to read it back)
+   static uint8_t lookupDelayed( AudioBand band, uint32_t nowMs ) {
+      uint32_t targetMs = ( nowMs > (uint32_t)audioForesightMs_ ) ? ( nowMs - (uint32_t)audioForesightMs_ ) : 0;
+      uint8_t bestIdx = 0;
+      uint32_t bestDelta = 0xFFFFFFFFu;
+      for ( uint8_t i = 0; i < historyCount_; ++i ) {
+         uint32_t ts = historyTimestamps_[ i ];
+         uint32_t delta = ( ts > targetMs ) ? ( ts - targetMs ) : ( targetMs - ts );
+         if ( delta < bestDelta ) { bestDelta = delta; bestIdx = i; }
+      }
+      return rawHistory_[ band ][ bestIdx ];
+   }
+
    static void updateAutoGainAndSilence( uint32_t nowMs ) {
       uint8_t raw = rawFullSpectrum();
 
@@ -473,15 +568,26 @@ class AudioBoard {
         Clipping_Basic();
         updateAutoGainAndSilence( time );
 
-        // raw: straight from the bins, before any adjustment at all
-        rawLevel_[ BandLow ] = (uint8_t)bin_low;
-        rawLevel_[ BandMid ] = (uint8_t)bin_mid;
-        rawLevel_[ BandHigh ] = (uint8_t)bin_high;
+        // raw: straight from the bins, before any adjustment at all.
+        // BandFull is the overall spectrum (max of all 7 raw bins, same
+        // source as the older getFullSpectrum()), not one of the 3 curated
+        // bins -- computed here so it flows through the exact same
+        // silence-squelch/auto-gain/hit treatment as the other 3 bands below.
+        //
+        // Freshly-measured samples are pushed into the per-band history
+        // ring buffer, then rawLevel_[] is read back from that same history
+        // at "now - audioForesightMs_" rather than used directly -- see
+        // the foresight block above for why.
+        pushRawHistory( (uint8_t)bin_low, (uint8_t)bin_mid, (uint8_t)bin_high, rawFullSpectrum(), time );
+        rawLevel_[ BandLow ] = lookupDelayed( BandLow, time );
+        rawLevel_[ BandMid ] = lookupDelayed( BandMid, time );
+        rawLevel_[ BandHigh ] = lookupDelayed( BandHigh, time );
+        rawLevel_[ BandFull ] = lookupDelayed( BandFull, time );
 
         // normal: silence-squelched + auto-gained, same treatment
         // getFullSpectrum() already applies to the full-spectrum sum, now
-        // also applied per-band
-        for ( int b = 0; b < 3; ++b ) {
+        // also applied per-band (and to BandFull, above)
+        for ( int b = 0; b < NUM_AUDIO_BANDS; ++b ) {
            if ( silent_ ) {
               normalLevel_[ b ] = 0;
               continue;
@@ -501,7 +607,7 @@ class AudioBoard {
    // alternative to pollFrequencies() for the Audio config screen's decay-
    // rate subsetting while showing the simulated signal (see
    // updateSimulatedBand() below) instead of real audio -- feeds the same
-   // eased square wave into all 3 bands' raw/normal levels and runs it
+   // eased square wave into all 4 bands' raw/normal levels and runs it
    // through the exact same updateHitTracking() real audio uses, so hit's
    // decay behavior being tuned here is the real code path, not a separate
    // mock. Gated at the same ~30ms cadence as pollFrequencies() so the
@@ -513,8 +619,8 @@ class AudioBoard {
       if ( time - timestamp > 30 ) {
          timestamp = time;
          uint8_t simRaw = updateSimulatedBand();
-         rawLevel_[ BandLow ] = rawLevel_[ BandMid ] = rawLevel_[ BandHigh ] = simRaw;
-         normalLevel_[ BandLow ] = normalLevel_[ BandMid ] = normalLevel_[ BandHigh ] = simRaw;
+         rawLevel_[ BandLow ] = rawLevel_[ BandMid ] = rawLevel_[ BandHigh ] = rawLevel_[ BandFull ] = simRaw;
+         normalLevel_[ BandLow ] = normalLevel_[ BandMid ] = normalLevel_[ BandHigh ] = normalLevel_[ BandFull ] = simRaw;
          updateHitTracking();
       }
    }
@@ -686,14 +792,20 @@ Timer AudioBoard::pollTimer_;
 Timer AudioBoard::silenceTimer_;
 bool AudioBoard::silent_ = false;
 
-uint8_t AudioBoard::rawLevel_[ 3 ] = { 0, 0, 0 };
-uint8_t AudioBoard::normalLevel_[ 3 ] = { 0, 0, 0 };
-float AudioBoard::hitLevel_[ 3 ] = { 0.0f, 0.0f, 0.0f };
+uint8_t AudioBoard::rawLevel_[ NUM_AUDIO_BANDS ] = { 0, 0, 0, 0 };
+uint8_t AudioBoard::normalLevel_[ NUM_AUDIO_BANDS ] = { 0, 0, 0, 0 };
+float AudioBoard::hitLevel_[ NUM_AUDIO_BANDS ] = { 0.0f, 0.0f, 0.0f, 0.0f };
 float AudioBoard::hitDecayMs_ = 300.0f; // overwritten by Nvm at boot
 Timer AudioBoard::hitTimer_;
-bool AudioBoard::hitWasAbove_[ 3 ] = { false, false, false };
-bool AudioBoard::newHitPending_[ 3 ] = { false, false, false };
-Timer AudioBoard::newHitPendingTimer_[ 3 ];
+bool AudioBoard::hitWasAbove_[ NUM_AUDIO_BANDS ] = { false, false, false, false };
+bool AudioBoard::newHitPending_[ NUM_AUDIO_BANDS ] = { false, false, false, false };
+Timer AudioBoard::newHitPendingTimer_[ NUM_AUDIO_BANDS ];
+
+uint8_t AudioBoard::rawHistory_[ NUM_AUDIO_BANDS ][ AudioBoard::FORESIGHT_BUFFER_SIZE ] = { { 0 } };
+uint32_t AudioBoard::historyTimestamps_[ AudioBoard::FORESIGHT_BUFFER_SIZE ] = { 0 };
+uint8_t AudioBoard::historyHead_ = 0;
+uint8_t AudioBoard::historyCount_ = 0;
+float AudioBoard::audioForesightMs_ = 0.0f; // overwritten by Nvm at boot
 
 uint32_t AudioBoard::simPhaseMs_ = 40;
 Timer AudioBoard::simStateTimer_( 10000 );

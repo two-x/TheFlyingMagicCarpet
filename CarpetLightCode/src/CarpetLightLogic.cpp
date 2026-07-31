@@ -42,12 +42,22 @@ static AppMode appMode = ModeShow;
 // single enum type, so it stays a plain uint8_t, but each mode's own set of
 // values is named below for readability at comparison sites.
 enum BrightnessSubsetting { SubBrightnessGlobal = 0, SubBrightnessHeadlight = 1, SubBrightnessChina = 2 };
-enum AudioSubsetting { SubAudioNoiseFloor = 0, SubAudioPeakThreshold = 1, SubAudioAutoGain = 2, SubAudioHitDecay = 3 };
+// noise floor and peak threshold used to be two separate subsettings (0/1),
+// but short press had no bound meaning in either one beyond the generic
+// "cycle to next subsetting" -- merged into one subsetting, with short press
+// repurposed to toggle which of the two the pot currently targets instead
+// (same kind of subsetting-specific short-press override as SubAudioHitDecay
+// below), rather than spending a whole subsetting slot on each.
+enum AudioSubsetting { SubAudioThreshold = 0, SubAudioHitDecay = 1, SubAudioForesight = 2, SubAudioAutoGain = 3 };
 enum PowerTestSubsetting { SubPowerTestHue = 0, SubPowerTestSat = 1, SubPowerTestBrightness = 2 };
 static uint8_t configSubsetting = 0;
 static float noiseFloorPercent = 0.0f; // committed value; audio below this is "silence" -- see AudioBoard.h
 static float peakThresholdPercent = 0.0f; // committed value; audio above this is a "hit"/peak -- see AudioBoard.h
-static bool liveAutoGainEnabled = false; // live (not-yet-committed) auto-gain toggle state, Audio subsetting 2
+// which of noiseFloorPercent/peakThresholdPercent the pot currently targets
+// within SubAudioThreshold -- toggled by short press, always starts false
+// (noise floor) on a fresh visit to the subsetting (see cycleSubsetting()).
+static bool adjustingPeakThreshold = false;
+static bool liveAutoGainEnabled = false; // live (not-yet-committed) auto-gain toggle state, Audio subsetting SubAudioAutoGain
 static float committedHitDecayMs = 300.0f; // committed value; ms for a "hit" to decay from full to zero -- see AudioBoard.h
 static const float HIT_DECAY_RANGE_MS = 1000.0f; // adjustable range is 0-1000ms, per request
 // Audio subsetting 3 (decay rate): starts in simulated-signal mode every
@@ -57,6 +67,9 @@ static const float HIT_DECAY_RANGE_MS = 1000.0f; // adjustable range is 0-1000ms
 // subsetting-specific override PowerTest already establishes for encoder
 // rotation.
 static bool audioSimMode = true;
+
+static float committedAudioForesightMs = 0.0f; // committed value; how far back in time sampled audio is looked up -- see AudioBoard.h
+static const float AUDIO_FORESIGHT_RANGE_MS = 1000.0f; // adjustable range is 0-1000ms, per request
 
 // PowerTest: an HSV test color, dialed in with the encoder (rotation edits
 // whichever of hue/sat/brightness the current subsetting selects), used to
@@ -128,7 +141,11 @@ void enterConfigMode( AppMode mode ) {
 void cycleSubsetting() {
    configSubsetting = ( configSubsetting + 1 ) % numSubsettingsFor( appMode );
    resetTakeoverState();
-   if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
+   if ( appMode == ModeConfigAudio && configSubsetting == SubAudioThreshold ) {
+      // fresh visit always starts targeting noise floor -- see
+      // adjustingPeakThreshold's declaration comment
+      adjustingPeakThreshold = false;
+   } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
       // fresh visit to the decay-rate screen always starts in simulated-
       // signal mode, per request -- see audioSimMode's declaration comment
       audioSimMode = true;
@@ -181,10 +198,10 @@ const char * settingName( AppMode mode, uint8_t subsetting ) {
       return "ChinaBr";
    }
    if ( mode == ModeConfigAudio ) {
-      if ( subsetting == SubAudioNoiseFloor ) return "NoiseFl";
-      if ( subsetting == SubAudioPeakThreshold ) return "PkThresh";
+      if ( subsetting == SubAudioThreshold ) return adjustingPeakThreshold ? "PkThresh" : "NoiseFl";
       if ( subsetting == SubAudioAutoGain ) return "AGC";
-      return "HitDecay";
+      if ( subsetting == SubAudioHitDecay ) return "HitDecay";
+      return "Foresight";
    }
    if ( mode == ModeConfigPowerTest ) {
       if ( subsetting == SubPowerTestHue ) return "Hue";
@@ -213,13 +230,13 @@ void printLevelMarker( int percent ) {
 // live line, and the commit confirmation, so all 3 format it identically.
 // pad=true (live line only) right-justifies to the field's max width.
 void printSettingValue( AppMode mode, uint8_t subsetting, float livePercent, bool pad = false ) {
-   if ( mode == ModeConfigBrightness || ( mode == ModeConfigAudio && subsetting <= SubAudioPeakThreshold ) ) {
+   if ( mode == ModeConfigBrightness || ( mode == ModeConfigAudio && subsetting == SubAudioThreshold ) ) {
       int v = (int)( livePercent + 0.5f ); // 0-100
       if ( pad ) printPad3( v ); else Serial.print( v );
       Serial.print( "%" );
    } else if ( mode == ModeConfigAudio && subsetting == SubAudioAutoGain ) {
       Serial.print( liveAutoGainEnabled ? "Ena" : "Dis" ); // already fixed-width
-   } else if ( mode == ModeConfigAudio ) { // SubAudioHitDecay: hit decay rate, in ms (0-1000, not a percent)
+   } else if ( mode == ModeConfigAudio ) { // SubAudioHitDecay or SubAudioForesight: both in ms (0-1000, not a percent)
       int v = (int)( livePercent + 0.5f );
       if ( pad ) printPad4( v ); else Serial.print( v );
       Serial.print( "ms" );
@@ -248,16 +265,16 @@ void printEnteringSetting( AppMode mode, uint8_t subsetting ) {
       Serial.print( (int)( v + 0.5f ) );
       Serial.println( "%" );
    } else if ( mode == ModeConfigAudio ) {
-      if ( subsetting == SubAudioNoiseFloor ) {
-         Serial.print( (int)( noiseFloorPercent + 0.5f ) );
-         Serial.println( "%" );
-      } else if ( subsetting == SubAudioPeakThreshold ) {
-         Serial.print( (int)( peakThresholdPercent + 0.5f ) );
+      if ( subsetting == SubAudioThreshold ) {
+         Serial.print( (int)( ( adjustingPeakThreshold ? peakThresholdPercent : noiseFloorPercent ) + 0.5f ) );
          Serial.println( "%" );
       } else if ( subsetting == SubAudioAutoGain ) {
          Serial.println( AudioBoard::getAutoGainEnabled() ? "Ena" : "Dis" );
-      } else {
+      } else if ( subsetting == SubAudioHitDecay ) {
          Serial.print( (int)( committedHitDecayMs + 0.5f ) );
+         Serial.println( "ms" );
+      } else { // SubAudioForesight
+         Serial.print( (int)( committedAudioForesightMs + 0.5f ) );
          Serial.println( "ms" );
       }
    } else if ( mode == ModeConfigPowerTest ) {
@@ -276,7 +293,7 @@ static const char * const BIN_FREQ_LABEL[ 7 ] = { "63", "160", "400", "1k", "2.5
 // achievable on a plain serial terminal without ANSI cursor codes, since two
 // '\r'-only lines with no '\n' between them just overwrite each other).
 void printLiveValue( AppMode mode, uint8_t subsetting, float livePercent ) {
-   if ( mode == ModeConfigAudio && subsetting <= 1 ) { // noise floor (0) or peak threshold (1)
+   if ( mode == ModeConfigAudio && subsetting == SubAudioThreshold ) { // noise floor / peak threshold, merged
       // this line is already packed (Lo/Md/Hi + 7 bins) -- skip the usual
       // "NoiseFl:<value>"/"PkThresh:<value>" prefix entirely here, by request, to save chars
       // curated 0-255 low/mid/high derived from the raw bins below (see
@@ -318,9 +335,11 @@ void printCommitted( AppMode mode, uint8_t subsetting, float livePercent ) {
 // than committing (advancing, cycling away, or cancelling)
 void revertAudioLivePreview() {
    if ( appMode != ModeConfigAudio ) return;
-   if ( configSubsetting == SubAudioNoiseFloor ) AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
-   else if ( configSubsetting == SubAudioPeakThreshold ) AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
-   else if ( configSubsetting == SubAudioHitDecay ) AudioBoard::setHitDecayMs( committedHitDecayMs );
+   if ( configSubsetting == SubAudioThreshold ) {
+      if ( adjustingPeakThreshold ) AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
+      else AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
+   } else if ( configSubsetting == SubAudioHitDecay ) AudioBoard::setHitDecayMs( committedHitDecayMs );
+   else if ( configSubsetting == SubAudioForesight ) AudioBoard::setAudioForesightMs( committedAudioForesightMs );
 }
 
 LightShow * makeShow( ShowMode mode, uint8_t variation ) {
@@ -396,6 +415,8 @@ void setup() {
    AudioBoard::setAutoGainEnabled( Nvm::loadedAutoGainEnabled() );
    committedHitDecayMs = Nvm::loadedHitDecayMs();
    AudioBoard::setHitDecayMs( committedHitDecayMs );
+   committedAudioForesightMs = Nvm::loadedAudioForesightMs();
+   AudioBoard::setAudioForesightMs( committedAudioForesightMs );
    committedTestHue = liveTestHue = Nvm::loadedTestHue();
    committedTestSat = liveTestSat = Nvm::loadedTestSat();
    committedTestBrightness = liveTestBrightness = Nvm::loadedTestBrightness();
@@ -494,6 +515,15 @@ void loop() {
          livePercent = livePercentFor( 0.0f, HIT_DECAY_RANGE_MS, true, committedHitDecayMs );
          AudioBoard::setHitDecayMs( livePercent );
          carpet->showHitDecayMeter( audioSimMode, livePercent, HIT_DECAY_RANGE_MS );
+      } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioForesight ) {
+         // foresight subsetting -- pot adjusts 0-1000ms (soft takeover, same
+         // convention as every other subsetting), live-previewed on
+         // AudioBoard immediately (reverted below if not committed) so the
+         // megabars' hit-based glow reacts under the live setting as it's
+         // tuned by ear/eye, shown via its own dedicated screen
+         livePercent = livePercentFor( 0.0f, AUDIO_FORESIGHT_RANGE_MS, true, committedAudioForesightMs );
+         AudioBoard::setAudioForesightMs( livePercent );
+         carpet->showForesightAdjust( livePercent, AUDIO_FORESIGHT_RANGE_MS );
       } else if ( appMode == ModeConfigAudio ) {
          // reference (committed) position for whichever of the two isn't
          // being actively adjusted right now -- both are always shown at
@@ -502,12 +532,12 @@ void loop() {
          float showNoiseFloor = noiseFloorPercent;
          float showThreshold = peakThresholdPercent;
 
-         if ( configSubsetting == SubAudioNoiseFloor ) {
+         if ( configSubsetting == SubAudioThreshold && !adjustingPeakThreshold ) {
             livePercent = livePercentFor( 0.0f, 100.0f, true, noiseFloorPercent );
             livePercent = min( livePercent, peakThresholdPercent ); // never cross the peak threshold
             AudioBoard::setNoiseFloorPercent( livePercent ); // live feedback while adjusting; reverted below if not committed
             showNoiseFloor = livePercent;
-         } else if ( configSubsetting == SubAudioPeakThreshold ) {
+         } else if ( configSubsetting == SubAudioThreshold ) { // adjustingPeakThreshold
             livePercent = livePercentFor( 0.0f, 100.0f, true, peakThresholdPercent );
             livePercent = max( livePercent, noiseFloorPercent ); // never cross the noise floor
             AudioBoard::setPeakThresholdPercent( livePercent ); // live feedback while adjusting; reverted below if not committed
@@ -519,7 +549,7 @@ void loop() {
          carpet->showAudioMeter( (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandHigh ) * 255 / 100 ),
                                  (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandMid ) * 255 / 100 ),
                                  (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandLow ) * 255 / 100 ),
-                                 configSubsetting, showNoiseFloor, showThreshold, liveAutoGainEnabled, fullSpectrumLevel );
+                                 configSubsetting == SubAudioAutoGain, showNoiseFloor, showThreshold, liveAutoGainEnabled, fullSpectrumLevel );
       } else { // ModeConfigPowerTest
          carpet->showPowerTest( liveTestHue, liveTestSat, liveTestBrightness );
       }
@@ -537,21 +567,25 @@ void loop() {
          } else if ( appMode == ModeConfigBrightness ) { // SubBrightnessChina
             carpet->setChinaBrightness( livePercent );
             Nvm::saveChinaBrightness( (uint8_t)( livePercent + 0.5f ) );
-         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioNoiseFloor ) {
+         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioThreshold && !adjustingPeakThreshold ) {
             noiseFloorPercent = livePercent;
             Nvm::saveNoiseFloor( (uint8_t)( noiseFloorPercent + 0.5f ) );
             AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
-         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioPeakThreshold ) {
+         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioThreshold ) { // adjustingPeakThreshold
             peakThresholdPercent = livePercent;
             Nvm::savePeakThreshold( (uint8_t)( peakThresholdPercent + 0.5f ) );
             AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioAutoGain ) {
             AudioBoard::setAutoGainEnabled( liveAutoGainEnabled );
             Nvm::saveAutoGainEnabled( liveAutoGainEnabled );
-         } else if ( appMode == ModeConfigAudio ) { // SubAudioHitDecay
+         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
             committedHitDecayMs = livePercent;
             Nvm::saveHitDecayMs( (uint16_t)( committedHitDecayMs + 0.5f ) );
             AudioBoard::setHitDecayMs( committedHitDecayMs );
+         } else if ( appMode == ModeConfigAudio ) { // SubAudioForesight
+            committedAudioForesightMs = livePercent;
+            Nvm::saveAudioForesightMs( (uint16_t)( committedAudioForesightMs + 0.5f ) );
+            AudioBoard::setAudioForesightMs( committedAudioForesightMs );
          } else { // ModeConfigPowerTest -- commits the whole hue/sat/brightness triple at once
             committedTestHue = liveTestHue;
             committedTestSat = liveTestSat;
@@ -568,7 +602,16 @@ void loop() {
          carpet->flashRope( 2 ); // confirms advancing to the next config setting
          enterConfigMode( nextConfigMode( appMode ) );
       } else if ( didShort ) {
-         if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
+         if ( appMode == ModeConfigAudio && configSubsetting == SubAudioThreshold ) {
+            // this subsetting overrides short-press's usual "cycle to next
+            // subsetting" meaning -- it toggles which of noise floor/peak
+            // threshold the pot targets instead (see adjustingPeakThreshold's
+            // declaration comment)
+            revertAudioLivePreview(); // undo whichever target's live preview was applied before switching
+            adjustingPeakThreshold = !adjustingPeakThreshold;
+            resetTakeoverState(); // fresh soft takeover for the newly-selected target
+            printEnteringSetting( appMode, configSubsetting );
+         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
             // this subsetting overrides short-press's usual "cycle to next
             // subsetting" meaning -- it toggles between the simulated and
             // live signal instead (same kind of subsetting-specific

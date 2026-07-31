@@ -382,21 +382,22 @@ class MagicCarpet {
    // whole segment goes solid white. trebleLevel/midLevel/bassLevel are
    // 0-255 (AudioBoard::getHigh/getMid/getLow range).
    //
-   // audioSubsetting selects what the side strips show (no more rainbow --
-   // each indicator is now a flat color, by request):
-   //  - 0 (noise floor) or 1 (peak threshold): BOTH values are shown at
-   //    once, so you can see where the other one sits while dialing in this
-   //    one -- noise floor as a blue 10-LED window, peak threshold as a red
-   //    10-LED window, each at its own percent position (0=back corner,
-   //    100=front corner, see renderSideIndicator()).
-   //  - 2 (auto-gain): a single white 10-LED window snapped to the back
+   // isAutoGainSubsetting selects what the side strips show (no more rainbow
+   // -- each indicator is now a flat color, by request):
+   //  - false (noise floor / peak threshold, merged into one subsetting):
+   //    BOTH values are shown at once, so you can see where the other one
+   //    sits while dialing in this one -- noise floor as a blue 10-LED
+   //    window, peak threshold as a red 10-LED window, each at its own
+   //    percent position (0=back corner, 100=front corner, see
+   //    renderSideIndicator()).
+   //  - true (auto-gain): a single white 10-LED window snapped to the back
    //    corner (off) or front corner (on) as a simple on/off indicator.
    //
    // fullSpectrumLevel (0-255, AudioBoard::getFullSpectrum() -- already
    // silence-gated and auto-gain-scaled if enabled) sets all megabars' blue
    // brightness uniformly.
    void showAudioMeter( uint8_t trebleLevel, uint8_t midLevel, uint8_t bassLevel,
-                        uint8_t audioSubsetting, float noiseFloorPercentToShow, float peakThresholdPercentToShow,
+                        bool isAutoGainSubsetting, float noiseFloorPercentToShow, float peakThresholdPercentToShow,
                         bool autoGainOnToShow, uint8_t fullSpectrumLevel ) {
       clearRope();
       // very simple per-bin floodlight confirmation, one raw hardware bin per
@@ -450,7 +451,7 @@ class MagicCarpet {
       // 0-255 range -- live, since AudioBoard's live-adjusted value is
       // already applied by the caller before this is drawn. Not shown while
       // adjusting auto-gain, since neither value is in play there.
-      if ( audioSubsetting != 2 ) {
+      if ( !isAutoGainSubsetting ) {
          uint8_t noiseFloorRaw = AudioBoard::getNoiseFloorRaw();
          uint8_t peakThresholdRaw = AudioBoard::getPeakThresholdRaw();
          int noiseFloorPos = ( (int)noiseFloorRaw * ( segmentLen - 1 ) + 127 ) / 255;
@@ -475,7 +476,7 @@ class MagicCarpet {
       // side strips, true corner to true corner (see renderSideIndicator's
       // comment) -- this stops 33 LEDs short of each end of the 352-LED
       // channel, so it doesn't wrap into the front/back edges near the corners
-      if ( audioSubsetting == 2 ) {
+      if ( isAutoGainSubsetting ) {
          float snapPercent = autoGainOnToShow ? 100.0f : 0.0f;
          renderSideIndicator( BACK_RIGHT, FRONT_RIGHT, snapPercent, CRGB::White );
          renderSideIndicator( BACK_LEFT, FRONT_LEFT, snapPercent, CRGB::White );
@@ -588,6 +589,46 @@ class MagicCarpet {
             c.nscale8( hitRaw );
             megabarLeds[ m ] = c;
          }
+      }
+   }
+
+   // Audio config screen's foresight-adjustment subsetting: dim blue ambient
+   // wash across the whole rope, just to indicate this screen is active (not
+   // audio-reactive itself), with a 2-pixel white marker overlaid on the
+   // front strip showing the current foresight setting's position within
+   // its 0-1000ms range (0ms at one end, 1000ms at the other) -- same "meter
+   // position reflects a SETTING, not an audio level" idea as the decay-rate
+   // screen's blue dot. China stays off, same as the decay-rate screen.
+   //
+   // Megabars ARE live audio-reactive here, in the same repeating 3-position
+   // pattern as the decay-rate screen's live mode -- treble(blue)/mid(green)/
+   // bass(red) every third megabar around all 12, each showing that band's
+   // own hit value -- so you can watch the flash and tune the pot until it
+   // lands in sync with the beat you hear (hit is already delayed by
+   // whatever foresightMs is currently being adjusted, since AudioBoard
+   // applies that delay upstream of every getter). Each megabar has a 15%
+   // brightness floor in its own band color regardless of hit, so which
+   // fixture maps to which frequency stays visible even at rest between hits.
+   void showForesightAdjust( float foresightMs, float foresightRangeMs ) {
+      for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
+         ropeLeds[ i ] = CRGB( 0, 0, 40 ); // dim blue ambient wash
+         ropeLeds[ i ].w = 0;
+      }
+      int markerPos = (int)( constrain( foresightMs / foresightRangeMs, 0.0f, 1.0f ) * ( SIZEOF_SMALL_NEO - 2 ) + 0.5f );
+      ropeLeds[ markerPos ] = CRGB::White; ropeLeds[ markerPos ].w = 0;
+      ropeLeds[ markerPos + 1 ] = CRGB::White; ropeLeds[ markerPos + 1 ].w = 0;
+
+      clearChinas();
+
+      static const AudioBand segBand[ 3 ] = { BandHigh, BandMid, BandLow };
+      static const CRGB segColor[ 3 ] = { CRGB::Blue, CRGB::Green, CRGB::Red };
+      static const uint8_t MIN_BRIGHTNESS = 38; // 15% of 255
+      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
+         int which = m % 3;
+         uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( segBand[ which ] ) * 255 / 100 );
+         CRGB c = segColor[ which ];
+         c.nscale8( max( hitRaw, MIN_BRIGHTNESS ) );
+         megabarLeds[ m ] = c;
       }
    }
 
