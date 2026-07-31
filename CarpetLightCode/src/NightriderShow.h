@@ -35,6 +35,7 @@ const CRGB bottomC[] {
 
 class NightriderShow : public LightShow {
  private:
+   enum Variation { VarManualHue = 0, VarAutoHueCycle = 1 };
    static const uint8_t numVariations_ = 2;
    uint8_t variation_;
 
@@ -55,7 +56,7 @@ class NightriderShow : public LightShow {
    }
 
    const char * variationName() {
-      return variation_ == 0 ? "manual hue" : "auto hue cycle";
+      return variation_ == VarManualHue ? "manual hue" : "auto hue cycle";
    }
 
    void start() {
@@ -114,9 +115,9 @@ class NightriderShow : public LightShow {
       uint8_t val1;
       static float autoHue = 0.0f;    // 0-255 continuous hue position, used by variation 2
       static uint32_t lastAutoTime = time;
-      if ( variation_ == 0 ) {
-         // variation 1: pot directly selects the color pair, as before
-         val1 = carpet->pot->read() / 4;
+      if ( variation_ == VarManualHue ) {
+         // pot directly selects the color pair, as before
+         val1 = (uint8_t)( carpet->pot->readPercent() / 100.0f * 255.0f + 0.5f );
          lastAutoTime = time; // keep the clock fresh so variation 2 doesn't jump on reentry
          huePrinter_.update( val1, "hue:" );
       } else {
@@ -196,7 +197,7 @@ class NightriderShow : public LightShow {
       LedUtil::reverse( carpet->ropeLeds + RIGHT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
       LedUtil::reverse( carpet->ropeLeds + LEFT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
 
-      int lowval = AudioBoard::getLow();
+      int lowval = (int)AudioBoard::getNormalPercent( BandLow ) * 255 / 100; // AudioBoard's getters are percent now; converted back to this show's own existing 0-255 scale
       static int lastlow = lowval;
       if (lowval > 80 && lowval > lastlow) {
          lastlow = lowval;
@@ -206,7 +207,7 @@ class NightriderShow : public LightShow {
       CRGB dmxclr1 = blend( clr1, clr2, lastlow );
       LedUtil::fill( carpet->megabarLeds, dmxclr1, NUM_MEGABAR_LEDS );
 
-      int highval = AudioBoard::getHigh();
+      int highval = (int)AudioBoard::getNormalPercent( BandHigh ) * 255 / 100; // see lowval's comment above
       static int lasthigh = highval;
       if (highval > 100 && highval > lasthigh) {
          lasthigh = highval;

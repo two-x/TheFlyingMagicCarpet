@@ -8,6 +8,7 @@
 #define __AUDIO_BOARD_H
 
 #include "Utilities.h"
+#include <math.h>
 
 //****************TUNABLE SYSTEM PARAMTERS************************
 //all the other art cars might need different values.
@@ -33,6 +34,11 @@
 #define NORMALIZED_AUDIO 0
 
 inline int scale( int x ) { return ( ( 255 * x ) / 1023 ); }
+inline uint8_t rawToPercent( uint8_t raw ) { return (uint8_t)( ( (uint16_t)raw * 100 + 127 ) / 255 ); }
+
+// which of the 3 curated bands a getter call is asking about -- see
+// AudioBoard's raw/normal/hit getters below.
+enum AudioBand { BandLow, BandMid, BandHigh };
 
 class AudioBoard {
  public:
@@ -47,6 +53,108 @@ class AudioBoard {
    // as the noise floor (see setPeakThresholdPercent()/getPeakThresholdRaw()
    // below) -- default approximates the old hardcoded 80/255.
 
+   // --- per-band raw/normal/hit tracking ---
+   //
+   // Three values are kept per band (low/mid/high), each 0-255 internally,
+   // exposed only as percent (0-100) or a nonzero/bool test to code outside
+   // this file:
+   //   raw    -- bin_low/mid/high straight from Into_3_Bins()+Clipping_Basic(),
+   //             before any adjustment at all.
+   //   normal -- raw after silence-squelch (0 while AudioBoard::silent_) and
+   //             auto-gain (255/rollingPeak_, when enabled) -- same
+   //             adjustments getFullSpectrum() already applies, now also
+   //             applied per-band instead of only to the full-spectrum sum.
+   //   hit    -- a peak-hold derived from normal: while normal is at or
+   //             above the live peak threshold, hit tracks it directly
+   //             (jumps instantly, even back down, as long as it stays at
+   //             or above threshold). The instant normal drops below
+   //             threshold, hit ignores normal entirely and decays on its
+   //             own at a fixed, time-based rate (hitDecayMs_ -- ms to
+   //             decay from full (255) to 0, adjustable, default 300ms),
+   //             until either it reaches 0 or normal rises back above
+   //             threshold. Because the decay is computed from real
+   //             elapsed wall-clock time (see updateHitTracking()) rather
+   //             than "how many polls have happened," the decay-rate
+   //             SETTING'S timing is independent of how often
+   //             pollFrequencies() actually runs -- polling faster or
+   //             slower changes how fresh/granular the underlying raw
+   //             signal is, but not how many milliseconds hit takes to
+   //             decay from max to zero. (The MSGEQ7 chip's own analog
+   //             sample-and-hold does have its own per-strobe decay
+   //             characteristic, which this can't see or compensate for --
+   //             that would affect how accurately raw/normal track the
+   //             true instantaneous level at a given poll rate, but not
+   //             hit's own decay timing, which never looks at poll count.)
+   static uint8_t rawLevel_[ 3 ];
+   static uint8_t normalLevel_[ 3 ];
+   static float hitLevel_[ 3 ]; // float for sub-integer decay precision; read back rounded
+   static float hitDecayMs_;    // ms to decay from 255 to 0, adjustable + persisted, default 300
+   static Timer hitTimer_;      // tracks dt between updateHitTracking() calls
+
+   // edge-triggered "a new hit just started" flag per band -- set the instant
+   // a band crosses from at-or-below to above the peak threshold, consumed
+   // (cleared) the next time that band's newHit() is called. See that
+   // function below. Also times out on its own (NEW_HIT_TIMEOUT_MS)
+   // if nobody calls the corresponding getter in time -- otherwise a hit
+   // nobody asked about yet could sit pending indefinitely and then
+   // erroneously report as "just happened" much later, whenever the caller
+   // finally does poll it.
+   static const uint32_t NEW_HIT_TIMEOUT_MS = 1000;
+   static bool hitWasAbove_[ 3 ];
+   static bool newHitPending_[ 3 ];
+   static Timer newHitPendingTimer_[ 3 ];
+
+   static void updateHitTracking() {
+      uint32_t dtMs = hitTimer_.elapsed();
+      hitTimer_.reset();
+      uint8_t peakRaw = getPeakThresholdRaw();
+      float decayAmount = ( 255.0f / hitDecayMs_ ) * (float)dtMs;
+      for ( int b = 0; b < 3; ++b ) {
+         bool isAbove = normalLevel_[ b ] >= peakRaw;
+         if ( isAbove ) {
+            hitLevel_[ b ] = normalLevel_[ b ];
+         } else {
+            hitLevel_[ b ] -= decayAmount;
+            if ( hitLevel_[ b ] < 0.0f ) hitLevel_[ b ] = 0.0f;
+         }
+         if ( isAbove && !hitWasAbove_[ b ] ) {
+            newHitPending_[ b ] = true;
+            newHitPendingTimer_[ b ].reset();
+         }
+         hitWasAbove_[ b ] = isAbove;
+         if ( newHitPending_[ b ] && newHitPendingTimer_[ b ].elapsed() >= NEW_HIT_TIMEOUT_MS ) {
+            newHitPending_[ b ] = false;
+         }
+      }
+   }
+
+   // returns true if this band has crossed above the peak threshold since
+   // the last time this same function was called, false otherwise -- a
+   // one-shot, consumed-on-read edge trigger (same "ask once, get it once"
+   // convention as Button::shortpress()/etc.), not a level test.
+   static bool newHit( AudioBand band ) { bool v = newHitPending_[ band ]; newHitPending_[ band ] = false; return v; }
+
+   static uint8_t getRawPercent( AudioBand band ) { return rawToPercent( rawLevel_[ band ] ); }
+   static bool getRawNonzero( AudioBand band ) { return rawLevel_[ band ] > 0; }
+   static uint8_t getNormalPercent( AudioBand band ) { return rawToPercent( normalLevel_[ band ] ); }
+   static bool getNormalNonzero( AudioBand band ) { return normalLevel_[ band ] > 0; }
+   static uint8_t getHitPercent( AudioBand band ) { return rawToPercent( (uint8_t)( hitLevel_[ band ] + 0.5f ) ); }
+   // true whenever this band's hit level is currently above the live peak
+   // threshold, false otherwise -- NOT a plain nonzero test (hit stays
+   // nonzero throughout its whole decay tail after dropping back below
+   // threshold, which shouldn't still read as "a hit" once it's decayed
+   // past the same crossing point everything else here uses).
+   static bool getHitNonzero( AudioBand band ) { return hitLevel_[ band ] > getPeakThresholdRaw(); }
+
+   // adjustable range is 0ms (instant decay) to 1000ms (1 full second) --
+   // per request, set live via the Audio config screen's decay-rate
+   // subsetting, pot-adjusted. 0ms still behaves safely in
+   // updateHitTracking() above: 255.0f/0.0f is IEEE-754 +infinity, which
+   // immediately drives hitLevel_ to (and clamped at) 0 on the very next
+   // update, i.e. genuinely instant decay, no divide-by-zero fault.
+   static void setHitDecayMs( float ms ) { hitDecayMs_ = constrain( ms, 0.0f, 1000.0f ); }
+   static float getHitDecayMs() { return hitDecayMs_; }
+
    static void Read_Frequencies(){
       //Read frequencies for each band
       // STROBE/RESET are inverted by hardware between the Due and the chip
@@ -55,37 +163,37 @@ class AudioBoard {
       // that what actually reaches the chip is correct. See also setup().
       for ( int freq_amp = 0; freq_amp < 7 ; ++freq_amp ) {
         Frequencies_Mono[freq_amp] = analogRead(DC_One);
-        delayMicroseconds( 15 );
         digitalWrite(STROBE, HIGH); //toggle pin of spectrum shield to get next bin value -- inverted: chip actually sees LOW here
-        delayMicroseconds( 100 );
+        delayMicroseconds( 200 );
         digitalWrite(STROBE, LOW); // inverted: chip actually sees HIGH here
-        delayMicroseconds( 85 ); // datasheet min for read after hi edge on strobe is 63-67us
+        delayMicroseconds( 200 ); // datasheet min for read after hi edge on strobe is 63-67us
       }
    }
 
    static void Into_3_Bins(){
-     //amalgamate into 3 bins by averaging
-     // bin_low = ((Frequencies_Mono[0]+ ( Frequencies_Mono[1] * 0.3 ) )/1.3);
-     // bin_mid = ((Frequencies_Mono[3]+Frequencies_Mono[4])/2);
-     // bin_high = ((Frequencies_Mono[5]+Frequencies_Mono[6])/2);
-   
-   
-   /*
-     //amalgamate into 3 bins by taking MAX value
-     bin_low = max (Frequencies_Mono[0], Frequencies_Mono[1]);
-     bin_low = max (bin_low, Frequencies_Mono[2]);
-     bin_mid = max (Frequencies_Mono[3], Frequencies_Mono[4]);
-     bin_high = max (Frequencies_Mono[5], Frequencies_Mono[6]);
-   */
-   
-   //Don's test to try to eliminate "randomness" from mixing mulitple signals
-     //amalgamate into 3 bins by taking the following frequencies and ignoring others
-   
-   
-     bin_low = Frequencies_Mono[1];
-     bin_mid = Frequencies_Mono[3];
-     bin_high = Frequencies_Mono[6];
-     
+     // MSGEQ7's 7 bins have fixed datasheet center frequencies: 63, 160,
+     // 400, 1000, 2500, 6250, 16000 Hz (bins 0-6 respectively -- see
+     // BIN_FREQ_LABEL in CarpetLightLogic.cpp, used for the noise-floor
+     // config screen's live bin readout). Mapped to bass/mid/treble by the
+     // requested crossover points -- bass: 0-85Hz, mid: 85Hz-3.8kHz,
+     // treble: 3.8kHz+:
+     //   bin0 (63Hz)                        -> bass
+     //   bin1,2,3,4 (160/400/1000/2500Hz)   -> mid
+     //   bin5,6 (6250/16000Hz)              -> treble
+     // Only bin0 falls below 85Hz, so bass is necessarily just that one bin
+     // -- MSGEQ7's own bin spacing doesn't offer a second bin under 85Hz to
+     // average with. Mid and treble now genuinely combine multiple bins
+     // (averaged) instead of each picking one arbitrary representative bin
+     // and discarding the rest, as the code previously did.
+     //
+     // UPDATED per request: bass is bin0 alone (unchanged); mid is the
+     // LARGER of bins 2/3 (400Hz/1000Hz) rather than an average of 4 bins;
+     // treble is the LARGER of bins 5/6 (6250Hz/16000Hz) rather than their
+     // average. max() preserves whichever sub-band actually has energy
+     // right now instead of diluting it against a quieter neighbor.
+     bin_low = Frequencies_Mono[0];
+     bin_mid = max( Frequencies_Mono[2], Frequencies_Mono[3] );
+     bin_high = max( Frequencies_Mono[5], Frequencies_Mono[6] );
    }
 
 
@@ -364,22 +472,51 @@ class AudioBoard {
         Into_3_Bins();
         Clipping_Basic();
         updateAutoGainAndSilence( time );
+
+        // raw: straight from the bins, before any adjustment at all
+        rawLevel_[ BandLow ] = (uint8_t)bin_low;
+        rawLevel_[ BandMid ] = (uint8_t)bin_mid;
+        rawLevel_[ BandHigh ] = (uint8_t)bin_high;
+
+        // normal: silence-squelched + auto-gained, same treatment
+        // getFullSpectrum() already applies to the full-spectrum sum, now
+        // also applied per-band
+        for ( int b = 0; b < 3; ++b ) {
+           if ( silent_ ) {
+              normalLevel_[ b ] = 0;
+              continue;
+           }
+           float gained = (float)rawLevel_[ b ];
+           if ( autoGainEnabled_ && rollingPeak_ > 0 ) {
+              gained *= ( 255.0f / (float)rollingPeak_ );
+              if ( gained > 255.0f ) gained = 255.0f; // clip prevention, see getFullSpectrum()'s comment
+           }
+           normalLevel_[ b ] = (uint8_t)( gained + 0.5f );
+        }
+
+        updateHitTracking();
      }
    }
 
-   static uint8_t getLow( int threshold = 255 ) {
-      if ( silent_ ) return 0;
-      return bin_low < threshold ? bin_low : 0;
-   }
-
-   static uint8_t getMid( int threshold = 255 ) {
-      if ( silent_ ) return 0;
-      return bin_mid < threshold ? bin_mid : 0;
-   }
-
-   static uint8_t getHigh( int threshold = 255 ) {
-      if ( silent_ ) return 0;
-      return bin_high < threshold ? bin_high : 0;
+   // alternative to pollFrequencies() for the Audio config screen's decay-
+   // rate subsetting while showing the simulated signal (see
+   // updateSimulatedBand() below) instead of real audio -- feeds the same
+   // eased square wave into all 3 bands' raw/normal levels and runs it
+   // through the exact same updateHitTracking() real audio uses, so hit's
+   // decay behavior being tuned here is the real code path, not a separate
+   // mock. Gated at the same ~30ms cadence as pollFrequencies() so the
+   // decay-rate setting is exercised under the same real poll-rate the
+   // hardware uses. Caller is responsible for calling this INSTEAD OF
+   // pollFrequencies() while the simulated signal is active, never both.
+   static void pollSimulated( uint32_t time ) {
+      static uint32_t timestamp;
+      if ( time - timestamp > 30 ) {
+         timestamp = time;
+         uint8_t simRaw = updateSimulatedBand();
+         rawLevel_[ BandLow ] = rawLevel_[ BandMid ] = rawLevel_[ BandHigh ] = simRaw;
+         normalLevel_[ BandLow ] = normalLevel_[ BandMid ] = normalLevel_[ BandHigh ] = simRaw;
+         updateHitTracking();
+      }
    }
 
    // "current full-spectrum audio level" -- silence-gated, and auto-gained if
@@ -445,6 +582,67 @@ class AudioBoard {
       return (uint8_t)( constrain( peakThresholdPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f );
    }
 
+   // simulated single-band waveform for the Audio config screen's decay-rate
+   // subsetting (see CarpetLightLogic.cpp) -- lets the decay behavior be
+   // tuned without needing real audio. Alternates high/low phases, holding
+   // each phase's duration for 10 seconds before switching between 40ms and
+   // 80ms phases. Only advances while actively polled (updateSimulatedBand()
+   // must be called every frame the decay-rate screen is showing the
+   // simulated signal) -- not run continuously in the background.
+   //
+   // The waveform's SHAPE (not just its phase duration) depends on which
+   // phase length is currently active, both built from the same fixed 40ms
+   // raised-cosine transition (SIM_EDGE_MS), applied at the start of every
+   // phase, easing from the previous phase's target to the current one:
+   //   - 40ms phase: the 40ms transition consumes the ENTIRE phase, so
+   //     there's never a flat plateau -- back-to-back rising/falling
+   //     raised-cosine halves are mathematically identical to one
+   //     continuous sine wave (period = 2x40 = 80ms).
+   //   - 80ms phase: the same 40ms transition only fills HALF the phase,
+   //     leaving a flat plateau at max (or 0) for the remaining 40ms --
+   //     i.e. it rises with a sine-shaped edge, stays at max volume, then
+   //     eases back down with the same sine-shaped curvature right around
+   //     the next toggle.
+   static const uint32_t SIM_EDGE_MS = 40;
+   static uint32_t simPhaseMs_;
+   static Timer simStateTimer_; // switches simPhaseMs_ between 40/80 every 10s
+   static Timer simPhaseTimer_; // toggles high/low within the current simPhaseMs_, and times the ease-in from phase start
+
+   static bool simPhaseHigh_;
+
+   // returns the simulated band's instantaneous level (0-255) and advances
+   // the internal waveform state by however much time has passed since the
+   // last call
+   static uint8_t updateSimulatedBand() {
+      if ( simStateTimer_.expireset() ) {
+         simPhaseMs_ = ( simPhaseMs_ == 40 ) ? 80 : 40;
+      }
+      if ( simPhaseTimer_.expired() ) {
+         simPhaseHigh_ = !simPhaseHigh_;
+         simPhaseTimer_.set( simPhaseMs_ );
+         simPhaseTimer_.reset();
+      }
+      uint8_t currTarget = simPhaseHigh_ ? 255 : 0;
+      uint8_t prevTarget = simPhaseHigh_ ? 0 : 255; // square wave always alternates, so the previous phase's target is just the opposite extreme
+      uint32_t elapsed = simPhaseTimer_.elapsed();
+      if ( elapsed >= SIM_EDGE_MS ) return currTarget;
+      float f = (float)elapsed / (float)SIM_EDGE_MS;
+      float eased = 0.5f - 0.5f * cosf( PI * f ); // raised-cosine: sine-family curvature, 0 at f=0, 1 at f=1
+      return (uint8_t)( (float)prevTarget + ( (float)currTarget - (float)prevTarget ) * eased + 0.5f );
+   }
+
+   // resets the simulated square wave to a fresh start -- call on entering
+   // the decay-rate subsetting, so it doesn't carry over stale phase/timer
+   // state from a previous visit
+   static void resetSimulatedBand() {
+      simPhaseMs_ = 40;
+      simPhaseHigh_ = true;
+      simStateTimer_.set( 10000 );
+      simStateTimer_.reset();
+      simPhaseTimer_.set( simPhaseMs_ );
+      simPhaseTimer_.reset();
+   }
+
    static void setup() {
       //Set spectrum Shield pin configurations
       // STROBE/RESET are inverted by hardware between the Due and the chip
@@ -487,5 +685,19 @@ float AudioBoard::emaAverage_ = 0.0f;
 Timer AudioBoard::pollTimer_;
 Timer AudioBoard::silenceTimer_;
 bool AudioBoard::silent_ = false;
+
+uint8_t AudioBoard::rawLevel_[ 3 ] = { 0, 0, 0 };
+uint8_t AudioBoard::normalLevel_[ 3 ] = { 0, 0, 0 };
+float AudioBoard::hitLevel_[ 3 ] = { 0.0f, 0.0f, 0.0f };
+float AudioBoard::hitDecayMs_ = 300.0f; // overwritten by Nvm at boot
+Timer AudioBoard::hitTimer_;
+bool AudioBoard::hitWasAbove_[ 3 ] = { false, false, false };
+bool AudioBoard::newHitPending_[ 3 ] = { false, false, false };
+Timer AudioBoard::newHitPendingTimer_[ 3 ];
+
+uint32_t AudioBoard::simPhaseMs_ = 40;
+Timer AudioBoard::simStateTimer_( 10000 );
+Timer AudioBoard::simPhaseTimer_( 40 );
+bool AudioBoard::simPhaseHigh_ = true;
 
 #endif

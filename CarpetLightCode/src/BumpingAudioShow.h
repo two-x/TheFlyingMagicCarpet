@@ -42,6 +42,7 @@ const CRGB bottomC[] {
 
 class EqualizerShow : public LightShow {
  private:
+   enum Variation { VarChase = 0, VarVuMeter = 1 };
    static const uint8_t numVariations_ = 2;
    uint8_t variation_;
 
@@ -50,7 +51,6 @@ class EqualizerShow : public LightShow {
    bool strobeEnabled_;
    bool strobeActive_ = false;
    Timer strobeTimer_;
-   int lastBassForTrigger_ = 0;
 
    // hit-suppression state: once a hit strobes, its level is remembered, and
    // any further hit that doesn't exceed it is suppressed as long as it's
@@ -68,8 +68,8 @@ class EqualizerShow : public LightShow {
    // Reverted back to the committed value on leaving this show (see
    // CarpetLightLogic.cpp's show-change block), so casual live tweaking here
    // never overwrites what's saved to flash.
-   static const uint16_t POT_TAKEOVER_THRESHOLD = (uint16_t)( 0.02f * MAX_VOLTAGE + 0.5f );
-   uint16_t potEntryRaw_ = 0;
+   static constexpr float POT_TAKEOVER_THRESHOLD_PERCENT = 2.0f;
+   float potEntryPercent_ = 0.0f;
    bool potTakenOver_ = false;
    SettlePrinter thresholdPrinter_;
 
@@ -82,7 +82,7 @@ class EqualizerShow : public LightShow {
    }
 
    const char * variationName() {
-      return variation_ == 0 ? "chase" : "VU meter";
+      return variation_ == VarChase ? "chase" : "VU meter";
    }
 
    bool getStrobeEnabled() {
@@ -96,7 +96,7 @@ class EqualizerShow : public LightShow {
       for ( int i = NEO3_OFFSET; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          carpet->ropeLeds[ i ] = CRGB::Black;
       }
-      potEntryRaw_ = carpet->pot->read();
+      potEntryPercent_ = carpet->pot->readPercent();
       potTakenOver_ = false;
    }
 
@@ -112,17 +112,16 @@ class EqualizerShow : public LightShow {
       }
 
       // pot -> live peak threshold, soft takeover (see member comment above)
-      uint16_t potRaw = carpet->pot->read();
+      float potPercent = carpet->pot->readPercent();
       if ( !potTakenOver_ ) {
-         uint16_t diff = ( potRaw > potEntryRaw_ ) ? ( potRaw - potEntryRaw_ ) : ( potEntryRaw_ - potRaw );
-         if ( diff >= POT_TAKEOVER_THRESHOLD ) potTakenOver_ = true;
+         if ( fabsf( potPercent - potEntryPercent_ ) >= POT_TAKEOVER_THRESHOLD_PERCENT ) potTakenOver_ = true;
       }
       if ( potTakenOver_ ) {
-         AudioBoard::setPeakThresholdPercent( (float)potRaw / (float)MAX_VOLTAGE * 100.0f );
+         AudioBoard::setPeakThresholdPercent( potPercent );
       }
       thresholdPrinter_.update( (int)( AudioBoard::getPeakThresholdPercent() + 0.5f ), "PkThresh:", "%" );
 
-      if ( variation_ == 1 ) {
+      if ( variation_ == VarVuMeter ) {
          updateVuMeter( time );
       } else {
       static const CRGBPalette256 clr( CRGB::Red, CRGB::Black );
@@ -246,22 +245,12 @@ class EqualizerShow : public LightShow {
       LedUtil::reverse( carpet->ropeLeds + RIGHT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
       LedUtil::reverse( carpet->ropeLeds + LEFT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
 
+      // switched to the shared hit value (attack/decay peak-hold now lives
+      // in AudioBoard, tunable via the Audio config screen's decay-rate
+      // subsetting) instead of this show's own ad-hoc lastlow tracking --
+      // per request, all EqualizerShow variations use hit instead of level.
       CRGB dmxclr;
-      // int dmxval = AudioBoard::getLow();
-      // Serial.println( dmxval );
-      int lowval = AudioBoard::getLow();
-      static int lastlow = lowval;
-      // Serial.print("lowval: ");
-      // Serial.println(lowval);
-      // Serial.flush();
-      if (lowval > AudioBoard::getPeakThresholdRaw() && lowval > lastlow) {
-       lastlow = lowval;
-      } else {
-       lastlow = lastlow > 15 ? lastlow - 15 : 0;
-      }
-      // Serial.print("lastlow: ");
-      // Serial.println(lastlow);
-      // Serial.flush();
+      uint8_t lastlow = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( BandLow ) * 255 / 100 );
       dmxclr = blend( CRGB::Black, clr2, lastlow );
       carpet->megabarLeds[1] = dmxclr;
       carpet->megabarLeds[2] = dmxclr;
@@ -273,7 +262,7 @@ class EqualizerShow : public LightShow {
       carpet->megabarLeds[11] = dmxclr;
 
 
-      int highval = AudioBoard::getHigh() > 150 ? AudioBoard::getHigh() : 0;
+      int highval = (int)( (uint16_t)AudioBoard::getHitPercent( BandHigh ) * 255 / 100 );
       // Serial.print("highval: ");
       // Serial.println(highval);
       /*static int lasthigh = highval;
@@ -382,21 +371,11 @@ class EqualizerShow : public LightShow {
    // bass and treble together cross by about 15% of half the car's length,
    // right around the middle -- per request.
    void updateVuMeter( uint32_t time ) {
-      static int vuLastBass = 0;
-      static int vuLastTreble = 0;
-
-      int bassRaw = AudioBoard::getLow();
-      if ( bassRaw > AudioBoard::getPeakThresholdRaw() && bassRaw > vuLastBass ) {
-         vuLastBass = bassRaw;
-      } else {
-         vuLastBass = vuLastBass > 15 ? vuLastBass - 15 : 0;
-      }
-      int trebleRaw = AudioBoard::getHigh();
-      if ( trebleRaw > AudioBoard::getPeakThresholdRaw() && trebleRaw > vuLastTreble ) {
-         vuLastTreble = trebleRaw;
-      } else {
-         vuLastTreble = vuLastTreble > 15 ? vuLastTreble - 15 : 0;
-      }
+      // hit already implements this meter's attack/decay ballistics (see
+      // AudioBoard::updateHitTracking(), tunable via the Audio config
+      // screen's decay-rate subsetting), so no more local peak-hold state.
+      int vuLastBass = (int)( (uint16_t)AudioBoard::getHitPercent( BandLow ) * 255 / 100 );
+      int vuLastTreble = (int)( (uint16_t)AudioBoard::getHitPercent( BandHigh ) * 255 / 100 );
 
       static const float halfLen_ = SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER; // true corner to center, 143
       static const float maxReach_ = halfLen_ * 1.15f; // 100%-level reach: 15% of halfLen_ past center
@@ -489,18 +468,17 @@ class EqualizerShow : public LightShow {
          return;
       }
 
-      int bassRaw = AudioBoard::getLow();
-      bool isHit = ( bassRaw > AudioBoard::getPeakThresholdRaw() && bassRaw > lastBassForTrigger_ );
-      lastBassForTrigger_ = bassRaw;
+      bool isHit = AudioBoard::getHitNonzero( BandLow );
+      int bassHit = AudioBoard::getHitPercent( BandLow );
 
       if ( isHit ) {
          static const uint32_t SILENCE_RESET_MS = 3000;
          bool silenceExpired = !hadHit_ || lastHitTimer_.elapsed( SILENCE_RESET_MS );
-         bool exceedsPeak = bassRaw > suppressionPeak_;
+         bool exceedsPeak = bassHit > suppressionPeak_;
          if ( !strobeActive_ && ( silenceExpired || exceedsPeak ) ) {
             strobeActive_ = true;
             strobeTimer_.reset();
-            suppressionPeak_ = bassRaw;
+            suppressionPeak_ = bassHit;
          }
          hadHit_ = true;
          lastHitTimer_.reset();

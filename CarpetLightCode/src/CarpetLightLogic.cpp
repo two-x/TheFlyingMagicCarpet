@@ -23,9 +23,10 @@ MagicCarpet * carpet;
 
 LightShow * currLightShow;
 
+enum ShowMode { ShowNightrider = 0, ShowFlame = 1, ShowEqualizer = 2, ShowSpeedStripes = 3, ShowLighthouse = 4 };
 static const uint8_t numModes = 5;
-static uint8_t currMode = 0;
-static uint8_t prevMode = currMode;
+static ShowMode currMode = ShowNightrider;
+static ShowMode prevMode = currMode;
 static uint8_t currVariation[ numModes ] = { 0, 0, 0, 0, 0 };
 static bool lightsOn = true; // always boots on; toggled by an extra-long press
 static bool blacklightOn = false; // always boots off; toggled by a double press in ModeShow -- not persisted, same as lightsOn
@@ -37,13 +38,25 @@ static bool blacklightOn = false; // always boots off; toggled by a double press
 // currently showing. Long-press is the only way to cancel.
 enum AppMode { ModeShow, ModeConfigBrightness, ModeConfigAudio, ModeConfigPowerTest };
 static AppMode appMode = ModeShow;
-// Brightness: 0 = global, 1 = headlight, 2 = china. Audio: 0 = noise floor, 1
-// = peak threshold, 2 = auto-gain enable. PowerTest: 0 = hue, 1 = saturation,
-// 2 = brightness
+// configSubsetting's meaning depends on the current appMode -- it can't be a
+// single enum type, so it stays a plain uint8_t, but each mode's own set of
+// values is named below for readability at comparison sites.
+enum BrightnessSubsetting { SubBrightnessGlobal = 0, SubBrightnessHeadlight = 1, SubBrightnessChina = 2 };
+enum AudioSubsetting { SubAudioNoiseFloor = 0, SubAudioPeakThreshold = 1, SubAudioAutoGain = 2, SubAudioHitDecay = 3 };
+enum PowerTestSubsetting { SubPowerTestHue = 0, SubPowerTestSat = 1, SubPowerTestBrightness = 2 };
 static uint8_t configSubsetting = 0;
 static float noiseFloorPercent = 0.0f; // committed value; audio below this is "silence" -- see AudioBoard.h
 static float peakThresholdPercent = 0.0f; // committed value; audio above this is a "hit"/peak -- see AudioBoard.h
 static bool liveAutoGainEnabled = false; // live (not-yet-committed) auto-gain toggle state, Audio subsetting 2
+static float committedHitDecayMs = 300.0f; // committed value; ms for a "hit" to decay from full to zero -- see AudioBoard.h
+static const float HIT_DECAY_RANGE_MS = 1000.0f; // adjustable range is 0-1000ms, per request
+// Audio subsetting 3 (decay rate): starts in simulated-signal mode every
+// fresh visit (see cycleSubsetting()); a short press while on this
+// subsetting toggles to/from live audio instead of the usual "cycle to next
+// subsetting" behavior (see loop()'s didShort handling) -- same kind of
+// subsetting-specific override PowerTest already establishes for encoder
+// rotation.
+static bool audioSimMode = true;
 
 // PowerTest: an HSV test color, dialed in with the encoder (rotation edits
 // whichever of hue/sat/brightness the current subsetting selects), used to
@@ -75,13 +88,13 @@ static Timer liveValuePrintTimer_( 150 );
 // It holds at the already-committed value until the pot moves noticeably (2%
 // of its full range) or the encoder is twisted at all since entry -- then it
 // hands over to live tracking.
-static const uint16_t POT_TAKEOVER_THRESHOLD = (uint16_t)( 0.02f * MAX_VOLTAGE + 0.5f );
-static uint16_t configEntryPotRaw = 0;
+static const float POT_TAKEOVER_THRESHOLD_PERCENT = 2.0f;
+static float configEntryPotPercent = 0.0f;
 static bool configPotTakenOver = false;
 
 uint8_t numSubsettingsFor( AppMode mode ) {
    if ( mode == ModeConfigBrightness ) return 3;
-   if ( mode == ModeConfigAudio ) return 3;
+   if ( mode == ModeConfigAudio ) return 4;
    if ( mode == ModeConfigPowerTest ) return 3;
    return 1;
 }
@@ -93,7 +106,7 @@ void printEnteringSetting( AppMode mode, uint8_t subsetting );
 // re-syncs every takeover tracker to "nothing has changed yet" -- call
 // whenever a new top-level setting or a new subsetting is entered
 void resetTakeoverState() {
-   configEntryPotRaw = carpet->pot->readLive(); // config screens always see the true live pot, never the low-power simulation
+   configEntryPotPercent = carpet->pot->readLivePercent(); // config screens always see the true live pot, never the low-power simulation
    configPotTakenOver = false;
    carpet->encoder->resetPositionDelta();
    liveAutoGainEnabled = AudioBoard::getAutoGainEnabled();
@@ -115,6 +128,12 @@ void enterConfigMode( AppMode mode ) {
 void cycleSubsetting() {
    configSubsetting = ( configSubsetting + 1 ) % numSubsettingsFor( appMode );
    resetTakeoverState();
+   if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
+      // fresh visit to the decay-rate screen always starts in simulated-
+      // signal mode, per request -- see audioSimMode's declaration comment
+      audioSimMode = true;
+      AudioBoard::resetSimulatedBand();
+   }
    printEnteringSetting( appMode, configSubsetting );
 }
 
@@ -130,25 +149,24 @@ AppMode nextConfigMode( AppMode mode ) {
 // maps the live pot reading linearly to a percent in [minPercent,maxPercent].
 // fullRange=false restricts to the pot's top half (used by global brightness).
 float potToPercent( float minPercent, float maxPercent, bool fullRange ) {
-   uint16_t potRaw = carpet->pot->readLive(); // config screens always see the true live pot, never the low-power simulation
+   float potPercent = carpet->pot->readLivePercent(); // config screens always see the true live pot, never the low-power simulation
    float frac;
    if ( fullRange ) {
-      frac = potRaw / (float)MAX_VOLTAGE;
+      frac = potPercent / 100.0f;
    } else {
-      uint16_t mid = MAX_VOLTAGE / 2;
-      frac = ( potRaw <= mid ) ? 0.0f : ( (float)( potRaw - mid ) / (float)( MAX_VOLTAGE - mid ) );
+      frac = ( potPercent <= 50.0f ) ? 0.0f : ( ( potPercent - 50.0f ) / 50.0f );
    }
    return minPercent + frac * ( maxPercent - minPercent );
 }
 
 // the live value a config screen should currently show: the committed value,
-// until the pot has moved POT_TAKEOVER_THRESHOLD from its reading when this
-// screen was entered -- then it switches to tracking the pot live.
+// until the pot has moved POT_TAKEOVER_THRESHOLD_PERCENT from its reading
+// when this screen was entered -- then it switches to tracking the pot live.
 float livePercentFor( float minPercent, float maxPercent, bool fullRange, float committedPercent ) {
    if ( !configPotTakenOver ) {
-      uint16_t potRaw = carpet->pot->read();
-      uint16_t diff = ( potRaw > configEntryPotRaw ) ? ( potRaw - configEntryPotRaw ) : ( configEntryPotRaw - potRaw );
-      if ( diff >= POT_TAKEOVER_THRESHOLD ) configPotTakenOver = true;
+      float potPercent = carpet->pot->readPercent();
+      float diff = fabsf( potPercent - configEntryPotPercent );
+      if ( diff >= POT_TAKEOVER_THRESHOLD_PERCENT ) configPotTakenOver = true;
    }
    if ( !configPotTakenOver ) return committedPercent;
    return potToPercent( minPercent, maxPercent, fullRange );
@@ -158,18 +176,19 @@ float livePercentFor( float minPercent, float maxPercent, bool fullRange, float 
 // spent in blocking Serial.print() at 9600 baud) and easy to scan
 const char * settingName( AppMode mode, uint8_t subsetting ) {
    if ( mode == ModeConfigBrightness ) {
-      if ( subsetting == 0 ) return "GlobalMaxBr";
-      if ( subsetting == 1 ) return "HeadliteBr";
+      if ( subsetting == SubBrightnessGlobal ) return "GlobalMaxBr";
+      if ( subsetting == SubBrightnessHeadlight ) return "HeadliteBr";
       return "ChinaBr";
    }
    if ( mode == ModeConfigAudio ) {
-      if ( subsetting == 0 ) return "NoiseFl";
-      if ( subsetting == 1 ) return "PkThresh";
-      return "AGC";
+      if ( subsetting == SubAudioNoiseFloor ) return "NoiseFl";
+      if ( subsetting == SubAudioPeakThreshold ) return "PkThresh";
+      if ( subsetting == SubAudioAutoGain ) return "AGC";
+      return "HitDecay";
    }
    if ( mode == ModeConfigPowerTest ) {
-      if ( subsetting == 0 ) return "Hue";
-      if ( subsetting == 1 ) return "Sat";
+      if ( subsetting == SubPowerTestHue ) return "Hue";
+      if ( subsetting == SubPowerTestSat ) return "Sat";
       return "Val";
    }
    return "?";
@@ -181,15 +200,12 @@ const char * settingName( AppMode mode, uint8_t subsetting ) {
 void printPad3( int v ) { char buf[ 5 ]; snprintf( buf, sizeof( buf ), "%3d", v ); Serial.print( buf ); }
 void printPad4( int v ) { char buf[ 6 ]; snprintf( buf, sizeof( buf ), "%4d", v ); Serial.print( buf ); }
 
-// a 0-255 raw level, shown as a padded percent
-void printPercentPad( int raw0to255 ) { printPad3( ( raw0to255 * 100 + 127 ) / 255 ); Serial.print( "%" ); }
-
-// one-char marker for a 0-255 level: '^' above AudioBoard::PEAK_THRESHOLD (a
-// "hit", same threshold EqualizerShow's strobe triggers on -- '^' as the
+// one-char marker for a percent (0-100) level: '^' above the peak threshold
+// (a "hit", same threshold EqualizerShow's strobe triggers on -- '^' as the
 // up-pointing opposite of '_'), '_' below the noise floor, '-' in between
-void printLevelMarker( int v ) {
-   if ( v > AudioBoard::getPeakThresholdRaw() ) Serial.print( "^" );
-   else if ( v < AudioBoard::getNoiseFloorRaw() ) Serial.print( "_" );
+void printLevelMarker( int percent ) {
+   if ( percent > AudioBoard::getPeakThresholdPercent() ) Serial.print( "^" );
+   else if ( percent < AudioBoard::getNoiseFloorPercent() ) Serial.print( "_" );
    else Serial.print( "-" );
 }
 
@@ -197,14 +213,18 @@ void printLevelMarker( int v ) {
 // live line, and the commit confirmation, so all 3 format it identically.
 // pad=true (live line only) right-justifies to the field's max width.
 void printSettingValue( AppMode mode, uint8_t subsetting, float livePercent, bool pad = false ) {
-   if ( mode == ModeConfigBrightness || ( mode == ModeConfigAudio && subsetting != 2 ) ) {
+   if ( mode == ModeConfigBrightness || ( mode == ModeConfigAudio && subsetting <= SubAudioPeakThreshold ) ) {
       int v = (int)( livePercent + 0.5f ); // 0-100
       if ( pad ) printPad3( v ); else Serial.print( v );
       Serial.print( "%" );
-   } else if ( mode == ModeConfigAudio ) { // subsetting 2: auto-gain
+   } else if ( mode == ModeConfigAudio && subsetting == SubAudioAutoGain ) {
       Serial.print( liveAutoGainEnabled ? "Ena" : "Dis" ); // already fixed-width
+   } else if ( mode == ModeConfigAudio ) { // SubAudioHitDecay: hit decay rate, in ms (0-1000, not a percent)
+      int v = (int)( livePercent + 0.5f );
+      if ( pad ) printPad4( v ); else Serial.print( v );
+      Serial.print( "ms" );
    } else if ( mode == ModeConfigPowerTest ) {
-      uint8_t v = ( subsetting == 0 ) ? liveTestHue : ( subsetting == 1 ) ? liveTestSat : liveTestBrightness; // 0-255
+      uint8_t v = ( subsetting == SubPowerTestHue ) ? liveTestHue : ( subsetting == SubPowerTestSat ) ? liveTestSat : liveTestBrightness; // 0-255
       if ( pad ) printPad3( v ); else Serial.print( v );
    }
 }
@@ -223,22 +243,25 @@ void printEnteringSetting( AppMode mode, uint8_t subsetting ) {
    Serial.print( settingName( mode, subsetting ) );
    Serial.print( ":" );
    if ( mode == ModeConfigBrightness ) {
-      float v = ( subsetting == 0 ) ? carpet->getGlobalBrightness() :
-                ( subsetting == 1 ) ? carpet->getHeadlightBrightness() : carpet->getChinaBrightness();
+      float v = ( subsetting == SubBrightnessGlobal ) ? carpet->getGlobalBrightness() :
+                ( subsetting == SubBrightnessHeadlight ) ? carpet->getHeadlightBrightness() : carpet->getChinaBrightness();
       Serial.print( (int)( v + 0.5f ) );
       Serial.println( "%" );
    } else if ( mode == ModeConfigAudio ) {
-      if ( subsetting == 0 ) {
+      if ( subsetting == SubAudioNoiseFloor ) {
          Serial.print( (int)( noiseFloorPercent + 0.5f ) );
          Serial.println( "%" );
-      } else if ( subsetting == 1 ) {
+      } else if ( subsetting == SubAudioPeakThreshold ) {
          Serial.print( (int)( peakThresholdPercent + 0.5f ) );
          Serial.println( "%" );
-      } else {
+      } else if ( subsetting == SubAudioAutoGain ) {
          Serial.println( AudioBoard::getAutoGainEnabled() ? "Ena" : "Dis" );
+      } else {
+         Serial.print( (int)( committedHitDecayMs + 0.5f ) );
+         Serial.println( "ms" );
       }
    } else if ( mode == ModeConfigPowerTest ) {
-      uint8_t v = ( subsetting == 0 ) ? committedTestHue : ( subsetting == 1 ) ? committedTestSat : committedTestBrightness;
+      uint8_t v = ( subsetting == SubPowerTestHue ) ? committedTestHue : ( subsetting == SubPowerTestSat ) ? committedTestSat : committedTestBrightness;
       Serial.println( v );
    }
 }
@@ -253,7 +276,7 @@ static const char * const BIN_FREQ_LABEL[ 7 ] = { "63", "160", "400", "1k", "2.5
 // achievable on a plain serial terminal without ANSI cursor codes, since two
 // '\r'-only lines with no '\n' between them just overwrite each other).
 void printLiveValue( AppMode mode, uint8_t subsetting, float livePercent ) {
-   if ( mode == ModeConfigAudio && subsetting != 2 ) { // noise floor (0) or peak threshold (1)
+   if ( mode == ModeConfigAudio && subsetting <= 1 ) { // noise floor (0) or peak threshold (1)
       // this line is already packed (Lo/Md/Hi + 7 bins) -- skip the usual
       // "NoiseFl:<value>"/"PkThresh:<value>" prefix entirely here, by request, to save chars
       // curated 0-255 low/mid/high derived from the raw bins below (see
@@ -261,9 +284,9 @@ void printLiveValue( AppMode mode, uint8_t subsetting, float livePercent ) {
       // one-char marker after each: '^' above AudioBoard::PEAK_THRESHOLD (a
       // "hit", same threshold EqualizerShow's strobe triggers on), '_' below
       // the noise floor, '-' in between
-      Serial.print( "Lo:" ); printPercentPad( AudioBoard::getLow() ); printLevelMarker( AudioBoard::getLow() );
-      Serial.print( " Md:" ); printPercentPad( AudioBoard::getMid() ); printLevelMarker( AudioBoard::getMid() );
-      Serial.print( " Hi:" ); printPercentPad( AudioBoard::getHigh() ); printLevelMarker( AudioBoard::getHigh() );
+      Serial.print( "Lo:" ); printPad3( AudioBoard::getNormalPercent( BandLow ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getRawPercent( BandLow ) );
+      Serial.print( " Md:" ); printPad3( AudioBoard::getNormalPercent( BandMid ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getRawPercent( BandMid ) );
+      Serial.print( " Hi:" ); printPad3( AudioBoard::getNormalPercent( BandHigh ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getRawPercent( BandHigh ) );
       // the 7 raw bins themselves, no label prefix (kept minimal)
       Serial.print( " " );
       for ( int i = 0; i < 7; ++i ) {
@@ -295,21 +318,22 @@ void printCommitted( AppMode mode, uint8_t subsetting, float livePercent ) {
 // than committing (advancing, cycling away, or cancelling)
 void revertAudioLivePreview() {
    if ( appMode != ModeConfigAudio ) return;
-   if ( configSubsetting == 0 ) AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
-   else if ( configSubsetting == 1 ) AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
+   if ( configSubsetting == SubAudioNoiseFloor ) AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
+   else if ( configSubsetting == SubAudioPeakThreshold ) AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
+   else if ( configSubsetting == SubAudioHitDecay ) AudioBoard::setHitDecayMs( committedHitDecayMs );
 }
 
-LightShow * makeShow( uint8_t mode, uint8_t variation ) {
+LightShow * makeShow( ShowMode mode, uint8_t variation ) {
    switch ( mode ) {
-      case 0:
+      case ShowNightrider:
          return new NightriderShow( carpet, variation );
-      case 1:
+      case ShowFlame:
          return new FlameShow( carpet, variation );
-      case 2:
+      case ShowEqualizer:
          return new EqualizerShow( carpet, variation, Nvm::loadedEqualizerStrobeEnabled() );
-      case 3:
+      case ShowSpeedStripes:
          return new SpeedStripesShow( carpet, variation );
-      case 4:
+      case ShowLighthouse:
          return new LighthouseShow( carpet, variation );
       default:
          // we fucked up, just reset
@@ -318,14 +342,14 @@ LightShow * makeShow( uint8_t mode, uint8_t variation ) {
    }
 }
 
-const char * showName( uint8_t mode ) {
+const char * showName( ShowMode mode ) {
    switch ( mode ) {
-      case 0:  return "Nightrider";
-      case 1:  return "FlameSparkle";
-      case 2:  return "Equalizer";
-      case 3:  return "SpeedStripes";
-      case 4:  return "Lighthouse";
-      default: return "?";
+      case ShowNightrider:   return "Nightrider";
+      case ShowFlame:        return "FlameSparkle";
+      case ShowEqualizer:    return "Equalizer";
+      case ShowSpeedStripes: return "SpeedStripes";
+      case ShowLighthouse:   return "Lighthouse";
+      default:               return "?";
    }
 }
 
@@ -356,8 +380,8 @@ void setup() {
    carpet = theMagicCarpet();
    carpet->setup(); // also loads persisted show/variation state from flash (Nvm::load())
 
-   currMode = Nvm::loadedShow();
-   if ( currMode >= numModes ) currMode = 0; // guard against stale/out-of-range flash data
+   currMode = (ShowMode)Nvm::loadedShow();
+   if ( currMode >= numModes ) currMode = ShowNightrider; // guard against stale/out-of-range flash data
    for ( uint8_t i = 0; i < numModes; ++i ) {
       currVariation[ i ] = Nvm::loadedVariation( i );
    }
@@ -370,6 +394,8 @@ void setup() {
    peakThresholdPercent = Nvm::loadedPeakThreshold();
    AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
    AudioBoard::setAutoGainEnabled( Nvm::loadedAutoGainEnabled() );
+   committedHitDecayMs = Nvm::loadedHitDecayMs();
+   AudioBoard::setHitDecayMs( committedHitDecayMs );
    committedTestHue = liveTestHue = Nvm::loadedTestHue();
    committedTestSat = liveTestSat = Nvm::loadedTestSat();
    committedTestBrightness = liveTestBrightness = Nvm::loadedTestBrightness();
@@ -389,7 +415,14 @@ void loop() {
    static uint32_t clock;
    clock = millis();
 
-   AudioBoard::pollFrequencies( clock );
+   // decay-rate screen's simulated signal replaces real audio polling
+   // entirely while it's active, never runs alongside it
+   bool usingSimulatedAudio = ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay && audioSimMode );
+   if ( usingSimulatedAudio ) {
+      AudioBoard::pollSimulated( clock );
+   } else {
+      AudioBoard::pollFrequencies( clock );
+   }
 
    carpet->encoder->update(); // refresh button short/medium/long/extra-long/double press state
 
@@ -414,7 +447,7 @@ void loop() {
       // read encoder rotation -- this has to happen BEFORE currLightShow->update()
       // below, since the active show also consumes encoder rotation for its own
       // variation selection and would otherwise eat it first.
-      if ( appMode == ModeConfigAudio && configSubsetting == 2 ) {
+      if ( appMode == ModeConfigAudio && configSubsetting == SubAudioAutoGain ) {
          int delta = carpet->encoder->readPositionDelta();
          if ( delta != 0 ) {
             carpet->encoder->resetPositionDelta();
@@ -429,9 +462,9 @@ void loop() {
          if ( delta != 0 ) {
             carpet->encoder->resetPositionDelta();
             static const int STEP = 4; // per detent; tune to taste
-            if ( configSubsetting == 0 ) {
+            if ( configSubsetting == SubPowerTestHue ) {
                liveTestHue = (uint8_t)( liveTestHue + delta * STEP ); // hue wraps naturally (uint8_t overflow)
-            } else if ( configSubsetting == 1 ) {
+            } else if ( configSubsetting == SubPowerTestSat ) {
                liveTestSat = (uint8_t)constrain( (int)liveTestSat + delta * STEP, 0, 255 );
             } else {
                liveTestBrightness = (uint8_t)constrain( (int)liveTestBrightness + delta * STEP, 0, 255 );
@@ -443,16 +476,24 @@ void loop() {
 
       float livePercent = 0.0f;
       if ( appMode == ModeConfigBrightness ) {
-         if ( configSubsetting == 0 ) {
+         if ( configSubsetting == SubBrightnessGlobal ) {
             livePercent = livePercentFor( 0.0f, 100.0f, false, carpet->getGlobalBrightness() ); // pot's bottom half unused
             carpet->showSolidRed( livePercent );
-         } else if ( configSubsetting == 1 ) {
+         } else if ( configSubsetting == SubBrightnessHeadlight ) {
             livePercent = livePercentFor( 50.0f, 100.0f, true, carpet->getHeadlightBrightness() );
             carpet->showHeadlightPreview( livePercent );
-         } else { // configSubsetting == 2
+         } else { // SubBrightnessChina
             livePercent = livePercentFor( 0.0f, 100.0f, true, carpet->getChinaBrightness() );
             carpet->showChinaPreview( livePercent );
          }
+      } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
+         // decay-rate subsetting -- pot adjusts 0-1000ms (soft takeover, same
+         // convention as every other subsetting), live-previewed on
+         // AudioBoard immediately (reverted below if not committed), shown
+         // via its own dedicated meter rather than showAudioMeter()
+         livePercent = livePercentFor( 0.0f, HIT_DECAY_RANGE_MS, true, committedHitDecayMs );
+         AudioBoard::setHitDecayMs( livePercent );
+         carpet->showHitDecayMeter( audioSimMode, livePercent, HIT_DECAY_RANGE_MS );
       } else if ( appMode == ModeConfigAudio ) {
          // reference (committed) position for whichever of the two isn't
          // being actively adjusted right now -- both are always shown at
@@ -461,12 +502,12 @@ void loop() {
          float showNoiseFloor = noiseFloorPercent;
          float showThreshold = peakThresholdPercent;
 
-         if ( configSubsetting == 0 ) {
+         if ( configSubsetting == SubAudioNoiseFloor ) {
             livePercent = livePercentFor( 0.0f, 100.0f, true, noiseFloorPercent );
             livePercent = min( livePercent, peakThresholdPercent ); // never cross the peak threshold
             AudioBoard::setNoiseFloorPercent( livePercent ); // live feedback while adjusting; reverted below if not committed
             showNoiseFloor = livePercent;
-         } else if ( configSubsetting == 1 ) {
+         } else if ( configSubsetting == SubAudioPeakThreshold ) {
             livePercent = livePercentFor( 0.0f, 100.0f, true, peakThresholdPercent );
             livePercent = max( livePercent, noiseFloorPercent ); // never cross the noise floor
             AudioBoard::setPeakThresholdPercent( livePercent ); // live feedback while adjusting; reverted below if not committed
@@ -474,8 +515,10 @@ void loop() {
          }
 
          uint8_t fullSpectrumLevel = AudioBoard::getFullSpectrum(
-               configSubsetting == 2 ? liveAutoGainEnabled : AudioBoard::getAutoGainEnabled() );
-         carpet->showAudioMeter( AudioBoard::getHigh(), AudioBoard::getMid(), AudioBoard::getLow(),
+               configSubsetting == SubAudioAutoGain ? liveAutoGainEnabled : AudioBoard::getAutoGainEnabled() );
+         carpet->showAudioMeter( (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandHigh ) * 255 / 100 ),
+                                 (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandMid ) * 255 / 100 ),
+                                 (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandLow ) * 255 / 100 ),
                                  configSubsetting, showNoiseFloor, showThreshold, liveAutoGainEnabled, fullSpectrumLevel );
       } else { // ModeConfigPowerTest
          carpet->showPowerTest( liveTestHue, liveTestSat, liveTestBrightness );
@@ -485,26 +528,30 @@ void loop() {
 
       if ( didDouble ) {
          // commit whichever subsetting is currently showing
-         if ( appMode == ModeConfigBrightness && configSubsetting == 0 ) {
+         if ( appMode == ModeConfigBrightness && configSubsetting == SubBrightnessGlobal ) {
             carpet->setGlobalBrightness( livePercent );
             Nvm::saveGlobalBrightness( (uint8_t)( livePercent + 0.5f ) );
-         } else if ( appMode == ModeConfigBrightness && configSubsetting == 1 ) {
+         } else if ( appMode == ModeConfigBrightness && configSubsetting == SubBrightnessHeadlight ) {
             carpet->setHeadlightBrightness( livePercent );
             Nvm::saveHeadlightBrightness( (uint8_t)( livePercent + 0.5f ) );
-         } else if ( appMode == ModeConfigBrightness ) { // configSubsetting == 2
+         } else if ( appMode == ModeConfigBrightness ) { // SubBrightnessChina
             carpet->setChinaBrightness( livePercent );
             Nvm::saveChinaBrightness( (uint8_t)( livePercent + 0.5f ) );
-         } else if ( appMode == ModeConfigAudio && configSubsetting == 0 ) { // noise floor
+         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioNoiseFloor ) {
             noiseFloorPercent = livePercent;
             Nvm::saveNoiseFloor( (uint8_t)( noiseFloorPercent + 0.5f ) );
             AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
-         } else if ( appMode == ModeConfigAudio && configSubsetting == 1 ) { // peak threshold
+         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioPeakThreshold ) {
             peakThresholdPercent = livePercent;
             Nvm::savePeakThreshold( (uint8_t)( peakThresholdPercent + 0.5f ) );
             AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
-         } else if ( appMode == ModeConfigAudio ) { // auto-gain enable
+         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioAutoGain ) {
             AudioBoard::setAutoGainEnabled( liveAutoGainEnabled );
             Nvm::saveAutoGainEnabled( liveAutoGainEnabled );
+         } else if ( appMode == ModeConfigAudio ) { // SubAudioHitDecay
+            committedHitDecayMs = livePercent;
+            Nvm::saveHitDecayMs( (uint16_t)( committedHitDecayMs + 0.5f ) );
+            AudioBoard::setHitDecayMs( committedHitDecayMs );
          } else { // ModeConfigPowerTest -- commits the whole hue/sat/brightness triple at once
             committedTestHue = liveTestHue;
             committedTestSat = liveTestSat;
@@ -521,8 +568,17 @@ void loop() {
          carpet->flashRope( 2 ); // confirms advancing to the next config setting
          enterConfigMode( nextConfigMode( appMode ) );
       } else if ( didShort ) {
-         revertAudioLivePreview();
-         cycleSubsetting();
+         if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
+            // this subsetting overrides short-press's usual "cycle to next
+            // subsetting" meaning -- it toggles between the simulated and
+            // live signal instead (same kind of subsetting-specific
+            // override PowerTest establishes for encoder rotation)
+            audioSimMode = !audioSimMode;
+            if ( audioSimMode ) AudioBoard::resetSimulatedBand();
+         } else {
+            revertAudioLivePreview();
+            cycleSubsetting();
+         }
       } else if ( didLong ) {
          revertAudioLivePreview();
          appMode = ModeShow; // cancel, no save
@@ -533,7 +589,7 @@ void loop() {
 
       if ( didExtraLong ) lightsOn = !lightsOn;
       if ( didDouble ) {
-         if ( currMode == 2 ) {
+         if ( currMode == ShowEqualizer ) {
             // Equalizer show active: double press toggles its triple-strobe
             // setting instead of blacklight (see EqualizerShow::updateStrobe())
             EqualizerShow * eq = static_cast<EqualizerShow *>( currLightShow );
@@ -546,7 +602,7 @@ void loop() {
       }
       if ( didLong ) enterConfigMode( ModeConfigBrightness );
       if ( didShort ) {
-         currMode = ( currMode + 1 ) % numModes;
+         currMode = (ShowMode)( ( (uint8_t)currMode + 1 ) % numModes );
          Nvm::saveShow( currMode );
       }
 
@@ -555,7 +611,7 @@ void loop() {
          // last-committed value, undoing whatever its own pot binding left
          // live (see EqualizerShow::update()) -- same revert-on-leave
          // philosophy as the config screens' live previews
-         if ( prevMode == 2 ) AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
+         if ( prevMode == ShowEqualizer ) AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
          delete currLightShow;
          currLightShow = makeShow( currMode, currVariation[ currMode ] );
          currLightShow->start();

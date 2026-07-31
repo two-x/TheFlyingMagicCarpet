@@ -172,10 +172,18 @@ class LighthouseShow : public LightShow {
       return deg;
    }
 
-   // shortest signed distance (deg, -180..180) from a to b going around the circle
+   // shortest signed distance (deg, -180..180) from a to b going around the
+   // circle. Callers always pass angles already wrapped to [0,360) (via
+   // wrap360()/ropeAngleCache_), so b-a+180 is bounded to (-180,540) --
+   // narrow enough that a single branch handles the one possible wraparound
+   // in either direction, same result as fmodf() without its much heavier
+   // software-emulated division-based cost (this runs up to ~4000x/frame
+   // across the rope's per-cluster loop below, the hottest float call site
+   // in this codebase -- worth avoiding fmodf specifically here).
    static float circularDelta( float a, float b ) {
-      float d = fmodf( b - a + 180.0f, 360.0f );
+      float d = b - a + 180.0f;
       if ( d < 0.0f ) d += 360.0f;
+      else if ( d >= 360.0f ) d -= 360.0f;
       return d - 180.0f;
    }
 

@@ -27,6 +27,7 @@ static const CRGBPalette256 waterflames(
   
 class FlameShow : public LightShow {
  private:
+   enum Variation { VarWaterflames = 0, VarFlames = 1, VarShiftingHues = 2, VarHueToWhite = 3 };
 
    // TODO: tune this
    static const uint8_t baseCoolingRate = 10;
@@ -102,9 +103,9 @@ class FlameShow : public LightShow {
    }
 
    const char * variationName() {
-      if ( mode_ == 0 ) return "waterflames";
-      if ( mode_ == 1 ) return "flames";
-      if ( mode_ == 2 ) return "shifting hues";
+      if ( mode_ == VarWaterflames ) return "waterflames";
+      if ( mode_ == VarFlames ) return "flames";
+      if ( mode_ == VarShiftingHues ) return "shifting hues";
       return "hue to white";
    }
 
@@ -118,8 +119,8 @@ class FlameShow : public LightShow {
    //             fixed white at the other -- "one color travels the hue
    //             spectrum... the other is always white".
    CRGB paletteColor( uint8_t index ) {
-      if ( mode_ == 0 ) return ColorFromPalette( waterflames, index );
-      if ( mode_ == 1 ) return ColorFromPalette( flames, index );
+      if ( mode_ == VarWaterflames ) return ColorFromPalette( waterflames, index );
+      if ( mode_ == VarFlames ) return ColorFromPalette( flames, index );
       return ColorFromPalette( shiftingPalette_, index );
    }
 
@@ -176,13 +177,13 @@ class FlameShow : public LightShow {
       shiftHue_ += hueRate * hueDtSec;
       while ( shiftHue_ >= 256.0f ) shiftHue_ -= 256.0f;
       uint8_t shiftHueByte = (uint8_t)shiftHue_;
-      if ( mode_ == 3 || mode_ == 2 ) {
+      if ( mode_ == VarHueToWhite || mode_ == VarShiftingHues ) {
          // shared by both hue-shifting variations: saturation random-walks
          // 75%-100% (widened from a fixed/87%-100% range -- was reading as
          // too saturated all the time), starting at 90%, same range/
          // technique as LighthouseShow's satWalk_.
          uint8_t satByte = (uint8_t)( satWalk_.value( 0.75f, 1.0f, 0.013f ) * 255.0f + 0.5f );
-         if ( mode_ == 3 ) {
+         if ( mode_ == VarHueToWhite ) {
             // one color (the drifting hue) fading to the other (fixed white)
             CRGB driftClr = CHSV( shiftHueByte, satByte, 255 );
             shiftingPalette_ = CRGBPalette16( driftClr, driftClr, CRGB::White, CRGB::White );
@@ -289,7 +290,7 @@ class FlameShow : public LightShow {
          */
       }
 
-      int dmxval = AudioBoard::getLow();
+      int dmxval = (int)AudioBoard::getNormalPercent( BandLow ) * 255 / 100; // AudioBoard's getters are percent now; converted back to this show's own 0-255 palette-index scale
       //Serial.println( dmxval );
       CRGB dmxclr = paletteColor( dmxval );
       LedUtil::gammaCorrect( dmxclr );

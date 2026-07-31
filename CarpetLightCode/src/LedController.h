@@ -34,33 +34,28 @@ class Potentiometer {
  public:
    Potentiometer( uint8_t pin ) : pin_( pin ) {}
 
-   // the value light shows should see: the real live pot reading, EXCEPT
-   // while a low-power simulation is active (see updateLowPower()), during
-   // which it instead returns a synthetic value fading from the pot's real
-   // reading at the moment low power engaged down to 0 over FADE_DURATION_MS,
-   // then holding at 0 -- i.e. every show's own pot-driven behavior smoothly
-   // winds down to its "pot at zero" state without the show needing to know
-   // anything about low-power mode. A real manual turn away from that
-   // captured starting position (more than NOISE_FLOOR_RAW) cancels the
-   // simulation for the rest of this low-power episode and hands back live
-   // control -- see README.md, "Low power mode".
-   uint16_t read() {
-      uint16_t raw = readLive();
-      if ( !simulationActive_ ) return raw;
-      uint16_t diff = ( raw > fadeStartRaw_ ) ? ( raw - fadeStartRaw_ ) : ( fadeStartRaw_ - raw );
-      if ( diff >= NOISE_FLOOR_RAW ) {
-         simulationActive_ = false; // manual override -- sticks until the next low-power rising edge
-         return raw;
-      }
-      if ( fadeTimer_.expired() ) return 0;
-      float frac = 1.0f - ( (float)fadeTimer_.elapsed() / (float)FADE_DURATION_MS ); // 1 -> 0 over 20s
-      return (uint16_t)( fadeStartRaw_ * frac + 0.5f );
+   // the value light shows should see, as a percent (0-100): the real live
+   // pot reading, EXCEPT while a low-power simulation is active (see
+   // updateLowPower()), during which it instead returns a synthetic value
+   // fading from the pot's real reading at the moment low power engaged down
+   // to 0 over FADE_DURATION_MS, then holding at 0 -- i.e. every show's own
+   // pot-driven behavior smoothly winds down to its "pot at zero" state
+   // without the show needing to know anything about low-power mode. A real
+   // manual turn away from that captured starting position (more than
+   // NOISE_FLOOR_RAW) cancels the simulation for the rest of this low-power
+   // episode and hands back live control -- see README.md, "Low power mode".
+   //
+   // The raw ADC reading (0-MAX_VOLTAGE) never leaves this class -- every
+   // caller outside Potentiometer works in percent only.
+   float readPercent() {
+      return rawToPercent_( read_() );
    }
 
-   // the true, always-live pot reading, bypassing the low-power simulation --
-   // for config-mode UI code, which must never be affected by it
-   uint16_t readLive() {
-      return analogRead( pin_ );
+   // the true, always-live pot reading as a percent, bypassing the
+   // low-power simulation -- for config-mode UI code, which must never be
+   // affected by it
+   float readLivePercent() {
+      return rawToPercent_( readLive_() );
    }
 
    // call once per main loop iteration, ModeShow only (never during config
@@ -72,7 +67,7 @@ class Potentiometer {
    void updateLowPower( bool wantLowPower ) {
       if ( wantLowPower && !lowPowerEngaged_ ) {
          simulationActive_ = true;
-         fadeStartRaw_ = readLive();
+         fadeStartRaw_ = readLive_();
          fadeTimer_.set( FADE_DURATION_MS ); // starts the fade-to-zero countdown now
       } else if ( !wantLowPower ) {
          simulationActive_ = false; // exiting low power snaps straight back to live
@@ -84,9 +79,28 @@ class Potentiometer {
    static const uint32_t FADE_DURATION_MS = 20000;
    static const uint16_t NOISE_FLOOR_RAW = (uint16_t)( 0.02f * MAX_VOLTAGE + 0.5f ); // ~2%
 
+   static float rawToPercent_( uint16_t raw ) { return (float)raw / (float)MAX_VOLTAGE * 100.0f; }
+
+   uint16_t read_() {
+      uint16_t raw = readLive_();
+      if ( !simulationActive_ ) return raw;
+      uint16_t diff = ( raw > fadeStartRaw_ ) ? ( raw - fadeStartRaw_ ) : ( fadeStartRaw_ - raw );
+      if ( diff >= NOISE_FLOOR_RAW ) {
+         simulationActive_ = false; // manual override -- sticks until the next low-power rising edge
+         return raw;
+      }
+      if ( fadeTimer_.expired() ) return 0;
+      float frac = 1.0f - ( (float)fadeTimer_.elapsed() / (float)FADE_DURATION_MS ); // 1 -> 0 over 20s
+      return (uint16_t)( fadeStartRaw_ * frac + 0.5f );
+   }
+
+   uint16_t readLive_() {
+      return analogRead( pin_ );
+   }
+
    uint8_t pin_;
    bool lowPowerEngaged_ = false;   // tracks the vehicle's actual reported state
-   bool simulationActive_ = false;  // are we currently overriding read()'s return value?
+   bool simulationActive_ = false;  // are we currently overriding read_()'s return value?
    uint16_t fadeStartRaw_ = 0;
    Timer fadeTimer_;
 };

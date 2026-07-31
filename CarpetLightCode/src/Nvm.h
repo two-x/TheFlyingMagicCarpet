@@ -15,7 +15,7 @@
 namespace Nvm {
 
 static DueFlashStorage flash;
-static const uint8_t MAGIC = 0x43; // bump this if State's layout ever changes
+static const uint8_t MAGIC = 0x44; // bump this if State's layout ever changes
 static const uint8_t MAX_SHOWS = 8; // headroom for future shows, no relayout needed
 
 // all brightness/threshold fields are percentages (0-100), never raw 0-255
@@ -35,6 +35,7 @@ struct State {
    uint8_t testSat;                    // 0-255, default 255
    uint8_t testBrightness;             // 0-255, default 255
    uint8_t equalizerStrobeEnabled;     // 0/1, default 0 (off) -- see BumpingAudioShow.h's EqualizerShow
+   uint16_t hitDecayMs;                // 0-1000, default 300 -- ms for a "hit" to decay from full to zero (see AudioBoard.h)
 };
 
 static State state;
@@ -57,6 +58,7 @@ inline void load() {
       state.testSat = 255;
       state.testBrightness = 255;
       state.equalizerStrobeEnabled = 0;
+      state.hitDecayMs = 300;
       flash.write( 0, (byte *)&state, sizeof( State ) );
    }
 }
@@ -107,6 +109,10 @@ inline uint8_t loadedTestBrightness() {
 
 inline bool loadedEqualizerStrobeEnabled() {
    return state.equalizerStrobeEnabled != 0;
+}
+
+inline uint16_t loadedHitDecayMs() {
+   return state.hitDecayMs;
 }
 
 inline void saveShow( uint8_t show ) {
@@ -167,6 +173,11 @@ inline void saveTestBrightness( uint8_t brightness ) {
 
 inline void saveEqualizerStrobeEnabled( bool enabled ) {
    state.equalizerStrobeEnabled = enabled ? 1 : 0;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveHitDecayMs( uint16_t ms ) {
+   state.hitDecayMs = ms;
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 

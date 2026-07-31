@@ -214,11 +214,11 @@ static SettlePrinter globalEnergyPrinter_; // shared across the whole group, not
 // that show never jumps to wherever the pot happens to be), and update()
 // once per frame to get this frame's energy percent.
 struct PotEnergyTakeover {
-   uint16_t entryRaw = 0;
+   float entryPercent = 0.0f;
    bool takenOver = false;
 
    void reset( MagicCarpet * carpet ) {
-      entryRaw = carpet->pot->read();
+      entryPercent = carpet->pot->readPercent();
       takenOver = false;
    }
 
@@ -226,13 +226,12 @@ struct PotEnergyTakeover {
    // enough yet since reset(), or the live pot position (updating the
    // shared value, for every show in the group) once it has
    float update( MagicCarpet * carpet ) {
-      uint16_t potRaw = carpet->pot->read();
+      float potPercent = carpet->pot->readPercent();
       if ( !takenOver ) {
-         uint16_t diff = ( potRaw > entryRaw ) ? ( potRaw - entryRaw ) : ( entryRaw - potRaw );
-         static const uint16_t THRESHOLD = (uint16_t)( 0.02f * MAX_VOLTAGE + 0.5f );
-         if ( diff >= THRESHOLD ) takenOver = true;
+         static const float THRESHOLD_PERCENT = 2.0f;
+         if ( fabsf( potPercent - entryPercent ) >= THRESHOLD_PERCENT ) takenOver = true;
       }
-      if ( takenOver ) globalEnergyPercent = (float)potRaw / (float)MAX_VOLTAGE * 100.0f;
+      if ( takenOver ) globalEnergyPercent = potPercent;
       globalEnergyPrinter_.update( (int)( globalEnergyPercent + 0.5f ), "energy:", "%" );
       return globalEnergyPercent;
    }

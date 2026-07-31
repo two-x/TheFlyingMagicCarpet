@@ -489,6 +489,108 @@ class MagicCarpet {
       LedUtil::fill( megabarLeds, CRGB( 0, 0, fullSpectrumLevel ), NUM_MEGABAR_LEDS );
    }
 
+   // shared by showHitDecayMeter()'s VU meters below: fills [0,barLen) of
+   // ropeLeds starting at ropeOffset with barColor up to litPos, black past
+   // it, then always stamps a red dot at peakPos (even if that pixel would
+   // otherwise be unlit) and a blue dot at decayDotPos -- the current
+   // decay-rate SETTING's position along this meter's own length (0=0ms,
+   // barLen-1=the top of the setting's range), entirely unrelated to any
+   // audio level. If any of the 3 marker positions coincide, nudge apart by
+   // 1 pixel (same collision-avoidance trick as showAudioMeter's dots above)
+   // so the later-drawn color never silently hides an earlier one.
+   void renderVuBar( int ropeOffset, int barLen, int litPos, CRGB barColor, int peakPos, int decayDotPos ) {
+      for ( int p = 0; p < barLen; ++p ) {
+         ropeLeds[ ropeOffset + p ] = ( p < litPos ) ? barColor : CRGB::Black;
+         ropeLeds[ ropeOffset + p ].w = 0;
+      }
+      if ( decayDotPos == peakPos ) {
+         if ( decayDotPos > 0 ) --decayDotPos; else ++peakPos;
+      }
+      ropeLeds[ ropeOffset + peakPos ] = CRGB::Red;
+      ropeLeds[ ropeOffset + peakPos ].w = 0;
+      ropeLeds[ ropeOffset + decayDotPos ] = CRGB::Blue;
+      ropeLeds[ ropeOffset + decayDotPos ].w = 0;
+   }
+
+   // Audio config screen's decay-rate subsetting (subsetting 3): visualizes
+   // hit-tracking (see AudioBoard.h's raw/normal/hit system) against either a
+   // simulated or live signal, so the decay rate can be tuned by eye (see
+   // CarpetLightLogic.cpp's sim/live toggle, bound to a short press while
+   // this subsetting is showing). China stays off in both modes, per
+   // request. decayMs/decayRangeMs place a blue dot on every VU meter marking
+   // where the current decay-rate SETTING sits within its own adjustable
+   // range (0 to decayRangeMs) -- that dot's position depends only on the
+   // setting, never on any audio level.
+   //
+   //  - simMode: every light tracks the single simulated hit value in green,
+   //    except the front strip, which shows ONE big VU meter across all 156
+   //    LEDs: white up to the current normalized level, switching to red for
+   //    whatever portion of that lit range is above the peak threshold, plus
+   //    a red dot always marking the threshold position itself. If hit is
+   //    still decaying down from a level higher than the current normalized
+   //    level, the gap between them also shows red (the decay's lingering
+   //    tail past where the live signal has already dropped to).
+   //  - live mode: the front strip instead shows 3 separate VU meters (one
+   //    per band, in the same treble/mid/bass array order as
+   //    showAudioMeter()), each driven by that band's own hit value, colored
+   //    blue/green/red respectively (peak-threshold dots are always red
+   //    regardless of a bar's own color). Megabars split into a repeating
+   //    3-position pattern -- treble(blue), mid(green), bass(red) -- around
+   //    all 12, each showing that band's own hit value.
+   void showHitDecayMeter( bool simMode, float decayMs, float decayRangeMs ) {
+      clearChinas();
+      int decayDotPos156 = (int)( constrain( decayMs / decayRangeMs, 0.0f, 1.0f ) * ( SIZEOF_SMALL_NEO - 1 ) + 0.5f );
+      int peakPos156 = ( (int)AudioBoard::getPeakThresholdRaw() * ( SIZEOF_SMALL_NEO - 1 ) + 127 ) / 255;
+
+      if ( simMode ) {
+         uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( BandLow ) * 255 / 100 );
+         uint8_t normalRaw = (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandLow ) * 255 / 100 );
+         int normalPos = ( (int)normalRaw * ( SIZEOF_SMALL_NEO - 1 ) + 127 ) / 255;
+         int hitPos = ( (int)hitRaw * ( SIZEOF_SMALL_NEO - 1 ) + 127 ) / 255;
+
+         LedUtil::fill( megabarLeds, CRGB( 0, hitRaw, 0 ), NUM_MEGABAR_LEDS );
+         for ( int i = SIZEOF_SMALL_NEO; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
+            ropeLeds[ i ] = CRGB( 0, hitRaw, 0 );
+            ropeLeds[ i ].w = 0;
+         }
+         // front strip: white up to normalPos, switching to red past peakPos
+         // (i.e. red for whatever's currently above threshold), then red
+         // again from normalPos up to hitPos if hit is still lagging above
+         // the live signal (decay not yet caught up)
+         for ( int p = 0; p < SIZEOF_SMALL_NEO; ++p ) {
+            CRGB c = CRGB::Black;
+            if ( p < normalPos ) c = ( p < peakPos156 ) ? CRGB::White : CRGB::Red;
+            else if ( p < hitPos ) c = CRGB::Red;
+            ropeLeds[ p ] = c;
+            ropeLeds[ p ].w = 0;
+         }
+         int peakDot = peakPos156, decayDot = decayDotPos156;
+         if ( decayDot == peakDot ) { if ( decayDot > 0 ) --decayDot; else ++peakDot; }
+         ropeLeds[ peakDot ] = CRGB::Red; ropeLeds[ peakDot ].w = 0;
+         ropeLeds[ decayDot ] = CRGB::Blue; ropeLeds[ decayDot ].w = 0;
+      } else {
+         static const int segLen = SIZEOF_SMALL_NEO / 3; // 52
+         static const AudioBand segBand[ 3 ] = { BandHigh, BandMid, BandLow };
+         static const CRGB segColor[ 3 ] = { CRGB::Blue, CRGB::Green, CRGB::Red };
+         int peakPosSeg = ( (int)AudioBoard::getPeakThresholdRaw() * ( segLen - 1 ) + 127 ) / 255;
+         int decayDotPosSeg = (int)( constrain( decayMs / decayRangeMs, 0.0f, 1.0f ) * ( segLen - 1 ) + 0.5f );
+         for ( int seg = 0; seg < 3; ++seg ) {
+            uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( segBand[ seg ] ) * 255 / 100 );
+            int hitPos = ( (int)hitRaw * ( segLen - 1 ) + 127 ) / 255;
+            renderVuBar( seg * segLen, segLen, hitPos, segColor[ seg ], peakPosSeg, decayDotPosSeg );
+         }
+         // megabars: repeating treble(blue)/mid(green)/bass(red) triple,
+         // each showing that band's own hit value
+         for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
+            int which = m % 3;
+            uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( segBand[ which ] ) * 255 / 100 );
+            CRGB c = segColor[ which ];
+            c.nscale8( hitRaw );
+            megabarLeds[ m ] = c;
+         }
+      }
+   }
+
    // power-saving A/B test: left half of the rig (rope's left side + left
    // half of both front/back edges, china[2..5]) shows the given HSV color
    // rendered straight to RGB (w=0); the right half (rope's right side +
