@@ -5,9 +5,14 @@
  *    angle+180 simultaneously (same color at both) -- so 2 independent
  *    beams produce 4 lit clusters total, on megabars and on the rope.
  *
- *    Per beam, on megabars: the nearest megabar (of the 12, 30 deg apart) to
- *    the beam's current angle is full brightness (V=255); its 2 immediate
- *    neighbors are half brightness (V=128). Same pattern at angle+180.
+ *    Per beam, on megabars: each of the 12 fixed megabar positions (30 deg
+ *    apart) gets a smooth, continuous brightness as a function of its own
+ *    angular distance from the beam's current (continuously-moving, never
+ *    quantized) angle -- same solid-then-feathered-fade-to-black shape as
+ *    the rope (see below), evaluated at 12 discrete points instead of ~1016.
+ *    Sampling a smoothly-varying field at sparse fixed points, rather than
+ *    the old discrete "nearest gets full, 2 neighbors get a fixed half"
+ *    snap, is what fakes a continuous sweep out of only 12 fixed fixtures.
  *
  *    Rotation: each beam's angular velocity (deg/s, range +/-360 = +/-1Hz)
  *    is its own independent random walk -- see RandomWalk below -- that can
@@ -21,14 +26,20 @@
  *    its own independent rotation random walk, but no independent hue/sat
  *    walks of its own.
  *
- *    Rope: each of the 4 clusters lights a (30/360 of the full loop)-wide
- *    segment at full brightness in its beam's color. Everywhere else, color
- *    smoothly blends between the two flanking clusters going around the
- *    ring, and brightness dips smoothly from 100% at a segment's edge down
- *    to 50% at the midpoint of the gap and back to 100% at the next
- *    segment -- never a hard cut. Where two clusters' segments overlap
- *    (megabars or rope), hue is additive (summed, wrapped) and brightness
- *    is NOT summed (stays at the flat max).
+ *    Rope AND megabars share one falloff shape per cluster (independently
+ *    tunable constants per request -- ROPE_SEGMENT_HALF_WIDTH_DEG/
+ *    ROPE_FADE_WIDTH_DEG vs MEGABAR_..., currently equal but meant to be
+ *    retuned separately after testing): solid full brightness out to
+ *    SEGMENT_HALF_WIDTH_DEG (15 deg, i.e. a 30-deg-wide solid segment),
+ *    then a smoothstep (flat-tangent, "very smooth") ease down to black
+ *    over the next FADE_WIDTH_DEG (7.5 deg) -- so the two "first pure
+ *    black" points on either side of one cluster sit 45 deg apart
+ *    (15+7.5 on each side). Beyond that, fully black -- no more blending
+ *    across the whole gap to the next cluster. Where two clusters'
+ *    falloffs overlap (megabars or rope), hue is additive (summed,
+ *    wrapped, same as before) and brightness is the max of the
+ *    contributors, not summed -- same "additive hue, same brightness"
+ *    rule the megabars always used, now applied identically to the rope.
  *
  *    China: all 8 fixtures share one color, crossfading smoothly between
  *    beam 1's and beam 2's color at a rate equal to the average of the two
@@ -152,31 +163,26 @@ class LighthouseShow : public LightShow {
       return d - 180.0f;
    }
 
-   // merges one cluster's contribution into a megabar slot: first writer
-   // sets it; subsequent writers (overlap) sum hue (wrapped) and keep
-   // brightness at the max of the two, per request ("additive hue, same brightness")
-   void mergeMegabar( bool set[ 12 ], uint8_t hue[ 12 ], uint8_t sat[ 12 ], uint8_t bright[ 12 ],
-                       int idx, uint8_t h, uint8_t s, uint8_t b ) {
-      if ( !set[ idx ] ) {
-         set[ idx ] = true;
-         hue[ idx ] = h;
-         sat[ idx ] = s;
-         bright[ idx ] = b;
-      } else {
-         hue[ idx ] = (uint8_t)( hue[ idx ] + h ); // wraps -- additive hue
-         bright[ idx ] = max( bright[ idx ], b );
-      }
+   // smooth ease from 255 (t=0) down to 0 (t=255) -- flat tangent at both
+   // ends ("very smooth", not a linear/triwave8 ramp) -- integer-only
+   // smoothstep(1 - t/255)*255, no float trig, no lookup table needed
+   static uint8_t smoothstep8( uint8_t t ) {
+      uint32_t x = 255 - t;
+      uint32_t smooth = ( x * x * ( 3 * 255 - 2 * x ) ) / ( 255ul * 255ul );
+      return (uint8_t)smooth;
    }
 
-   void addMegabarCluster( bool set[ 12 ], uint8_t hue[ 12 ], uint8_t sat[ 12 ], uint8_t bright[ 12 ],
-                            float clusterAngle, uint8_t h, uint8_t s ) {
-      int nearest = ( (int)( clusterAngle / 30.0f + 0.5f ) ) % 12;
-      if ( nearest < 0 ) nearest += 12;
-      int neighborA = ( nearest + 11 ) % 12;
-      int neighborB = ( nearest + 1 ) % 12;
-      mergeMegabar( set, hue, sat, bright, nearest, h, s, 255 );
-      mergeMegabar( set, hue, sat, bright, neighborA, h, s, 128 );
-      mergeMegabar( set, hue, sat, bright, neighborB, h, s, 128 );
+   // one cluster's brightness contribution (0-255) at angular distance d
+   // (0-180 deg) away: solid 255 out to halfWidthDeg, smoothstep fade to 0
+   // over the next fadeWidthDeg, flat 0 beyond that -- shared shape for
+   // both rope and megabars, just with separately-tunable widths (see
+   // class comment)
+   static uint8_t clusterBrightness( float d, float halfWidthDeg, float fadeWidthDeg ) {
+      if ( d <= halfWidthDeg ) return 255;
+      float outer = halfWidthDeg + fadeWidthDeg;
+      if ( d >= outer ) return 0;
+      float fadeFrac = ( d - halfWidthDeg ) / fadeWidthDeg; // 0..1
+      return smoothstep8( (uint8_t)( fadeFrac * 255.0f + 0.5f ) );
    }
 
  public:
@@ -221,70 +227,54 @@ class LighthouseShow : public LightShow {
       float clusterAngle[ 4 ] = { angle1_, wrap360( angle1_ + 180.0f ), angle2_, wrap360( angle2_ + 180.0f ) };
       uint8_t clusterHue[ 4 ] = { hue1Byte, hue1Byte, hue2Byte, hue2Byte };
 
-      // --- megabars ---
-      bool mbSet[ 12 ] = { false };
-      uint8_t mbHue[ 12 ], mbSat[ 12 ], mbBright[ 12 ];
-      for ( int c = 0; c < 4; ++c ) {
-         addMegabarCluster( mbSet, mbHue, mbSat, mbBright, clusterAngle[ c ], clusterHue[ c ], satByte );
-      }
-      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
-         carpet->megabarLeds[ i ] = mbSet[ i ] ? (CRGB)CHSV( mbHue[ i ], satByte, mbBright[ i ] ) : CRGB::Black;
-      }
-
-      // --- rope ---
-      static const float SEGMENT_HALF_WIDTH_DEG = 15.0f; // (30/360 total) wide, so +/-15 from center
-      // sorted cluster order, needed to find each background LED's flanking
-      // pair -- insertion sort, only 4 elements
-      int order[ 4 ] = { 0, 1, 2, 3 };
-      for ( int a = 1; a < 4; ++a ) {
-         int key = order[ a ], j = a - 1;
-         while ( j >= 0 && clusterAngle[ order[ j ] ] > clusterAngle[ key ] ) {
-            order[ j + 1 ] = order[ j ];
-            --j;
+      // --- megabars: smooth per-position falloff, sampled at each of the
+      // 12 fixed 30-deg-apart positions -- see class comment. Independent
+      // constants from the rope's, by request (tune separately after testing).
+      // Fade set to 5deg/side (solid core left at 15deg, i.e. still a
+      // 30deg-wide solid beam) to help smooth the megabar-to-megabar travel
+      // -- total reach between first-black points on each side: 40deg.
+      static const float MEGABAR_SEGMENT_HALF_WIDTH_DEG = 15.0f;
+      static const float MEGABAR_FADE_WIDTH_DEG = 5.0f;
+      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
+         float megabarAngle = m * 30.0f;
+         uint16_t hueSum = 0;
+         uint8_t maxBright = 0;
+         bool anySet = false;
+         for ( int c = 0; c < 4; ++c ) {
+            float d = fabsf( circularDelta( megabarAngle, clusterAngle[ c ] ) );
+            uint8_t contribBright = clusterBrightness( d, MEGABAR_SEGMENT_HALF_WIDTH_DEG, MEGABAR_FADE_WIDTH_DEG );
+            if ( contribBright > 0 ) {
+               hueSum += clusterHue[ c ];
+               maxBright = max( maxBright, contribBright );
+               anySet = true;
+            }
          }
-         order[ j + 1 ] = key;
+         carpet->megabarLeds[ m ] = anySet ? (CRGB)CHSV( (uint8_t)hueSum, satByte, maxBright ) : CRGB::Black;
       }
 
+      // --- rope: same falloff shape, own constants, evaluated at each of
+      // the ~1016 rope LEDs' actual angular positions. No more blending
+      // across the whole gap between clusters -- fully black beyond the
+      // fade width now, per request.
+      static const float ROPE_SEGMENT_HALF_WIDTH_DEG = 15.0f;
+      static const float ROPE_FADE_WIDTH_DEG = 7.5f;
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          float a = ropeAngleCache_[ i ];
 
          uint16_t hueSum = 0;
+         uint8_t maxBright = 0;
          bool anySet = false;
          for ( int c = 0; c < 4; ++c ) {
-            if ( fabsf( circularDelta( a, clusterAngle[ c ] ) ) <= SEGMENT_HALF_WIDTH_DEG ) {
+            float d = fabsf( circularDelta( a, clusterAngle[ c ] ) );
+            uint8_t contribBright = clusterBrightness( d, ROPE_SEGMENT_HALF_WIDTH_DEG, ROPE_FADE_WIDTH_DEG );
+            if ( contribBright > 0 ) {
                hueSum += clusterHue[ c ];
+               maxBright = max( maxBright, contribBright );
                anySet = true;
             }
          }
 
-         CRGB result;
-         if ( anySet ) {
-            result = CHSV( (uint8_t)hueSum, satByte, 255 );
-         } else {
-            // find the flanking clusters (trailing/leading) in sorted order
-            int leadPos = 0;
-            while ( leadPos < 4 && circularDelta( clusterAngle[ order[ leadPos ] ], a ) < 0.0f ) ++leadPos;
-            int lead = order[ leadPos % 4 ];
-            int trail = order[ ( leadPos + 3 ) % 4 ];
-
-            float gapStart = wrap360( clusterAngle[ trail ] + SEGMENT_HALF_WIDTH_DEG );
-            float gapSpan = circularDelta( gapStart, wrap360( clusterAngle[ lead ] - SEGMENT_HALF_WIDTH_DEG ) );
-            if ( gapSpan < 0.0f ) gapSpan += 360.0f;
-            float into = circularDelta( gapStart, a );
-            if ( into < 0.0f ) into += 360.0f;
-            float t = ( gapSpan > 0.0f ) ? constrain( into / gapSpan, 0.0f, 1.0f ) : 0.0f;
-
-            CRGB trailClr = CHSV( clusterHue[ trail ], satByte, 255 );
-            CRGB leadClr = CHSV( clusterHue[ lead ], satByte, 255 );
-            result = blend( trailClr, leadClr, (uint8_t)( t * 255.0f ) );
-
-            // 100% at each edge, dipping to 50% at the gap's midpoint --
-            // triwave8 (0->255->0 across the full input range) inverted,
-            // no float trig needed (see class comment)
-            uint8_t brightness = 255 - ( triwave8( (uint8_t)( t * 255.0f ) ) / 2 );
-            result.nscale8( brightness );
-         }
-         carpet->ropeLeds[ i ] = result;
+         carpet->ropeLeds[ i ] = anySet ? (CRGB)CHSV( (uint8_t)hueSum, satByte, maxBright ) : CRGB::Black;
          carpet->ropeLeds[ i ].w = 0;
       }
 
