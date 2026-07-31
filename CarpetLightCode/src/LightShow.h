@@ -167,6 +167,77 @@ static CRGBPalette256 topColors = topColors_t;
 static CRGBPalette256 bottomColors = bottomColors_t;
 */
 
+// prints "<label><value><suffix>" once, 1s after a pot-adjusted value stops
+// changing -- not on every frame while it's still moving. General-purpose:
+// covers any pot binding in normal run mode that doesn't already have its
+// own live console feedback (config mode's screens print their own way
+// instead -- see printLiveValue() in CarpetLightLogic.cpp). Duplicated as a
+// tiny struct per this codebase's convention (see RandomWalk).
+struct SettlePrinter {
+   int lastValue = 0;
+   bool armed = false; // false until the first update(), so boot doesn't print immediately
+   Timer settleTimer{ 1000 };
+   bool printed = true;
+
+   void update( int value, const char * label, const char * suffix = "" ) {
+      if ( !armed || value != lastValue ) {
+         armed = true;
+         lastValue = value;
+         settleTimer.reset();
+         printed = false;
+      }
+      if ( !printed && settleTimer.expired() ) {
+         Serial.print( label );
+         Serial.print( value );
+         Serial.println( suffix );
+         printed = true;
+      }
+   }
+};
+
+// shared "how energetic" setting, 0-100%, pot-driven, shared across every
+// show/variation where the pot represents the light show's overall energy
+// level (NightriderShow's auto-cycle variation, FlameShow's fire-sim cadence
+// + hue-drift ceiling, LighthouseShow's rotation ceiling). Adjusting the pot
+// in any ONE of them updates this one value, so it becomes the new starting
+// point for all the others too, next time you're on one of them. Not
+// persisted to flash -- live-only, same as each of these was before.
+static float globalEnergyPercent = 100.0f; // defaults to fully energetic
+static SettlePrinter globalEnergyPrinter_; // shared across the whole group, not per-show
+
+// small reusable per-show soft-takeover tracker binding the pot to
+// globalEnergyPercent -- duplicated as a tiny struct (not a full
+// base-class mechanism), matching this codebase's existing
+// duplicate-small-helpers convention (see RandomWalk in FlameShow.h/
+// LighthouseShow.h/SpeedStripesShow.h). Each show in the shared group
+// declares one member, calls reset() from its own start() (so switching TO
+// that show never jumps to wherever the pot happens to be), and update()
+// once per frame to get this frame's energy percent.
+struct PotEnergyTakeover {
+   uint16_t entryRaw = 0;
+   bool takenOver = false;
+
+   void reset( MagicCarpet * carpet ) {
+      entryRaw = carpet->pot->read();
+      takenOver = false;
+   }
+
+   // returns 0-100%: the shared value if this show's pot hasn't moved
+   // enough yet since reset(), or the live pot position (updating the
+   // shared value, for every show in the group) once it has
+   float update( MagicCarpet * carpet ) {
+      uint16_t potRaw = carpet->pot->read();
+      if ( !takenOver ) {
+         uint16_t diff = ( potRaw > entryRaw ) ? ( potRaw - entryRaw ) : ( entryRaw - potRaw );
+         static const uint16_t THRESHOLD = (uint16_t)( 0.02f * MAX_VOLTAGE + 0.5f );
+         if ( diff >= THRESHOLD ) takenOver = true;
+      }
+      if ( takenOver ) globalEnergyPercent = (float)potRaw / (float)MAX_VOLTAGE * 100.0f;
+      globalEnergyPrinter_.update( (int)( globalEnergyPercent + 0.5f ), "energy:", "%" );
+      return globalEnergyPercent;
+   }
+};
+
 class LightShow {
  protected:
    MagicCarpet * carpet;

@@ -355,7 +355,7 @@ class MagicCarpet {
    // constants (FRONT_RIGHT/BACK_RIGHT, BACK_LEFT/FRONT_LEFT), which land 33
    // LEDs in from each end of the physical channel (SIZEOF_LARGE_NEO_CORNER),
    // so the window doesn't wrap into the front/back edge LEDs at either end.
-   void renderSideIndicator( int backCornerIdx, int frontCornerIdx, float percent ) {
+   void renderSideIndicator( int backCornerIdx, int frontCornerIdx, float percent, CRGB color ) {
       const int segmentLen = abs( frontCornerIdx - backCornerIdx ) + 1;
       static const int windowWidth = 10;
       int direction = ( frontCornerIdx > backCornerIdx ) ? 1 : -1;
@@ -365,18 +365,15 @@ class MagicCarpet {
       for ( int k = 0; k < windowWidth; ++k ) {
          int localOffset = windowOffset + k;
          int idx = backCornerIdx + direction * localOffset;
-         float f = (float)localOffset / (float)( segmentLen - 1 ); // 0=back(red) .. 1=front(green)
-         uint8_t hue = (uint8_t)( f * 96.0f );
-         ropeLeds[ idx ] = CHSV( hue, 255, 255 );
+         ropeLeds[ idx ] = color;
          ropeLeds[ idx ].w = 0;
       }
    }
 
    // audio configuration screen: a 3-band VU meter across the front rope
-   // strip (ropeLeds[0..SIZEOF_SMALL_NEO-1], 156 LEDs), a 10-LED position
-   // indicator sliding along each side strip showing the live noise-floor
-   // percent, and all megabars glowing blue proportional to the current
-   // full-spectrum audio level. China is blanked.
+   // strip (ropeLeds[0..SIZEOF_SMALL_NEO-1], 156 LEDs), a position indicator
+   // sliding along each side strip, and all megabars glowing blue
+   // proportional to the current full-spectrum audio level.
    //
    // The front strip splits into 3 equal 52-LED segments in array order:
    // treble, mid, bass. Each segment shows a dim (50%) green->yellow->red
@@ -385,18 +382,52 @@ class MagicCarpet {
    // whole segment goes solid white. trebleLevel/midLevel/bassLevel are
    // 0-255 (AudioBoard::getHigh/getMid/getLow range).
    //
-   // Each side strip, true corner to true corner (286 LEDs -- the 352-LED
-   // physical channel minus 33 at each end, see renderSideIndicator()) shows
-   // a 10-LED window at the position corresponding to liveNoiseFloorPercent
-   // (0-100): at the back corner at 0%, sliding to the front corner at 100%.
+   // audioSubsetting selects what the side strips show (no more rainbow --
+   // each indicator is now a flat color, by request):
+   //  - 0 (noise floor) or 1 (peak threshold): BOTH values are shown at
+   //    once, so you can see where the other one sits while dialing in this
+   //    one -- noise floor as a blue 10-LED window, peak threshold as a red
+   //    10-LED window, each at its own percent position (0=back corner,
+   //    100=front corner, see renderSideIndicator()).
+   //  - 2 (auto-gain): a single white 10-LED window snapped to the back
+   //    corner (off) or front corner (on) as a simple on/off indicator.
    //
    // fullSpectrumLevel (0-255, AudioBoard::getFullSpectrum() -- already
    // silence-gated and auto-gain-scaled if enabled) sets all megabars' blue
    // brightness uniformly.
    void showAudioMeter( uint8_t trebleLevel, uint8_t midLevel, uint8_t bassLevel,
-                        float liveNoiseFloorPercent, uint8_t fullSpectrumLevel ) {
+                        uint8_t audioSubsetting, float noiseFloorPercentToShow, float peakThresholdPercentToShow,
+                        bool autoGainOnToShow, uint8_t fullSpectrumLevel ) {
       clearRope();
-      clearChinas();
+      // very simple per-bin floodlight confirmation, one raw hardware bin per
+      // china fixture (blue, same convention as the megabar glow below) --
+      // not meant to look good, just to let you visually confirm each of the
+      // 7 raw frequency bins is actually reaching a floodlight. Only 7 of the
+      // 8 china fixtures are used, one per bin; the 8th stays off. Brightness
+      // tracks the bin's level directly, except a fixture flashes solid white
+      // for PEAK_FLASH_MS the instant its bin rises above the same
+      // AudioBoard::PEAK_THRESHOLD EqualizerShow's bass strobe uses -- an
+      // edge trigger (like EqualizerShow's isHit), not sustained, so it's a
+      // single quick flash per crossing rather than staying white throughout
+      // a loud passage.
+      static const uint8_t PEAK_FLASH_MS = 40;
+      static uint8_t lastBinLevel_[ 7 ] = { 0, 0, 0, 0, 0, 0, 0 };
+      static Timer binFlashTimer_[ 7 ];
+      uint8_t peakThresholdRaw = AudioBoard::getPeakThresholdRaw();
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
+         if ( i < 7 ) {
+            uint8_t level = scale( AudioBoard::Frequencies_Mono[ i ] );
+            bool rising = level > peakThresholdRaw && lastBinLevel_[ i ] <= peakThresholdRaw;
+            lastBinLevel_[ i ] = level;
+            if ( rising ) binFlashTimer_[ i ].reset();
+            bool flashing = binFlashTimer_[ i ].elapsed() < PEAK_FLASH_MS;
+            chinaLeds[ i ] = flashing ? CRGB::White : CRGB( 0, 0, level );
+            chinaLeds[ i ].w = flashing ? 255 : 0;
+         } else {
+            chinaLeds[ i ] = CRGB::Black;
+            chinaLeds[ i ].w = 0;
+         }
+      }
       static const int segmentLen = SIZEOF_SMALL_NEO / 3; // 52
       uint8_t levels[ 3 ] = { trebleLevel, midLevel, bassLevel };
       for ( int seg = 0; seg < 3; ++seg ) {
@@ -413,13 +444,38 @@ class MagicCarpet {
             }
          }
       }
+      // while dialing in noise floor or peak threshold, overlay one blue
+      // pixel (noise floor) and one red pixel (peak threshold) on each of
+      // the 3 segments above, at the position along that segment's own
+      // 0-255 range -- live, since AudioBoard's live-adjusted value is
+      // already applied by the caller before this is drawn. Not shown while
+      // adjusting auto-gain, since neither value is in play there.
+      if ( audioSubsetting != 2 ) {
+         uint8_t noiseFloorRaw = AudioBoard::getNoiseFloorRaw();
+         uint8_t peakThresholdRaw = AudioBoard::getPeakThresholdRaw();
+         int noiseFloorPos = ( (int)noiseFloorRaw * ( segmentLen - 1 ) + 127 ) / 255;
+         int peakThresholdPos = ( (int)peakThresholdRaw * ( segmentLen - 1 ) + 127 ) / 255;
+         for ( int seg = 0; seg < 3; ++seg ) {
+            ropeLeds[ seg * segmentLen + noiseFloorPos ] = CRGB::Blue;
+            ropeLeds[ seg * segmentLen + noiseFloorPos ].w = 0;
+            ropeLeds[ seg * segmentLen + peakThresholdPos ] = CRGB::Red;
+            ropeLeds[ seg * segmentLen + peakThresholdPos ].w = 0;
+         }
+      }
 
-      // right side: true corner to true corner (see renderSideIndicator's comment) --
-      // this stops 33 LEDs short of each end of the 352-LED channel, so it
-      // doesn't wrap into the front/back edges near the corners
-      renderSideIndicator( BACK_RIGHT, FRONT_RIGHT, liveNoiseFloorPercent );
-      // left side: true corner to true corner
-      renderSideIndicator( BACK_LEFT, FRONT_LEFT, liveNoiseFloorPercent );
+      // side strips, true corner to true corner (see renderSideIndicator's
+      // comment) -- this stops 33 LEDs short of each end of the 352-LED
+      // channel, so it doesn't wrap into the front/back edges near the corners
+      if ( audioSubsetting == 2 ) {
+         float snapPercent = autoGainOnToShow ? 100.0f : 0.0f;
+         renderSideIndicator( BACK_RIGHT, FRONT_RIGHT, snapPercent, CRGB::White );
+         renderSideIndicator( BACK_LEFT, FRONT_LEFT, snapPercent, CRGB::White );
+      } else {
+         renderSideIndicator( BACK_RIGHT, FRONT_RIGHT, noiseFloorPercentToShow, CRGB::Blue );
+         renderSideIndicator( BACK_LEFT, FRONT_LEFT, noiseFloorPercentToShow, CRGB::Blue );
+         renderSideIndicator( BACK_RIGHT, FRONT_RIGHT, peakThresholdPercentToShow, CRGB::Red );
+         renderSideIndicator( BACK_LEFT, FRONT_LEFT, peakThresholdPercentToShow, CRGB::Red );
+      }
 
       LedUtil::fill( megabarLeds, CRGB( 0, 0, fullSpectrumLevel ), NUM_MEGABAR_LEDS );
    }

@@ -83,6 +83,11 @@ class FlameShow : public LightShow {
    uint8_t megabarHeat[ NUM_MEGABAR_LEDS ] = { 0 };
    uint8_t chinaHeat[ NUM_CHINA_LEDS ] = { 0 };
 
+   // sparkle cadence + variations 2/3's hue-rate ceiling both driven by the
+   // shared energy setting (see LightShow.h) -- adjusting it here also
+   // becomes the new starting point for NightriderShow and LighthouseShow
+   PotEnergyTakeover energyTakeover_;
+
  public:
 
    FlameShow( MagicCarpet * carpetArg, uint8_t initialVariation = 0 )
@@ -117,6 +122,7 @@ class FlameShow : public LightShow {
    void start() {
       CRGB clr = ColorFromPalette( flames, 0 );
       LedUtil::fill( carpet->ropeLeds, clr, NUM_NEO_LEDS_ACTUAL );
+      energyTakeover_.reset( carpet );
    }
 
    void update( uint32_t time ) {
@@ -133,21 +139,27 @@ class FlameShow : public LightShow {
       }
 
 
-      // read once, reused below both for the sparkle-cycle delay (as
-      // before) AND to scale variations 2/3's max hue rate (new) -- the pot
-      // does both jobs at once, per request
-      uint16_t potval = scaleTo255( carpet->pot->read(), 1023, 0 );
+      // shared energy setting drives both the sparkle-cycle delay (as
+      // before) AND variations 2/3's max hue rate (new) -- 100% (pot fully
+      // up) = fastest cadence + fastest max hue drift, 0% = slowest of both.
+      // (Fixes a real inversion bug found here during this refactor: the
+      // old potFrac-from-potval math had the hue-rate ceiling backwards
+      // -- pot UP used to give the LOWER 50% ceiling, contradicting both
+      // this project's "pot=energy, up=hyper" convention and this file's
+      // own README description, even though the cadence half was already
+      // correct.)
+      float energyFrac = energyTakeover_.update( carpet ) / 100.0f; // 0..1, 1=hyper
+      uint16_t potval = (uint16_t)( 255.0f * ( 1.0f - energyFrac ) + 0.5f ); // inverted: hyper -> less delay
 
       // variations 2/3's hue drift -- advances every call (not just
       // rate-gated fire-sim cycles) so it stays smooth regardless of the
-      // sparkle cadence. Pot scales the max rate: fully down -> 50% of the
-      // base max, fully up -> 100% -- direction and the random-walk
-      // mechanism are unchanged, just the ceiling it wanders within.
+      // sparkle cadence. Energy scales the max rate: 0% -> 50% of the base
+      // max, 100% -> 100% -- direction and the random-walk mechanism are
+      // unchanged, only the ceiling it wanders within.
       float hueDtSec = (float)hueFrameTimer_.elapsed() / 1000.0f;
       hueFrameTimer_.reset();
       static const float BASE_MAX_HUE_RATE = 255.0f / 20.0f; // full spectrum in as little as 20s, same as LighthouseShow
-      float potFrac = potval / 255.0f; // 0..1
-      float maxHueRate = BASE_MAX_HUE_RATE * ( 0.5f + 0.5f * potFrac );
+      float maxHueRate = BASE_MAX_HUE_RATE * ( 0.5f + 0.5f * energyFrac );
       float hueRate = hueRateWalk_.value( 0.0f, maxHueRate, maxHueRate * 0.1f ); // never negative -- always one direction
       shiftHue_ += hueRate * hueDtSec;
       while ( shiftHue_ >= 256.0f ) shiftHue_ -= 256.0f;

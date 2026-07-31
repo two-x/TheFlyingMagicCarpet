@@ -80,7 +80,7 @@ class LighthouseShow : public LightShow {
       }
    };
 
-   RandomWalk velWalk1_, velWalk2_; // deg/s, range +/-360
+   RandomWalk velWalk1_, velWalk2_; // deg/s, range +/-(ceiling from globalEnergyPercent)
    RandomWalk hueRateWalk_;         // hue-units/sec, range 0..(255/20)
    RandomWalk satWalk_;             // fraction, range 0.87..1.0
 
@@ -90,6 +90,12 @@ class LighthouseShow : public LightShow {
    float chinaPhaseDeg_ = 0.0f;
 
    Timer frameTimer_; // tracks dt between update() calls
+
+   // pot -> each beam's max rotation speed ceiling, 0.5Hz (180deg/s) to 1Hz
+   // (360deg/s), driven by the shared globalEnergyPercent (see LightShow.h)
+   // -- adjusting the pot here also becomes the new starting point for
+   // NightriderShow's auto-cycle variation and FlameSparkle
+   PotEnergyTakeover energyTakeover_;
 
    float ropeAngleCache_[ NUM_NEO_LEDS_ACTUAL ]; // see class comment: cached once, not per-frame
 
@@ -183,15 +189,20 @@ class LighthouseShow : public LightShow {
       carpet->clearChinas();
       frameTimer_.reset();
       cacheAngles();
+      energyTakeover_.reset( carpet );
    }
 
    void update( uint32_t time ) {
       float dtSec = (float)frameTimer_.elapsed() / 1000.0f;
       frameTimer_.reset();
 
+      // pot -> max rotation speed ceiling, via the shared energy setting
+      float energyFrac = energyTakeover_.update( carpet ) / 100.0f;
+
       // --- random-walked parameters ---
-      vel1_ = velWalk1_.value( -360.0f, 360.0f, 10.0f ); // deg/s, +/-1Hz max, +/-10deg/s step
-      vel2_ = velWalk2_.value( -360.0f, 360.0f, 10.0f );
+      float velCeilDegPerSec = ( 0.5f + 0.5f * energyFrac ) * 360.0f; // 0.5-1.0Hz -> 180-360deg/s
+      vel1_ = velWalk1_.value( -velCeilDegPerSec, velCeilDegPerSec, 10.0f ); // +/-10deg/s step, unchanged
+      vel2_ = velWalk2_.value( -velCeilDegPerSec, velCeilDegPerSec, 10.0f );
       static const float MAX_HUE_RATE = 255.0f / 20.0f; // full spectrum in as little as 20s
       float hueRate = hueRateWalk_.value( 0.0f, MAX_HUE_RATE, MAX_HUE_RATE * 0.1f ); // never negative -- always "clockwise"
       float satFraction = satWalk_.value( 0.87f, 1.0f, 0.013f );

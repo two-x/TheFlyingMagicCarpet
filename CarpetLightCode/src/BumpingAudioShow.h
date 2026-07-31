@@ -61,6 +61,18 @@ class EqualizerShow : public LightShow {
    Timer lastHitTimer_;      // timeout armed to SILENCE_RESET_MS on the first hit
    int suppressionPeak_ = 0;
 
+   // pot adjusts AudioBoard's shared peak threshold while this show (either
+   // variation) is active -- soft takeover, same convention as config mode's
+   // livePercentFor(): holds at the last-committed value until the pot
+   // actually moves since this show became active, so it doesn't jump.
+   // Reverted back to the committed value on leaving this show (see
+   // CarpetLightLogic.cpp's show-change block), so casual live tweaking here
+   // never overwrites what's saved to flash.
+   static const uint16_t POT_TAKEOVER_THRESHOLD = (uint16_t)( 0.02f * MAX_VOLTAGE + 0.5f );
+   uint16_t potEntryRaw_ = 0;
+   bool potTakenOver_ = false;
+   SettlePrinter thresholdPrinter_;
+
  public:
    EqualizerShow( MagicCarpet * carpetArg, uint8_t initialVariation = 0, bool initialStrobeEnabled = false )
       : LightShow( carpetArg ), variation_( initialVariation % numVariations_ ), strobeEnabled_( initialStrobeEnabled ) {}
@@ -84,6 +96,8 @@ class EqualizerShow : public LightShow {
       for ( int i = NEO3_OFFSET; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          carpet->ropeLeds[ i ] = CRGB::Black;
       }
+      potEntryRaw_ = carpet->pot->read();
+      potTakenOver_ = false;
    }
 
    void update( uint32_t time ) {
@@ -96,6 +110,17 @@ class EqualizerShow : public LightShow {
          if ( newVariation < 0 ) newVariation += numVariations_;
          variation_ = (uint8_t)newVariation;
       }
+
+      // pot -> live peak threshold, soft takeover (see member comment above)
+      uint16_t potRaw = carpet->pot->read();
+      if ( !potTakenOver_ ) {
+         uint16_t diff = ( potRaw > potEntryRaw_ ) ? ( potRaw - potEntryRaw_ ) : ( potEntryRaw_ - potRaw );
+         if ( diff >= POT_TAKEOVER_THRESHOLD ) potTakenOver_ = true;
+      }
+      if ( potTakenOver_ ) {
+         AudioBoard::setPeakThresholdPercent( (float)potRaw / (float)MAX_VOLTAGE * 100.0f );
+      }
+      thresholdPrinter_.update( (int)( AudioBoard::getPeakThresholdPercent() + 0.5f ), "PkThresh:", "%" );
 
       if ( variation_ == 1 ) {
          updateVuMeter( time );
@@ -229,7 +254,7 @@ class EqualizerShow : public LightShow {
       // Serial.print("lowval: ");
       // Serial.println(lowval);
       // Serial.flush();
-      if (lowval > 80 && lowval > lastlow) {
+      if (lowval > AudioBoard::getPeakThresholdRaw() && lowval > lastlow) {
        lastlow = lowval;
       } else {
        lastlow = lastlow > 15 ? lastlow - 15 : 0;
@@ -361,13 +386,13 @@ class EqualizerShow : public LightShow {
       static int vuLastTreble = 0;
 
       int bassRaw = AudioBoard::getLow();
-      if ( bassRaw > 80 && bassRaw > vuLastBass ) {
+      if ( bassRaw > AudioBoard::getPeakThresholdRaw() && bassRaw > vuLastBass ) {
          vuLastBass = bassRaw;
       } else {
          vuLastBass = vuLastBass > 15 ? vuLastBass - 15 : 0;
       }
       int trebleRaw = AudioBoard::getHigh();
-      if ( trebleRaw > 80 && trebleRaw > vuLastTreble ) {
+      if ( trebleRaw > AudioBoard::getPeakThresholdRaw() && trebleRaw > vuLastTreble ) {
          vuLastTreble = trebleRaw;
       } else {
          vuLastTreble = vuLastTreble > 15 ? vuLastTreble - 15 : 0;
@@ -465,7 +490,7 @@ class EqualizerShow : public LightShow {
       }
 
       int bassRaw = AudioBoard::getLow();
-      bool isHit = ( bassRaw > 80 && bassRaw > lastBassForTrigger_ );
+      bool isHit = ( bassRaw > AudioBoard::getPeakThresholdRaw() && bassRaw > lastBassForTrigger_ );
       lastBassForTrigger_ = bassRaw;
 
       if ( isHit ) {

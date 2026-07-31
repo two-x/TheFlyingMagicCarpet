@@ -40,6 +40,13 @@ class AudioBoard {
    static int Frequencies_Mono[7];
    static int bin_low, bin_mid, bin_high;
 
+   // shared "this counts as a hit" level -- EqualizerShow's bass strobe
+   // trigger and the Audio config screen's per-bin peak flash both compare
+   // against this same live-adjustable value (getPeakThresholdRaw()), so
+   // they agree on what counts as a peak. Live-adjustable + persisted, same
+   // as the noise floor (see setPeakThresholdPercent()/getPeakThresholdRaw()
+   // below) -- default approximates the old hardcoded 80/255.
+
    static void Read_Frequencies(){
       //Read frequencies for each band
       // STROBE/RESET are inverted by hardware between the Due and the chip
@@ -298,6 +305,7 @@ class AudioBoard {
 
    static bool autoGainEnabled_;
    static float noiseFloorPercent_; // 0-100
+   static float peakThresholdPercent_; // 0-100
 
    static float emaAverage_;
    static Timer pollTimer_; // tracks dt between updateAutoGainAndSilence() calls
@@ -394,6 +402,21 @@ class AudioBoard {
       return (uint8_t)( gained + 0.5f );
    }
 
+   // best-effort estimate, in percent, of the source's own volume-knob
+   // position -- NOT "how loud is it right now" (that's getFullSpectrum(),
+   // which swings with the music's own dynamics regardless of the knob).
+   // Uses the rolling 4s peak (rollingPeak_) rather than the instantaneous
+   // level or the EMA average, since the loudest moments in a trailing
+   // window track a knob's ceiling far more reliably than any single
+   // instant does, and rolling_peak already resets fast enough (4s) to
+   // follow an actual knob turn. Necessarily approximate -- a spectrum
+   // analyzer chip has no direct visibility into the source's own volume
+   // control -- but it's the best signal already available here. Currently
+   // unused by anything; exists as a general-purpose accessor for later use.
+   static uint8_t getOverallLevelPercent() {
+      return (uint8_t)( ( (uint16_t)rollingPeak_ * 100 + 127 ) / 255 );
+   }
+
    static void setAutoGainEnabled( bool enabled ) {
       autoGainEnabled_ = enabled;
    }
@@ -406,6 +429,20 @@ class AudioBoard {
    }
    static float getNoiseFloorPercent() {
       return noiseFloorPercent_;
+   }
+   // same 0-100% -> 0-255 conversion used internally by updateAutoGainAndSilence()
+   static uint8_t getNoiseFloorRaw() {
+      return (uint8_t)( constrain( noiseFloorPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f );
+   }
+
+   static void setPeakThresholdPercent( float percent ) {
+      peakThresholdPercent_ = constrain( percent, 0.0f, 100.0f );
+   }
+   static float getPeakThresholdPercent() {
+      return peakThresholdPercent_;
+   }
+   static uint8_t getPeakThresholdRaw() {
+      return (uint8_t)( constrain( peakThresholdPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f );
    }
 
    static void setup() {
@@ -445,6 +482,7 @@ uint8_t AudioBoard::peakCount_ = 0;
 uint8_t AudioBoard::rollingPeak_ = 0;
 bool AudioBoard::autoGainEnabled_ = false;
 float AudioBoard::noiseFloorPercent_ = 0.0f;
+float AudioBoard::peakThresholdPercent_ = 31.0f; // approx. the old hardcoded 80/255, overwritten by Nvm at boot
 float AudioBoard::emaAverage_ = 0.0f;
 Timer AudioBoard::pollTimer_;
 Timer AudioBoard::silenceTimer_;

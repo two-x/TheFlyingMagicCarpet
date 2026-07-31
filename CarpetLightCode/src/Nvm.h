@@ -15,7 +15,7 @@
 namespace Nvm {
 
 static DueFlashStorage flash;
-static const uint8_t MAGIC = 0x42; // bump this if State's layout ever changes
+static const uint8_t MAGIC = 0x43; // bump this if State's layout ever changes
 static const uint8_t MAX_SHOWS = 8; // headroom for future shows, no relayout needed
 
 // all brightness/threshold fields are percentages (0-100), never raw 0-255
@@ -28,6 +28,8 @@ struct State {
    uint8_t headlightBrightnessPercent; // 50-100, per-fixture, default 50 (see MagicCarpet.h)
    uint8_t chinaBrightnessPercent;     // 0-100, default 100 (unrestricted)
    uint8_t noiseFloorPercent;          // 0-100, default 0 -- audio below this is "silence" (see AudioBoard.h)
+   uint8_t peakThresholdPercent;       // 0-100, default 31 (approx. the old hardcoded 80/255) -- audio above
+                                        // this counts as a "hit"/peak (see AudioBoard.h::PEAK_THRESHOLD)
    uint8_t autoGainEnabled;            // 0/1, default 0 (off) -- see AudioBoard.h
    uint8_t testHue;                    // 0-255, default 0 -- power-saving test color (see CarpetLightLogic.cpp)
    uint8_t testSat;                    // 0-255, default 255
@@ -49,6 +51,7 @@ inline void load() {
       state.headlightBrightnessPercent = 50;
       state.chinaBrightnessPercent = 100;
       state.noiseFloorPercent = 0;
+      state.peakThresholdPercent = 31;
       state.autoGainEnabled = 0;
       state.testHue = 0;
       state.testSat = 255;
@@ -80,6 +83,10 @@ inline uint8_t loadedChinaBrightness() {
 
 inline uint8_t loadedNoiseFloor() {
    return state.noiseFloorPercent;
+}
+
+inline uint8_t loadedPeakThreshold() {
+   return state.peakThresholdPercent;
 }
 
 inline bool loadedAutoGainEnabled() {
@@ -130,6 +137,11 @@ inline void saveChinaBrightness( uint8_t percent ) {
 
 inline void saveNoiseFloor( uint8_t percent ) {
    state.noiseFloorPercent = percent;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void savePeakThreshold( uint8_t percent ) {
+   state.peakThresholdPercent = percent;
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 

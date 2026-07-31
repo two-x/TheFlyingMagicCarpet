@@ -38,6 +38,14 @@ class NightriderShow : public LightShow {
    static const uint8_t numVariations_ = 2;
    uint8_t variation_;
 
+   // variation 1's auto-cycle rate is pot-driven via the shared energy
+   // setting (see LightShow.h) -- adjusting it here also becomes the new
+   // starting point for LighthouseShow and FlameSparkle. Variation 0's pot
+   // binding (direct hue pick) is unrelated to "energy" and stays a plain
+   // live read, but gets its own settle-print since it had none before.
+   PotEnergyTakeover energyTakeover_;
+   SettlePrinter huePrinter_;
+
  public:
    NightriderShow( MagicCarpet * carpetArg, uint8_t initialVariation = 0 )
       : LightShow( carpetArg ), variation_( initialVariation % numVariations_ ) {}
@@ -54,6 +62,7 @@ class NightriderShow : public LightShow {
       for ( int i = NEO3_OFFSET; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          carpet->ropeLeds[ i ] = CRGB::Black;
       }
+      energyTakeover_.reset( carpet );
    }
 
    void update( uint32_t time ) {
@@ -109,18 +118,21 @@ class NightriderShow : public LightShow {
          // variation 1: pot directly selects the color pair, as before
          val1 = carpet->pot->read() / 4;
          lastAutoTime = time; // keep the clock fresh so variation 2 doesn't jump on reentry
+         huePrinter_.update( val1, "hue:" );
       } else {
          // variation 2: color automatically slides through the spectrum at a
          // constant rate, as if the pot from variation 1 were being turned
-         // continuously. the pot instead sets the period of one full cycle:
-         // 20 min at its lowest reading down to 1 sec at its highest, mapped
+         // continuously. the shared energy setting instead sets the period of
+         // one full cycle: 20 min at 0% down to 1 sec at 100%, mapped
          // exponentially since a linear map would cram nearly all the usable
          // range into a sliver near one end of the pot's travel.
          static const uint32_t slowestPeriodMs = 20UL * 60UL * 1000UL; // 20 min
          static const uint32_t fastestPeriodMs = 1000UL;               // 1 sec
-         float potFrac = carpet->pot->read() / (float)MAX_VOLTAGE;     // 0..1
+         float potFrac = energyTakeover_.update( carpet ) / 100.0f;    // 0..1
+         // powf(), not pow() -- this was double-precision for no reason
+         // (the ratio and result are both already float-precision quantities)
          uint32_t periodMs = (uint32_t)( slowestPeriodMs *
-               pow( (double)fastestPeriodMs / (double)slowestPeriodMs, potFrac ) );
+               powf( (float)fastestPeriodMs / (float)slowestPeriodMs, potFrac ) );
 
          uint32_t dtMs = time - lastAutoTime;
          lastAutoTime = time;
