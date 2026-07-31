@@ -455,6 +455,15 @@ class MagicCarpet {
          uint8_t peakThresholdRaw = AudioBoard::getPeakThresholdRaw();
          int noiseFloorPos = ( (int)noiseFloorRaw * ( segmentLen - 1 ) + 127 ) / 255;
          int peakThresholdPos = ( (int)peakThresholdRaw * ( segmentLen - 1 ) + 127 ) / 255;
+         // cheat so both dots stay visible once they've run into each other
+         // -- noise floor is cross-clamped elsewhere to never exceed peak
+         // threshold, so they can only collide (become equal), never cross.
+         // Nudge the blue dot back by 1 pixel so red shows up right next to
+         // it instead of silently overwriting it (red is drawn second,
+         // below) at the exact position adjustment is now disallowed past.
+         if ( noiseFloorPos == peakThresholdPos ) {
+            if ( noiseFloorPos > 0 ) --noiseFloorPos; else ++peakThresholdPos;
+         }
          for ( int seg = 0; seg < 3; ++seg ) {
             ropeLeds[ seg * segmentLen + noiseFloorPos ] = CRGB::Blue;
             ropeLeds[ seg * segmentLen + noiseFloorPos ].w = 0;
@@ -480,16 +489,16 @@ class MagicCarpet {
       LedUtil::fill( megabarLeds, CRGB( 0, 0, fullSpectrumLevel ), NUM_MEGABAR_LEDS );
    }
 
-   // power-saving A/B test: front half of the rig (rope's front edge + front
-   // half of both sides, china[0..3]) shows the given HSV color rendered
-   // straight to RGB (w=0); the back half (rope's back edge + back half of
-   // both sides, china[4..7]) shows the same color translated to RGBW by
-   // moving the shared min(r,g,b) out of the color channels and into the
-   // white channel -- same hue/brightness, less color-LED power. Megabars
-   // are off; unlike the other config previews this one deliberately ignores
-   // the committed global/headlight/china brightness ceiling (hue/sat/
-   // brightness here are already a full manual color spec, not a dimming
-   // level) -- see README.md.
+   // power-saving A/B test: left half of the rig (rope's left side + left
+   // half of both front/back edges, china[2..5]) shows the given HSV color
+   // rendered straight to RGB (w=0); the right half (rope's right side +
+   // right half of both front/back edges, china[0,1,6,7]) shows the same
+   // color translated to RGBW by moving the shared min(r,g,b) out of the
+   // color channels and into the white channel -- same hue/brightness, less
+   // color-LED power. Megabars are off; unlike the other config previews
+   // this one deliberately ignores the committed global/headlight/china
+   // brightness ceiling (hue/sat/brightness here are already a full manual
+   // color spec, not a dimming level) -- see README.md.
    void showPowerTest( uint8_t hue, uint8_t sat, uint8_t val ) {
       clearMegabars();
 
@@ -501,13 +510,21 @@ class MagicCarpet {
       savingClr.b = straightClr.b - minCh;
       savingClr.w = minCh;
 
-      // front half = front edge + front half of each side, forming an
-      // upside-down U to the carpet's front-to-back center line
-      int frontBoundaryRight = SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO_HALF;
-      int frontBoundaryLeft = ( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO ) + SIZEOF_LARGE_NEO_HALF;
+      // BUGFIX: this had the same front/back-edge-direction bug LighthouseShow's
+      // ropeAngleDeg() had (see its README entry) -- i < FRONT / i >= BACK
+      // used to be swapped, so this was reporting the true right half as
+      // "left" and vice versa, and the ~30 LEDs of the right-side strip's
+      // corner-wrap portion nearest the front edge visibly mismatched the
+      // (mislabeled) front-edge LEDs right next to them. Now: right half is
+      // the single contiguous span [FRONT,BACK) -- front edge's higher-
+      // index/right portion, all of the right side, back edge's lower-
+      // index/right portion (matching the now-corrected direction: front
+      // edge runs left-to-right as index increases, back edge right-to-left)
+      // -- and left half is everything outside that span, forming a
+      // sideways U to the carpet's left-to-right center line.
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-         bool frontHalf = ( i < frontBoundaryRight ) || ( i >= frontBoundaryLeft );
-         if ( frontHalf ) {
+         bool leftHalf = ( i < FRONT ) || ( i >= BACK );
+         if ( leftHalf ) {
             ropeLeds[ i ] = straightClr;
             ropeLeds[ i ].w = 0;
          } else {
@@ -515,9 +532,11 @@ class MagicCarpet {
          }
       }
 
-      // china[0..3] are the front-corner pairs, china[4..7] the back-corner pairs
+      // china[2,3] = front-left, china[4,5] = back-left; china[0,1] =
+      // front-right, china[6,7] = back-right -- see README.md, "China lights"
       for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
-         if ( i < 4 ) {
+         bool leftHalf = ( i >= 2 && i < 6 );
+         if ( leftHalf ) {
             chinaLeds[ i ] = straightClr;
             chinaLeds[ i ].w = 0;
          } else {

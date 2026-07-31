@@ -65,6 +65,10 @@ class FlameShow : public LightShow {
    RandomWalk hueRateWalk_;
    float shiftHue_ = 0.0f;   // 0-255, only ever increases (same "always one direction" rule as Lighthouse)
    Timer hueFrameTimer_;     // tracks dt between update() calls for the hue drift
+   // variation 2's saturation random-walks 87%-100%, same range/technique as
+   // LighthouseShow's satWalk_ -- duplicated here per this codebase's
+   // convention rather than shared.
+   RandomWalk satWalk_;
    CRGBPalette16 shiftingPalette_;  // rebuilt once per update() call, not per-LED -- see paletteColor()
 
    uint8_t currTemperature[ NUM_NEO_LEDS_ACTUAL ] = { 0 };
@@ -123,6 +127,14 @@ class FlameShow : public LightShow {
       CRGB clr = ColorFromPalette( flames, 0 );
       LedUtil::fill( carpet->ropeLeds, clr, NUM_NEO_LEDS_ACTUAL );
       energyTakeover_.reset( carpet );
+
+      // seed saturation's start explicitly (same reasoning as
+      // LighthouseShow's velocity walks -- RandomWalk::value() would
+      // otherwise auto-init to the range midpoint, 87.5%, not the
+      // requested 90%)
+      satWalk_.rampStart = satWalk_.rampTarget = 0.90f;
+      satWalk_.initialized = true;
+      satWalk_.tickTimer.set( 800 + random( 400 ) );
    }
 
    void update( uint32_t time ) {
@@ -164,10 +176,28 @@ class FlameShow : public LightShow {
       shiftHue_ += hueRate * hueDtSec;
       while ( shiftHue_ >= 256.0f ) shiftHue_ -= 256.0f;
       uint8_t shiftHueByte = (uint8_t)shiftHue_;
-      if ( mode_ == 3 ) {
-         // one color (the drifting hue) fading to the other (fixed white)
-         CRGB driftClr = CHSV( shiftHueByte, 255, 255 );
-         shiftingPalette_ = CRGBPalette16( driftClr, driftClr, CRGB::White, CRGB::White );
+      if ( mode_ == 3 || mode_ == 2 ) {
+         // shared by both hue-shifting variations: saturation random-walks
+         // 75%-100% (widened from a fixed/87%-100% range -- was reading as
+         // too saturated all the time), starting at 90%, same range/
+         // technique as LighthouseShow's satWalk_.
+         uint8_t satByte = (uint8_t)( satWalk_.value( 0.75f, 1.0f, 0.013f ) * 255.0f + 0.5f );
+         if ( mode_ == 3 ) {
+            // one color (the drifting hue) fading to the other (fixed white)
+            CRGB driftClr = CHSV( shiftHueByte, satByte, 255 );
+            shiftingPalette_ = CRGBPalette16( driftClr, driftClr, CRGB::White, CRGB::White );
+         } else {
+            // two complementary colors, both full brightness -- one drifting
+            // hue (shiftHueByte, same rotation as before) and its complement
+            // (+128), sharing the same random-walked saturation. Previously
+            // this was a single hue ramped only through 4 brightness levels
+            // (60/140/220/255), which read as dim/washed-out at the low end
+            // -- replaced with an actual 2-color contrast instead of a
+            // brightness ramp.
+            CRGB colorA = CHSV( shiftHueByte, satByte, 255 );
+            CRGB colorB = CHSV( (uint8_t)( shiftHueByte + 128 ), satByte, 255 );
+            shiftingPalette_ = CRGBPalette16( colorA, colorA, colorB, colorB );
+         }
       } else {
          shiftingPalette_ = CRGBPalette16( CHSV( shiftHueByte, 255, 60 ), CHSV( shiftHueByte, 255, 140 ),
                                            CHSV( shiftHueByte, 255, 220 ), CHSV( shiftHueByte, 255, 255 ) );
@@ -205,15 +235,19 @@ class FlameShow : public LightShow {
             }
          }
 
-         // floodlight sparkle (see the class member comment): same cooling
-         // rate as the rope, same cadence (this whole block). Spark count is
-         // proportional, not fixed: the fraction of floodlights sparkling
-         // per cycle equals the fraction of rope LEDs sparkling per cycle
-         // (sparkingRate/255, the same per-LED probability used just above),
-         // applied to each fixture count and rounded to the nearest whole
-         // fixture -- floods are still chosen at random.
-         for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) megabarHeat[ i ] = qsub8( megabarHeat[ i ], coolingRate );
-         for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) chinaHeat[ i ] = qsub8( chinaHeat[ i ], coolingRate );
+         // floodlight sparkle (see the class member comment): same cadence
+         // as the rope (this whole block), but cools twice as fast -- a
+         // shorter flash duration than the rope's own sparks, per request
+         // (floods read as too long/lingering at the rope's cooling rate).
+         // Spark count is proportional, not fixed: the fraction of
+         // floodlights sparkling per cycle equals the fraction of rope LEDs
+         // sparkling per cycle (sparkingRate/255, the same per-LED
+         // probability used just above), applied to each fixture count and
+         // rounded to the nearest whole fixture -- floods are still chosen
+         // at random.
+         uint8_t floodCoolingRate = qadd8( coolingRate, coolingRate ); // 2x rope's rate, clamped at 255
+         for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) megabarHeat[ i ] = qsub8( megabarHeat[ i ], floodCoolingRate );
+         for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) chinaHeat[ i ] = qsub8( chinaHeat[ i ], floodCoolingRate );
          float sparkFraction = (float)sparkingRate / 255.0f;
          int megabarSparkCount = (int)( NUM_MEGABAR_LEDS * sparkFraction + 0.5f );
          int chinaSparkCount = (int)( NUM_CHINA_LEDS * sparkFraction + 0.5f );

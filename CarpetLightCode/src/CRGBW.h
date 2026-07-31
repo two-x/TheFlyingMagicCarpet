@@ -307,14 +307,22 @@ struct CRGBW : CRGB {
 } CRGBW_t;
 
 struct CRGBWUA : CRGBW {
-   union {
-       uint8_t u;
-       uint8_t black;
-   };
+   // BUGFIX: DMX (unlike NeoPixel) has no 3-channel packing constraint --
+   // dmx_send() sends this struct's raw memory directly, so declaration
+   // order here IS the real DMX channel order (channel base+4, base+5).
+   // u/a used to be declared in the other order, putting u (blacklight) at
+   // the fixture's 5th channel -- but that's actually the amber channel on
+   // the real hardware (confirmed: enabling "blacklight" visibly lit amber
+   // instead), with UV actually on the 6th. Swapped so u now lands on the
+   // channel that's actually UV.
    union {
        uint8_t a;
        // TODO: figure out what a is for...
        uint8_t dunno;
+   };
+   union {
+       uint8_t u;
+       uint8_t black;
    };
 
  	 inline CRGBWUA() __attribute__((always_inline)) : CRGBW() {
@@ -422,6 +430,20 @@ static void reverse( T *arr, uint16_t size ) {
 inline uint8_t gamR( uint8_t r ) { return gammaR[ r ]; }
 inline uint8_t gamG( uint8_t g ) { return gammaG[ g ]; }
 inline uint8_t gamB( uint8_t b ) { return gammaB[ b ]; }
+// BUGFIX: white was never gamma-corrected here (see the old comment above,
+// "we don't gamma correct for the white -- what would that even mean?").
+// Gamma exists to compensate for the nonlinear relationship between PWM
+// duty cycle and PERCEIVED brightness -- a property of human vision, not
+// of LED color -- so it applies to a white element exactly as much as to
+// red/green/blue. Leaving W raw while R/G/B all get corrected meant the
+// two looked inconsistent side by side (e.g. the PowerTest A/B comparison:
+// the straight RGB side desaturates smoothly, the RGBW "power-saving" side
+// -- which moves color into W -- did not, and looked like the white
+// channel was overpowering at low-to-mid values). Reuses gammaG's table
+// (uncapped 0-255, unlike gammaR/gammaB which are also capped for R/B
+// white-balance against each other -- that capping doesn't obviously apply
+// to a white element, which isn't being color-balanced against anything).
+inline uint8_t gamW( uint8_t w ) { return gammaG[ w ]; }
 
 inline CRGB & gammaCorrect( CRGB & clr ) {
    clr.r = gamR( clr.r );
@@ -432,9 +454,9 @@ inline CRGB & gammaCorrect( CRGB & clr ) {
 
 static void convertNeo( CRGBW *src, CRGB *dst ) {
    dst[ 0 ] = CRGB( gamR( src[ 0 ].r ), gamG( src[ 0 ].g ), gamB( src[ 0 ].b ) );
-   dst[ 1 ] = CRGB( gamG( src[ 1 ].g ), src[ 0 ].w, gamR( src[ 1 ].r ) );
-   dst[ 2 ] = CRGB( src[ 1 ].w, gamB( src[ 1 ].b ), gamG( src[ 2 ].g ) );
-   dst[ 3 ] = CRGB( gamB( src[ 2 ].b ), gamR( src[ 2 ].r ), src[ 2 ].w );
+   dst[ 1 ] = CRGB( gamG( src[ 1 ].g ), gamW( src[ 0 ].w ), gamR( src[ 1 ].r ) );
+   dst[ 2 ] = CRGB( gamW( src[ 1 ].w ), gamB( src[ 1 ].b ), gamG( src[ 2 ].g ) );
+   dst[ 3 ] = CRGB( gamB( src[ 2 ].b ), gamR( src[ 2 ].r ), gamW( src[ 2 ].w ) );
 }
 
 // NOTE: this function assumes that dst is large enough to fit all of src,

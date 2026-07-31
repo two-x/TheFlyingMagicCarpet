@@ -410,11 +410,11 @@ void loop() {
    if ( appMode == ModeConfigBrightness || appMode == ModeConfigAudio || appMode == ModeConfigPowerTest ) {
       // these 3 screens take over the whole visual with a live preview
 
-      // Audio subsetting 1 (auto-gain toggle) and PowerTest (all 3 subsettings)
+      // Audio subsetting 2 (auto-gain toggle) and PowerTest (all 3 subsettings)
       // read encoder rotation -- this has to happen BEFORE currLightShow->update()
       // below, since the active show also consumes encoder rotation for its own
       // variation selection and would otherwise eat it first.
-      if ( appMode == ModeConfigAudio && configSubsetting == 1 ) {
+      if ( appMode == ModeConfigAudio && configSubsetting == 2 ) {
          int delta = carpet->encoder->readPositionDelta();
          if ( delta != 0 ) {
             carpet->encoder->resetPositionDelta();

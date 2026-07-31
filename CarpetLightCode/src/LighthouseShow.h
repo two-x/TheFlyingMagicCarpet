@@ -93,7 +93,7 @@ class LighthouseShow : public LightShow {
 
    RandomWalk velWalk1_, velWalk2_; // deg/s, range +/-(ceiling from globalEnergyPercent)
    RandomWalk hueRateWalk_;         // hue-units/sec, range 0..(255/20)
-   RandomWalk satWalk_;             // fraction, range 0.87..1.0
+   RandomWalk satWalk_;             // fraction, range 0.75..1.0, starts at 0.90
 
    float angle1_ = 0.0f, angle2_ = 180.0f; // deg, 0-360
    float vel1_ = 0.0f, vel2_ = 0.0f;       // deg/s, current (post-random-walk) value
@@ -120,7 +120,23 @@ class LighthouseShow : public LightShow {
    }
 
    // true angular position of a rope LED from its actual physical (x,y) on
-   // the carpet's 16ft x 12ft rectangle -- same geometry as SpeedStripesShow.
+   // the carpet's 16ft x 12ft rectangle.
+   //
+   // BUGFIX: the front and back edges' x formulas used to run the "wrong"
+   // direction (front: right-to-left as index increases; back: left-to-
+   // right), which put a ~12ft discontinuity at every segment seam (e.g.
+   // front edge's last LED computed near front-LEFT, but the very next
+   // index -- right side's first LED -- computed front-RIGHT, a hard jump
+   // instead of a continuous position). Only LighthouseShow showed this
+   // visibly, since it's the only show deriving a continuous 0-360deg
+   // physical angle from these (x,y) points for a smoothly-rotating beam;
+   // SpeedStripesShow uses an unrelated, self-consistent local-offset
+   // system (renderSide()) that was never exposed to this. Front and back
+   // are now reversed so all 4 seams line up continuously: front runs
+   // left-to-right (ending where the right side's own start already was),
+   // right runs front-to-back (unchanged), back runs right-to-left (ending
+   // where the left side's own start already was), left runs back-to-front
+   // (unchanged, closing the loop back at front-left where front now begins).
    float ropeAngleDeg( int i ) {
       static const float halfWidthFt = 6.0f;
       static const float halfLengthFt = 8.0f;
@@ -128,7 +144,7 @@ class LighthouseShow : public LightShow {
       static const float ledsPerFootLength = SIZEOF_LARGE_NEO / 16.0f;  // 22
       float x, y;
       if ( i < SIZEOF_SMALL_NEO ) {
-         x = halfWidthFt - i / ledsPerFootWidth;
+         x = -halfWidthFt + i / ledsPerFootWidth;
          y = halfLengthFt;
       } else if ( i < SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO ) {
          float local = i - SIZEOF_SMALL_NEO;
@@ -136,7 +152,7 @@ class LighthouseShow : public LightShow {
          y = halfLengthFt - local / ledsPerFootLength;
       } else if ( i < SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO ) {
          float local = i - ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO );
-         x = -halfWidthFt + local / ledsPerFootWidth;
+         x = halfWidthFt - local / ledsPerFootWidth;
          y = -halfLengthFt;
       } else {
          float local = i - ( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO );
@@ -196,22 +212,49 @@ class LighthouseShow : public LightShow {
       frameTimer_.reset();
       cacheAngles();
       energyTakeover_.reset( carpet );
+
+      // seed each beam's initial rotation speed directly (RandomWalk::value()
+      // would otherwise auto-init both to the range midpoint, i.e. 0deg/s,
+      // on its first call) -- beam 1 starts clockwise at 5s/rotation
+      // (72deg/s), beam 2 starts counterclockwise at 2s/rotation (-180deg/s),
+      // per request. From here both drift normally via the random walk.
+      velWalk1_.rampStart = velWalk1_.rampTarget = 72.0f;
+      velWalk1_.initialized = true;
+      velWalk1_.tickTimer.set( 800 + random( 400 ) );
+      velWalk2_.rampStart = velWalk2_.rampTarget = -180.0f;
+      velWalk2_.initialized = true;
+      velWalk2_.tickTimer.set( 800 + random( 400 ) );
+
+      // seed saturation's start explicitly too (same reasoning as the
+      // velocity walks above -- RandomWalk::value() would otherwise
+      // auto-init to the range midpoint, 87.5%, not the requested 90%)
+      satWalk_.rampStart = satWalk_.rampTarget = 0.90f;
+      satWalk_.initialized = true;
+      satWalk_.tickTimer.set( 800 + random( 400 ) );
    }
 
    void update( uint32_t time ) {
       float dtSec = (float)frameTimer_.elapsed() / 1000.0f;
       frameTimer_.reset();
 
-      // pot -> max rotation speed ceiling, via the shared energy setting
+      // pot -> rotation speed attenuation, via the shared energy setting --
+      // applied AFTER the random walk (see below), not by narrowing its
+      // range, per request ("before any rotational speed limit attenuation
+      // set by the potentiometer")
       float energyFrac = energyTakeover_.update( carpet ) / 100.0f;
 
       // --- random-walked parameters ---
-      float velCeilDegPerSec = ( 0.5f + 0.5f * energyFrac ) * 360.0f; // 0.5-1.0Hz -> 180-360deg/s
-      vel1_ = velWalk1_.value( -velCeilDegPerSec, velCeilDegPerSec, 10.0f ); // +/-10deg/s step, unchanged
-      vel2_ = velWalk2_.value( -velCeilDegPerSec, velCeilDegPerSec, 10.0f );
+      // each beam's raw (pre-attenuation) angular velocity always wanders
+      // within a fixed +/-360deg/s (1 sec/rotation max, either direction) --
+      // no longer pot-scaled itself; energyFrac attenuates the result below.
+      static const float VEL_CEIL_DEG_PER_SEC = 360.0f;
+      float rawVel1 = velWalk1_.value( -VEL_CEIL_DEG_PER_SEC, VEL_CEIL_DEG_PER_SEC, 10.0f ); // +/-10deg/s step, unchanged
+      float rawVel2 = velWalk2_.value( -VEL_CEIL_DEG_PER_SEC, VEL_CEIL_DEG_PER_SEC, 10.0f );
+      vel1_ = rawVel1 * energyFrac;
+      vel2_ = rawVel2 * energyFrac;
       static const float MAX_HUE_RATE = 255.0f / 20.0f; // full spectrum in as little as 20s
       float hueRate = hueRateWalk_.value( 0.0f, MAX_HUE_RATE, MAX_HUE_RATE * 0.1f ); // never negative -- always "clockwise"
-      float satFraction = satWalk_.value( 0.87f, 1.0f, 0.013f );
+      float satFraction = satWalk_.value( 0.75f, 1.0f, 0.013f ); // widened 87-100% -> 75-100%, per request (was reading as too saturated all the time)
 
       angle1_ = wrap360( angle1_ + vel1_ * dtSec );
       angle2_ = wrap360( angle2_ + vel2_ * dtSec );
@@ -236,7 +279,18 @@ class LighthouseShow : public LightShow {
       static const float MEGABAR_SEGMENT_HALF_WIDTH_DEG = 15.0f;
       static const float MEGABAR_FADE_WIDTH_DEG = 5.0f;
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
-         float megabarAngle = m * 30.0f;
+         // BUGFIX: megabar index m does NOT sweep the same rotational
+         // direction as angleDeg()'s convention (front=0,right=90,back=180,
+         // left=270). The megabars' real physical wiring sweeps the OTHER
+         // way -- front -> left -> back -> right (see README.md,
+         // "Megabars") -- a left/right mirror image of the rope's
+         // convention, not just an offset. Negating m*30 (then wrapping)
+         // converts megabar index to the rope's angle convention so the two
+         // fixture types agree on where each cluster physically is; without
+         // this, rope and megabar beams appear mirrored/rotated relative
+         // to each other by a seemingly inconsistent amount depending on
+         // beam position.
+         float megabarAngle = wrap360( -m * 30.0f );
          uint16_t hueSum = 0;
          uint8_t maxBright = 0;
          bool anySet = false;
@@ -279,14 +333,18 @@ class LighthouseShow : public LightShow {
       }
 
       // --- china: shared crossfade between the 2 beams' colors ---
+      // DISABLED FOR NOW, per request (debugging the rope/megabar seam bug
+      // without china in the picture) -- computation left intact, just not
+      // written to the fixtures, so re-enabling later is a one-line change.
       float avgAbsVel = ( fabsf( vel1_ ) + fabsf( vel2_ ) ) / 2.0f; // deg/s, reused directly as a color-phase rate
       chinaPhaseDeg_ = wrap360( chinaPhaseDeg_ + avgAbsVel * dtSec );
       uint8_t chinaPhase8 = (uint8_t)( chinaPhaseDeg_ / 360.0f * 255.0f );
       uint8_t chinaBlend = sin8( chinaPhase8 ); // smooth 0-255 oscillation, no float trig
       CRGB chinaColor = blend( (CRGB)CHSV( hue1Byte, satByte, 255 ), (CRGB)CHSV( hue2Byte, satByte, 255 ), chinaBlend );
       chinaColor.nscale8( 204 ); // 80% of this show's own max output
+      (void)chinaColor; // suppress unused-variable warning while disabled
       for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
-         carpet->chinaLeds[ i ] = chinaColor;
+         carpet->chinaLeds[ i ] = CRGB::Black;
          carpet->chinaLeds[ i ].w = 0;
       }
    }
