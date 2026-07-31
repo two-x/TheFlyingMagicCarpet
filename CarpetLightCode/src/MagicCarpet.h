@@ -540,7 +540,12 @@ class MagicCarpet {
    //    all 12, each showing that band's own hit value.
    void showHitDecayMeter( bool simMode, float decayMs, float decayRangeMs ) {
       clearChinas();
-      int decayDotPos156 = (int)( constrain( decayMs / decayRangeMs, 0.0f, 1.0f ) * ( SIZEOF_SMALL_NEO - 1 ) + 0.5f );
+      // decayRangeMs can legitimately be 0 (e.g. hit-prediction's range is
+      // capped to the live foresight setting, which defaults to 0) -- guard
+      // the divide rather than let a 0/0 NaN propagate into an (int) cast,
+      // which is undefined behavior and could corrupt an array index below.
+      float rangeFrac = ( decayRangeMs > 0.0f ) ? constrain( decayMs / decayRangeMs, 0.0f, 1.0f ) : 0.0f;
+      int decayDotPos156 = (int)( rangeFrac * ( SIZEOF_SMALL_NEO - 1 ) + 0.5f );
       int peakPos156 = ( (int)AudioBoard::getPeakThresholdRaw() * ( SIZEOF_SMALL_NEO - 1 ) + 127 ) / 255;
 
       if ( simMode ) {
@@ -574,7 +579,7 @@ class MagicCarpet {
          static const AudioBand segBand[ 3 ] = { BandHigh, BandMid, BandLow };
          static const CRGB segColor[ 3 ] = { CRGB::Blue, CRGB::Green, CRGB::Red };
          int peakPosSeg = ( (int)AudioBoard::getPeakThresholdRaw() * ( segLen - 1 ) + 127 ) / 255;
-         int decayDotPosSeg = (int)( constrain( decayMs / decayRangeMs, 0.0f, 1.0f ) * ( segLen - 1 ) + 0.5f );
+         int decayDotPosSeg = (int)( rangeFrac * ( segLen - 1 ) + 0.5f );
          for ( int seg = 0; seg < 3; ++seg ) {
             uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( segBand[ seg ] ) * 255 / 100 );
             int hitPos = ( (int)hitRaw * ( segLen - 1 ) + 127 ) / 255;

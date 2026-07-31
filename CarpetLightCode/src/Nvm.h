@@ -15,7 +15,7 @@
 namespace Nvm {
 
 static DueFlashStorage flash;
-static const uint8_t MAGIC = 0x45; // bump this if State's layout ever changes
+static const uint8_t MAGIC = 0x47; // bump this if State's layout ever changes
 static const uint8_t MAX_SHOWS = 8; // headroom for future shows, no relayout needed
 
 // all brightness/threshold fields are percentages (0-100), never raw 0-255
@@ -37,6 +37,8 @@ struct State {
    uint8_t equalizerStrobeEnabled;     // 0/1, default 0 (off) -- see BumpingAudioShow.h's EqualizerShow
    uint16_t hitDecayMs;                // 0-1000, default 300 -- ms for a "hit" to decay from full to zero (see AudioBoard.h)
    uint16_t audioForesightMs;          // 0-1000, default 0 -- how far back in time sampled audio is looked up (see AudioBoard.h)
+   uint16_t hitPredictionMs;           // 0-audioForesightMs, default 0 -- predictive lead-up before an upcoming hit (see AudioBoard.h)
+   uint8_t hitPredictionStyle;         // 0=disabled/1=exponential/2=pulse train, default 1 (see AudioBoard.h's HitPredictionStyle)
 };
 
 static State state;
@@ -61,6 +63,8 @@ inline void load() {
       state.equalizerStrobeEnabled = 0;
       state.hitDecayMs = 300;
       state.audioForesightMs = 0;
+      state.hitPredictionMs = 0;
+      state.hitPredictionStyle = 1; // PredictExponential
       flash.write( 0, (byte *)&state, sizeof( State ) );
    }
 }
@@ -119,6 +123,14 @@ inline uint16_t loadedHitDecayMs() {
 
 inline uint16_t loadedAudioForesightMs() {
    return state.audioForesightMs;
+}
+
+inline uint16_t loadedHitPredictionMs() {
+   return state.hitPredictionMs;
+}
+
+inline uint8_t loadedHitPredictionStyle() {
+   return state.hitPredictionStyle;
 }
 
 inline void saveShow( uint8_t show ) {
@@ -189,6 +201,16 @@ inline void saveHitDecayMs( uint16_t ms ) {
 
 inline void saveAudioForesightMs( uint16_t ms ) {
    state.audioForesightMs = ms;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveHitPredictionMs( uint16_t ms ) {
+   state.hitPredictionMs = ms;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveHitPredictionStyle( uint8_t style ) {
+   state.hitPredictionStyle = style;
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 

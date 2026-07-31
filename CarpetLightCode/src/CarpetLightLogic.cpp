@@ -48,7 +48,7 @@ enum BrightnessSubsetting { SubBrightnessGlobal = 0, SubBrightnessHeadlight = 1,
 // repurposed to toggle which of the two the pot currently targets instead
 // (same kind of subsetting-specific short-press override as SubAudioHitDecay
 // below), rather than spending a whole subsetting slot on each.
-enum AudioSubsetting { SubAudioThreshold = 0, SubAudioHitDecay = 1, SubAudioForesight = 2, SubAudioAutoGain = 3 };
+enum AudioSubsetting { SubAudioThreshold = 0, SubAudioHitDecay = 1, SubAudioHitPrediction = 2, SubAudioForesight = 3, SubAudioAutoGain = 4 };
 enum PowerTestSubsetting { SubPowerTestHue = 0, SubPowerTestSat = 1, SubPowerTestBrightness = 2 };
 static uint8_t configSubsetting = 0;
 static float noiseFloorPercent = 0.0f; // committed value; audio below this is "silence" -- see AudioBoard.h
@@ -60,13 +60,24 @@ static bool adjustingPeakThreshold = false;
 static bool liveAutoGainEnabled = false; // live (not-yet-committed) auto-gain toggle state, Audio subsetting SubAudioAutoGain
 static float committedHitDecayMs = 300.0f; // committed value; ms for a "hit" to decay from full to zero -- see AudioBoard.h
 static const float HIT_DECAY_RANGE_MS = 1000.0f; // adjustable range is 0-1000ms, per request
-// Audio subsetting 3 (decay rate): starts in simulated-signal mode every
-// fresh visit (see cycleSubsetting()); a short press while on this
-// subsetting toggles to/from live audio instead of the usual "cycle to next
+// SubAudioHitDecay and SubAudioHitPrediction share this same sim/live test
+// setup (same square-wave signal, same VU-meter screen -- hit prediction's
+// lookahead needs the same buffered history the decay test already
+// exercises): starts in simulated-signal mode every fresh visit to EITHER
+// one (see cycleSubsetting()); a short press while on either subsetting
+// toggles to/from live audio instead of the usual "cycle to next
 // subsetting" behavior (see loop()'s didShort handling) -- same kind of
 // subsetting-specific override PowerTest already establishes for encoder
 // rotation.
 static bool audioSimMode = true;
+
+static float committedHitPredictionMs = 0.0f; // committed value; predictive lead-up before an upcoming hit, capped to committedAudioForesightMs -- see AudioBoard.h
+// SubAudioHitPrediction's pot adjusts the ms amount above; its encoder
+// (otherwise idle on this subsetting) cycles which shape the lead-up
+// follows instead -- same live/committed + revert-on-leave convention as
+// liveAutoGainEnabled above, just encoder- instead of pot-driven.
+static uint8_t committedHitPredictionStyle = 1; // PredictExponential, see AudioBoard.h's HitPredictionStyle
+static uint8_t liveHitPredictionStyle = 1;
 
 static float committedAudioForesightMs = 0.0f; // committed value; how far back in time sampled audio is looked up -- see AudioBoard.h
 static const float AUDIO_FORESIGHT_RANGE_MS = 1000.0f; // adjustable range is 0-1000ms, per request
@@ -107,7 +118,7 @@ static bool configPotTakenOver = false;
 
 uint8_t numSubsettingsFor( AppMode mode ) {
    if ( mode == ModeConfigBrightness ) return 3;
-   if ( mode == ModeConfigAudio ) return 4;
+   if ( mode == ModeConfigAudio ) return 5;
    if ( mode == ModeConfigPowerTest ) return 3;
    return 1;
 }
@@ -123,6 +134,7 @@ void resetTakeoverState() {
    configPotTakenOver = false;
    carpet->encoder->resetPositionDelta();
    liveAutoGainEnabled = AudioBoard::getAutoGainEnabled();
+   liveHitPredictionStyle = AudioBoard::getHitPredictionStyle();
 }
 
 void enterConfigMode( AppMode mode ) {
@@ -145,9 +157,9 @@ void cycleSubsetting() {
       // fresh visit always starts targeting noise floor -- see
       // adjustingPeakThreshold's declaration comment
       adjustingPeakThreshold = false;
-   } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
-      // fresh visit to the decay-rate screen always starts in simulated-
-      // signal mode, per request -- see audioSimMode's declaration comment
+   } else if ( appMode == ModeConfigAudio && ( configSubsetting == SubAudioHitDecay || configSubsetting == SubAudioHitPrediction ) ) {
+      // fresh visit to either screen always starts in simulated-signal
+      // mode, per request -- see audioSimMode's declaration comment
       audioSimMode = true;
       AudioBoard::resetSimulatedBand();
    }
@@ -189,6 +201,15 @@ float livePercentFor( float minPercent, float maxPercent, bool fullRange, float 
    return potToPercent( minPercent, maxPercent, fullRange );
 }
 
+// display names for AudioBoard's HitPredictionStyle enum, per request:
+// "exponential rise," "machine gun," "drum intro," disabled called "off"
+const char * hitPredictionStyleName( uint8_t style ) {
+   if ( style == PredictDisabled ) return "Off";
+   if ( style == PredictExponential ) return "ExpRise";
+   if ( style == PredictPulseTrain ) return "MachineGun";
+   return "DrumIntro"; // PredictTwoPulse
+}
+
 // short CamelCase labels, no spaces -- keeps each print short (less time
 // spent in blocking Serial.print() at 9600 baud) and easy to scan
 const char * settingName( AppMode mode, uint8_t subsetting ) {
@@ -201,6 +222,7 @@ const char * settingName( AppMode mode, uint8_t subsetting ) {
       if ( subsetting == SubAudioThreshold ) return adjustingPeakThreshold ? "PkThresh" : "NoiseFl";
       if ( subsetting == SubAudioAutoGain ) return "AGC";
       if ( subsetting == SubAudioHitDecay ) return "HitDecay";
+      if ( subsetting == SubAudioHitPrediction ) return "HitPredict";
       return "Foresight";
    }
    if ( mode == ModeConfigPowerTest ) {
@@ -273,6 +295,10 @@ void printEnteringSetting( AppMode mode, uint8_t subsetting ) {
       } else if ( subsetting == SubAudioHitDecay ) {
          Serial.print( (int)( committedHitDecayMs + 0.5f ) );
          Serial.println( "ms" );
+      } else if ( subsetting == SubAudioHitPrediction ) {
+         Serial.print( (int)( committedHitPredictionMs + 0.5f ) );
+         Serial.print( "ms " );
+         Serial.println( hitPredictionStyleName( committedHitPredictionStyle ) );
       } else { // SubAudioForesight
          Serial.print( (int)( committedAudioForesightMs + 0.5f ) );
          Serial.println( "ms" );
@@ -339,7 +365,10 @@ void revertAudioLivePreview() {
       if ( adjustingPeakThreshold ) AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
       else AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
    } else if ( configSubsetting == SubAudioHitDecay ) AudioBoard::setHitDecayMs( committedHitDecayMs );
-   else if ( configSubsetting == SubAudioForesight ) AudioBoard::setAudioForesightMs( committedAudioForesightMs );
+   else if ( configSubsetting == SubAudioHitPrediction ) {
+      AudioBoard::setHitPredictionMs( committedHitPredictionMs );
+      AudioBoard::setHitPredictionStyle( committedHitPredictionStyle );
+   } else if ( configSubsetting == SubAudioForesight ) AudioBoard::setAudioForesightMs( committedAudioForesightMs );
 }
 
 LightShow * makeShow( ShowMode mode, uint8_t variation ) {
@@ -417,6 +446,12 @@ void setup() {
    AudioBoard::setHitDecayMs( committedHitDecayMs );
    committedAudioForesightMs = Nvm::loadedAudioForesightMs();
    AudioBoard::setAudioForesightMs( committedAudioForesightMs );
+   // must load after foresight above -- setHitPredictionMs()'s clamp uses
+   // the currently-set audioForesightMs_ as its upper bound
+   committedHitPredictionMs = Nvm::loadedHitPredictionMs();
+   AudioBoard::setHitPredictionMs( committedHitPredictionMs );
+   committedHitPredictionStyle = Nvm::loadedHitPredictionStyle();
+   AudioBoard::setHitPredictionStyle( committedHitPredictionStyle );
    committedTestHue = liveTestHue = Nvm::loadedTestHue();
    committedTestSat = liveTestSat = Nvm::loadedTestSat();
    committedTestBrightness = liveTestBrightness = Nvm::loadedTestBrightness();
@@ -436,9 +471,10 @@ void loop() {
    static uint32_t clock;
    clock = millis();
 
-   // decay-rate screen's simulated signal replaces real audio polling
-   // entirely while it's active, never runs alongside it
-   bool usingSimulatedAudio = ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay && audioSimMode );
+   // decay-rate/hit-prediction screens' simulated signal replaces real audio
+   // polling entirely while it's active, never runs alongside it
+   bool usingSimulatedAudio = ( appMode == ModeConfigAudio &&
+         ( configSubsetting == SubAudioHitDecay || configSubsetting == SubAudioHitPrediction ) && audioSimMode );
    if ( usingSimulatedAudio ) {
       AudioBoard::pollSimulated( clock );
    } else {
@@ -478,6 +514,19 @@ void loop() {
             // sign depends on encoder wiring, unverified), just flip this test.
             liveAutoGainEnabled = ( delta > 0 );
          }
+      } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitPrediction ) {
+         // pot (below) adjusts the ms amount; encoder rotation here cycles
+         // which shape the lead-up follows instead, wrapping through
+         // AudioBoard's HitPredictionStyle enum -- see liveHitPredictionStyle's
+         // declaration comment
+         int delta = carpet->encoder->readPositionDelta();
+         if ( delta != 0 ) {
+            carpet->encoder->resetPositionDelta();
+            int newStyle = ( (int)liveHitPredictionStyle + delta ) % (int)NUM_HIT_PREDICTION_STYLES;
+            if ( newStyle < 0 ) newStyle += NUM_HIT_PREDICTION_STYLES;
+            liveHitPredictionStyle = (uint8_t)newStyle;
+            AudioBoard::setHitPredictionStyle( liveHitPredictionStyle ); // live feedback while adjusting; reverted below if not committed
+         }
       } else if ( appMode == ModeConfigPowerTest ) {
          int delta = carpet->encoder->readPositionDelta();
          if ( delta != 0 ) {
@@ -515,6 +564,17 @@ void loop() {
          livePercent = livePercentFor( 0.0f, HIT_DECAY_RANGE_MS, true, committedHitDecayMs );
          AudioBoard::setHitDecayMs( livePercent );
          carpet->showHitDecayMeter( audioSimMode, livePercent, HIT_DECAY_RANGE_MS );
+      } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitPrediction ) {
+         // pot adjusts 0-committedAudioForesightMs (dynamic range, can't
+         // predict further ahead than foresight allows -- see
+         // AudioBoard::setHitPredictionMs()'s clamp); encoder (above) cycles
+         // the style live already. Reuses showHitDecayMeter()'s VU-meter
+         // screen -- same square-wave test signal, same blue "current
+         // setting's position" dot, just showing prediction's own value/
+         // range instead of decay's.
+         livePercent = livePercentFor( 0.0f, committedAudioForesightMs, true, committedHitPredictionMs );
+         AudioBoard::setHitPredictionMs( livePercent );
+         carpet->showHitDecayMeter( audioSimMode, livePercent, committedAudioForesightMs );
       } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioForesight ) {
          // foresight subsetting -- pot adjusts 0-1000ms (soft takeover, same
          // convention as every other subsetting), live-previewed on
@@ -582,11 +642,20 @@ void loop() {
             committedHitDecayMs = livePercent;
             Nvm::saveHitDecayMs( (uint16_t)( committedHitDecayMs + 0.5f ) );
             AudioBoard::setHitDecayMs( committedHitDecayMs );
-         } else if ( appMode == ModeConfigAudio ) { // SubAudioForesight
+         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitPrediction ) {
+            // commits both the pot-driven ms amount and the encoder-driven
+            // style together, same as PowerTest's hue/sat/brightness triple
+            committedHitPredictionMs = livePercent;
+            Nvm::saveHitPredictionMs( (uint16_t)( committedHitPredictionMs + 0.5f ) );
+            AudioBoard::setHitPredictionMs( committedHitPredictionMs );
+            committedHitPredictionStyle = liveHitPredictionStyle;
+            Nvm::saveHitPredictionStyle( committedHitPredictionStyle );
+            AudioBoard::setHitPredictionStyle( committedHitPredictionStyle );
+         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioForesight ) {
             committedAudioForesightMs = livePercent;
             Nvm::saveAudioForesightMs( (uint16_t)( committedAudioForesightMs + 0.5f ) );
             AudioBoard::setAudioForesightMs( committedAudioForesightMs );
-         } else { // ModeConfigPowerTest -- commits the whole hue/sat/brightness triple at once
+         } else if ( appMode == ModeConfigPowerTest ) { // commits the whole hue/sat/brightness triple at once
             committedTestHue = liveTestHue;
             committedTestSat = liveTestSat;
             committedTestBrightness = liveTestBrightness;
@@ -611,7 +680,7 @@ void loop() {
             adjustingPeakThreshold = !adjustingPeakThreshold;
             resetTakeoverState(); // fresh soft takeover for the newly-selected target
             printEnteringSetting( appMode, configSubsetting );
-         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
+         } else if ( appMode == ModeConfigAudio && ( configSubsetting == SubAudioHitDecay || configSubsetting == SubAudioHitPrediction ) ) {
             // this subsetting overrides short-press's usual "cycle to next
             // subsetting" meaning -- it toggles between the simulated and
             // live signal instead (same kind of subsetting-specific
