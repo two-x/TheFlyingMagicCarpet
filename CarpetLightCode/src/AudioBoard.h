@@ -191,6 +191,18 @@ class AudioBoard {
    static void setAudioForesightMs( float ms ) { audioForesightMs_ = constrain( ms, 0.0f, (float)FORESIGHT_BUFFER_MS ); }
    static float getAudioForesightMs() { return audioForesightMs_; }
 
+   // NOT tied to POLL_INTERVAL_MS above, deliberately -- the 200us delays
+   // below are the MSGEQ7's own datasheet-mandated minimum STROBE hold/
+   // settle time (63-67us minimum, per the comment below; 200us is margin
+   // above that), a hardware protocol requirement independent of how often
+   // we choose to call this function. Coupling them to the poll interval
+   // would be wrong: shrinking POLL_INTERVAL_MS to poll faster would also
+   // shrink these below the chip's minimum, corrupting every bin read.
+   // POLL_INTERVAL_MS only needs to stay >= this function's own real
+   // execution time (7 bins x ~400us of strobe delay alone, so >=~2.8ms
+   // before analogRead() overhead) for the poll gate to mean anything --
+   // true today by a wide margin (30ms), but worth keeping in mind if
+   // POLL_INTERVAL_MS is ever tuned down.
    static void Read_Frequencies(){
       //Read frequencies for each band
       // STROBE/RESET are inverted by hardware between the Due and the chip
@@ -485,12 +497,22 @@ class AudioBoard {
    // the true instantaneous signal, since that's a control loop, not
    // something a person perceives directly, and delaying it too would just
    // add unnecessary lag to the gain/silence response.
+   // POLL_INTERVAL_MS is the single source of truth for how often
+   // pollFrequencies()/pollSimulated() actually read a fresh sample (see
+   // their own "> POLL_INTERVAL_MS" gates below) -- FORESIGHT_BUFFER_SIZE is
+   // *derived* from it (ceiling division, so the buffer always spans at
+   // least FORESIGHT_BUFFER_MS regardless of what POLL_INTERVAL_MS is set
+   // to, plus a small fixed margin for poll-timing jitter) rather than
+   // hardcoded to a value that assumes today's 30ms. If the poll rate is
+   // ever changed, the buffer resizes itself accordingly at compile time --
+   // nothing here needs to be hand-retuned to match.
+   static const uint16_t POLL_INTERVAL_MS = 30;
    static const uint16_t FORESIGHT_BUFFER_MS = 1000; // must cover the full 0-1000ms adjustable range
-   static const uint8_t FORESIGHT_BUFFER_SIZE = 50; // ~1s of samples at the ~30ms poll rate, with margin (same convention as PEAK_BUFFER_SIZE)
+   static const uint16_t FORESIGHT_BUFFER_SIZE = ( FORESIGHT_BUFFER_MS + POLL_INTERVAL_MS - 1 ) / POLL_INTERVAL_MS + 2;
    static uint8_t rawHistory_[ NUM_AUDIO_BANDS ][ FORESIGHT_BUFFER_SIZE ]; // band-major; all 4 bands share one timestamp array below since they're always sampled together
    static uint32_t historyTimestamps_[ FORESIGHT_BUFFER_SIZE ];
-   static uint8_t historyHead_;
-   static uint8_t historyCount_;
+   static uint16_t historyHead_;
+   static uint16_t historyCount_;
    static float audioForesightMs_; // 0-1000, adjustable + persisted, default 0
 
    // pushes this poll's just-measured raw samples (one per band) into the
@@ -513,9 +535,9 @@ class AudioBoard {
    // largest, so no circular-order bookkeeping is needed to read it back)
    static uint8_t lookupDelayed( AudioBand band, uint32_t nowMs ) {
       uint32_t targetMs = ( nowMs > (uint32_t)audioForesightMs_ ) ? ( nowMs - (uint32_t)audioForesightMs_ ) : 0;
-      uint8_t bestIdx = 0;
+      uint16_t bestIdx = 0;
       uint32_t bestDelta = 0xFFFFFFFFu;
-      for ( uint8_t i = 0; i < historyCount_; ++i ) {
+      for ( uint16_t i = 0; i < historyCount_; ++i ) {
          uint32_t ts = historyTimestamps_[ i ];
          uint32_t delta = ( ts > targetMs ) ? ( ts - targetMs ) : ( targetMs - ts );
          if ( delta < bestDelta ) { bestDelta = delta; bestIdx = i; }
@@ -561,7 +583,7 @@ class AudioBoard {
    static void pollFrequencies( uint32_t time ) {
      static uint32_t timestamp;
      // TODO: fiddle around with this value to find the right tuning
-     if ( time - timestamp > 30 ) {
+     if ( time - timestamp > POLL_INTERVAL_MS ) {
         timestamp = time;
         Read_Frequencies();
         Into_3_Bins();
@@ -616,7 +638,7 @@ class AudioBoard {
    // pollFrequencies() while the simulated signal is active, never both.
    static void pollSimulated( uint32_t time ) {
       static uint32_t timestamp;
-      if ( time - timestamp > 30 ) {
+      if ( time - timestamp > POLL_INTERVAL_MS ) {
          timestamp = time;
          uint8_t simRaw = updateSimulatedBand();
          rawLevel_[ BandLow ] = rawLevel_[ BandMid ] = rawLevel_[ BandHigh ] = rawLevel_[ BandFull ] = simRaw;
@@ -803,8 +825,8 @@ Timer AudioBoard::newHitPendingTimer_[ NUM_AUDIO_BANDS ];
 
 uint8_t AudioBoard::rawHistory_[ NUM_AUDIO_BANDS ][ AudioBoard::FORESIGHT_BUFFER_SIZE ] = { { 0 } };
 uint32_t AudioBoard::historyTimestamps_[ AudioBoard::FORESIGHT_BUFFER_SIZE ] = { 0 };
-uint8_t AudioBoard::historyHead_ = 0;
-uint8_t AudioBoard::historyCount_ = 0;
+uint16_t AudioBoard::historyHead_ = 0;
+uint16_t AudioBoard::historyCount_ = 0;
 float AudioBoard::audioForesightMs_ = 0.0f; // overwritten by Nvm at boot
 
 uint32_t AudioBoard::simPhaseMs_ = 40;
