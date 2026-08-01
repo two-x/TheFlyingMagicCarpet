@@ -5,6 +5,14 @@ https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA
 
 All directions below (front/back/left/right) are relative to the carpet's own forward direction of travel, not compass or diagram orientation.
 
+## Browser visualizer/simulator — `tools/visualizer/carpet-visualizer.html`
+
+A self-contained, single-file HTML/JS/Canvas simulator of the light shows, for previewing behavior without needing the physical car — open `tools/visualizer/carpet-visualizer.html` directly in a browser (double-click it, or `open tools/visualizer/carpet-visualizer.html` on macOS). No build step, no server, no dependencies.
+
+It's a **parallel JS reimplementation** of the show logic in `src/*.h` (`AudioBoard.h`'s math, `NightriderShow`/`FlameShow`/`EqualizerShow`/`SpeedStripesShow`/`LighthouseShow`, the config-mode navigation, etc.) — not the actual firmware, so it can drift out of sync with real code changes over time. It reads real audio (microphone, a shared system/tab audio stream, an audio file, or a synthetic test tone), simulates the pot/encoder/button controls and config-mode navigation, and renders a schematic top-down view of the car with all fixtures (rope, megabars, china) responding as they should on the real hardware.
+
+Also published as a shareable Claude Artifact for viewing without cloning the repo — ask Claude for the current link, since the artifact URL isn't tracked in git.
+
 ## Perimeter rope lights — `ropeLeds[NUM_NEO_LEDS_ACTUAL]`, 1016 LEDs total
 
 Only **4 continuous physical strips** exist. `NEO0_OFFSET`..`NEO3_OFFSET` (the 4 real strips, reading from `ropeLeds[]`) are the ones actually in use; `NEO4_OFFSET`..`NEO7_OFFSET` were leftover offsets from an original 8-strip plan that was never wired, and have been removed from code.
