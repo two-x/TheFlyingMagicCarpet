@@ -58,6 +58,15 @@ header .sub {
   color: var(--text-faint);
   letter-spacing: 0.04em;
 }
+.build-info {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-faint);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ---------- layout ---------- */
 /* Consolidated to one narrow control column so the stage gets almost all
@@ -514,6 +523,12 @@ footer {
     <option value="landscape" selected>Landscape</option>
     <option value="portrait">Portrait</option>
   </select>
+  <!-- Replaced with the real branch/short-SHA/push-time by
+       .github/workflows/deploy-visualizer.yml at deploy time -- stays as
+       this placeholder text for a local file:// open or a non-deployed
+       copy (e.g. a Claude Artifact), since there's no git context
+       available client-side in a static page. -->
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">soren53.lights @ 89d9c92 - 2026-08-02 11:14 UTC</span>
 </header>
 
 <div class="deck">
@@ -1504,10 +1519,16 @@ function useFile(file) {
 // noise+tone mix for snare/hihat/mid) rather than sampled audio -- enough
 // spectral variety to exercise the light shows' band-reactivity, not
 // meant to sound musical. 4 step-arrays per pattern:
-//   kick  -- bass (BAND_LOW). A step value of 2 (not just 1) means a
-//            SUSTAINED hit that holds at full level for up to 400ms
-//            before its normal decay starts, instead of decaying
-//            immediately -- see KICK_SUSTAIN_SAMPLES below.
+//   kick  -- bass (BAND_LOW), normally at kickHz (pattern-overridable,
+//            default 55Hz) with the default fast decay. A step value of 2
+//            means a SUSTAINED hit that holds at full level for up to
+//            400ms before its normal decay starts, instead of decaying
+//            immediately -- see KICK_SUSTAIN_SAMPLES below. A step value
+//            of 3 means a short SECONDARY hit at kick2Hz (defaults to
+//            kickHz) using the fast default decay regardless of the
+//            pattern's own kickDecayMs -- for a pattern whose main hits
+//            are slow/sustained but still wants an occasional punchy
+//            hip-hop-style kick mixed in (see "chris").
 //   snare -- a short mid/broadband transient (the "snap" of a snare hit).
 //   hihat -- treble (BAND_HIGH).
 //   mid   -- BAND_MID, genre-appropriate (chord stabs / vocal line /
@@ -1553,8 +1574,14 @@ const TONE_PATTERNS = {
   // boombap's per request; the distinguishing features are the sustained
   // (up to 400ms) bass hits (kick steps valued 2) and an overall tempo
   // 75% of boombap's (90*0.75 = 67.5bpm), i.e. noticeably slower/heavier.
-  chris: { bpm: 90 * 0.75,
-    kick:  [2,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0], // steps 0 and 10 sustain; step 6 a normal short hit
+  // Bass frequency/decay reworked per follow-up request: kick step value 2
+  // = the long, sustained (up to 400ms hold) hit, at kickHz (42Hz) with a
+  // slow 250ms decay tail (kickDecayMs); step value 3 = a SHORT secondary
+  // hit "between" the long ones, like a hip-hop kick's own quick punch
+  // (borrows boombap's fast default decay, not kickDecayMs), at kick2Hz
+  // (40Hz) -- see the synthesis loop below for how steps 2/3 map to these.
+  chris: { bpm: 90 * 0.75, kickHz: 42, kick2Hz: 40, kickDecayMs: 250,
+    kick:  [2,0,0,0,3,0,0,0,2,0,0,0,3,0,0,0], // long sustained hits at 0/8, short hip-hop-style hits between them at 4/12
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
     hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // same as boombap, per request
     mid:   [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // minimal -- a bass-focused genre, midrange stays out of the way
@@ -1591,13 +1618,25 @@ function useTone() {
   const noiseNode = ctx.createScriptProcessor ? ctx.createScriptProcessor(bufSize, 1, 1) : null;
   let kickEnv = 0, kickPhase = 0, snareEnv = 0, snarePhase = 0, hihatEnv = 0, hihatPhase = 0, hihatPhase2 = 0;
   let midEnv = 0, midPhase = 0, kickSustainRemaining = 0, midSustainRemaining = 0;
+  let kickFreqActive = 55, kickDecayActive = 0.9994; // which of kick/kick2's Hz+decay is currently sounding
   let sampleInStep = 0, stepIdx = -1;
   if (noiseNode) {
     noiseNode.onaudioprocess = (e) => {
       const out = e.outputBuffer.getChannelData(0);
       const pat = TONE_PATTERNS[toneSettings.pattern] || TONE_PATTERNS.simple;
       const samplesPerStep = Math.round((60 / pat.bpm / 4) * ctx.sampleRate); // 16th notes
-      const kickHz = 55, kickDecay = 0.9994, snareDecay = 0.9985, hihatDecay = 0.9978, midDecay = 0.9975;
+      // kickHz/kickDecayMs are per-pattern overridable (Chris: 42Hz, 250ms
+      // decay) -- default 55Hz with the old fixed 0.9994/sample decay
+      // (~38ms time constant) for every pattern that doesn't specify one.
+      // kick2Hz is a SEPARATE, optional short/secondary hit (step value 3)
+      // that always uses the fast default decay regardless of the
+      // pattern's own kickDecayMs, to read as a punchy hip-hop-style kick
+      // even in a pattern whose main hits are slow/sustained.
+      const kickHz = pat.kickHz || 55;
+      const kickDecay = pat.kickDecayMs ? Math.exp(-1 / ((pat.kickDecayMs / 1000) * ctx.sampleRate)) : 0.9994;
+      const kick2Hz = pat.kick2Hz || kickHz;
+      const kick2Decay = 0.9994;
+      const snareDecay = 0.9985, hihatDecay = 0.9978, midDecay = 0.9975;
       // BAND_MID/BAND_HIGH sample specific narrow FFT bins (max of bins at
       // ~400/1000Hz for mid, ~6250/16000Hz for treble -- see BIN_FREQS).
       // Pure broadband noise spreads its energy across the WHOLE spectrum,
@@ -1619,16 +1658,22 @@ function useTone() {
           sampleInStep = 0;
           stepIdx = (stepIdx + 1) % 16;
           const kickStep = pat.kick[stepIdx] || 0;
-          if (kickStep) { kickEnv = 1; kickPhase = 0; kickSustainRemaining = kickStep >= 2 ? KICK_SUSTAIN_SAMPLES : 0; }
+          if (kickStep) {
+            kickEnv = 1; kickPhase = 0;
+            kickSustainRemaining = kickStep === 2 ? KICK_SUSTAIN_SAMPLES : 0;
+            // step 3 = short secondary hit: kick2Hz/kick2Decay, no sustain, never overlaps a long hit's own timing
+            if (kickStep === 3) { kickFreqActive = kick2Hz; kickDecayActive = kick2Decay; }
+            else { kickFreqActive = kickHz; kickDecayActive = kickDecay; }
+          }
           if (pat.snare[stepIdx]) { snareEnv = 1; snarePhase = 0; }
           if (pat.hihat[stepIdx]) { hihatEnv = 1; hihatPhase = 0; hihatPhase2 = 0; }
           const midStep = (pat.mid && pat.mid[stepIdx]) || 0;
           if (midStep) { midEnv = 1; midPhase = 0; midSustainRemaining = midStep >= 2 ? KICK_SUSTAIN_SAMPLES : 0; }
         }
-        if (kickSustainRemaining > 0) kickSustainRemaining--; else kickEnv *= kickDecay;
+        if (kickSustainRemaining > 0) kickSustainRemaining--; else kickEnv *= kickDecayActive;
         if (midSustainRemaining > 0) midSustainRemaining--; else midEnv *= midDecay;
         snareEnv *= snareDecay; hihatEnv *= hihatDecay;
-        kickPhase += kickHz / ctx.sampleRate;
+        kickPhase += kickFreqActive / ctx.sampleRate;
         snarePhase += snareHz / ctx.sampleRate;
         hihatPhase += hihatHz1 / ctx.sampleRate;
         hihatPhase2 += hihatHz2 / ctx.sampleRate;
@@ -1757,28 +1802,56 @@ function hsv(h, s, v) { // h 0-255, s 0-255, v 0-255 -> {r,g,b} 0-255
   return { r: r*255, g: g*255, b: b*255 };
 }
 function scale255(c, amt) { const f = amt/255; return {r:c.r*f, g:c.g*f, b:c.b*f}; }
-// Rescales a color so r+g+b sums to 255, preserving hue/sat -- used where
-// a color is a PALETTE REFERENCE POINT (e.g. a fire palette's "cool" vs
-// "hot" stop) being repurposed as a flash color that should be able to
-// reach full brightness on its own, not stay capped at however bright
-// that particular palette stop happens to be.
-// BUGFIX: this used to normalize by max-channel (scaling so the single
-// brightest channel hit 255), which does NOT equalize perceived
-// brightness -- a near-pure-blue color and a near-white-blue color can
-// both have max channel = 255 while their r+g+b SUMS (the actual
-// brightness metric drawWash()/drawGroundEllipse()/the fixture-dot
-// renderer all key off, via `color.r+color.g+color.b`) differ by 2-3x.
-// That's exactly why the bass-reactive floods (blended from a fire
-// palette's dim, blue/red-dominant "cool" stop) still read dimmer than
-// the treble-reactive ones (blended from the much whiter "hot" stop)
-// even after the max-channel fix -- normalizing by SUM instead is what
-// actually matches the metric the renderer uses, so equal hit
-// percentages now genuinely render as equal on-screen brightness.
-function normalizeToFull(c) {
-  const sum = c.r + c.g + c.b;
-  if (sum <= 0) return { r: 0, g: 0, b: 0 };
-  const scale = 255 / sum;
-  return { r: c.r * scale, g: c.g * scale, b: c.b * scale };
+// Equalizes two colors' r+g+b SUMS (the brightness metric
+// drawWash()/drawGroundEllipse()/the fixture-dot renderer all actually key
+// off) by brightening ONLY the dimmer one up to match the brighter one --
+// the brighter color is always returned completely unchanged. Used where
+// two palette reference points (e.g. a fire palette's dim "cool" stop vs
+// its much whiter "hot" stop) get repurposed as a matched pair of flash
+// colors (bass vs treble) that should read equally bright at equal hit%.
+//
+// BUGFIX HISTORY: an earlier version of this normalized each color
+// independently by its MAX channel (scale so the single brightest channel
+// hit 255) -- doesn't equalize SUM (a near-pure-blue and a near-white-blue
+// can both have max=255 while summing very differently), so bass still
+// read dimmer than treble. Normalizing independently by SUM to a flat
+// target (255) fixed the mismatch but made EVERYTHING much dimmer than
+// before -- capping every color's sum at 255 throws away the headroom a
+// less-saturated color naturally has (up to 765), which is what made
+// hits across every flame variation (and this fed into china too) go
+// visibly dim compared to shows that don't touch this path (e.g.
+// SpeedStripes) and got reported as a regression. The next version only
+// ever scaled the DIMMER of the pair's channels UP (never scaled anything
+// down) -- correct in spirit, but a pure/saturated color (e.g. (255,0,0),
+// sum 255) has its brightest channel ALREADY at 255, so multiplicative
+// scaling can't increase its sum at all (255*k still clamps to 255) --
+// silently a complete no-op exactly for the most saturated colors, which
+// is exactly what Nightrider's c1/c2 (always S=255,V=255) are. Fixed for
+// real below by redistributing the needed increase across whichever
+// channels AREN'T maxed yet (iterating, since a channel can hit its own
+// ceiling partway through and its remaining share needs to spill over to
+// the others) -- reaches the exact target sum whenever physically
+// possible (i.e. target <= 765), not just whenever pure scaling happens
+// to have headroom.
+function boostSumTo(c, target) {
+  target = Math.min(765, target);
+  let r = c.r, g = c.g, b = c.b;
+  for (let iter = 0; iter < 4; iter++) {
+    const need = target - (r + g + b);
+    if (need <= 0.01) break;
+    const openCount = (r < 255 ? 1 : 0) + (g < 255 ? 1 : 0) + (b < 255 ? 1 : 0);
+    if (openCount === 0) break;
+    const share = need / openCount;
+    if (r < 255) r = Math.min(255, r + share);
+    if (g < 255) g = Math.min(255, g + share);
+    if (b < 255) b = Math.min(255, b + share);
+  }
+  return { r, g, b };
+}
+function equalizeBrightnessPair(a, b) {
+  const sumA = a.r + a.g + a.b, sumB = b.r + b.g + b.b;
+  if (sumA <= 0 || sumB <= 0 || sumA === sumB) return [a, b];
+  return sumA < sumB ? [boostSumTo(a, sumB), b] : [a, boostSumTo(b, sumA)];
 }
 
 /* =====================================================================
@@ -1849,8 +1922,17 @@ function showNightrider(nowMs, dtMs) {
   }
   const lowHit = AudioBoard.getHitPct(BAND_LOW) / 100 * 255;
   const highHit = AudioBoard.getHitPct(BAND_HIGH) / 100 * 255;
-  const mbLow = blend({r:0,g:0,b:0}, c2, lowHit);
-  const mbHigh = blend({r:0,g:0,b:0}, c1, highHit);
+  // BUGFIX: c1/c2 are always 128/256 (=180deg) apart in hue, and at fixed
+  // S=255/V=255 a hue's own r+g+b sum varies with hue (255 at a pure
+  // primary -- 0/120/240deg -- up to 510 at a secondary -- 60/180/300deg).
+  // Since 180deg is never a multiple of 120deg, c1 and c2 can NEVER both
+  // land on a primary or both on a secondary -- one of them is ALWAYS
+  // exactly half the other's sum, regardless of which hue is currently
+  // active, so bass and treble hits never actually matched in brightness.
+  // Same equalizeBrightnessPair fix as FlameShow's analogous bug.
+  const [c2Eq, c1Eq] = equalizeBrightnessPair(c2, c1);
+  const mbLow = blend({r:0,g:0,b:0}, c2Eq, lowHit);
+  const mbHigh = blend({r:0,g:0,b:0}, c1Eq, highHit);
   for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = (m % 3 === 0) ? mbHigh : mbLow;
 }
 
@@ -1991,12 +2073,14 @@ function showFlame(nowMs, dtMs) {
     // so using them directly here made the bass/headlight set (loColor,
     // m%2===0) read as much dimmer than the treble set (hiColor) even at
     // equal hit levels -- confirmed by inspecting FLAME_PALETTES: index 40
-    // sums to ~186/765, index 230 to ~694/765. Normalizing each to its own
-    // full brightness before scaling by the hit percentage keeps their hue
-    // identity but lets both reach true full brightness, so a 100% bass
-    // hit reads exactly as bright as a 100% treble hit.
-    const bassClr = scale255(normalizeToFull(loColor), Math.round(bassHitPct / 100 * 255));
-    const trebleClr = scale255(normalizeToFull(hiColor), Math.round(trebleHitPct / 100 * 255));
+    // sums to ~186/765, index 230 to ~694/765. equalizeBrightnessPair only
+    // brightens the dimmer (loColor) up toward hiColor's own level -- see
+    // its comment for why this is safer than normalizing either
+    // independently (that either clips a saturated color or, if capped to
+    // a flat low target, dims everything).
+    const [loColorEq, hiColorEq] = equalizeBrightnessPair(loColor, hiColor);
+    const bassClr = scale255(loColorEq, Math.round(bassHitPct / 100 * 255));
+    const trebleClr = scale255(hiColorEq, Math.round(trebleHitPct / 100 * 255));
     for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = (m % 2 === 0) ? bassClr : trebleClr;
     const sidesFollowBass = flameChinaSwapBassOnSides;
     for (const c of FLAME_CHINA_SIDES) chinaLeds[c] = sidesFollowBass ? bassClr : trebleClr;
@@ -3383,6 +3467,16 @@ document.getElementById('orientationSelect').addEventListener('change', (e) => {
   Ctl.orientation = e.target.value;
   applyOrientation();
 });
+
+// The CI deploy workflow replaces soren53.lights @ 89d9c92 - 2026-08-02 11:14 UTC with the real
+// branch/short-SHA/push-time -- if it's STILL that literal text, this
+// wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
+// copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
+// friendlier fallback instead of showing raw placeholder text.
+{
+  const el = document.getElementById('buildInfo');
+  if (el.textContent === 'soren53.lights @ 89d9c92 - 2026-08-02 11:14 UTC') el.textContent = 'local build (not CI-deployed)';
+}
 
 const potIndicator = document.querySelector('#potKnob .knob__indicator');
 function updatePotKnob() {
