@@ -73,6 +73,10 @@ class AudioBoard {
    //             auto-gain (255/rollingPeak_, when enabled) -- same
    //             adjustments getFullSpectrum() already applies, now also
    //             applied per-band instead of only to the full-spectrum sum.
+   //             Additionally floored to 0 if still below
+   //             getNoiseFloorRaw() after gain (see convertRawToNormal()) --
+   //             this last step is per-band only, NOT applied to
+   //             getFullSpectrum()'s own full-spectrum sum.
    //   hit    -- a peak-hold derived from normal: while normal is at or
    //             above the live peak threshold, hit tracks it directly
    //             (jumps instantly, even back down, as long as it stays at
@@ -116,6 +120,17 @@ class AudioBoard {
    // through unchanged) while the simulated signal is active, since sim
    // mode's whole point is a controlled signal unaffected by real-world
    // silence detection/auto-gain state.
+   //
+   // BUGFIX: the noise floor setting used to only feed the coarse,
+   // several-second-delayed whole-signal silent_ flag above -- it had no
+   // effect on any individual band's own level, so a band's noise could
+   // sit right at the peak threshold and keep registering hits forever
+   // even with the noise floor set well above it. A live noise floor is
+   // supposed to mean "nothing below this can register as reactivity";
+   // now anything under it is floored to 0 here, in the same post-autogain
+   // 0-255 domain peak threshold already compares against (so the two
+   // stay on a consistent scale), before it ever reaches
+   // updateHitTracking()'s peak comparison.
    static uint8_t convertRawToNormal( uint8_t raw ) {
       if ( simModeActive_ ) return raw;
       if ( silent_ ) return 0;
@@ -124,6 +139,7 @@ class AudioBoard {
          gained *= ( 255.0f / (float)rollingPeak_ );
          if ( gained > 255.0f ) gained = 255.0f; // clip prevention, see getFullSpectrum()'s comment
       }
+      if ( gained < (float)getNoiseFloorRaw() ) gained = 0.0f;
       return (uint8_t)( gained + 0.5f );
    }
 
@@ -865,7 +881,8 @@ class AudioBoard {
    static float getNoiseFloorPercent() {
       return noiseFloorPercent_;
    }
-   // same 0-100% -> 0-255 conversion used internally by updateAutoGainAndSilence()
+   // same 0-100% -> 0-255 conversion used internally by
+   // updateAutoGainAndSilence() and convertRawToNormal()
    static uint8_t getNoiseFloorRaw() {
       return (uint8_t)( constrain( noiseFloorPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f );
    }
