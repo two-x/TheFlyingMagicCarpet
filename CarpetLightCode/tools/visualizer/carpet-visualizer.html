@@ -215,13 +215,20 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
    never depends on how many variations the current show has (0-4 across
    the different shows) -- min-height reserves space for 2 full rows even
    when only 0-2 buttons are present, so the rest of the sidebar below it
-   doesn't shift up/down when switching shows. */
+   doesn't shift up/down when switching shows. Compacted to <=75% of its
+   original height (68px -> 46px) via smaller gap/padding/font, alongside
+   shorter button labels (see VARIATIONS).*/
 #variationRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  min-height: 68px;
+  gap: 4px;
+  min-height: 46px;
   align-content: start;
+}
+#variationRow button {
+  padding: 4px 5px;
+  font-size: 10px;
+  min-width: 0;
 }
 
 /* Pot/Encoder control panel: a very-rounded rect (corner radius = 1/7 of
@@ -455,14 +462,17 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .meter-stack .mid i { background: var(--green); }
 .meter-stack .treble i { background: var(--blue); }
 .meter-stack .full i { background: var(--amber); }
-.meter-stack__hint {
-  font-family: var(--mono);
-  font-size: 7px;
-  letter-spacing: 0.04em;
-  color: var(--text-faint);
-  text-align: center;
-  margin-top: 2px;
+.expand-source-btn {
+  width: 100%;
+  margin-top: 6px;
+  font-size: 10px;
+  padding: 6px 8px;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  border: 1px solid var(--line);
 }
+.expand-source-btn:hover { color: var(--text); border-color: var(--amber-dim); }
+.expand-source-btn.open { color: var(--amber); border-color: var(--amber-dim); }
 
 .tone-expand {
   display: none;
@@ -576,8 +586,8 @@ footer {
     </div>
 
     <div class="group">
-      <div class="row"><label>Vehicle speed</label><span class="val" id="speedVal">0 mph</span></div>
-      <input type="range" id="speedSlider" min="0" max="25" step="1" value="0" />
+      <div class="row"><label>Vehicle speed</label><span class="val" id="speedVal">4 mph</span></div>
+      <input type="range" id="speedSlider" min="0" max="25" step="1" value="4" />
     </div>
 
     <div class="group">
@@ -636,25 +646,25 @@ footer {
     <div class="group">
       <div class="btnrow">
         <button id="btnMic">Mic</button>
-        <button id="btnSystem">System</button>
+        <button id="btnSystem">PC</button>
         <button id="btnFile">File</button>
-        <button id="btnTone">Tone</button>
+        <button id="btnTone">Beats</button>
       </div>
       <input type="file" id="fileInput" accept="audio/*" style="display:none;" />
       <div class="row">
         <label id="audioStatus">idle</label>
-        <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">"System" uses the browser's screen/tab-share picker — choose a tab (with "share audio" checked) or, on Windows, your whole screen with audio — plays Spotify/etc. straight through, no OS loopback tool needed. Chrome/Edge only. If Mic errors instead of showing a permission prompt, this page is likely in an embedded preview frame that blocks mic access — open the artifact in its own browser tab and try again.</span></span>
+        <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">"PC" opens the browser's screen/window/tab-share picker — "share audio" only captures audio from WHATEVER you pick there, not your whole PC by default. To hear Spotify or another app, pick "Entire Screen" (or, on Windows, that app's own "Window") in the picker, NOT "Chrome Tab" — a Chrome Tab share only captures that one tab's own audio, which is silent if the music is playing somewhere else (a common mix-up: picking the tab this page is running in, or another browser tab, captures nothing useful). Chrome/Edge only. If Mic errors instead of showing a permission prompt, this page is likely in an embedded preview frame that blocks mic access — open the artifact in its own browser tab and try again.</span></span>
         <span class="chip" id="silentChip">&mdash;</span>
       </div>
     </div>
     <div class="group">
-      <div class="meter-stack" id="meterStack" title="Click to expand tone generator controls">
+      <div class="meter-stack" id="meterStack">
         <div class="mrow bass"><span class="lbl">Bass</span><div class="bar"><i id="barBassHit"></i></div></div>
         <div class="mrow mid"><span class="lbl">Mid</span><div class="bar"><i id="barMidHit"></i></div></div>
         <div class="mrow treble"><span class="lbl">Treb</span><div class="bar"><i id="barTrebleHit"></i></div></div>
         <div class="mrow full"><span class="lbl">Full</span><div class="bar"><i id="barFullHit"></i></div></div>
-        <div class="meter-stack__hint">click for tone controls</div>
       </div>
+      <button id="expandSourceBtn" class="expand-source-btn">Expand source controls &#9662;</button>
       <div class="tone-expand" id="toneExpand">
         <div class="row"><label style="flex:none;">Tone generator pattern</label></div>
         <select id="tonePatternSelect">
@@ -662,7 +672,8 @@ footer {
           <option value="edm">EDM (four-on-the-floor)</option>
           <option value="trap">Trap</option>
           <option value="boombap" selected>Boom-bap / hip-hop</option>
-          <option value="lofi">Lo-fi</option>
+          <option value="chris">Chris (bass music)</option>
+          <option value="lofi">Oldies ballad</option>
         </select>
         <div class="row"><label>Base noise</label><span class="val" id="toneBaseNoiseVal">1%</span></div>
         <input type="range" id="toneBaseNoiseSlider" min="0" max="5" step="0.1" value="1" />
@@ -901,13 +912,13 @@ function chinaWashAt(centerDist, sizeCenterDist) {
     // Wide, bright core (peakScale well above 1.0 pushes the gradient's
     // half-brightness stop out toward the edge, not concentrated near the
     // center), with the overall spot sized via radiusMult (history: 1.3 ->
-    // 1.3*2.5 when spots were "pathetic" -> *0.75 per follow-up request to
-    // come back down 25%, net 1.3*2.5*0.75 = 2.4375) and the fadeout itself
-    // softened further (peakScale lowered a bit from the previous 1.6, so
-    // more of the radius is spent gradually fading rather than staying at
-    // full brightness right up to the edge).
+    // 1.3*2.5 when spots were "pathetic" -> *0.75 to come back down 25% ->
+    // *0.97 for a further 3% trim, net 1.3*2.5*0.75*0.97 = 2.364375) and
+    // the fadeout itself softened further (peakScale lowered a bit from
+    // the previous 1.6, so more of the radius is spent gradually fading
+    // rather than staying at full brightness right up to the edge).
     peakScale: 1.3,
-    radiusMult: 1.3 * 2.5 * 0.75,
+    radiusMult: 1.3 * 2.5 * 0.75 * 0.97,
   });
 }
 // side pairs (0,3,4,7) -- the reference size everything else now matches
@@ -1429,6 +1440,17 @@ function teardownSource() {
   if (sourceNode) { try { sourceNode.disconnect(); } catch (e) {} sourceNode = null; }
   if (extraSourceNode) { try { extraSourceNode.disconnect(); } catch (e) {} extraSourceNode = null; }
 }
+// "None" -- all 4 source buttons toggled off. Clearing `analyser` (rather
+// than just disconnecting the source) makes readBins() take its own
+// already-existing no-analyser branch and return flat zeros, so sound-in
+// is truly 0 rather than an analyser left frozen on its last-seen frame.
+function useNone() {
+  teardownSource();
+  analyser = null;
+  fftData = null;
+  setAppGeneratedSource(false);
+  document.getElementById('audioStatus').textContent = 'off';
+}
 async function useMic() {
   teardownSource();
   const ctx = ensureCtx();
@@ -1476,23 +1498,78 @@ function useFile(file) {
   };
   reader.readAsArrayBuffer(file);
 }
-// Tone generator patterns -- 16-step sequencers (kick/snare/hihat hit
-// flags) covering a spread of common EDM/trap/hip-hop/lo-fi feels, plus the
-// original simple kick+broadband as a baseline. Each channel is a cheap
-// synthesized burst (sine for kick, noise for snare/hihat) rather than
-// sampled audio -- enough spectral variety to exercise the light shows'
-// band-reactivity, not meant to sound musical.
+// Tone generator patterns -- 16-step sequencers covering a spread of
+// common genre feels, plus the original simple kick+broadband as a
+// baseline. Each channel is a cheap synthesized burst (sine for kick,
+// noise+tone mix for snare/hihat/mid) rather than sampled audio -- enough
+// spectral variety to exercise the light shows' band-reactivity, not
+// meant to sound musical. 4 step-arrays per pattern:
+//   kick  -- bass (BAND_LOW). A step value of 2 (not just 1) means a
+//            SUSTAINED hit that holds at full level for up to 400ms
+//            before its normal decay starts, instead of decaying
+//            immediately -- see KICK_SUSTAIN_SAMPLES below.
+//   snare -- a short mid/broadband transient (the "snap" of a snare hit).
+//   hihat -- treble (BAND_HIGH).
+//   mid   -- BAND_MID, genre-appropriate (chord stabs / vocal line /
+//            sample chop / etc, see each pattern's own comment) -- mostly
+//            tonal rather than noisy, and can also use the 2=sustained
+//            convention (used by the oldies-ballad pattern's "singing").
 const TONE_PATTERNS = {
   // "simple" previously had an empty hihat pattern -- meaning the default
   // selection produced literally zero treble content, the actual bug
   // behind "no treble activity" (this was true even before the pattern
   // rework, since the old broadband noise floor alone was too quiet to
   // register). Now has a steady basic hihat like every other pattern.
-  simple: { bpm: 100, kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [], hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
-  edm:    { bpm: 128, kick: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
-  trap:   { bpm: 140, kick: [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1] },
-  boombap:{ bpm: 90,  kick: [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
-  lofi:   { bpm: 78,  kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
+  simple: { bpm: 100,
+    kick:  [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+    snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+    hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
+    mid:   [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // one plain mid pulse per bar -- generic baseline, no genre character
+  },
+  edm: { bpm: 128,
+    kick:  [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
+    snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+    hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
+    mid:   [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0], // off-beat chord "pluck" stabs, the classic EDM upbeat lead
+  },
+  // Treble reworked per request: rapid-fire hihat spurts clustered right
+  // before/after each kick (the classic trap hihat "roll"), with real
+  // silence in between -- previously near-constant-density throughout,
+  // which read as one steady texture rather than distinct bursts tied to
+  // the kick hits.
+  trap: { bpm: 140,
+    kick:  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0],
+    snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+    hihat: [1,1,0,0,0,1,1,1,1,1,1,0,0,0,0,0], // bursts around kick@0, kick@6, kick@9; quiet stretches elsewhere
+    mid:   [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0], // sparse, syncopated -- rap-vocal-ish stabs, off the beat
+  },
+  boombap: { bpm: 90,
+    kick:  [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],
+    snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+    hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+    mid:   [0,0,1,0,0,0,0,0,0,0,1,0,0,1,0,0], // horn/sample-chop stabs, classic boom-bap placement just off the snare
+  },
+  // "Chris" -- a bass-music genre: treble is intentionally IDENTICAL to
+  // boombap's per request; the distinguishing features are the sustained
+  // (up to 400ms) bass hits (kick steps valued 2) and an overall tempo
+  // 75% of boombap's (90*0.75 = 67.5bpm), i.e. noticeably slower/heavier.
+  chris: { bpm: 90 * 0.75,
+    kick:  [2,0,0,0,0,0,1,0,0,0,2,0,0,0,0,0], // steps 0 and 10 sustain; step 6 a normal short hit
+    snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+    hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // same as boombap, per request
+    mid:   [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // minimal -- a bass-focused genre, midrange stays out of the way
+  },
+  // Oldies power-ballad (e.g. "Total Eclipse of the Heart"), not EDM --
+  // per request, the midrange here represents SINGING: a slow, sustained,
+  // more melodic mid line (using the 2=sustain convention for held notes)
+  // rather than a percussive stab, with several notes per bar like an
+  // actual vocal phrase would have.
+  lofi: { bpm: 78,
+    kick:  [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
+    snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+    hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
+    mid:   [1,0,0,2,0,0,1,0,0,0,2,0,1,0,0,0], // a simple held vocal-line rhythm across the bar
+  },
 };
 // Noise has 2 independent components, both pk-pk fractions of full scale,
 // for testing AGC/noise-floor against a somewhat-realistic signal:
@@ -1513,13 +1590,14 @@ function useTone() {
   const bufSize = 2048;
   const noiseNode = ctx.createScriptProcessor ? ctx.createScriptProcessor(bufSize, 1, 1) : null;
   let kickEnv = 0, kickPhase = 0, snareEnv = 0, snarePhase = 0, hihatEnv = 0, hihatPhase = 0, hihatPhase2 = 0;
+  let midEnv = 0, midPhase = 0, kickSustainRemaining = 0, midSustainRemaining = 0;
   let sampleInStep = 0, stepIdx = -1;
   if (noiseNode) {
     noiseNode.onaudioprocess = (e) => {
       const out = e.outputBuffer.getChannelData(0);
       const pat = TONE_PATTERNS[toneSettings.pattern] || TONE_PATTERNS.simple;
       const samplesPerStep = Math.round((60 / pat.bpm / 4) * ctx.sampleRate); // 16th notes
-      const kickHz = 55, kickDecay = 0.9994, snareDecay = 0.9985, hihatDecay = 0.9978;
+      const kickHz = 55, kickDecay = 0.9994, snareDecay = 0.9985, hihatDecay = 0.9978, midDecay = 0.9975;
       // BAND_MID/BAND_HIGH sample specific narrow FFT bins (max of bins at
       // ~400/1000Hz for mid, ~6250/16000Hz for treble -- see BIN_FREQS).
       // Pure broadband noise spreads its energy across the WHOLE spectrum,
@@ -1528,28 +1606,40 @@ function useTone() {
       // exactly one bin and blows past the hit threshold every time. This
       // was the actual, more general bug behind "none of them have any
       // mid or treble" (not missing pattern data -- every pattern already
-      // has snare/hihat steps). Fix: snare/hihat are now noise MIXED WITH
-      // concentrated tone components at the frequencies those bands
+      // has snare/hihat steps). Fix: snare/hihat/mid are all noise MIXED
+      // WITH concentrated tone components at the frequencies those bands
       // actually sample, so they register just as reliably as the kick.
-      const snareHz = 900, hihatHz1 = 6250, hihatHz2 = 15500;
+      // mid uses 400Hz specifically (not 900, which snare already covers)
+      // so mid/snare land as distinct contributions within BAND_MID
+      // (max of the 400Hz and 1000Hz bins).
+      const snareHz = 900, hihatHz1 = 6250, hihatHz2 = 15500, midHz = 400;
+      const KICK_SUSTAIN_SAMPLES = Math.round(0.4 * ctx.sampleRate); // up to 400ms hold for step-value 2 (kick or mid)
       for (let i = 0; i < out.length; i++) {
         if (++sampleInStep >= samplesPerStep) {
           sampleInStep = 0;
           stepIdx = (stepIdx + 1) % 16;
-          if (pat.kick[stepIdx]) { kickEnv = 1; kickPhase = 0; }
+          const kickStep = pat.kick[stepIdx] || 0;
+          if (kickStep) { kickEnv = 1; kickPhase = 0; kickSustainRemaining = kickStep >= 2 ? KICK_SUSTAIN_SAMPLES : 0; }
           if (pat.snare[stepIdx]) { snareEnv = 1; snarePhase = 0; }
           if (pat.hihat[stepIdx]) { hihatEnv = 1; hihatPhase = 0; hihatPhase2 = 0; }
+          const midStep = (pat.mid && pat.mid[stepIdx]) || 0;
+          if (midStep) { midEnv = 1; midPhase = 0; midSustainRemaining = midStep >= 2 ? KICK_SUSTAIN_SAMPLES : 0; }
         }
-        kickEnv *= kickDecay; snareEnv *= snareDecay; hihatEnv *= hihatDecay;
+        if (kickSustainRemaining > 0) kickSustainRemaining--; else kickEnv *= kickDecay;
+        if (midSustainRemaining > 0) midSustainRemaining--; else midEnv *= midDecay;
+        snareEnv *= snareDecay; hihatEnv *= hihatDecay;
         kickPhase += kickHz / ctx.sampleRate;
         snarePhase += snareHz / ctx.sampleRate;
         hihatPhase += hihatHz1 / ctx.sampleRate;
         hihatPhase2 += hihatHz2 / ctx.sampleRate;
+        midPhase += midHz / ctx.sampleRate;
         const kickSample = Math.sin(kickPhase * 2 * Math.PI) * kickEnv;
         const snareSample = ((Math.random() * 2 - 1) * 0.5 + Math.sin(snarePhase * 2 * Math.PI) * 0.5) * snareEnv;
         const hihatSample = ((Math.random() * 2 - 1) * 0.35 + Math.sin(hihatPhase * 2 * Math.PI) * 0.4 + Math.sin(hihatPhase2 * 2 * Math.PI) * 0.25) * hihatEnv;
+        // mostly tonal (chord/vocal-like), light noise texture -- not a percussive hit
+        const midSample = (Math.sin(midPhase * 2 * Math.PI) * 0.8 + (Math.random() * 2 - 1) * 0.15) * midEnv;
         const ampNoiseSample = (Math.random() * 2 - 1) * toneSettings.ampNoise;
-        out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + ampNoiseSample));
+        out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + midSample * 0.6 + ampNoiseSample));
       }
     };
     noiseNode.connect(ensureVolumeGain(ctx)); // scales 0..set level with Phone volume, see toneSettings comment above
@@ -1667,14 +1757,28 @@ function hsv(h, s, v) { // h 0-255, s 0-255, v 0-255 -> {r,g,b} 0-255
   return { r: r*255, g: g*255, b: b*255 };
 }
 function scale255(c, amt) { const f = amt/255; return {r:c.r*f, g:c.g*f, b:c.b*f}; }
-// Rescales a color so its brightest channel hits 255, preserving hue/sat --
-// used where a color is a PALETTE REFERENCE POINT (e.g. a fire palette's
-// "cool" vs "hot" stop) being repurposed as a flash color that should be
-// able to reach full brightness on its own, not stay capped at however
-// bright that particular palette stop happens to be.
+// Rescales a color so r+g+b sums to 255, preserving hue/sat -- used where
+// a color is a PALETTE REFERENCE POINT (e.g. a fire palette's "cool" vs
+// "hot" stop) being repurposed as a flash color that should be able to
+// reach full brightness on its own, not stay capped at however bright
+// that particular palette stop happens to be.
+// BUGFIX: this used to normalize by max-channel (scaling so the single
+// brightest channel hit 255), which does NOT equalize perceived
+// brightness -- a near-pure-blue color and a near-white-blue color can
+// both have max channel = 255 while their r+g+b SUMS (the actual
+// brightness metric drawWash()/drawGroundEllipse()/the fixture-dot
+// renderer all key off, via `color.r+color.g+color.b`) differ by 2-3x.
+// That's exactly why the bass-reactive floods (blended from a fire
+// palette's dim, blue/red-dominant "cool" stop) still read dimmer than
+// the treble-reactive ones (blended from the much whiter "hot" stop)
+// even after the max-channel fix -- normalizing by SUM instead is what
+// actually matches the metric the renderer uses, so equal hit
+// percentages now genuinely render as equal on-screen brightness.
 function normalizeToFull(c) {
-  const m = Math.max(c.r, c.g, c.b, 1);
-  return { r: c.r / m * 255, g: c.g / m * 255, b: c.b / m * 255 };
+  const sum = c.r + c.g + c.b;
+  if (sum <= 0) return { r: 0, g: 0, b: 0 };
+  const scale = 255 / sum;
+  return { r: c.r * scale, g: c.g * scale, b: c.b * scale };
 }
 
 /* =====================================================================
@@ -1688,7 +1792,7 @@ const Ctl = {
   headlightBr: 50,
   chinaBr: 100,
   blacklight: false,
-  speedMph: 0,
+  speedMph: 4,
   currMode: 'nightrider',
   variation: 0,
   // config-mode navigation: 'show' means normal light-show operation;
@@ -2030,18 +2134,15 @@ function showEqualizer(nowMs, dtMs) {
    the pattern slide backward in the car's own reference frame). The
    very-first stripe's leading edge starts (on show entry/reset) level
    with the largest Y among all floodlight ground spots -- i.e. even with
-   the frontmost throw. Any megabar or china fixture just shows whichever
-   stripe's leading edge has most recently descended past its own ground
-   spot's Y (solid, no fade -- by definition this also means the front
-   megabars and the front china cross a given stripe boundary at the same
-   moment, since it's the same leading-edge Y for all of them). Each rope
-   LED does the same by its own (car-relative, sharp-cornered-rectangle)
-   position, but fades between the two adjacent stripes' colors over about
-   SS_ROPE_FADE_LEDS neopixels, converted to real feet using THAT LED's
-   own edge density (front/back vs side channels don't run the same
-   LEDs/ft, so a fixed LED count is a different real distance on each). */
+   the frontmost throw. Every fixture (megabar, china, and each rope LED
+   by its own car-relative position) shows whichever stripe's leading edge
+   has most recently descended past its own Y, cross-fading linearly into
+   the adjacent stripe's color over SS_FADE_FT feet centered on the
+   boundary -- same fade width for rope and every flood, so a boundary
+   reads as one continuous transition sweeping across the whole car, not
+   just along the rope. */
 const SS_STRIPE_WIDTH_FT = 13; // trailing edge Y = leading edge Y - this
-const SS_ROPE_FADE_LEDS = 25; // rope blends across a stripe boundary over about this many LEDs
+const SS_FADE_FT = 3; // stripe-to-stripe cross-fade width, feet -- rope and all floods alike
 
 // Car-relative feet, Y+ = front -- see block comment above.
 function canvasToCarFt(pt) { return { x: (pt.x - CAR_X) / PX_PER_FT, y: (CAR_Y - pt.y) / PX_PER_FT }; }
@@ -2077,9 +2178,6 @@ function ssLedCarFt(i) {
   const u = (i - LEFT) / SIZEOF_LARGE_NEO; return { x: -SS_CAR_HALF_W_FT, y: -SS_CAR_HALF_H_FT + u * CAR_H_FT };
 }
 const SS_LED_Y_FT = Array.from({ length: NUM_NEO }, (_, i) => ssLedCarFt(i).y);
-const SS_LED_DENSITY = Array.from({ length: NUM_NEO }, (_, i) => // LEDs/ft on that LED's own edge
-  (i < RIGHT || (i >= BACK && i < LEFT)) ? (SIZEOF_SMALL_NEO / CAR_W_FT) : (SIZEOF_LARGE_NEO / CAR_H_FT)
-);
 
 let ssRefEdgeY = 0; // current Y of the k=0 stripe's leading edge
 function resetSpeedStripesState() {
@@ -2094,11 +2192,9 @@ function ssStripeColor(k) {
   h = (h ^ (h >>> 15)) >>> 0;
   return hsv(h & 0xFF, 255, 255);
 }
-function ssStripeIndexAt(y) { return Math.floor((ssRefEdgeY - y) / SS_STRIPE_WIDTH_FT); }
-// fadeFt: 0 (or omitted) for a hard-edged solid stripe color (megabar/
-// china); >0 to linearly cross-fade between the two adjacent stripes'
-// colors over that many total feet, centered on whichever boundary is
-// nearest (rope).
+// fadeFt: 0 (or omitted) for a hard-edged solid stripe color; >0 to
+// linearly cross-fade between the two adjacent stripes' colors over that
+// many total feet, centered on whichever boundary is nearest.
 function ssColorAt(y, fadeFt) {
   const contPos = (ssRefEdgeY - y) / SS_STRIPE_WIDTH_FT;
   const k = Math.floor(contPos);
@@ -2122,14 +2218,14 @@ function showSpeedStripes(nowMs, dtMs) {
 
   clearRope(); clearMegabars(); clearChinas();
   for (let m = 0; m < NUM_MEGABAR; m++) {
-    megabarLeds[m] = ssStripeColor(ssStripeIndexAt(SS_MEGABAR_SPOT_FT[m].y));
+    megabarLeds[m] = ssColorAt(SS_MEGABAR_SPOT_FT[m].y, SS_FADE_FT);
   }
   for (let i = 0; i < NUM_NEO; i++) {
-    ropeLeds[i] = ssColorAt(SS_LED_Y_FT[i], SS_ROPE_FADE_LEDS / SS_LED_DENSITY[i]);
+    ropeLeds[i] = ssColorAt(SS_LED_Y_FT[i], SS_FADE_FT);
   }
   if (Ctl.variation === 1) { // 2nd variation: china lit by the exact same algorithm
     for (let c = 0; c < NUM_CHINA; c++) {
-      chinaLeds[c] = ssStripeColor(ssStripeIndexAt(SS_CHINA_SPOT_FT[c].y));
+      chinaLeds[c] = ssColorAt(SS_CHINA_SPOT_FT[c].y, SS_FADE_FT);
     }
   }
 }
@@ -2248,7 +2344,12 @@ function showLighthouse(nowMs, dtMs) {
     megabarLeds[m] = w ? hsv(w.hue, 255, w.brightness) : {r:0,g:0,b:0};
   }
   clearChinas();
-  if (updateLighthouseStrobe(nowMs)) {
+  // Variation 1 ("No china"): china (the strobe below) is the ONLY
+  // audio-reactive part of this show -- the rope/megabar sweep is driven
+  // purely by the pot/angle mechanism above, no audio involved -- so
+  // skipping china here also means skipping ALL sound reactivity for this
+  // variation, per request.
+  if (Ctl.variation !== 1 && updateLighthouseStrobe(nowMs)) {
     for (let c = 0; c < NUM_CHINA; c++) chinaLeds[c] = { r: 255, g: 255, b: 255 };
   }
 }
@@ -2967,10 +3068,10 @@ function draw() {
    ===================================================================== */
 const VARIATIONS = {
   nightrider: ['Manual hue', 'Auto cycle'],
-  flame: ['Waterflames', 'Flames', 'Shifting hues', 'Hue to white'],
+  flame: ['Waterflames', 'Flames', 'Shift hues', 'Hue-white'],
   equalizer: ['Chase', 'VU meter'],
-  speedstripes: ['Rope + megabars', 'Rope + megabars + china'],
-  lighthouse: ['Default'],
+  speedstripes: ['Rope+MB', 'Rope+MB+China'],
+  lighthouse: ['Default', 'No china'],
   cfg_meter: [], cfg_decay: [], cfg_predict: [], cfg_foresight: [],
 };
 function refreshVariationRow() {
@@ -3013,17 +3114,47 @@ document.getElementById('showSelect').addEventListener('change', (e) => {
 });
 refreshVariationRow();
 
-document.getElementById('btnMic').onclick = () => useMic().catch(err => {
-  document.getElementById('audioStatus').textContent = 'mic error: ' + err.message;
-});
-document.getElementById('btnSystem').onclick = () => useSystemAudio().catch(err => {
-  document.getElementById('audioStatus').textContent = 'system audio error: ' + err.message;
-});
-document.getElementById('btnFile').onclick = () => document.getElementById('fileInput').click();
+// Audio source buttons are a radio-group-that-can-also-be-fully-off: at
+// most one lit orange (.active) at a time, clicking the already-active one
+// turns it (and sound-in) off instead of re-activating it.
+const AUDIO_SOURCE_BUTTON_IDS = ['btnMic', 'btnSystem', 'btnFile', 'btnTone'];
+let activeAudioSourceId = null;
+function selectAudioSource(id) {
+  activeAudioSourceId = id;
+  for (const bid of AUDIO_SOURCE_BUTTON_IDS) document.getElementById(bid).classList.toggle('active', bid === id);
+}
+function deselectAudioSource() {
+  activeAudioSourceId = null;
+  for (const bid of AUDIO_SOURCE_BUTTON_IDS) document.getElementById(bid).classList.remove('active');
+  useNone();
+}
+document.getElementById('btnMic').onclick = () => {
+  if (activeAudioSourceId === 'btnMic') { deselectAudioSource(); return; }
+  useMic().then(() => selectAudioSource('btnMic')).catch(err => {
+    document.getElementById('audioStatus').textContent = 'mic error: ' + err.message;
+  });
+};
+document.getElementById('btnSystem').onclick = () => {
+  if (activeAudioSourceId === 'btnSystem') { deselectAudioSource(); return; }
+  useSystemAudio().then(() => selectAudioSource('btnSystem')).catch(err => {
+    document.getElementById('audioStatus').textContent = 'system audio error: ' + err.message;
+  });
+};
+document.getElementById('btnFile').onclick = () => {
+  if (activeAudioSourceId === 'btnFile') { deselectAudioSource(); return; }
+  document.getElementById('fileInput').click();
+};
 document.getElementById('fileInput').addEventListener('change', (e) => {
-  if (e.target.files[0]) useFile(e.target.files[0]);
+  if (e.target.files[0]) { useFile(e.target.files[0]); selectAudioSource('btnFile'); }
 });
-document.getElementById('btnTone').onclick = () => useTone();
+document.getElementById('btnTone').onclick = () => {
+  if (activeAudioSourceId === 'btnTone') { deselectAudioSource(); return; }
+  useTone();
+  selectAudioSource('btnTone');
+};
+// Beats is on by default at startup, so there's sound (and reactivity)
+// immediately without having to click anything first.
+document.getElementById('btnTone').onclick();
 
 document.getElementById('speedSlider').addEventListener('input', (e) => {
   Ctl.speedMph = +e.target.value;
@@ -3487,12 +3618,12 @@ bindSlider('noiseFloorSlider', 'noiseFloorVal', v => v+'%', v => AudioBoard.nois
 bindSlider('peakThreshSlider', 'peakThreshVal', v => v+'%', v => AudioBoard.peakThresholdPct = v);
 bindSlider('hitDecaySlider', 'hitDecayVal', v => v+'ms', v => AudioBoard.hitDecayMs = v);
 // Hit prediction can never exceed foresight -- there's no lead-time window
-// to predict a hit into otherwise. Setting the slider's own `max` (rather
-// than just clamping the stored value) makes the browser physically refuse
-// to drag the thumb past it, per request, not just silently snap back.
+// to predict a hit into otherwise. The slider's own range STAYS the full
+// fixed 0-1000ms (per request -- not a shrinking `max` attribute); the
+// drag-time refusal to go past the current foresight value instead lives
+// in the predictMsSlider input handler below, which snaps the thumb's own
+// DOM value back down every time it's dragged past that point.
 function syncPredictMsMax() {
-  const slider = document.getElementById('predictMsSlider');
-  slider.max = AudioBoard.audioForesightMs;
   if (AudioBoard.hitPredictionMs > AudioBoard.audioForesightMs) {
     AudioBoard.hitPredictionMs = AudioBoard.audioForesightMs;
   }
@@ -3511,8 +3642,11 @@ bindToggleButton('btnMute', () => applyVolumeUI());
 bindToggleButton('btnDelay', () => updateOutputDelayTime());
 document.getElementById('volumeSlider').addEventListener('input', applyVolumeUI);
 
-document.getElementById('meterStack').addEventListener('click', () => {
-  document.getElementById('toneExpand').classList.toggle('open');
+document.getElementById('expandSourceBtn').addEventListener('click', () => {
+  const btn = document.getElementById('expandSourceBtn');
+  const open = document.getElementById('toneExpand').classList.toggle('open');
+  btn.classList.toggle('open', open);
+  btn.innerHTML = (open ? 'Collapse source controls' : 'Expand source controls') + ' &#9662;';
 });
 document.getElementById('tonePatternSelect').addEventListener('change', (e) => { toneSettings.pattern = e.target.value; });
 document.getElementById('toneBaseNoiseSlider').addEventListener('input', (e) => {
@@ -3523,7 +3657,18 @@ document.getElementById('toneAmpNoiseSlider').addEventListener('input', (e) => {
   toneSettings.ampNoise = +e.target.value / 100;
   document.getElementById('toneAmpNoiseVal').textContent = e.target.value + '%';
 });
-bindSlider('predictMsSlider', 'predictMsVal', v => v+'ms', v => AudioBoard.hitPredictionMs = v);
+// Bespoke (not bindSlider) so a drag past the current foresight value can
+// snap the thumb's own DOM position back, not just clamp the stored number.
+document.getElementById('predictMsSlider').addEventListener('input', (e) => {
+  let v = +e.target.value;
+  if (v > AudioBoard.audioForesightMs) {
+    v = AudioBoard.audioForesightMs;
+    e.target.value = v;
+  }
+  AudioBoard.hitPredictionMs = v;
+  document.getElementById('predictMsVal').textContent = v + 'ms';
+  updateStatusPanel();
+});
 syncPredictMsMax();
 bindSlider('globalBrSlider', 'globalBrVal', v => v+'%', v => Ctl.globalBr = v);
 bindSlider('headlightBrSlider', 'headlightBrVal', v => v+'%', v => Ctl.headlightBr = v);
