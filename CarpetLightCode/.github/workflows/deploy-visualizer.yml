@@ -1,0 +1,26 @@
+name: deploy-visualizer
+
+# Publishes tools/visualizer/carpet-visualizer.html to GitHub Pages under a
+# per-branch subfolder on every push, so
+# https://two-x.github.io/TheFlyingMagicCarpet/<branch>/carpet-visualizer.html
+# always reflects that branch's latest pushed commit. Requires GitHub Pages
+# to be enabled once in repo Settings -> Pages, source: gh-pages branch.
+on:
+  push:
+    branches-ignore:
+      - gh-pages
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy branch subfolder to Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: tools/visualizer
+          target-folder: ${{ github.ref_name }}

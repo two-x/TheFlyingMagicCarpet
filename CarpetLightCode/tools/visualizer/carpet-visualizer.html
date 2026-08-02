@@ -212,6 +212,114 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .btnrow { display: flex; flex-wrap: wrap; gap: 6px; }
 .btnrow button { flex: 1 1 auto; }
 
+/* Pot/Encoder control panel: a very-rounded rect (corner radius = 1/7 of
+   its own width, set from JS in sizeCtrlPanel() since a plain CSS percent
+   border-radius scales independently per-axis and would go elliptical
+   whenever the box isn't square) holding two knurled knobs (encoder left,
+   pot right) with the 5 button-press buttons in one row underneath. */
+.ctrl-panel {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  padding: 10px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ctrl-panel__knobs {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+.knob-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.knob-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+}
+.knob-label .val {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+.knob {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 28%, #524c5c, #211e27 68%),
+    repeating-conic-gradient(from 0deg, rgba(255,255,255,0.06) 0deg 4deg, rgba(0,0,0,0.18) 4deg 8deg);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 4px rgba(0,0,0,0.4);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+.knob__indicator {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  width: 2px;
+  height: 44%;
+  background: #fff;
+  border-radius: 1px;
+  box-shadow: 0 0 3px rgba(255,255,255,0.7);
+  transform-origin: bottom center;
+  transform: translateX(-50%) rotate(var(--angle, 0deg));
+  pointer-events: none;
+}
+/* Encoder knob has no meaningful absolute angle (relative rotary input),
+   so instead of a direction line it shows curved click-here-to-turn arrows
+   in its left/right halves -- each a 120deg arc (30deg to 150deg from top,
+   mirrored on the left) at 70% of the knob's radius, with an arrowhead at
+   the end. .flash briefly whitens the corresponding side when a detent
+   fires, toggled from JS. */
+.knob__arrows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+.knob__arc {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px rgba(242, 163, 65, 0.7));
+  transition: stroke 0.1s, filter 0.1s;
+}
+.knob__arrowhead {
+  fill: var(--amber);
+  filter: drop-shadow(0 0 3px rgba(242, 163, 65, 0.7));
+  transition: fill 0.1s, filter 0.1s;
+}
+.knob__arrow-group.flash .knob__arc {
+  stroke: #fff;
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.95));
+}
+.knob__arrow-group.flash .knob__arrowhead {
+  fill: #fff;
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.95));
+}
+.ctrl-panel__buttons {
+  display: flex;
+  gap: 4px;
+}
+.ctrl-panel__buttons button {
+  flex: 1 1 auto;
+  padding: 6px 2px;
+  font-size: 10px;
+  min-width: 0;
+}
+.ctrl-panel__buttons .tt { flex: 0 0 auto; }
+
 .hint {
   font-size: 11px;
   color: var(--text-faint);
@@ -266,7 +374,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .stage-wrap { align-items: stretch; }
 #stageCanvas {
   width: 100%;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 1160 / 1374;
   background: radial-gradient(ellipse at 50% 40%, #14121a 0%, #0a0910 75%);
   border-radius: 4px;
   display: block;
@@ -274,33 +382,41 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 #stageCanvas:active { cursor: grabbing; }
 /* compact 4-channel meter stack, doubling as the tone-generator's
-   expand/collapse trigger -- replaces the old 4-separate-boxes layout to
-   save vertical space for a bigger stage. */
+   expand/collapse trigger -- now living in the narrow side column (moved
+   from the wide stage panel), so bars are shorter/tighter to match. */
 .meter-stack {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 5px 8px;
+  padding: 4px 6px;
   border-radius: 4px;
   background: var(--panel-2);
   cursor: pointer;
 }
 .meter-stack:hover { background: var(--line-soft); }
-.meter-stack .mrow { display: flex; align-items: center; gap: 6px; }
+.meter-stack .mrow { display: flex; align-items: center; gap: 5px; }
 .meter-stack .lbl {
-  width: 30px;
+  width: 26px;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 7px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-faint);
 }
-.meter-stack .bar { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.meter-stack .bar { flex: 1; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .meter-stack .bar > i { display: block; height: 100%; width: 0%; border-radius: 2px; }
 .meter-stack .bass i { background: var(--red); }
 .meter-stack .mid i { background: var(--green); }
 .meter-stack .treble i { background: var(--blue); }
 .meter-stack .full i { background: var(--amber); }
+.meter-stack__hint {
+  font-family: var(--mono);
+  font-size: 7px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: 2px;
+}
 
 .tone-expand {
   display: none;
@@ -348,25 +464,7 @@ footer {
       <span class="config-status__mode" id="configStatusMode">SHOW MODE</span>
       <span class="config-status__detail" id="configStatusDetail">Nightrider</span>
     </div>
-    <canvas id="stageCanvas" width="900" height="1200"></canvas>
-    <div class="meter-stack" id="meterStack" title="Click to expand tone generator controls">
-      <div class="mrow bass"><span class="lbl">Bass</span><div class="bar"><i id="barBassHit"></i></div></div>
-      <div class="mrow mid"><span class="lbl">Mid</span><div class="bar"><i id="barMidHit"></i></div></div>
-      <div class="mrow treble"><span class="lbl">Treb</span><div class="bar"><i id="barTrebleHit"></i></div></div>
-      <div class="mrow full"><span class="lbl">Full</span><div class="bar"><i id="barFullHit"></i></div></div>
-    </div>
-    <div class="tone-expand" id="toneExpand">
-      <div class="row"><label style="flex:none;">Tone generator pattern</label></div>
-      <select id="tonePatternSelect">
-        <option value="simple" selected>Simple (kick + broadband)</option>
-        <option value="edm">EDM (four-on-the-floor)</option>
-        <option value="trap">Trap</option>
-        <option value="boombap">Boom-bap / hip-hop</option>
-        <option value="lofi">Lo-fi</option>
-      </select>
-      <div class="row"><label>Noise floor</label><span class="val" id="toneNoiseVal">15%</span></div>
-      <input type="range" id="toneNoiseSlider" min="0" max="100" step="1" value="15" />
-    </div>
+    <canvas id="stageCanvas" width="1160" height="1374"></canvas>
   </div>
 
   <!-- ============ single consolidated control column ============ -->
@@ -394,10 +492,10 @@ footer {
       <select id="showSelect">
         <optgroup label="Light shows">
           <option value="nightrider">Nightrider</option>
+          <option value="lighthouse">Lighthouse</option>
           <option value="flame">FlameSparkle</option>
           <option value="equalizer">Equalizer</option>
           <option value="speedstripes">SpeedStripes</option>
-          <option value="lighthouse">Lighthouse</option>
         </optgroup>
         <optgroup label="Audio config screens">
           <option value="cfg_meter">Noise/Peak meter</option>
@@ -416,29 +514,42 @@ footer {
 
     <div class="group">
       <div class="row"><label>View zoom</label><span class="val" id="zoomVal">50ft</span></div>
-      <input type="range" id="zoomSlider" min="20" max="100" step="1" value="50" />
       <div class="row"><label style="font-size:9px;">Scroll/pinch on stage, or , and . keys</label></div>
     </div>
 
     <div class="group">
-      <div class="row"><label>Pot</label><span class="val" id="potVal">50%</span></div>
-      <input type="range" id="potSlider" min="0" max="100" step="1" value="50" />
-      <div class="row"><label>Encoder</label><span class="val" id="encVal">pos 0</span></div>
-      <div class="btnrow">
-        <button id="encLeft">&#9664;</button>
-        <button id="encRight">&#9654;</button>
-      </div>
-    </div>
-    <div class="group">
-      <div class="btnrow">
-        <button id="btnShort">Short</button>
-        <button id="btnMedium">Med</button>
-        <button id="btnLong">Long</button>
-      </div>
-      <div class="btnrow">
-        <button id="btnXLong">X-long</button>
-        <button id="btnDouble">Dbl</button>
-        <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Short: next show, or next config subsetting. Medium: next config screen (Brightness→Audio→PowerTest). Long: enter config / cancel out of it. Double: blacklight toggle, or commit &amp; exit config. Extra-long: lights on/off. In config, Pot/Encoder drive whichever subsetting is shown in the status bar.</span></span>
+      <div class="ctrl-panel" id="ctrlPanel">
+        <div class="ctrl-panel__knobs">
+          <div class="knob-wrap">
+            <div class="knob knob--encoder" id="encoderKnob">
+              <svg class="knob__arrows" viewBox="0 0 56 56" width="56" height="56">
+                <g class="knob__arrow-group knob__arrow-group--right">
+                  <path class="knob__arc" d="M37.80,11.03 A19.6,19.6 0 0 1 37.80,44.97" />
+                  <path class="knob__arrowhead" d="M37.80,44.97 L45.61,44.51 L42.11,38.44 Z" />
+                </g>
+                <g class="knob__arrow-group knob__arrow-group--left">
+                  <path class="knob__arc" d="M18.20,11.03 A19.6,19.6 0 0 0 18.20,44.97" />
+                  <path class="knob__arrowhead" d="M18.20,44.97 L10.39,44.51 L13.89,38.44 Z" />
+                </g>
+              </svg>
+            </div>
+            <div class="knob-label">Encoder <span class="val" id="encVal">pos 0</span></div>
+          </div>
+          <div class="knob-wrap">
+            <div class="knob knob--pot" id="potKnob">
+              <div class="knob__indicator"></div>
+            </div>
+            <div class="knob-label">Pot <span class="val" id="potVal">50%</span></div>
+          </div>
+        </div>
+        <div class="ctrl-panel__buttons">
+          <button id="btnShort">Short</button>
+          <button id="btnMedium">Med</button>
+          <button id="btnLong">Long</button>
+          <button id="btnXLong">X-long</button>
+          <button id="btnDouble">Dbl</button>
+          <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Short: next show, or next config subsetting. Medium: next config screen (Brightness→Audio→PowerTest). Long: enter config / cancel out of it. Double: blacklight toggle, or commit &amp; exit config. Extra-long: lights on/off. In config, Pot/Encoder drive whichever subsetting is shown in the status bar. Encoder knob: click its left/right half for one detent left/right. Pot knob: click and drag up/right to increase, down/left to decrease.</span></span>
+        </div>
       </div>
     </div>
 
@@ -446,13 +557,13 @@ footer {
     <div class="group">
       <div class="row"><label>Noise floor</label><span class="val" id="noiseFloorVal">0%</span></div>
       <input type="range" id="noiseFloorSlider" min="0" max="100" step="1" value="0" />
-      <div class="row"><label>Peak thresh</label><span class="val" id="peakThreshVal">31%</span></div>
-      <input type="range" id="peakThreshSlider" min="0" max="100" step="1" value="31" />
+      <div class="row"><label>Peak thresh</label><span class="val" id="peakThreshVal">78%</span></div>
+      <input type="range" id="peakThreshSlider" min="0" max="100" step="1" value="78" />
       <div class="row"><label>Auto-gain</label><input type="checkbox" id="autoGainCheck" /></div>
     </div>
     <div class="group">
       <div class="row"><label>Hit decay</label><span class="val" id="hitDecayVal">300ms</span></div>
-      <input type="range" id="hitDecaySlider" min="0" max="1000" step="10" value="300" />
+      <input type="range" id="hitDecaySlider" min="0" max="3000" step="10" value="300" />
       <div class="row"><label>Foresight</label><span class="val" id="foresightVal">0ms</span></div>
       <input type="range" id="foresightSlider" min="0" max="1000" step="10" value="0" />
       <div class="row"><label>Hit predict</label><span class="val" id="predictMsVal">0ms</span></div>
@@ -472,14 +583,29 @@ footer {
       <div class="row"><label>China bright</label><span class="val" id="chinaBrVal">100%</span></div>
       <input type="range" id="chinaBrSlider" min="0" max="100" step="1" value="100" />
       <div class="row"><label>Blacklight</label><input type="checkbox" id="blacklightCheck" /></div>
+      <div class="row"><label>Show fixture dots</label><input type="checkbox" id="fixtureDotsCheck" /></div>
     </div>
+    <h2>Audio Levels</h2>
     <div class="group">
-      <div class="row"><label>PowerTest hue</label><span class="val" id="testHueVal">0</span></div>
-      <input type="range" id="testHueSlider" min="0" max="255" step="1" value="0" />
-      <div class="row"><label>PowerTest sat</label><span class="val" id="testSatVal">255</span></div>
-      <input type="range" id="testSatSlider" min="0" max="255" step="1" value="255" />
-      <div class="row"><label>PowerTest val</label><span class="val" id="testBrightnessVal">255</span></div>
-      <input type="range" id="testBrightnessSlider" min="0" max="255" step="1" value="255" />
+      <div class="meter-stack" id="meterStack" title="Click to expand tone generator controls">
+        <div class="mrow bass"><span class="lbl">Bass</span><div class="bar"><i id="barBassHit"></i></div></div>
+        <div class="mrow mid"><span class="lbl">Mid</span><div class="bar"><i id="barMidHit"></i></div></div>
+        <div class="mrow treble"><span class="lbl">Treb</span><div class="bar"><i id="barTrebleHit"></i></div></div>
+        <div class="mrow full"><span class="lbl">Full</span><div class="bar"><i id="barFullHit"></i></div></div>
+        <div class="meter-stack__hint">click for tone controls</div>
+      </div>
+      <div class="tone-expand" id="toneExpand">
+        <div class="row"><label style="flex:none;">Tone generator pattern</label></div>
+        <select id="tonePatternSelect">
+          <option value="simple">Simple (kick + broadband)</option>
+          <option value="edm">EDM (four-on-the-floor)</option>
+          <option value="trap">Trap</option>
+          <option value="boombap" selected>Boom-bap / hip-hop</option>
+          <option value="lofi">Lo-fi</option>
+        </select>
+        <div class="row"><label>Noise floor</label><span class="val" id="toneNoiseVal">5%</span></div>
+        <input type="range" id="toneNoiseSlider" min="0" max="100" step="1" value="5" />
+      </div>
     </div>
   </div>
 
@@ -511,7 +637,27 @@ const HEADLIGHT_INDEX = 0;
 const PX_PER_FT = 34;
 const CAR_W_FT = 12, CAR_H_FT = 16; // width (left-right), length (front-back)
 const CAR_W = CAR_W_FT * PX_PER_FT, CAR_H = CAR_H_FT * PX_PER_FT;
-const CAR_X = 900/2, CAR_Y = 1200/2;
+// 1160x1374 -- sized so the canvas's OWN dimensions exactly equal the real
+// render rectangle: the tightest box that contains every flood's ground
+// spot in full (out to where each one's radial gradient actually reaches
+// alpha=0), plus a flat 5% margin on top, per request. Computed once
+// offline (not at runtime, to avoid a circular dependency -- CAR_X/CAR_Y
+// are themselves needed to place the fixtures whose spots this measures)
+// by replicating this file's own fixture-position/wash-geometry math in a
+// throwaway script, tracking a real (asymmetric) X/Y bounding box via each
+// spot's rotated-ellipse extent (see spotRadiiFt() and drawGroundEllipse()
+// below for that same across/along math) rather than a single radial
+// distance. The resulting box wasn't symmetric front-to-back (front/back
+// megabar inset
+// depths differ -- see FRONT_INSET_FT/BACK_INSET_FT), so each axis uses
+// the larger of its two sides, padded 5%, to stay centered on the car:
+//   half-width ~16.25ft, half-height ~19.25ft (the larger, back-side value)
+//   -> (2*16.25*1.05, 2*19.25*1.05) ft * PX_PER_FT = (1160, 1374) px
+// The aspect-ratio CSS on #stageCanvas and ZOOM_MAX_FT (below, in the zoom
+// section) both derive from this same box -- if the fixture geometry ever
+// changes meaningfully, this whole comment block's numbers (and those two
+// other spots) need recomputing together.
+const CAR_X = 1160/2, CAR_Y = 1374/2;
 
 // Side-profile note for the future 3D pass (not renderable in 2D top-down --
 // straight-down orthographic can't show height at all without perspective/
@@ -577,9 +723,12 @@ CORNER_TASSEL.megabarsAvoidBack = true;
 // WASH_MAX_RENDER_FT clamps that for legible rendering rather than
 // drawing a football field.
 const FLOOD_SPREAD_DEG = 25 + 8;  // full cone spread, per spec, both fixture types (widened +8deg per request)
-const MEGABAR_TILT_DEG = 15;      // down from horizontal -- shallow, reaches far
+const MEGABAR_TILT_DEG = 11;      // down from horizontal -- shallow, reaches far (~8ft out for the default mount height, per correction -- was 15deg/~5.6ft)
 const CHINA_TILT_DEG = 40;        // down from horizontal -- steep, lands close & bright
-const CHINA_BRIGHTNESS_MULT = 1.5; // "about fifty percent brighter... especially because they hit the floor sooner"
+// China are noticeably more powerful than megabars, not the "puny little
+// lights" the old flat 1.5x read as -- see CHINA_AIR_MULT/CHINA_GROUND_MULT
+// below (defined after CHINA_WASH, since ground brightness is now spec'd
+// relative to megabar's own value).
 const WASH_MAX_RENDER_FT = 26;
 
 function washFootprint(tiltDeg, heightFt) {
@@ -595,16 +744,107 @@ function washFootprint(tiltDeg, heightFt) {
 // real per-fixture mount heights now (FIXTURE_HEIGHTS_FT above), not the
 // deck-height stand-in this used before
 const MEGABAR_WASH = washFootprint(MEGABAR_TILT_DEG, FIXTURE_HEIGHTS_FT.megabarDefault);
-const MEGABAR_FRONT_WASH = washFootprint(MEGABAR_TILT_DEG, FIXTURE_HEIGHTS_FT.megabarFront);
+// Was its own washFootprint() at the front megabar's real, lower mount
+// height (FIXTURE_HEIGHTS_FT.megabarFront, 1.0ft vs the default 1.5ft),
+// which put its spot noticeably closer than every other megabar's --
+// per request, all megabars' spots land the same distance out, so this is
+// now just an alias for the standard wash (same centerDist/width as the
+// rest). The 1.0ft real height fact itself isn't lost (still in
+// FIXTURE_HEIGHTS_FT), just no longer driving this fixture's own cone/spot
+// geometry -- flag if you'd rather it stay at the true lower height with a
+// shallower tilt instead, to reach the same distance a different way.
+const MEGABAR_FRONT_WASH = MEGABAR_WASH;
 const CHINA_WASH = washFootprint(CHINA_TILT_DEG, FIXTURE_HEIGHTS_FT.china);
+// china's ground spot reads as a tighter, more concentrated "powerful" hot
+// core than a megabar's broader wash (see drawGroundEllipse's peakScale) --
+// roughly a 2.5ft-diameter brightest zone, closer to the ground and at a
+// steeper angle than a megabar.
+CHINA_WASH.peakScale = 0.55;
 
-// china aim azimuths: each pair's baseline is perpendicular to whichever
-// edge it's nearest (0/90/180/270, matching megabarAngle's convention),
-// then skewed 15 degrees toward its corner -- "aimed slightly toward the
-// outside of the car compared to a line across the edge" is read here as
-// skewed toward the corner (the most "outside" point where two edges
-// meet), off the straight edge-normal. Order matches CHINA_POS (0..7).
-const CHINA_AIM_DEG = [75, 15, 345, 285, 255, 195, 165, 105]; // indices 0/1 and 6/7 swapped to match the CHINA_POS fix above
+// China aim azimuths -- exact per-fixture formulas (0deg = straight
+// forward, increasing clockwise, matching megabarAngle's own convention).
+// rotationFactor ("X") is the angular sweep outward from the relevant edge
+// of the carpet that each light is aimed -- a real physical adjustment on
+// all 8 lamps at once, kept as one named constant rather than baked into
+// each angle, so retuning it later is a one-line change.
+const rotationFactor = 15; // "X", degrees
+const CHINA_AIM_DEG = [
+  180 - rotationFactor, // 0
+  270 + rotationFactor, // 1
+  90 - rotationFactor,  // 2
+  180 + rotationFactor, // 3
+  360 - rotationFactor, // 4
+  90 + rotationFactor,  // 5
+  270 - rotationFactor, // 6
+  0 + rotationFactor,   // 7
+];
+
+// China brightness: 25% brighter than before in the air, and its ground
+// spot 25% brighter than a megabar's (not than china's own old ground
+// value) -- two different baselines, per request.
+const CHINA_AIR_MULT_BASE = 1.25;
+const CHINA_AIR_MULT = CHINA_AIR_MULT_BASE * 1.25 * 2; // 1.5625, then doubled again per follow-up request -- 3.125
+// Fixed at 2.0 -- originally "2x megabar's ground brightMult," but kept as
+// a plain literal (not re-derived from MEGABAR_MULT below) so dimming the
+// megabars doesn't change china's brightness too, per request that china
+// stay exactly as they are.
+const CHINA_GROUND_MULT = 2.0;
+// Megabar cones/spots dimmed 15%, china left untouched -- applied at both
+// drawWash and drawGroundEllipse call sites for megabars (see draw()).
+const MEGABAR_MULT = 0.85 * 0.70; // 15% dim, then a further 30% off that per follow-up -- 0.595 total
+
+// Which lamp covers which side of the carpet:
+//   #1, #2 = front side
+//   #3, #4 = left side
+//   #5, #6 = back side
+//   #7, #0 = right side
+// CAR_W_FT (12ft, the carpet's width) and CAR_H_FT (16ft, its length) are
+// already declared above (see the geometry section) -- reused here rather
+// than re-declared, so there's only ever one source of truth for them.
+//
+// Per-lamp ground-spot center distance, via tiltFactor ("T"): T is the
+// percent of the relevant carpet EDGE DIMENSION out from the lamp that its
+// spot lands, front side and back side lamps (1/2/5/6) measured against
+// the carpet's WIDTH (they sit along a width-spanning edge), left side and
+// right side lamps (3/4/0/7) measured against its LENGTH (they sit along a
+// length-spanning edge). Calculated once, not re-derived per frame.
+const tiltFactor = 0.17; // "T", 17%
+const CHINA_CENTER_DIST_WIDTH_FT = tiltFactor * CAR_W_FT;  // front/back lamps (1,2,5,6) -- 3ft
+const CHINA_CENTER_DIST_LENGTH_FT = tiltFactor * CAR_H_FT; // left/right lamps (0,3,4,7) -- 4ft
+// BUGFIX: overriding centerDist above without also recalculating width left
+// width stuck at the value from CHINA_WASH's ORIGINAL (much closer, ~2.38ft)
+// centerDist -- so the spot was never actually "as wide as the beam cone at
+// that [new, farther] location" like requested, it was still sized for the
+// old location. width = 2*centerDist*tan(halfSpread) is the same formula
+// washFootprint() itself uses, just re-run at the new centerDist.
+const CHINA_HALF_SPREAD_RAD = (FLOOD_SPREAD_DEG / 2) * Math.PI / 180;
+function chinaWashAt(centerDist) {
+  return Object.assign({}, CHINA_WASH, {
+    centerDist,
+    width: 2 * centerDist * Math.tan(CHINA_HALF_SPREAD_RAD),
+    // Wide, bright core (peakScale well above 1.0 pushes the gradient's
+    // half-brightness stop out toward the edge, not concentrated near the
+    // center), with the overall spot 30% larger (radiusMult) and the
+    // fadeout itself softened further (peakScale lowered a bit from the
+    // previous 1.6, so more of the now-bigger radius is spent gradually
+    // fading rather than staying at full brightness right up to the edge).
+    peakScale: 1.3,
+    radiusMult: 1.3,
+  });
+}
+const CHINA_WASH_WIDTH_BASED = chinaWashAt(CHINA_CENTER_DIST_WIDTH_FT);
+const CHINA_WASH_LENGTH_BASED = chinaWashAt(CHINA_CENTER_DIST_LENGTH_FT);
+// indexed 0..7, matching the side key above
+const CHINA_WASH_FOR = [
+  CHINA_WASH_LENGTH_BASED, // 0 right side
+  CHINA_WASH_WIDTH_BASED,  // 1 front side
+  CHINA_WASH_WIDTH_BASED,  // 2 front side
+  CHINA_WASH_LENGTH_BASED, // 3 left side
+  CHINA_WASH_LENGTH_BASED, // 4 left side
+  CHINA_WASH_WIDTH_BASED,  // 5 back side
+  CHINA_WASH_WIDTH_BASED,  // 6 back side
+  CHINA_WASH_LENGTH_BASED, // 7 right side
+];
 
 // Rope: mounted right at the perimeter edge, aimed 45 degrees up and out
 // (away from the car). Not rendered as a wash in 2D -- per spec they stay
@@ -615,9 +855,9 @@ const CHINA_AIM_DEG = [75, 15, 345, 285, 255, 195, 165, 105]; // indices 0/1 and
 const ROPE_AIM_TILT_UP_DEG = 45;
 
 // The rope can't actually bend at a sharp 90-degree angle -- real unavoidable
-// bend radius at each corner is about 1.5in. The car deck itself stays a
+// bend radius at each corner is about 3in. The car deck itself stays a
 // true sharp-cornered rectangle; only the rope's own path gets rounded.
-const ROPE_CORNER_RADIUS_FT = 1.5 / 12;
+const ROPE_CORNER_RADIUS_FT = 3 / 12;
 const ROPE_CORNER_RADIUS_PX = ROPE_CORNER_RADIUS_FT * PX_PER_FT;
 
 function perimeterPoint(t) {
@@ -795,6 +1035,20 @@ const CHINA_POS = [
   { x: CHINA_CORNERS.backRight.x + CHINA_NUDGE_PX, y: CHINA_CORNERS.backRight.y },   // 7 back-right, aimed side
 ];
 
+// Ground spot radii in FEET (across-beam, along-beam), shared by
+// drawGroundEllipse's rendering and the max-extent calculation below so
+// the two can never drift apart. See drawGroundEllipse for why alongFt is
+// capped independently of raw near/far distance.
+function spotRadiiFt(wash) {
+  const acrossFt = Math.max(wash.width / 2, 3 / PX_PER_FT);
+  const alongFt = Math.min(Math.max(wash.centerDist - wash.nearDist, wash.farDist - wash.centerDist, acrossFt), acrossFt * 2.2);
+  // wash.radiusMult scales the whole spot (both axes, uniformly) after the
+  // shape/cap math above -- used to make china's spot larger without
+  // touching the megabar geometry this same function is also shared with.
+  const mult = wash.radiusMult || 1.0;
+  return { acrossFt: acrossFt * mult, alongFt: alongFt * mult };
+}
+
 /* =====================================================================
    AUDIO BOARD -- JS port of AudioBoard.h's bin mapping + raw/normal/hit/
    decay/foresight/prediction pipeline. Faithful to the C++ math; the
@@ -812,7 +1066,7 @@ const AudioBoard = {
   hitWasAbove: [false,false,false,false],
 
   noiseFloorPct: 0,
-  peakThresholdPct: 31,
+  peakThresholdPct: 78,
   autoGainEnabled: false,
   hitDecayMs: 300,
   audioForesightMs: 0,
@@ -1102,13 +1356,18 @@ function useFile(file) {
 // sampled audio -- enough spectral variety to exercise the light shows'
 // band-reactivity, not meant to sound musical.
 const TONE_PATTERNS = {
-  simple: { bpm: 100, kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [], hihat: [] },
+  // "simple" previously had an empty hihat pattern -- meaning the default
+  // selection produced literally zero treble content, the actual bug
+  // behind "no treble activity" (this was true even before the pattern
+  // rework, since the old broadband noise floor alone was too quiet to
+  // register). Now has a steady basic hihat like every other pattern.
+  simple: { bpm: 100, kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [], hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
   edm:    { bpm: 128, kick: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
   trap:   { bpm: 140, kick: [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1] },
   boombap:{ bpm: 90,  kick: [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
   lofi:   { bpm: 78,  kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
 };
-let toneSettings = { pattern: 'simple', noise: 0.15 };
+let toneSettings = { pattern: 'boombap', noise: 0.045 }; // noise at 30% of the previous 0.15 default
 
 function useTone() {
   teardownSource();
@@ -1116,29 +1375,44 @@ function useTone() {
   setupAnalyser(ctx);
   const bufSize = 2048;
   const noiseNode = ctx.createScriptProcessor ? ctx.createScriptProcessor(bufSize, 1, 1) : null;
-  let kickEnv = 0, kickPhase = 0, snareEnv = 0, hihatEnv = 0;
+  let kickEnv = 0, kickPhase = 0, snareEnv = 0, snarePhase = 0, hihatEnv = 0, hihatPhase = 0, hihatPhase2 = 0;
   let sampleInStep = 0, stepIdx = -1;
   if (noiseNode) {
     noiseNode.onaudioprocess = (e) => {
       const out = e.outputBuffer.getChannelData(0);
       const pat = TONE_PATTERNS[toneSettings.pattern] || TONE_PATTERNS.simple;
       const samplesPerStep = Math.round((60 / pat.bpm / 4) * ctx.sampleRate); // 16th notes
-      const kickHz = 55, kickDecay = 0.9994, snareDecay = 0.9975, hihatDecay = 0.992;
+      const kickHz = 55, kickDecay = 0.9994, snareDecay = 0.9985, hihatDecay = 0.9978;
+      // BAND_MID/BAND_HIGH sample specific narrow FFT bins (max of bins at
+      // ~400/1000Hz for mid, ~6250/16000Hz for treble -- see BIN_FREQS).
+      // Pure broadband noise spreads its energy across the WHOLE spectrum,
+      // so only a thin sliver of it ever lands in any one sampled bin --
+      // meanwhile the kick's plain sine tone dumps ALL its energy into
+      // exactly one bin and blows past the hit threshold every time. This
+      // was the actual, more general bug behind "none of them have any
+      // mid or treble" (not missing pattern data -- every pattern already
+      // has snare/hihat steps). Fix: snare/hihat are now noise MIXED WITH
+      // concentrated tone components at the frequencies those bands
+      // actually sample, so they register just as reliably as the kick.
+      const snareHz = 900, hihatHz1 = 6250, hihatHz2 = 15500;
       for (let i = 0; i < out.length; i++) {
         if (++sampleInStep >= samplesPerStep) {
           sampleInStep = 0;
           stepIdx = (stepIdx + 1) % 16;
           if (pat.kick[stepIdx]) { kickEnv = 1; kickPhase = 0; }
-          if (pat.snare[stepIdx]) snareEnv = 1;
-          if (pat.hihat[stepIdx]) hihatEnv = 1;
+          if (pat.snare[stepIdx]) { snareEnv = 1; snarePhase = 0; }
+          if (pat.hihat[stepIdx]) { hihatEnv = 1; hihatPhase = 0; hihatPhase2 = 0; }
         }
         kickEnv *= kickDecay; snareEnv *= snareDecay; hihatEnv *= hihatDecay;
         kickPhase += kickHz / ctx.sampleRate;
+        snarePhase += snareHz / ctx.sampleRate;
+        hihatPhase += hihatHz1 / ctx.sampleRate;
+        hihatPhase2 += hihatHz2 / ctx.sampleRate;
         const kickSample = Math.sin(kickPhase * 2 * Math.PI) * kickEnv;
-        const snareSample = (Math.random() * 2 - 1) * snareEnv;
-        const hihatSample = (Math.random() * 2 - 1) * hihatEnv;
+        const snareSample = ((Math.random() * 2 - 1) * 0.5 + Math.sin(snarePhase * 2 * Math.PI) * 0.5) * snareEnv;
+        const hihatSample = ((Math.random() * 2 - 1) * 0.35 + Math.sin(hihatPhase * 2 * Math.PI) * 0.4 + Math.sin(hihatPhase2 * 2 * Math.PI) * 0.25) * hihatEnv;
         const noiseSample = (Math.random() * 2 - 1) * toneSettings.noise;
-        out[i] = Math.max(-1, Math.min(1, kickSample * 0.9 + snareSample * 0.5 + hihatSample * 0.3 + noiseSample));
+        out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + noiseSample));
       }
     };
     noiseNode.connect(analyser);
@@ -1265,7 +1539,8 @@ const Ctl = {
   prevShowMode: 'nightrider', // real show to return to on exiting config
   adjustingPeakThreshold: false, // audio subsetting 0's short-press toggle: noise floor vs peak threshold
   testHue: 0, testSat: 255, testBrightness: 255, // PowerTest screen's HSV test color
-  zoomFt: 50, // viewer distance from car center, 20-100ft
+  zoomFt: 32, // viewer distance from car center, 20-100ft
+  showFixtureDots: false, // visualizer-only: light up the fixture dots themselves, off by default
 };
 
 /* =====================================================================
@@ -1357,7 +1632,7 @@ const flameChinaHeat = new Array(NUM_CHINA).fill(0);
 const flameMegabarColorPick = new Array(NUM_MEGABAR).fill(0).map(() => Math.random() < 0.5);
 const flameChinaColorPick = new Array(NUM_CHINA).fill(0).map(() => Math.random() < 0.5);
 const flameHueRateWalk = makeRandomWalk(), flameSatWalk = makeRandomWalk();
-let flameShiftHue = 0, flameLastHitMs = -99999;
+let flameShiftHue = 0, flameLastHitMs = -99999, flameLastStepMs = -99999;
 let flameChinaSwapBassOnSides = true, flameChinaSwapNextAt = 0;
 const FLAME_CHINA_FRONTBACK = [1, 2, 5, 6], FLAME_CHINA_SIDES = [0, 3, 4, 7]; // matches SpeedStripesShow's front/back vs side china grouping
 function resetFlameState() {
@@ -1381,24 +1656,45 @@ function showFlame(nowMs, dtMs) {
   const loColor = flamePaletteColor(variation, 40, driftHue, satByte);
   const hiColor = flamePaletteColor(variation, 230, driftHue, satByte);
 
-  // Rope fire sim -- cool, diffuse to neighbors, add random sparks, map
-  // through the palette. Sparking rate scales LINEARLY with pot energy
-  // (0-100% -> 20-240 out of 255), per request -- real firmware actually
-  // hardcodes this rate; wired to the pot here so it has a visible effect.
+  // Cadence gate -- THE actual fix for both "way more hyper than before"
+  // and "the pot doesn't seem to do anything". Real firmware rate-limits
+  // its WHOLE fire-sim/sparkle cycle with delay(potval) at the end of its
+  // loop (pot up = less delay = faster ticks, pot down = more delay = much
+  // calmer). The visualizer was running this cool/diffuse/spark step every
+  // single animation frame (~60/sec) regardless of pot -- scaling spark
+  // PROBABILITY per pot was never going to be enough on top of a fixed
+  // 60fps update rate. This restores the real per-tick gating; between
+  // ticks the rope/flood arrays just hold their last value (nothing here
+  // clears them), matching how the real hardware actually looks frozen
+  // between updates during a slow (low-pot) cycle.
+  const potval = 255 * (1 - energyFrac); // ms between ticks, same inverted formula as real firmware
+  const dueForTick = (nowMs - flameLastStepMs) >= potval;
+  // hoisted to function scope -- the idle flood-sparkle branch below (which
+  // runs independent of dueForTick) also needs this; declaring it inside
+  // the if-block made it block-scoped and threw "coolingRate is not
+  // defined" the moment that branch actually ran, which (like the
+  // flameLastStepMs bug) killed the whole render loop, not just this show.
   const coolingRate = 75;
-  const sparkingRateRope = 20 + energyFrac * 220;
-  for (let i = 0; i < NUM_NEO; i++) flamePrevTemp[i] = Math.max(0, flamePrevTemp[i] - coolingRate);
-  for (let i = 0; i < NUM_NEO; i++) {
-    const lw = i > 0 ? i - 1 : NUM_NEO - 1;
-    const hi = i < NUM_NEO - 1 ? i + 1 : 0;
-    flameCurrTemp[i] = (flamePrevTemp[lw] + flamePrevTemp[hi] + flamePrevTemp[i]) / 3;
-  }
-  for (let i = 0; i < NUM_NEO; i++) {
-    if (Math.random() * 255 < sparkingRateRope) flameCurrTemp[i] = Math.min(255, flameCurrTemp[i] + 160 + Math.random() * 95);
-  }
-  for (let i = 0; i < NUM_NEO; i++) {
-    ropeLeds[i] = flamePaletteColor(variation, flameCurrTemp[i], driftHue, satByte);
-    flamePrevTemp[i] = flameCurrTemp[i];
+  if (dueForTick) {
+    flameLastStepMs = nowMs;
+    // Rope fire sim -- cool, diffuse to neighbors, add random sparks, map
+    // through the palette. Rate is now fixed per-tick (cadence itself
+    // carries the pot's effect); NeoPixel activity level still scales
+    // LINEARLY with pot overall since tick rate is linear in energyFrac.
+    const sparkingRateRope = 190;
+    for (let i = 0; i < NUM_NEO; i++) flamePrevTemp[i] = Math.max(0, flamePrevTemp[i] - coolingRate);
+    for (let i = 0; i < NUM_NEO; i++) {
+      const lw = i > 0 ? i - 1 : NUM_NEO - 1;
+      const hi = i < NUM_NEO - 1 ? i + 1 : 0;
+      flameCurrTemp[i] = (flamePrevTemp[lw] + flamePrevTemp[hi] + flamePrevTemp[i]) / 3;
+    }
+    for (let i = 0; i < NUM_NEO; i++) {
+      if (Math.random() * 255 < sparkingRateRope) flameCurrTemp[i] = Math.min(255, flameCurrTemp[i] + 160 + Math.random() * 95);
+    }
+    for (let i = 0; i < NUM_NEO; i++) {
+      ropeLeds[i] = flamePaletteColor(variation, flameCurrTemp[i], driftHue, satByte);
+      flamePrevTemp[i] = flameCurrTemp[i];
+    }
   }
 
   // Hit-reactive gate: any real bass/treble hit within the last 3s switches
@@ -1543,9 +1839,17 @@ function showEqualizer(nowMs, dtMs) {
    NOTE: the real firmware's stripe width is 4ft (SIZEOF_LARGE_NEO/4, a
    clean quarter of the car's 16ft length), not 5ft -- used the real
    constant here rather than the 5ft figure, flagged for confirmation. */
-const SS_STRIPE_LEDS = SIZEOF_LARGE_NEO / 4; // 88 = 4ft
+const SS_STRIPE_LEDS = SIZEOF_LARGE_NEO / 2; // 176 = 8ft (22 LEDs/ft), per request -- was 4ft (a quarter of the car's length, the real firmware's own value)
 const SS_PERIOD = SS_STRIPE_LEDS * 2; // 176 = one lit + one dark band
-const SS_LEDS_PER_MPH_PER_SEC = 4.0; // real firmware's own scroll-rate constant (an artistic rate, not true 1:1 ground scale -- at 1:1 scale a real stripe would zip by in ~0.1s at speed and be unreadable)
+// True 1:1 ground-speed conversion, NOT the real firmware's own constant
+// (which uses a deliberately slower, artistic 4.0 -- about 8x too slow to
+// actually match the car's real speed). Per request, this should visually
+// track real ground speed, matching the scrolling ground texture (which
+// already uses the correct 1.4667 ft/s-per-mph conversion): 1 mph =
+// 1.4667 ft/s, and the side channel runs 22 LEDs/ft (352 LEDs / 16ft), so
+// 1.4667 * 22 = 32.27 LEDs/s per mph. Flagging clearly since this is a
+// deliberate deviation from what's actually in SpeedStripesShow.h.
+const SS_LEDS_PER_MPH_PER_SEC = 1.4667 * (SIZEOF_LARGE_NEO / 16.0);
 const SS_LEDS_PER_FOOT = SIZEOF_LARGE_NEO / 16.0; // 22
 
 let ssScrollOffset = 0;
@@ -1625,7 +1929,6 @@ function showSpeedStripes(nowMs, dtMs) {
   }
 
   clearRope(); clearMegabars(); clearChinas();
-  // front/back rope edges stay off -- they run side to side, not front to back
   function renderSide(backCornerIdx, frontCornerIdx) {
     const direction = frontCornerIdx > backCornerIdx ? 1 : -1;
     for (let localOffset = 0; localOffset < SIZEOF_LARGE_NEO; localOffset++) {
@@ -1635,6 +1938,17 @@ function showSpeedStripes(nowMs, dtMs) {
   }
   renderSide(BACK - 1, RIGHT);         // right side: back corner -> front corner
   renderSide(LEFT, NUM_NEO - 1);       // left side: back corner -> front corner
+
+  // front/back rope edges: they run side-to-side, not front-to-back, so
+  // they don't have individual positions spread along the direction of
+  // travel the way the side channels do -- but the whole edge still sits
+  // at one shared position along the car, and per request should reflect
+  // whatever stripe is currently there, solid across its whole width,
+  // continuous with wherever the adjacent side channel currently ends.
+  const frontEdgeRopeClr = sampleScaled((SIZEOF_LARGE_NEO - 1) + ssScrollOffset);
+  for (let i = 0; i < SIZEOF_SMALL_NEO; i++) ropeLeds[i] = frontEdgeRopeClr;
+  const backEdgeRopeClr = sampleScaled(0 + ssScrollOffset);
+  for (let i = BACK; i < LEFT; i++) ropeLeds[i] = backEdgeRopeClr;
 
   // front: megabars preview a stripe-width (4ft) out; china pick it up 1ft out
   const frontLeadClr = sampleScaled((SIZEOF_LARGE_NEO - 1) + SS_STRIPE_LEDS + ssScrollOffset);
@@ -1727,16 +2041,36 @@ function showLighthouse(nowMs, dtMs) {
     const w = pickOverlapColor(contributors);
     ropeLeds[i] = w ? hsv(w.hue, 255, w.brightness) : {r:0,g:0,b:0};
   }
-  // Megabars: widened well past the real firmware's default (15/5, only
-  // ~20deg reach against 30deg spacing -- effectively one flood at a time)
-  // so 2-3 adjacent floods are always contributing at once, each at its own
-  // brightness, for a smooth analog sweep instead of a single-flood snap.
+  // Megabars: true 2-nearest-neighbor crossfade, not an independent
+  // per-megabar falloff function. The earlier widened-falloff approach
+  // still had a flat full-brightness "plateau" near each megabar (a solid
+  // core before the fade even starts), which read as jumping between
+  // discrete on/off floods rather than a continuous sweep. This instead
+  // keeps one continuous, exact beam angle per cluster and always finds
+  // exactly the 2 megabars bracketing it, splitting that cluster's full
+  // brightness between them by proximity (closer one gets more) -- so
+  // brightness fades smoothly and continuously as the beam passes from one
+  // flood to the next, never plateaus, and never involves more than the 2
+  // physically-nearest fixtures for a given cluster.
   clearMegabars();
-  const MB_HALF = 10, MB_FADE = 45;
+  function megabarBracket(angleDeg) {
+    // megabarAngle(m) = wrap360(-m*30) -- invert to continuous "megabar
+    // index space" so floor/ceil gives the two bracketing real indices.
+    const mFloat = wrap360(-angleDeg) / 30;
+    const lowIdx = Math.floor(mFloat);
+    const frac = mFloat - lowIdx;
+    const lowM = ((lowIdx % NUM_MEGABAR) + NUM_MEGABAR) % NUM_MEGABAR;
+    const highM = (lowM + 1) % NUM_MEGABAR;
+    return [{ idx: lowM, weight: 1 - frac }, { idx: highM, weight: frac }];
+  }
+  const megabarContribs = Array.from({ length: NUM_MEGABAR }, () => []);
+  for (const c of clusters) {
+    for (const b of megabarBracket(c.a)) {
+      if (b.weight > 0) megabarContribs[b.idx].push({ hue: c.hue, brightness: Math.round(255 * b.weight) });
+    }
+  }
   for (let m = 0; m < NUM_MEGABAR; m++) {
-    const ang = megabarAngle(m);
-    const contributors = clusters.map(c => ({ hue: c.hue, brightness: fall(Math.abs(circDelta(ang, c.a)), MB_HALF, MB_FADE) }));
-    const w = pickOverlapColor(contributors);
+    const w = pickOverlapColor(megabarContribs[m]);
     megabarLeds[m] = w ? hsv(w.hue, 255, w.brightness) : {r:0,g:0,b:0};
   }
   clearChinas();
@@ -1918,110 +2252,199 @@ function drawWash(originPx, azimuthDeg, wash, color, brightMult) {
   if (brightness < 3) return;
   const a = (azimuthDeg - 90) * Math.PI / 180; // 0deg = front/up, clockwise -- matches edgeInsetPoint
   const halfSpread = (FLOOD_SPREAD_DEG / 2) * Math.PI / 180;
-  const farPx = Math.max(wash.farDist * PX_PER_FT, 6);
-  const farLeft = { x: originPx.x + Math.cos(a - halfSpread) * farPx, y: originPx.y + Math.sin(a - halfSpread) * farPx };
-  const farRight = { x: originPx.x + Math.cos(a + halfSpread) * farPx, y: originPx.y + Math.sin(a + halfSpread) * farPx };
-  const farCenter = { x: originPx.x + Math.cos(a) * farPx, y: originPx.y + Math.sin(a) * farPx };
-
+  // Cone stops at the spot's own center distance, not the old (much
+  // farther, sometimes WASH_MAX_RENDER_FT-clamped) farDist -- per request,
+  // the light passing through the air shouldn't visibly reach any farther
+  // than where its brightest point on the ground actually is.
+  const farPx = Math.max(wash.centerDist * PX_PER_FT, 6);
   const peakAlpha = Math.min(1, (brightness / 765) * 0.9 * brightMult);
-  const grad = ctx2d.createLinearGradient(originPx.x, originPx.y, farCenter.x, farCenter.y);
-  grad.addColorStop(0, rgba(color, peakAlpha));
-  grad.addColorStop(0.6, rgba(color, peakAlpha * 0.35));
-  grad.addColorStop(1, rgba(color, 0));
 
-  ctx2d.beginPath();
-  ctx2d.moveTo(originPx.x, originPx.y);
-  ctx2d.lineTo(farLeft.x, farLeft.y);
-  ctx2d.lineTo(farRight.x, farRight.y);
-  ctx2d.closePath();
-  ctx2d.fillStyle = grad;
-  ctx2d.fill();
+  // Subtle lateral falloff across the cone's width -- brighter dead center,
+  // a bit dimmer toward the left/right edges of the spread ("not by much,
+  // but noticeable" per request). Split into a handful of thin angular
+  // slices, each keeping the same near-far gradient shape as before but
+  // with its own peak alpha scaled down toward the edges (cosine-ish,
+  // edges land around 70% of center) -- still one continuous-looking cone,
+  // just with a gentle side-to-side brightness variation now.
+  const SLICES = 7;
+  for (let s = 0; s < SLICES; s++) {
+    const t0 = s / SLICES, t1 = (s + 1) / SLICES;
+    const ang0 = a - halfSpread + t0 * 2 * halfSpread;
+    const ang1 = a - halfSpread + t1 * 2 * halfSpread;
+    const lateralFrac = Math.abs((t0 + t1) / 2 - 0.5) * 2; // 0 at center, 1 at the very edge
+    const sliceAlpha = peakAlpha * (1 - 0.3 * lateralFrac);
+
+    const farL = { x: originPx.x + Math.cos(ang0) * farPx, y: originPx.y + Math.sin(ang0) * farPx };
+    const farR = { x: originPx.x + Math.cos(ang1) * farPx, y: originPx.y + Math.sin(ang1) * farPx };
+    const farCenterAng = (ang0 + ang1) / 2;
+    const farCenter = { x: originPx.x + Math.cos(farCenterAng) * farPx, y: originPx.y + Math.sin(farCenterAng) * farPx };
+
+    const grad = ctx2d.createLinearGradient(originPx.x, originPx.y, farCenter.x, farCenter.y);
+    grad.addColorStop(0, rgba(color, sliceAlpha));
+    grad.addColorStop(0.6, rgba(color, sliceAlpha * 0.35));
+    grad.addColorStop(1, rgba(color, 0));
+
+    ctx2d.beginPath();
+    ctx2d.moveTo(originPx.x, originPx.y);
+    ctx2d.lineTo(farL.x, farL.y);
+    ctx2d.lineTo(farR.x, farR.y);
+    ctx2d.closePath();
+    ctx2d.fillStyle = grad;
+    ctx2d.fill();
+  }
 }
 
-// Component B: the actual ground coloration underneath the beam -- an
-// egg-shaped bright spot, pointy end toward the fixture, that dims
-// smoothly toward its edges (both to the sides and along the beam axis).
-// This is a real cone-on-a-plane intersection: at wash.nearDist the cone
-// has only traveled a short distance from the fixture so its footprint is
-// narrow (the "point" of the egg); by wash.farDist it has expanded to the
-// full wash.width (the egg's broad end). The near/far ratio -- and so how
-// elongated vs. compact the egg reads -- falls straight out of each
-// fixture's own height/tilt (wash object), which is where the "depends on
-// the angle of the light to the ground" and "individually per flood"
-// requirements are actually satisfied: MEGABAR_WASH / MEGABAR_FRONT_WASH /
-// CHINA_WASH are each already computed from that fixture's own real mount
-// height and tilt (see FIXTURE_HEIGHTS_FT / washFootprint above).
+// Component B: the actual ground coloration underneath the beam -- ONE
+// light makes ONE spot, not a series of circles (the previous "stack of
+// overlapping circles" attempt read as multiple separate blobs instead of
+// one coherent shape, and was too dim/too small). This is a single filled
+// ellipse with a single radial gradient -- guaranteed to read as one
+// continuous spot, brightest at its true center (wash.centerDist along the
+// beam, well out from the fixture -- by design these are shallow-angle
+// throws that land several feet out, not right underneath the fixture),
+// fading smoothly to nothing at its edge. Sized directly from the cone
+// geometry: by definition, the cone's cross-section at the distance it
+// hits the ground is wash.width wide -- that IS the spot's width, no
+// separate tuning needed. The along-beam radius is sized to reach
+// whichever of the near/far edges is farther from center, so the visible
+// spot always covers the full geometric footprint.
 function drawGroundEllipse(originPx, azimuthDeg, wash, color, brightMult) {
   const brightness = color.r + color.g + color.b;
   if (brightness < 3) return;
   const a = (azimuthDeg - 90) * Math.PI / 180;
-  const halfSpread = (FLOOD_SPREAD_DEG / 2) * Math.PI / 180;
-  const nearPx = Math.max(wash.nearDist * PX_PER_FT, 2);
-  const farPx = Math.max(wash.farDist * PX_PER_FT, nearPx + 6);
-  // cone cross-section width scales ~proportionally with distance traveled
-  // from the fixture along the beam -- narrow near point, full wash.width
-  // at the far edge.
-  const farWidthPx = Math.max(wash.width * PX_PER_FT, 4);
-  const nearWidthPx = farWidthPx * (nearPx / farPx);
   const dir = { x: Math.cos(a), y: Math.sin(a) };
-  const perp = { x: -dir.y, y: dir.x };
-  const nearC = { x: originPx.x + dir.x * nearPx, y: originPx.y + dir.y * nearPx };
-  const farC = { x: originPx.x + dir.x * farPx, y: originPx.y + dir.y * farPx };
-  const nearL = { x: nearC.x - perp.x * nearWidthPx / 2, y: nearC.y - perp.y * nearWidthPx / 2 };
-  const nearR = { x: nearC.x + perp.x * nearWidthPx / 2, y: nearC.y + perp.y * nearWidthPx / 2 };
-  const farL = { x: farC.x - perp.x * farWidthPx / 2, y: farC.y - perp.y * farWidthPx / 2 };
-  const farR = { x: farC.x + perp.x * farWidthPx / 2, y: farC.y + perp.y * farWidthPx / 2 };
-  const midC = { x: (nearC.x + farC.x) / 2, y: (nearC.y + farC.y) / 2 };
+  const centerPx = wash.centerDist * PX_PER_FT;
+  const pos = { x: originPx.x + dir.x * centerPx, y: originPx.y + dir.y * centerPx };
+  const { acrossFt, alongFt } = spotRadiiFt(wash);
+  const acrossRadiusPx = acrossFt * PX_PER_FT, alongRadiusPx = alongFt * PX_PER_FT;
+  // how tightly brightness concentrates around the peak -- smaller = a
+  // more concentrated, "powerful" hot core (china use this to read
+  // hotter/tighter than megabars); defaults to a broad, gentle peak.
+  const peakScale = wash.peakScale || 1.0;
 
-  ctx2d.beginPath();
-  ctx2d.moveTo(nearL.x, nearL.y);
-  ctx2d.quadraticCurveTo(midC.x - perp.x * farWidthPx / 2, midC.y - perp.y * farWidthPx / 2, farL.x, farL.y);
-  ctx2d.lineTo(farR.x, farR.y);
-  ctx2d.quadraticCurveTo(midC.x + perp.x * farWidthPx / 2, midC.y + perp.y * farWidthPx / 2, nearR.x, nearR.y);
-  ctx2d.closePath();
-
-  // brightest at the egg's center, smoothly dimming out toward its whole
-  // perimeter (sides AND both ends) -- a radial gradient centered on the
-  // shape reads this way regardless of the egg's elongation.
-  const peakAlpha = Math.min(1, (brightness / 765) * brightMult);
-  const gradR = Math.max(farWidthPx, (farPx - nearPx)) * 0.65;
-  const grad = ctx2d.createRadialGradient(midC.x, midC.y, 0, midC.x, midC.y, gradR);
+  const peakAlpha = Math.min(1, (brightness / 380) * brightMult);
+  ctx2d.save();
+  ctx2d.translate(pos.x, pos.y);
+  ctx2d.rotate(a);
+  ctx2d.scale(alongRadiusPx / acrossRadiusPx, 1);
+  const grad = ctx2d.createRadialGradient(0, 0, 0, 0, 0, acrossRadiusPx);
   grad.addColorStop(0, rgba(color, peakAlpha));
-  grad.addColorStop(0.55, rgba(color, peakAlpha * 0.45));
+  grad.addColorStop(Math.max(0.15, Math.min(0.85, 0.5 * peakScale)), rgba(color, peakAlpha * 0.5));
   grad.addColorStop(1, rgba(color, 0));
+  ctx2d.beginPath();
+  ctx2d.arc(0, 0, acrossRadiusPx, 0, Math.PI * 2);
   ctx2d.fillStyle = grad;
   ctx2d.fill();
+  ctx2d.restore();
 }
 
-// Zoom: viewer distance from car center, 20-100ft (per request), applied as
-// a simple post-hoc scale around the canvas center rather than reworking
-// every position constant -- REFERENCE_DIST is the distance at which
-// zoomScale=1 (today's default look), scale falls off proportionally
-// further out / grows proportionally closer in.
-const ZOOM_REFERENCE_FT = 50, ZOOM_MIN_FT = 20, ZOOM_MAX_FT = 100;
+// Zoom: viewer distance from car center, applied as a simple post-hoc
+// scale around the canvas center rather than reworking every position
+// constant -- ZOOM_REFERENCE_FT is the distance at which zoomScale=1 (no
+// scaling at all).
+//
+// The canvas's own pixel dimensions (CAR_X*2, CAR_Y*2, see the geometry
+// section) were sized to exactly equal the render rectangle -- every flood
+// spot in full, plus 5% -- so at zoomScale=1 the canvas already exactly
+// frames that rectangle by construction. Per request, you shouldn't be
+// able to zoom out any further than that (there's nothing more to see
+// past it, just empty ground), so ZOOM_MAX_FT is just ZOOM_REFERENCE_FT
+// itself -- no separate formula needed anymore.
+const ZOOM_REFERENCE_FT = 50, ZOOM_MIN_FT = 20;
+const ZOOM_MAX_FT = ZOOM_REFERENCE_FT;
 function zoomScale() { return ZOOM_REFERENCE_FT / Ctl.zoomFt; }
 
-// Subtle scrolling ground texture under/around the car -- faint dashes
-// moving front-to-back at a rate tied to Ctl.speedMph, so a nonzero speed
-// visually reads as "the car is moving" independent of which show is
-// running. Non-distracting: low contrast, drawn UNDER everything else.
+// Ground texture: the real surface is Black Rock Desert playa -- off-white
+// sun-baked alkali clay, cracked into an irregular network of polygonal
+// plates. No reference photo was provided for this, so it's a procedural
+// approximation (a jittered grid with wavy, sometimes-broken crack lines
+// along each cell edge) rather than a literal match. Built once to an
+// offscreen tile and repeated via a canvas pattern rather than regenerated
+// every frame. Scrolls with Ctl.speedMph so a nonzero speed visually reads
+// as "the car is moving," independent of which show is running.
+// Cell size calibrated so the LARGEST pieces (jitter plus the occasional
+// skipped crack merging two adjacent cells, see crackLine's skipChance
+// below) land around 7in in their longest dimension, per reference photo --
+// not an average, since the real surface has many smaller pieces too that
+// would throw an average-based calibration off.
+const GROUND_TILE_FT = 24, GROUND_CELL_FT = 4 / 12;
+let groundTileCanvas = null;
+function buildGroundTile() {
+  const cell = GROUND_CELL_FT * PX_PER_FT;
+  const cols = Math.ceil(GROUND_TILE_FT / GROUND_CELL_FT);
+  const size = cols * cell;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const g = c.getContext('2d');
+  // Colors sampled from a real reference photo of Black Rock Desert playa
+  // (pale warm grey-beige plates, dark grey-brown cracks in daylight),
+  // darkened for the nighttime scene. Previous attempt (#2a2822, R42/G40/
+  // B34) had R barely ahead of G -- at low lightness that reads as
+  // indistinct murky grey-green ("olive"), not tan, regardless of the
+  // actual numbers; a real warm bias needs R clearly, unambiguously above
+  // G, which is clearly above B, at a brightness where hue is still
+  // perceptible at all (very low-lightness colors read as hueless).
+  g.fillStyle = '#362d24'; // #2e241a desaturated 25% and brightened 25% (HSL), per follow-up
+  g.fillRect(0, 0, size, size);
+  // jittered grid points, tiled seamlessly (edge columns/rows reuse the
+  // opposite edge's jitter so the pattern repeats without a visible seam)
+  const pts = [];
+  for (let ry = 0; ry <= cols; ry++) {
+    pts.push([]);
+    for (let rx = 0; rx <= cols; rx++) {
+      const seedX = rx % cols, seedY = ry % cols;
+      const jx = (Math.sin(seedX * 12.9898 + seedY * 78.233) * 43758.5453 % 1) * cell * 0.55;
+      const jy = (Math.sin(seedX * 39.346 + seedY * 11.135) * 24634.634 % 1) * cell * 0.55;
+      pts[ry].push({ x: rx * cell + jx, y: ry * cell + jy });
+    }
+  }
+  // The previous "less dark, less distracting" pass overcorrected into
+  // total invisibility -- rgba(72,64,50,0.4) against a #3e3a2e fill is
+  // only about a 4/255 effective difference, imperceptible on a real
+  // screen (confirmed by literally rendering this file headless and
+  // looking at it -- the fill showed, the cracks didn't at all). This is
+  // still soft/muted, just actually visible.
+  g.strokeStyle = 'rgba(19, 18, 16, 0.6)'; // dark grey-brown crack color, desaturated 25% and brightened 25% (HSL) to match the fill
+  g.lineWidth = 1;
+  // At ~4in cells this is ~10,000+ crack segments -- batching them all into
+  // ONE path with a single stroke() call at the end (instead of a separate
+  // beginPath/stroke per segment, which this had before) is what actually
+  // makes this finish in a reasonable time. The per-segment version was
+  // doing 10,000+ individual stroke() calls synchronously on the first
+  // frame, which can stall the tab for several seconds -- easily read as
+  // "the ground texture isn't there" if it never finishes fast enough to
+  // notice, or as a frozen page in the meantime.
+  g.beginPath();
+  function crackLine(p1, p2, skipChance) {
+    if (Math.sin(p1.x * 3.7 + p2.y * 9.1) * 0.5 + 0.5 < skipChance) return; // deterministic "random" skip, some cracks incomplete
+    const mx = (p1.x + p2.x) / 2 + Math.sin(p1.x * 1.3 + p1.y * 2.1) * cell * 0.15;
+    const my = (p1.y + p2.y) / 2 + Math.cos(p1.y * 1.7 + p2.x * 1.1) * cell * 0.15;
+    g.moveTo(p1.x, p1.y);
+    g.quadraticCurveTo(mx, my, p2.x, p2.y);
+  }
+  for (let ry = 0; ry <= cols; ry++) {
+    for (let rx = 0; rx <= cols; rx++) {
+      const p = pts[ry][rx];
+      if (rx < cols) crackLine(p, pts[ry][rx + 1], 0.12);
+      if (ry < cols) crackLine(p, pts[ry + 1][rx], 0.12);
+    }
+  }
+  g.stroke();
+  return c;
+}
 let groundScrollFt = 0, groundScrollLastMs = performance.now();
 function drawGroundScroll(nowMs) {
   const dtSec = Math.max(0, Math.min(0.2, (nowMs - groundScrollLastMs) / 1000));
   groundScrollLastMs = nowMs;
-  if (Ctl.speedMph > 0) groundScrollFt = (groundScrollFt + Ctl.speedMph * 1.467 * dtSec) % 8; // 1.467 ft/s per mph
-  const spacingPx = 8 * PX_PER_FT;
-  const offsetPx = (groundScrollFt / 8) * spacingPx;
+  if (Ctl.speedMph > 0) groundScrollFt = (groundScrollFt + Ctl.speedMph * 1.467 * dtSec) % GROUND_TILE_FT; // 1.467 ft/s per mph
+  if (!groundTileCanvas) groundTileCanvas = buildGroundTile();
+  const tilePx = GROUND_TILE_FT * PX_PER_FT;
+  const offsetPx = groundScrollFt * PX_PER_FT;
   ctx2d.save();
-  ctx2d.strokeStyle = 'rgba(120, 110, 130, 0.14)';
-  ctx2d.lineWidth = 2;
-  ctx2d.setLineDash([3 * PX_PER_FT, 5 * PX_PER_FT]);
-  for (let gy = -spacingPx * 2 - offsetPx; gy < canvas.height + spacingPx * 2; gy += spacingPx) {
-    ctx2d.beginPath();
-    ctx2d.moveTo(0, gy);
-    ctx2d.lineTo(canvas.width, gy);
-    ctx2d.stroke();
-  }
+  ctx2d.translate(0, offsetPx);
+  const pattern = ctx2d.createPattern(groundTileCanvas, 'repeat');
+  ctx2d.fillStyle = pattern;
+  ctx2d.fillRect(-tilePx, -tilePx - offsetPx, canvas.width + tilePx * 2, canvas.height + tilePx * 2);
   ctx2d.restore();
 }
 
@@ -2066,10 +2489,6 @@ function draw() {
   ctx2d.strokeStyle = 'rgba(214, 168, 110, 0.35)';
   ctx2d.lineWidth = 1.5;
   ctx2d.strokeRect(x + borderW, y + borderW, w - borderW*2, h - borderW*2);
-  ctx2d.fillStyle = '#5b5468';
-  ctx2d.font = '11px ui-monospace, monospace';
-  ctx2d.textAlign = 'center';
-  ctx2d.fillText('FRONT', CAR_X, y - 14);
   ctx2d.restore();
 
   // round table + tablecloths -- ~3ft diameter, centered left-right, 3ft
@@ -2158,29 +2577,51 @@ function draw() {
   // both clipped to outside the deck.
   for (let m = 0; m < NUM_MEGABAR; m++) {
     const wash = m === HEADLIGHT_INDEX ? MEGABAR_FRONT_WASH : MEGABAR_WASH;
-    drawGroundEllipse(megabarPos(m), megabarAngle(m), wash, megabarLeds[m], 1.0);
+    drawGroundEllipse(megabarPos(m), megabarAngle(m), wash, megabarLeds[m], MEGABAR_MULT);
   }
   for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
-    drawGroundEllipse(CHINA_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH, chinaLeds[cIdx], CHINA_BRIGHTNESS_MULT);
+    drawGroundEllipse(CHINA_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH_FOR[cIdx], chinaLeds[cIdx], CHINA_GROUND_MULT);
   }
   for (let m = 0; m < NUM_MEGABAR; m++) {
     const wash = m === HEADLIGHT_INDEX ? MEGABAR_FRONT_WASH : MEGABAR_WASH;
-    drawWash(megabarPos(m), megabarAngle(m), wash, megabarLeds[m], 1.0);
+    drawWash(megabarPos(m), megabarAngle(m), wash, megabarLeds[m], MEGABAR_MULT);
   }
   for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
-    drawWash(CHINA_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH, chinaLeds[cIdx], CHINA_BRIGHTNESS_MULT);
+    drawWash(CHINA_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH_FOR[cIdx], chinaLeds[cIdx], CHINA_AIR_MULT);
   }
   ctx2d.restore();
 
-  // rope: each LED drawn as its OWN discrete dot, not a blended line --
-  // real diffusion here is only about 50%, so individual points of light
-  // stay visible rather than smoothing into a solid ring. Deliberately
-  // drawn LARGER than true scale (real LEDs would be nearly touching at
-  // this zoom level) specifically so the color pattern reads clearly --
-  // an intentional visualization exaggeration, not a claim about the real
-  // fixture size. Every LED is drawn (not skipped) at 75% of the prior
-  // radius, per request -- so config-mode meters showing single-pixel
-  // detail (individual dots, sliding indicator windows) are never lost.
+  // China ambient spill: unlike megabars (aimed out into open air, fully
+  // blocked by the deck from underneath), china are mounted UNDER the deck
+  // and aimed mostly along/under the car itself -- at full brightness
+  // their light doesn't stop cleanly at the deck's edge, some general glow
+  // reaches even under the car, visible from directly above as a soft wash
+  // across the whole deck. Deliberately NOT clipped to outside the deck
+  // (that clip is correct for megabars, wrong for china).
+  {
+    let avgR = 0, avgG = 0, avgB = 0;
+    for (const c of chinaLeds) { avgR += c.r; avgG += c.g; avgB += c.b; }
+    avgR /= NUM_CHINA; avgG /= NUM_CHINA; avgB /= NUM_CHINA;
+    const avgBrightness = avgR + avgG + avgB;
+    if (avgBrightness > 3) {
+      const spillAlpha = Math.min(0.5, (avgBrightness / 765) * 0.5);
+      ctx2d.save();
+      ctx2d.globalCompositeOperation = 'lighter';
+      ctx2d.fillStyle = rgba({ r: avgR, g: avgG, b: avgB }, spillAlpha);
+      ctx2d.fillRect(x, y, w, h);
+      ctx2d.restore();
+    }
+  }
+
+  // rope: each LED drawn as its OWN discrete dot, not a blended line.
+  // Blur was cut way down from earlier passes (was reading as much more
+  // diffused/blended-together than the real LEDs actually are) -- real
+  // adjacent LEDs stay individually crisp, so the glow here is now mostly
+  // cosmetic rather than a real soft-diffusion radius. Deliberately drawn
+  // LARGER than true physical scale (real LEDs would be nearly touching at
+  // this zoom level) so the color pattern still reads clearly -- an
+  // intentional visualization exaggeration, not a claim about real
+  // fixture size. Every LED is drawn (not skipped).
   ctx2d.save();
   for (let i = 0; i < NUM_NEO; i++) {
     const c = ropeLeds[i];
@@ -2188,11 +2629,11 @@ function draw() {
     if (brightness < 3) continue;
     const p = ledPoint(i);
     ctx2d.beginPath();
-    ctx2d.arc(p.x, p.y, 3.4 * 0.75, 0, Math.PI * 2);
+    ctx2d.arc(p.x, p.y, 3.4 * 0.6, 0, Math.PI * 2);
     ctx2d.fillStyle = css(c);
     ctx2d.globalAlpha = Math.min(1, 0.55 + brightness/765*0.45);
     ctx2d.shadowColor = css(c);
-    ctx2d.shadowBlur = 4; // ~50% diffused -- soft, but each point still reads as a point
+    ctx2d.shadowBlur = 1;
     ctx2d.fill();
   }
   ctx2d.restore();
@@ -2203,7 +2644,11 @@ function draw() {
   for (let m = 0; m < NUM_MEGABAR; m++) {
     const p = megabarPos(m);
     const c = megabarLeds[m];
-    const brightness = c.r + c.g + c.b;
+    // Fixture dots off by default (per request) -- the cone/spot already
+    // shows the light; the dot is just a position marker unless the
+    // checkbox is on. Doesn't touch megabarLeds/chinaLeds themselves, only
+    // whether this marker's own fill reflects it.
+    const brightness = Ctl.showFixtureDots ? (c.r + c.g + c.b) : 0;
     const fillStyle = brightness > 3 ? css(c) : '#26212c';
     const glow = brightness > 3;
     if (m === HEADLIGHT_INDEX) {
@@ -2233,13 +2678,14 @@ function draw() {
     }
   }
 
-  // china
+  // china -- per request, china are much more powerful than megabars, not
+  // "tiny little headlamps": dots rendered 3x brighter and 2x the radius.
   for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
     const p = CHINA_POS[cIdx];
-    const c = chinaLeds[cIdx];
-    const brightness = c.r + c.g + c.b;
+    const c = scale255(chinaLeds[cIdx], 765); // 3x brightness (scale255's amt is out of 255, so 3*255=765)
+    const brightness = Ctl.showFixtureDots ? (c.r + c.g + c.b) : 0; // off by default, see the megabar loop's comment above
     ctx2d.beginPath();
-    ctx2d.arc(p.x, p.y, 9, 0, Math.PI*2);
+    ctx2d.arc(p.x, p.y, 9, 0, Math.PI*2); // dot size reverted to the original 9px -- the "spot" being too small referred to the ground spot, not this marker
     ctx2d.fillStyle = brightness > 3 ? css(c) : '#211c29';
     if (brightness > 3) { ctx2d.shadowColor = css(c); ctx2d.shadowBlur = 14; }
     else ctx2d.shadowBlur = 0;
@@ -2320,19 +2766,44 @@ document.getElementById('speedSlider').addEventListener('input', (e) => {
 });
 
 /* ----- zoom: 20-100ft viewer distance, works in 2D (and will in 3D once
-   that exists). Slider, ',' / '.' keys (also Shift+Up/Down as an alias for
-   ','), mouse wheel over the stage, and trackpad pinch (Chrome/Edge send
-   pinch as a wheel event with ctrlKey set). ----- */
+   that exists). No slider (removed per request, the readout is enough) --
+   ',' / '.' keys (also Shift+Up/Down as an alias for ','), mouse wheel over
+   the stage, and trackpad pinch (Chrome/Edge send pinch as a wheel event
+   with ctrlKey set). ----- */
 function setZoom(ft) {
   Ctl.zoomFt = Math.max(ZOOM_MIN_FT, Math.min(ZOOM_MAX_FT, ft));
-  document.getElementById('zoomSlider').value = Math.round(Ctl.zoomFt);
   document.getElementById('zoomVal').textContent = Math.round(Ctl.zoomFt) + 'ft';
 }
-document.getElementById('zoomSlider').addEventListener('input', (e) => setZoom(+e.target.value));
+setZoom(Ctl.zoomFt);
+// Plain scroll wheel and 2-finger trackpad swipe are left alone (page
+// scrolls normally) -- only a trackpad PINCH gesture controls zoom.
+// Chrome/Edge report pinch as a wheel event with ctrlKey set (a browser
+// quirk simulating pinch-to-zoom via wheel), which is how this
+// distinguishes a real pinch from an ordinary scroll/swipe.
 document.getElementById('stageCanvas').addEventListener('wheel', (e) => {
+  if (!e.ctrlKey) return; // not a pinch -- let the page scroll normally
   e.preventDefault();
-  setZoom(Ctl.zoomFt + Math.sign(e.deltaY) * 2); // wheel-up / pinch-out (negative deltaY) zooms in
+  setZoom(Ctl.zoomFt + Math.sign(e.deltaY) * 2); // pinch-in (positive deltaY) zooms out, pinch-out zooms in
 }, { passive: false });
+// Mouse: drag up while holding the left button zooms in, drag down zooms
+// out. Listens on window (not just the canvas) for move/up so a drag that
+// leaves the canvas mid-gesture still tracks correctly.
+let mouseZoomActive = false, mouseZoomLastY = 0;
+document.getElementById('stageCanvas').addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  mouseZoomActive = true;
+  mouseZoomLastY = e.clientY;
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!mouseZoomActive) return;
+  const dy = e.clientY - mouseZoomLastY;
+  mouseZoomLastY = e.clientY;
+  setZoom(Ctl.zoomFt + dy * 0.15); // drag up (negative dy) zooms in, drag down zooms out
+});
+window.addEventListener('mouseup', (e) => {
+  if (e.button === 0) mouseZoomActive = false;
+});
 window.addEventListener('keydown', (e) => {
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
   if (e.key === ',' || (e.shiftKey && e.key === 'ArrowUp')) { setZoom(Ctl.zoomFt - 2); e.preventDefault(); }
@@ -2444,7 +2915,7 @@ function applyConfigPot() {
     if (Ctl.configSubsetting === 0) {
       if (Ctl.adjustingPeakThreshold) { AudioBoard.peakThresholdPct = pct; syncSlider('peakThreshSlider', 'peakThreshVal', pct, '%'); }
       else { AudioBoard.noiseFloorPct = pct; syncSlider('noiseFloorSlider', 'noiseFloorVal', pct, '%'); }
-    } else if (Ctl.configSubsetting === 1) { const ms = Math.round(pct / 100 * 1000); AudioBoard.hitDecayMs = ms; syncSlider('hitDecaySlider', 'hitDecayVal', ms, 'ms'); }
+    } else if (Ctl.configSubsetting === 1) { const ms = Math.round(pct / 100 * 3000); AudioBoard.hitDecayMs = ms; syncSlider('hitDecaySlider', 'hitDecayVal', ms, 'ms'); }
     else if (Ctl.configSubsetting === 2) { const ms = Math.round(pct / 100 * (AudioBoard.audioForesightMs || 1000)); AudioBoard.hitPredictionMs = ms; syncSlider('predictMsSlider', 'predictMsVal', ms, 'ms'); }
     else if (Ctl.configSubsetting === 3) { const ms = Math.round(pct / 100 * 1000); AudioBoard.audioForesightMs = ms; syncSlider('foresightSlider', 'foresightVal', ms, 'ms'); updateOutputDelayTime(); }
     // subsetting 4 (auto-gain) is a toggle, not pot-driven -- see the encoder handler
@@ -2461,30 +2932,126 @@ function applyEncoderStep(dir) {
     document.getElementById('predictStyleSelect').value = AudioBoard.hitPredictionStyle;
   } else if (Ctl.appMode === 'powertest') {
     const sub = Ctl.configSubsetting;
-    if (sub === 0) { Ctl.testHue = (Ctl.testHue + dir * 4 + 256) % 256; syncSlider('testHueSlider', 'testHueVal', Ctl.testHue, ''); }
-    else if (sub === 1) { Ctl.testSat = Math.max(0, Math.min(255, Ctl.testSat + dir * 8)); syncSlider('testSatSlider', 'testSatVal', Ctl.testSat, ''); }
-    else { Ctl.testBrightness = Math.max(0, Math.min(255, Ctl.testBrightness + dir * 8)); syncSlider('testBrightnessSlider', 'testBrightnessVal', Ctl.testBrightness, ''); }
+    if (sub === 0) { Ctl.testHue = (Ctl.testHue + dir * 4 + 256) % 256; }
+    else if (sub === 1) { Ctl.testSat = Math.max(0, Math.min(255, Ctl.testSat + dir * 8)); }
+    else { Ctl.testBrightness = Math.max(0, Math.min(255, Ctl.testBrightness + dir * 8)); }
   }
   updateStatusPanel();
 }
 
-document.getElementById('potSlider').addEventListener('input', (e) => {
-  Ctl.pot = +e.target.value;
-  document.getElementById('potVal').textContent = Ctl.pot + '%';
-  if (Ctl.appMode !== 'show') applyConfigPot();
-});
-document.getElementById('encLeft').onclick = () => {
-  Ctl.encoderPos--;
-  document.getElementById('encVal').textContent = 'pos ' + Ctl.encoderPos;
-  if (Ctl.appMode !== 'show') applyEncoderStep(-1);
-};
-document.getElementById('encRight').onclick = () => {
-  Ctl.encoderPos++;
-  document.getElementById('encVal').textContent = 'pos ' + Ctl.encoderPos;
-  if (Ctl.appMode !== 'show') applyEncoderStep(1);
-};
+/* ----- Pot/Encoder knobs -----
+   Pot: a real potentiometer's mechanical sweep is 300 degrees, centered on
+   straight up -- 0% sits 150deg CCW of up, 50% is straight up, 100% sits
+   150deg CW of up. Click and hold; the knob tracks the angle of the
+   imaginary line from its center to the cursor for as long as the button
+   stays down (clamped to the 300deg sweep), not a relative drag delta.
+   Encoder: has no absolute position (it's a relative rotary input), so
+   instead of a direction line its knob just shows static curved
+   click-here-to-turn arrows (see .knob__arrow-group), flashing white
+   briefly on the side that just fired. Clicking the left half is one
+   detent left (CCW), the right half one detent right (CW); holding past
+   500ms auto-repeats at 10 detents/sec in that same direction until
+   release. The "pos N" counter is a session display convenience, not real
+   hardware state, so it resets to 0 five seconds after the mouse is
+   released following any adjustment. */
+const ctrlPanelEl = document.getElementById('ctrlPanel');
+function sizeCtrlPanel() {
+  // Corner radius = 1/7 of the panel's own (horizontal) width. A plain CSS
+  // percentage border-radius resolves separately per axis (% of width for
+  // the horizontal reach, % of height for the vertical one), which goes
+  // elliptical the moment the box isn't square -- this panel is wide and
+  // short, so that's set explicitly in px from the measured width instead.
+  const w = ctrlPanelEl.getBoundingClientRect().width;
+  ctrlPanelEl.style.borderRadius = (w / 7) + 'px';
+}
+sizeCtrlPanel();
+window.addEventListener('resize', sizeCtrlPanel);
 
-const showOrder = ['nightrider','flame','equalizer','speedstripes','lighthouse'];
+const potIndicator = document.querySelector('#potKnob .knob__indicator');
+function updatePotKnob() {
+  const deg = -150 + (Ctl.pot / 100) * 300;
+  potIndicator.style.setProperty('--angle', deg + 'deg');
+  document.getElementById('potVal').textContent = Math.round(Ctl.pot) + '%';
+}
+function updateEncoderKnob() {
+  // No direction line -- the encoder has no meaningful absolute angle (it's
+  // a relative rotary input), so its knob just shows static curved
+  // click-here-to-turn arrows (see .knob__arrow) instead.
+  document.getElementById('encVal').textContent = 'pos ' + Ctl.encoderPos;
+}
+updatePotKnob();
+updateEncoderKnob();
+
+let potDragActive = false, potDragCx = 0, potDragCy = 0;
+function potAngleFromCursor(clientX, clientY) {
+  const dx = clientX - potDragCx, dy = clientY - potDragCy;
+  const deg = Math.atan2(dx, -dy) * 180 / Math.PI; // 0deg = up, clockwise positive
+  return Math.max(-150, Math.min(150, deg));
+}
+function setPotFromCursor(clientX, clientY) {
+  Ctl.pot = (potAngleFromCursor(clientX, clientY) + 150) / 300 * 100;
+  updatePotKnob();
+  if (Ctl.appMode !== 'show') applyConfigPot();
+}
+document.getElementById('potKnob').addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  potDragCx = rect.left + rect.width / 2;
+  potDragCy = rect.top + rect.height / 2;
+  potDragActive = true;
+  setPotFromCursor(e.clientX, e.clientY);
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!potDragActive) return;
+  setPotFromCursor(e.clientX, e.clientY);
+});
+
+const ENCODER_RESET_DELAY_MS = 5000;
+const ENCODER_HOLD_DELAY_MS = 500;
+const ENCODER_REPEAT_MS = 100; // 10 detents/sec
+let encoderPressActive = false, encoderHoldDir = 0;
+let encoderHoldTimer = null, encoderRepeatTimer = null, encoderResetTimer = null;
+function flashEncoderArrow(dir) {
+  const group = document.querySelector(dir < 0 ? '.knob__arrow-group--left' : '.knob__arrow-group--right');
+  group.classList.add('flash');
+  clearTimeout(group._flashTimer);
+  group._flashTimer = setTimeout(() => group.classList.remove('flash'), 150);
+}
+function doEncoderStep(dir) {
+  Ctl.encoderPos += dir;
+  updateEncoderKnob();
+  flashEncoderArrow(dir);
+  if (Ctl.appMode !== 'show') applyEncoderStep(dir);
+}
+document.getElementById('encoderKnob').addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  clearTimeout(encoderResetTimer);
+  const rect = e.currentTarget.getBoundingClientRect();
+  encoderHoldDir = (e.clientX < rect.left + rect.width / 2) ? -1 : 1;
+  encoderPressActive = true;
+  doEncoderStep(encoderHoldDir);
+  encoderHoldTimer = setTimeout(() => {
+    encoderRepeatTimer = setInterval(() => doEncoderStep(encoderHoldDir), ENCODER_REPEAT_MS);
+  }, ENCODER_HOLD_DELAY_MS);
+  e.preventDefault();
+});
+window.addEventListener('mouseup', (e) => {
+  if (e.button !== 0) return;
+  potDragActive = false;
+  if (encoderPressActive) {
+    encoderPressActive = false;
+    clearTimeout(encoderHoldTimer);
+    clearInterval(encoderRepeatTimer);
+    clearTimeout(encoderResetTimer);
+    encoderResetTimer = setTimeout(() => {
+      Ctl.encoderPos = 0;
+      updateEncoderKnob();
+    }, ENCODER_RESET_DELAY_MS);
+  }
+});
+
+const showOrder = ['nightrider','lighthouse','flame','equalizer','speedstripes'];
 document.getElementById('btnShort').onclick = () => {
   if (Ctl.appMode === 'show') {
     const idx = (showOrder.indexOf(Ctl.currMode) + 1) % showOrder.length;
@@ -2556,41 +3123,57 @@ bindSlider('predictMsSlider', 'predictMsVal', v => v+'ms', v => AudioBoard.hitPr
 bindSlider('globalBrSlider', 'globalBrVal', v => v+'%', v => Ctl.globalBr = v);
 bindSlider('headlightBrSlider', 'headlightBrVal', v => v+'%', v => Ctl.headlightBr = v);
 bindSlider('chinaBrSlider', 'chinaBrVal', v => v+'%', v => Ctl.chinaBr = v);
-bindSlider('testHueSlider', 'testHueVal', v => ''+v, v => Ctl.testHue = v);
-bindSlider('testSatSlider', 'testSatVal', v => ''+v, v => Ctl.testSat = v);
-bindSlider('testBrightnessSlider', 'testBrightnessVal', v => ''+v, v => Ctl.testBrightness = v);
 document.getElementById('autoGainCheck').addEventListener('change', (e) => { AudioBoard.autoGainEnabled = e.target.checked; updateStatusPanel(); });
 document.getElementById('blacklightCheck').addEventListener('change', (e) => Ctl.blacklight = e.target.checked);
+document.getElementById('fixtureDotsCheck').addEventListener('change', (e) => Ctl.showFixtureDots = e.target.checked);
 document.getElementById('predictStyleSelect').addEventListener('change', (e) => { AudioBoard.hitPredictionStyle = +e.target.value; updateStatusPanel(); });
 updateStatusPanel();
 
 /* =====================================================================
    MAIN LOOP
    ===================================================================== */
+// A bug in any one show's rendering used to freeze the ENTIRE tool
+// silently -- an uncaught exception inside tick() stops
+// requestAnimationFrame from ever being scheduled again, so the whole page
+// just locks up with zero indication anything's wrong (this is exactly
+// how a missing variable declaration in FlameShow took down every show,
+// not just that one). tick() itself now always reschedules regardless of
+// what happens inside it, and a failure is surfaced visibly in the status
+// bar instead of hard-freezing silently.
+let lastTickError = null;
 function tick(now) {
-  const dtMs = now - lastFrameT;
-  lastFrameT = now;
+  try {
+    const dtMs = now - lastFrameT;
+    lastFrameT = now;
 
-  if (analyser) {
-    const bins = readBins();
-    AudioBoard.poll(now, bins);
+    if (analyser) {
+      const bins = readBins();
+      AudioBoard.poll(now, bins);
+    }
+
+    renderCurrent(now, dtMs);
+    draw();
+
+    // meters
+    const setBar = (barId, pct) => { document.getElementById(barId).style.width = pct + '%'; };
+    setBar('barBassHit', AudioBoard.getHitPct(BAND_LOW));
+    setBar('barMidHit', AudioBoard.getHitPct(BAND_MID));
+    setBar('barTrebleHit', AudioBoard.getHitPct(BAND_HIGH));
+    setBar('barFullHit', AudioBoard.getHitPct(BAND_FULL));
+    const chip = document.getElementById('silentChip');
+    if (analyser) {
+      chip.textContent = AudioBoard.silent ? 'silent' : 'live';
+      chip.className = 'chip' + (AudioBoard.silent ? ' silent' : ' on');
+    }
+  } catch (err) {
+    if (err !== lastTickError) {
+      lastTickError = err;
+      console.error('Render error:', err);
+      document.getElementById('configStatusBar').classList.add('config-status--config');
+      document.getElementById('configStatusMode').textContent = 'RENDER ERROR';
+      document.getElementById('configStatusDetail').textContent = String((err && err.message) || err);
+    }
   }
-
-  renderCurrent(now, dtMs);
-  draw();
-
-  // meters
-  const setBar = (barId, pct) => { document.getElementById(barId).style.width = pct + '%'; };
-  setBar('barBassHit', AudioBoard.getHitPct(BAND_LOW));
-  setBar('barMidHit', AudioBoard.getHitPct(BAND_MID));
-  setBar('barTrebleHit', AudioBoard.getHitPct(BAND_HIGH));
-  setBar('barFullHit', AudioBoard.getHitPct(BAND_FULL));
-  const chip = document.getElementById('silentChip');
-  if (analyser) {
-    chip.textContent = AudioBoard.silent ? 'silent' : 'live';
-    chip.className = 'chip' + (AudioBoard.silent ? ' silent' : ' on');
-  }
-
   requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);

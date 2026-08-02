@@ -221,7 +221,7 @@ class FlameShow : public LightShow {
          // disperse heat
          for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
             uint16_t lw = i > 0 ? i - 1 : NUM_NEO_LEDS_ACTUAL - 1;
-            uint16_t hi = i < NUM_NEO_LEDS_ACTUAL - 1 ? i + i : 0;
+            uint16_t hi = i < NUM_NEO_LEDS_ACTUAL - 1 ? i + 1 : 0;
             currTemperature[ i ] = ( prevTemperature[ lw ] +
                                      prevTemperature[ hi ] +
                                      prevTemperature[ i ] ) / 3;

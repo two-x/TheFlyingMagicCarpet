@@ -7,6 +7,11 @@ All directions below (front/back/left/right) are relative to the carpet's own fo
 
 ## Browser visualizer/simulator — `tools/visualizer/carpet-visualizer.html`
 
+**If the Mic or System audio source doesn't work** (silently stays at 0, or the browser complains about permissions), the OS is blocking the browser from capturing audio:
+
+- **macOS**: System Settings → Privacy & Security → Microphone → enable your browser (Chrome/Safari/etc). For "System" (tab/system audio capture), macOS additionally requires System Settings → Privacy & Security → Screen & System Audio Recording → enable the browser (Chrome's tab-audio-sharing picker uses this permission even though it's not capturing video). After granting either permission, fully quit and reopen the browser — a mid-session grant doesn't take effect until relaunch.
+- **Windows**: Settings → Privacy & security → Microphone → turn on "Let apps access your microphone" and enable it for your browser. For "System" audio, use the browser's "Share tab audio" / "Share system audio" checkbox in the screen-share picker dialog when prompted (no separate OS-level toggle is normally required on Windows, but if it's greyed out, check Settings → Privacy & security → "Let desktop apps access your microphone" as well, since some browsers route system-audio capture through the same pipeline).
+
 A self-contained, single-file HTML/JS/Canvas simulator of the light shows, for previewing behavior without needing the physical car — open `tools/visualizer/carpet-visualizer.html` directly in a browser (double-click it, or `open tools/visualizer/carpet-visualizer.html` on macOS). No build step, no server, no dependencies.
 
 It's a **parallel JS reimplementation** of the show logic in `src/*.h` (`AudioBoard.h`'s math, `NightriderShow`/`FlameShow`/`EqualizerShow`/`SpeedStripesShow`/`LighthouseShow`, the config-mode navigation, etc.) — not the actual firmware, so it can drift out of sync with real code changes over time. It reads real audio (microphone, a shared system/tab audio stream, an audio file, or a synthetic test tone), simulates the pot/encoder/button controls and config-mode navigation, and renders a schematic top-down view of the car with all fixtures (rope, megabars, china) responding as they should on the real hardware.
