@@ -369,6 +369,10 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   background: rgba(242, 163, 65, 0.1);
 }
 .config-status--config .config-status__detail { color: var(--amber); }
+/* Hidden in plain show mode -- "SHOW MODE / <name>" was redundant with the
+   show dropdown right below it and just ate vertical space. Still shown for
+   config-mode status and render errors (see updateStatusPanel/tick()). */
+.config-status--hidden { display: none; }
 
 /* ---------- stage (center) ---------- */
 .stage-wrap { align-items: stretch; }
@@ -454,13 +458,17 @@ footer {
 <header>
   <h1>&#9679; Flying Magic Carpet</h1>
   <span class="sub">light console &mdash; audio-reactive preview</span>
+  <select id="orientationSelect" title="Viewport orientation">
+    <option value="landscape" selected>Landscape</option>
+    <option value="portrait">Portrait</option>
+  </select>
 </header>
 
 <div class="deck">
 
   <!-- ============ STAGE (most of the width) ============ -->
   <div class="panel stage-wrap">
-    <div class="config-status" id="configStatusBar">
+    <div class="config-status config-status--hidden" id="configStatusBar">
       <span class="config-status__mode" id="configStatusMode">SHOW MODE</span>
       <span class="config-status__detail" id="configStatusDetail">Nightrider</span>
     </div>
@@ -469,54 +477,6 @@ footer {
 
   <!-- ============ single consolidated control column ============ -->
   <div class="panel">
-    <h2>Audio Source</h2>
-    <div class="group">
-      <div class="btnrow">
-        <button id="btnMic">Mic</button>
-        <button id="btnSystem">System</button>
-        <button id="btnFile">File</button>
-        <button id="btnTone">Tone</button>
-      </div>
-      <input type="file" id="fileInput" accept="audio/*" style="display:none;" />
-      <div class="row">
-        <label id="audioStatus">idle</label>
-        <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">"System" uses the browser's screen/tab-share picker — choose a tab (with "share audio" checked) or, on Windows, your whole screen with audio — plays Spotify/etc. straight through, no OS loopback tool needed. Chrome/Edge only. If Mic errors instead of showing a permission prompt, this page is likely in an embedded preview frame that blocks mic access — open the artifact in its own browser tab and try again.</span></span>
-        <span class="chip" id="silentChip">&mdash;</span>
-      </div>
-      <div class="row"><label>Volume <span style="opacity:.6;">(File/Tone only)</span></label><input type="checkbox" id="muteCheck" checked disabled /><label for="muteCheck" style="flex:none;font-size:9px;">mute</label></div>
-      <input type="range" id="volumeSlider" min="0" max="100" step="1" value="60" disabled />
-      <div class="row"><label>Delay audio to match foresight</label><input type="checkbox" id="delayAudioCheck" disabled /></div>
-    </div>
-
-    <div class="group">
-      <select id="showSelect">
-        <optgroup label="Light shows">
-          <option value="nightrider">Nightrider</option>
-          <option value="lighthouse">Lighthouse</option>
-          <option value="flame">FlameSparkle</option>
-          <option value="equalizer">Equalizer</option>
-          <option value="speedstripes">SpeedStripes</option>
-        </optgroup>
-        <optgroup label="Audio config screens">
-          <option value="cfg_meter">Noise/Peak meter</option>
-          <option value="cfg_decay">Hit decay meter</option>
-          <option value="cfg_predict">Hit prediction</option>
-          <option value="cfg_foresight">Foresight adjust</option>
-        </optgroup>
-      </select>
-      <div class="btnrow" id="variationRow"></div>
-    </div>
-
-    <div class="group">
-      <div class="row"><label>Speed</label><span class="val" id="speedVal">0 mph</span></div>
-      <input type="range" id="speedSlider" min="0" max="25" step="1" value="0" />
-    </div>
-
-    <div class="group">
-      <div class="row"><label>View zoom</label><span class="val" id="zoomVal">50ft</span></div>
-      <div class="row"><label style="font-size:9px;">Scroll/pinch on stage, or , and . keys</label></div>
-    </div>
-
     <div class="group">
       <div class="ctrl-panel" id="ctrlPanel">
         <div class="ctrl-panel__knobs">
@@ -553,17 +513,66 @@ footer {
       </div>
     </div>
 
+    <div class="group">
+      <select id="showSelect">
+        <optgroup label="Light shows">
+          <option value="nightrider">Nightrider</option>
+          <option value="lighthouse">Lighthouse</option>
+          <option value="flame">FlameSparkle</option>
+          <option value="equalizer">Equalizer</option>
+          <option value="speedstripes">SpeedStripes</option>
+        </optgroup>
+        <optgroup label="Audio config screens">
+          <option value="cfg_meter">Noise/Peak meter</option>
+          <option value="cfg_decay">Hit decay meter</option>
+          <option value="cfg_predict">Hit prediction</option>
+          <option value="cfg_foresight">Foresight adjust</option>
+        </optgroup>
+      </select>
+      <div class="btnrow" id="variationRow"></div>
+    </div>
+
+    <div class="group">
+      <div class="row"><label>Speed</label><span class="val" id="speedVal">0 mph</span></div>
+      <input type="range" id="speedSlider" min="0" max="25" step="1" value="0" />
+    </div>
+
+    <div class="group">
+      <div class="row"><label>View zoom</label><span class="val" id="zoomVal">50ft</span></div>
+      <div class="row"><label style="font-size:9px;">Scroll/pinch on stage, or , and . keys</label></div>
+    </div>
+
     <h2>Quick Adjust <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Direct override, always live — a second, independent path to the same values config mode adjusts.</span></span></h2>
     <div class="group">
       <div class="row"><label>Noise floor</label><span class="val" id="noiseFloorVal">0%</span></div>
       <input type="range" id="noiseFloorSlider" min="0" max="100" step="1" value="0" />
       <div class="row"><label>Peak thresh</label><span class="val" id="peakThreshVal">78%</span></div>
       <input type="range" id="peakThreshSlider" min="0" max="100" step="1" value="78" />
-      <div class="row"><label>Auto-gain</label><input type="checkbox" id="autoGainCheck" /></div>
     </div>
     <div class="group">
       <div class="row"><label>Hit decay</label><span class="val" id="hitDecayVal">300ms</span></div>
       <input type="range" id="hitDecaySlider" min="0" max="3000" step="10" value="300" />
+    </div>
+    <div class="group">
+      <div class="row"><label>Global bright</label><span class="val" id="globalBrVal">100%</span></div>
+      <input type="range" id="globalBrSlider" min="0" max="100" step="1" value="100" />
+      <div class="row"><label>Headlight bright</label><span class="val" id="headlightBrVal">50%</span></div>
+      <input type="range" id="headlightBrSlider" min="50" max="100" step="1" value="50" />
+      <div class="row"><label>China bright</label><span class="val" id="chinaBrVal">100%</span></div>
+      <input type="range" id="chinaBrSlider" min="0" max="100" step="1" value="100" />
+      <div class="row"><label>Blacklight</label><input type="checkbox" id="blacklightCheck" /></div>
+      <div class="row"><label>Colorize fixture dots</label><input type="checkbox" id="fixtureDotsCheck" /></div>
+    </div>
+
+    <h2>Audio</h2>
+    <div class="group">
+      <div class="btnrow">
+        <button id="btnMute" class="active" disabled>Mute</button>
+        <button id="btnDelay" disabled>Delay</button>
+        <button id="btnAgc">AGC</button>
+      </div>
+    </div>
+    <div class="group">
       <div class="row"><label>Foresight</label><span class="val" id="foresightVal">0ms</span></div>
       <input type="range" id="foresightSlider" min="0" max="1000" step="10" value="0" />
       <div class="row"><label>Hit predict</label><span class="val" id="predictMsVal">0ms</span></div>
@@ -576,16 +585,21 @@ footer {
       </select>
     </div>
     <div class="group">
-      <div class="row"><label>Global bright</label><span class="val" id="globalBrVal">100%</span></div>
-      <input type="range" id="globalBrSlider" min="0" max="100" step="1" value="100" />
-      <div class="row"><label>Headlight bright</label><span class="val" id="headlightBrVal">50%</span></div>
-      <input type="range" id="headlightBrSlider" min="50" max="100" step="1" value="50" />
-      <div class="row"><label>China bright</label><span class="val" id="chinaBrVal">100%</span></div>
-      <input type="range" id="chinaBrSlider" min="0" max="100" step="1" value="100" />
-      <div class="row"><label>Blacklight</label><input type="checkbox" id="blacklightCheck" /></div>
-      <div class="row"><label>Show fixture dots</label><input type="checkbox" id="fixtureDotsCheck" /></div>
+      <div class="btnrow">
+        <button id="btnMic">Mic</button>
+        <button id="btnSystem">System</button>
+        <button id="btnFile">File</button>
+        <button id="btnTone">Tone</button>
+      </div>
+      <input type="file" id="fileInput" accept="audio/*" style="display:none;" />
+      <div class="row">
+        <label id="audioStatus">idle</label>
+        <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">"System" uses the browser's screen/tab-share picker — choose a tab (with "share audio" checked) or, on Windows, your whole screen with audio — plays Spotify/etc. straight through, no OS loopback tool needed. Chrome/Edge only. If Mic errors instead of showing a permission prompt, this page is likely in an embedded preview frame that blocks mic access — open the artifact in its own browser tab and try again.</span></span>
+        <span class="chip" id="silentChip">&mdash;</span>
+      </div>
+      <div class="row"><label>Volume <span style="opacity:.6;">(File/Tone only)</span></label></div>
+      <input type="range" id="volumeSlider" min="0" max="100" step="1" value="60" disabled />
     </div>
-    <h2>Audio Levels</h2>
     <div class="group">
       <div class="meter-stack" id="meterStack" title="Click to expand tone generator controls">
         <div class="mrow bass"><span class="lbl">Bass</span><div class="bar"><i id="barBassHit"></i></div></div>
@@ -1266,12 +1280,12 @@ function ensureOutputChain(ctx) {
 function applyVolumeUI() {
   if (!outputGain) return;
   const vol = +document.getElementById('volumeSlider').value / 100;
-  const muted = document.getElementById('muteCheck').checked;
+  const muted = document.getElementById('btnMute').classList.contains('active');
   outputGain.gain.value = muted ? 0 : vol;
 }
 function updateOutputDelayTime() {
   if (!outputDelay) return;
-  const delayOn = currentSourceIsAppGenerated && document.getElementById('delayAudioCheck').checked;
+  const delayOn = currentSourceIsAppGenerated && document.getElementById('btnDelay').classList.contains('active');
   outputDelay.delayTime.value = delayOn ? Math.min(1.0, AudioBoard.audioForesightMs / 1000) : 0;
 }
 // External sources (Mic/System) can't be delayed or volume-controlled --
@@ -1281,12 +1295,12 @@ function updateOutputDelayTime() {
 // would just desync the lights from the sound with no way to compensate.
 function setAppGeneratedSource(isAppGenerated) {
   currentSourceIsAppGenerated = isAppGenerated;
-  document.getElementById('delayAudioCheck').disabled = !isAppGenerated;
+  document.getElementById('btnDelay').disabled = !isAppGenerated;
   document.getElementById('volumeSlider').disabled = !isAppGenerated;
-  document.getElementById('muteCheck').disabled = !isAppGenerated;
+  document.getElementById('btnMute').disabled = !isAppGenerated;
   document.getElementById('foresightSlider').disabled = !isAppGenerated;
   if (!isAppGenerated) {
-    document.getElementById('delayAudioCheck').checked = false;
+    document.getElementById('btnDelay').classList.remove('active');
     AudioBoard.audioForesightMs = 0;
     document.getElementById('foresightSlider').value = 0;
     document.getElementById('foresightVal').textContent = '0ms';
@@ -1541,6 +1555,7 @@ const Ctl = {
   testHue: 0, testSat: 255, testBrightness: 255, // PowerTest screen's HSV test color
   zoomFt: 32, // viewer distance from car center, 20-100ft
   showFixtureDots: false, // visualizer-only: light up the fixture dots themselves, off by default
+  orientation: 'landscape', // visualizer-only viewport orientation, see applyOrientation()
 };
 
 /* =====================================================================
@@ -1985,15 +2000,29 @@ function showSpeedStripes(nowMs, dtMs) {
 let lhAngle1 = 0, lhAngle2 = 0, lhHue1 = 0;
 function resetLighthouseState() {
   lhAngle1 = 0; lhAngle2 = 0; lhHue1 = 0;
-  lhStrobeActive = false; lhHadHit = false; lhSuppressionPeak = 0;
+  lhStrobeActive = false; lhHadHit = false; lhSuppressionPeak = 0; lhStrobeLastMs = 0;
 }
 
 // China bass-strobe: same triple-pulse timing/suppression as EqualizerShow's
 // strobe (real firmware, BumpingAudioShow.h) -- borrowed here since real
 // Lighthouse currently leaves china off entirely. Bass hits only.
 let lhStrobeActive = false, lhStrobeT0 = 0;
-let lhHadHit = false, lhLastHitT = 0, lhSuppressionPeak = 0;
+let lhHadHit = false, lhLastHitT = 0, lhSuppressionPeak = 0, lhStrobeLastMs = 0;
+// DEVIATION from real firmware: BumpingAudioShow.h's suppressionPeak_ never
+// decays -- it's only cleared by a full 3s gap with NO qualifying bass hits
+// at all. Under continuous music that gap essentially never happens, so
+// after the first loud hit (or two) sets a high peak, it silently latches
+// there and the strobe stops firing for the rest of the show except on a
+// rare new loudest-ever hit -- exactly the "works once, then never again
+// except after a lull" behavior reported as broken. Decaying the peak back
+// down over time lets moderate hits clear it again periodically, so it
+// keeps reacting through a whole show instead of firing once and going
+// quiet, while still avoiding a strobe on literally every single hit.
+const LH_SUPPRESSION_DECAY_PER_SEC = 60; // percentage points/sec
 function updateLighthouseStrobe(nowMs) {
+  const dtSec = Math.max(0, Math.min(0.5, (nowMs - lhStrobeLastMs) / 1000));
+  lhStrobeLastMs = nowMs;
+  lhSuppressionPeak = Math.max(0, lhSuppressionPeak - LH_SUPPRESSION_DECAY_PER_SEC * dtSec);
   const isHit = AudioBoard.hitLevel[BAND_LOW] > 0;
   const bassHit = AudioBoard.getHitPct(BAND_LOW);
   if (isHit) {
@@ -2230,6 +2259,22 @@ function renderCurrent(nowMs, dtMs) {
    ===================================================================== */
 const canvas = document.getElementById('stageCanvas');
 const ctx2d = canvas.getContext('2d');
+// Portrait is the "native" orientation everything else in this file is
+// computed in (CAR_X/CAR_Y, the flood-extent render rectangle, etc, all
+// assume the car's front points up). Landscape just swaps the canvas'
+// own pixel buffer + CSS box to the rotated aspect ratio and adds a
+// 90deg rotation to draw()'s transform -- no geometry is recomputed.
+const PORTRAIT_CANVAS_W = canvas.width, PORTRAIT_CANVAS_H = canvas.height;
+function applyOrientation() {
+  if (Ctl.orientation === 'landscape') {
+    canvas.width = PORTRAIT_CANVAS_H;
+    canvas.height = PORTRAIT_CANVAS_W;
+  } else {
+    canvas.width = PORTRAIT_CANVAS_W;
+    canvas.height = PORTRAIT_CANVAS_H;
+  }
+  canvas.style.aspectRatio = canvas.width + ' / ' + canvas.height;
+}
 // Point-light fills get a display-only gamma boost: a canvas circle filled
 // at a linear 20% is much harder to read against a dark stage than a real
 // LED at 20% PWM actually looks at night. This only changes how a given
@@ -2386,6 +2431,65 @@ function buildGroundTile() {
   // perceptible at all (very low-lightness colors read as hueless).
   g.fillStyle = '#362d24'; // #2e241a desaturated 25% and brightened 25% (HSL), per follow-up
   g.fillRect(0, 0, size, size);
+
+  // Second, coarser detail layer: distinct from the fine (~4-8in) crack
+  // polygons below, the reference photos also show broader (several-ft)
+  // irregular patches of subtly different tone -- mineral/moisture
+  // variation between one cracked area and the next, not just the cracks
+  // themselves. A handful of seed points per tile (wraparound-jittered like
+  // the crack grid below, so this still tiles seamlessly) each get their
+  // own small lightness offset off the base fill; every pixel takes its
+  // nearest seed's offset, so lightness steps between patches the way real
+  // playa coloration does. The seed distance is warped by a smooth sine
+  // field first so those patch borders bow and curve (an estimate of the
+  // organic shapes visible at an angle in the photos) instead of reading as
+  // straight Voronoi polygon edges. Hue is untouched -- same muted palette
+  // throughout, only lightness varies, per request.
+  {
+    const REGION_GRID_N = 4; // ~6ft/region at GROUND_TILE_FT=24
+    const regionCell = size / REGION_GRID_N;
+    const seeds = [];
+    for (let ry = 0; ry < REGION_GRID_N; ry++) {
+      for (let rx = 0; rx < REGION_GRID_N; rx++) {
+        const jx = (Math.sin(rx * 17.31 + ry * 5.73) * 91723.3 % 1) * regionCell * 0.5;
+        const jy = (Math.sin(rx * 6.91 + ry * 23.17) * 54121.7 % 1) * regionCell * 0.5;
+        const delta = (Math.sin(rx * 41.3 + ry * 71.9) * 12345.6 % 1) * 2 - 1; // -1..1
+        seeds.push({ x: (rx + 0.5) * regionCell + jx, y: (ry + 0.5) * regionCell + jy, delta });
+      }
+    }
+    const baseR = 0x36, baseG = 0x2d, baseB = 0x24;
+    const REGION_LIGHTNESS_RANGE = 0.14; // max +/-14% RGB scale between patches
+    // Warp terms use integer cycle counts across the tile (2*PI*n*p/size),
+    // so each term is exactly periodic over [0,size) -- required for the
+    // curved borders to tile seamlessly too, not just the underlying
+    // Voronoi cell colors (which already wrap via the torus distance below).
+    const TWO_PI = Math.PI * 2;
+    const imgData = g.getImageData(0, 0, size, size);
+    const buf = imgData.data;
+    for (let py = 0; py < size; py++) {
+      const warpY = Math.cos(TWO_PI * 4 * py / size) * 22;
+      for (let px = 0; px < size; px++) {
+        const wx = px + Math.sin(TWO_PI * 3 * px / size) * 22 + Math.sin(TWO_PI * 2 * py / size) * 14;
+        const wy = py + warpY + Math.cos(TWO_PI * 5 * px / size) * 14;
+        let bestD = Infinity, bestDelta = 0;
+        for (let i = 0; i < seeds.length; i++) {
+          const s = seeds[i];
+          let dx = Math.abs(wx - s.x); if (dx > size / 2) dx = size - dx;
+          let dy = Math.abs(wy - s.y); if (dy > size / 2) dy = size - dy;
+          const d = dx * dx + dy * dy;
+          if (d < bestD) { bestD = d; bestDelta = s.delta; }
+        }
+        const mult = 1 + bestDelta * REGION_LIGHTNESS_RANGE;
+        const idx = (py * size + px) * 4;
+        buf[idx] = Math.max(0, Math.min(255, Math.round(baseR * mult)));
+        buf[idx + 1] = Math.max(0, Math.min(255, Math.round(baseG * mult)));
+        buf[idx + 2] = Math.max(0, Math.min(255, Math.round(baseB * mult)));
+        buf[idx + 3] = 255;
+      }
+    }
+    g.putImageData(imgData, 0, 0);
+  }
+
   // jittered grid points, tiled seamlessly (edge columns/rows reuse the
   // opposite edge's jitter so the pattern repeats without a visible seam)
   const pts = [];
@@ -2452,9 +2556,16 @@ function draw() {
   ctx2d.clearRect(0, 0, canvas.width, canvas.height);
   ctx2d.save();
   const zs = zoomScale();
+  // Pivot at the canvas' own center (which is the car's center either way),
+  // optionally rotate 90deg for landscape (front then points right instead
+  // of up), then scale for zoom, then shift so everything drawn below using
+  // the native portrait-space coordinates (CAR_X/CAR_Y etc) lands correctly
+  // -- CAR_X/CAR_Y are portrait-space by definition regardless of the
+  // canvas' current (possibly swapped) pixel dimensions.
   ctx2d.translate(canvas.width / 2, canvas.height / 2);
+  if (Ctl.orientation === 'landscape') ctx2d.rotate(Math.PI / 2);
   ctx2d.scale(zs, zs);
-  ctx2d.translate(-canvas.width / 2, -canvas.height / 2);
+  ctx2d.translate(-CAR_X, -CAR_Y);
 
   drawGroundScroll(performance.now());
 
@@ -2590,28 +2701,6 @@ function draw() {
     drawWash(CHINA_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH_FOR[cIdx], chinaLeds[cIdx], CHINA_AIR_MULT);
   }
   ctx2d.restore();
-
-  // China ambient spill: unlike megabars (aimed out into open air, fully
-  // blocked by the deck from underneath), china are mounted UNDER the deck
-  // and aimed mostly along/under the car itself -- at full brightness
-  // their light doesn't stop cleanly at the deck's edge, some general glow
-  // reaches even under the car, visible from directly above as a soft wash
-  // across the whole deck. Deliberately NOT clipped to outside the deck
-  // (that clip is correct for megabars, wrong for china).
-  {
-    let avgR = 0, avgG = 0, avgB = 0;
-    for (const c of chinaLeds) { avgR += c.r; avgG += c.g; avgB += c.b; }
-    avgR /= NUM_CHINA; avgG /= NUM_CHINA; avgB /= NUM_CHINA;
-    const avgBrightness = avgR + avgG + avgB;
-    if (avgBrightness > 3) {
-      const spillAlpha = Math.min(0.5, (avgBrightness / 765) * 0.5);
-      ctx2d.save();
-      ctx2d.globalCompositeOperation = 'lighter';
-      ctx2d.fillStyle = rgba({ r: avgR, g: avgG, b: avgB }, spillAlpha);
-      ctx2d.fillRect(x, y, w, h);
-      ctx2d.restore();
-    }
-  }
 
   // rope: each LED drawn as its OWN discrete dot, not a blended line.
   // Blur was cut way down from earlier passes (was reading as much more
@@ -2859,10 +2948,10 @@ function updateStatusPanel() {
   const modeLabel = document.getElementById('configStatusMode');
   const detail = document.getElementById('configStatusDetail');
   if (Ctl.appMode === 'show') {
+    bar.classList.add('config-status--hidden');
     bar.classList.remove('config-status--config');
-    modeLabel.textContent = 'SHOW MODE';
-    detail.textContent = Ctl.currMode;
   } else {
+    bar.classList.remove('config-status--hidden');
     bar.classList.add('config-status--config');
     modeLabel.textContent = 'CONFIG — ' + Ctl.appMode.toUpperCase();
     detail.textContent = SUBSETTING_NAMES[Ctl.appMode][Ctl.configSubsetting] + ':  ' + currentSubsettingValueText();
@@ -2926,7 +3015,7 @@ function applyConfigPot() {
 function applyEncoderStep(dir) {
   if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 4) {
     AudioBoard.autoGainEnabled = !AudioBoard.autoGainEnabled;
-    document.getElementById('autoGainCheck').checked = AudioBoard.autoGainEnabled;
+    document.getElementById('btnAgc').classList.toggle('active', AudioBoard.autoGainEnabled);
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 2) {
     AudioBoard.hitPredictionStyle = (AudioBoard.hitPredictionStyle + dir + 4) % 4;
     document.getElementById('predictStyleSelect').value = AudioBoard.hitPredictionStyle;
@@ -2966,6 +3055,12 @@ function sizeCtrlPanel() {
 }
 sizeCtrlPanel();
 window.addEventListener('resize', sizeCtrlPanel);
+
+applyOrientation();
+document.getElementById('orientationSelect').addEventListener('change', (e) => {
+  Ctl.orientation = e.target.value;
+  applyOrientation();
+});
 
 const potIndicator = document.querySelector('#potKnob .knob__indicator');
 function updatePotKnob() {
@@ -3107,9 +3202,17 @@ bindSlider('noiseFloorSlider', 'noiseFloorVal', v => v+'%', v => AudioBoard.nois
 bindSlider('peakThreshSlider', 'peakThreshVal', v => v+'%', v => AudioBoard.peakThresholdPct = v);
 bindSlider('hitDecaySlider', 'hitDecayVal', v => v+'ms', v => AudioBoard.hitDecayMs = v);
 bindSlider('foresightSlider', 'foresightVal', v => v+'ms', v => { AudioBoard.audioForesightMs = v; updateOutputDelayTime(); });
-document.getElementById('muteCheck').addEventListener('change', applyVolumeUI);
+function bindToggleButton(id, onToggle) {
+  const btn = document.getElementById(id);
+  btn.addEventListener('click', () => {
+    if (btn.disabled) return;
+    btn.classList.toggle('active');
+    onToggle(btn.classList.contains('active'));
+  });
+}
+bindToggleButton('btnMute', () => applyVolumeUI());
+bindToggleButton('btnDelay', () => updateOutputDelayTime());
 document.getElementById('volumeSlider').addEventListener('input', applyVolumeUI);
-document.getElementById('delayAudioCheck').addEventListener('change', updateOutputDelayTime);
 
 document.getElementById('meterStack').addEventListener('click', () => {
   document.getElementById('toneExpand').classList.toggle('open');
@@ -3123,7 +3226,7 @@ bindSlider('predictMsSlider', 'predictMsVal', v => v+'ms', v => AudioBoard.hitPr
 bindSlider('globalBrSlider', 'globalBrVal', v => v+'%', v => Ctl.globalBr = v);
 bindSlider('headlightBrSlider', 'headlightBrVal', v => v+'%', v => Ctl.headlightBr = v);
 bindSlider('chinaBrSlider', 'chinaBrVal', v => v+'%', v => Ctl.chinaBr = v);
-document.getElementById('autoGainCheck').addEventListener('change', (e) => { AudioBoard.autoGainEnabled = e.target.checked; updateStatusPanel(); });
+bindToggleButton('btnAgc', (on) => { AudioBoard.autoGainEnabled = on; updateStatusPanel(); });
 document.getElementById('blacklightCheck').addEventListener('change', (e) => Ctl.blacklight = e.target.checked);
 document.getElementById('fixtureDotsCheck').addEventListener('change', (e) => Ctl.showFixtureDots = e.target.checked);
 document.getElementById('predictStyleSelect').addEventListener('change', (e) => { AudioBoard.hitPredictionStyle = +e.target.value; updateStatusPanel(); });
@@ -3170,6 +3273,7 @@ function tick(now) {
       lastTickError = err;
       console.error('Render error:', err);
       document.getElementById('configStatusBar').classList.add('config-status--config');
+      document.getElementById('configStatusBar').classList.remove('config-status--hidden');
       document.getElementById('configStatusMode').textContent = 'RENDER ERROR';
       document.getElementById('configStatusDetail').textContent = String((err && err.message) || err);
     }
