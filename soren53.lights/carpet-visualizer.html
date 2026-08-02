@@ -278,9 +278,12 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Encoder knob has no meaningful absolute angle (relative rotary input),
    so instead of a direction line it shows curved click-here-to-turn arrows
    in its left/right halves -- each a 120deg arc (30deg to 150deg from top,
-   mirrored on the left) at 70% of the knob's radius, with an arrowhead at
-   the end. .flash briefly whitens the corresponding side when a detent
-   fires, toggled from JS. */
+   mirrored on the left), sized to sit centered in the annular band between
+   the center push-button and the knob's own edge, with an arrowhead at the
+   end. Light gray at rest; .pressed turns the side actually being held
+   down orange, toggled from JS for exactly as long as the mouse is down
+   (not a fixed-length flash) -- matches the center button's own
+   press/release-driven color state below. */
 .knob__arrows {
   position: absolute;
   top: 0;
@@ -289,28 +292,55 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 .knob__arc {
   fill: none;
-  stroke: var(--amber);
+  stroke: #9a94a3;
   stroke-width: 2.5;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 3px rgba(242, 163, 65, 0.7));
-  transition: stroke 0.1s, filter 0.1s;
+  transition: stroke 0.08s, filter 0.08s;
 }
 .knob__arrowhead {
+  fill: #9a94a3;
+  transition: fill 0.08s, filter 0.08s;
+}
+.knob__arrow-group.pressed .knob__arc {
+  stroke: var(--amber);
+  filter: drop-shadow(0 0 7px rgba(242, 163, 65, 0.9));
+}
+.knob__arrow-group.pressed .knob__arrowhead {
   fill: var(--amber);
-  filter: drop-shadow(0 0 3px rgba(242, 163, 65, 0.7));
-  transition: fill 0.1s, filter 0.1s;
+  filter: drop-shadow(0 0 7px rgba(242, 163, 65, 0.9));
 }
-.knob__arrow-group.flash .knob__arc {
-  stroke: #fff;
-  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.95));
+/* Center push-button: ~1/3 the knob's diameter, concentric. Gray at rest,
+   orange while pressed -- mouse-driven equivalent of the encoder's real
+   integrated pushbutton, classified into short/medium/long/x-long/double
+   press events by hold duration (see the JS state machine, ported from
+   the firmware's own PushButtonEdge thresholds). */
+.knob__center-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 19px;
+  height: 19px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, #6b6577, #423d4c 75%);
+  border: 1px solid #524c5c;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.12);
+  cursor: pointer;
+  transition: background 0.08s, box-shadow 0.08s;
 }
-.knob__arrow-group.flash .knob__arrowhead {
-  fill: #fff;
-  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.95));
+.knob__center-btn.pressed {
+  background: radial-gradient(circle at 35% 28%, var(--amber), #b97a2e 75%);
+  box-shadow: 0 0 8px rgba(242, 163, 65, 0.85), inset 0 1px 1px rgba(255,255,255,0.25);
 }
 .ctrl-panel__buttons {
   display: flex;
   gap: 4px;
+}
+.ctrl-panel__buttons button.pressed-flash {
+  background: var(--amber);
+  color: #1a1206;
+  border-color: var(--amber);
+  font-weight: 600;
 }
 .ctrl-panel__buttons button {
   flex: 1 1 auto;
@@ -484,14 +514,15 @@ footer {
             <div class="knob knob--encoder" id="encoderKnob">
               <svg class="knob__arrows" viewBox="0 0 56 56" width="56" height="56">
                 <g class="knob__arrow-group knob__arrow-group--right">
-                  <path class="knob__arc" d="M37.80,11.03 A19.6,19.6 0 0 1 37.80,44.97" />
-                  <path class="knob__arrowhead" d="M37.80,44.97 L45.61,44.51 L42.11,38.44 Z" />
+                  <path class="knob__arc" d="M37.38,11.76 A18.75,18.75 0 0 1 37.38,44.24" />
+                  <path class="knob__arrowhead" d="M37.38,44.24 L44.63,43.80 L41.38,38.17 Z" />
                 </g>
                 <g class="knob__arrow-group knob__arrow-group--left">
-                  <path class="knob__arc" d="M18.20,11.03 A19.6,19.6 0 0 0 18.20,44.97" />
-                  <path class="knob__arrowhead" d="M18.20,44.97 L10.39,44.51 L13.89,38.44 Z" />
+                  <path class="knob__arc" d="M18.62,11.76 A18.75,18.75 0 0 0 18.62,44.24" />
+                  <path class="knob__arrowhead" d="M18.62,44.24 L11.37,43.80 L14.62,38.17 Z" />
                 </g>
               </svg>
+              <div class="knob__center-btn" id="encoderCenterBtn"></div>
             </div>
             <div class="knob-label">Encoder <span class="val" id="encVal">pos 0</span></div>
           </div>
@@ -508,7 +539,7 @@ footer {
           <button id="btnLong">Long</button>
           <button id="btnXLong">X-long</button>
           <button id="btnDouble">Dbl</button>
-          <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Short: next show, or next config subsetting. Medium: next config screen (Brightness→Audio→PowerTest). Long: enter config / cancel out of it. Double: blacklight toggle, or commit &amp; exit config. Extra-long: lights on/off. In config, Pot/Encoder drive whichever subsetting is shown in the status bar. Encoder knob: click its left/right half for one detent left/right. Pot knob: click and drag up/right to increase, down/left to decrease.</span></span>
+          <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Short: next show, or next config subsetting. Medium: next config screen (Brightness→Audio→PowerTest). Long: enter config / cancel out of it. Double: blacklight toggle, or commit &amp; exit config. Extra-long: lights on/off. In config, Pot/Encoder drive whichever subsetting is shown in the status bar. Encoder knob: click its left/right half for one detent left/right; its center circle is the encoder's own pushbutton, firing Short/Medium/Long/X-long/Double the same as the buttons below based on how long you hold it. Pot knob: click and drag up/right to increase, down/left to decrease.</span></span>
         </div>
       </div>
     </div>
@@ -533,22 +564,20 @@ footer {
     </div>
 
     <div class="group">
-      <div class="row"><label>Speed</label><span class="val" id="speedVal">0 mph</span></div>
+      <div class="row"><label>Vehicle speed</label><span class="val" id="speedVal">0 mph</span></div>
       <input type="range" id="speedSlider" min="0" max="25" step="1" value="0" />
     </div>
 
     <div class="group">
-      <div class="row"><label>View zoom</label><span class="val" id="zoomVal">50ft</span></div>
-      <div class="row"><label style="font-size:9px;">Scroll/pinch on stage, or , and . keys</label></div>
+      <div class="row">
+        <label>Zoom</label>
+        <span class="val" id="zoomVal">50ft</span>
+        <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Scroll/pinch on the stage, or the , and . keys, to zoom (20-100ft).</span></span>
+      </div>
+      <div class="row"><label>Colorize lamps</label><input type="checkbox" id="fixtureDotsCheck" /></div>
     </div>
 
     <h2>Quick Adjust <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Direct override, always live — a second, independent path to the same values config mode adjusts.</span></span></h2>
-    <div class="group">
-      <div class="row"><label>Noise floor</label><span class="val" id="noiseFloorVal">0%</span></div>
-      <input type="range" id="noiseFloorSlider" min="0" max="100" step="1" value="0" />
-      <div class="row"><label>Peak thresh</label><span class="val" id="peakThreshVal">78%</span></div>
-      <input type="range" id="peakThreshSlider" min="0" max="100" step="1" value="78" />
-    </div>
     <div class="group">
       <div class="row"><label>Hit decay</label><span class="val" id="hitDecayVal">300ms</span></div>
       <input type="range" id="hitDecaySlider" min="0" max="3000" step="10" value="300" />
@@ -561,7 +590,6 @@ footer {
       <div class="row"><label>China bright</label><span class="val" id="chinaBrVal">100%</span></div>
       <input type="range" id="chinaBrSlider" min="0" max="100" step="1" value="100" />
       <div class="row"><label>Blacklight</label><input type="checkbox" id="blacklightCheck" /></div>
-      <div class="row"><label>Colorize fixture dots</label><input type="checkbox" id="fixtureDotsCheck" /></div>
     </div>
 
     <h2>Audio</h2>
@@ -573,16 +601,25 @@ footer {
       </div>
     </div>
     <div class="group">
+      <div class="row"><label>Phone volume <span style="opacity:.6;">(File/Tone only)</span></label></div>
+      <input type="range" id="volumeSlider" min="0" max="100" step="1" value="60" disabled />
+      <div class="row"><label>Noise floor</label><span class="val" id="noiseFloorVal">8%</span></div>
+      <input type="range" id="noiseFloorSlider" min="0" max="100" step="1" value="8" />
+      <div class="row"><label>Peak thresh</label><span class="val" id="peakThreshVal">78%</span></div>
+      <input type="range" id="peakThreshSlider" min="0" max="100" step="1" value="78" />
       <div class="row"><label>Foresight</label><span class="val" id="foresightVal">0ms</span></div>
       <input type="range" id="foresightSlider" min="0" max="1000" step="10" value="0" />
       <div class="row"><label>Hit predict</label><span class="val" id="predictMsVal">0ms</span></div>
       <input type="range" id="predictMsSlider" min="0" max="1000" step="10" value="0" />
-      <select id="predictStyleSelect">
-        <option value="0">Off</option>
-        <option value="1" selected>Exponential rise</option>
-        <option value="2">Machine gun</option>
-        <option value="3">Drum intro</option>
-      </select>
+      <div class="row">
+        <label style="flex:1; white-space:normal;">Hit prediction style</label>
+        <select id="predictStyleSelect" style="flex:1.6; min-width:0;">
+          <option value="0">Off</option>
+          <option value="1" selected>Exponential rise</option>
+          <option value="2">Machine gun</option>
+          <option value="3">Drum intro</option>
+        </select>
+      </div>
     </div>
     <div class="group">
       <div class="btnrow">
@@ -597,8 +634,6 @@ footer {
         <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">"System" uses the browser's screen/tab-share picker — choose a tab (with "share audio" checked) or, on Windows, your whole screen with audio — plays Spotify/etc. straight through, no OS loopback tool needed. Chrome/Edge only. If Mic errors instead of showing a permission prompt, this page is likely in an embedded preview frame that blocks mic access — open the artifact in its own browser tab and try again.</span></span>
         <span class="chip" id="silentChip">&mdash;</span>
       </div>
-      <div class="row"><label>Volume <span style="opacity:.6;">(File/Tone only)</span></label></div>
-      <input type="range" id="volumeSlider" min="0" max="100" step="1" value="60" disabled />
     </div>
     <div class="group">
       <div class="meter-stack" id="meterStack" title="Click to expand tone generator controls">
@@ -617,8 +652,10 @@ footer {
           <option value="boombap" selected>Boom-bap / hip-hop</option>
           <option value="lofi">Lo-fi</option>
         </select>
-        <div class="row"><label>Noise floor</label><span class="val" id="toneNoiseVal">5%</span></div>
-        <input type="range" id="toneNoiseSlider" min="0" max="100" step="1" value="5" />
+        <div class="row"><label>Base noise</label><span class="val" id="toneBaseNoiseVal">10%</span></div>
+        <input type="range" id="toneBaseNoiseSlider" min="0" max="100" step="1" value="10" />
+        <div class="row"><label>Amplified noise</label><span class="val" id="toneAmpNoiseVal">5%</span></div>
+        <input type="range" id="toneAmpNoiseSlider" min="0" max="100" step="1" value="5" />
       </div>
     </div>
   </div>
@@ -797,12 +834,13 @@ const CHINA_AIM_DEG = [
 // spot 25% brighter than a megabar's (not than china's own old ground
 // value) -- two different baselines, per request.
 const CHINA_AIR_MULT_BASE = 1.25;
-const CHINA_AIR_MULT = CHINA_AIR_MULT_BASE * 1.25 * 2; // 1.5625, then doubled again per follow-up request -- 3.125
+const CHINA_AIR_MULT = CHINA_AIR_MULT_BASE * 1.25 * 2 * 1.35; // 3.125, then 35% brighter per follow-up -- 4.21875
 // Fixed at 2.0 -- originally "2x megabar's ground brightMult," but kept as
 // a plain literal (not re-derived from MEGABAR_MULT below) so dimming the
 // megabars doesn't change china's brightness too, per request that china
-// stay exactly as they are.
-const CHINA_GROUND_MULT = 2.0;
+// stay exactly as they are. Then 35% brighter per follow-up (spots were
+// "pathetic again").
+const CHINA_GROUND_MULT = 2.0 * 1.35; // 2.7
 // Megabar cones/spots dimmed 15%, china left untouched -- applied at both
 // drawWash and drawGroundEllipse call sites for megabars (see draw()).
 const MEGABAR_MULT = 0.85 * 0.70; // 15% dim, then a further 30% off that per follow-up -- 0.595 total
@@ -832,22 +870,39 @@ const CHINA_CENTER_DIST_LENGTH_FT = tiltFactor * CAR_H_FT; // left/right lamps (
 // old location. width = 2*centerDist*tan(halfSpread) is the same formula
 // washFootprint() itself uses, just re-run at the new centerDist.
 const CHINA_HALF_SPREAD_RAD = (FLOOD_SPREAD_DEG / 2) * Math.PI / 180;
-function chinaWashAt(centerDist) {
+// sizeCenterDist (optional): the ground spot's SIZE (width, and therefore
+// spotRadiiFt's across/along radii) is computed from this distance, while
+// centerDist itself still governs where the spot's center actually lands.
+// Needed because front/back lamps (1,2,5,6) sit closer to the car
+// (CHINA_CENTER_DIST_WIDTH_FT, ~2ft) than the side lamps (0,3,4,7,
+// CHINA_CENTER_DIST_LENGTH_FT, ~2.7ft) -- same radiusMult applied to a
+// smaller centerDist still nets a visibly smaller spot, which is exactly
+// the "front/back pairs are pathetic" complaint. Passing the side lamps'
+// (larger) centerDist here for the front/back washes forces their SIZE to
+// match the side pairs exactly, while their aim/position stays physically
+// correct at their own true centerDist.
+function chinaWashAt(centerDist, sizeCenterDist) {
+  const sizeDist = sizeCenterDist !== undefined ? sizeCenterDist : centerDist;
   return Object.assign({}, CHINA_WASH, {
     centerDist,
-    width: 2 * centerDist * Math.tan(CHINA_HALF_SPREAD_RAD),
+    width: 2 * sizeDist * Math.tan(CHINA_HALF_SPREAD_RAD),
     // Wide, bright core (peakScale well above 1.0 pushes the gradient's
     // half-brightness stop out toward the edge, not concentrated near the
-    // center), with the overall spot 30% larger (radiusMult) and the
-    // fadeout itself softened further (peakScale lowered a bit from the
-    // previous 1.6, so more of the now-bigger radius is spent gradually
-    // fading rather than staying at full brightness right up to the edge).
+    // center), with the overall spot 2.5x larger (radiusMult, was 1.3x)
+    // and the fadeout itself softened further (peakScale lowered a bit
+    // from the previous 1.6, so more of the now-bigger radius is spent
+    // gradually fading rather than staying at full brightness right up to
+    // the edge). radiusMult bumped 1.3 -> 1.3*2.5 per follow-up request
+    // ("spots are pathetic again").
     peakScale: 1.3,
-    radiusMult: 1.3,
+    radiusMult: 1.3 * 2.5,
   });
 }
-const CHINA_WASH_WIDTH_BASED = chinaWashAt(CHINA_CENTER_DIST_WIDTH_FT);
+// side pairs (0,3,4,7) -- the reference size everything else now matches
 const CHINA_WASH_LENGTH_BASED = chinaWashAt(CHINA_CENTER_DIST_LENGTH_FT);
+// front/back pairs (1,2,5,6) -- own true centerDist for aim, but sized to
+// match CHINA_WASH_LENGTH_BASED exactly (see chinaWashAt's comment above)
+const CHINA_WASH_WIDTH_BASED = chinaWashAt(CHINA_CENTER_DIST_WIDTH_FT, CHINA_CENTER_DIST_LENGTH_FT);
 // indexed 0..7, matching the side key above
 const CHINA_WASH_FOR = [
   CHINA_WASH_LENGTH_BASED, // 0 right side
@@ -983,7 +1038,7 @@ function edgeInsetPoint(deg, insetFt) {
 //     exception, otherwise untouched.
 // Values in feet from car center (X=right+, Y=back+), converted to px.
 const STD_INSET_FT = 2.5;
-const FRONT_INSET_FT = 2.5, BACK_INSET_FT = 1.5; // front pair (m0) 1.5ft, back-facing (m6) 0.5ft further back toward center
+const FRONT_INSET_FT = 2.0, BACK_INSET_FT = 1.5; // front pair (m0) moved 6in forward (away from center, was 2.5), back-facing (m6) 0.5ft further back toward center
 const FRONT_NEAR_GAP_FT = 0.3; // m1/m11/m5/m7's small deliberate gap beyond m2/m10/m4/m8's X
 const CORNER_PULL_FT = 1.0; // m1/m5/m7/m11 (the true corner-nearest four) pulled toward center, X only
 {
@@ -1079,7 +1134,7 @@ const AudioBoard = {
   hitLevel: [0,0,0,0],
   hitWasAbove: [false,false,false,false],
 
-  noiseFloorPct: 0,
+  noiseFloorPct: 8,
   peakThresholdPct: 78,
   autoGainEnabled: false,
   hitDecayMs: 300,
@@ -1258,9 +1313,11 @@ const AudioBoard = {
    center frequency (63/160/400/1000/2500/6250/16000 Hz).
    ===================================================================== */
 const BIN_FREQS = [63, 160, 400, 1000, 2500, 6250, 16000];
-let audioCtx = null, analyser = null, sourceNode = null, fftData = null;
+let audioCtx = null, analyser = null, sourceNode = null, extraSourceNode = null, fftData = null;
 let toneTimer = null;
 let outputDelay = null, outputGain = null; // speaker-bound chain for app-generated sources only (File/Tone)
+let volumeGain = null; // analyser-bound chain, mirrors outputGain -- see ensureVolumeGain()
+let baseNoiseGain = null; // Tone's base-noise path, mute-only -- see ensureBaseNoiseGain()
 let currentSourceIsAppGenerated = false; // File/Tone = true (we own the signal, can delay/volume/mute it); Mic/System = false
 
 // Speaker output chain: source -> outputDelay -> outputGain -> destination.
@@ -1277,11 +1334,39 @@ function ensureOutputChain(ctx) {
   }
   return outputDelay;
 }
+// BUGFIX: the Phone-volume slider used to only reach outputGain (what you
+// HEAR) -- the analyser (what the light code actually sees/reacts to) was
+// wired straight to the source, completely bypassing it, so turning the
+// phone down never changed the VU levels at all. volumeGain is a second,
+// separate gain node App-generated sources (File/Tone) route through on
+// their way to the analyser, kept driven by the same slider value as
+// outputGain so both what-you-hear and what-the-lights-see scale together.
+function ensureVolumeGain(ctx) {
+  if (!volumeGain) { volumeGain = ctx.createGain(); applyVolumeUI(); }
+  return volumeGain;
+}
+// Base noise (Tone generator only, see useTone) represents a fixed
+// self-noise floor -- present at its own set pk-pk level regardless of
+// Phone volume, only silenced by Mute (a real mic/preamp's self-noise
+// doesn't get quieter just because you turned the source's volume down).
+// Connects straight to the analyser and to the speakers, bypassing
+// volumeGain/outputGain entirely so it's structurally independent of
+// volume, not just numerically compensated for it.
+function ensureBaseNoiseGain(ctx) {
+  if (!baseNoiseGain) {
+    baseNoiseGain = ctx.createGain();
+    baseNoiseGain.connect(ctx.destination);
+    applyVolumeUI();
+  }
+  return baseNoiseGain;
+}
 function applyVolumeUI() {
-  if (!outputGain) return;
   const vol = +document.getElementById('volumeSlider').value / 100;
   const muted = document.getElementById('btnMute').classList.contains('active');
-  outputGain.gain.value = muted ? 0 : vol;
+  const g = muted ? 0 : vol;
+  if (outputGain) outputGain.gain.value = g;
+  if (volumeGain) volumeGain.gain.value = g;
+  if (baseNoiseGain) baseNoiseGain.gain.value = muted ? 0 : 1; // ignores volume on purpose, see ensureBaseNoiseGain
 }
 function updateOutputDelayTime() {
   if (!outputDelay) return;
@@ -1304,6 +1389,7 @@ function setAppGeneratedSource(isAppGenerated) {
     AudioBoard.audioForesightMs = 0;
     document.getElementById('foresightSlider').value = 0;
     document.getElementById('foresightVal').textContent = '0ms';
+    syncPredictMsMax();
   }
   updateOutputDelayTime();
 }
@@ -1315,6 +1401,7 @@ function ensureCtx() {
 function teardownSource() {
   if (toneTimer) { clearInterval(toneTimer); toneTimer = null; }
   if (sourceNode) { try { sourceNode.disconnect(); } catch (e) {} sourceNode = null; }
+  if (extraSourceNode) { try { extraSourceNode.disconnect(); } catch (e) {} extraSourceNode = null; }
 }
 async function useMic() {
   teardownSource();
@@ -1353,7 +1440,7 @@ function useFile(file) {
       const src = ctx.createBufferSource();
       src.buffer = buf; src.loop = true;
       setupAnalyser(ctx);
-      src.connect(analyser);
+      src.connect(ensureVolumeGain(ctx)); // volumeGain is already wired to the fresh analyser, see setupAnalyser
       src.connect(ensureOutputChain(ctx));
       src.start();
       sourceNode = src;
@@ -1381,7 +1468,17 @@ const TONE_PATTERNS = {
   boombap:{ bpm: 90,  kick: [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
   lofi:   { bpm: 78,  kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
 };
-let toneSettings = { pattern: 'boombap', noise: 0.045 }; // noise at 30% of the previous 0.15 default
+// Noise has 2 independent components, both pk-pk fractions of full scale,
+// for testing AGC/noise-floor against a somewhat-realistic signal:
+//   - baseNoise: a fixed self-noise floor, always present at this exact
+//     level regardless of Phone volume (see ensureBaseNoiseGain) -- e.g. a
+//     mic preamp's own noise, which doesn't change just because you turned
+//     the source down.
+//   - ampNoise: mixed into the tone signal itself, so it rides through
+//     volumeGain/outputGain with everything else -- at Phone volume 100%
+//     it's at its own full set level, scaling down to 0 as volume drops,
+//     like noise that gets amplified along with the signal by a gain stage.
+let toneSettings = { pattern: 'boombap', baseNoise: 0.10, ampNoise: 0.05 };
 
 function useTone() {
   teardownSource();
@@ -1425,13 +1522,22 @@ function useTone() {
         const kickSample = Math.sin(kickPhase * 2 * Math.PI) * kickEnv;
         const snareSample = ((Math.random() * 2 - 1) * 0.5 + Math.sin(snarePhase * 2 * Math.PI) * 0.5) * snareEnv;
         const hihatSample = ((Math.random() * 2 - 1) * 0.35 + Math.sin(hihatPhase * 2 * Math.PI) * 0.4 + Math.sin(hihatPhase2 * 2 * Math.PI) * 0.25) * hihatEnv;
-        const noiseSample = (Math.random() * 2 - 1) * toneSettings.noise;
-        out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + noiseSample));
+        const ampNoiseSample = (Math.random() * 2 - 1) * toneSettings.ampNoise;
+        out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + ampNoiseSample));
       }
     };
-    noiseNode.connect(analyser);
+    noiseNode.connect(ensureVolumeGain(ctx)); // scales 0..set level with Phone volume, see toneSettings comment above
     noiseNode.connect(ensureOutputChain(ctx));
     sourceNode = noiseNode;
+  }
+  const baseNoiseNode = ctx.createScriptProcessor ? ctx.createScriptProcessor(bufSize, 1, 1) : null;
+  if (baseNoiseNode) {
+    baseNoiseNode.onaudioprocess = (e) => {
+      const out = e.outputBuffer.getChannelData(0);
+      for (let i = 0; i < out.length; i++) out[i] = (Math.random() * 2 - 1) * toneSettings.baseNoise;
+    };
+    baseNoiseNode.connect(ensureBaseNoiseGain(ctx)); // independent of Phone volume, see ensureBaseNoiseGain
+    extraSourceNode = baseNoiseNode;
   }
   setAppGeneratedSource(true);
   document.getElementById('audioStatus').textContent = 'synthetic test tone';
@@ -1441,6 +1547,11 @@ function setupAnalyser(ctx) {
   analyser.fftSize = 2048;
   analyser.smoothingTimeConstant = 0.2;
   fftData = new Uint8Array(analyser.frequencyBinCount);
+  // volumeGain/baseNoiseGain are persistent singletons (created once, reused
+  // across source switches) -- reconnect them to this fresh analyser every
+  // time one's created, same as the direct sourceNode.connect() below.
+  ensureVolumeGain(ctx).connect(analyser);
+  ensureBaseNoiseGain(ctx).connect(analyser);
   if (sourceNode && sourceNode.connect && !(sourceNode instanceof AudioBufferSourceNode)) {
     try { sourceNode.connect(analyser); } catch (e) {}
   }
@@ -1530,6 +1641,15 @@ function hsv(h, s, v) { // h 0-255, s 0-255, v 0-255 -> {r,g,b} 0-255
   return { r: r*255, g: g*255, b: b*255 };
 }
 function scale255(c, amt) { const f = amt/255; return {r:c.r*f, g:c.g*f, b:c.b*f}; }
+// Rescales a color so its brightest channel hits 255, preserving hue/sat --
+// used where a color is a PALETTE REFERENCE POINT (e.g. a fire palette's
+// "cool" vs "hot" stop) being repurposed as a flash color that should be
+// able to reach full brightness on its own, not stay capped at however
+// bright that particular palette stop happens to be.
+function normalizeToFull(c) {
+  const m = Math.max(c.r, c.g, c.b, 1);
+  return { r: c.r / m * 255, g: c.g / m * 255, b: c.b / m * 255 };
+}
 
 /* =====================================================================
    INPUT STATE -- pot, encoder, button, brightness/blacklight
@@ -1627,11 +1747,17 @@ function flamePaletteColor(variation, index, driftHue, satByte) {
     const lo = Math.floor(idx), hi = Math.min(pal.length - 1, lo + 1), f = idx - lo;
     return { r: pal[lo][0]+(pal[hi][0]-pal[lo][0])*f, g: pal[lo][1]+(pal[hi][1]-pal[lo][1])*f, b: pal[lo][2]+(pal[hi][2]-pal[lo][2])*f };
   }
-  if (variation === 3) { // hue-to-white: drifting hue at one end, fixed white at the other
+  if (variation === 3) {
+    // hue-to-white: white is the SECONDARY (low-index/base) color, the
+    // drifting hue is primary (high-index/accent) -- reversed from real
+    // firmware's own CRGBPalette16(driftClr, driftClr, White, White)
+    // (driftClr low, White high), a deliberate visualizer-only deviation
+    // per request.
     const driftClr = hsv(driftHue, satByte, 255);
-    if (index < 85) return driftClr;
-    if (index > 170) return { r: 255, g: 255, b: 255 };
-    return blend(driftClr, { r: 255, g: 255, b: 255 }, ((index - 85) / 85) * 255);
+    const white = { r: 255, g: 255, b: 255 };
+    if (index < 85) return white;
+    if (index > 170) return driftClr;
+    return blend(white, driftClr, ((index - 85) / 85) * 255);
   }
   // variation 2: shifting hues -- 2 complementary full-brightness colors
   const colorA = hsv(driftHue, satByte, 255), colorB = hsv((driftHue + 128) % 256, satByte, 255);
@@ -1728,8 +1854,19 @@ function showFlame(nowMs, dtMs) {
       flameChinaSwapBassOnSides = !flameChinaSwapBassOnSides;
       flameChinaSwapNextAt = nowMs + (2000 + Math.random() * 5000);
     }
-    const bassClr = scale255(loColor, Math.round(bassHitPct / 100 * 255));
-    const trebleClr = scale255(hiColor, Math.round(trebleHitPct / 100 * 255));
+    // BUGFIX: loColor/hiColor are palette REFERENCE points (a fire
+    // palette's cool ~40 and hot ~230 heat stops) -- for variations 0/1
+    // (the actual 2-color fire palettes) those stops are NOT equally
+    // bright by design (cool end is meant to look dim, hot end blown out),
+    // so using them directly here made the bass/headlight set (loColor,
+    // m%2===0) read as much dimmer than the treble set (hiColor) even at
+    // equal hit levels -- confirmed by inspecting FLAME_PALETTES: index 40
+    // sums to ~186/765, index 230 to ~694/765. Normalizing each to its own
+    // full brightness before scaling by the hit percentage keeps their hue
+    // identity but lets both reach true full brightness, so a 100% bass
+    // hit reads exactly as bright as a 100% treble hit.
+    const bassClr = scale255(normalizeToFull(loColor), Math.round(bassHitPct / 100 * 255));
+    const trebleClr = scale255(normalizeToFull(hiColor), Math.round(trebleHitPct / 100 * 255));
     for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = (m % 2 === 0) ? bassClr : trebleClr;
     const sidesFollowBass = flameChinaSwapBassOnSides;
     for (const c of FLAME_CHINA_SIDES) chinaLeds[c] = sidesFollowBass ? bassClr : trebleClr;
@@ -1841,152 +1978,124 @@ function showEqualizer(nowMs, dtMs) {
   }
 }
 
-/* ---- SpeedStripesShow: ground-fixed stripes, ported from real firmware ----
-   src/SpeedStripesShow.h models this as the ground being painted with
-   infinite 4ft-wide stripes of random color running perpendicular to the
-   car's travel (fuzzy, not hard-edged), and the car driving over that fixed
-   pattern -- every fixture continuously samples the SAME periodic function
-   at its own physical along-the-length position, so a given stripe's color
-   matches everywhere it's visible at once (rope, megabar, china). This was
-   entirely unmodeled in the visualizer before (previous version was a
-   simple, unrelated chase loop) -- that's the visualizer bug being fixed
-   here, not a firmware bug.
-   NOTE: the real firmware's stripe width is 4ft (SIZEOF_LARGE_NEO/4, a
-   clean quarter of the car's 16ft length), not 5ft -- used the real
-   constant here rather than the 5ft figure, flagged for confirmation. */
-const SS_STRIPE_LEDS = SIZEOF_LARGE_NEO / 2; // 176 = 8ft (22 LEDs/ft), per request -- was 4ft (a quarter of the car's length, the real firmware's own value)
-const SS_PERIOD = SS_STRIPE_LEDS * 2; // 176 = one lit + one dark band
-// True 1:1 ground-speed conversion, NOT the real firmware's own constant
-// (which uses a deliberately slower, artistic 4.0 -- about 8x too slow to
-// actually match the car's real speed). Per request, this should visually
-// track real ground speed, matching the scrolling ground texture (which
-// already uses the correct 1.4667 ft/s-per-mph conversion): 1 mph =
-// 1.4667 ft/s, and the side channel runs 22 LEDs/ft (352 LEDs / 16ft), so
-// 1.4667 * 22 = 32.27 LEDs/s per mph. Flagging clearly since this is a
-// deliberate deviation from what's actually in SpeedStripesShow.h.
-const SS_LEDS_PER_MPH_PER_SEC = 1.4667 * (SIZEOF_LARGE_NEO / 16.0);
-const SS_LEDS_PER_FOOT = SIZEOF_LARGE_NEO / 16.0; // 22
+/* ---- SpeedStripesShow: ground-fixed stripes -----------------------------
+   Rewritten per explicit spec (replaces the earlier LED-index/phase-based
+   version entirely). Modeled directly in real-world feet, car-relative:
+   origin at the car's own center, Y increasing toward the FRONT (note:
+   this is the OPPOSITE sign from MEGABAR_POS_FT's internal feet, which
+   uses Y=back+ to mirror canvas-pixel Y directly -- kept local to this
+   show rather than flipping that shared convention everywhere else).
 
-let ssScrollOffset = 0;
-let ssWasStopped = false, ssStoppedAtMs = 0, ssMeanderHue = 0;
-const ssMeanderWalk = makeRandomWalk();
-function resetSpeedStripesState() { ssScrollOffset = 0; ssWasStopped = false; ssMeanderHue = 0; ssMeanderWalk.initialized = false; }
+   Mechanism: the ground has infinite stripes, each SS_STRIPE_WIDTH_FT
+   wide, of a random-but-STABLE color. A stripe's leading edge (larger Y)
+   and trailing edge (leading edge - SS_STRIPE_WIDTH_FT, which is also the
+   next stripe's leading edge) both descend together at the current
+   vehicle speed, ft/s (the ground is fixed; the car driving forward makes
+   the pattern slide backward in the car's own reference frame). The
+   very-first stripe's leading edge starts (on show entry/reset) level
+   with the largest Y among all floodlight ground spots -- i.e. even with
+   the frontmost throw. Any megabar or china fixture just shows whichever
+   stripe's leading edge has most recently descended past its own ground
+   spot's Y (solid, no fade -- by definition this also means the front
+   megabars and the front china cross a given stripe boundary at the same
+   moment, since it's the same leading-edge Y for all of them). Each rope
+   LED does the same by its own (car-relative, sharp-cornered-rectangle)
+   position, but fades between the two adjacent stripes' colors over about
+   SS_ROPE_FADE_LEDS neopixels, converted to real feet using THAT LED's
+   own edge density (front/back vs side channels don't run the same
+   LEDs/ft, so a fixed LED count is a different real distance on each). */
+const SS_STRIPE_WIDTH_FT = 10; // trailing edge Y = leading edge Y - this
+const SS_ROPE_FADE_LEDS = 25; // rope blends across a stripe boundary over about this many LEDs
 
-function ssCurrentSatFraction(nowMs) {
-  const periodMs = 30000;
-  const phase = (nowMs % periodMs) / periodMs;
-  return 0.925 + 0.075 * Math.cos(2 * Math.PI * phase);
+// Car-relative feet, Y+ = front -- see block comment above.
+function canvasToCarFt(pt) { return { x: (pt.x - CAR_X) / PX_PER_FT, y: (CAR_Y - pt.y) / PX_PER_FT }; }
+// Ground-spot center for a fixture: mount position + aim direction *
+// centerDist, same formula drawGroundEllipse()/drawWash() use to place
+// the actual rendered glow (kept as its own small helper here rather than
+// refactoring those, to avoid touching proven rendering code).
+function groundSpotPx(originPx, azimuthDeg, wash) {
+  const a = (azimuthDeg - 90) * Math.PI / 180;
+  const d = wash.centerDist * PX_PER_FT;
+  return { x: originPx.x + Math.cos(a) * d, y: originPx.y + Math.sin(a) * d };
 }
-function ssDesaturate(c, satFraction) {
-  const maxC = Math.max(c.r, c.g, c.b);
-  if (maxC === 0) return c;
-  const minFloor = maxC * (1 - satFraction);
-  return { r: Math.max(c.r, minFloor), g: Math.max(c.g, minFloor), b: Math.max(c.b, minFloor) };
+// Ground-spot centers for every megabar/china, car-relative feet --
+// computed once (fixture positions/washes are static), reused every frame.
+const SS_MEGABAR_SPOT_FT = Array.from({ length: NUM_MEGABAR }, (_, m) => {
+  const wash = m === HEADLIGHT_INDEX ? MEGABAR_FRONT_WASH : MEGABAR_WASH;
+  return canvasToCarFt(groundSpotPx(megabarPos(m), megabarAngle(m), wash));
+});
+const SS_CHINA_SPOT_FT = Array.from({ length: NUM_CHINA }, (_, c) =>
+  canvasToCarFt(groundSpotPx(CHINA_POS[c], CHINA_AIM_DEG[c], CHINA_WASH_FOR[c]))
+);
+// Rope LED positions, car-relative feet -- an idealized SHARP-CORNERED
+// rectangle (not the rope's own rounded-corner cosmetic path from
+// perimeterPoint()/ledPoint()): the LEDs sit in a simple orthogonal
+// arrangement and this show only needs each one's real along-the-car
+// position. Index order/direction matches ledPoint() (front L->R, right
+// side F->B, back R->L, left side B->F). Computed once.
+const SS_CAR_HALF_W_FT = CAR_W_FT / 2, SS_CAR_HALF_H_FT = CAR_H_FT / 2;
+function ssLedCarFt(i) {
+  if (i < RIGHT) { const u = i / SIZEOF_SMALL_NEO; return { x: -SS_CAR_HALF_W_FT + u * CAR_W_FT, y: SS_CAR_HALF_H_FT }; }
+  if (i < BACK) { const u = (i - RIGHT) / SIZEOF_LARGE_NEO; return { x: SS_CAR_HALF_W_FT, y: SS_CAR_HALF_H_FT - u * CAR_H_FT }; }
+  if (i < LEFT) { const u = (i - BACK) / SIZEOF_SMALL_NEO; return { x: SS_CAR_HALF_W_FT - u * CAR_W_FT, y: -SS_CAR_HALF_H_FT }; }
+  const u = (i - LEFT) / SIZEOF_LARGE_NEO; return { x: -SS_CAR_HALF_W_FT, y: -SS_CAR_HALF_H_FT + u * CAR_H_FT };
 }
-// returns {color, stripeIdx} -- stripeIdx identifies which physical stripe
-// this position falls in (a stable hash seed for that stripe's 2-color
-// gradient), used by the caller to detect "is this the frontmost stripe".
-function ssSampleWave(pos, satFraction, meanderOffset) {
-  let wrapped = pos % SS_PERIOD;
-  if (wrapped < 0) wrapped += SS_PERIOD;
-  const phase01 = wrapped / SS_PERIOD;
-  // contrast-boosted sine envelope -- fuzzy (not hard-cut) edges, dark at
-  // the period boundary, full bright at the mid-point of the lit half
-  let centered = Math.sin(phase01 * 2 * Math.PI - Math.PI / 2) * 128 * 2;
-  centered = Math.max(-128, Math.min(127, centered));
-  const brightness = centered + 128;
-  const stripeIdx = Math.floor((pos - wrapped) / SS_PERIOD);
-  let h = Math.imul(stripeIdx | 0, 2654435761) >>> 0;
+const SS_LED_Y_FT = Array.from({ length: NUM_NEO }, (_, i) => ssLedCarFt(i).y);
+const SS_LED_DENSITY = Array.from({ length: NUM_NEO }, (_, i) => // LEDs/ft on that LED's own edge
+  (i < RIGHT || (i >= BACK && i < LEFT)) ? (SIZEOF_SMALL_NEO / CAR_W_FT) : (SIZEOF_LARGE_NEO / CAR_H_FT)
+);
+
+let ssRefEdgeY = 0; // current Y of the k=0 stripe's leading edge
+function resetSpeedStripesState() {
+  ssRefEdgeY = Math.max(...SS_MEGABAR_SPOT_FT.map(p => p.y), ...SS_CHINA_SPOT_FT.map(p => p.y));
+}
+// Deterministic pseudo-random color per stripe index (stable forever for a
+// given k, so a physical stripe keeps its color as it scrolls) -- same
+// imul/xorshift hash technique this show's earlier version used. Negative
+// k works fine (Math.imul/|0 both handle signed 32-bit input).
+function ssStripeColor(k) {
+  let h = Math.imul(k | 0, 2654435761) >>> 0;
   h = (h ^ (h >>> 15)) >>> 0;
-  const leadHue = ((h & 0xFF) + Math.round(meanderOffset)) % 256;
-  const trailHue = (((h >>> 8) & 0xFF) + Math.round(meanderOffset)) % 256;
-  const leadClr = ssDesaturate(hsv(leadHue, 255, 255), satFraction);
-  const trailClr = ssDesaturate(hsv(trailHue, 255, 255), satFraction);
-  const result = blend(trailClr, leadClr, Math.round(phase01 * 255));
-  const bf = brightness / 255;
-  return { color: { r: result.r * bf, g: result.g * bf, b: result.b * bf }, stripeIdx };
+  return hsv(h & 0xFF, 255, 255);
 }
-function ssLocalOffsetForFracBackFromFront(frac) { return (SIZEOF_LARGE_NEO - 1) * (1 - frac); }
+function ssStripeIndexAt(y) { return Math.floor((ssRefEdgeY - y) / SS_STRIPE_WIDTH_FT); }
+// fadeFt: 0 (or omitted) for a hard-edged solid stripe color (megabar/
+// china); >0 to linearly cross-fade between the two adjacent stripes'
+// colors over that many total feet, centered on whichever boundary is
+// nearest (rope).
+function ssColorAt(y, fadeFt) {
+  const contPos = (ssRefEdgeY - y) / SS_STRIPE_WIDTH_FT;
+  const k = Math.floor(contPos);
+  if (!fadeFt) return ssStripeColor(k);
+  const frac = contPos - k;
+  const distToBoundaryFt = Math.min(frac, 1 - frac) * SS_STRIPE_WIDTH_FT;
+  const halfFade = fadeFt / 2;
+  if (distToBoundaryFt >= halfFade) return ssStripeColor(k);
+  if (frac < 0.5) { // near the leading edge -- blending in from the previous stripe
+    const f = 0.5 + 0.5 * (distToBoundaryFt / halfFade);
+    return blend(ssStripeColor(k - 1), ssStripeColor(k), Math.round(f * 255));
+  }
+  // near the trailing edge -- blending out toward the next stripe back
+  const f = 0.5 * (1 - distToBoundaryFt / halfFade);
+  return blend(ssStripeColor(k), ssStripeColor(k + 1), Math.round(f * 255));
+}
 
 function showSpeedStripes(nowMs, dtMs) {
   const dtSec = Math.max(0, Math.min(0.2, dtMs / 1000));
-  const satFraction = ssCurrentSatFraction(nowMs);
-  const speedMph = Ctl.speedMph;
-  const stopped = speedMph <= 0;
-
-  let meanderOffset = 0;
-  if (stopped) {
-    if (!ssWasStopped) { ssWasStopped = true; ssStoppedAtMs = nowMs; }
-    if (nowMs - ssStoppedAtMs >= 2000) { // start meandering a couple seconds after stopping, so it's not boring but also not instant
-      const MAX_MEANDER_RATE = 255 / 20;
-      const meanderRate = randomWalkValue(ssMeanderWalk, nowMs, 0, MAX_MEANDER_RATE, MAX_MEANDER_RATE * 0.1);
-      ssMeanderHue = (ssMeanderHue + meanderRate * dtSec) % 256;
-    }
-    meanderOffset = ssMeanderHue;
-    // ssScrollOffset deliberately not advanced -- pattern holds exactly where it was
-  } else {
-    ssWasStopped = false;
-    ssMeanderHue = 0;
-    ssScrollOffset += speedMph * SS_LEDS_PER_MPH_PER_SEC * dtSec;
-    while (ssScrollOffset >= SS_PERIOD) ssScrollOffset -= SS_PERIOD;
-  }
-
-  // brightness policy per request: 75% ceiling by default, except the
-  // single stripe currently crossing the front edge follows bass hit level
-  // instead whenever that's brighter than 75%.
-  const bassHitFrac = AudioBoard.getHitPct(BAND_LOW) / 100;
-  const frontStripeIdx = ssSampleWave((SIZEOF_LARGE_NEO - 1) + ssScrollOffset, satFraction, meanderOffset).stripeIdx;
-  function stripeMult(stripeIdx) { return stripeIdx === frontStripeIdx ? Math.max(0.75, bassHitFrac) : 0.75; }
-  function sampleScaled(pos) {
-    const s = ssSampleWave(pos, satFraction, meanderOffset);
-    const m = stripeMult(s.stripeIdx);
-    return { r: s.color.r * m, g: s.color.g * m, b: s.color.b * m };
-  }
+  ssRefEdgeY -= Ctl.speedMph * 1.4667 * dtSec; // 1.4667 ft/s per mph, same conversion the ground texture scroll uses
 
   clearRope(); clearMegabars(); clearChinas();
-  function renderSide(backCornerIdx, frontCornerIdx) {
-    const direction = frontCornerIdx > backCornerIdx ? 1 : -1;
-    for (let localOffset = 0; localOffset < SIZEOF_LARGE_NEO; localOffset++) {
-      const idx = backCornerIdx + direction * localOffset;
-      ropeLeds[idx] = sampleScaled(localOffset + ssScrollOffset);
+  for (let m = 0; m < NUM_MEGABAR; m++) {
+    megabarLeds[m] = ssStripeColor(ssStripeIndexAt(SS_MEGABAR_SPOT_FT[m].y));
+  }
+  for (let i = 0; i < NUM_NEO; i++) {
+    ropeLeds[i] = ssColorAt(SS_LED_Y_FT[i], SS_ROPE_FADE_LEDS / SS_LED_DENSITY[i]);
+  }
+  if (Ctl.variation === 1) { // 2nd variation: china lit by the exact same algorithm
+    for (let c = 0; c < NUM_CHINA; c++) {
+      chinaLeds[c] = ssStripeColor(ssStripeIndexAt(SS_CHINA_SPOT_FT[c].y));
     }
   }
-  renderSide(BACK - 1, RIGHT);         // right side: back corner -> front corner
-  renderSide(LEFT, NUM_NEO - 1);       // left side: back corner -> front corner
-
-  // front/back rope edges: they run side-to-side, not front-to-back, so
-  // they don't have individual positions spread along the direction of
-  // travel the way the side channels do -- but the whole edge still sits
-  // at one shared position along the car, and per request should reflect
-  // whatever stripe is currently there, solid across its whole width,
-  // continuous with wherever the adjacent side channel currently ends.
-  const frontEdgeRopeClr = sampleScaled((SIZEOF_LARGE_NEO - 1) + ssScrollOffset);
-  for (let i = 0; i < SIZEOF_SMALL_NEO; i++) ropeLeds[i] = frontEdgeRopeClr;
-  const backEdgeRopeClr = sampleScaled(0 + ssScrollOffset);
-  for (let i = BACK; i < LEFT; i++) ropeLeds[i] = backEdgeRopeClr;
-
-  // front: megabars preview a stripe-width (4ft) out; china pick it up 1ft out
-  const frontLeadClr = sampleScaled((SIZEOF_LARGE_NEO - 1) + SS_STRIPE_LEDS + ssScrollOffset);
-  megabarLeds[11] = frontLeadClr; megabarLeds[0] = frontLeadClr; megabarLeds[1] = frontLeadClr;
-  const frontEdgeClr = sampleScaled((SIZEOF_LARGE_NEO - 1) + SS_LEDS_PER_FOOT * 1 + ssScrollOffset);
-  // rear: mirror, behind the back corner
-  const rearLeadClr = sampleScaled(-SS_STRIPE_LEDS + ssScrollOffset);
-  megabarLeds[5] = rearLeadClr; megabarLeds[6] = rearLeadClr; megabarLeds[7] = rearLeadClr;
-  const rearEdgeClr = sampleScaled(-SS_LEDS_PER_FOOT * 1 + ssScrollOffset);
-
-  // china: per request, only the 2 frontmost + 2 rearmost china are used
-  // for this show (real firmware also lights the 4 side china -- narrowed
-  // here on request), at 50% brightness on top of everything else.
-  chinaLeds[1] = scale255(frontEdgeClr, 128); chinaLeds[2] = scale255(frontEdgeClr, 128);
-  chinaLeds[5] = scale255(rearEdgeClr, 128); chinaLeds[6] = scale255(rearEdgeClr, 128);
-
-  // remaining 3 megabars per side, at the 1/3, 1/2, 2/3 partition
-  const pos13 = ssLocalOffsetForFracBackFromFront(1/3) + ssScrollOffset;
-  const pos12 = ssLocalOffsetForFracBackFromFront(0.5) + ssScrollOffset;
-  const pos23 = ssLocalOffsetForFracBackFromFront(2/3) + ssScrollOffset;
-  const clr13 = sampleScaled(pos13), clr12 = sampleScaled(pos12), clr23 = sampleScaled(pos23);
-  megabarLeds[2] = clr13; megabarLeds[3] = clr12; megabarLeds[4] = clr23;
-  megabarLeds[10] = clr13; megabarLeds[9] = clr12; megabarLeds[8] = clr23;
 }
 
 // Persistent state, integrated incrementally each frame (angle += vel*dt)
@@ -2647,7 +2756,17 @@ function draw() {
   // bottom structure below it is 3D-only, see CORNER_TASSEL above.
   ctx2d.save();
   ctx2d.beginPath();
-  ctx2d.rect(0, 0, canvas.width, canvas.height);
+  // BUGFIX: this rect is drawn in the transformed (portrait-space-units)
+  // coordinate system draw() sets up, so it must use the TRUE portrait
+  // dimensions here -- canvas.width/height reflect the actual pixel
+  // buffer, which in landscape mode is swapped (1374x1160, not
+  // 1160x1374). Using the swapped values under-covered portrait-Y from
+  // 1160-1374 (the deepest back region), so this evenodd clip's outer
+  // boundary didn't reach that far and silently clipped off any
+  // wash/glow back there -- back maps to screen-LEFT after the 90deg
+  // landscape rotation, which is exactly the "chopped off on the left"
+  // symptom reported.
+  ctx2d.rect(0, 0, PORTRAIT_CANVAS_W, PORTRAIT_CANVAS_H);
   ctx2d.rect(x, y, w, h);
   ctx2d.clip('evenodd');
   const tasselR = (CORNER_TASSEL.ballDiameterIn / 12 / 2) * PX_PER_FT * 0.7 * 2.5;
@@ -2679,7 +2798,7 @@ function draw() {
   // wrongly show through the car.
   ctx2d.save();
   ctx2d.beginPath();
-  ctx2d.rect(0, 0, canvas.width, canvas.height);
+  ctx2d.rect(0, 0, PORTRAIT_CANVAS_W, PORTRAIT_CANVAS_H); // true portrait dims, not canvas.width/height -- see the tassel clip above for why
   ctx2d.rect(x, y, w, h);
   ctx2d.clip('evenodd');
   ctx2d.globalCompositeOperation = 'lighter';
@@ -2710,19 +2829,29 @@ function draw() {
   // LARGER than true physical scale (real LEDs would be nearly touching at
   // this zoom level) so the color pattern still reads clearly -- an
   // intentional visualization exaggeration, not a claim about real
-  // fixture size. Every LED is drawn (not skipped).
+  // fixture size. Every LED is drawn (not skipped) -- the strip itself is
+  // a continuous opaque physical object even where a given pixel is off,
+  // so an "off" dot must still be drawn solid (black, full alpha) to block
+  // whatever's behind it. The previous version skipped drawing below a
+  // brightness threshold, which just left the ground texture showing
+  // through every off LED -- confirmed by sampling the actual canvas pixel
+  // there with all ropeLeds forced to {0,0,0}: it came back rgb(143,100,55),
+  // an unmistakable brown, not the black an off LED should read as.
   ctx2d.save();
   for (let i = 0; i < NUM_NEO; i++) {
     const c = ropeLeds[i];
     const brightness = c.r + c.g + c.b;
-    if (brightness < 3) continue;
     const p = ledPoint(i);
     ctx2d.beginPath();
     ctx2d.arc(p.x, p.y, 3.4 * 0.6, 0, Math.PI * 2);
     ctx2d.fillStyle = css(c);
-    ctx2d.globalAlpha = Math.min(1, 0.55 + brightness/765*0.45);
-    ctx2d.shadowColor = css(c);
-    ctx2d.shadowBlur = 1;
+    ctx2d.globalAlpha = 1;
+    if (brightness >= 3) {
+      ctx2d.shadowColor = css(c);
+      ctx2d.shadowBlur = 1;
+    } else {
+      ctx2d.shadowBlur = 0;
+    }
     ctx2d.fill();
   }
   ctx2d.restore();
@@ -2793,7 +2922,7 @@ const VARIATIONS = {
   nightrider: ['Manual hue', 'Auto cycle'],
   flame: ['Waterflames', 'Flames', 'Shifting hues', 'Hue to white'],
   equalizer: ['Chase', 'VU meter'],
-  speedstripes: ['Default'],
+  speedstripes: ['Rope + megabars', 'Rope + megabars + china'],
   lighthouse: ['Default'],
   cfg_meter: [], cfg_decay: [], cfg_predict: [], cfg_foresight: [],
 };
@@ -3005,8 +3134,22 @@ function applyConfigPot() {
       if (Ctl.adjustingPeakThreshold) { AudioBoard.peakThresholdPct = pct; syncSlider('peakThreshSlider', 'peakThreshVal', pct, '%'); }
       else { AudioBoard.noiseFloorPct = pct; syncSlider('noiseFloorSlider', 'noiseFloorVal', pct, '%'); }
     } else if (Ctl.configSubsetting === 1) { const ms = Math.round(pct / 100 * 3000); AudioBoard.hitDecayMs = ms; syncSlider('hitDecaySlider', 'hitDecayVal', ms, 'ms'); }
-    else if (Ctl.configSubsetting === 2) { const ms = Math.round(pct / 100 * (AudioBoard.audioForesightMs || 1000)); AudioBoard.hitPredictionMs = ms; syncSlider('predictMsSlider', 'predictMsVal', ms, 'ms'); }
-    else if (Ctl.configSubsetting === 3) { const ms = Math.round(pct / 100 * 1000); AudioBoard.audioForesightMs = ms; syncSlider('foresightSlider', 'foresightVal', ms, 'ms'); updateOutputDelayTime(); }
+    else if (Ctl.configSubsetting === 2) {
+      // BUGFIX: the `|| 1000` fallback let hit-prediction scale up to
+      // 1000ms even while foresight was 0 -- hit prediction can never
+      // exceed foresight (there's no lead-time window to predict into
+      // otherwise), so with foresight at 0 this must also stay pinned to 0.
+      const ms = Math.round(pct / 100 * AudioBoard.audioForesightMs);
+      AudioBoard.hitPredictionMs = ms;
+      syncSlider('predictMsSlider', 'predictMsVal', ms, 'ms');
+    }
+    else if (Ctl.configSubsetting === 3) {
+      const ms = Math.round(pct / 100 * 1000);
+      AudioBoard.audioForesightMs = ms;
+      syncSlider('foresightSlider', 'foresightVal', ms, 'ms');
+      updateOutputDelayTime();
+      syncPredictMsMax();
+    }
     // subsetting 4 (auto-gain) is a toggle, not pot-driven -- see the encoder handler
   }
   // PowerTest's hue/sat/brightness are encoder-driven (see below), not pot-driven
@@ -3035,14 +3178,15 @@ function applyEncoderStep(dir) {
    imaginary line from its center to the cursor for as long as the button
    stays down (clamped to the 300deg sweep), not a relative drag delta.
    Encoder: has no absolute position (it's a relative rotary input), so
-   instead of a direction line its knob just shows static curved
-   click-here-to-turn arrows (see .knob__arrow-group), flashing white
-   briefly on the side that just fired. Clicking the left half is one
+   instead of a direction line its knob shows light-gray curved
+   click-here-to-turn arrows (see .knob__arrow-group) that turn orange for
+   exactly as long as that side is held down. Clicking the left half is one
    detent left (CCW), the right half one detent right (CW); holding past
    500ms auto-repeats at 10 detents/sec in that same direction until
    release. The "pos N" counter is a session display convenience, not real
    hardware state, so it resets to 0 five seconds after the mouse is
-   released following any adjustment. */
+   released following any adjustment. A concentric center circle is the
+   encoder's own pushbutton -- see the ENC_BTN_* state machine below. */
 const ctrlPanelEl = document.getElementById('ctrlPanel');
 function sizeCtrlPanel() {
   // Corner radius = 1/7 of the panel's own (horizontal) width. A plain CSS
@@ -3071,7 +3215,7 @@ function updatePotKnob() {
 function updateEncoderKnob() {
   // No direction line -- the encoder has no meaningful absolute angle (it's
   // a relative rotary input), so its knob just shows static curved
-  // click-here-to-turn arrows (see .knob__arrow) instead.
+  // click-here-to-turn arrows (see .knob__arrow-group) instead.
   document.getElementById('encVal').textContent = 'pos ' + Ctl.encoderPos;
 }
 updatePotKnob();
@@ -3105,25 +3249,38 @@ window.addEventListener('mousemove', (e) => {
 const ENCODER_RESET_DELAY_MS = 5000;
 const ENCODER_HOLD_DELAY_MS = 500;
 const ENCODER_REPEAT_MS = 100; // 10 detents/sec
-let encoderPressActive = false, encoderHoldDir = 0;
+const ENCODER_CENTER_BTN_R = 9.5; // px, in the knob's own 56x56 SVG/CSS space -- see .knob__center-btn
+let encoderPressActive = false, encoderHoldDir = 0, encoderActiveGroup = null;
 let encoderHoldTimer = null, encoderRepeatTimer = null, encoderResetTimer = null;
-function flashEncoderArrow(dir) {
+// Arrow color now directly mirrors "is this side currently held down" --
+// no fixed-length flash timer, so a long auto-repeating hold keeps that
+// side lit orange the whole time instead of blinking once per detent.
+function setEncoderArrowPressed(dir, pressed) {
   const group = document.querySelector(dir < 0 ? '.knob__arrow-group--left' : '.knob__arrow-group--right');
-  group.classList.add('flash');
-  clearTimeout(group._flashTimer);
-  group._flashTimer = setTimeout(() => group.classList.remove('flash'), 150);
+  group.classList.toggle('pressed', pressed);
+  return group;
 }
 function doEncoderStep(dir) {
   Ctl.encoderPos += dir;
   updateEncoderKnob();
-  flashEncoderArrow(dir);
   if (Ctl.appMode !== 'show') applyEncoderStep(dir);
 }
 document.getElementById('encoderKnob').addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
-  clearTimeout(encoderResetTimer);
   const rect = e.currentTarget.getBoundingClientRect();
-  encoderHoldDir = (e.clientX < rect.left + rect.width / 2) ? -1 : 1;
+  const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+  // Scale the center-button hit radius from the knob's own 56px SVG/CSS
+  // space to however big it's actually rendered on screen right now.
+  const centerBtnPxR = ENCODER_CENTER_BTN_R * (rect.width / 56);
+  const dx = e.clientX - cx, dy = e.clientY - cy;
+  if (Math.sqrt(dx * dx + dy * dy) <= centerBtnPxR) {
+    encoderCenterBtnDown();
+    e.preventDefault();
+    return; // center-button click must NOT also trigger a left/right turn
+  }
+  clearTimeout(encoderResetTimer);
+  encoderHoldDir = (e.clientX < cx) ? -1 : 1;
+  encoderActiveGroup = setEncoderArrowPressed(encoderHoldDir, true);
   encoderPressActive = true;
   doEncoderStep(encoderHoldDir);
   encoderHoldTimer = setTimeout(() => {
@@ -3138,13 +3295,82 @@ window.addEventListener('mouseup', (e) => {
     encoderPressActive = false;
     clearTimeout(encoderHoldTimer);
     clearInterval(encoderRepeatTimer);
+    if (encoderActiveGroup) { encoderActiveGroup.classList.remove('pressed'); encoderActiveGroup = null; }
     clearTimeout(encoderResetTimer);
     encoderResetTimer = setTimeout(() => {
       Ctl.encoderPos = 0;
       updateEncoderKnob();
     }, ENCODER_RESET_DELAY_MS);
   }
+  encoderCenterBtnUp();
 });
+
+/* ----- Encoder center push-button -----
+   Mouse equivalent of the encoder's real integrated pushbutton -- fires
+   the same short/medium/long/x-long/double press events as the separate
+   button row, classified by hold duration. Thresholds and state machine
+   ported 1:1 from the real firmware's own button debouncer
+   (src/LedController.h's PushButtonEdge: mediumPressMillis_=300,
+   longPressMillis_=1500, extraLongPressMillis_=3000,
+   doublePressWindowMillis_=250), not invented for this UI. Extra-long and
+   double both fire LIVE (the instant their condition is met, still held
+   for x-long; immediately on press-down for double); short is deferred
+   until the double-press window closes with no second press; medium/long
+   are decided on release. */
+const ENC_BTN_MEDIUM_MS = 300, ENC_BTN_LONG_MS = 1500, ENC_BTN_XLONG_MS = 3000, ENC_BTN_DOUBLE_WINDOW_MS = 250;
+let encBtnDown = false, encBtnPressStartMs = 0, encBtnLiveActionFired = false;
+let encBtnHoldTimer = null;
+let encBtnAwaitingSecondPress = false, encBtnSecondPressWindowStartMs = 0, encBtnShortPendingTimer = null;
+const ENC_BTN_ACTION_TO_BUTTON = { short: 'btnShort', medium: 'btnMedium', long: 'btnLong', xlong: 'btnXLong', double: 'btnDouble' };
+function fireEncBtnAction(type) {
+  const id = ENC_BTN_ACTION_TO_BUTTON[type];
+  document.getElementById(id).onclick();
+  flashPressButton(id);
+}
+function encoderCenterBtnDown() {
+  const btn = document.getElementById('encoderCenterBtn');
+  btn.classList.add('pressed');
+  const now = performance.now();
+  if (encBtnAwaitingSecondPress && (now - encBtnSecondPressWindowStartMs) <= ENC_BTN_DOUBLE_WINDOW_MS) {
+    encBtnAwaitingSecondPress = false;
+    clearTimeout(encBtnShortPendingTimer);
+    encBtnLiveActionFired = true;
+    fireEncBtnAction('double');
+  } else {
+    encBtnAwaitingSecondPress = false;
+    clearTimeout(encBtnShortPendingTimer);
+    encBtnLiveActionFired = false;
+  }
+  encBtnDown = true;
+  encBtnPressStartMs = now;
+  clearInterval(encBtnHoldTimer);
+  encBtnHoldTimer = setInterval(() => {
+    if (!encBtnLiveActionFired && performance.now() - encBtnPressStartMs >= ENC_BTN_XLONG_MS) {
+      encBtnLiveActionFired = true;
+      fireEncBtnAction('xlong');
+    }
+  }, 20);
+}
+function encoderCenterBtnUp() {
+  if (!encBtnDown) return;
+  encBtnDown = false;
+  document.getElementById('encoderCenterBtn').classList.remove('pressed');
+  clearInterval(encBtnHoldTimer);
+  const heldMs = performance.now() - encBtnPressStartMs;
+  if (!encBtnLiveActionFired) {
+    if (heldMs >= ENC_BTN_XLONG_MS) fireEncBtnAction('xlong'); // safety net, matches classifyOnRelease()
+    else if (heldMs >= ENC_BTN_LONG_MS) fireEncBtnAction('long');
+    else if (heldMs >= ENC_BTN_MEDIUM_MS) fireEncBtnAction('medium');
+    else {
+      encBtnAwaitingSecondPress = true;
+      encBtnSecondPressWindowStartMs = performance.now();
+      encBtnShortPendingTimer = setTimeout(() => {
+        encBtnAwaitingSecondPress = false;
+        fireEncBtnAction('short');
+      }, ENC_BTN_DOUBLE_WINDOW_MS);
+    }
+  }
+}
 
 const showOrder = ['nightrider','lighthouse','flame','equalizer','speedstripes'];
 document.getElementById('btnShort').onclick = () => {
@@ -3188,6 +3414,18 @@ document.getElementById('btnXLong').onclick = () => {
   document.getElementById('globalBrSlider').value = Ctl.globalBr;
   document.getElementById('globalBrVal').textContent = Ctl.globalBr + '%';
 };
+// Each press button lights up orange for 150ms on click -- both a real
+// mouse click here, and (via fireEncBtnAction, above) whenever that same
+// press type is triggered from the encoder's own center push-button.
+function flashPressButton(id) {
+  const btn = document.getElementById(id);
+  btn.classList.add('pressed-flash');
+  clearTimeout(btn._flashTimer);
+  btn._flashTimer = setTimeout(() => btn.classList.remove('pressed-flash'), 150);
+}
+for (const id of Object.values(ENC_BTN_ACTION_TO_BUTTON)) {
+  document.getElementById(id).addEventListener('click', () => flashPressButton(id));
+}
 
 function bindSlider(id, valId, fmt, apply) {
   const el = document.getElementById(id);
@@ -3201,7 +3439,19 @@ function bindSlider(id, valId, fmt, apply) {
 bindSlider('noiseFloorSlider', 'noiseFloorVal', v => v+'%', v => AudioBoard.noiseFloorPct = v);
 bindSlider('peakThreshSlider', 'peakThreshVal', v => v+'%', v => AudioBoard.peakThresholdPct = v);
 bindSlider('hitDecaySlider', 'hitDecayVal', v => v+'ms', v => AudioBoard.hitDecayMs = v);
-bindSlider('foresightSlider', 'foresightVal', v => v+'ms', v => { AudioBoard.audioForesightMs = v; updateOutputDelayTime(); });
+// Hit prediction can never exceed foresight -- there's no lead-time window
+// to predict a hit into otherwise. Setting the slider's own `max` (rather
+// than just clamping the stored value) makes the browser physically refuse
+// to drag the thumb past it, per request, not just silently snap back.
+function syncPredictMsMax() {
+  const slider = document.getElementById('predictMsSlider');
+  slider.max = AudioBoard.audioForesightMs;
+  if (AudioBoard.hitPredictionMs > AudioBoard.audioForesightMs) {
+    AudioBoard.hitPredictionMs = AudioBoard.audioForesightMs;
+  }
+  syncSlider('predictMsSlider', 'predictMsVal', AudioBoard.hitPredictionMs, 'ms');
+}
+bindSlider('foresightSlider', 'foresightVal', v => v+'ms', v => { AudioBoard.audioForesightMs = v; updateOutputDelayTime(); syncPredictMsMax(); });
 function bindToggleButton(id, onToggle) {
   const btn = document.getElementById(id);
   btn.addEventListener('click', () => {
@@ -3218,11 +3468,16 @@ document.getElementById('meterStack').addEventListener('click', () => {
   document.getElementById('toneExpand').classList.toggle('open');
 });
 document.getElementById('tonePatternSelect').addEventListener('change', (e) => { toneSettings.pattern = e.target.value; });
-document.getElementById('toneNoiseSlider').addEventListener('input', (e) => {
-  toneSettings.noise = +e.target.value / 100;
-  document.getElementById('toneNoiseVal').textContent = e.target.value + '%';
+document.getElementById('toneBaseNoiseSlider').addEventListener('input', (e) => {
+  toneSettings.baseNoise = +e.target.value / 100;
+  document.getElementById('toneBaseNoiseVal').textContent = e.target.value + '%';
+});
+document.getElementById('toneAmpNoiseSlider').addEventListener('input', (e) => {
+  toneSettings.ampNoise = +e.target.value / 100;
+  document.getElementById('toneAmpNoiseVal').textContent = e.target.value + '%';
 });
 bindSlider('predictMsSlider', 'predictMsVal', v => v+'ms', v => AudioBoard.hitPredictionMs = v);
+syncPredictMsMax();
 bindSlider('globalBrSlider', 'globalBrVal', v => v+'%', v => Ctl.globalBr = v);
 bindSlider('headlightBrSlider', 'headlightBrVal', v => v+'%', v => Ctl.headlightBr = v);
 bindSlider('chinaBrSlider', 'chinaBrVal', v => v+'%', v => Ctl.chinaBr = v);
