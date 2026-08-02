@@ -11,6 +11,12 @@ name: deploy-visualizer
 # target-folder, so other branches' directories already on gh-pages are left
 # alone. Requires GitHub Pages to be enabled once in repo Settings -> Pages,
 # source: gh-pages branch.
+#
+# Also stamps the deployed HTML with the branch/short-commit-SHA/push-time
+# (replacing the literal placeholder text BUILD_INFO_PLACEHOLDER in the
+# header) before copying it to gh-pages, so anyone looking at a deployed
+# URL can see exactly what's live -- the checked-out source file itself
+# keeps the placeholder unchanged.
 on:
   push:
     branches-ignore:
@@ -27,6 +33,22 @@ jobs:
       - name: Compute sanitized branch dir name
         id: branchdir
         run: echo "name=$(echo '${{ github.ref_name }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
+      - name: Inject build info (branch/commit/push time) into visualizer
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          PUSH_TIME="$(date -u +'%Y-%m-%d %H:%M UTC')"
+          python3 - "$BRANCH_NAME" "$SHORT_SHA" "$PUSH_TIME" <<'EOF'
+          import sys
+          branch, sha, ts = sys.argv[1], sys.argv[2], sys.argv[3]
+          p = 'CarpetLightCode/tools/visualizer/carpet-visualizer.html'
+          s = open(p, encoding='utf-8').read()
+          info = f'{branch} @ {sha} - {ts}'
+          s = s.replace('BUILD_INFO_PLACEHOLDER', info)
+          open(p, 'w', encoding='utf-8').write(s)
+          EOF
       - name: Deploy branch subfolder to Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
