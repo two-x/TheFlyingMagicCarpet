@@ -2,9 +2,15 @@ name: deploy-visualizer
 
 # Publishes tools/visualizer/carpet-visualizer.html to GitHub Pages under a
 # per-branch subfolder on every push, so
-# https://two-x.github.io/TheFlyingMagicCarpet/<branch>/carpet-visualizer.html
-# always reflects that branch's latest pushed commit. Requires GitHub Pages
-# to be enabled once in repo Settings -> Pages, source: gh-pages branch.
+# https://two-x.github.io/TheFlyingMagicCarpet/<sanitized-branch>/carpet-visualizer.html
+# always reflects that branch's latest pushed commit. Branch names containing
+# "/" (e.g. feature/foo) can't be used as a single gh-pages path segment
+# as-is -- they're flattened to "-" (feature/foo -> feature-foo) so every
+# branch gets its own flat top-level directory instead of a nested one.
+# github-pages-deploy-action's clean step only touches files inside its own
+# target-folder, so other branches' directories already on gh-pages are left
+# alone. Requires GitHub Pages to be enabled once in repo Settings -> Pages,
+# source: gh-pages branch.
 on:
   push:
     branches-ignore:
@@ -18,9 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Compute sanitized branch dir name
+        id: branchdir
+        run: echo "name=$(echo '${{ github.ref_name }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
       - name: Deploy branch subfolder to Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           branch: gh-pages
           folder: CarpetLightCode/tools/visualizer
-          target-folder: ${{ github.ref_name }}
+          target-folder: ${{ steps.branchdir.outputs.name }}

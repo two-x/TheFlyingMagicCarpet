@@ -7,16 +7,58 @@ All directions below (front/back/left/right) are relative to the carpet's own fo
 
 ## Browser visualizer/simulator — `tools/visualizer/carpet-visualizer.html`
 
+A self-contained, single-file HTML/JS/Canvas simulator of the light shows, for previewing and tuning behavior without needing the physical car. It's a **parallel JS reimplementation** of the show logic in `src/*.h` (`AudioBoard.h`'s math, `NightriderShow`/`FlameShow`/`EqualizerShow`/`SpeedStripesShow`/`LighthouseShow`, the config-mode navigation, etc.) — not the actual firmware, so it can drift out of sync with real code changes over time; anywhere it's a known, deliberate deviation from real firmware behavior, that's flagged in a comment right above the relevant code. It reads real audio (microphone, a shared system/tab audio stream, an audio file, or a synthetic test tone), simulates the pot/encoder/button controls and config-mode navigation, and renders a schematic top-down view of the car with all fixtures (rope, megabars, china) responding as they should on the real hardware.
+
+### Access it live — one URL per branch, always current
+
+Every push to any branch auto-deploys that branch's `carpet-visualizer.html` via GitHub Actions (`.github/workflows/deploy-visualizer.yml`) to GitHub Pages, at:
+
+```text
+https://two-x.github.io/TheFlyingMagicCarpet/<your-branch>/carpet-visualizer.html
+```
+
+`<your-branch>` is your branch name with any `/` flattened to `-` (e.g. `feature/foo` → `feature-foo`). Push, wait for the "deploy-visualizer" check to go green in the Actions tab (usually well under a minute), then load or reload that URL — it's always exactly your branch's latest pushed commit, no build step or manual publish needed. Share that link with anyone (it's a public URL) to let them see or drive your in-progress work live.
+
+### Run it locally instead
+
+No build step, no server, no dependencies — it's one HTML file. From a terminal (e.g. VSCode's integrated terminal, `` Ctrl+` ``):
+
+```sh
+open tools/visualizer/carpet-visualizer.html
+```
+
+(macOS `open`; on Windows/Linux, use your file manager or `start tools\visualizer\carpet-visualizer.html` / `xdg-open`.) Dragging the file from VSCode's editor tab straight into a browser window usually **fails** — VSCode hands the browser an internal reference the browser's sandbox won't accept. Either use the command above, or drag from Finder/Explorer (not the editor tab), or right-click the file in VSCode's Explorer sidebar → Copy Path → paste into the browser's address bar.
+
+### Features
+
+- **Light shows**: Nightrider, Lighthouse, FlameSparkle, Equalizer, SpeedStripes — matching the real firmware's shows, each with their own variations where the real show has them.
+- **Config-mode screens**: Noise/Peak meter, Hit decay meter, Hit prediction, Foresight adjust — the same audio-tuning screens as the real controller's config mode, navigable the same way (see Controls below).
+- **Audio-reactive**, from any of 4 sources: **Mic**, **System** (a shared browser tab or, on Windows, whole-screen audio — plays whatever's already on your speakers straight through, no OS loopback tool needed), **File** (any local audio file), or **Tone** (a built-in synthetic generator with several genre patterns — simple, EDM, trap, boom-bap/hip-hop, lo-fi — for testing without needing real music).
+- **Landscape/portrait viewport** toggle (top-left dropdown) — landscape (default) rotates the car 90° so its front points right, better suited to a wide PC monitor; portrait matches the car's true top-down aspect.
+- Scrollable/pinchable **zoom** (20–100ft simulated viewer distance), capped so you can't zoom out past the point the rendered ground already covers the whole view.
+- A **Quick Adjust** panel — direct, always-live overrides (brightness levels, hit decay/foresight/prediction, blacklight, fixture-dot coloring) that sit alongside, not instead of, the config-mode path to the same values.
+- A live 4-band (bass/mid/treble/full) audio level meter, doubling as the tone generator's expand/collapse control.
+
+### Controls
+
+The control panel at the top of the sidebar mimics the real hardware's pot, rotary encoder, and 5 button-press lengths:
+
+- **Pot knob**: click and hold, then move the mouse — the knob tracks the angle from its center to the cursor for as long as the button's down (0% = 150° counterclockwise of straight up, 50% = straight up, 100% = 150° clockwise).
+- **Encoder knob**: click its left half for one detent left (counterclockwise), right half for one detent right — the curved arrows show which side does which, and flash on the side that just fired. Holding past 500ms auto-repeats at 10 detents/sec in that direction. The `pos N` readout is a session convenience, not real hardware state, so it resets to 0 five seconds after you release the mouse.
+- **Short / Med / Long / X-long / Dbl**: the 5 button-press lengths the real controller distinguishes. In normal show mode: Short cycles to the next show; Medium/Long/Dbl/X-long are enter-config, exit/cancel, blacklight-toggle-or-commit, and lights-on/off respectively. Inside config mode, Short cycles the subsetting, Medium cycles the config screen (Brightness → Audio → PowerTest), and the Pot/Encoder drive whichever value the status bar shows.
+
+Everything else (show/variation dropdowns, speed, brightness sliders, audio source buttons, etc.) is a direct, labeled, always-live control — no separate documentation needed beyond hovering the `?` tooltips scattered through the panel.
+
+### Mic / System audio permissions
+
 **If the Mic or System audio source doesn't work** (silently stays at 0, or the browser complains about permissions), the OS is blocking the browser from capturing audio:
 
 - **macOS**: System Settings → Privacy & Security → Microphone → enable your browser (Chrome/Safari/etc). For "System" (tab/system audio capture), macOS additionally requires System Settings → Privacy & Security → Screen & System Audio Recording → enable the browser (Chrome's tab-audio-sharing picker uses this permission even though it's not capturing video). After granting either permission, fully quit and reopen the browser — a mid-session grant doesn't take effect until relaunch.
 - **Windows**: Settings → Privacy & security → Microphone → turn on "Let apps access your microphone" and enable it for your browser. For "System" audio, use the browser's "Share tab audio" / "Share system audio" checkbox in the screen-share picker dialog when prompted (no separate OS-level toggle is normally required on Windows, but if it's greyed out, check Settings → Privacy & security → "Let desktop apps access your microphone" as well, since some browsers route system-audio capture through the same pipeline).
 
-A self-contained, single-file HTML/JS/Canvas simulator of the light shows, for previewing behavior without needing the physical car — open `tools/visualizer/carpet-visualizer.html` directly in a browser (double-click it, or `open tools/visualizer/carpet-visualizer.html` on macOS). No build step, no server, no dependencies.
+### Also available as a Claude Artifact
 
-It's a **parallel JS reimplementation** of the show logic in `src/*.h` (`AudioBoard.h`'s math, `NightriderShow`/`FlameShow`/`EqualizerShow`/`SpeedStripesShow`/`LighthouseShow`, the config-mode navigation, etc.) — not the actual firmware, so it can drift out of sync with real code changes over time. It reads real audio (microphone, a shared system/tab audio stream, an audio file, or a synthetic test tone), simulates the pot/encoder/button controls and config-mode navigation, and renders a schematic top-down view of the car with all fixtures (rope, megabars, china) responding as they should on the real hardware.
-
-Also published as a shareable Claude Artifact for viewing without cloning the repo — ask Claude for the current link, since the artifact URL isn't tracked in git.
+Separately from the GitHub Pages URLs above, this file also gets published as a shareable Claude Artifact when worked on through Claude — ask Claude for the current link, since that URL isn't tracked in git.
 
 ## Perimeter rope lights — `ropeLeds[NUM_NEO_LEDS_ACTUAL]`, 1016 LEDs total
 
