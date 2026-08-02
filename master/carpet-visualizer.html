@@ -1,0 +1,3182 @@
+<title>Flying Magic Carpet — Light Console</title>
+<style>
+:root {
+  --bg: #0d0c10;
+  --panel: #17151b;
+  --panel-2: #1e1b23;
+  --line: #322d38;
+  --line-soft: #241f29;
+  --text: #e9e4de;
+  --text-dim: #a89e93;
+  --text-faint: #6b6470;
+  --amber: #f2a341;
+  --amber-dim: #7a5722;
+  --red: #ff5a5a;
+  --green: #6bdc8f;
+  --blue: #5aa9ff;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Roboto Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100vh;
+}
+
+/* ---------- header ---------- */
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+header h1 {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin: 0;
+  color: var(--amber);
+}
+header .sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+}
+
+/* ---------- layout ---------- */
+/* Consolidated to one narrow control column so the stage gets almost all
+   the width -- needed once the flood ground-coloration model (which
+   reaches well past the car) is in view, per request. Borders/margins
+   trimmed throughout for the same reason ("I hate borders and margins"). */
+.deck {
+  display: grid;
+  grid-template-columns: minmax(480px, 1fr) 230px;
+  gap: 8px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .deck { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: var(--panel);
+  border-radius: 4px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.panel > h2 {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0;
+  padding-bottom: 2px;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.group + .group {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 4px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.row label {
+  font-size: 10px;
+  color: var(--text-dim);
+  flex: 1;
+}
+.row .val {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+  min-width: 3.2em;
+  text-align: right;
+}
+
+/* hover tooltip (1s delay), replaces the old always-visible hint paragraph
+   under Audio Source to save vertical space */
+.tt { position: relative; display: inline-flex; align-items: center; }
+.tt-trigger {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  width: 15px; height: 15px;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: help;
+}
+.tt-bubble {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 240px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--text-dim);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  transition-delay: 1s;
+  z-index: 10;
+}
+.tt:hover .tt-bubble { opacity: 1; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--amber);
+  cursor: pointer;
+  border: 2px solid #0d0c10;
+  box-shadow: 0 0 6px rgba(242, 163, 65, 0.6);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--amber);
+  cursor: pointer;
+  border: 2px solid #0d0c10;
+}
+
+select, button, input[type="text"], input[type="file"]::file-selector-button {
+  font-family: var(--sans);
+  font-size: 12px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+select:focus-visible, button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+button {
+  transition: background 0.12s, border-color 0.12s;
+}
+button:hover { border-color: var(--amber-dim); }
+button.active {
+  background: var(--amber);
+  color: #1a1206;
+  border-color: var(--amber);
+  font-weight: 600;
+}
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btnrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.btnrow button { flex: 1 1 auto; }
+
+/* Pot/Encoder control panel: a very-rounded rect (corner radius = 1/7 of
+   its own width, set from JS in sizeCtrlPanel() since a plain CSS percent
+   border-radius scales independently per-axis and would go elliptical
+   whenever the box isn't square) holding two knurled knobs (encoder left,
+   pot right) with the 5 button-press buttons in one row underneath. */
+.ctrl-panel {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  padding: 10px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ctrl-panel__knobs {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+.knob-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.knob-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+}
+.knob-label .val {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+.knob {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 28%, #524c5c, #211e27 68%),
+    repeating-conic-gradient(from 0deg, rgba(255,255,255,0.06) 0deg 4deg, rgba(0,0,0,0.18) 4deg 8deg);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.55), inset 0 1px 2px rgba(255,255,255,0.1), inset 0 -2px 4px rgba(0,0,0,0.4);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+.knob__indicator {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  width: 2px;
+  height: 44%;
+  background: #fff;
+  border-radius: 1px;
+  box-shadow: 0 0 3px rgba(255,255,255,0.7);
+  transform-origin: bottom center;
+  transform: translateX(-50%) rotate(var(--angle, 0deg));
+  pointer-events: none;
+}
+/* Encoder knob has no meaningful absolute angle (relative rotary input),
+   so instead of a direction line it shows curved click-here-to-turn arrows
+   in its left/right halves -- each a 120deg arc (30deg to 150deg from top,
+   mirrored on the left) at 70% of the knob's radius, with an arrowhead at
+   the end. .flash briefly whitens the corresponding side when a detent
+   fires, toggled from JS. */
+.knob__arrows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+.knob__arc {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px rgba(242, 163, 65, 0.7));
+  transition: stroke 0.1s, filter 0.1s;
+}
+.knob__arrowhead {
+  fill: var(--amber);
+  filter: drop-shadow(0 0 3px rgba(242, 163, 65, 0.7));
+  transition: fill 0.1s, filter 0.1s;
+}
+.knob__arrow-group.flash .knob__arc {
+  stroke: #fff;
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.95));
+}
+.knob__arrow-group.flash .knob__arrowhead {
+  fill: #fff;
+  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.95));
+}
+.ctrl-panel__buttons {
+  display: flex;
+  gap: 4px;
+}
+.ctrl-panel__buttons button {
+  flex: 1 1 auto;
+  padding: 6px 2px;
+  font-size: 10px;
+  min-width: 0;
+}
+.ctrl-panel__buttons .tt { flex: 0 0 auto; }
+
+.hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
+/* toggle chip */
+.chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--text-faint);
+}
+.chip.on { border-color: var(--green); color: var(--green); }
+.chip.silent { border-color: var(--text-faint); }
+
+/* ---------- config-mode status bar ---------- */
+.config-status {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.config-status__mode { font-weight: 700; }
+.config-status__detail {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+.config-status--config {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: rgba(242, 163, 65, 0.1);
+}
+.config-status--config .config-status__detail { color: var(--amber); }
+
+/* ---------- stage (center) ---------- */
+.stage-wrap { align-items: stretch; }
+#stageCanvas {
+  width: 100%;
+  aspect-ratio: 1160 / 1374;
+  background: radial-gradient(ellipse at 50% 40%, #14121a 0%, #0a0910 75%);
+  border-radius: 4px;
+  display: block;
+  cursor: grab;
+}
+#stageCanvas:active { cursor: grabbing; }
+/* compact 4-channel meter stack, doubling as the tone-generator's
+   expand/collapse trigger -- now living in the narrow side column (moved
+   from the wide stage panel), so bars are shorter/tighter to match. */
+.meter-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.meter-stack:hover { background: var(--line-soft); }
+.meter-stack .mrow { display: flex; align-items: center; gap: 5px; }
+.meter-stack .lbl {
+  width: 26px;
+  font-family: var(--mono);
+  font-size: 7px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.meter-stack .bar { flex: 1; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.meter-stack .bar > i { display: block; height: 100%; width: 0%; border-radius: 2px; }
+.meter-stack .bass i { background: var(--red); }
+.meter-stack .mid i { background: var(--green); }
+.meter-stack .treble i { background: var(--blue); }
+.meter-stack .full i { background: var(--amber); }
+.meter-stack__hint {
+  font-family: var(--mono);
+  font-size: 7px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: 2px;
+}
+
+.tone-expand {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  margin-top: 2px;
+  background: var(--panel-2);
+  border-radius: 4px;
+}
+.tone-expand.open { display: flex; }
+
+/* ---------- footer ---------- */
+footer {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  text-align: center;
+  padding-top: 6px;
+  letter-spacing: 0.03em;
+}
+
+/* accessible focus for canvas-adjacent controls */
+.dot-btn {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  font-size: 15px;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+</style>
+
+<body>
+
+<header>
+  <h1>&#9679; Flying Magic Carpet</h1>
+  <span class="sub">light console &mdash; audio-reactive preview</span>
+</header>
+
+<div class="deck">
+
+  <!-- ============ STAGE (most of the width) ============ -->
+  <div class="panel stage-wrap">
+    <div class="config-status" id="configStatusBar">
+      <span class="config-status__mode" id="configStatusMode">SHOW MODE</span>
+      <span class="config-status__detail" id="configStatusDetail">Nightrider</span>
+    </div>
+    <canvas id="stageCanvas" width="1160" height="1374"></canvas>
+  </div>
+
+  <!-- ============ single consolidated control column ============ -->
+  <div class="panel">
+    <h2>Audio Source</h2>
+    <div class="group">
+      <div class="btnrow">
+        <button id="btnMic">Mic</button>
+        <button id="btnSystem">System</button>
+        <button id="btnFile">File</button>
+        <button id="btnTone">Tone</button>
+      </div>
+      <input type="file" id="fileInput" accept="audio/*" style="display:none;" />
+      <div class="row">
+        <label id="audioStatus">idle</label>
+        <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">"System" uses the browser's screen/tab-share picker — choose a tab (with "share audio" checked) or, on Windows, your whole screen with audio — plays Spotify/etc. straight through, no OS loopback tool needed. Chrome/Edge only. If Mic errors instead of showing a permission prompt, this page is likely in an embedded preview frame that blocks mic access — open the artifact in its own browser tab and try again.</span></span>
+        <span class="chip" id="silentChip">&mdash;</span>
+      </div>
+      <div class="row"><label>Volume <span style="opacity:.6;">(File/Tone only)</span></label><input type="checkbox" id="muteCheck" checked disabled /><label for="muteCheck" style="flex:none;font-size:9px;">mute</label></div>
+      <input type="range" id="volumeSlider" min="0" max="100" step="1" value="60" disabled />
+      <div class="row"><label>Delay audio to match foresight</label><input type="checkbox" id="delayAudioCheck" disabled /></div>
+    </div>
+
+    <div class="group">
+      <select id="showSelect">
+        <optgroup label="Light shows">
+          <option value="nightrider">Nightrider</option>
+          <option value="lighthouse">Lighthouse</option>
+          <option value="flame">FlameSparkle</option>
+          <option value="equalizer">Equalizer</option>
+          <option value="speedstripes">SpeedStripes</option>
+        </optgroup>
+        <optgroup label="Audio config screens">
+          <option value="cfg_meter">Noise/Peak meter</option>
+          <option value="cfg_decay">Hit decay meter</option>
+          <option value="cfg_predict">Hit prediction</option>
+          <option value="cfg_foresight">Foresight adjust</option>
+        </optgroup>
+      </select>
+      <div class="btnrow" id="variationRow"></div>
+    </div>
+
+    <div class="group">
+      <div class="row"><label>Speed</label><span class="val" id="speedVal">0 mph</span></div>
+      <input type="range" id="speedSlider" min="0" max="25" step="1" value="0" />
+    </div>
+
+    <div class="group">
+      <div class="row"><label>View zoom</label><span class="val" id="zoomVal">50ft</span></div>
+      <div class="row"><label style="font-size:9px;">Scroll/pinch on stage, or , and . keys</label></div>
+    </div>
+
+    <div class="group">
+      <div class="ctrl-panel" id="ctrlPanel">
+        <div class="ctrl-panel__knobs">
+          <div class="knob-wrap">
+            <div class="knob knob--encoder" id="encoderKnob">
+              <svg class="knob__arrows" viewBox="0 0 56 56" width="56" height="56">
+                <g class="knob__arrow-group knob__arrow-group--right">
+                  <path class="knob__arc" d="M37.80,11.03 A19.6,19.6 0 0 1 37.80,44.97" />
+                  <path class="knob__arrowhead" d="M37.80,44.97 L45.61,44.51 L42.11,38.44 Z" />
+                </g>
+                <g class="knob__arrow-group knob__arrow-group--left">
+                  <path class="knob__arc" d="M18.20,11.03 A19.6,19.6 0 0 0 18.20,44.97" />
+                  <path class="knob__arrowhead" d="M18.20,44.97 L10.39,44.51 L13.89,38.44 Z" />
+                </g>
+              </svg>
+            </div>
+            <div class="knob-label">Encoder <span class="val" id="encVal">pos 0</span></div>
+          </div>
+          <div class="knob-wrap">
+            <div class="knob knob--pot" id="potKnob">
+              <div class="knob__indicator"></div>
+            </div>
+            <div class="knob-label">Pot <span class="val" id="potVal">50%</span></div>
+          </div>
+        </div>
+        <div class="ctrl-panel__buttons">
+          <button id="btnShort">Short</button>
+          <button id="btnMedium">Med</button>
+          <button id="btnLong">Long</button>
+          <button id="btnXLong">X-long</button>
+          <button id="btnDouble">Dbl</button>
+          <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Short: next show, or next config subsetting. Medium: next config screen (Brightness→Audio→PowerTest). Long: enter config / cancel out of it. Double: blacklight toggle, or commit &amp; exit config. Extra-long: lights on/off. In config, Pot/Encoder drive whichever subsetting is shown in the status bar. Encoder knob: click its left/right half for one detent left/right. Pot knob: click and drag up/right to increase, down/left to decrease.</span></span>
+        </div>
+      </div>
+    </div>
+
+    <h2>Quick Adjust <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Direct override, always live — a second, independent path to the same values config mode adjusts.</span></span></h2>
+    <div class="group">
+      <div class="row"><label>Noise floor</label><span class="val" id="noiseFloorVal">0%</span></div>
+      <input type="range" id="noiseFloorSlider" min="0" max="100" step="1" value="0" />
+      <div class="row"><label>Peak thresh</label><span class="val" id="peakThreshVal">78%</span></div>
+      <input type="range" id="peakThreshSlider" min="0" max="100" step="1" value="78" />
+      <div class="row"><label>Auto-gain</label><input type="checkbox" id="autoGainCheck" /></div>
+    </div>
+    <div class="group">
+      <div class="row"><label>Hit decay</label><span class="val" id="hitDecayVal">300ms</span></div>
+      <input type="range" id="hitDecaySlider" min="0" max="3000" step="10" value="300" />
+      <div class="row"><label>Foresight</label><span class="val" id="foresightVal">0ms</span></div>
+      <input type="range" id="foresightSlider" min="0" max="1000" step="10" value="0" />
+      <div class="row"><label>Hit predict</label><span class="val" id="predictMsVal">0ms</span></div>
+      <input type="range" id="predictMsSlider" min="0" max="1000" step="10" value="0" />
+      <select id="predictStyleSelect">
+        <option value="0">Off</option>
+        <option value="1" selected>Exponential rise</option>
+        <option value="2">Machine gun</option>
+        <option value="3">Drum intro</option>
+      </select>
+    </div>
+    <div class="group">
+      <div class="row"><label>Global bright</label><span class="val" id="globalBrVal">100%</span></div>
+      <input type="range" id="globalBrSlider" min="0" max="100" step="1" value="100" />
+      <div class="row"><label>Headlight bright</label><span class="val" id="headlightBrVal">50%</span></div>
+      <input type="range" id="headlightBrSlider" min="50" max="100" step="1" value="50" />
+      <div class="row"><label>China bright</label><span class="val" id="chinaBrVal">100%</span></div>
+      <input type="range" id="chinaBrSlider" min="0" max="100" step="1" value="100" />
+      <div class="row"><label>Blacklight</label><input type="checkbox" id="blacklightCheck" /></div>
+      <div class="row"><label>Show fixture dots</label><input type="checkbox" id="fixtureDotsCheck" /></div>
+    </div>
+    <h2>Audio Levels</h2>
+    <div class="group">
+      <div class="meter-stack" id="meterStack" title="Click to expand tone generator controls">
+        <div class="mrow bass"><span class="lbl">Bass</span><div class="bar"><i id="barBassHit"></i></div></div>
+        <div class="mrow mid"><span class="lbl">Mid</span><div class="bar"><i id="barMidHit"></i></div></div>
+        <div class="mrow treble"><span class="lbl">Treb</span><div class="bar"><i id="barTrebleHit"></i></div></div>
+        <div class="mrow full"><span class="lbl">Full</span><div class="bar"><i id="barFullHit"></i></div></div>
+        <div class="meter-stack__hint">click for tone controls</div>
+      </div>
+      <div class="tone-expand" id="toneExpand">
+        <div class="row"><label style="flex:none;">Tone generator pattern</label></div>
+        <select id="tonePatternSelect">
+          <option value="simple">Simple (kick + broadband)</option>
+          <option value="edm">EDM (four-on-the-floor)</option>
+          <option value="trap">Trap</option>
+          <option value="boombap" selected>Boom-bap / hip-hop</option>
+          <option value="lofi">Lo-fi</option>
+        </select>
+        <div class="row"><label>Noise floor</label><span class="val" id="toneNoiseVal">5%</span></div>
+        <input type="range" id="toneNoiseSlider" min="0" max="100" step="1" value="5" />
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>Schematic top-down. Scroll/pinch or ,/. to zoom (20-100ft). 3D tilt/orbit camera planned as a follow-up.</footer>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   GEOMETRY -- mirrors MagicCarpet.h's constants & rope layout
+   ===================================================================== */
+const SIZEOF_SMALL_NEO = 156;   // front / back edges
+const SIZEOF_LARGE_NEO = 352;   // left / right sides
+const NUM_NEO = SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO * 2; // 1016
+const FRONT = 0;
+const RIGHT = SIZEOF_SMALL_NEO;                              // 156
+const BACK  = SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO;            // 508
+const LEFT  = SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO;        // 664
+const NUM_MEGABAR = 12;
+const NUM_CHINA = 8;
+const HEADLIGHT_INDEX = 0;
+
+// canvas-space rectangle the rope is drawn along -- square corners (the
+// real deck is a plain rectangle, not rounded), 12ft wide x 16ft long.
+// front=top edge, running left-to-right as index increases (matches the
+// corrected rope-direction convention from the codebase's own bugfix).
+const PX_PER_FT = 34;
+const CAR_W_FT = 12, CAR_H_FT = 16; // width (left-right), length (front-back)
+const CAR_W = CAR_W_FT * PX_PER_FT, CAR_H = CAR_H_FT * PX_PER_FT;
+// 1160x1374 -- sized so the canvas's OWN dimensions exactly equal the real
+// render rectangle: the tightest box that contains every flood's ground
+// spot in full (out to where each one's radial gradient actually reaches
+// alpha=0), plus a flat 5% margin on top, per request. Computed once
+// offline (not at runtime, to avoid a circular dependency -- CAR_X/CAR_Y
+// are themselves needed to place the fixtures whose spots this measures)
+// by replicating this file's own fixture-position/wash-geometry math in a
+// throwaway script, tracking a real (asymmetric) X/Y bounding box via each
+// spot's rotated-ellipse extent (see spotRadiiFt() and drawGroundEllipse()
+// below for that same across/along math) rather than a single radial
+// distance. The resulting box wasn't symmetric front-to-back (front/back
+// megabar inset
+// depths differ -- see FRONT_INSET_FT/BACK_INSET_FT), so each axis uses
+// the larger of its two sides, padded 5%, to stay centered on the car:
+//   half-width ~16.25ft, half-height ~19.25ft (the larger, back-side value)
+//   -> (2*16.25*1.05, 2*19.25*1.05) ft * PX_PER_FT = (1160, 1374) px
+// The aspect-ratio CSS on #stageCanvas and ZOOM_MAX_FT (below, in the zoom
+// section) both derive from this same box -- if the fixture geometry ever
+// changes meaningfully, this whole comment block's numbers (and those two
+// other spots) need recomputing together.
+const CAR_X = 1160/2, CAR_Y = 1374/2;
+
+// Side-profile note for the future 3D pass (not renderable in 2D top-down --
+// straight-down orthographic can't show height at all without perspective/
+// shading, so this is data only for now): deck surface averages 2.5ft off
+// the ground, riding a raised sine wave along the car's LENGTH -- confirmed
+// exact form: heightIn(t) = 1.75 * (1 - cos(6*PI*t)), t = 0..1 front-to-back
+// -- 3 full cycles of that raised shape, giving exactly 3 peaks (at t =
+// 1/6, 1/2, 5/6 -- the middle one lands exactly at the halfway point) and 4
+// zero points (t = 0, 1/3, 2/3, 1, including both the front and back
+// edges), ranging 0-3.5in added on top of the 2.5ft average. Constant
+// across the WIDTH at any given front-back position.
+const DECK_HEIGHT_PROFILE = {
+  avgFt: 2.5,
+  peakToPeakIn: 3.5,
+  cycles: 3,
+  heightIn(t) { return (this.peakToPeakIn / 2) * (1 - Math.cos(2 * Math.PI * this.cycles * t)); },
+};
+
+// Fixture mount heights (ground to fixture), for the future 3D pass -- not
+// renderable in 2D top-down, but real numbers now so the wash geometry
+// below can eventually use per-fixture height instead of the deck-height
+// stand-in. Most megabars sit 1.5ft up; the front-facing one (m=0, see
+// MEGABAR_POS_FT below) is a further exception at 1ft; china are all 2ft up.
+const FIXTURE_HEIGHTS_FT = { megabarDefault: 1.5, megabarFront: 1.0, china: 2.0 };
+
+// Perimeter fringe: hangs a fixed 1ft down from the deck surface all the
+// way around, made of thick mop-head strands -- gappy and not fully
+// opaque, so floodlight hitting the back of it scatters erratically and is
+// mostly attenuated rather than blocked outright. Not renderable in true
+// 3D detail here, but drawn as a soft translucent band just outside the
+// rope line as a 2D stand-in (see draw()). Per spec, megabars are all
+// tilted so ~75% of each beam clears the fringe's bottom edge and ~25%
+// clips the back of it; china are aimed to miss the fringe entirely --
+// both are vertical-clearance facts that need real 3D to actually show.
+const FRINGE = { dropFt: 1.0, material: 'mop-head strands', opacity: 0.5, megabarClearFrac: 0.75 };
+
+// Corner tassels: much larger decorative tassels at all 4 corners, bright
+// shiny gold, distinct from the regular perimeter fringe. Ball top ~5in
+// diameter, centered directly ON the true corner point, sitting a couple
+// inches ABOVE the deck surface -- below the ball a tie point constricts
+// to ~4in, then ~2ft of length flowing outward in a ~15-degree-from-
+// vertical cone to a flat bottom about 6in off the ground. Vertical
+// structure is 3D-only; 2D shows the ball's footprint position/color only,
+// clipped to outside the deck rectangle so it never overlaps the rope.
+const CORNER_TASSEL = {
+  ballDiameterIn: 5, ballAboveSurfaceIn: 2, tieDiameterIn: 4,
+  coneLengthFt: 2, coneSplayDeg: 15, bottomAboveGroundIn: 6,
+  color: { r: 232, g: 186, b: 66 }, // bright shiny gold
+};
+// The two corner-pair megabars flanking each tassel are intentionally
+// aimed/positioned so they largely avoid lighting the back of that
+// tassel -- another vertical-aim fact only real 3D can actually show;
+// noted here so it isn't lost before that pass.
+CORNER_TASSEL.megabarsAvoidBack = true;
+
+// ---- floodlight wash geometry (megabars + china) ----
+// Throw distance and footprint size come from simple cone-on-a-plane
+// geometry: a fixture at height H, tilted "tiltDeg" down from horizontal
+// with a "spreadDeg"-wide cone, has its beam CENTER hit the ground at
+// H/tan(tilt); the near/far edges of the cone hit at H/tan(tilt +-
+// spread/2). At a shallow tilt (megabars: 15 degrees) that far-edge
+// distance grows huge (the beam is nearly grazing the ground) --
+// WASH_MAX_RENDER_FT clamps that for legible rendering rather than
+// drawing a football field.
+const FLOOD_SPREAD_DEG = 25 + 8;  // full cone spread, per spec, both fixture types (widened +8deg per request)
+const MEGABAR_TILT_DEG = 11;      // down from horizontal -- shallow, reaches far (~8ft out for the default mount height, per correction -- was 15deg/~5.6ft)
+const CHINA_TILT_DEG = 40;        // down from horizontal -- steep, lands close & bright
+// China are noticeably more powerful than megabars, not the "puny little
+// lights" the old flat 1.5x read as -- see CHINA_AIR_MULT/CHINA_GROUND_MULT
+// below (defined after CHINA_WASH, since ground brightness is now spec'd
+// relative to megabar's own value).
+const WASH_MAX_RENDER_FT = 26;
+
+function washFootprint(tiltDeg, heightFt) {
+  const tilt = tiltDeg * Math.PI / 180;
+  const halfSpread = (FLOOD_SPREAD_DEG / 2) * Math.PI / 180;
+  const centerDist = heightFt / Math.tan(tilt);
+  const nearDist = heightFt / Math.tan(tilt + halfSpread);
+  const farAngle = Math.max(0.5 * Math.PI / 180, tilt - halfSpread); // guard tan(0)
+  const farDist = Math.min(heightFt / Math.tan(farAngle), WASH_MAX_RENDER_FT);
+  const width = 2 * centerDist * Math.tan(halfSpread);
+  return { nearDist, farDist, centerDist, length: farDist - nearDist, width };
+}
+// real per-fixture mount heights now (FIXTURE_HEIGHTS_FT above), not the
+// deck-height stand-in this used before
+const MEGABAR_WASH = washFootprint(MEGABAR_TILT_DEG, FIXTURE_HEIGHTS_FT.megabarDefault);
+// Was its own washFootprint() at the front megabar's real, lower mount
+// height (FIXTURE_HEIGHTS_FT.megabarFront, 1.0ft vs the default 1.5ft),
+// which put its spot noticeably closer than every other megabar's --
+// per request, all megabars' spots land the same distance out, so this is
+// now just an alias for the standard wash (same centerDist/width as the
+// rest). The 1.0ft real height fact itself isn't lost (still in
+// FIXTURE_HEIGHTS_FT), just no longer driving this fixture's own cone/spot
+// geometry -- flag if you'd rather it stay at the true lower height with a
+// shallower tilt instead, to reach the same distance a different way.
+const MEGABAR_FRONT_WASH = MEGABAR_WASH;
+const CHINA_WASH = washFootprint(CHINA_TILT_DEG, FIXTURE_HEIGHTS_FT.china);
+// china's ground spot reads as a tighter, more concentrated "powerful" hot
+// core than a megabar's broader wash (see drawGroundEllipse's peakScale) --
+// roughly a 2.5ft-diameter brightest zone, closer to the ground and at a
+// steeper angle than a megabar.
+CHINA_WASH.peakScale = 0.55;
+
+// China aim azimuths -- exact per-fixture formulas (0deg = straight
+// forward, increasing clockwise, matching megabarAngle's own convention).
+// rotationFactor ("X") is the angular sweep outward from the relevant edge
+// of the carpet that each light is aimed -- a real physical adjustment on
+// all 8 lamps at once, kept as one named constant rather than baked into
+// each angle, so retuning it later is a one-line change.
+const rotationFactor = 15; // "X", degrees
+const CHINA_AIM_DEG = [
+  180 - rotationFactor, // 0
+  270 + rotationFactor, // 1
+  90 - rotationFactor,  // 2
+  180 + rotationFactor, // 3
+  360 - rotationFactor, // 4
+  90 + rotationFactor,  // 5
+  270 - rotationFactor, // 6
+  0 + rotationFactor,   // 7
+];
+
+// China brightness: 25% brighter than before in the air, and its ground
+// spot 25% brighter than a megabar's (not than china's own old ground
+// value) -- two different baselines, per request.
+const CHINA_AIR_MULT_BASE = 1.25;
+const CHINA_AIR_MULT = CHINA_AIR_MULT_BASE * 1.25 * 2; // 1.5625, then doubled again per follow-up request -- 3.125
+// Fixed at 2.0 -- originally "2x megabar's ground brightMult," but kept as
+// a plain literal (not re-derived from MEGABAR_MULT below) so dimming the
+// megabars doesn't change china's brightness too, per request that china
+// stay exactly as they are.
+const CHINA_GROUND_MULT = 2.0;
+// Megabar cones/spots dimmed 15%, china left untouched -- applied at both
+// drawWash and drawGroundEllipse call sites for megabars (see draw()).
+const MEGABAR_MULT = 0.85 * 0.70; // 15% dim, then a further 30% off that per follow-up -- 0.595 total
+
+// Which lamp covers which side of the carpet:
+//   #1, #2 = front side
+//   #3, #4 = left side
+//   #5, #6 = back side
+//   #7, #0 = right side
+// CAR_W_FT (12ft, the carpet's width) and CAR_H_FT (16ft, its length) are
+// already declared above (see the geometry section) -- reused here rather
+// than re-declared, so there's only ever one source of truth for them.
+//
+// Per-lamp ground-spot center distance, via tiltFactor ("T"): T is the
+// percent of the relevant carpet EDGE DIMENSION out from the lamp that its
+// spot lands, front side and back side lamps (1/2/5/6) measured against
+// the carpet's WIDTH (they sit along a width-spanning edge), left side and
+// right side lamps (3/4/0/7) measured against its LENGTH (they sit along a
+// length-spanning edge). Calculated once, not re-derived per frame.
+const tiltFactor = 0.17; // "T", 17%
+const CHINA_CENTER_DIST_WIDTH_FT = tiltFactor * CAR_W_FT;  // front/back lamps (1,2,5,6) -- 3ft
+const CHINA_CENTER_DIST_LENGTH_FT = tiltFactor * CAR_H_FT; // left/right lamps (0,3,4,7) -- 4ft
+// BUGFIX: overriding centerDist above without also recalculating width left
+// width stuck at the value from CHINA_WASH's ORIGINAL (much closer, ~2.38ft)
+// centerDist -- so the spot was never actually "as wide as the beam cone at
+// that [new, farther] location" like requested, it was still sized for the
+// old location. width = 2*centerDist*tan(halfSpread) is the same formula
+// washFootprint() itself uses, just re-run at the new centerDist.
+const CHINA_HALF_SPREAD_RAD = (FLOOD_SPREAD_DEG / 2) * Math.PI / 180;
+function chinaWashAt(centerDist) {
+  return Object.assign({}, CHINA_WASH, {
+    centerDist,
+    width: 2 * centerDist * Math.tan(CHINA_HALF_SPREAD_RAD),
+    // Wide, bright core (peakScale well above 1.0 pushes the gradient's
+    // half-brightness stop out toward the edge, not concentrated near the
+    // center), with the overall spot 30% larger (radiusMult) and the
+    // fadeout itself softened further (peakScale lowered a bit from the
+    // previous 1.6, so more of the now-bigger radius is spent gradually
+    // fading rather than staying at full brightness right up to the edge).
+    peakScale: 1.3,
+    radiusMult: 1.3,
+  });
+}
+const CHINA_WASH_WIDTH_BASED = chinaWashAt(CHINA_CENTER_DIST_WIDTH_FT);
+const CHINA_WASH_LENGTH_BASED = chinaWashAt(CHINA_CENTER_DIST_LENGTH_FT);
+// indexed 0..7, matching the side key above
+const CHINA_WASH_FOR = [
+  CHINA_WASH_LENGTH_BASED, // 0 right side
+  CHINA_WASH_WIDTH_BASED,  // 1 front side
+  CHINA_WASH_WIDTH_BASED,  // 2 front side
+  CHINA_WASH_LENGTH_BASED, // 3 left side
+  CHINA_WASH_LENGTH_BASED, // 4 left side
+  CHINA_WASH_WIDTH_BASED,  // 5 back side
+  CHINA_WASH_WIDTH_BASED,  // 6 back side
+  CHINA_WASH_LENGTH_BASED, // 7 right side
+];
+
+// Rope: mounted right at the perimeter edge, aimed 45 degrees up and out
+// (away from the car). Not rendered as a wash in 2D -- per spec they stay
+// individually visible from directly above ("from the top of the car you
+// can see all of them"), which the existing perimeter dash rendering
+// already does. Captured here for the 3D pass, which can give each rope
+// segment this same up-and-out aim.
+const ROPE_AIM_TILT_UP_DEG = 45;
+
+// The rope can't actually bend at a sharp 90-degree angle -- real unavoidable
+// bend radius at each corner is about 3in. The car deck itself stays a
+// true sharp-cornered rectangle; only the rope's own path gets rounded.
+const ROPE_CORNER_RADIUS_FT = 3 / 12;
+const ROPE_CORNER_RADIUS_PX = ROPE_CORNER_RADIUS_FT * PX_PER_FT;
+
+function perimeterPoint(t) {
+  // t: 0..1 fraction around the perimeter, starting at front-left corner,
+  // going clockwise: front edge -> right side -> back edge -> left side.
+  // Each corner is a small quarter-circle arc instead of a sharp point.
+  const w = CAR_W, h = CAR_H;
+  const r = ROPE_CORNER_RADIUS_PX;
+  const arcLen = (Math.PI / 2) * r;
+  const perim = 2 * (w + h) - 8 * r + 4 * arcLen;
+  let d = (t % 1) * perim;
+  const cx = CAR_X, cy = CAR_Y;
+  const left = cx - w / 2, right = cx + w / 2, top = cy - h / 2, bottom = cy + h / 2;
+
+  function arc(centerX, centerY, startDeg, u) {
+    const a = (startDeg + 90 * (u / arcLen)) * Math.PI / 180;
+    return { x: centerX + r * Math.cos(a), y: centerY + r * Math.sin(a) };
+  }
+
+  const segs = [
+    { len: w - 2 * r, fn: (u) => ({ x: left + r + u, y: top }) },             // front edge, L->R
+    { len: arcLen,    fn: (u) => arc(right - r, top + r, 270, u) },            // front-right corner
+    { len: h - 2 * r, fn: (u) => ({ x: right, y: top + r + u }) },            // right side, F->B
+    { len: arcLen,    fn: (u) => arc(right - r, bottom - r, 0, u) },           // back-right corner
+    { len: w - 2 * r, fn: (u) => ({ x: right - r - u, y: bottom }) },         // back edge, R->L
+    { len: arcLen,    fn: (u) => arc(left + r, bottom - r, 90, u) },           // back-left corner
+    { len: h - 2 * r, fn: (u) => ({ x: left, y: bottom - r - u }) },          // left side, B->F
+    { len: arcLen,    fn: (u) => arc(left + r, top + r, 180, u) },             // front-left corner
+  ];
+  for (const s of segs) {
+    if (d <= s.len) return s.fn(d);
+    d -= s.len;
+  }
+  return segs[0].fn(0);
+}
+// precompute front/side fractional ranges along the perimeter
+const PERIM = 2 * (CAR_W + CAR_H);
+const FRONT_FRAC = CAR_W / PERIM;
+const SIDE_FRAC = CAR_H / PERIM;
+
+// map a rope LED index (0..NUM_NEO) to a canvas point, distributing each
+// logical edge (front/right/back/left) evenly across its own on-screen
+// path segment regardless of how many LEDs that edge actually has.
+function ledPoint(i) {
+  let t;
+  if (i < RIGHT) { // front, 0..155
+    const u = i / SIZEOF_SMALL_NEO;
+    t = u * FRONT_FRAC;
+  } else if (i < BACK) { // right side, 156..507
+    const u = (i - RIGHT) / SIZEOF_LARGE_NEO;
+    t = FRONT_FRAC + u * SIDE_FRAC;
+  } else if (i < LEFT) { // back, 508..663
+    const u = (i - BACK) / SIZEOF_SMALL_NEO;
+    t = FRONT_FRAC + SIDE_FRAC + u * FRONT_FRAC;
+  } else { // left side, 664..1015
+    const u = (i - LEFT) / SIZEOF_LARGE_NEO;
+    t = 2*FRONT_FRAC + SIDE_FRAC + u * SIDE_FRAC;
+  }
+  return perimeterPoint(t % 1);
+}
+
+// megabar m's angle in the rope's own angleDeg() convention
+// (front=0,right=90,back=180,left=270) -- real wiring sweeps the OPPOSITE
+// way (front->left->back->right), replicated here via the same
+// wrap360(-m*30) the firmware uses.
+function wrap360(d) { d = d % 360; return d < 0 ? d + 360 : d; }
+function megabarAngle(m) { return wrap360(-m * 30); }
+
+// Floodlights mount underneath the car deck, not out at its true edge.
+// edgeInsetPoint(deg, insetFt) fires a ray from center at the given angle,
+// finds where it exits the true CAR_W x CAR_H rectangle (correctly
+// handling the non-square aspect ratio and corners), then pulls that point
+// straight in from whichever edge it hit (vertical or horizontal) by a
+// fixed foot distance -- not a radius, and not a percentage of distance
+// from center, since these fixtures sit a roughly constant distance
+// in from THEIR edge regardless of which edge that is.
+function edgeInsetPoint(deg, insetFt) {
+  const a = (deg - 90) * Math.PI / 180; // 0deg = top (front), clockwise
+  const dx = Math.cos(a), dy = Math.sin(a);
+  const halfW = CAR_W / 2, halfH = CAR_H / 2;
+  const t = 1 / Math.max(Math.abs(dx) / halfW, Math.abs(dy) / halfH);
+  let x = dx * t, y = dy * t; // point on the true rectangle boundary
+  const insetPx = insetFt * PX_PER_FT;
+  if (Math.abs(dx) / halfW > Math.abs(dy) / halfH) {
+    x -= Math.sign(x) * insetPx; // hit a side (vertical) edge -- inset horizontally
+  } else {
+    y -= Math.sign(y) * insetPx; // hit front/back (horizontal) edge -- inset vertically
+  }
+  return { x: CAR_X + x, y: CAR_Y + y };
+}
+// Megabar positions are hand-tuned rather than a uniform formula -- too
+// many one-off exceptions to keep it generic. Latest correction round:
+//   - m3/m9 (left-/right-center): confirmed correct, the reference points
+//     everything else below is measured against.
+//   - m2/m4 and m8/m10 (the side-edge member of each corner pair -- next
+//     to m3 on the left, m9 on the right): X now matches m3/m9's X exactly
+//     (previously these were incorrectly pulled further inward). Y (their
+//     distance along the side edge) unchanged.
+//   - m1/m11 ("front facing," the front-edge member of each front corner
+//     pair): pulled inward to nearly (not quite) match m2/m10's X -- a
+//     small deliberate gap (FRONT_NEAR_GAP_FT) rather than landing exactly
+//     on top of them. Y unchanged. m5/m7 (the back-edge equivalents)
+//     mirrored the same way for consistency, since only the front pair was
+//     called out explicitly this round -- flag if the back should've been
+//     left alone.
+//   - m0 (front-facing, center): 1ft inset from the front edge, drawn as
+//     TWO small lamps (see draw()) -- physically two fixtures, not one.
+//   - m6 (back-facing, center): 1ft inset from the back edge, its own
+//     exception, otherwise untouched.
+// Values in feet from car center (X=right+, Y=back+), converted to px.
+const STD_INSET_FT = 2.5;
+const FRONT_INSET_FT = 2.5, BACK_INSET_FT = 1.5; // front pair (m0) 1.5ft, back-facing (m6) 0.5ft further back toward center
+const FRONT_NEAR_GAP_FT = 0.3; // m1/m11/m5/m7's small deliberate gap beyond m2/m10/m4/m8's X
+const CORNER_PULL_FT = 1.0; // m1/m5/m7/m11 (the true corner-nearest four) pulled toward center, X only
+{
+  const halfW = CAR_W_FT / 2, halfH = CAR_H_FT / 2; // 6, 8
+  const sideEdgeY = halfW / Math.tan(60 * Math.PI / 180); // m2/m4/m8/m10's side-edge |Y|, ~3.46ft, unchanged
+  const centerX = halfW - STD_INSET_FT;                    // m3/m9's X, and now m2/m4/m8/m10's X too -- 3.5ft
+  const nearX = centerX + FRONT_NEAR_GAP_FT - CORNER_PULL_FT; // m1/m5/m7/m11's X, pulled 1ft toward center
+  var MEGABAR_POS_FT = [
+    { x: 0, y: -(halfH - FRONT_INSET_FT) },                 // 0 front-facing (drawn as 2 lamps)
+    { x: -nearX, y: -(halfH - STD_INSET_FT) },               // 1 front edge, left of center
+    { x: -centerX, y: -sideEdgeY },                          // 2 left edge, front end
+    { x: -centerX, y: 0 },                                   // 3 left-center (reference, unchanged)
+    { x: -centerX, y: sideEdgeY },                           // 4 left edge, back end
+    { x: -nearX, y: (halfH - STD_INSET_FT) },                // 5 back edge, left of center
+    { x: 0, y: (halfH - BACK_INSET_FT) },                    // 6 back-facing
+    { x: nearX, y: (halfH - STD_INSET_FT) },                 // 7 back edge, right of center
+    { x: centerX, y: sideEdgeY },                            // 8 right edge, back end
+    { x: centerX, y: 0 },                                    // 9 right-center (reference, unchanged)
+    { x: centerX, y: -sideEdgeY },                           // 10 right edge, front end
+    { x: nearX, y: -(halfH - STD_INSET_FT) },                // 11 front edge, right of center
+  ].map(p => ({ x: CAR_X + p.x * PX_PER_FT, y: CAR_Y + p.y * PX_PER_FT }));
+}
+function megabarPos(m) { return MEGABAR_POS_FT[m]; }
+
+// china: 2 fixtures per corner, aimed 90 degrees apart (one out to the
+// side, one out the front/back). "Basically touching" but the spec calls
+// for a specific 30% overlap between the two 9px-radius dots, so
+// center-to-center distance = 2*9*(1-0.30) = 12.6px; since the two are
+// nudged along perpendicular (not opposing) directions, each nudge
+// magnitude is that distance / sqrt(2) to land on the right separation.
+// [0,1]=front-right, [2,3]=front-left, [4,5]=back-left, [6,7]=back-right,
+// matching PowerTest's left/right china grouping.
+const CHINA_CORNER_INSET_FT = 1.25; // 15in, pulled back from the corner a bit more so the pair reads as two dots
+const CHINA_DOT_RADIUS_PX = 9;
+const CHINA_OVERLAP_FRAC = 0.30;
+const CHINA_PAIR_DIST_PX = 2 * CHINA_DOT_RADIUS_PX * (1 - CHINA_OVERLAP_FRAC);
+const CHINA_NUDGE_PX = CHINA_PAIR_DIST_PX / Math.SQRT2;
+{
+  const ci = CHINA_CORNER_INSET_FT * PX_PER_FT;
+  const halfW = CAR_W / 2, halfH = CAR_H / 2;
+  var CHINA_CORNERS = {
+    frontRight: { x: CAR_X + halfW - ci, y: CAR_Y - halfH + ci },
+    frontLeft:  { x: CAR_X - halfW + ci, y: CAR_Y - halfH + ci },
+    backLeft:   { x: CAR_X - halfW + ci, y: CAR_Y + halfH - ci },
+    backRight:  { x: CAR_X + halfW - ci, y: CAR_Y + halfH - ci },
+  };
+}
+// Index-to-aim convention corrected to match the real firmware exactly
+// (README.md / SpeedStripesShow.h are explicit about this: china [1,2] aim
+// along the front edge, [5,6] along the back edge, [0,3,4,7] along a side
+// edge) -- indices 0/1 and 6/7 were previously swapped here relative to
+// that, a real bug (not just a rendering choice): any code writing "this
+// is the front-aimed one" to index 1 was landing on the fixture actually
+// drawn/aimed as the side one, and vice versa.
+const CHINA_POS = [
+  { x: CHINA_CORNERS.frontRight.x + CHINA_NUDGE_PX, y: CHINA_CORNERS.frontRight.y }, // 0 front-right, aimed side
+  { x: CHINA_CORNERS.frontRight.x, y: CHINA_CORNERS.frontRight.y - CHINA_NUDGE_PX }, // 1 front-right, aimed front
+  { x: CHINA_CORNERS.frontLeft.x, y: CHINA_CORNERS.frontLeft.y - CHINA_NUDGE_PX },   // 2 front-left, aimed front
+  { x: CHINA_CORNERS.frontLeft.x - CHINA_NUDGE_PX, y: CHINA_CORNERS.frontLeft.y },   // 3 front-left, aimed side
+  { x: CHINA_CORNERS.backLeft.x - CHINA_NUDGE_PX, y: CHINA_CORNERS.backLeft.y },     // 4 back-left, aimed side
+  { x: CHINA_CORNERS.backLeft.x, y: CHINA_CORNERS.backLeft.y + CHINA_NUDGE_PX },     // 5 back-left, aimed back
+  { x: CHINA_CORNERS.backRight.x, y: CHINA_CORNERS.backRight.y + CHINA_NUDGE_PX },   // 6 back-right, aimed back
+  { x: CHINA_CORNERS.backRight.x + CHINA_NUDGE_PX, y: CHINA_CORNERS.backRight.y },   // 7 back-right, aimed side
+];
+
+// Ground spot radii in FEET (across-beam, along-beam), shared by
+// drawGroundEllipse's rendering and the max-extent calculation below so
+// the two can never drift apart. See drawGroundEllipse for why alongFt is
+// capped independently of raw near/far distance.
+function spotRadiiFt(wash) {
+  const acrossFt = Math.max(wash.width / 2, 3 / PX_PER_FT);
+  const alongFt = Math.min(Math.max(wash.centerDist - wash.nearDist, wash.farDist - wash.centerDist, acrossFt), acrossFt * 2.2);
+  // wash.radiusMult scales the whole spot (both axes, uniformly) after the
+  // shape/cap math above -- used to make china's spot larger without
+  // touching the megabar geometry this same function is also shared with.
+  const mult = wash.radiusMult || 1.0;
+  return { acrossFt: acrossFt * mult, alongFt: alongFt * mult };
+}
+
+/* =====================================================================
+   AUDIO BOARD -- JS port of AudioBoard.h's bin mapping + raw/normal/hit/
+   decay/foresight/prediction pipeline. Faithful to the C++ math; the
+   input bins come from a Web Audio FFT approximating the MSGEQ7's 7
+   datasheet center frequencies instead of a real chip.
+   ===================================================================== */
+const BAND_LOW = 0, BAND_MID = 1, BAND_HIGH = 2, BAND_FULL = 3;
+const PREDICT_OFF = 0, PREDICT_EXP = 1, PREDICT_GUN = 2, PREDICT_DRUM = 3;
+
+const AudioBoard = {
+  bins: [0,0,0,0,0,0,0], // 7 raw 0-255 values, MSGEQ7-analog order
+  rawLevel: [0,0,0,0],
+  normalLevel: [0,0,0,0],
+  hitLevel: [0,0,0,0],
+  hitWasAbove: [false,false,false,false],
+
+  noiseFloorPct: 0,
+  peakThresholdPct: 78,
+  autoGainEnabled: false,
+  hitDecayMs: 300,
+  audioForesightMs: 0,
+  hitPredictionMs: 0,
+  hitPredictionStyle: PREDICT_EXP,
+
+  rollingPeak: 0,
+  peakBuf: [], // {v, t}
+  emaAverage: 0,
+  silent: true,
+  silenceSinceMs: 0,
+  lastPollT: 0,
+
+  historySize: 60,
+  history: { low: [], mid: [], high: [], full: [], t: [] },
+
+  peakThresholdRaw() { return Math.round(this.peakThresholdPct / 100 * 255); },
+  noiseFloorRaw() { return Math.round(this.noiseFloorPct / 100 * 255); },
+
+  rawFullSpectrum() { return Math.max(...this.bins); },
+
+  into3Bins() {
+    const b = this.bins;
+    const bass = b[0];
+    const mid = Math.max(b[2], b[3]);
+    const treble = Math.max(b[5], b[6]);
+    return [bass, mid, treble];
+  },
+
+  pushHistory(low, mid, high, full, t) {
+    const h = this.history;
+    h.low.push(low); h.mid.push(mid); h.high.push(high); h.full.push(full); h.t.push(t);
+    if (h.t.length > this.historySize) {
+      h.low.shift(); h.mid.shift(); h.high.shift(); h.full.shift(); h.t.shift();
+    }
+  },
+  lookupDelayed(bandArr, nowMs) {
+    const target = Math.max(0, nowMs - this.audioForesightMs);
+    const h = this.history;
+    if (h.t.length === 0) return 0;
+    let bestIdx = 0, bestDelta = Infinity;
+    for (let i = 0; i < h.t.length; i++) {
+      const d = Math.abs(h.t[i] - target);
+      if (d < bestDelta) { bestDelta = d; bestIdx = i; }
+    }
+    return bandArr[bestIdx];
+  },
+  currentDisplayMs(nowMs) { return Math.max(0, nowMs - this.audioForesightMs); },
+
+  convertRawToNormal(raw) {
+    if (this.silent) return 0;
+    let gained = raw;
+    if (this.autoGainEnabled && this.rollingPeak > 0) {
+      gained *= 255 / this.rollingPeak;
+      if (gained > 255) gained = 255;
+    }
+    return Math.round(gained);
+  },
+
+  updateAutoGainAndSilence(nowMs, rawFull) {
+    this.peakBuf.push({ v: rawFull, t: nowMs });
+    while (this.peakBuf.length && nowMs - this.peakBuf[0].t > 4000) this.peakBuf.shift();
+    this.rollingPeak = this.peakBuf.reduce((m, s) => Math.max(m, s.v), 0);
+
+    const dt = this.lastPollT ? nowMs - this.lastPollT : 30;
+    this.lastPollT = nowMs;
+    const alpha = dt / (4000 + dt);
+    this.emaAverage += alpha * (rawFull - this.emaAverage);
+
+    const nf = this.noiseFloorRaw();
+    if (this.emaAverage >= nf) {
+      this.silenceSinceMs = nowMs;
+      this.silent = false;
+    } else if (nowMs - this.silenceSinceMs >= 4000) {
+      this.silent = true;
+    }
+  },
+
+  shapePulse(timeInto, width, peak) {
+    const ramp = width / 3;
+    if (timeInto < ramp) return peak * timeInto / ramp;
+    if (timeInto < width - ramp) return peak;
+    const remain = width - timeInto;
+    return peak * remain / ramp;
+  },
+  computePulseTrain(timeUntilHit) {
+    const LEAD = 300, MIN_SP = 30, MAX_SP = 90, WIDTH = 30;
+    if (timeUntilHit > LEAD) return 0;
+    let onset = LEAD;
+    while (true) {
+      if (timeUntilHit <= onset && (onset - timeUntilHit) < WIDTH) {
+        return this.shapePulse(onset - timeUntilHit, WIDTH, this.peakThresholdRaw());
+      }
+      if (onset === 0) return 0;
+      const spacing = MIN_SP + (onset * (MAX_SP - MIN_SP)) / LEAD;
+      onset = onset >= spacing ? onset - spacing : 0;
+    }
+  },
+  computeTwoPulse(timeUntilHit) {
+    const MAXLEAD = 400, SPACING = 45, WIDTH = 35;
+    let lead = Math.min(this.audioForesightMs, MAXLEAD);
+    if (timeUntilHit > lead) return 0;
+    const a = lead, b = Math.max(0, lead - SPACING);
+    const peak = this.peakThresholdRaw();
+    if (timeUntilHit <= a && (a - timeUntilHit) < WIDTH) return this.shapePulse(a - timeUntilHit, WIDTH, peak);
+    if (timeUntilHit <= b && (b - timeUntilHit) < WIDTH) return this.shapePulse(b - timeUntilHit, WIDTH, peak);
+    return 0;
+  },
+  computePredictedRamp(bandKey, displayMs) {
+    if (this.hitPredictionStyle === PREDICT_OFF || this.hitPredictionMs < 1) return 0;
+    const hp = this.hitPredictionMs;
+    const windowEnd = displayMs + hp;
+    const peakRaw = this.peakThresholdRaw();
+    const h = this.history;
+    const arr = h[bandKey];
+    let bestT = 0, found = false;
+    for (let i = 0; i < h.t.length; i++) {
+      const ts = h.t[i];
+      if (ts <= displayMs || ts > windowEnd) continue;
+      if (this.convertRawToNormal(arr[i]) < peakRaw) continue;
+      if (!found || ts < bestT) { bestT = ts; found = true; }
+    }
+    if (!found) return 0;
+    const timeUntilHit = bestT - displayMs;
+    if (this.hitPredictionStyle === PREDICT_GUN) return this.computePulseTrain(timeUntilHit);
+    if (this.hitPredictionStyle === PREDICT_DRUM) return this.computeTwoPulse(timeUntilHit);
+    const ramp = 255 * (hp - timeUntilHit) / timeUntilHit;
+    return Math.min(255, ramp);
+  },
+
+  updateHitTracking(nowMs, dtMs) {
+    const peakRaw = this.peakThresholdRaw();
+    const decayAmount = (255 / Math.max(1, this.hitDecayMs)) * dtMs;
+    const displayMs = this.currentDisplayMs(nowMs);
+    const keys = ['low','mid','high','full'];
+    for (let b = 0; b < 4; b++) {
+      const isAbove = this.normalLevel[b] >= peakRaw;
+      if (isAbove) this.hitLevel[b] = this.normalLevel[b];
+      else { this.hitLevel[b] = Math.max(0, this.hitLevel[b] - decayAmount); }
+      const predicted = this.computePredictedRamp(keys[b], displayMs);
+      if (predicted > this.hitLevel[b]) this.hitLevel[b] = predicted;
+      this.hitWasAbove[b] = isAbove;
+    }
+  },
+
+  // main per-frame update -- call with fresh 7 MSGEQ7-analog bins (0-255)
+  poll(nowMs, freshBins) {
+    this.bins = freshBins;
+    const [bass, mid, treble] = this.into3Bins();
+    const full = this.rawFullSpectrum();
+    this.updateAutoGainAndSilence(nowMs, full);
+    this.pushHistory(bass, mid, treble, full, nowMs);
+
+    const dLow = this.lookupDelayed(this.history.low, nowMs);
+    const dMid = this.lookupDelayed(this.history.mid, nowMs);
+    const dHigh = this.lookupDelayed(this.history.high, nowMs);
+    const dFull = this.lookupDelayed(this.history.full, nowMs);
+    this.rawLevel = [dLow, dMid, dHigh, dFull];
+    this.normalLevel = this.rawLevel.map(v => this.convertRawToNormal(v));
+
+    const dt = this._lastHitT ? nowMs - this._lastHitT : 30;
+    this._lastHitT = nowMs;
+    this.updateHitTracking(nowMs, dt);
+  },
+
+  pct(v) { return Math.round(v / 255 * 100); },
+  getHitPct(band) { return this.pct(this.hitLevel[band]); },
+  getNormalPct(band) { return this.pct(this.normalLevel[band]); },
+  getRawPct(band) { return this.pct(this.rawLevel[band]); },
+};
+
+/* =====================================================================
+   AUDIO INPUT -- mic / file / synthetic test tone, bucketed into 7
+   pseudo-MSGEQ7 bins via a Web Audio FFT sampled near each datasheet
+   center frequency (63/160/400/1000/2500/6250/16000 Hz).
+   ===================================================================== */
+const BIN_FREQS = [63, 160, 400, 1000, 2500, 6250, 16000];
+let audioCtx = null, analyser = null, sourceNode = null, fftData = null;
+let toneTimer = null;
+let outputDelay = null, outputGain = null; // speaker-bound chain for app-generated sources only (File/Tone)
+let currentSourceIsAppGenerated = false; // File/Tone = true (we own the signal, can delay/volume/mute it); Mic/System = false
+
+// Speaker output chain: source -> outputDelay -> outputGain -> destination.
+// Kept SEPARATE from the source->analyser connection (analyser always sees
+// the real-time, undelayed signal) so delaying what you HEAR never affects
+// the show's actual timing/reactivity -- only this preview path.
+function ensureOutputChain(ctx) {
+  if (!outputDelay) {
+    outputDelay = ctx.createDelay(1.0); // max 1000ms, matches foresight's own 0-1000ms range
+    outputGain = ctx.createGain();
+    outputDelay.connect(outputGain);
+    outputGain.connect(ctx.destination);
+    applyVolumeUI();
+  }
+  return outputDelay;
+}
+function applyVolumeUI() {
+  if (!outputGain) return;
+  const vol = +document.getElementById('volumeSlider').value / 100;
+  const muted = document.getElementById('muteCheck').checked;
+  outputGain.gain.value = muted ? 0 : vol;
+}
+function updateOutputDelayTime() {
+  if (!outputDelay) return;
+  const delayOn = currentSourceIsAppGenerated && document.getElementById('delayAudioCheck').checked;
+  outputDelay.delayTime.value = delayOn ? Math.min(1.0, AudioBoard.audioForesightMs / 1000) : 0;
+}
+// External sources (Mic/System) can't be delayed or volume-controlled --
+// we don't own that audio, it's already reaching the speakers on its own.
+// Per request, foresight itself is also forced to 0 and disabled for them,
+// since a nonzero foresight with no way to delay-match what you're hearing
+// would just desync the lights from the sound with no way to compensate.
+function setAppGeneratedSource(isAppGenerated) {
+  currentSourceIsAppGenerated = isAppGenerated;
+  document.getElementById('delayAudioCheck').disabled = !isAppGenerated;
+  document.getElementById('volumeSlider').disabled = !isAppGenerated;
+  document.getElementById('muteCheck').disabled = !isAppGenerated;
+  document.getElementById('foresightSlider').disabled = !isAppGenerated;
+  if (!isAppGenerated) {
+    document.getElementById('delayAudioCheck').checked = false;
+    AudioBoard.audioForesightMs = 0;
+    document.getElementById('foresightSlider').value = 0;
+    document.getElementById('foresightVal').textContent = '0ms';
+  }
+  updateOutputDelayTime();
+}
+
+function ensureCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function teardownSource() {
+  if (toneTimer) { clearInterval(toneTimer); toneTimer = null; }
+  if (sourceNode) { try { sourceNode.disconnect(); } catch (e) {} sourceNode = null; }
+}
+async function useMic() {
+  teardownSource();
+  const ctx = ensureCtx();
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  sourceNode = ctx.createMediaStreamSource(stream);
+  setupAnalyser(ctx);
+  setAppGeneratedSource(false);
+  document.getElementById('audioStatus').textContent = 'microphone live';
+}
+async function useSystemAudio() {
+  teardownSource();
+  const ctx = ensureCtx();
+  // Chrome/Edge only: getDisplayMedia's audio track is the only way a page
+  // can capture real OS/tab output (Spotify, etc.) without an OS-level
+  // loopback device. video:true is required by most browsers to even show
+  // the "share audio" checkbox -- the video track is discarded immediately.
+  const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  const audioTracks = stream.getAudioTracks();
+  stream.getVideoTracks().forEach(t => t.stop());
+  if (audioTracks.length === 0) {
+    audioTracks.forEach(t => t.stop());
+    throw new Error('no audio was shared -- reopen and check "share tab audio" / "share system audio" in the picker');
+  }
+  sourceNode = ctx.createMediaStreamSource(stream);
+  setupAnalyser(ctx);
+  setAppGeneratedSource(false);
+  document.getElementById('audioStatus').textContent = 'system/tab audio live';
+}
+function useFile(file) {
+  teardownSource();
+  const ctx = ensureCtx();
+  const reader = new FileReader();
+  reader.onload = () => {
+    ctx.decodeAudioData(reader.result, (buf) => {
+      const src = ctx.createBufferSource();
+      src.buffer = buf; src.loop = true;
+      setupAnalyser(ctx);
+      src.connect(analyser);
+      src.connect(ensureOutputChain(ctx));
+      src.start();
+      sourceNode = src;
+      setAppGeneratedSource(true);
+      document.getElementById('audioStatus').textContent = 'file: ' + file.name;
+    });
+  };
+  reader.readAsArrayBuffer(file);
+}
+// Tone generator patterns -- 16-step sequencers (kick/snare/hihat hit
+// flags) covering a spread of common EDM/trap/hip-hop/lo-fi feels, plus the
+// original simple kick+broadband as a baseline. Each channel is a cheap
+// synthesized burst (sine for kick, noise for snare/hihat) rather than
+// sampled audio -- enough spectral variety to exercise the light shows'
+// band-reactivity, not meant to sound musical.
+const TONE_PATTERNS = {
+  // "simple" previously had an empty hihat pattern -- meaning the default
+  // selection produced literally zero treble content, the actual bug
+  // behind "no treble activity" (this was true even before the pattern
+  // rework, since the old broadband noise floor alone was too quiet to
+  // register). Now has a steady basic hihat like every other pattern.
+  simple: { bpm: 100, kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [], hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
+  edm:    { bpm: 128, kick: [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
+  trap:   { bpm: 140, kick: [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [1,1,0,1,1,1,0,1,1,1,0,1,1,1,0,1] },
+  boombap:{ bpm: 90,  kick: [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0] },
+  lofi:   { bpm: 78,  kick: [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0] },
+};
+let toneSettings = { pattern: 'boombap', noise: 0.045 }; // noise at 30% of the previous 0.15 default
+
+function useTone() {
+  teardownSource();
+  const ctx = ensureCtx();
+  setupAnalyser(ctx);
+  const bufSize = 2048;
+  const noiseNode = ctx.createScriptProcessor ? ctx.createScriptProcessor(bufSize, 1, 1) : null;
+  let kickEnv = 0, kickPhase = 0, snareEnv = 0, snarePhase = 0, hihatEnv = 0, hihatPhase = 0, hihatPhase2 = 0;
+  let sampleInStep = 0, stepIdx = -1;
+  if (noiseNode) {
+    noiseNode.onaudioprocess = (e) => {
+      const out = e.outputBuffer.getChannelData(0);
+      const pat = TONE_PATTERNS[toneSettings.pattern] || TONE_PATTERNS.simple;
+      const samplesPerStep = Math.round((60 / pat.bpm / 4) * ctx.sampleRate); // 16th notes
+      const kickHz = 55, kickDecay = 0.9994, snareDecay = 0.9985, hihatDecay = 0.9978;
+      // BAND_MID/BAND_HIGH sample specific narrow FFT bins (max of bins at
+      // ~400/1000Hz for mid, ~6250/16000Hz for treble -- see BIN_FREQS).
+      // Pure broadband noise spreads its energy across the WHOLE spectrum,
+      // so only a thin sliver of it ever lands in any one sampled bin --
+      // meanwhile the kick's plain sine tone dumps ALL its energy into
+      // exactly one bin and blows past the hit threshold every time. This
+      // was the actual, more general bug behind "none of them have any
+      // mid or treble" (not missing pattern data -- every pattern already
+      // has snare/hihat steps). Fix: snare/hihat are now noise MIXED WITH
+      // concentrated tone components at the frequencies those bands
+      // actually sample, so they register just as reliably as the kick.
+      const snareHz = 900, hihatHz1 = 6250, hihatHz2 = 15500;
+      for (let i = 0; i < out.length; i++) {
+        if (++sampleInStep >= samplesPerStep) {
+          sampleInStep = 0;
+          stepIdx = (stepIdx + 1) % 16;
+          if (pat.kick[stepIdx]) { kickEnv = 1; kickPhase = 0; }
+          if (pat.snare[stepIdx]) { snareEnv = 1; snarePhase = 0; }
+          if (pat.hihat[stepIdx]) { hihatEnv = 1; hihatPhase = 0; hihatPhase2 = 0; }
+        }
+        kickEnv *= kickDecay; snareEnv *= snareDecay; hihatEnv *= hihatDecay;
+        kickPhase += kickHz / ctx.sampleRate;
+        snarePhase += snareHz / ctx.sampleRate;
+        hihatPhase += hihatHz1 / ctx.sampleRate;
+        hihatPhase2 += hihatHz2 / ctx.sampleRate;
+        const kickSample = Math.sin(kickPhase * 2 * Math.PI) * kickEnv;
+        const snareSample = ((Math.random() * 2 - 1) * 0.5 + Math.sin(snarePhase * 2 * Math.PI) * 0.5) * snareEnv;
+        const hihatSample = ((Math.random() * 2 - 1) * 0.35 + Math.sin(hihatPhase * 2 * Math.PI) * 0.4 + Math.sin(hihatPhase2 * 2 * Math.PI) * 0.25) * hihatEnv;
+        const noiseSample = (Math.random() * 2 - 1) * toneSettings.noise;
+        out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + noiseSample));
+      }
+    };
+    noiseNode.connect(analyser);
+    noiseNode.connect(ensureOutputChain(ctx));
+    sourceNode = noiseNode;
+  }
+  setAppGeneratedSource(true);
+  document.getElementById('audioStatus').textContent = 'synthetic test tone';
+}
+function setupAnalyser(ctx) {
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.2;
+  fftData = new Uint8Array(analyser.frequencyBinCount);
+  if (sourceNode && sourceNode.connect && !(sourceNode instanceof AudioBufferSourceNode)) {
+    try { sourceNode.connect(analyser); } catch (e) {}
+  }
+}
+function readBins() {
+  if (!analyser || !fftData) return [0,0,0,0,0,0,0];
+  analyser.getByteFrequencyData(fftData);
+  const nyquist = audioCtx.sampleRate / 2;
+  const out = [];
+  for (const f of BIN_FREQS) {
+    const idx = Math.min(fftData.length - 1, Math.round(f / nyquist * fftData.length));
+    // average a small window around the target bin for stability
+    let sum = 0, n = 0;
+    for (let k = -2; k <= 2; k++) {
+      const j = idx + k;
+      if (j >= 0 && j < fftData.length) { sum += fftData[j]; n++; }
+    }
+    out.push(n ? Math.round(sum / n) : 0);
+  }
+  return out;
+}
+
+/* =====================================================================
+   RENDERING STATE -- ropeLeds / megabarLeds / chinaLeds as {r,g,b}
+   ===================================================================== */
+const ropeLeds = new Array(NUM_NEO).fill(0).map(() => ({r:0,g:0,b:0}));
+const megabarLeds = new Array(NUM_MEGABAR).fill(0).map(() => ({r:0,g:0,b:0}));
+const chinaLeds = new Array(NUM_CHINA).fill(0).map(() => ({r:0,g:0,b:0}));
+function clearRope() { for (const p of ropeLeds) { p.r=0; p.g=0; p.b=0; } }
+function clearMegabars() { for (const p of megabarLeds) { p.r=0; p.g=0; p.b=0; } }
+function clearChinas() { for (const p of chinaLeds) { p.r=0; p.g=0; p.b=0; } }
+function blend(c1, c2, frac) { // frac 0-255
+  const f = frac / 255;
+  return { r: c1.r + (c2.r - c1.r) * f, g: c1.g + (c2.g - c1.g) * f, b: c1.b + (c2.b - c1.b) * f };
+}
+// Where two independent light "contributions" land on the same fixture
+// (e.g. two Lighthouse beam clusters overlapping), summing their hues
+// together reads as a muddy/washed-out blend. Per request: whichever
+// contributor is brightest wins outright; on an exact tie, one is picked
+// at random rather than mixed. contributors: [{hue, brightness}, ...].
+// Returns {hue, brightness} of the winner, or null if none contributed.
+// Generic port of the RandomWalk helper duplicated across SpeedStripesShow.h/
+// LighthouseShow.h/FlameShow.h: ramps smoothly toward a freshly-randomized
+// target every ~0.8-1.2s rather than jumping.
+function makeRandomWalk() { return { rampStart: 0, rampTarget: 0, tickT0: 0, tickDur: 1000, initialized: false }; }
+function randomWalkValue(w, nowMs, minVal, maxVal, maxStep) {
+  if (!w.initialized) {
+    w.initialized = true;
+    w.tickT0 = nowMs; w.tickDur = 800 + Math.random() * 400;
+    w.rampStart = w.rampTarget = minVal + (maxVal - minVal) * 0.5;
+  }
+  if (nowMs - w.tickT0 >= w.tickDur) {
+    w.rampStart = w.rampTarget;
+    const step = (Math.random() * 2 - 1) * maxStep;
+    w.rampTarget = Math.max(minVal, Math.min(maxVal, w.rampStart + step));
+    w.tickT0 = nowMs; w.tickDur = 800 + Math.random() * 400;
+  }
+  let frac = (nowMs - w.tickT0) / w.tickDur;
+  if (frac > 1) frac = 1;
+  return w.rampStart + (w.rampTarget - w.rampStart) * frac;
+}
+function pickOverlapColor(contributors) {
+  let bestB = -1, ties = [];
+  for (const c of contributors) {
+    if (c.brightness <= 0) continue;
+    if (c.brightness > bestB) { bestB = c.brightness; ties = [c]; }
+    else if (c.brightness === bestB) { ties.push(c); }
+  }
+  if (ties.length === 0) return null;
+  const winner = ties[Math.floor(Math.random() * ties.length)];
+  return { hue: winner.hue, brightness: bestB };
+}
+function hsv(h, s, v) { // h 0-255, s 0-255, v 0-255 -> {r,g,b} 0-255
+  h = (h % 256 + 256) % 256;
+  const hh = h / 256 * 6, sf = s / 255, vf = v / 255;
+  const i = Math.floor(hh), f = hh - i;
+  const p = vf * (1 - sf), q = vf * (1 - sf * f), t = vf * (1 - sf * (1 - f));
+  let r, g, b;
+  switch (i % 6) {
+    case 0: r=vf; g=t; b=p; break;
+    case 1: r=q; g=vf; b=p; break;
+    case 2: r=p; g=vf; b=t; break;
+    case 3: r=p; g=q; b=vf; break;
+    case 4: r=t; g=p; b=vf; break;
+    default: r=vf; g=p; b=q; break;
+  }
+  return { r: r*255, g: g*255, b: b*255 };
+}
+function scale255(c, amt) { const f = amt/255; return {r:c.r*f, g:c.g*f, b:c.b*f}; }
+
+/* =====================================================================
+   INPUT STATE -- pot, encoder, button, brightness/blacklight
+   ===================================================================== */
+const Ctl = {
+  pot: 50,
+  encoderPos: 0,
+  encoderDelta: 0,
+  globalBr: 100,
+  headlightBr: 50,
+  chinaBr: 100,
+  blacklight: false,
+  speedMph: 0,
+  currMode: 'nightrider',
+  variation: 0,
+  // config-mode navigation: 'show' means normal light-show operation;
+  // otherwise one of 'brightness'/'audio'/'powertest', matching the
+  // real controller's top-level config screens.
+  appMode: 'show',
+  configSubsetting: 0,
+  prevShowMode: 'nightrider', // real show to return to on exiting config
+  adjustingPeakThreshold: false, // audio subsetting 0's short-press toggle: noise floor vs peak threshold
+  testHue: 0, testSat: 255, testBrightness: 255, // PowerTest screen's HSV test color
+  zoomFt: 32, // viewer distance from car center, 20-100ft
+  showFixtureDots: false, // visualizer-only: light up the fixture dots themselves, off by default
+};
+
+/* =====================================================================
+   SHOW LOGIC -- ported from the firmware's *Show.h files. Visual
+   approximations where noted; audio-reactive math is faithful.
+   ===================================================================== */
+let showT0 = performance.now();
+let lastFrameT = performance.now();
+
+function updatePotEnergy() { return Ctl.pot; } // 0-100, shared "energy" stand-in
+
+function showNightrider(nowMs, dtMs) {
+  clearRope(); clearMegabars(); clearChinas();
+  const t = (nowMs - showT0) / 1000;
+  let hue;
+  if (Ctl.variation === 0) {
+    hue = Math.round(Ctl.pot / 100 * 255);
+  } else {
+    const periodSec = 20 * 60 * Math.pow(1 / (20*60), Ctl.pot / 100); // 20min -> 1s
+    hue = Math.round((t % periodSec) / periodSec * 255);
+  }
+  const c1 = hsv(hue, 255, 255), c2 = hsv((hue + 128) % 256, 255, 255);
+  // Real Nightrider bounces independently within each of 8 edge segments
+  // (front/back halves x2, left/right halves x2), all sharing the same
+  // phase -- so the chase point appears simultaneously at several points
+  // around the full loop, not as a single dot circling once. Approximated
+  // here as 8 equal segments (not the real firmware's exact unequal
+  // corner-vs-straight boundaries) each with their own synchronized
+  // bounce, which gets the "handful of segments visible at once" look.
+  const NUM_SEGMENTS = 8;
+  const segLen = NUM_NEO / NUM_SEGMENTS;
+  const bouncePeriodSec = 2.4;
+  const phase = (t % bouncePeriodSec) / bouncePeriodSec;
+  const triangle = phase < 0.5 ? phase * 2 : (1 - phase) * 2; // 0->1->0
+  const bouncePos = triangle * segLen;
+  for (let i = 0; i < NUM_NEO; i++) {
+    const posInSeg = i % segLen;
+    const d = Math.abs(posInSeg - bouncePos);
+    const f = Math.max(0, 255 - d * 10);
+    ropeLeds[i] = blend(c1, c2, f);
+  }
+  const lowHit = AudioBoard.getHitPct(BAND_LOW) / 100 * 255;
+  const highHit = AudioBoard.getHitPct(BAND_HIGH) / 100 * 255;
+  const mbLow = blend({r:0,g:0,b:0}, c2, lowHit);
+  const mbHigh = blend({r:0,g:0,b:0}, c1, highHit);
+  for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = (m % 3 === 0) ? mbHigh : mbLow;
+}
+
+/* ---- FlameShow: real Fire2012-style heat-diffusion sparkle, ported from
+   src/FlameShow.h ---- Previous visualizer version was a plain sine-wave
+   flicker approximation with no real per-LED texture -- that's the
+   visualizer bug behind "just two fading colors, not little points of
+   sparkle." This ports the real cool/diffuse/spark heat simulation
+   per-LED, mapped through the same 4 palette variations. (While porting
+   this, found and fixed a real out-of-bounds array read in the actual
+   firmware's diffusion step -- src/FlameShow.h used `i+i` instead of `i+1`
+   for the "higher" neighbor index, reading past the array for roughly the
+   upper half of it. Fixed there too; flagged separately since it changes
+   real hardware behavior.) */
+const FLAME_PALETTES = [
+  [[0,0,90],[10,30,255],[70,200,255],[255,255,255]],   // 0 waterflames: DarkBlue,Blue,Aqua,White
+  [[90,0,0],[255,20,0],[255,120,0],[255,220,60]],       // 1 flames: DarkRed,Red,Orange,Yellow
+];
+function flamePaletteColor(variation, index, driftHue, satByte) {
+  index = Math.max(0, Math.min(255, index));
+  if (variation < 2) {
+    const pal = FLAME_PALETTES[variation];
+    const idx = (index / 255) * (pal.length - 1);
+    const lo = Math.floor(idx), hi = Math.min(pal.length - 1, lo + 1), f = idx - lo;
+    return { r: pal[lo][0]+(pal[hi][0]-pal[lo][0])*f, g: pal[lo][1]+(pal[hi][1]-pal[lo][1])*f, b: pal[lo][2]+(pal[hi][2]-pal[lo][2])*f };
+  }
+  if (variation === 3) { // hue-to-white: drifting hue at one end, fixed white at the other
+    const driftClr = hsv(driftHue, satByte, 255);
+    if (index < 85) return driftClr;
+    if (index > 170) return { r: 255, g: 255, b: 255 };
+    return blend(driftClr, { r: 255, g: 255, b: 255 }, ((index - 85) / 85) * 255);
+  }
+  // variation 2: shifting hues -- 2 complementary full-brightness colors
+  const colorA = hsv(driftHue, satByte, 255), colorB = hsv((driftHue + 128) % 256, satByte, 255);
+  if (index < 85) return colorA;
+  if (index > 170) return colorB;
+  return blend(colorA, colorB, ((index - 85) / 85) * 255);
+}
+
+const flameCurrTemp = new Array(NUM_NEO).fill(0);
+const flamePrevTemp = new Array(NUM_NEO).fill(0);
+const flameMegabarHeat = new Array(NUM_MEGABAR).fill(0);
+const flameChinaHeat = new Array(NUM_CHINA).fill(0);
+const flameMegabarColorPick = new Array(NUM_MEGABAR).fill(0).map(() => Math.random() < 0.5);
+const flameChinaColorPick = new Array(NUM_CHINA).fill(0).map(() => Math.random() < 0.5);
+const flameHueRateWalk = makeRandomWalk(), flameSatWalk = makeRandomWalk();
+let flameShiftHue = 0, flameLastHitMs = -99999, flameLastStepMs = -99999;
+let flameChinaSwapBassOnSides = true, flameChinaSwapNextAt = 0;
+const FLAME_CHINA_FRONTBACK = [1, 2, 5, 6], FLAME_CHINA_SIDES = [0, 3, 4, 7]; // matches SpeedStripesShow's front/back vs side china grouping
+function resetFlameState() {
+  flameCurrTemp.fill(0); flamePrevTemp.fill(0);
+  flameMegabarHeat.fill(0); flameChinaHeat.fill(0);
+  flameShiftHue = 0; flameHueRateWalk.initialized = false; flameSatWalk.initialized = false;
+  flameLastHitMs = -99999; flameChinaSwapNextAt = 0;
+}
+
+function showFlame(nowMs, dtMs) {
+  const dtSec = Math.max(0, Math.min(0.2, dtMs / 1000));
+  const energyFrac = Ctl.pot / 100;
+  const variation = Ctl.variation;
+
+  const BASE_MAX_HUE_RATE = 255 / 20;
+  const maxHueRate = BASE_MAX_HUE_RATE * (0.5 + 0.5 * energyFrac);
+  const hueRate = randomWalkValue(flameHueRateWalk, nowMs, 0, maxHueRate, maxHueRate * 0.1);
+  flameShiftHue = (flameShiftHue + hueRate * dtSec) % 256;
+  const driftHue = Math.round(flameShiftHue);
+  const satByte = Math.round(randomWalkValue(flameSatWalk, nowMs, 0.75, 1.0, 0.013) * 255);
+  const loColor = flamePaletteColor(variation, 40, driftHue, satByte);
+  const hiColor = flamePaletteColor(variation, 230, driftHue, satByte);
+
+  // Cadence gate -- THE actual fix for both "way more hyper than before"
+  // and "the pot doesn't seem to do anything". Real firmware rate-limits
+  // its WHOLE fire-sim/sparkle cycle with delay(potval) at the end of its
+  // loop (pot up = less delay = faster ticks, pot down = more delay = much
+  // calmer). The visualizer was running this cool/diffuse/spark step every
+  // single animation frame (~60/sec) regardless of pot -- scaling spark
+  // PROBABILITY per pot was never going to be enough on top of a fixed
+  // 60fps update rate. This restores the real per-tick gating; between
+  // ticks the rope/flood arrays just hold their last value (nothing here
+  // clears them), matching how the real hardware actually looks frozen
+  // between updates during a slow (low-pot) cycle.
+  const potval = 255 * (1 - energyFrac); // ms between ticks, same inverted formula as real firmware
+  const dueForTick = (nowMs - flameLastStepMs) >= potval;
+  // hoisted to function scope -- the idle flood-sparkle branch below (which
+  // runs independent of dueForTick) also needs this; declaring it inside
+  // the if-block made it block-scoped and threw "coolingRate is not
+  // defined" the moment that branch actually ran, which (like the
+  // flameLastStepMs bug) killed the whole render loop, not just this show.
+  const coolingRate = 75;
+  if (dueForTick) {
+    flameLastStepMs = nowMs;
+    // Rope fire sim -- cool, diffuse to neighbors, add random sparks, map
+    // through the palette. Rate is now fixed per-tick (cadence itself
+    // carries the pot's effect); NeoPixel activity level still scales
+    // LINEARLY with pot overall since tick rate is linear in energyFrac.
+    const sparkingRateRope = 190;
+    for (let i = 0; i < NUM_NEO; i++) flamePrevTemp[i] = Math.max(0, flamePrevTemp[i] - coolingRate);
+    for (let i = 0; i < NUM_NEO; i++) {
+      const lw = i > 0 ? i - 1 : NUM_NEO - 1;
+      const hi = i < NUM_NEO - 1 ? i + 1 : 0;
+      flameCurrTemp[i] = (flamePrevTemp[lw] + flamePrevTemp[hi] + flamePrevTemp[i]) / 3;
+    }
+    for (let i = 0; i < NUM_NEO; i++) {
+      if (Math.random() * 255 < sparkingRateRope) flameCurrTemp[i] = Math.min(255, flameCurrTemp[i] + 160 + Math.random() * 95);
+    }
+    for (let i = 0; i < NUM_NEO; i++) {
+      ropeLeds[i] = flamePaletteColor(variation, flameCurrTemp[i], driftHue, satByte);
+      flamePrevTemp[i] = flameCurrTemp[i];
+    }
+  }
+
+  // Hit-reactive gate: any real bass/treble hit within the last 3s switches
+  // ALL floods to pure sound-reactive mode (half bass/one color, half
+  // treble/the other, china split front-back vs sides swapping every
+  // random 2-7s); otherwise floods run the idle sparkle behavior below,
+  // undisturbed. Per correction: hit-mode colors are the rope's own
+  // current 2-color identity (loColor/hiColor), not an independent
+  // meandering hue/saturation.
+  const bassHitPct = AudioBoard.getHitPct(BAND_LOW), trebleHitPct = AudioBoard.getHitPct(BAND_HIGH);
+  if (bassHitPct > 0 || trebleHitPct > 0) flameLastHitMs = nowMs;
+  const hitReactive = (nowMs - flameLastHitMs) < 3000;
+
+  if (hitReactive) {
+    if (nowMs >= flameChinaSwapNextAt) {
+      flameChinaSwapBassOnSides = !flameChinaSwapBassOnSides;
+      flameChinaSwapNextAt = nowMs + (2000 + Math.random() * 5000);
+    }
+    const bassClr = scale255(loColor, Math.round(bassHitPct / 100 * 255));
+    const trebleClr = scale255(hiColor, Math.round(trebleHitPct / 100 * 255));
+    for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = (m % 2 === 0) ? bassClr : trebleClr;
+    const sidesFollowBass = flameChinaSwapBassOnSides;
+    for (const c of FLAME_CHINA_SIDES) chinaLeds[c] = sidesFollowBass ? bassClr : trebleClr;
+    for (const c of FLAME_CHINA_FRONTBACK) chinaLeds[c] = sidesFollowBass ? trebleClr : bassClr;
+  } else {
+    // Idle: base fill randomly picked PER FLOOD between the palette's two
+    // reference colors (previously every flood shared one synchronized
+    // color -- per request, each independently shows one or the other),
+    // re-rolled whenever that fixture sparks. Floodlight sparkle cools 2x
+    // the rope's rate (shorter flashes) and its sparking rate scales with
+    // pot energy SQUARED, not linearly (per request -- floods should ramp
+    // up much more gently than the rope as the pot increases).
+    const sparkFractionFloods = (20 + energyFrac * energyFrac * 220) / 255;
+    const floodCoolingRate = Math.min(255, coolingRate * 2);
+    for (let i = 0; i < NUM_MEGABAR; i++) flameMegabarHeat[i] = Math.max(0, flameMegabarHeat[i] - floodCoolingRate);
+    for (let i = 0; i < NUM_CHINA; i++) flameChinaHeat[i] = Math.max(0, flameChinaHeat[i] - floodCoolingRate);
+    const megabarSparkCount = Math.round(NUM_MEGABAR * sparkFractionFloods);
+    const chinaSparkCount = Math.round(NUM_CHINA * sparkFractionFloods);
+    for (let s = 0; s < megabarSparkCount; s++) {
+      const idx = Math.floor(Math.random() * NUM_MEGABAR);
+      flameMegabarHeat[idx] = Math.min(255, flameMegabarHeat[idx] + 160 + Math.random() * 95);
+      flameMegabarColorPick[idx] = Math.random() < 0.5;
+    }
+    for (let s = 0; s < chinaSparkCount; s++) {
+      const idx = Math.floor(Math.random() * NUM_CHINA);
+      flameChinaHeat[idx] = Math.min(255, flameChinaHeat[idx] + 160 + Math.random() * 95);
+      flameChinaColorPick[idx] = Math.random() < 0.5;
+    }
+    for (let m = 0; m < NUM_MEGABAR; m++) {
+      const base = flameMegabarColorPick[m] ? loColor : hiColor;
+      const sparkClr = flamePaletteColor(variation, flameMegabarHeat[m], driftHue, satByte);
+      megabarLeds[m] = blend(base, sparkClr, flameMegabarHeat[m]);
+    }
+    for (let c = 0; c < NUM_CHINA; c++) {
+      const base = flameChinaColorPick[c] ? loColor : hiColor;
+      const sparkClr = flamePaletteColor(variation, flameChinaHeat[c], driftHue, satByte);
+      chinaLeds[c] = blend(base, sparkClr, flameChinaHeat[c]);
+    }
+  }
+}
+
+// True corner-to-corner geometry, matching BumpingAudioShow.h's updateVuMeter()
+// exactly: SIZEOF_LARGE_NEO_CORNER (33 LEDs) inset from each side channel's
+// boundary marks where the "true corner" sits for this meter -- the small
+// gap between that and the front/back edge is deliberately left unlit by
+// the real firmware, replicated here rather than filled in.
+const SIZEOF_LARGE_NEO_CORNER = 33;
+const VU_HALFLEN = SIZEOF_LARGE_NEO / 2 - SIZEOF_LARGE_NEO_CORNER; // 143, true corner to center
+const VU_MAX_REACH = VU_HALFLEN * 1.15; // 100%-level reach: 15% past center, so maxed meters cross there
+const VU_FRONT_RIGHT = RIGHT + SIZEOF_LARGE_NEO_CORNER;
+const VU_BACK_RIGHT = BACK - SIZEOF_LARGE_NEO_CORNER;
+const VU_BACK_LEFT = LEFT + SIZEOF_LARGE_NEO_CORNER;
+const VU_FRONT_LEFT = NUM_NEO - SIZEOF_LARGE_NEO_CORNER;
+
+function showEqualizer(nowMs, dtMs) {
+  clearRope(); clearChinas();
+  const t = (nowMs - showT0) / 1000;
+  const c1 = { r: 0, g: 0, b: 255 }, c2 = { r: 255, g: 0, b: 0 };
+  if (Ctl.variation === 1) {
+    // dual VU meter, faithful port of the real firmware: bass (red) is
+    // based across the WHOLE back edge and grows forward along both sides;
+    // treble (blue) is based across the WHOLE front edge and grows
+    // backward along both sides -- symmetric on both sides by construction
+    // (same VU_HALFLEN/VU_MAX_REACH used for left and right), fixing the
+    // previous asymmetric/uneven-height bug. Brightness tracks level
+    // directly (dim meter for a quiet signal, not just a short one).
+    const bassHitPct = AudioBoard.getHitPct(BAND_LOW), trebleHitPct = AudioBoard.getHitPct(BAND_HIGH);
+    const bassLitCount = (bassHitPct / 100) * VU_MAX_REACH;
+    const trebleLitCount = (trebleHitPct / 100) * VU_MAX_REACH;
+    const bassClr = scale255(c2, Math.round(bassHitPct/100*255));
+    const trebleClr = scale255(c1, Math.round(trebleHitPct/100*255));
+    for (let i = BACK; i < LEFT; i++) ropeLeds[i] = bassClr;   // back edge: always bass base, full width
+    for (let i = 0; i < RIGHT; i++) ropeLeds[i] = trebleClr;   // front edge: always treble base, full width
+    function vuSide(startIdx, endIdx, dir) { // dir: +1 back->front increasing index, -1 front->back increasing index
+      for (let i = startIdx; dir > 0 ? i <= endIdx : i >= endIdx; i += dir) {
+        const distFromBack = dir > 0 ? (i - startIdx) : (startIdx - i);
+        const distFromFront = dir > 0 ? (endIdx - i) : (i - endIdx);
+        const bassLit = distFromBack < bassLitCount, trebleLit = distFromFront < trebleLitCount;
+        if (bassLit && trebleLit) ropeLeds[i] = (Math.random() < 0.5) ? bassClr : trebleClr; // crossing zone: equal contributors, random pick instead of blending
+        else if (bassLit) ropeLeds[i] = bassClr;
+        else if (trebleLit) ropeLeds[i] = trebleClr;
+        else ropeLeds[i] = {r:0,g:0,b:0};
+      }
+    }
+    vuSide(VU_BACK_RIGHT, VU_FRONT_RIGHT, -1); // right side: back corner -> front corner
+    vuSide(VU_BACK_LEFT, VU_FRONT_LEFT, 1);    // left side: back corner -> front corner
+    // Floods (megabar + china) reproduce the same meter, split by their own
+    // physical front/back position -- not in the real firmware yet (which
+    // only drives the rope here), added per request so the floods aren't
+    // dark during this variation.
+    clearMegabars();
+    for (let m = 0; m < NUM_MEGABAR; m++) {
+      megabarLeds[m] = (megabarPos(m).y < CAR_Y) ? trebleClr : bassClr;
+    }
+    for (let c = 0; c < NUM_CHINA; c++) {
+      chinaLeds[c] = (CHINA_POS[c].y < CAR_Y) ? trebleClr : bassClr;
+    }
+  } else {
+    const pos = (t * 60) % NUM_NEO;
+    for (let i = 0; i < NUM_NEO; i++) {
+      const d = Math.min(Math.abs(i - pos), NUM_NEO - Math.abs(i - pos));
+      ropeLeds[i] = blend(c1, c2, Math.max(0, 255 - d * 4));
+    }
+    const lowHit = AudioBoard.getHitPct(BAND_LOW)/100*255;
+    const highHit = AudioBoard.getHitPct(BAND_HIGH)/100*255;
+    for (let m = 0; m < NUM_MEGABAR; m++) {
+      megabarLeds[m] = (m % 3 === 0) ? blend({r:0,g:0,b:0}, c1, highHit) : blend({r:0,g:0,b:0}, c2, lowHit);
+    }
+  }
+}
+
+/* ---- SpeedStripesShow: ground-fixed stripes, ported from real firmware ----
+   src/SpeedStripesShow.h models this as the ground being painted with
+   infinite 4ft-wide stripes of random color running perpendicular to the
+   car's travel (fuzzy, not hard-edged), and the car driving over that fixed
+   pattern -- every fixture continuously samples the SAME periodic function
+   at its own physical along-the-length position, so a given stripe's color
+   matches everywhere it's visible at once (rope, megabar, china). This was
+   entirely unmodeled in the visualizer before (previous version was a
+   simple, unrelated chase loop) -- that's the visualizer bug being fixed
+   here, not a firmware bug.
+   NOTE: the real firmware's stripe width is 4ft (SIZEOF_LARGE_NEO/4, a
+   clean quarter of the car's 16ft length), not 5ft -- used the real
+   constant here rather than the 5ft figure, flagged for confirmation. */
+const SS_STRIPE_LEDS = SIZEOF_LARGE_NEO / 2; // 176 = 8ft (22 LEDs/ft), per request -- was 4ft (a quarter of the car's length, the real firmware's own value)
+const SS_PERIOD = SS_STRIPE_LEDS * 2; // 176 = one lit + one dark band
+// True 1:1 ground-speed conversion, NOT the real firmware's own constant
+// (which uses a deliberately slower, artistic 4.0 -- about 8x too slow to
+// actually match the car's real speed). Per request, this should visually
+// track real ground speed, matching the scrolling ground texture (which
+// already uses the correct 1.4667 ft/s-per-mph conversion): 1 mph =
+// 1.4667 ft/s, and the side channel runs 22 LEDs/ft (352 LEDs / 16ft), so
+// 1.4667 * 22 = 32.27 LEDs/s per mph. Flagging clearly since this is a
+// deliberate deviation from what's actually in SpeedStripesShow.h.
+const SS_LEDS_PER_MPH_PER_SEC = 1.4667 * (SIZEOF_LARGE_NEO / 16.0);
+const SS_LEDS_PER_FOOT = SIZEOF_LARGE_NEO / 16.0; // 22
+
+let ssScrollOffset = 0;
+let ssWasStopped = false, ssStoppedAtMs = 0, ssMeanderHue = 0;
+const ssMeanderWalk = makeRandomWalk();
+function resetSpeedStripesState() { ssScrollOffset = 0; ssWasStopped = false; ssMeanderHue = 0; ssMeanderWalk.initialized = false; }
+
+function ssCurrentSatFraction(nowMs) {
+  const periodMs = 30000;
+  const phase = (nowMs % periodMs) / periodMs;
+  return 0.925 + 0.075 * Math.cos(2 * Math.PI * phase);
+}
+function ssDesaturate(c, satFraction) {
+  const maxC = Math.max(c.r, c.g, c.b);
+  if (maxC === 0) return c;
+  const minFloor = maxC * (1 - satFraction);
+  return { r: Math.max(c.r, minFloor), g: Math.max(c.g, minFloor), b: Math.max(c.b, minFloor) };
+}
+// returns {color, stripeIdx} -- stripeIdx identifies which physical stripe
+// this position falls in (a stable hash seed for that stripe's 2-color
+// gradient), used by the caller to detect "is this the frontmost stripe".
+function ssSampleWave(pos, satFraction, meanderOffset) {
+  let wrapped = pos % SS_PERIOD;
+  if (wrapped < 0) wrapped += SS_PERIOD;
+  const phase01 = wrapped / SS_PERIOD;
+  // contrast-boosted sine envelope -- fuzzy (not hard-cut) edges, dark at
+  // the period boundary, full bright at the mid-point of the lit half
+  let centered = Math.sin(phase01 * 2 * Math.PI - Math.PI / 2) * 128 * 2;
+  centered = Math.max(-128, Math.min(127, centered));
+  const brightness = centered + 128;
+  const stripeIdx = Math.floor((pos - wrapped) / SS_PERIOD);
+  let h = Math.imul(stripeIdx | 0, 2654435761) >>> 0;
+  h = (h ^ (h >>> 15)) >>> 0;
+  const leadHue = ((h & 0xFF) + Math.round(meanderOffset)) % 256;
+  const trailHue = (((h >>> 8) & 0xFF) + Math.round(meanderOffset)) % 256;
+  const leadClr = ssDesaturate(hsv(leadHue, 255, 255), satFraction);
+  const trailClr = ssDesaturate(hsv(trailHue, 255, 255), satFraction);
+  const result = blend(trailClr, leadClr, Math.round(phase01 * 255));
+  const bf = brightness / 255;
+  return { color: { r: result.r * bf, g: result.g * bf, b: result.b * bf }, stripeIdx };
+}
+function ssLocalOffsetForFracBackFromFront(frac) { return (SIZEOF_LARGE_NEO - 1) * (1 - frac); }
+
+function showSpeedStripes(nowMs, dtMs) {
+  const dtSec = Math.max(0, Math.min(0.2, dtMs / 1000));
+  const satFraction = ssCurrentSatFraction(nowMs);
+  const speedMph = Ctl.speedMph;
+  const stopped = speedMph <= 0;
+
+  let meanderOffset = 0;
+  if (stopped) {
+    if (!ssWasStopped) { ssWasStopped = true; ssStoppedAtMs = nowMs; }
+    if (nowMs - ssStoppedAtMs >= 2000) { // start meandering a couple seconds after stopping, so it's not boring but also not instant
+      const MAX_MEANDER_RATE = 255 / 20;
+      const meanderRate = randomWalkValue(ssMeanderWalk, nowMs, 0, MAX_MEANDER_RATE, MAX_MEANDER_RATE * 0.1);
+      ssMeanderHue = (ssMeanderHue + meanderRate * dtSec) % 256;
+    }
+    meanderOffset = ssMeanderHue;
+    // ssScrollOffset deliberately not advanced -- pattern holds exactly where it was
+  } else {
+    ssWasStopped = false;
+    ssMeanderHue = 0;
+    ssScrollOffset += speedMph * SS_LEDS_PER_MPH_PER_SEC * dtSec;
+    while (ssScrollOffset >= SS_PERIOD) ssScrollOffset -= SS_PERIOD;
+  }
+
+  // brightness policy per request: 75% ceiling by default, except the
+  // single stripe currently crossing the front edge follows bass hit level
+  // instead whenever that's brighter than 75%.
+  const bassHitFrac = AudioBoard.getHitPct(BAND_LOW) / 100;
+  const frontStripeIdx = ssSampleWave((SIZEOF_LARGE_NEO - 1) + ssScrollOffset, satFraction, meanderOffset).stripeIdx;
+  function stripeMult(stripeIdx) { return stripeIdx === frontStripeIdx ? Math.max(0.75, bassHitFrac) : 0.75; }
+  function sampleScaled(pos) {
+    const s = ssSampleWave(pos, satFraction, meanderOffset);
+    const m = stripeMult(s.stripeIdx);
+    return { r: s.color.r * m, g: s.color.g * m, b: s.color.b * m };
+  }
+
+  clearRope(); clearMegabars(); clearChinas();
+  function renderSide(backCornerIdx, frontCornerIdx) {
+    const direction = frontCornerIdx > backCornerIdx ? 1 : -1;
+    for (let localOffset = 0; localOffset < SIZEOF_LARGE_NEO; localOffset++) {
+      const idx = backCornerIdx + direction * localOffset;
+      ropeLeds[idx] = sampleScaled(localOffset + ssScrollOffset);
+    }
+  }
+  renderSide(BACK - 1, RIGHT);         // right side: back corner -> front corner
+  renderSide(LEFT, NUM_NEO - 1);       // left side: back corner -> front corner
+
+  // front/back rope edges: they run side-to-side, not front-to-back, so
+  // they don't have individual positions spread along the direction of
+  // travel the way the side channels do -- but the whole edge still sits
+  // at one shared position along the car, and per request should reflect
+  // whatever stripe is currently there, solid across its whole width,
+  // continuous with wherever the adjacent side channel currently ends.
+  const frontEdgeRopeClr = sampleScaled((SIZEOF_LARGE_NEO - 1) + ssScrollOffset);
+  for (let i = 0; i < SIZEOF_SMALL_NEO; i++) ropeLeds[i] = frontEdgeRopeClr;
+  const backEdgeRopeClr = sampleScaled(0 + ssScrollOffset);
+  for (let i = BACK; i < LEFT; i++) ropeLeds[i] = backEdgeRopeClr;
+
+  // front: megabars preview a stripe-width (4ft) out; china pick it up 1ft out
+  const frontLeadClr = sampleScaled((SIZEOF_LARGE_NEO - 1) + SS_STRIPE_LEDS + ssScrollOffset);
+  megabarLeds[11] = frontLeadClr; megabarLeds[0] = frontLeadClr; megabarLeds[1] = frontLeadClr;
+  const frontEdgeClr = sampleScaled((SIZEOF_LARGE_NEO - 1) + SS_LEDS_PER_FOOT * 1 + ssScrollOffset);
+  // rear: mirror, behind the back corner
+  const rearLeadClr = sampleScaled(-SS_STRIPE_LEDS + ssScrollOffset);
+  megabarLeds[5] = rearLeadClr; megabarLeds[6] = rearLeadClr; megabarLeds[7] = rearLeadClr;
+  const rearEdgeClr = sampleScaled(-SS_LEDS_PER_FOOT * 1 + ssScrollOffset);
+
+  // china: per request, only the 2 frontmost + 2 rearmost china are used
+  // for this show (real firmware also lights the 4 side china -- narrowed
+  // here on request), at 50% brightness on top of everything else.
+  chinaLeds[1] = scale255(frontEdgeClr, 128); chinaLeds[2] = scale255(frontEdgeClr, 128);
+  chinaLeds[5] = scale255(rearEdgeClr, 128); chinaLeds[6] = scale255(rearEdgeClr, 128);
+
+  // remaining 3 megabars per side, at the 1/3, 1/2, 2/3 partition
+  const pos13 = ssLocalOffsetForFracBackFromFront(1/3) + ssScrollOffset;
+  const pos12 = ssLocalOffsetForFracBackFromFront(0.5) + ssScrollOffset;
+  const pos23 = ssLocalOffsetForFracBackFromFront(2/3) + ssScrollOffset;
+  const clr13 = sampleScaled(pos13), clr12 = sampleScaled(pos12), clr23 = sampleScaled(pos23);
+  megabarLeds[2] = clr13; megabarLeds[3] = clr12; megabarLeds[4] = clr23;
+  megabarLeds[10] = clr13; megabarLeds[9] = clr12; megabarLeds[8] = clr23;
+}
+
+// Persistent state, integrated incrementally each frame (angle += vel*dt)
+// -- NOT recomputed from elapsed-time-since-show-start, which was the bug:
+// with angle = vel*t, changing the pot (which changes vel) instantly
+// reflows the ENTIRE elapsed history through the new velocity, snapping
+// the beams to a different position the moment you touch the pot. This
+// matches how the real firmware does it (angle1_ = wrap360(angle1_ +
+// vel1_*dtSec), see LighthouseShow.h) -- current position always carries
+// forward continuously; only the RATE changes when the pot moves.
+let lhAngle1 = 0, lhAngle2 = 0, lhHue1 = 0;
+function resetLighthouseState() {
+  lhAngle1 = 0; lhAngle2 = 0; lhHue1 = 0;
+  lhStrobeActive = false; lhHadHit = false; lhSuppressionPeak = 0;
+}
+
+// China bass-strobe: same triple-pulse timing/suppression as EqualizerShow's
+// strobe (real firmware, BumpingAudioShow.h) -- borrowed here since real
+// Lighthouse currently leaves china off entirely. Bass hits only.
+let lhStrobeActive = false, lhStrobeT0 = 0;
+let lhHadHit = false, lhLastHitT = 0, lhSuppressionPeak = 0;
+function updateLighthouseStrobe(nowMs) {
+  const isHit = AudioBoard.hitLevel[BAND_LOW] > 0;
+  const bassHit = AudioBoard.getHitPct(BAND_LOW);
+  if (isHit) {
+    const silenceExpired = !lhHadHit || (nowMs - lhLastHitT) >= 3000;
+    const exceedsPeak = bassHit > lhSuppressionPeak;
+    if (!lhStrobeActive && (silenceExpired || exceedsPeak)) {
+      lhStrobeActive = true; lhStrobeT0 = nowMs; lhSuppressionPeak = bassHit;
+    }
+    lhHadHit = true; lhLastHitT = nowMs;
+  }
+  if (!lhStrobeActive) return false;
+  const onMs = 30, gapMs = 20;
+  const pulseStart = [0, onMs+gapMs, 2*(onMs+gapMs)];
+  const elapsed = nowMs - lhStrobeT0;
+  if (elapsed >= pulseStart[2] + onMs) { lhStrobeActive = false; return false; }
+  for (let p = 0; p < 3; p++) if (elapsed >= pulseStart[p] && elapsed < pulseStart[p]+onMs) return true;
+  return false;
+}
+
+function showLighthouse(nowMs, dtMs) {
+  clearRope();
+  const dtSec = Math.max(0, Math.min(0.2, dtMs / 1000)); // clamp huge gaps (tab backgrounded, etc.)
+  const energyFrac = Ctl.pot / 100;
+  const vel1 = 72 * energyFrac, vel2 = -180 * energyFrac;
+  lhAngle1 = wrap360(lhAngle1 + vel1 * dtSec);
+  lhAngle2 = wrap360(lhAngle2 + vel2 * dtSec);
+  lhHue1 = (lhHue1 + 12 * dtSec) % 256;
+  const angle1 = lhAngle1, angle2 = lhAngle2;
+  const hue1 = Math.round(lhHue1), hue2 = (hue1 + 128) % 256;
+  const clusters = [
+    { a: angle1, hue: hue1 }, { a: wrap360(angle1+180), hue: hue1 },
+    { a: angle2, hue: hue2 }, { a: wrap360(angle2+180), hue: hue2 },
+  ];
+  function circDelta(a, b) { let d = (b - a + 180) % 360; if (d < 0) d += 360; return d - 180; }
+  function fall(d, half, fade) { if (d <= half) return 255; if (d >= half+fade) return 0; return Math.round(255*(1-(d-half)/fade)); }
+
+  // Rope: half-width halved (15->7.5) and fade doubled (7.5->15) from the
+  // real firmware's defaults, per request -- narrower solid core, much
+  // softer/wider edges, net effect a wider-reaching, more analog segment.
+  const ROPE_HALF = 7.5, ROPE_FADE = 15;
+  for (let i = 0; i < NUM_NEO; i++) {
+    const pt = ledPoint(i);
+    const ang = (Math.atan2(pt.y - CAR_Y, pt.x - CAR_X) * 180/Math.PI + 90 + 360) % 360;
+    const contributors = clusters.map(c => ({ hue: c.hue, brightness: fall(Math.abs(circDelta(ang, c.a)), ROPE_HALF, ROPE_FADE) }));
+    const w = pickOverlapColor(contributors);
+    ropeLeds[i] = w ? hsv(w.hue, 255, w.brightness) : {r:0,g:0,b:0};
+  }
+  // Megabars: true 2-nearest-neighbor crossfade, not an independent
+  // per-megabar falloff function. The earlier widened-falloff approach
+  // still had a flat full-brightness "plateau" near each megabar (a solid
+  // core before the fade even starts), which read as jumping between
+  // discrete on/off floods rather than a continuous sweep. This instead
+  // keeps one continuous, exact beam angle per cluster and always finds
+  // exactly the 2 megabars bracketing it, splitting that cluster's full
+  // brightness between them by proximity (closer one gets more) -- so
+  // brightness fades smoothly and continuously as the beam passes from one
+  // flood to the next, never plateaus, and never involves more than the 2
+  // physically-nearest fixtures for a given cluster.
+  clearMegabars();
+  function megabarBracket(angleDeg) {
+    // megabarAngle(m) = wrap360(-m*30) -- invert to continuous "megabar
+    // index space" so floor/ceil gives the two bracketing real indices.
+    const mFloat = wrap360(-angleDeg) / 30;
+    const lowIdx = Math.floor(mFloat);
+    const frac = mFloat - lowIdx;
+    const lowM = ((lowIdx % NUM_MEGABAR) + NUM_MEGABAR) % NUM_MEGABAR;
+    const highM = (lowM + 1) % NUM_MEGABAR;
+    return [{ idx: lowM, weight: 1 - frac }, { idx: highM, weight: frac }];
+  }
+  const megabarContribs = Array.from({ length: NUM_MEGABAR }, () => []);
+  for (const c of clusters) {
+    for (const b of megabarBracket(c.a)) {
+      if (b.weight > 0) megabarContribs[b.idx].push({ hue: c.hue, brightness: Math.round(255 * b.weight) });
+    }
+  }
+  for (let m = 0; m < NUM_MEGABAR; m++) {
+    const w = pickOverlapColor(megabarContribs[m]);
+    megabarLeds[m] = w ? hsv(w.hue, 255, w.brightness) : {r:0,g:0,b:0};
+  }
+  clearChinas();
+  if (updateLighthouseStrobe(nowMs)) {
+    for (let c = 0; c < NUM_CHINA; c++) chinaLeds[c] = { r: 255, g: 255, b: 255 };
+  }
+}
+
+/* ---- audio config screens ---- */
+// lights a 10-LED window sliding from backCornerIdx (0%) to frontCornerIdx
+// (100%) as percent varies, flat color -- ported from MagicCarpet.h's
+// renderSideIndicator(). Was entirely missing from the visualizer before
+// (a real gap, not a rendering-style choice): the side strips showed
+// nothing at all during this screen.
+function renderSideIndicatorWindow(backCornerIdx, frontCornerIdx, percent, color) {
+  const segmentLen = Math.abs(frontCornerIdx - backCornerIdx) + 1;
+  const windowWidth = 10;
+  const direction = frontCornerIdx > backCornerIdx ? 1 : -1;
+  const t = Math.max(0, Math.min(100, percent)) / 100;
+  const maxOffset = segmentLen - windowWidth;
+  const windowOffset = Math.round(t * maxOffset);
+  for (let k = 0; k < windowWidth; k++) {
+    ropeLeds[backCornerIdx + direction * (windowOffset + k)] = color;
+  }
+}
+function cfgMeterScreen() {
+  clearRope(); clearChinas(); clearMegabars();
+  const segLen = Math.floor(SIZEOF_SMALL_NEO / 3); // 52 -- front strip ONLY, per real firmware (not the full rope)
+  const levels = [AudioBoard.getNormalPct(BAND_HIGH), AudioBoard.getNormalPct(BAND_MID), AudioBoard.getNormalPct(BAND_LOW)];
+  for (let seg = 0; seg < 3; seg++) {
+    const filled = Math.round(levels[seg]/100 * segLen);
+    for (let p = 0; p < segLen; p++) {
+      const i = seg*segLen + p;
+      if (p < filled) ropeLeds[i] = { r: 255, g: 255, b: 255 };
+      else { const hue = Math.round(96 - 96*p/(segLen-1)); ropeLeds[i] = hsv(hue,255,128); }
+    }
+  }
+  // noise floor (blue) / peak threshold (red) dots, overlaid on each of the
+  // 3 front segments at that value's own position along the segment --
+  // previously missing entirely.
+  const noiseFloorPct = AudioBoard.noiseFloorPct, peakThreshPct = AudioBoard.peakThresholdPct;
+  let noiseFloorPos = Math.round(noiseFloorPct/100*(segLen-1));
+  let peakThreshPos = Math.round(peakThreshPct/100*(segLen-1));
+  if (noiseFloorPos === peakThreshPos) { if (noiseFloorPos > 0) noiseFloorPos--; else peakThreshPos++; }
+  for (let seg = 0; seg < 3; seg++) {
+    ropeLeds[seg*segLen + noiseFloorPos] = { r: 0, g: 0, b: 255 };
+    ropeLeds[seg*segLen + peakThreshPos] = { r: 255, g: 0, b: 0 };
+  }
+  // side strips: sliding indicator windows, true corner to true corner --
+  // previously missing entirely, the actual bug behind "I don't see that at all."
+  renderSideIndicatorWindow(VU_BACK_RIGHT, VU_FRONT_RIGHT, noiseFloorPct, { r: 0, g: 0, b: 255 });
+  renderSideIndicatorWindow(VU_BACK_LEFT, VU_FRONT_LEFT, noiseFloorPct, { r: 0, g: 0, b: 255 });
+  renderSideIndicatorWindow(VU_BACK_RIGHT, VU_FRONT_RIGHT, peakThreshPct, { r: 255, g: 0, b: 0 });
+  renderSideIndicatorWindow(VU_BACK_LEFT, VU_FRONT_LEFT, peakThreshPct, { r: 255, g: 0, b: 0 });
+  // per-bin china confirmation (7 of 8 fixtures, one raw frequency bin each)
+  for (let c = 0; c < 7; c++) chinaLeds[c] = { r: 0, g: 0, b: (AudioBoard.bins && AudioBoard.bins[c]) || 0 };
+  const full = AudioBoard.getNormalPct(BAND_FULL)/100*255;
+  for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = { r: 0, g: 0, b: full };
+}
+function cfgDecayOrPredictScreen() {
+  clearRope(); clearChinas(); clearMegabars();
+  const segBand = [BAND_HIGH, BAND_MID, BAND_LOW];
+  const segColor = [{r:0,g:0,b:255},{r:0,g:255,b:0},{r:255,g:0,b:0}];
+  const segLen = Math.floor(SIZEOF_SMALL_NEO/3);
+  for (let seg = 0; seg < 3; seg++) {
+    const hit = AudioBoard.getHitPct(segBand[seg])/100 * segLen;
+    for (let p = 0; p < segLen; p++) {
+      ropeLeds[seg*segLen+p] = p < hit ? segColor[seg] : {r:0,g:0,b:0};
+    }
+  }
+  for (let m = 0; m < NUM_MEGABAR; m++) {
+    const which = m % 3;
+    const hitRaw = AudioBoard.getHitPct(segBand[which])/100*255;
+    megabarLeds[m] = scale255(segColor[which], Math.max(hitRaw, 38));
+  }
+}
+function cfgForesightScreen() {
+  for (let i = 0; i < NUM_NEO; i++) ropeLeds[i] = { r: 0, g: 0, b: 40 };
+  clearChinas();
+  const segBand = [BAND_HIGH, BAND_MID, BAND_LOW];
+  const segColor = [{r:0,g:0,b:255},{r:0,g:255,b:0},{r:255,g:0,b:0}];
+  for (let m = 0; m < NUM_MEGABAR; m++) {
+    const which = m % 3;
+    const hitRaw = AudioBoard.getHitPct(segBand[which])/100*255;
+    megabarLeds[m] = scale255(segColor[which], Math.max(hitRaw, 38));
+  }
+}
+
+// Brightness config screens: solid white preview across whichever fixture
+// group the current subsetting controls, so moving the pot shows its effect
+// directly (the global/china brightness ceiling applied below then scales
+// it same as any real show).
+function brightnessScreen() {
+  clearRope(); clearMegabars(); clearChinas();
+  const white = { r: 255, g: 255, b: 255 };
+  if (Ctl.configSubsetting === 0) {
+    for (let i = 0; i < NUM_NEO; i++) ropeLeds[i] = white;
+    for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = white;
+    for (let c = 0; c < NUM_CHINA; c++) chinaLeds[c] = white;
+  } else if (Ctl.configSubsetting === 1) {
+    megabarLeds[HEADLIGHT_INDEX] = white;
+  } else {
+    for (let c = 0; c < NUM_CHINA; c++) chinaLeds[c] = white;
+  }
+}
+// PowerTest: a power-saving experiment -- front half of the car shows a
+// direct HSV->RGB conversion of the test color, back half pulls the shared
+// low channel out into an (unmodeled here) white element by simply
+// subtracting it, so the two halves should read as roughly the same color
+// at a glance despite different underlying channel mixes.
+// per README: left half (straight HSV->RGB) = china [2,3,4,5] (front-left +
+// back-left pairs); right half (RGBW power-saving translation) = china
+// [0,1,6,7] (front-right + back-right pairs) -- NOT a simple first-4/
+// last-4 split, since the pairs wrap around index 0.
+const POWERTEST_CHINA_LEFT = [2, 3, 4, 5], POWERTEST_CHINA_RIGHT = [0, 1, 6, 7];
+function powerTestScreen() {
+  clearMegabars();
+  const color = hsv(Ctl.testHue, Ctl.testSat, Ctl.testBrightness);
+  const w = Math.min(color.r, color.g, color.b);
+  const backHalf = { r: color.r - w, g: color.g - w, b: color.b - w };
+  // left/right determined by each LED's actual physical X position (not an
+  // index range) -- the true split includes the left side run PLUS the
+  // left half of both the front and back edges, not a contiguous index span.
+  for (let i = 0; i < NUM_NEO; i++) ropeLeds[i] = (ledPoint(i).x < CAR_X) ? color : backHalf;
+  for (const c of POWERTEST_CHINA_LEFT) chinaLeds[c] = color;
+  for (const c of POWERTEST_CHINA_RIGHT) chinaLeds[c] = backHalf;
+}
+
+function renderCurrent(nowMs, dtMs) {
+  switch (Ctl.currMode) {
+    case 'nightrider': showNightrider(nowMs, dtMs); break;
+    case 'flame': showFlame(nowMs, dtMs); break;
+    case 'equalizer': showEqualizer(nowMs, dtMs); break;
+    case 'speedstripes': showSpeedStripes(nowMs, dtMs); break;
+    case 'lighthouse': showLighthouse(nowMs, dtMs); break;
+    case 'cfg_meter': cfgMeterScreen(); break;
+    case 'cfg_decay': cfgDecayOrPredictScreen(); break;
+    case 'cfg_predict': cfgDecayOrPredictScreen(); break;
+    case 'cfg_foresight': cfgForesightScreen(); break;
+    case 'brightness': brightnessScreen(); break;
+    case 'powertest': powerTestScreen(); break;
+  }
+  // global/china brightness ceiling (linear scale, no gamma -- matches
+  // applyBrightnessCeiling()'s own linear-only approach)
+  const gf = Ctl.globalBr / 100;
+  for (const p of ropeLeds) { p.r*=gf; p.g*=gf; p.b*=gf; }
+  for (const p of megabarLeds) { p.r*=gf; p.g*=gf; p.b*=gf; }
+  const hf = Ctl.headlightBr / 100;
+  megabarLeds[HEADLIGHT_INDEX].r *= hf; megabarLeds[HEADLIGHT_INDEX].g *= hf; megabarLeds[HEADLIGHT_INDEX].b *= hf;
+  const cf = Ctl.chinaBr / 100 * gf;
+  for (const p of chinaLeds) { p.r*=cf; p.g*=cf; p.b*=cf; }
+  if (Ctl.blacklight) for (const p of chinaLeds) { p.r = Math.max(p.r, 110); p.g = Math.max(p.g, 0); p.b = Math.max(p.b, 255); }
+}
+
+/* =====================================================================
+   CANVAS DRAW
+   ===================================================================== */
+const canvas = document.getElementById('stageCanvas');
+const ctx2d = canvas.getContext('2d');
+// Point-light fills get a display-only gamma boost: a canvas circle filled
+// at a linear 20% is much harder to read against a dark stage than a real
+// LED at 20% PWM actually looks at night. This only changes how a given
+// simulated brightness is DRAWN, not the underlying LED data used for any
+// brightness math elsewhere.
+function displayGamma(v) { return Math.round(Math.min(255, Math.max(0, Math.pow(Math.min(255, Math.max(0, v)) / 255, 0.55) * 255))); }
+function css(c) { return `rgb(${displayGamma(c.r)}, ${displayGamma(c.g)}, ${displayGamma(c.b)})`; }
+function rgba(c, a) { return `rgba(${Math.round(Math.min(255,Math.max(0,c.r)))}, ${Math.round(Math.min(255,Math.max(0,c.g)))}, ${Math.round(Math.min(255,Math.max(0,c.b)))}, ${a})`; }
+
+// draws one fixture's ground wash as an actual spreading WEDGE from the
+// fixture's own position -- the wedge's opening angle IS FLOOD_SPREAD_DEG
+// (25 degrees), so the spread is directly legible as a shape, not just
+// implied by an ellipse's aspect ratio. Brightest right at the fixture,
+// fading to nothing by the cone's far edge. brightMult lets china run
+// brighter than megabars per spec. Caller is expected to have already
+// clipped out the deck footprint (see draw()) so this never paints
+// "through" the car.
+function drawWash(originPx, azimuthDeg, wash, color, brightMult) {
+  const brightness = color.r + color.g + color.b;
+  if (brightness < 3) return;
+  const a = (azimuthDeg - 90) * Math.PI / 180; // 0deg = front/up, clockwise -- matches edgeInsetPoint
+  const halfSpread = (FLOOD_SPREAD_DEG / 2) * Math.PI / 180;
+  // Cone stops at the spot's own center distance, not the old (much
+  // farther, sometimes WASH_MAX_RENDER_FT-clamped) farDist -- per request,
+  // the light passing through the air shouldn't visibly reach any farther
+  // than where its brightest point on the ground actually is.
+  const farPx = Math.max(wash.centerDist * PX_PER_FT, 6);
+  const peakAlpha = Math.min(1, (brightness / 765) * 0.9 * brightMult);
+
+  // Subtle lateral falloff across the cone's width -- brighter dead center,
+  // a bit dimmer toward the left/right edges of the spread ("not by much,
+  // but noticeable" per request). Split into a handful of thin angular
+  // slices, each keeping the same near-far gradient shape as before but
+  // with its own peak alpha scaled down toward the edges (cosine-ish,
+  // edges land around 70% of center) -- still one continuous-looking cone,
+  // just with a gentle side-to-side brightness variation now.
+  const SLICES = 7;
+  for (let s = 0; s < SLICES; s++) {
+    const t0 = s / SLICES, t1 = (s + 1) / SLICES;
+    const ang0 = a - halfSpread + t0 * 2 * halfSpread;
+    const ang1 = a - halfSpread + t1 * 2 * halfSpread;
+    const lateralFrac = Math.abs((t0 + t1) / 2 - 0.5) * 2; // 0 at center, 1 at the very edge
+    const sliceAlpha = peakAlpha * (1 - 0.3 * lateralFrac);
+
+    const farL = { x: originPx.x + Math.cos(ang0) * farPx, y: originPx.y + Math.sin(ang0) * farPx };
+    const farR = { x: originPx.x + Math.cos(ang1) * farPx, y: originPx.y + Math.sin(ang1) * farPx };
+    const farCenterAng = (ang0 + ang1) / 2;
+    const farCenter = { x: originPx.x + Math.cos(farCenterAng) * farPx, y: originPx.y + Math.sin(farCenterAng) * farPx };
+
+    const grad = ctx2d.createLinearGradient(originPx.x, originPx.y, farCenter.x, farCenter.y);
+    grad.addColorStop(0, rgba(color, sliceAlpha));
+    grad.addColorStop(0.6, rgba(color, sliceAlpha * 0.35));
+    grad.addColorStop(1, rgba(color, 0));
+
+    ctx2d.beginPath();
+    ctx2d.moveTo(originPx.x, originPx.y);
+    ctx2d.lineTo(farL.x, farL.y);
+    ctx2d.lineTo(farR.x, farR.y);
+    ctx2d.closePath();
+    ctx2d.fillStyle = grad;
+    ctx2d.fill();
+  }
+}
+
+// Component B: the actual ground coloration underneath the beam -- ONE
+// light makes ONE spot, not a series of circles (the previous "stack of
+// overlapping circles" attempt read as multiple separate blobs instead of
+// one coherent shape, and was too dim/too small). This is a single filled
+// ellipse with a single radial gradient -- guaranteed to read as one
+// continuous spot, brightest at its true center (wash.centerDist along the
+// beam, well out from the fixture -- by design these are shallow-angle
+// throws that land several feet out, not right underneath the fixture),
+// fading smoothly to nothing at its edge. Sized directly from the cone
+// geometry: by definition, the cone's cross-section at the distance it
+// hits the ground is wash.width wide -- that IS the spot's width, no
+// separate tuning needed. The along-beam radius is sized to reach
+// whichever of the near/far edges is farther from center, so the visible
+// spot always covers the full geometric footprint.
+function drawGroundEllipse(originPx, azimuthDeg, wash, color, brightMult) {
+  const brightness = color.r + color.g + color.b;
+  if (brightness < 3) return;
+  const a = (azimuthDeg - 90) * Math.PI / 180;
+  const dir = { x: Math.cos(a), y: Math.sin(a) };
+  const centerPx = wash.centerDist * PX_PER_FT;
+  const pos = { x: originPx.x + dir.x * centerPx, y: originPx.y + dir.y * centerPx };
+  const { acrossFt, alongFt } = spotRadiiFt(wash);
+  const acrossRadiusPx = acrossFt * PX_PER_FT, alongRadiusPx = alongFt * PX_PER_FT;
+  // how tightly brightness concentrates around the peak -- smaller = a
+  // more concentrated, "powerful" hot core (china use this to read
+  // hotter/tighter than megabars); defaults to a broad, gentle peak.
+  const peakScale = wash.peakScale || 1.0;
+
+  const peakAlpha = Math.min(1, (brightness / 380) * brightMult);
+  ctx2d.save();
+  ctx2d.translate(pos.x, pos.y);
+  ctx2d.rotate(a);
+  ctx2d.scale(alongRadiusPx / acrossRadiusPx, 1);
+  const grad = ctx2d.createRadialGradient(0, 0, 0, 0, 0, acrossRadiusPx);
+  grad.addColorStop(0, rgba(color, peakAlpha));
+  grad.addColorStop(Math.max(0.15, Math.min(0.85, 0.5 * peakScale)), rgba(color, peakAlpha * 0.5));
+  grad.addColorStop(1, rgba(color, 0));
+  ctx2d.beginPath();
+  ctx2d.arc(0, 0, acrossRadiusPx, 0, Math.PI * 2);
+  ctx2d.fillStyle = grad;
+  ctx2d.fill();
+  ctx2d.restore();
+}
+
+// Zoom: viewer distance from car center, applied as a simple post-hoc
+// scale around the canvas center rather than reworking every position
+// constant -- ZOOM_REFERENCE_FT is the distance at which zoomScale=1 (no
+// scaling at all).
+//
+// The canvas's own pixel dimensions (CAR_X*2, CAR_Y*2, see the geometry
+// section) were sized to exactly equal the render rectangle -- every flood
+// spot in full, plus 5% -- so at zoomScale=1 the canvas already exactly
+// frames that rectangle by construction. Per request, you shouldn't be
+// able to zoom out any further than that (there's nothing more to see
+// past it, just empty ground), so ZOOM_MAX_FT is just ZOOM_REFERENCE_FT
+// itself -- no separate formula needed anymore.
+const ZOOM_REFERENCE_FT = 50, ZOOM_MIN_FT = 20;
+const ZOOM_MAX_FT = ZOOM_REFERENCE_FT;
+function zoomScale() { return ZOOM_REFERENCE_FT / Ctl.zoomFt; }
+
+// Ground texture: the real surface is Black Rock Desert playa -- off-white
+// sun-baked alkali clay, cracked into an irregular network of polygonal
+// plates. No reference photo was provided for this, so it's a procedural
+// approximation (a jittered grid with wavy, sometimes-broken crack lines
+// along each cell edge) rather than a literal match. Built once to an
+// offscreen tile and repeated via a canvas pattern rather than regenerated
+// every frame. Scrolls with Ctl.speedMph so a nonzero speed visually reads
+// as "the car is moving," independent of which show is running.
+// Cell size calibrated so the LARGEST pieces (jitter plus the occasional
+// skipped crack merging two adjacent cells, see crackLine's skipChance
+// below) land around 7in in their longest dimension, per reference photo --
+// not an average, since the real surface has many smaller pieces too that
+// would throw an average-based calibration off.
+const GROUND_TILE_FT = 24, GROUND_CELL_FT = 4 / 12;
+let groundTileCanvas = null;
+function buildGroundTile() {
+  const cell = GROUND_CELL_FT * PX_PER_FT;
+  const cols = Math.ceil(GROUND_TILE_FT / GROUND_CELL_FT);
+  const size = cols * cell;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const g = c.getContext('2d');
+  // Colors sampled from a real reference photo of Black Rock Desert playa
+  // (pale warm grey-beige plates, dark grey-brown cracks in daylight),
+  // darkened for the nighttime scene. Previous attempt (#2a2822, R42/G40/
+  // B34) had R barely ahead of G -- at low lightness that reads as
+  // indistinct murky grey-green ("olive"), not tan, regardless of the
+  // actual numbers; a real warm bias needs R clearly, unambiguously above
+  // G, which is clearly above B, at a brightness where hue is still
+  // perceptible at all (very low-lightness colors read as hueless).
+  g.fillStyle = '#362d24'; // #2e241a desaturated 25% and brightened 25% (HSL), per follow-up
+  g.fillRect(0, 0, size, size);
+  // jittered grid points, tiled seamlessly (edge columns/rows reuse the
+  // opposite edge's jitter so the pattern repeats without a visible seam)
+  const pts = [];
+  for (let ry = 0; ry <= cols; ry++) {
+    pts.push([]);
+    for (let rx = 0; rx <= cols; rx++) {
+      const seedX = rx % cols, seedY = ry % cols;
+      const jx = (Math.sin(seedX * 12.9898 + seedY * 78.233) * 43758.5453 % 1) * cell * 0.55;
+      const jy = (Math.sin(seedX * 39.346 + seedY * 11.135) * 24634.634 % 1) * cell * 0.55;
+      pts[ry].push({ x: rx * cell + jx, y: ry * cell + jy });
+    }
+  }
+  // The previous "less dark, less distracting" pass overcorrected into
+  // total invisibility -- rgba(72,64,50,0.4) against a #3e3a2e fill is
+  // only about a 4/255 effective difference, imperceptible on a real
+  // screen (confirmed by literally rendering this file headless and
+  // looking at it -- the fill showed, the cracks didn't at all). This is
+  // still soft/muted, just actually visible.
+  g.strokeStyle = 'rgba(19, 18, 16, 0.6)'; // dark grey-brown crack color, desaturated 25% and brightened 25% (HSL) to match the fill
+  g.lineWidth = 1;
+  // At ~4in cells this is ~10,000+ crack segments -- batching them all into
+  // ONE path with a single stroke() call at the end (instead of a separate
+  // beginPath/stroke per segment, which this had before) is what actually
+  // makes this finish in a reasonable time. The per-segment version was
+  // doing 10,000+ individual stroke() calls synchronously on the first
+  // frame, which can stall the tab for several seconds -- easily read as
+  // "the ground texture isn't there" if it never finishes fast enough to
+  // notice, or as a frozen page in the meantime.
+  g.beginPath();
+  function crackLine(p1, p2, skipChance) {
+    if (Math.sin(p1.x * 3.7 + p2.y * 9.1) * 0.5 + 0.5 < skipChance) return; // deterministic "random" skip, some cracks incomplete
+    const mx = (p1.x + p2.x) / 2 + Math.sin(p1.x * 1.3 + p1.y * 2.1) * cell * 0.15;
+    const my = (p1.y + p2.y) / 2 + Math.cos(p1.y * 1.7 + p2.x * 1.1) * cell * 0.15;
+    g.moveTo(p1.x, p1.y);
+    g.quadraticCurveTo(mx, my, p2.x, p2.y);
+  }
+  for (let ry = 0; ry <= cols; ry++) {
+    for (let rx = 0; rx <= cols; rx++) {
+      const p = pts[ry][rx];
+      if (rx < cols) crackLine(p, pts[ry][rx + 1], 0.12);
+      if (ry < cols) crackLine(p, pts[ry + 1][rx], 0.12);
+    }
+  }
+  g.stroke();
+  return c;
+}
+let groundScrollFt = 0, groundScrollLastMs = performance.now();
+function drawGroundScroll(nowMs) {
+  const dtSec = Math.max(0, Math.min(0.2, (nowMs - groundScrollLastMs) / 1000));
+  groundScrollLastMs = nowMs;
+  if (Ctl.speedMph > 0) groundScrollFt = (groundScrollFt + Ctl.speedMph * 1.467 * dtSec) % GROUND_TILE_FT; // 1.467 ft/s per mph
+  if (!groundTileCanvas) groundTileCanvas = buildGroundTile();
+  const tilePx = GROUND_TILE_FT * PX_PER_FT;
+  const offsetPx = groundScrollFt * PX_PER_FT;
+  ctx2d.save();
+  ctx2d.translate(0, offsetPx);
+  const pattern = ctx2d.createPattern(groundTileCanvas, 'repeat');
+  ctx2d.fillStyle = pattern;
+  ctx2d.fillRect(-tilePx, -tilePx - offsetPx, canvas.width + tilePx * 2, canvas.height + tilePx * 2);
+  ctx2d.restore();
+}
+
+function draw() {
+  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+  ctx2d.save();
+  const zs = zoomScale();
+  ctx2d.translate(canvas.width / 2, canvas.height / 2);
+  ctx2d.scale(zs, zs);
+  ctx2d.translate(-canvas.width / 2, -canvas.height / 2);
+
+  drawGroundScroll(performance.now());
+
+  // car deck -- square corners, matches the real deck shape. Colored from
+  // the reference photos: a pink/rose medallion field over most of the
+  // surface, a dark navy border band near the edge, and a thin maroon
+  // pinstripe right against the rope itself -- all darkened/muted for a
+  // nighttime look, same treatment as the table/cloth.
+  ctx2d.save();
+  const w = CAR_W, h = CAR_H, x = CAR_X - w/2, y = CAR_Y - h/2;
+  ctx2d.beginPath();
+  ctx2d.rect(x, y, w, h);
+  ctx2d.fillStyle = '#63414c'; // pink/rose field
+  ctx2d.fill();
+  // thin maroon pinstripe right at the edge, next to the rope
+  ctx2d.strokeStyle = '#5a1f2c';
+  ctx2d.lineWidth = 2;
+  ctx2d.stroke();
+  // bright hairline so the deck's edge always reads clearly against the
+  // stage backdrop, independent of whatever show colors are overlaid --
+  // otherwise a black-on-black show (e.g. blacklight) makes the car outline
+  // vanish into the surrounding darkness.
+  ctx2d.strokeStyle = 'rgba(242, 163, 65, 0.3)';
+  ctx2d.lineWidth = 3;
+  ctx2d.stroke();
+  // dark navy border band, inset from the edge
+  const borderW = 20;
+  ctx2d.strokeStyle = 'rgba(34, 42, 64, 0.88)';
+  ctx2d.lineWidth = borderW;
+  ctx2d.strokeRect(x + borderW/2, y + borderW/2, w - borderW, h - borderW);
+  // faint rose/gold accent line where the navy border meets the pink field
+  ctx2d.strokeStyle = 'rgba(214, 168, 110, 0.35)';
+  ctx2d.lineWidth = 1.5;
+  ctx2d.strokeRect(x + borderW, y + borderW, w - borderW*2, h - borderW*2);
+  ctx2d.restore();
+
+  // round table + tablecloths -- ~3ft diameter, centered left-right, 3ft
+  // forward of the deck's front-back center. Muted, desaturated tones --
+  // this is decoration, not lighting, so it should recede rather than
+  // compete with the show. Cloth is axis-aligned, not tilted.
+  ctx2d.save();
+  const tableR = 1.5 * PX_PER_FT;
+  const tableCx = CAR_X, tableCy = CAR_Y - 2.5 * PX_PER_FT;
+  ctx2d.beginPath();
+  ctx2d.arc(tableCx, tableCy, tableR, 0, Math.PI*2);
+  ctx2d.fillStyle = '#5c5347';
+  ctx2d.fill();
+  ctx2d.strokeStyle = 'rgba(60,50,40,0.5)';
+  ctx2d.lineWidth = 1;
+  ctx2d.stroke();
+  // The square cloth's corners overhang the round table and droop straight
+  // down under gravity -- from directly overhead they're hidden behind/
+  // under the table's own edge, not sticking out past it, so the square is
+  // clipped to the table's circular footprint rather than drawn full-size.
+  const clothR = tableR * 0.82;
+  ctx2d.save();
+  ctx2d.beginPath();
+  ctx2d.arc(tableCx, tableCy, tableR, 0, Math.PI*2);
+  ctx2d.clip();
+  ctx2d.fillStyle = '#5e3634';
+  ctx2d.fillRect(tableCx - clothR, tableCy - clothR, clothR*2, clothR*2);
+  ctx2d.restore();
+  ctx2d.restore();
+
+  // Fringe hangs straight down from the deck edge -- genuinely not visible
+  // from directly above, so it isn't drawn at all here (real thing only
+  // matters once the 3D pass can show drop/occlusion). See FRINGE above.
+
+  // corner tassels -- large gold ball-top tassels, centered directly on
+  // each true corner of the deck (not offset outward -- per correction,
+  // the ball sits right on the corner point itself). Diameter doubled
+  // from the earlier muted pass. Clipped to the area OUTSIDE the deck
+  // rectangle so the ball never overlaps the rope running along the deck
+  // edge -- since it's centered exactly on the corner, this naturally
+  // leaves about 3/4 of the circle visible (the quarter that would fall
+  // inside the deck is clipped away). Kept subtle/background (muted, no
+  // glow) -- decoration, not a light source, shouldn't compete with the
+  // actual show. 2D shows only the ball's footprint; the tie/cone/flat-
+  // bottom structure below it is 3D-only, see CORNER_TASSEL above.
+  ctx2d.save();
+  ctx2d.beginPath();
+  ctx2d.rect(0, 0, canvas.width, canvas.height);
+  ctx2d.rect(x, y, w, h);
+  ctx2d.clip('evenodd');
+  const tasselR = (CORNER_TASSEL.ballDiameterIn / 12 / 2) * PX_PER_FT * 0.7 * 2.5;
+  const tasselCorners = [
+    { x: x,     y: y },     // front-left
+    { x: x + w, y: y },     // front-right
+    { x: x,     y: y + h }, // back-left
+    { x: x + w, y: y + h }, // back-right
+  ];
+  ctx2d.fillStyle = 'rgba(150, 125, 60, 0.55)';
+  ctx2d.strokeStyle = 'rgba(100, 85, 45, 0.4)';
+  ctx2d.lineWidth = 1;
+  for (const c of tasselCorners) {
+    ctx2d.beginPath();
+    ctx2d.arc(c.x, c.y, tasselR, 0, Math.PI*2);
+    ctx2d.fill();
+    ctx2d.stroke();
+  }
+  ctx2d.restore();
+
+  // ground wash -- indicative only (2D can't do real cone-on-terrain
+  // projection), but sized/positioned from the actual mount tilt/spread/
+  // height geometry above so throw distance and footprint size are at
+  // least in the right ballpark, brightest at the beam center like a real
+  // floodlight's falloff. Clipped to EXCLUDE the deck rectangle -- looking
+  // straight down, the deck itself blocks any wash that would otherwise
+  // fall underneath it, and 'lighter' additive blending doesn't respect
+  // z-order/occlusion on its own, so without this clip the glow would
+  // wrongly show through the car.
+  ctx2d.save();
+  ctx2d.beginPath();
+  ctx2d.rect(0, 0, canvas.width, canvas.height);
+  ctx2d.rect(x, y, w, h);
+  ctx2d.clip('evenodd');
+  ctx2d.globalCompositeOperation = 'lighter';
+  // ground coloration (component B) drawn first as the "base" layer, then
+  // the beam's path through the air (component A) on top -- both additive,
+  // both clipped to outside the deck.
+  for (let m = 0; m < NUM_MEGABAR; m++) {
+    const wash = m === HEADLIGHT_INDEX ? MEGABAR_FRONT_WASH : MEGABAR_WASH;
+    drawGroundEllipse(megabarPos(m), megabarAngle(m), wash, megabarLeds[m], MEGABAR_MULT);
+  }
+  for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
+    drawGroundEllipse(CHINA_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH_FOR[cIdx], chinaLeds[cIdx], CHINA_GROUND_MULT);
+  }
+  for (let m = 0; m < NUM_MEGABAR; m++) {
+    const wash = m === HEADLIGHT_INDEX ? MEGABAR_FRONT_WASH : MEGABAR_WASH;
+    drawWash(megabarPos(m), megabarAngle(m), wash, megabarLeds[m], MEGABAR_MULT);
+  }
+  for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
+    drawWash(CHINA_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH_FOR[cIdx], chinaLeds[cIdx], CHINA_AIR_MULT);
+  }
+  ctx2d.restore();
+
+  // China ambient spill: unlike megabars (aimed out into open air, fully
+  // blocked by the deck from underneath), china are mounted UNDER the deck
+  // and aimed mostly along/under the car itself -- at full brightness
+  // their light doesn't stop cleanly at the deck's edge, some general glow
+  // reaches even under the car, visible from directly above as a soft wash
+  // across the whole deck. Deliberately NOT clipped to outside the deck
+  // (that clip is correct for megabars, wrong for china).
+  {
+    let avgR = 0, avgG = 0, avgB = 0;
+    for (const c of chinaLeds) { avgR += c.r; avgG += c.g; avgB += c.b; }
+    avgR /= NUM_CHINA; avgG /= NUM_CHINA; avgB /= NUM_CHINA;
+    const avgBrightness = avgR + avgG + avgB;
+    if (avgBrightness > 3) {
+      const spillAlpha = Math.min(0.5, (avgBrightness / 765) * 0.5);
+      ctx2d.save();
+      ctx2d.globalCompositeOperation = 'lighter';
+      ctx2d.fillStyle = rgba({ r: avgR, g: avgG, b: avgB }, spillAlpha);
+      ctx2d.fillRect(x, y, w, h);
+      ctx2d.restore();
+    }
+  }
+
+  // rope: each LED drawn as its OWN discrete dot, not a blended line.
+  // Blur was cut way down from earlier passes (was reading as much more
+  // diffused/blended-together than the real LEDs actually are) -- real
+  // adjacent LEDs stay individually crisp, so the glow here is now mostly
+  // cosmetic rather than a real soft-diffusion radius. Deliberately drawn
+  // LARGER than true physical scale (real LEDs would be nearly touching at
+  // this zoom level) so the color pattern still reads clearly -- an
+  // intentional visualization exaggeration, not a claim about real
+  // fixture size. Every LED is drawn (not skipped).
+  ctx2d.save();
+  for (let i = 0; i < NUM_NEO; i++) {
+    const c = ropeLeds[i];
+    const brightness = c.r + c.g + c.b;
+    if (brightness < 3) continue;
+    const p = ledPoint(i);
+    ctx2d.beginPath();
+    ctx2d.arc(p.x, p.y, 3.4 * 0.6, 0, Math.PI * 2);
+    ctx2d.fillStyle = css(c);
+    ctx2d.globalAlpha = Math.min(1, 0.55 + brightness/765*0.45);
+    ctx2d.shadowColor = css(c);
+    ctx2d.shadowBlur = 1;
+    ctx2d.fill();
+  }
+  ctx2d.restore();
+
+  // megabars -- m0 (front-facing) is physically two small fixtures side by
+  // side, overlapping ~25%; every other megabar is one normal dot.
+  const MB_R = 8;
+  for (let m = 0; m < NUM_MEGABAR; m++) {
+    const p = megabarPos(m);
+    const c = megabarLeds[m];
+    // Fixture dots off by default (per request) -- the cone/spot already
+    // shows the light; the dot is just a position marker unless the
+    // checkbox is on. Doesn't touch megabarLeds/chinaLeds themselves, only
+    // whether this marker's own fill reflects it.
+    const brightness = Ctl.showFixtureDots ? (c.r + c.g + c.b) : 0;
+    const fillStyle = brightness > 3 ? css(c) : '#26212c';
+    const glow = brightness > 3;
+    if (m === HEADLIGHT_INDEX) {
+      const pairDist = 2 * MB_R * (1 - 0.25); // 25% overlap
+      const dx = pairDist / 2;
+      for (const sx of [-dx, dx]) {
+        ctx2d.beginPath();
+        ctx2d.arc(p.x + sx, p.y, MB_R, 0, Math.PI*2);
+        ctx2d.fillStyle = fillStyle;
+        if (glow) { ctx2d.shadowColor = css(c); ctx2d.shadowBlur = 12; } else ctx2d.shadowBlur = 0;
+        ctx2d.fill();
+        ctx2d.shadowBlur = 0;
+        ctx2d.strokeStyle = '#443c52';
+        ctx2d.lineWidth = 1;
+        ctx2d.stroke();
+      }
+    } else {
+      ctx2d.beginPath();
+      ctx2d.arc(p.x, p.y, MB_R, 0, Math.PI*2);
+      ctx2d.fillStyle = fillStyle;
+      if (glow) { ctx2d.shadowColor = css(c); ctx2d.shadowBlur = 12; } else ctx2d.shadowBlur = 0;
+      ctx2d.fill();
+      ctx2d.shadowBlur = 0;
+      ctx2d.strokeStyle = '#443c52';
+      ctx2d.lineWidth = 1;
+      ctx2d.stroke();
+    }
+  }
+
+  // china -- per request, china are much more powerful than megabars, not
+  // "tiny little headlamps": dots rendered 3x brighter and 2x the radius.
+  for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
+    const p = CHINA_POS[cIdx];
+    const c = scale255(chinaLeds[cIdx], 765); // 3x brightness (scale255's amt is out of 255, so 3*255=765)
+    const brightness = Ctl.showFixtureDots ? (c.r + c.g + c.b) : 0; // off by default, see the megabar loop's comment above
+    ctx2d.beginPath();
+    ctx2d.arc(p.x, p.y, 9, 0, Math.PI*2); // dot size reverted to the original 9px -- the "spot" being too small referred to the ground spot, not this marker
+    ctx2d.fillStyle = brightness > 3 ? css(c) : '#211c29';
+    if (brightness > 3) { ctx2d.shadowColor = css(c); ctx2d.shadowBlur = 14; }
+    else ctx2d.shadowBlur = 0;
+    ctx2d.fill();
+    ctx2d.shadowBlur = 0;
+    ctx2d.strokeStyle = '#443c52';
+    ctx2d.stroke();
+  }
+  ctx2d.restore(); // closes the zoom transform opened at the top of draw()
+}
+
+/* =====================================================================
+   UI WIRING
+   ===================================================================== */
+const VARIATIONS = {
+  nightrider: ['Manual hue', 'Auto cycle'],
+  flame: ['Waterflames', 'Flames', 'Shifting hues', 'Hue to white'],
+  equalizer: ['Chase', 'VU meter'],
+  speedstripes: ['Default'],
+  lighthouse: ['Default'],
+  cfg_meter: [], cfg_decay: [], cfg_predict: [], cfg_foresight: [],
+};
+function refreshVariationRow() {
+  const row = document.getElementById('variationRow');
+  row.innerHTML = '';
+  const opts = VARIATIONS[Ctl.currMode] || [];
+  Ctl.variation = 0;
+  opts.forEach((name, idx) => {
+    const b = document.createElement('button');
+    b.textContent = name;
+    if (idx === 0) b.classList.add('active');
+    b.onclick = () => {
+      Ctl.variation = idx;
+      [...row.children].forEach(c => c.classList.remove('active'));
+      b.classList.add('active');
+    };
+    row.appendChild(b);
+  });
+}
+document.getElementById('showSelect').addEventListener('change', (e) => {
+  const v = e.target.value;
+  // Manually picking a screen from the dropdown also updates appMode/
+  // configSubsetting so the status bar and button semantics stay accurate,
+  // whichever path (buttons or dropdown) got you there.
+  if (v.startsWith('cfg_')) {
+    Ctl.appMode = 'audio';
+    Ctl.configSubsetting = ['cfg_meter','cfg_decay','cfg_predict','cfg_foresight'].indexOf(v);
+    if (Ctl.configSubsetting < 0) Ctl.configSubsetting = 0;
+  } else {
+    Ctl.appMode = 'show';
+    Ctl.prevShowMode = v;
+  }
+  Ctl.currMode = v;
+  showT0 = performance.now();
+  resetLighthouseState(); resetSpeedStripesState(); resetFlameState();
+  Ctl.blacklight = false; // volatile, force-reset off on every show change -- see btnShort's handler for details
+  document.getElementById('blacklightCheck').checked = false;
+  refreshVariationRow();
+  updateStatusPanel();
+});
+refreshVariationRow();
+
+document.getElementById('btnMic').onclick = () => useMic().catch(err => {
+  document.getElementById('audioStatus').textContent = 'mic error: ' + err.message;
+});
+document.getElementById('btnSystem').onclick = () => useSystemAudio().catch(err => {
+  document.getElementById('audioStatus').textContent = 'system audio error: ' + err.message;
+});
+document.getElementById('btnFile').onclick = () => document.getElementById('fileInput').click();
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  if (e.target.files[0]) useFile(e.target.files[0]);
+});
+document.getElementById('btnTone').onclick = () => useTone();
+
+document.getElementById('speedSlider').addEventListener('input', (e) => {
+  Ctl.speedMph = +e.target.value;
+  document.getElementById('speedVal').textContent = Ctl.speedMph + ' mph';
+});
+
+/* ----- zoom: 20-100ft viewer distance, works in 2D (and will in 3D once
+   that exists). No slider (removed per request, the readout is enough) --
+   ',' / '.' keys (also Shift+Up/Down as an alias for ','), mouse wheel over
+   the stage, and trackpad pinch (Chrome/Edge send pinch as a wheel event
+   with ctrlKey set). ----- */
+function setZoom(ft) {
+  Ctl.zoomFt = Math.max(ZOOM_MIN_FT, Math.min(ZOOM_MAX_FT, ft));
+  document.getElementById('zoomVal').textContent = Math.round(Ctl.zoomFt) + 'ft';
+}
+setZoom(Ctl.zoomFt);
+// Plain scroll wheel and 2-finger trackpad swipe are left alone (page
+// scrolls normally) -- only a trackpad PINCH gesture controls zoom.
+// Chrome/Edge report pinch as a wheel event with ctrlKey set (a browser
+// quirk simulating pinch-to-zoom via wheel), which is how this
+// distinguishes a real pinch from an ordinary scroll/swipe.
+document.getElementById('stageCanvas').addEventListener('wheel', (e) => {
+  if (!e.ctrlKey) return; // not a pinch -- let the page scroll normally
+  e.preventDefault();
+  setZoom(Ctl.zoomFt + Math.sign(e.deltaY) * 2); // pinch-in (positive deltaY) zooms out, pinch-out zooms in
+}, { passive: false });
+// Mouse: drag up while holding the left button zooms in, drag down zooms
+// out. Listens on window (not just the canvas) for move/up so a drag that
+// leaves the canvas mid-gesture still tracks correctly.
+let mouseZoomActive = false, mouseZoomLastY = 0;
+document.getElementById('stageCanvas').addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  mouseZoomActive = true;
+  mouseZoomLastY = e.clientY;
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!mouseZoomActive) return;
+  const dy = e.clientY - mouseZoomLastY;
+  mouseZoomLastY = e.clientY;
+  setZoom(Ctl.zoomFt + dy * 0.15); // drag up (negative dy) zooms in, drag down zooms out
+});
+window.addEventListener('mouseup', (e) => {
+  if (e.button === 0) mouseZoomActive = false;
+});
+window.addEventListener('keydown', (e) => {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (e.key === ',' || (e.shiftKey && e.key === 'ArrowUp')) { setZoom(Ctl.zoomFt - 2); e.preventDefault(); }
+  else if (e.key === '.' || (e.shiftKey && e.key === 'ArrowDown')) { setZoom(Ctl.zoomFt + 2); e.preventDefault(); }
+});
+
+/* ----- config-mode navigation -----
+   Ctl.appMode: 'show' (normal operation) or one of 'brightness'/'audio'/
+   'powertest' (the real controller's top-level config screens). Long
+   enters/exits config; Medium cycles between the three config screens;
+   Short cycles the subsetting within a screen (except audio subsetting 0,
+   where the real controller overrides short-press to flip between
+   adjusting the noise floor and the peak threshold instead); Double
+   commits and exits. Pot/Encoder are re-routed below to whichever
+   subsetting is currently active instead of their normal-mode meaning. */
+const SUBSETTING_NAMES = {
+  brightness: ['Global Brightness', 'Headlight Brightness', 'China Brightness'],
+  audio: ['Noise Floor / Peak Threshold', 'Hit Decay', 'Hit Prediction', 'Foresight', 'Auto-Gain'],
+  powertest: ['Hue', 'Saturation', 'Brightness'],
+};
+const AUDIO_SUB_SCREEN = ['cfg_meter', 'cfg_decay', 'cfg_predict', 'cfg_foresight', 'cfg_meter'];
+function subsettingCount(mode) { return (SUBSETTING_NAMES[mode] || []).length; }
+function configCurrModeFor(appMode, sub) {
+  if (appMode === 'brightness') return 'brightness';
+  if (appMode === 'powertest') return 'powertest';
+  if (appMode === 'audio') return AUDIO_SUB_SCREEN[sub];
+  return Ctl.prevShowMode;
+}
+function syncSlider(id, valId, v, suffix) {
+  document.getElementById(id).value = v;
+  document.getElementById(valId).textContent = v + suffix;
+}
+function currentSubsettingValueText() {
+  if (Ctl.appMode === 'brightness') {
+    return [Ctl.globalBr, Ctl.headlightBr, Ctl.chinaBr][Ctl.configSubsetting] + '%';
+  }
+  if (Ctl.appMode === 'audio') {
+    switch (Ctl.configSubsetting) {
+      case 0: return Ctl.adjustingPeakThreshold ? ('peak thresh ' + AudioBoard.peakThresholdPct + '%') : ('noise floor ' + AudioBoard.noiseFloorPct + '%');
+      case 1: return AudioBoard.hitDecayMs + 'ms';
+      case 2: return AudioBoard.hitPredictionMs + 'ms';
+      case 3: return AudioBoard.audioForesightMs + 'ms';
+      case 4: return AudioBoard.autoGainEnabled ? 'on' : 'off';
+    }
+  }
+  if (Ctl.appMode === 'powertest') {
+    return ['hue ' + Ctl.testHue, 'sat ' + Ctl.testSat, 'val ' + Ctl.testBrightness][Ctl.configSubsetting];
+  }
+  return '';
+}
+function updateStatusPanel() {
+  const bar = document.getElementById('configStatusBar');
+  const modeLabel = document.getElementById('configStatusMode');
+  const detail = document.getElementById('configStatusDetail');
+  if (Ctl.appMode === 'show') {
+    bar.classList.remove('config-status--config');
+    modeLabel.textContent = 'SHOW MODE';
+    detail.textContent = Ctl.currMode;
+  } else {
+    bar.classList.add('config-status--config');
+    modeLabel.textContent = 'CONFIG — ' + Ctl.appMode.toUpperCase();
+    detail.textContent = SUBSETTING_NAMES[Ctl.appMode][Ctl.configSubsetting] + ':  ' + currentSubsettingValueText();
+  }
+}
+function enterConfigMode() {
+  Ctl.prevShowMode = Ctl.currMode;
+  Ctl.appMode = 'brightness';
+  Ctl.configSubsetting = 0;
+  Ctl.adjustingPeakThreshold = false;
+  Ctl.currMode = configCurrModeFor('brightness', 0);
+  showT0 = performance.now();
+  updateStatusPanel();
+}
+function exitConfigMode() {
+  Ctl.appMode = 'show';
+  Ctl.currMode = Ctl.prevShowMode;
+  showT0 = performance.now();
+  resetLighthouseState(); resetSpeedStripesState(); resetFlameState();
+  document.getElementById('showSelect').value = Ctl.currMode;
+  refreshVariationRow();
+  updateStatusPanel();
+}
+function advanceConfigScreen() {
+  const order = ['brightness', 'audio', 'powertest'];
+  const idx = (order.indexOf(Ctl.appMode) + 1) % order.length;
+  Ctl.appMode = order[idx];
+  Ctl.configSubsetting = 0;
+  Ctl.adjustingPeakThreshold = false;
+  Ctl.currMode = configCurrModeFor(Ctl.appMode, 0);
+  updateStatusPanel();
+}
+function cycleConfigSubsetting() {
+  if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 0) {
+    Ctl.adjustingPeakThreshold = !Ctl.adjustingPeakThreshold;
+    updateStatusPanel();
+    return;
+  }
+  Ctl.configSubsetting = (Ctl.configSubsetting + 1) % subsettingCount(Ctl.appMode);
+  Ctl.currMode = configCurrModeFor(Ctl.appMode, Ctl.configSubsetting);
+  updateStatusPanel();
+}
+function applyConfigPot() {
+  const pct = Ctl.pot;
+  if (Ctl.appMode === 'brightness') {
+    if (Ctl.configSubsetting === 0) { Ctl.globalBr = pct; syncSlider('globalBrSlider', 'globalBrVal', pct, '%'); }
+    else if (Ctl.configSubsetting === 1) { const v = Math.max(50, pct); Ctl.headlightBr = v; syncSlider('headlightBrSlider', 'headlightBrVal', v, '%'); }
+    else { Ctl.chinaBr = pct; syncSlider('chinaBrSlider', 'chinaBrVal', pct, '%'); }
+  } else if (Ctl.appMode === 'audio') {
+    if (Ctl.configSubsetting === 0) {
+      if (Ctl.adjustingPeakThreshold) { AudioBoard.peakThresholdPct = pct; syncSlider('peakThreshSlider', 'peakThreshVal', pct, '%'); }
+      else { AudioBoard.noiseFloorPct = pct; syncSlider('noiseFloorSlider', 'noiseFloorVal', pct, '%'); }
+    } else if (Ctl.configSubsetting === 1) { const ms = Math.round(pct / 100 * 3000); AudioBoard.hitDecayMs = ms; syncSlider('hitDecaySlider', 'hitDecayVal', ms, 'ms'); }
+    else if (Ctl.configSubsetting === 2) { const ms = Math.round(pct / 100 * (AudioBoard.audioForesightMs || 1000)); AudioBoard.hitPredictionMs = ms; syncSlider('predictMsSlider', 'predictMsVal', ms, 'ms'); }
+    else if (Ctl.configSubsetting === 3) { const ms = Math.round(pct / 100 * 1000); AudioBoard.audioForesightMs = ms; syncSlider('foresightSlider', 'foresightVal', ms, 'ms'); updateOutputDelayTime(); }
+    // subsetting 4 (auto-gain) is a toggle, not pot-driven -- see the encoder handler
+  }
+  // PowerTest's hue/sat/brightness are encoder-driven (see below), not pot-driven
+  updateStatusPanel();
+}
+function applyEncoderStep(dir) {
+  if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 4) {
+    AudioBoard.autoGainEnabled = !AudioBoard.autoGainEnabled;
+    document.getElementById('autoGainCheck').checked = AudioBoard.autoGainEnabled;
+  } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 2) {
+    AudioBoard.hitPredictionStyle = (AudioBoard.hitPredictionStyle + dir + 4) % 4;
+    document.getElementById('predictStyleSelect').value = AudioBoard.hitPredictionStyle;
+  } else if (Ctl.appMode === 'powertest') {
+    const sub = Ctl.configSubsetting;
+    if (sub === 0) { Ctl.testHue = (Ctl.testHue + dir * 4 + 256) % 256; }
+    else if (sub === 1) { Ctl.testSat = Math.max(0, Math.min(255, Ctl.testSat + dir * 8)); }
+    else { Ctl.testBrightness = Math.max(0, Math.min(255, Ctl.testBrightness + dir * 8)); }
+  }
+  updateStatusPanel();
+}
+
+/* ----- Pot/Encoder knobs -----
+   Pot: a real potentiometer's mechanical sweep is 300 degrees, centered on
+   straight up -- 0% sits 150deg CCW of up, 50% is straight up, 100% sits
+   150deg CW of up. Click and hold; the knob tracks the angle of the
+   imaginary line from its center to the cursor for as long as the button
+   stays down (clamped to the 300deg sweep), not a relative drag delta.
+   Encoder: has no absolute position (it's a relative rotary input), so
+   instead of a direction line its knob just shows static curved
+   click-here-to-turn arrows (see .knob__arrow-group), flashing white
+   briefly on the side that just fired. Clicking the left half is one
+   detent left (CCW), the right half one detent right (CW); holding past
+   500ms auto-repeats at 10 detents/sec in that same direction until
+   release. The "pos N" counter is a session display convenience, not real
+   hardware state, so it resets to 0 five seconds after the mouse is
+   released following any adjustment. */
+const ctrlPanelEl = document.getElementById('ctrlPanel');
+function sizeCtrlPanel() {
+  // Corner radius = 1/7 of the panel's own (horizontal) width. A plain CSS
+  // percentage border-radius resolves separately per axis (% of width for
+  // the horizontal reach, % of height for the vertical one), which goes
+  // elliptical the moment the box isn't square -- this panel is wide and
+  // short, so that's set explicitly in px from the measured width instead.
+  const w = ctrlPanelEl.getBoundingClientRect().width;
+  ctrlPanelEl.style.borderRadius = (w / 7) + 'px';
+}
+sizeCtrlPanel();
+window.addEventListener('resize', sizeCtrlPanel);
+
+const potIndicator = document.querySelector('#potKnob .knob__indicator');
+function updatePotKnob() {
+  const deg = -150 + (Ctl.pot / 100) * 300;
+  potIndicator.style.setProperty('--angle', deg + 'deg');
+  document.getElementById('potVal').textContent = Math.round(Ctl.pot) + '%';
+}
+function updateEncoderKnob() {
+  // No direction line -- the encoder has no meaningful absolute angle (it's
+  // a relative rotary input), so its knob just shows static curved
+  // click-here-to-turn arrows (see .knob__arrow) instead.
+  document.getElementById('encVal').textContent = 'pos ' + Ctl.encoderPos;
+}
+updatePotKnob();
+updateEncoderKnob();
+
+let potDragActive = false, potDragCx = 0, potDragCy = 0;
+function potAngleFromCursor(clientX, clientY) {
+  const dx = clientX - potDragCx, dy = clientY - potDragCy;
+  const deg = Math.atan2(dx, -dy) * 180 / Math.PI; // 0deg = up, clockwise positive
+  return Math.max(-150, Math.min(150, deg));
+}
+function setPotFromCursor(clientX, clientY) {
+  Ctl.pot = (potAngleFromCursor(clientX, clientY) + 150) / 300 * 100;
+  updatePotKnob();
+  if (Ctl.appMode !== 'show') applyConfigPot();
+}
+document.getElementById('potKnob').addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  potDragCx = rect.left + rect.width / 2;
+  potDragCy = rect.top + rect.height / 2;
+  potDragActive = true;
+  setPotFromCursor(e.clientX, e.clientY);
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!potDragActive) return;
+  setPotFromCursor(e.clientX, e.clientY);
+});
+
+const ENCODER_RESET_DELAY_MS = 5000;
+const ENCODER_HOLD_DELAY_MS = 500;
+const ENCODER_REPEAT_MS = 100; // 10 detents/sec
+let encoderPressActive = false, encoderHoldDir = 0;
+let encoderHoldTimer = null, encoderRepeatTimer = null, encoderResetTimer = null;
+function flashEncoderArrow(dir) {
+  const group = document.querySelector(dir < 0 ? '.knob__arrow-group--left' : '.knob__arrow-group--right');
+  group.classList.add('flash');
+  clearTimeout(group._flashTimer);
+  group._flashTimer = setTimeout(() => group.classList.remove('flash'), 150);
+}
+function doEncoderStep(dir) {
+  Ctl.encoderPos += dir;
+  updateEncoderKnob();
+  flashEncoderArrow(dir);
+  if (Ctl.appMode !== 'show') applyEncoderStep(dir);
+}
+document.getElementById('encoderKnob').addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  clearTimeout(encoderResetTimer);
+  const rect = e.currentTarget.getBoundingClientRect();
+  encoderHoldDir = (e.clientX < rect.left + rect.width / 2) ? -1 : 1;
+  encoderPressActive = true;
+  doEncoderStep(encoderHoldDir);
+  encoderHoldTimer = setTimeout(() => {
+    encoderRepeatTimer = setInterval(() => doEncoderStep(encoderHoldDir), ENCODER_REPEAT_MS);
+  }, ENCODER_HOLD_DELAY_MS);
+  e.preventDefault();
+});
+window.addEventListener('mouseup', (e) => {
+  if (e.button !== 0) return;
+  potDragActive = false;
+  if (encoderPressActive) {
+    encoderPressActive = false;
+    clearTimeout(encoderHoldTimer);
+    clearInterval(encoderRepeatTimer);
+    clearTimeout(encoderResetTimer);
+    encoderResetTimer = setTimeout(() => {
+      Ctl.encoderPos = 0;
+      updateEncoderKnob();
+    }, ENCODER_RESET_DELAY_MS);
+  }
+});
+
+const showOrder = ['nightrider','lighthouse','flame','equalizer','speedstripes'];
+document.getElementById('btnShort').onclick = () => {
+  if (Ctl.appMode === 'show') {
+    const idx = (showOrder.indexOf(Ctl.currMode) + 1) % showOrder.length;
+    Ctl.currMode = showOrder[idx];
+    Ctl.prevShowMode = Ctl.currMode;
+    document.getElementById('showSelect').value = Ctl.currMode;
+    showT0 = performance.now();
+    resetLighthouseState(); resetSpeedStripesState(); resetFlameState();
+    // blacklight is volatile and force-reset off on every show change (real
+    // firmware rule, README.md) -- was previously never reset in the
+    // visualizer at all, a real gap (blacklight also isn't persisted
+    // anywhere in this tool -- no localStorage/save mechanism exists here,
+    // so it's already volatile in that sense; this fixes the OTHER half,
+    // the reset-on-show-change behavior).
+    Ctl.blacklight = false;
+    document.getElementById('blacklightCheck').checked = false;
+    refreshVariationRow();
+    updateStatusPanel();
+  } else {
+    cycleConfigSubsetting();
+  }
+};
+document.getElementById('btnMedium').onclick = () => {
+  if (Ctl.appMode !== 'show') advanceConfigScreen();
+};
+document.getElementById('btnLong').onclick = () => {
+  if (Ctl.appMode === 'show') enterConfigMode(); else exitConfigMode();
+};
+document.getElementById('btnDouble').onclick = () => {
+  if (Ctl.appMode === 'show') {
+    Ctl.blacklight = !Ctl.blacklight;
+    document.getElementById('blacklightCheck').checked = Ctl.blacklight;
+  } else {
+    exitConfigMode(); // commit -- this sim applies every change live already, so commit and cancel both just return to ModeShow
+  }
+};
+document.getElementById('btnXLong').onclick = () => {
+  Ctl.globalBr = Ctl.globalBr > 0 ? 0 : 100;
+  document.getElementById('globalBrSlider').value = Ctl.globalBr;
+  document.getElementById('globalBrVal').textContent = Ctl.globalBr + '%';
+};
+
+function bindSlider(id, valId, fmt, apply) {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+    const v = +el.value;
+    document.getElementById(valId).textContent = fmt(v);
+    apply(v);
+    updateStatusPanel();
+  });
+}
+bindSlider('noiseFloorSlider', 'noiseFloorVal', v => v+'%', v => AudioBoard.noiseFloorPct = v);
+bindSlider('peakThreshSlider', 'peakThreshVal', v => v+'%', v => AudioBoard.peakThresholdPct = v);
+bindSlider('hitDecaySlider', 'hitDecayVal', v => v+'ms', v => AudioBoard.hitDecayMs = v);
+bindSlider('foresightSlider', 'foresightVal', v => v+'ms', v => { AudioBoard.audioForesightMs = v; updateOutputDelayTime(); });
+document.getElementById('muteCheck').addEventListener('change', applyVolumeUI);
+document.getElementById('volumeSlider').addEventListener('input', applyVolumeUI);
+document.getElementById('delayAudioCheck').addEventListener('change', updateOutputDelayTime);
+
+document.getElementById('meterStack').addEventListener('click', () => {
+  document.getElementById('toneExpand').classList.toggle('open');
+});
+document.getElementById('tonePatternSelect').addEventListener('change', (e) => { toneSettings.pattern = e.target.value; });
+document.getElementById('toneNoiseSlider').addEventListener('input', (e) => {
+  toneSettings.noise = +e.target.value / 100;
+  document.getElementById('toneNoiseVal').textContent = e.target.value + '%';
+});
+bindSlider('predictMsSlider', 'predictMsVal', v => v+'ms', v => AudioBoard.hitPredictionMs = v);
+bindSlider('globalBrSlider', 'globalBrVal', v => v+'%', v => Ctl.globalBr = v);
+bindSlider('headlightBrSlider', 'headlightBrVal', v => v+'%', v => Ctl.headlightBr = v);
+bindSlider('chinaBrSlider', 'chinaBrVal', v => v+'%', v => Ctl.chinaBr = v);
+document.getElementById('autoGainCheck').addEventListener('change', (e) => { AudioBoard.autoGainEnabled = e.target.checked; updateStatusPanel(); });
+document.getElementById('blacklightCheck').addEventListener('change', (e) => Ctl.blacklight = e.target.checked);
+document.getElementById('fixtureDotsCheck').addEventListener('change', (e) => Ctl.showFixtureDots = e.target.checked);
+document.getElementById('predictStyleSelect').addEventListener('change', (e) => { AudioBoard.hitPredictionStyle = +e.target.value; updateStatusPanel(); });
+updateStatusPanel();
+
+/* =====================================================================
+   MAIN LOOP
+   ===================================================================== */
+// A bug in any one show's rendering used to freeze the ENTIRE tool
+// silently -- an uncaught exception inside tick() stops
+// requestAnimationFrame from ever being scheduled again, so the whole page
+// just locks up with zero indication anything's wrong (this is exactly
+// how a missing variable declaration in FlameShow took down every show,
+// not just that one). tick() itself now always reschedules regardless of
+// what happens inside it, and a failure is surfaced visibly in the status
+// bar instead of hard-freezing silently.
+let lastTickError = null;
+function tick(now) {
+  try {
+    const dtMs = now - lastFrameT;
+    lastFrameT = now;
+
+    if (analyser) {
+      const bins = readBins();
+      AudioBoard.poll(now, bins);
+    }
+
+    renderCurrent(now, dtMs);
+    draw();
+
+    // meters
+    const setBar = (barId, pct) => { document.getElementById(barId).style.width = pct + '%'; };
+    setBar('barBassHit', AudioBoard.getHitPct(BAND_LOW));
+    setBar('barMidHit', AudioBoard.getHitPct(BAND_MID));
+    setBar('barTrebleHit', AudioBoard.getHitPct(BAND_HIGH));
+    setBar('barFullHit', AudioBoard.getHitPct(BAND_FULL));
+    const chip = document.getElementById('silentChip');
+    if (analyser) {
+      chip.textContent = AudioBoard.silent ? 'silent' : 'live';
+      chip.className = 'chip' + (AudioBoard.silent ? ' silent' : ' on');
+    }
+  } catch (err) {
+    if (err !== lastTickError) {
+      lastTickError = err;
+      console.error('Render error:', err);
+      document.getElementById('configStatusBar').classList.add('config-status--config');
+      document.getElementById('configStatusMode').textContent = 'RENDER ERROR';
+      document.getElementById('configStatusDetail').textContent = String((err && err.message) || err);
+    }
+  }
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+draw();
+</script>
+</body>
