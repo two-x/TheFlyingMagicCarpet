@@ -248,7 +248,17 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .ctrl-panel {
   background: var(--panel-2);
   border: 1px solid var(--line);
-  padding: 10px 8px 8px;
+  /* Sides trimmed to a few px (frees up width for the action table's
+     text). Bottom kept much larger than top/sides on purpose: the corner
+     radius here is ~1/7 of this panel's own width (see sizeCtrlPanel()),
+     easily 30px+ -- with only a few px of side inset, the last text row
+     needs real vertical clearance or its left/right ends get visually
+     clipped by that curve. (Worked out from the corner-circle geometry:
+     at a small x-inset, clearing the arc needs roughly (2*R*x - x^2)
+     of y-inset -- 20px comfortably covers that for this panel's actual
+     size, with margin for the border-radius being recomputed at
+     different viewport widths.) */
+  padding: 10px 3px 20px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -369,17 +379,27 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
    the ENC_BTN_* state machine, already fires these same short/medium/
    long/x-long/double actions by hold duration -- this table is purely
    informational, describing what each physical input currently does for
-   the app's present state). */
+   the app's present state). Wording (see describeInputActions()) is kept
+   radically short on purpose, backed by nowrap/ellipsis/fixed-height below
+   as a hard guarantee -- every cell is EXACTLY one line no matter what
+   text lands in it, so the panel never grows/shrinks as state changes.
+   Column gap is sized to roughly one uppercase "M" at this font size, not
+   an arbitrary px value. */
 .ctrl-panel__actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 3px 8px;
+  column-gap: 1em; /* ~1 uppercase "M" at this element's own font-size */
+  row-gap: 2px;
 }
 .action-cell {
   font-size: 10px;
-  line-height: 1.35;
+  line-height: 13px;
+  height: 13px;
   color: var(--text-dim);
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .action-cell b {
   color: var(--text);
@@ -540,7 +560,7 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ 2bcbe58 - 2026-08-03 00:16 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ dc602a6 - 2026-08-03 00:30 UTC</span>
 </header>
 
 <div class="deck">
@@ -3517,64 +3537,61 @@ const HIT_PREDICT_STYLE_NAMES = ['off', 'exponential-rise', 'machine-gun', 'drum
 // fresh on every call rather than cached, since it depends on a wide
 // spread of state (appMode, configSubsetting, currMode, variation,
 // adjustingPeakThreshold...) that's cheapest to just re-derive.
+// Wording is kept intentionally terse (a handful of words, no show/
+// variation names, no parentheticals) so every cell fits on its one
+// guaranteed line at a glance -- see .action-cell's nowrap/ellipsis/fixed-
+// height in the CSS for the hard backstop if anything ever runs long
+// anyway. This trades away some detail the earlier, more verbose wording
+// had; the bold prefix (Left/Right/Pot/...) plus the status bar above
+// already carry the rest of the context.
 function describeInputActions() {
   const a = {};
   if (Ctl.appMode === 'show') {
     const opts = VARIATIONS[Ctl.currMode] || [];
-    if (opts.length >= 2) {
-      const next = opts[(Ctl.variation + 1) % opts.length], prev = opts[(Ctl.variation - 1 + opts.length) % opts.length];
-      a.left = 'previous variation (' + prev + ')';
-      a.right = 'next variation (' + next + ')';
-    } else {
-      a.left = a.right = 'no effect (this show has no other variations)';
-    }
+    if (opts.length >= 2) { a.left = 'prev var'; a.right = 'next var'; }
+    else { a.left = a.right = 'no effect'; }
     const potByShow = {
-      nightrider: Ctl.variation === 0 ? 'set hue directly' : Ctl.variation === 2 ? 'no effect (this variation ignores the pot)' : 'set auto hue-cycle speed',
-      lighthouse: 'set beam rotation speed',
-      flame: 'set hue-drift speed',
+      nightrider: Ctl.variation === 0 ? 'set hue' : Ctl.variation === 2 ? 'no effect' : 'cycle spd',
+      lighthouse: 'rotate spd',
+      flame: 'hue spd',
       equalizer: 'no effect',
       speedstripes: 'no effect',
     };
     a.pot = potByShow[Ctl.currMode] || 'no effect';
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 4) {
-    a.left = a.right = 'toggle auto-gain ' + (AudioBoard.autoGainEnabled ? 'off' : 'on');
-    a.pot = 'no effect (auto-gain is a toggle, not pot-driven)';
+    a.left = a.right = 'toggle AGC';
+    a.pot = 'no effect';
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 2) {
-    const cur = AudioBoard.hitPredictionStyle;
-    a.left = 'previous hit-prediction style (' + HIT_PREDICT_STYLE_NAMES[(cur - 1 + 4) % 4] + ')';
-    a.right = 'next hit-prediction style (' + HIT_PREDICT_STYLE_NAMES[(cur + 1) % 4] + ')';
-    a.pot = 'set hit-prediction lead time';
+    a.left = 'prev style';
+    a.right = 'next style';
+    a.pot = 'predict tm';
   } else if (Ctl.appMode === 'powertest') {
-    const names = ['hue', 'saturation', 'test brightness'];
-    a.left = 'decrease ' + names[Ctl.configSubsetting];
-    a.right = 'increase ' + names[Ctl.configSubsetting];
-    a.pot = 'no effect (Hue/Saturation/Brightness are encoder-driven here, not pot-driven)';
+    const names = ['hue', 'sat', 'bright'];
+    a.left = 'dec ' + names[Ctl.configSubsetting];
+    a.right = 'inc ' + names[Ctl.configSubsetting];
+    a.pot = 'no effect';
   } else if (Ctl.appMode === 'brightness') {
     a.left = a.right = 'no effect';
-    a.pot = ['set global brightness', 'set headlight brightness (50-100%)', 'set china brightness'][Ctl.configSubsetting];
+    a.pot = ['global br', 'head br', 'china br'][Ctl.configSubsetting];
   } else { // audio, subsettings 0 (threshold) / 1 (hit decay) / 3 (foresight)
     a.left = a.right = 'no effect';
-    if (Ctl.configSubsetting === 0) a.pot = 'set ' + (Ctl.adjustingPeakThreshold ? 'peak threshold' : 'noise floor');
-    else if (Ctl.configSubsetting === 1) a.pot = 'set hit decay time';
-    else a.pot = 'set audio foresight lead time';
+    if (Ctl.configSubsetting === 0) a.pot = Ctl.adjustingPeakThreshold ? 'peak thresh' : 'noise floor';
+    else if (Ctl.configSubsetting === 1) a.pot = 'hit decay';
+    else a.pot = 'foresight';
   }
 
   if (Ctl.appMode === 'show') {
-    a.short = 'next show (' + showOrder[(showOrder.indexOf(Ctl.currMode) + 1) % showOrder.length] + ')';
-    a.med = 'no effect (only in config)';
-    a.long = 'enter config mode';
-    a.double = 'toggle blacklight ' + (Ctl.blacklight ? 'off' : 'on');
+    a.short = 'next show';
+    a.med = 'no effect';
+    a.long = 'enter config';
+    a.double = Ctl.blacklight ? 'UV off' : 'UV on';
   } else {
-    if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 0) {
-      a.short = 'switch to adjusting ' + (Ctl.adjustingPeakThreshold ? 'noise floor' : 'peak threshold');
-    } else {
-      a.short = 'next ' + Ctl.appMode + ' subsetting';
-    }
-    a.med = 'next config screen (' + ({brightness:'Audio', audio:'PowerTest', powertest:'Brightness'})[Ctl.appMode] + ')';
-    a.long = 'cancel out of config (no changes discarded -- everything here applies live)';
-    a.double = 'commit & exit config';
+    a.short = (Ctl.appMode === 'audio' && Ctl.configSubsetting === 0) ? 'swap fl/pk' : 'next sub';
+    a.med = 'next screen';
+    a.long = 'cancel config';
+    a.double = 'save & exit';
   }
-  a.xl = 'turn all lights ' + (Ctl.globalBr > 0 ? 'off' : 'on');
+  a.xl = Ctl.globalBr > 0 ? 'lights off' : 'lights on';
   return a;
 }
 function updateInputActionTable() {
@@ -3709,14 +3726,14 @@ document.getElementById('orientationSelect').addEventListener('change', (e) => {
   applyOrientation();
 });
 
-// The CI deploy workflow replaces master @ 2bcbe58 - 2026-08-03 00:16 UTC with the real
+// The CI deploy workflow replaces master @ dc602a6 - 2026-08-03 00:30 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  if (el.textContent === 'master @ 2bcbe58 - 2026-08-03 00:16 UTC') el.textContent = 'local build (not CI-deployed)';
+  if (el.textContent === 'master @ dc602a6 - 2026-08-03 00:30 UTC') el.textContent = 'local build (not CI-deployed)';
 }
 
 const potIndicator = document.querySelector('#potKnob .knob__indicator');
