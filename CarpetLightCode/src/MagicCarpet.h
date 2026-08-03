@@ -314,16 +314,18 @@ class MagicCarpet {
    }
 
    // preview for the headlight-brightness setting: rope and china off, all
-   // other megabars shown at the (already-committed) global brightness as a
-   // fixed reference, and the headlight shown at global brightness scaled by
-   // liveHeadlightPercent (the not-yet-committed value being adjusted) -- so
-   // the two can be visually compared side by side.
+   // other megabars shown at full max (a fixed, unambiguous reference --
+   // previously the already-committed global brightness, which made
+   // comparison meaningless whenever global itself was dim), and the
+   // headlight shown at global brightness scaled by liveHeadlightPercent
+   // (the not-yet-committed value being adjusted) -- so the two can be
+   // visually compared side by side.
    void showHeadlightPreview( float liveHeadlightPercent ) {
       clearRope();
       clearChinas();
       uint8_t globalRaw = percentToRaw( globalBrightness_ );
       uint8_t headlightRaw = scale8( globalRaw, percentToRaw( liveHeadlightPercent ) );
-      LedUtil::fill( megabarLeds, CRGB( globalRaw, 0, 0 ), NUM_MEGABAR_LEDS );
+      LedUtil::fill( megabarLeds, CRGB( 255, 0, 0 ), NUM_MEGABAR_LEDS );
       megabarLeds[ HEADLIGHT_INDEX ] = CRGB( headlightRaw, 0, 0 );
    }
 

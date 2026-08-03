@@ -402,14 +402,34 @@ class EqualizerShow : public LightShow {
          carpet->ropeLeds[ i ] = trebleClr;
       }
 
-      // right side: front corner at FRONT_RIGHT, back corner at BACK_RIGHT
-      for ( int i = FRONT_RIGHT; i <= BACK_RIGHT; ++i ) {
+      // right side: FRONT_RIGHT/BACK_RIGHT are the reference corner-to-
+      // center points bassLitCount/trebleLitCount are calibrated against
+      // (see halfLen_/maxReach_ above) -- kept fixed. The loop itself,
+      // however, covers the side channel's ENTIRE physical strand (true
+      // corner to true corner: SIZEOF_SMALL_NEO to SIZEOF_SMALL_NEO+
+      // SIZEOF_LARGE_NEO-1), not just the span between the reference
+      // points.
+      //
+      // BUGFIX: this loop used to run FRONT_RIGHT..BACK_RIGHT only (the
+      // reference points themselves), leaving the ~33-LED zone on EACH side
+      // of that span (between the true physical corner and its inset
+      // reference point) completely dark regardless of level -- neither
+      // this loop nor the front/back base-edge fill above ever touched it.
+      // Widening the loop to the true strand bounds fixes this using this
+      // side's OWN distance-from-reference math (which, past a reference
+      // point, is always "closer than any possible LitCount," i.e. reads as
+      // an unconditional, level-proportional continuation of that meter --
+      // physically correct, and entirely local to this side's own strand,
+      // never reaching into the front/back channels' own logic the way an
+      // earlier version of this fix mistakenly did).
+      for ( int i = SIZEOF_SMALL_NEO; i < SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO; ++i ) {
          float distFromFront = i - FRONT_RIGHT;
          float distFromBack = BACK_RIGHT - i;
          carpet->ropeLeds[ i ] = vuMeterColor( distFromBack < bassLitCount, distFromFront < trebleLitCount, bassClr, trebleClr );
       }
-      // left side: back corner at BACK_LEFT, front corner at FRONT_LEFT
-      for ( int i = BACK_LEFT; i <= FRONT_LEFT; ++i ) {
+      // left side: same widening, BACK_LEFT/FRONT_LEFT stay the fixed
+      // reference points, loop covers the full physical strand.
+      for ( int i = SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          float distFromBack = i - BACK_LEFT;
          float distFromFront = FRONT_LEFT - i;
          carpet->ropeLeds[ i ] = vuMeterColor( distFromBack < bassLitCount, distFromFront < trebleLitCount, bassClr, trebleClr );

@@ -255,22 +255,26 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 .ctrl-panel__knobs {
   display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 10px;
 }
 .knob-wrap {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 6px;
 }
+/* "?" sits between the two knobs, top-aligned with the knobs' own top
+   edge (not vertically centered in the row) -- align-self overrides the
+   row's default center alignment for just this one child. */
+.knobs-tt { align-self: flex-start; }
 .knob-label {
   font-size: 9px;
+  line-height: 1.5;
   color: var(--text-dim);
-  display: flex;
-  gap: 4px;
-  align-items: baseline;
 }
+.knob-label--left { text-align: right; }
+.knob-label--right { text-align: left; }
 .knob-label .val {
   font-family: var(--mono);
   font-size: 9px;
@@ -360,23 +364,31 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   background: radial-gradient(circle at 35% 28%, var(--amber), #b97a2e 75%);
   box-shadow: 0 0 8px rgba(242, 163, 65, 0.85), inset 0 1px 1px rgba(255,255,255,0.25);
 }
-.ctrl-panel__buttons {
-  display: flex;
-  gap: 4px;
+/* 4 rows x 2 columns of live input-action descriptions, replacing the old
+   5 clickable press-buttons (the encoder's own center push-button, see
+   the ENC_BTN_* state machine, already fires these same short/medium/
+   long/x-long/double actions by hold duration -- this table is purely
+   informational, describing what each physical input currently does for
+   the app's present state). */
+.ctrl-panel__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 8px;
 }
-.ctrl-panel__buttons button.pressed-flash {
-  background: var(--amber);
-  color: #1a1206;
-  border-color: var(--amber);
-  font-weight: 600;
-}
-.ctrl-panel__buttons button {
-  flex: 1 1 auto;
-  padding: 6px 2px;
+.action-cell {
   font-size: 10px;
-  min-width: 0;
+  line-height: 1.35;
+  color: var(--text-dim);
+  text-align: left;
 }
-.ctrl-panel__buttons .tt { flex: 0 0 auto; }
+.action-cell b {
+  color: var(--text);
+  transition: color 0.08s;
+}
+.action-cell.flash b {
+  color: var(--amber);
+  text-shadow: 0 0 6px rgba(242, 163, 65, 0.7);
+}
 
 .hint {
   font-size: 11px;
@@ -548,6 +560,7 @@ footer {
       <div class="ctrl-panel" id="ctrlPanel">
         <div class="ctrl-panel__knobs">
           <div class="knob-wrap">
+            <div class="knob-label knob-label--left">Encoder<br><span class="val" id="encVal">pos 0</span></div>
             <div class="knob knob--encoder" id="encoderKnob">
               <svg class="knob__arrows" viewBox="0 0 56 56" width="56" height="56">
                 <g class="knob__arrow-group knob__arrow-group--right">
@@ -561,22 +574,24 @@ footer {
               </svg>
               <div class="knob__center-btn" id="encoderCenterBtn"></div>
             </div>
-            <div class="knob-label">Encoder <span class="val" id="encVal">pos 0</span></div>
           </div>
+          <span class="tt knobs-tt"><span class="tt-trigger">?</span><span class="tt-bubble">Short: next show, or next config subsetting. Medium: next config screen (Brightness→Audio→PowerTest). Long: enter config / cancel out of it. Double: blacklight toggle, or commit &amp; exit config. Extra-long: lights on/off. In config, Pot/Encoder drive whichever subsetting is shown in the status bar. Encoder knob: click its left/right half for one detent left/right; its center circle is the encoder's own pushbutton, firing Short/Medium/Long/X-long/Double the same as the buttons below based on how long you hold it. Pot knob: click and drag up/right to increase, down/left to decrease.</span></span>
           <div class="knob-wrap">
             <div class="knob knob--pot" id="potKnob">
               <div class="knob__indicator"></div>
             </div>
-            <div class="knob-label">Pot <span class="val" id="potVal">50%</span></div>
+            <div class="knob-label knob-label--right">Pot<br><span class="val" id="potVal">50%</span></div>
           </div>
         </div>
-        <div class="ctrl-panel__buttons">
-          <button id="btnShort">Short</button>
-          <button id="btnMedium">Med</button>
-          <button id="btnLong">Long</button>
-          <button id="btnXLong">X-long</button>
-          <button id="btnDouble">Dbl</button>
-          <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Short: next show, or next config subsetting. Medium: next config screen (Brightness→Audio→PowerTest). Long: enter config / cancel out of it. Double: blacklight toggle, or commit &amp; exit config. Extra-long: lights on/off. In config, Pot/Encoder drive whichever subsetting is shown in the status bar. Encoder knob: click its left/right half for one detent left/right; its center circle is the encoder's own pushbutton, firing Short/Medium/Long/X-long/Double the same as the buttons below based on how long you hold it. Pot knob: click and drag up/right to increase, down/left to decrease.</span></span>
+        <div class="ctrl-panel__actions" id="ctrlPanelActions">
+          <div class="action-cell" id="actLeft"><b>Left:</b> <span></span></div>
+          <div class="action-cell" id="actRight"><b>Right:</b> <span></span></div>
+          <div class="action-cell" id="actPot"><b>Pot:</b> <span></span></div>
+          <div class="action-cell" id="actShort"><b>Short:</b> <span></span></div>
+          <div class="action-cell" id="actMed"><b>Med:</b> <span></span></div>
+          <div class="action-cell" id="actLong"><b>Long:</b> <span></span></div>
+          <div class="action-cell" id="actXL"><b>XL:</b> <span></span></div>
+          <div class="action-cell" id="actDouble"><b>Double:</b> <span></span></div>
         </div>
       </div>
     </div>
@@ -601,8 +616,8 @@ footer {
     </div>
 
     <div class="group">
-      <div class="row"><label>Vehicle speed</label><span class="val" id="speedVal">4 mph</span></div>
-      <input type="range" id="speedSlider" min="0" max="25" step="1" value="4" />
+      <div class="row"><label>Vehicle speed</label><span class="val" id="speedVal">5 mph</span></div>
+      <input type="range" id="speedSlider" min="0" max="25" step="1" value="5" />
     </div>
 
     <div class="group">
@@ -611,7 +626,7 @@ footer {
         <span class="val" id="zoomVal">50ft</span>
         <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Scroll/pinch on the stage, or the , and . keys, to zoom (20-100ft).</span></span>
       </div>
-      <div class="row"><label>Colorize lamps</label><input type="checkbox" id="fixtureDotsCheck" /></div>
+      <div class="row"><label>Colorize lamps</label><input type="checkbox" id="fixtureDotsCheck" checked /></div>
     </div>
 
     <h2>Quick Adjust <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Direct override, always live — a second, independent path to the same values config mode adjusts.</span></span></h2>
@@ -684,7 +699,7 @@ footer {
         <div class="row"><label style="flex:none;">Tone generator pattern</label></div>
         <select id="tonePatternSelect">
           <option value="simple">Simple (kick + broadband)</option>
-          <option value="edm">EDM (four-on-the-floor)</option>
+          <option value="house">House (four-on-the-floor)</option>
           <option value="trap">Trap</option>
           <option value="boombap" selected>Boom-bap / hip-hop</option>
           <option value="chris">Chris (bass music)</option>
@@ -879,9 +894,16 @@ const CHINA_AIR_MULT = CHINA_AIR_MULT_BASE * 1.25 * 2 * 1.35; // 3.125, then 35%
 // stay exactly as they are. Then 35% brighter per follow-up (spots were
 // "pathetic again").
 const CHINA_GROUND_MULT = 2.0 * 1.35; // 2.7
-// Megabar cones/spots dimmed 15%, china left untouched -- applied at both
-// drawWash and drawGroundEllipse call sites for megabars (see draw()).
-const MEGABAR_MULT = 0.85 * 0.70; // 15% dim, then a further 30% off that per follow-up -- 0.595 total
+// Applied at both drawWash and drawGroundEllipse call sites for megabars
+// (see draw()). Set to 1.0 so a fully-saturated, full-value (S=255,V=255)
+// megabar color -- e.g. any sound-reactive show's color at a genuine 100%
+// hit -- reaches peakAlpha exactly 1 (true full brightness) in
+// drawGroundEllipse's now-hue-independent max-channel formula, matching
+// what SpeedStripes and every other full-brightness show already reaches.
+// Previously 0.595 (a leftover dimming pass from when brightness was read
+// off r+g+b SUM, which needed extra headroom for hue-dependent sums up to
+// 765) -- with SUM gone, this straightforwardly means "100%" now.
+const MEGABAR_MULT = 1.0;
 
 // Which lamp covers which side of the carpet:
 //   #1, #2 = front side
@@ -1365,7 +1387,8 @@ let audioCtx = null, analyser = null, sourceNode = null, extraSourceNode = null,
 let toneTimer = null;
 let outputDelay = null, outputGain = null; // speaker-bound chain for app-generated sources only (File/Tone)
 let volumeGain = null; // analyser-bound chain, mirrors outputGain -- see ensureVolumeGain()
-let baseNoiseGain = null; // Tone's base-noise path, mute-only -- see ensureBaseNoiseGain()
+let baseNoiseGain = null; // Tone's base-noise path, volume-independent -- see ensureBaseNoiseGain()
+let baseNoiseSpeakerGate = null; // mute-only gate on baseNoiseGain's speaker leg -- see ensureBaseNoiseGain()
 let currentSourceIsAppGenerated = false; // File/Tone = true (we own the signal, can delay/volume/mute it); Mic/System = false
 
 // Speaker output chain: source -> outputDelay -> outputGain -> destination.
@@ -1395,30 +1418,46 @@ function ensureVolumeGain(ctx) {
 }
 // Base noise (Tone generator only, see useTone) represents a fixed
 // self-noise floor -- present at its own set pk-pk level regardless of
-// Phone volume, only silenced by Mute (a real mic/preamp's self-noise
-// doesn't get quieter just because you turned the source's volume down).
-// Connects straight to the analyser and to the speakers, bypassing
-// volumeGain/outputGain entirely so it's structurally independent of
-// volume, not just numerically compensated for it.
+// Phone volume (a real mic/preamp's self-noise doesn't get quieter just
+// because you turned the source's volume down), reaching the analyser
+// unconditionally so the VU meter/light code always sees it, same as a
+// real noise floor would.
+//
+// BUGFIX: baseNoiseGain used to connect straight to ctx.destination with a
+// gain that never looked at Mute at all ("unconditionally on") -- so
+// muting still let the noise floor play out loud to the speakers. Report
+// was "the noise should also not go to the computer speakers if mute is
+// on," diagnosed as the noise signal never actually being combined with
+// the rest of the mute-aware chain before reaching an output -- it had its
+// own bypass straight to destination. Fixed by giving its SPEAKER leg
+// specifically a separate mute-gated node (baseNoiseSpeakerGate) -- the
+// analyser leg is untouched (still direct, still mute-independent, so the
+// lights keep reacting to noise even with the speaker muted, same as the
+// tone signal's own volumeGain->analyser path already does).
 function ensureBaseNoiseGain(ctx) {
   if (!baseNoiseGain) {
     baseNoiseGain = ctx.createGain();
-    baseNoiseGain.connect(ctx.destination);
+    baseNoiseSpeakerGate = ctx.createGain();
+    baseNoiseGain.connect(baseNoiseSpeakerGate);
+    baseNoiseSpeakerGate.connect(ctx.destination);
     applyVolumeUI();
   }
   return baseNoiseGain;
 }
-// Mute only silences the SPEAKER path (outputGain) -- per request it must
-// not touch what the light code sees at all, so volumeGain (analyser path)
-// and baseNoiseGain both ignore it entirely and are driven only by Phone
-// volume (baseNoiseGain doesn't even look at volume, see its own comment
-// above -- it's now unconditionally on).
+// Mute only silences what reaches the SPEAKERS (outputGain for the tone
+// signal, baseNoiseSpeakerGate for the noise floor) -- per an earlier
+// request it must not touch what the light code sees at all, so
+// volumeGain and baseNoiseGain (both analyser-bound) ignore it entirely
+// and are driven only by Phone volume (baseNoiseGain doesn't even look at
+// volume, see its own comment above -- it's unconditionally on for the
+// analyser specifically).
 function applyVolumeUI() {
   const vol = +document.getElementById('volumeSlider').value / 100;
   const muted = document.getElementById('btnMute').classList.contains('active');
   if (outputGain) outputGain.gain.value = muted ? 0 : vol;
   if (volumeGain) volumeGain.gain.value = vol;
   if (baseNoiseGain) baseNoiseGain.gain.value = 1;
+  if (baseNoiseSpeakerGate) baseNoiseSpeakerGate.gain.value = muted ? 0 : 1;
 }
 function updateOutputDelayTime() {
   if (!outputDelay) return;
@@ -1547,11 +1586,11 @@ const TONE_PATTERNS = {
     hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
     mid:   [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // one plain mid pulse per bar -- generic baseline, no genre character
   },
-  edm: { bpm: 128,
+  house: { bpm: 128,
     kick:  [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
     hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
-    mid:   [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0], // off-beat chord "pluck" stabs, the classic EDM upbeat lead
+    mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   // Treble reworked per request: rapid-fire hihat spurts clustered right
   // before/after each kick (the classic trap hihat "roll"), with real
@@ -1562,13 +1601,13 @@ const TONE_PATTERNS = {
     kick:  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
     hihat: [1,1,0,0,0,1,1,1,1,1,1,0,0,0,0,0], // bursts around kick@0, kick@6, kick@9; quiet stretches elsewhere
-    mid:   [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0], // sparse, syncopated -- rap-vocal-ish stabs, off the beat
+    mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   boombap: { bpm: 90,
     kick:  [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
     hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
-    mid:   [0,0,1,0,0,0,0,0,0,0,1,0,0,1,0,0], // horn/sample-chop stabs, classic boom-bap placement just off the snare
+    mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   // "Chris" -- a bass-music genre: treble is intentionally IDENTICAL to
   // boombap's per request; the distinguishing features are the sustained
@@ -1584,7 +1623,7 @@ const TONE_PATTERNS = {
     kick:  [2,0,0,0,3,0,0,0,2,0,0,0,3,0,0,0], // long sustained hits at 0/8, short hip-hop-style hits between them at 4/12
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
     hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // same as boombap, per request
-    mid:   [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // minimal -- a bass-focused genre, midrange stays out of the way
+    mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass-focused genre, bass/treble only
   },
   // Oldies power-ballad (e.g. "Total Eclipse of the Heart"), not EDM --
   // per request, the midrange here represents SINGING: a slow, sustained,
@@ -1802,56 +1841,18 @@ function hsv(h, s, v) { // h 0-255, s 0-255, v 0-255 -> {r,g,b} 0-255
   return { r: r*255, g: g*255, b: b*255 };
 }
 function scale255(c, amt) { const f = amt/255; return {r:c.r*f, g:c.g*f, b:c.b*f}; }
-// Equalizes two colors' r+g+b SUMS (the brightness metric
-// drawWash()/drawGroundEllipse()/the fixture-dot renderer all actually key
-// off) by brightening ONLY the dimmer one up to match the brighter one --
-// the brighter color is always returned completely unchanged. Used where
-// two palette reference points (e.g. a fire palette's dim "cool" stop vs
-// its much whiter "hot" stop) get repurposed as a matched pair of flash
-// colors (bass vs treble) that should read equally bright at equal hit%.
-//
-// BUGFIX HISTORY: an earlier version of this normalized each color
-// independently by its MAX channel (scale so the single brightest channel
-// hit 255) -- doesn't equalize SUM (a near-pure-blue and a near-white-blue
-// can both have max=255 while summing very differently), so bass still
-// read dimmer than treble. Normalizing independently by SUM to a flat
-// target (255) fixed the mismatch but made EVERYTHING much dimmer than
-// before -- capping every color's sum at 255 throws away the headroom a
-// less-saturated color naturally has (up to 765), which is what made
-// hits across every flame variation (and this fed into china too) go
-// visibly dim compared to shows that don't touch this path (e.g.
-// SpeedStripes) and got reported as a regression. The next version only
-// ever scaled the DIMMER of the pair's channels UP (never scaled anything
-// down) -- correct in spirit, but a pure/saturated color (e.g. (255,0,0),
-// sum 255) has its brightest channel ALREADY at 255, so multiplicative
-// scaling can't increase its sum at all (255*k still clamps to 255) --
-// silently a complete no-op exactly for the most saturated colors, which
-// is exactly what Nightrider's c1/c2 (always S=255,V=255) are. Fixed for
-// real below by redistributing the needed increase across whichever
-// channels AREN'T maxed yet (iterating, since a channel can hit its own
-// ceiling partway through and its remaining share needs to spill over to
-// the others) -- reaches the exact target sum whenever physically
-// possible (i.e. target <= 765), not just whenever pure scaling happens
-// to have headroom.
-function boostSumTo(c, target) {
-  target = Math.min(765, target);
-  let r = c.r, g = c.g, b = c.b;
-  for (let iter = 0; iter < 4; iter++) {
-    const need = target - (r + g + b);
-    if (need <= 0.01) break;
-    const openCount = (r < 255 ? 1 : 0) + (g < 255 ? 1 : 0) + (b < 255 ? 1 : 0);
-    if (openCount === 0) break;
-    const share = need / openCount;
-    if (r < 255) r = Math.min(255, r + share);
-    if (g < 255) g = Math.min(255, g + share);
-    if (b < 255) b = Math.min(255, b + share);
-  }
-  return { r, g, b };
-}
-function equalizeBrightnessPair(a, b) {
-  const sumA = a.r + a.g + a.b, sumB = b.r + b.g + b.b;
-  if (sumA <= 0 || sumB <= 0 || sumA === sumB) return [a, b];
-  return sumA < sumB ? [boostSumTo(a, sumB), b] : [a, boostSumTo(b, sumA)];
+// Boosts brightness up to maxMult x, but never past the point where the
+// brightest channel would hit 255 -- unlike scale255 (a flat per-channel
+// multiply), this can't clip individual channels unevenly, which distorts
+// hue (e.g. a color whose blue channel is already near 255 clips there
+// while red/green keep climbing, shifting the apparent hue toward
+// whichever channel had more headroom). Used wherever a "make this marker
+// read as brighter/more powerful" boost needs to preserve the color's true
+// hue exactly, not just approximate it.
+function boostPreserveHue(c, maxMult) {
+  const peak = Math.max(c.r, c.g, c.b, 1);
+  const f = Math.min(maxMult, 255 / peak);
+  return { r: c.r * f, g: c.g * f, b: c.b * f };
 }
 
 /* =====================================================================
@@ -1865,7 +1866,7 @@ const Ctl = {
   headlightBr: 50,
   chinaBr: 100,
   blacklight: false,
-  speedMph: 4,
+  speedMph: 5,
   currMode: 'nightrider',
   variation: 0,
   // config-mode navigation: 'show' means normal light-show operation;
@@ -1877,7 +1878,7 @@ const Ctl = {
   adjustingPeakThreshold: false, // audio subsetting 0's short-press toggle: noise floor vs peak threshold
   testHue: 0, testSat: 255, testBrightness: 255, // PowerTest screen's HSV test color
   zoomFt: 32, // viewer distance from car center, 20-100ft
-  showFixtureDots: false, // visualizer-only: light up the fixture dots themselves, off by default
+  showFixtureDots: true, // visualizer-only: light up the fixture dots themselves, on by default
   orientation: 'landscape', // visualizer-only viewport orientation, see applyOrientation()
 };
 
@@ -1890,6 +1891,28 @@ let lastFrameT = performance.now();
 
 function updatePotEnergy() { return Ctl.pot; } // 0-100, shared "energy" stand-in
 
+// Precomputed once (fixture positions/washes are static): for each
+// megabar, the rope LED index whose own angular position (from car
+// center) most closely matches a straight line from car center through
+// that megabar's ground spot -- i.e. "the neopixel that line passes
+// thru," per request. Used by showNightrider below whenever there's no
+// audio to react to, so the floods still have a physically-motivated
+// color instead of going dark or freezing on a stale value.
+const NIGHTRIDER_MEGABAR_ROPE_IDX = Array.from({ length: NUM_MEGABAR }, (_, m) => {
+  const wash = m === HEADLIGHT_INDEX ? MEGABAR_FRONT_WASH : MEGABAR_WASH;
+  const spot = groundSpotPx(megabarPos(m), megabarAngle(m), wash);
+  const spotAng = (Math.atan2(spot.y - CAR_Y, spot.x - CAR_X) * 180 / Math.PI + 90 + 360) % 360;
+  let best = 0, bestDelta = Infinity;
+  for (let i = 0; i < NUM_NEO; i++) {
+    const pt = ledPoint(i);
+    const ang = (Math.atan2(pt.y - CAR_Y, pt.x - CAR_X) * 180 / Math.PI + 90 + 360) % 360;
+    let delta = Math.abs(ang - spotAng);
+    if (delta > 180) delta = 360 - delta;
+    if (delta < bestDelta) { bestDelta = delta; best = i; }
+  }
+  return best;
+});
+
 function showNightrider(nowMs, dtMs) {
   clearRope(); clearMegabars(); clearChinas();
   const t = (nowMs - showT0) / 1000;
@@ -1897,6 +1920,8 @@ function showNightrider(nowMs, dtMs) {
   if (Ctl.variation === 0) {
     hue = Math.round(Ctl.pot / 100 * 255);
   } else {
+    // variation 2 ("Auto cycle, no audio") reuses variation 1's exact hue
+    // drift -- the two only differ in how the floods behave below.
     const periodSec = 20 * 60 * Math.pow(1 / (20*60), Ctl.pot / 100); // 20min -> 1s
     hue = Math.round((t % periodSec) / periodSec * 255);
   }
@@ -1920,20 +1945,32 @@ function showNightrider(nowMs, dtMs) {
     const f = Math.max(0, 255 - d * 10);
     ropeLeds[i] = blend(c1, c2, f);
   }
-  const lowHit = AudioBoard.getHitPct(BAND_LOW) / 100 * 255;
-  const highHit = AudioBoard.getHitPct(BAND_HIGH) / 100 * 255;
-  // BUGFIX: c1/c2 are always 128/256 (=180deg) apart in hue, and at fixed
-  // S=255/V=255 a hue's own r+g+b sum varies with hue (255 at a pure
-  // primary -- 0/120/240deg -- up to 510 at a secondary -- 60/180/300deg).
-  // Since 180deg is never a multiple of 120deg, c1 and c2 can NEVER both
-  // land on a primary or both on a secondary -- one of them is ALWAYS
-  // exactly half the other's sum, regardless of which hue is currently
-  // active, so bass and treble hits never actually matched in brightness.
-  // Same equalizeBrightnessPair fix as FlameShow's analogous bug.
-  const [c2Eq, c1Eq] = equalizeBrightnessPair(c2, c1);
-  const mbLow = blend({r:0,g:0,b:0}, c2Eq, lowHit);
-  const mbHigh = blend({r:0,g:0,b:0}, c1Eq, highHit);
-  for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = (m % 3 === 0) ? mbHigh : mbLow;
+  // Variation 2 ("Auto cycle, no audio") never reacts to sound at all;
+  // variations 0/1 fall back to the same no-audio behavior whenever
+  // there's genuinely nothing to react to (AudioBoard.silent) instead of
+  // sitting at black -- per request: draw a line from car center through
+  // each flood's own ground spot, and color that flood with whichever
+  // neopixel color that line passes through (NIGHTRIDER_MEGABAR_ROPE_IDX,
+  // precomputed above), so idle floods still read as part of the same
+  // chase pattern the rope is showing.
+  if (Ctl.variation === 2 || AudioBoard.silent) {
+    for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = ropeLeds[NIGHTRIDER_MEGABAR_ROPE_IDX[m]];
+  } else {
+    const lowHit = AudioBoard.getHitPct(BAND_LOW) / 100 * 255;
+    const highHit = AudioBoard.getHitPct(BAND_HIGH) / 100 * 255;
+    // NOTE: c1/c2 (both hsv(_,255,255)) can land on hues with different
+    // r+g+b sums (255 at a pure primary vs up to 510 at a secondary), which
+    // used to get "corrected" here by force-brightening one color to match
+    // the other's sum -- reverted, since for a large gap that means pushing
+    // a saturated color almost all the way to white, destroying its hue
+    // entirely (confirmed: this is why waterflames/hue-to-white briefly
+    // rendered every hit as plain white). Fixed for real at the RENDERING
+    // level instead -- see drawGroundEllipse()/drawWash()'s brightness
+    // metric, which no longer depends on hue at all.
+    const mbLow = blend({r:0,g:0,b:0}, c2, lowHit);
+    const mbHigh = blend({r:0,g:0,b:0}, c1, highHit);
+    for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = (m % 3 === 0) ? mbHigh : mbLow;
+  }
 }
 
 /* ---- FlameShow: real Fire2012-style heat-diffusion sparkle, ported from
@@ -1947,8 +1984,18 @@ function showNightrider(nowMs, dtMs) {
    for the "higher" neighbor index, reading past the array for roughly the
    upper half of it. Fixed there too; flagged separately since it changes
    real hardware behavior.) */
+// BUGFIX: waterflames' top stop used to be pure White (matching the real
+// firmware's own per-LED sparkle palette, where hot embers legitimately
+// blow out to white -- that's still fine for the ROPE's sparkle texture,
+// see flamePaletteColor() below). The problem was reusing this SAME array
+// to also pick the flood bass/treble reference colors (see floodHuePair()
+// below): sampling near the top stop landed treble very close to White,
+// reading as "the floods are just white" for hits. Changed to a vivid,
+// non-white cyan instead -- flames' own array (DarkRed..Yellow) never had
+// this problem since none of ITS stops are white either, so this just
+// brings waterflames' data in line with flames' own pattern.
 const FLAME_PALETTES = [
-  [[0,0,90],[10,30,255],[70,200,255],[255,255,255]],   // 0 waterflames: DarkBlue,Blue,Aqua,White
+  [[0,0,90],[10,30,255],[70,200,255],[120,230,255]],   // 0 waterflames: DarkBlue,Blue,Aqua,BrightCyan
   [[90,0,0],[255,20,0],[255,120,0],[255,220,60]],       // 1 flames: DarkRed,Red,Orange,Yellow
 ];
 function flamePaletteColor(variation, index, driftHue, satByte) {
@@ -1976,6 +2023,26 @@ function flamePaletteColor(variation, index, driftHue, satByte) {
   if (index < 85) return colorA;
   if (index > 170) return colorB;
   return blend(colorA, colorB, ((index - 85) / 85) * 255);
+}
+// Bass/treble FLOOD reference colors (loColor/hiColor) -- ONE common
+// algorithm for all 4 variations, per request: every flame variation is,
+// at its core, two constant hues (a more-common "primary" and a
+// less-common "secondary"), regardless of how the per-LED sparkle
+// texture's brightness/blend moves around live. Variations 1 (flames) and
+// 2 (shift hues) already read this way naturally -- this just makes 0
+// (waterflames) and 3 (hue-white) use the SAME two-constant-hues shape
+// instead of their own bespoke sampling, which is what was producing a
+// literal white color for one of the two (see FLAME_PALETTES' own comment
+// for waterflames' half of this; hue-to-white's own palette function
+// deliberately returns flat White below index 85, which this bypasses for
+// flood purposes specifically -- the rope's per-LED sparkle still calls
+// flamePaletteColor() directly and keeps blowing out to true white at its
+// hottest, unchanged, since that's the "hue-TO-white" look's whole point).
+function floodHuePair(variation, driftHue, satByte) {
+  if (variation === 3) {
+    return [hsv(driftHue, satByte, 255), hsv((driftHue + 128) % 256, satByte, 255)];
+  }
+  return [flamePaletteColor(variation, 40, driftHue, satByte), flamePaletteColor(variation, 230, driftHue, satByte)];
 }
 
 const flameCurrTemp = new Array(NUM_NEO).fill(0);
@@ -2006,8 +2073,7 @@ function showFlame(nowMs, dtMs) {
   flameShiftHue = (flameShiftHue + hueRate * dtSec) % 256;
   const driftHue = Math.round(flameShiftHue);
   const satByte = Math.round(randomWalkValue(flameSatWalk, nowMs, 0.75, 1.0, 0.013) * 255);
-  const loColor = flamePaletteColor(variation, 40, driftHue, satByte);
-  const hiColor = flamePaletteColor(variation, 230, driftHue, satByte);
+  const [loColor, hiColor] = floodHuePair(variation, driftHue, satByte);
 
   // Cadence gate -- THE actual fix for both "way more hyper than before"
   // and "the pot doesn't seem to do anything". Real firmware rate-limits
@@ -2066,21 +2132,19 @@ function showFlame(nowMs, dtMs) {
       flameChinaSwapBassOnSides = !flameChinaSwapBassOnSides;
       flameChinaSwapNextAt = nowMs + (2000 + Math.random() * 5000);
     }
-    // BUGFIX: loColor/hiColor are palette REFERENCE points (a fire
-    // palette's cool ~40 and hot ~230 heat stops) -- for variations 0/1
-    // (the actual 2-color fire palettes) those stops are NOT equally
-    // bright by design (cool end is meant to look dim, hot end blown out),
-    // so using them directly here made the bass/headlight set (loColor,
-    // m%2===0) read as much dimmer than the treble set (hiColor) even at
-    // equal hit levels -- confirmed by inspecting FLAME_PALETTES: index 40
-    // sums to ~186/765, index 230 to ~694/765. equalizeBrightnessPair only
-    // brightens the dimmer (loColor) up toward hiColor's own level -- see
-    // its comment for why this is safer than normalizing either
-    // independently (that either clips a saturated color or, if capped to
-    // a flat low target, dims everything).
-    const [loColorEq, hiColorEq] = equalizeBrightnessPair(loColor, hiColor);
-    const bassClr = scale255(loColorEq, Math.round(bassHitPct / 100 * 255));
-    const trebleClr = scale255(hiColorEq, Math.round(trebleHitPct / 100 * 255));
+    // NOTE: loColor/hiColor are palette REFERENCE points (a fire palette's
+    // cool ~40 and hot ~230 heat stops) and are NOT equally bright by
+    // design (cool end is meant to look dim, hot end blown out). Used to
+    // "fix" that here by force-brightening loColor up toward hiColor's sum
+    // via equalizeBrightnessPair -- reverted, since for hue/white palettes
+    // (where hiColor IS white, sum=765) that meant boosting loColor almost
+    // all the way to white too, destroying its hue (confirmed: this is why
+    // waterflames/hue-to-white briefly rendered every hit as plain white).
+    // Fixed for real at the RENDERING level instead -- see
+    // drawGroundEllipse()/drawWash()'s brightness metric, which is now
+    // hue-independent.
+    const bassClr = scale255(loColor, Math.round(bassHitPct / 100 * 255));
+    const trebleClr = scale255(hiColor, Math.round(trebleHitPct / 100 * 255));
     for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = (m % 2 === 0) ? bassClr : trebleClr;
     const sidesFollowBass = flameChinaSwapBassOnSides;
     for (const c of FLAME_CHINA_SIDES) chinaLeds[c] = sidesFollowBass ? bassClr : trebleClr;
@@ -2148,16 +2212,34 @@ function showEqualizer(nowMs, dtMs) {
     // previous asymmetric/uneven-height bug. Brightness tracks level
     // directly (dim meter for a quiet signal, not just a short one).
     const bassHitPct = AudioBoard.getHitPct(BAND_LOW), trebleHitPct = AudioBoard.getHitPct(BAND_HIGH);
+    // Meter LENGTH along the rope stays driven by the true, uncompensated
+    // hit% (it's meant to represent the actual audio level spatially).
     const bassLitCount = (bassHitPct / 100) * VU_MAX_REACH;
     const trebleLitCount = (trebleHitPct / 100) * VU_MAX_REACH;
+    // Meter COLOR/brightness gets the same perceptual boost as the chase
+    // variant above (pure blue reads dimmer than pure red on-screen at
+    // equal channel values -- sRGB perceptual-luminance weighting), so red
+    // and blue floods read equally bright at equal hit%.
+    const trebleColorPct = Math.min(100, trebleHitPct * 1.6);
     const bassClr = scale255(c2, Math.round(bassHitPct/100*255));
-    const trebleClr = scale255(c1, Math.round(trebleHitPct/100*255));
+    const trebleClr = scale255(c1, Math.round(trebleColorPct/100*255));
     for (let i = BACK; i < LEFT; i++) ropeLeds[i] = bassClr;   // back edge: always bass base, full width
     for (let i = 0; i < RIGHT; i++) ropeLeds[i] = trebleClr;   // front edge: always treble base, full width
-    function vuSide(startIdx, endIdx, dir) { // dir: +1 back->front increasing index, -1 front->back increasing index
-      for (let i = startIdx; dir > 0 ? i <= endIdx : i >= endIdx; i += dir) {
-        const distFromBack = dir > 0 ? (i - startIdx) : (startIdx - i);
-        const distFromFront = dir > 0 ? (endIdx - i) : (i - endIdx);
+    // refBack/refFront: the meter's own corner-to-center reference points
+    // (VU_HALFLEN/VU_MAX_REACH are calibrated from these, NOT the physical
+    // strand ends -- matches the real firmware's identical corner-inset
+    // convention). loopStart/loopEnd: the actual LED range to paint, which
+    // covers this side's ENTIRE physical strand (true corner to true
+    // corner), not just the reference span -- so the ~33-LED zone between
+    // the true corner and the inset reference point is filled by this same
+    // side-local distance logic (naturally reading as "always lit,
+    // proportional to level" there, since it's past the reference point in
+    // BOTH functions' math), never by reaching into a neighboring strand's
+    // own front/back edge logic. Each side stays self-contained.
+    function vuSide(refBack, refFront, loopStart, loopEnd, dir) {
+      for (let i = loopStart; dir > 0 ? i <= loopEnd : i >= loopEnd; i += dir) {
+        const distFromBack = dir > 0 ? (i - refBack) : (refBack - i);
+        const distFromFront = dir > 0 ? (refFront - i) : (i - refFront);
         const bassLit = distFromBack < bassLitCount, trebleLit = distFromFront < trebleLitCount;
         if (bassLit && trebleLit) ropeLeds[i] = (Math.random() < 0.5) ? bassClr : trebleClr; // crossing zone: equal contributors, random pick instead of blending
         else if (bassLit) ropeLeds[i] = bassClr;
@@ -2165,8 +2247,8 @@ function showEqualizer(nowMs, dtMs) {
         else ropeLeds[i] = {r:0,g:0,b:0};
       }
     }
-    vuSide(VU_BACK_RIGHT, VU_FRONT_RIGHT, -1); // right side: back corner -> front corner
-    vuSide(VU_BACK_LEFT, VU_FRONT_LEFT, 1);    // left side: back corner -> front corner
+    vuSide(VU_BACK_RIGHT, VU_FRONT_RIGHT, BACK - 1, RIGHT, -1);      // right strand: true back corner -> true front corner
+    vuSide(VU_BACK_LEFT, VU_FRONT_LEFT, LEFT, NUM_NEO - 1, 1);       // left strand: true back corner -> true front corner
     // Floods (megabar + china) reproduce the same meter, split by their own
     // physical front/back position -- not in the real firmware yet (which
     // only drives the rope here), added per request so the floods aren't
@@ -2322,9 +2404,16 @@ function showSpeedStripes(nowMs, dtMs) {
 // matches how the real firmware does it (angle1_ = wrap360(angle1_ +
 // vel1_*dtSec), see LighthouseShow.h) -- current position always carries
 // forward continuously; only the RATE changes when the pot moves.
-let lhAngle1 = 0, lhAngle2 = 0, lhHue1 = 0;
+// lhAngle2 seeds at 180 (not 0), matching the real firmware
+// (LighthouseShow.h: angle1_=0, angle2_=180) -- BUGFIX: previously both
+// started at the same 0deg, so with the pot down near 0 (rotation frozen)
+// both beam-pairs land on the exact same position and pickOverlapColor's
+// "brightest wins, exact ties broken randomly" logic flickers between
+// their two hues every single frame -- reads as "one beam, stuck, flashing
+// colors like a lunatic," confirmed to reproduce exactly this way.
+let lhAngle1 = 0, lhAngle2 = 180, lhHue1 = 0;
 function resetLighthouseState() {
-  lhAngle1 = 0; lhAngle2 = 0; lhHue1 = 0;
+  lhAngle1 = 0; lhAngle2 = 180; lhHue1 = 0;
   lhStrobeActive = false; lhHadHit = false; lhSuppressionPeak = 0; lhStrobeLastMs = 0;
 }
 
@@ -2530,7 +2619,14 @@ function brightnessScreen() {
     for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = white;
     for (let c = 0; c < NUM_CHINA; c++) chinaLeds[c] = white;
   } else if (Ctl.configSubsetting === 1) {
-    megabarLeds[HEADLIGHT_INDEX] = white;
+    // All OTHER megabars shown at full max (a fixed, unambiguous reference)
+    // so the live-adjusted headlight can be compared directly against it --
+    // previously left fully off (via the clearMegabars() above), making
+    // that comparison impossible. HEADLIGHT_INDEX gets overwritten right
+    // after by the same live-adjusted white every other subsetting uses,
+    // then dimmed by the live headlightBr% down in renderCurrent()'s hf
+    // scaling, same as during normal show playback.
+    for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = white;
   } else {
     for (let c = 0; c < NUM_CHINA; c++) chinaLeds[c] = white;
   }
@@ -2574,14 +2670,39 @@ function renderCurrent(nowMs, dtMs) {
   }
   // global/china brightness ceiling (linear scale, no gamma -- matches
   // applyBrightnessCeiling()'s own linear-only approach)
+  //
+  // BUGFIX: this used to mutate each array slot's color object IN PLACE
+  // (p.r*=gf etc). Many shows assign the SAME shared color object
+  // reference to multiple array slots (e.g. Lighthouse's `megabarLeds[m] =
+  // (m%3===0) ? mbHigh : mbLow` -- mbHigh/mbLow are each ONE object reused
+  // across several indices), which is harmless on its own, but in-place
+  // mutation here meant that shared object got scaled by gf/hf/cf ONCE PER
+  // ALIASED SLOT, not once total -- e.g. a color shared across all 12
+  // megabars got hit with gf 12 TIMES over (compounding: gf=0.75 -> 0.75^12
+  // = ~3%, gf=0.5 -> 0.5^12 = ~0.02%), reading as fully black at any
+  // globalBr below 100%. Fixed by writing a freshly-scaled object to each
+  // slot instead of mutating whatever object happens to be there, so
+  // aliased slots each get scaled exactly once regardless of sharing
+  // upstream.
   const gf = Ctl.globalBr / 100;
-  for (const p of ropeLeds) { p.r*=gf; p.g*=gf; p.b*=gf; }
-  for (const p of megabarLeds) { p.r*=gf; p.g*=gf; p.b*=gf; }
+  for (let i = 0; i < ropeLeds.length; i++) ropeLeds[i] = scale255(ropeLeds[i], gf * 255);
+  for (let i = 0; i < megabarLeds.length; i++) megabarLeds[i] = scale255(megabarLeds[i], gf * 255);
   const hf = Ctl.headlightBr / 100;
-  megabarLeds[HEADLIGHT_INDEX].r *= hf; megabarLeds[HEADLIGHT_INDEX].g *= hf; megabarLeds[HEADLIGHT_INDEX].b *= hf;
+  megabarLeds[HEADLIGHT_INDEX] = scale255(megabarLeds[HEADLIGHT_INDEX], hf * 255);
   const cf = Ctl.chinaBr / 100 * gf;
-  for (const p of chinaLeds) { p.r*=cf; p.g*=cf; p.b*=cf; }
-  if (Ctl.blacklight) for (const p of chinaLeds) { p.r = Math.max(p.r, 110); p.g = Math.max(p.g, 0); p.b = Math.max(p.b, 255); }
+  for (let i = 0; i < chinaLeds.length; i++) chinaLeds[i] = scale255(chinaLeds[i], cf * 255);
+  if (Ctl.blacklight) {
+    // Real hardware's blacklight is a genuine UV LED channel (full on/off,
+    // see MagicCarpet::setBlacklight()) with no RGB equivalent to render
+    // literally -- this purple-ish minimum-floor is a visualizer-only
+    // stand-in. Dimmed 25% per request (visualizer-cosmetic only, doesn't
+    // correspond to any real hardware brightness change since the real
+    // channel has no brightness dial).
+    for (let i = 0; i < chinaLeds.length; i++) {
+      const p = chinaLeds[i];
+      chinaLeds[i] = { r: Math.max(p.r, 110 * 0.75), g: Math.max(p.g, 0), b: Math.max(p.b, 255 * 0.75) };
+    }
+  }
 }
 
 /* =====================================================================
@@ -2623,7 +2744,16 @@ function rgba(c, a) { return `rgba(${Math.round(Math.min(255,Math.max(0,c.r)))},
 // clipped out the deck footprint (see draw()) so this never paints
 // "through" the car.
 function drawWash(originPx, azimuthDeg, wash, color, brightMult) {
-  const brightness = color.r + color.g + color.b;
+  // Brightness metric is the MAX channel, not r+g+b SUM -- any fully
+  // saturated HSV(_,255,255) color has max channel exactly 255 regardless
+  // of hue (a "pure primary" hue only sums to 255, a "secondary" hue up to
+  // 510, white 765 -- SUM made brightness hue-dependent, so a saturated
+  // red flashed at a genuine 100% hit could look dramatically dimmer than
+  // a saturated yellow at the same hit%, and never even reach full alpha).
+  // Max-channel is exactly 255 for ANY fully-saturated color, so this
+  // reads brightness the same regardless of hue -- confirmed root cause of
+  // "floods are dimmer/inconsistent across shows" reports.
+  const brightness = Math.max(color.r, color.g, color.b);
   if (brightness < 3) return;
   const a = (azimuthDeg - 90) * Math.PI / 180; // 0deg = front/up, clockwise -- matches edgeInsetPoint
   const halfSpread = (FLOOD_SPREAD_DEG / 2) * Math.PI / 180;
@@ -2632,7 +2762,7 @@ function drawWash(originPx, azimuthDeg, wash, color, brightMult) {
   // the light passing through the air shouldn't visibly reach any farther
   // than where its brightest point on the ground actually is.
   const farPx = Math.max(wash.centerDist * PX_PER_FT, 6);
-  const peakAlpha = Math.min(1, (brightness / 765) * 0.9 * brightMult);
+  const peakAlpha = Math.min(1, (brightness / 255) * 0.9 * brightMult);
 
   // Subtle lateral falloff across the cone's width -- brighter dead center,
   // a bit dimmer toward the left/right edges of the spread ("not by much,
@@ -2684,7 +2814,10 @@ function drawWash(originPx, azimuthDeg, wash, color, brightMult) {
 // whichever of the near/far edges is farther from center, so the visible
 // spot always covers the full geometric footprint.
 function drawGroundEllipse(originPx, azimuthDeg, wash, color, brightMult) {
-  const brightness = color.r + color.g + color.b;
+  // Max channel, not SUM -- see drawWash()'s comment for why (hue-
+  // independent brightness reading, always 255 for a fully-saturated
+  // color regardless of hue).
+  const brightness = Math.max(color.r, color.g, color.b);
   if (brightness < 3) return;
   const a = (azimuthDeg - 90) * Math.PI / 180;
   const dir = { x: Math.cos(a), y: Math.sin(a) };
@@ -2697,7 +2830,7 @@ function drawGroundEllipse(originPx, azimuthDeg, wash, color, brightMult) {
   // hotter/tighter than megabars); defaults to a broad, gentle peak.
   const peakScale = wash.peakScale || 1.0;
 
-  const peakAlpha = Math.min(1, (brightness / 380) * brightMult);
+  const peakAlpha = Math.min(1, (brightness / 255) * brightMult);
   ctx2d.save();
   ctx2d.translate(pos.x, pos.y);
   ctx2d.rotate(a);
@@ -3093,7 +3226,21 @@ function draw() {
   const MB_R = 8;
   for (let m = 0; m < NUM_MEGABAR; m++) {
     const p = megabarPos(m);
-    const c = megabarLeds[m];
+    // BUGFIX (recurring): megabarLeds[HEADLIGHT_INDEX] stores the PER-LAMP
+    // color (headlightBr 50-100% of global, see renderCurrent()) -- correct
+    // for driving the real 2-lamp hardware, but drawn AS-IS here each dot
+    // literally displayed at half brightness at the 50% (minimum) setting,
+    // reading as visibly dimmer than any other single megabar despite the
+    // pair's combined output never actually being less (2 lamps at >=50%
+    // each is already >= one normal megabar's worth of light). Scale2x's
+    // display-only, matching the same "combined output" interpretation the
+    // ground-ellipse wash already uses (MEGABAR_MULT*2 there) -- at 50% each
+    // dot now reads exactly as bright as a normal megabar (so the PAIR,
+    // being two of them, always reads as bright or brighter, never dimmer),
+    // and at 100% each dot is already clamped to full same as a normal dot,
+    // with the second lamp's own separate glow being what reads as
+    // "brighter than a single megabar," not an over-255 color.
+    const c = (m === HEADLIGHT_INDEX) ? boostPreserveHue(megabarLeds[m], 2) : megabarLeds[m];
     // Fixture dots off by default (per request) -- the cone/spot already
     // shows the light; the dot is just a position marker unless the
     // checkbox is on. Doesn't touch megabarLeds/chinaLeds themselves, only
@@ -3129,10 +3276,20 @@ function draw() {
   }
 
   // china -- per request, china are much more powerful than megabars, not
-  // "tiny little headlamps": dots rendered 3x brighter and 2x the radius.
+  // "tiny little headlamps": dots rendered up to 3x brighter and 2x the
+  // radius.
+  // BUGFIX: this used to be a flat scale255(..., 765) (3x every channel,
+  // then implicitly clipped at 255 by css()) -- for a color already close
+  // to max in one channel (e.g. blacklight's forced-minimum blue), that
+  // channel clips almost immediately while the others keep climbing,
+  // shifting the dot's apparent HUE away from the true beam color (ground
+  // ellipse/wash both use the real, unscaled color -- only this dot marker
+  // had the mismatch). boostPreserveHue scales all channels by the SAME
+  // factor, so the ratio -- and therefore the hue -- always matches the
+  // beam exactly, brightened only as far as headroom actually allows.
   for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
     const p = CHINA_POS[cIdx];
-    const c = scale255(chinaLeds[cIdx], 765); // 3x brightness (scale255's amt is out of 255, so 3*255=765)
+    const c = boostPreserveHue(chinaLeds[cIdx], 3);
     const brightness = Ctl.showFixtureDots ? (c.r + c.g + c.b) : 0; // off by default, see the megabar loop's comment above
     ctx2d.beginPath();
     ctx2d.arc(p.x, p.y, 9, 0, Math.PI*2); // dot size reverted to the original 9px -- the "spot" being too small referred to the ground spot, not this marker
@@ -3151,22 +3308,26 @@ function draw() {
    UI WIRING
    ===================================================================== */
 const VARIATIONS = {
-  nightrider: ['Manual hue', 'Auto cycle'],
+  nightrider: ['Manual hue', 'Auto cycle', 'Auto cycle, no audio'],
   flame: ['Waterflames', 'Flames', 'Shift hues', 'Hue-white'],
   equalizer: ['Chase', 'VU meter'],
   speedstripes: ['Rope+MB', 'Rope+MB+China'],
   lighthouse: ['Default', 'No china'],
   cfg_meter: [], cfg_decay: [], cfg_predict: [], cfg_foresight: [],
 };
+// Per-show default variation index, shown on first load / whenever that
+// show is freshly selected -- defaults to 0 unless listed here.
+// SpeedStripes defaults to the china-lights variant per request.
+const DEFAULT_VARIATION = { speedstripes: 1 };
 function refreshVariationRow() {
   const row = document.getElementById('variationRow');
   row.innerHTML = '';
   const opts = VARIATIONS[Ctl.currMode] || [];
-  Ctl.variation = 0;
+  Ctl.variation = DEFAULT_VARIATION[Ctl.currMode] || 0;
   opts.forEach((name, idx) => {
     const b = document.createElement('button');
     b.textContent = name;
-    if (idx === 0) b.classList.add('active');
+    if (idx === Ctl.variation) b.classList.add('active');
     b.onclick = () => {
       Ctl.variation = idx;
       [...row.children].forEach(c => c.classList.remove('active'));
@@ -3347,6 +3508,81 @@ function updateStatusPanel() {
     modeLabel.textContent = 'CONFIG — ' + Ctl.appMode.toUpperCase();
     detail.textContent = SUBSETTING_NAMES[Ctl.appMode][Ctl.configSubsetting] + ':  ' + currentSubsettingValueText();
   }
+  updateInputActionTable();
+}
+const HIT_PREDICT_STYLE_NAMES = ['off', 'exponential-rise', 'machine-gun', 'drum-intro'];
+// Everything each physical input currently does, in plain language, for
+// the app's present state -- drives the 4x2 "Left/Right/Pot/Short/Med/
+// Long/XL/Double" action table (see .action-cell markup). Recomputed
+// fresh on every call rather than cached, since it depends on a wide
+// spread of state (appMode, configSubsetting, currMode, variation,
+// adjustingPeakThreshold...) that's cheapest to just re-derive.
+function describeInputActions() {
+  const a = {};
+  if (Ctl.appMode === 'show') {
+    const opts = VARIATIONS[Ctl.currMode] || [];
+    if (opts.length >= 2) {
+      const next = opts[(Ctl.variation + 1) % opts.length], prev = opts[(Ctl.variation - 1 + opts.length) % opts.length];
+      a.left = 'previous variation (' + prev + ')';
+      a.right = 'next variation (' + next + ')';
+    } else {
+      a.left = a.right = 'no effect (this show has no other variations)';
+    }
+    const potByShow = {
+      nightrider: Ctl.variation === 0 ? 'set hue directly' : Ctl.variation === 2 ? 'no effect (this variation ignores the pot)' : 'set auto hue-cycle speed',
+      lighthouse: 'set beam rotation speed',
+      flame: 'set hue-drift speed',
+      equalizer: 'no effect',
+      speedstripes: 'no effect',
+    };
+    a.pot = potByShow[Ctl.currMode] || 'no effect';
+  } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 4) {
+    a.left = a.right = 'toggle auto-gain ' + (AudioBoard.autoGainEnabled ? 'off' : 'on');
+    a.pot = 'no effect (auto-gain is a toggle, not pot-driven)';
+  } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 2) {
+    const cur = AudioBoard.hitPredictionStyle;
+    a.left = 'previous hit-prediction style (' + HIT_PREDICT_STYLE_NAMES[(cur - 1 + 4) % 4] + ')';
+    a.right = 'next hit-prediction style (' + HIT_PREDICT_STYLE_NAMES[(cur + 1) % 4] + ')';
+    a.pot = 'set hit-prediction lead time';
+  } else if (Ctl.appMode === 'powertest') {
+    const names = ['hue', 'saturation', 'test brightness'];
+    a.left = 'decrease ' + names[Ctl.configSubsetting];
+    a.right = 'increase ' + names[Ctl.configSubsetting];
+    a.pot = 'no effect (Hue/Saturation/Brightness are encoder-driven here, not pot-driven)';
+  } else if (Ctl.appMode === 'brightness') {
+    a.left = a.right = 'no effect';
+    a.pot = ['set global brightness', 'set headlight brightness (50-100%)', 'set china brightness'][Ctl.configSubsetting];
+  } else { // audio, subsettings 0 (threshold) / 1 (hit decay) / 3 (foresight)
+    a.left = a.right = 'no effect';
+    if (Ctl.configSubsetting === 0) a.pot = 'set ' + (Ctl.adjustingPeakThreshold ? 'peak threshold' : 'noise floor');
+    else if (Ctl.configSubsetting === 1) a.pot = 'set hit decay time';
+    else a.pot = 'set audio foresight lead time';
+  }
+
+  if (Ctl.appMode === 'show') {
+    a.short = 'next show (' + showOrder[(showOrder.indexOf(Ctl.currMode) + 1) % showOrder.length] + ')';
+    a.med = 'no effect (only in config)';
+    a.long = 'enter config mode';
+    a.double = 'toggle blacklight ' + (Ctl.blacklight ? 'off' : 'on');
+  } else {
+    if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 0) {
+      a.short = 'switch to adjusting ' + (Ctl.adjustingPeakThreshold ? 'noise floor' : 'peak threshold');
+    } else {
+      a.short = 'next ' + Ctl.appMode + ' subsetting';
+    }
+    a.med = 'next config screen (' + ({brightness:'Audio', audio:'PowerTest', powertest:'Brightness'})[Ctl.appMode] + ')';
+    a.long = 'cancel out of config (no changes discarded -- everything here applies live)';
+    a.double = 'commit & exit config';
+  }
+  a.xl = 'turn all lights ' + (Ctl.globalBr > 0 ? 'off' : 'on');
+  return a;
+}
+function updateInputActionTable() {
+  const a = describeInputActions();
+  const set = (id, text) => { document.getElementById(id).querySelector('span').textContent = text; };
+  set('actLeft', a.left); set('actRight', a.right); set('actPot', a.pot);
+  set('actShort', a.short); set('actMed', a.med); set('actLong', a.long);
+  set('actXL', a.xl); set('actDouble', a.double);
 }
 function enterConfigMode() {
   Ctl.prevShowMode = Ctl.currMode;
@@ -3393,8 +3629,13 @@ function applyConfigPot() {
     else { Ctl.chinaBr = pct; syncSlider('chinaBrSlider', 'chinaBrVal', pct, '%'); }
   } else if (Ctl.appMode === 'audio') {
     if (Ctl.configSubsetting === 0) {
-      if (Ctl.adjustingPeakThreshold) { AudioBoard.peakThresholdPct = pct; syncSlider('peakThreshSlider', 'peakThreshVal', pct, '%'); }
-      else { AudioBoard.noiseFloorPct = pct; syncSlider('noiseFloorSlider', 'noiseFloorVal', pct, '%'); }
+      // BUGFIX: ported from the real firmware (CarpetLightLogic.cpp) which
+      // already clamps each of these against the OTHER's current value --
+      // peak threshold may never drop below the noise floor, and vice
+      // versa -- this visualizer port was missing that clamp entirely, so
+      // either could be dragged past the other.
+      if (Ctl.adjustingPeakThreshold) { AudioBoard.peakThresholdPct = Math.max(pct, AudioBoard.noiseFloorPct); syncSlider('peakThreshSlider', 'peakThreshVal', AudioBoard.peakThresholdPct, '%'); }
+      else { AudioBoard.noiseFloorPct = Math.min(pct, AudioBoard.peakThresholdPct); syncSlider('noiseFloorSlider', 'noiseFloorVal', AudioBoard.noiseFloorPct, '%'); }
     } else if (Ctl.configSubsetting === 1) { const ms = Math.round(pct / 100 * 3000); AudioBoard.hitDecayMs = ms; syncSlider('hitDecaySlider', 'hitDecayVal', ms, 'ms'); }
     else if (Ctl.configSubsetting === 2) {
       // BUGFIX: the `|| 1000` fallback let hit-prediction scale up to
@@ -3502,6 +3743,8 @@ function potAngleFromCursor(clientX, clientY) {
 function setPotFromCursor(clientX, clientY) {
   Ctl.pot = (potAngleFromCursor(clientX, clientY) + 150) / 300 * 100;
   updatePotKnob();
+  flashActionCell('actPot'); // re-armed on every drag event, so it stays lit for the whole turn, not just a single blip
+  updateInputActionTable();
   if (Ctl.appMode !== 'show') applyConfigPot();
 }
 document.getElementById('potKnob').addEventListener('mousedown', (e) => {
@@ -3532,10 +3775,27 @@ function setEncoderArrowPressed(dir, pressed) {
   group.classList.toggle('pressed', pressed);
   return group;
 }
+// BUGFIX: encoder turns during normal show playback did nothing at all --
+// the real firmware cycles to the next/previous variation on every encoder
+// detent while a show is running (see NightriderShow.h/BumpingAudioShow.h,
+// each calling carpet->encoder->readPositionDelta() in their own update()),
+// same convention across every multi-variation show. This visualizer port
+// only ever wired the encoder to CONFIG-mode adjustments (appMode !== 'show'
+// below), leaving show-mode variation cycling entirely unimplemented.
+function cycleShowVariation(dir) {
+  const opts = VARIATIONS[Ctl.currMode] || [];
+  if (opts.length < 2) return;
+  const buttons = document.getElementById('variationRow').children;
+  const newIdx = ((Ctl.variation + dir) % opts.length + opts.length) % opts.length;
+  buttons[newIdx].click(); // reuses the real click handler, so highlight + Ctl.variation stay in sync
+}
 function doEncoderStep(dir) {
   Ctl.encoderPos += dir;
   updateEncoderKnob();
+  flashActionCell(dir < 0 ? 'actLeft' : 'actRight');
   if (Ctl.appMode !== 'show') applyEncoderStep(dir);
+  else cycleShowVariation(dir);
+  updateInputActionTable();
 }
 document.getElementById('encoderKnob').addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
@@ -3593,11 +3853,12 @@ const ENC_BTN_MEDIUM_MS = 300, ENC_BTN_LONG_MS = 1500, ENC_BTN_XLONG_MS = 3000, 
 let encBtnDown = false, encBtnPressStartMs = 0, encBtnLiveActionFired = false;
 let encBtnHoldTimer = null;
 let encBtnAwaitingSecondPress = false, encBtnSecondPressWindowStartMs = 0, encBtnShortPendingTimer = null;
-const ENC_BTN_ACTION_TO_BUTTON = { short: 'btnShort', medium: 'btnMedium', long: 'btnLong', xlong: 'btnXLong', double: 'btnDouble' };
+const ENC_BTN_ACTION_TO_CELL = { short: 'actShort', medium: 'actMed', long: 'actLong', xlong: 'actXL', double: 'actDouble' };
+const ENC_BTN_ACTION_FN = { short: doShortPress, medium: doMediumPress, long: doLongPress, xlong: doXLongPress, double: doDoublePress };
 function fireEncBtnAction(type) {
-  const id = ENC_BTN_ACTION_TO_BUTTON[type];
-  document.getElementById(id).onclick();
-  flashPressButton(id);
+  ENC_BTN_ACTION_FN[type]();
+  flashActionCell(ENC_BTN_ACTION_TO_CELL[type]);
+  updateInputActionTable();
 }
 function encoderCenterBtnDown() {
   const btn = document.getElementById('encoderCenterBtn');
@@ -3645,7 +3906,13 @@ function encoderCenterBtnUp() {
 }
 
 const showOrder = ['nightrider','lighthouse','flame','equalizer','speedstripes'];
-document.getElementById('btnShort').onclick = () => {
+// These 5 used to be onclick handlers on real buttons -- now plain
+// functions, since the "Short/Med/Long/XL/Double" row is a read-only
+// action-description table (see the .action-cell markup / updateInputAction
+// Table() below). Still triggered the same way: the encoder's own center
+// push-button (see the ENC_BTN_* state machine above), classified into
+// these 5 by hold duration, same as always.
+function doShortPress() {
   if (Ctl.appMode === 'show') {
     const idx = (showOrder.indexOf(Ctl.currMode) + 1) % showOrder.length;
     Ctl.currMode = showOrder[idx];
@@ -3666,37 +3933,36 @@ document.getElementById('btnShort').onclick = () => {
   } else {
     cycleConfigSubsetting();
   }
-};
-document.getElementById('btnMedium').onclick = () => {
+}
+function doMediumPress() {
   if (Ctl.appMode !== 'show') advanceConfigScreen();
-};
-document.getElementById('btnLong').onclick = () => {
+}
+function doLongPress() {
   if (Ctl.appMode === 'show') enterConfigMode(); else exitConfigMode();
-};
-document.getElementById('btnDouble').onclick = () => {
+}
+function doDoublePress() {
   if (Ctl.appMode === 'show') {
     Ctl.blacklight = !Ctl.blacklight;
     document.getElementById('blacklightCheck').checked = Ctl.blacklight;
   } else {
     exitConfigMode(); // commit -- this sim applies every change live already, so commit and cancel both just return to ModeShow
   }
-};
-document.getElementById('btnXLong').onclick = () => {
+}
+function doXLongPress() {
   Ctl.globalBr = Ctl.globalBr > 0 ? 0 : 100;
   document.getElementById('globalBrSlider').value = Ctl.globalBr;
   document.getElementById('globalBrVal').textContent = Ctl.globalBr + '%';
-};
-// Each press button lights up orange for 150ms on click -- both a real
-// mouse click here, and (via fireEncBtnAction, above) whenever that same
-// press type is triggered from the encoder's own center push-button.
-function flashPressButton(id) {
-  const btn = document.getElementById(id);
-  btn.classList.add('pressed-flash');
-  clearTimeout(btn._flashTimer);
-  btn._flashTimer = setTimeout(() => btn.classList.remove('pressed-flash'), 150);
 }
-for (const id of Object.values(ENC_BTN_ACTION_TO_BUTTON)) {
-  document.getElementById(id).addEventListener('click', () => flashPressButton(id));
+// The bold first word of an action-cell lights up orange for 150ms --
+// mirrors the old physical buttons' own press-flash, now driven only by
+// the encoder's center push-button (for Short/Med/Long/XL/Double) or by
+// turning the encoder/pot themselves (for Left/Right/Pot, see
+// doEncoderStep()/the pot drag handler).
+function flashActionCell(id) {
+  const cell = document.getElementById(id);
+  cell.classList.add('flash');
+  clearTimeout(cell._flashTimer);
+  cell._flashTimer = setTimeout(() => cell.classList.remove('flash'), 150);
 }
 
 function bindSlider(id, valId, fmt, apply) {
