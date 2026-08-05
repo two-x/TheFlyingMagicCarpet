@@ -30,7 +30,7 @@ struct State {
    uint8_t noiseFloorPercent;          // 0-100, default 0 -- audio below this is "silence" (see AudioBoard.h)
    uint8_t peakThresholdPercent;       // 0-100, default 31 (approx. the old hardcoded 80/255) -- audio above
                                         // this counts as a "hit"/peak (see AudioBoard.h::PEAK_THRESHOLD)
-   uint8_t autoGainEnabled;            // 0/1, default 0 (off) -- see AudioBoard.h
+   uint8_t agcMode;                    // AGCoff/AGCband/AGCfull, default AGCoff -- see AudioBoard.h's AGCMode
    uint8_t testHue;                    // 0-255, default 0 -- power-saving test color (see CarpetLightLogic.cpp)
    uint8_t testSat;                    // 0-255, default 255
    uint8_t testBrightness;             // 0-255, default 255
@@ -39,6 +39,7 @@ struct State {
    uint16_t audioForesightMs;          // 0-1000, default 0 -- how far back in time sampled audio is looked up (see AudioBoard.h)
    uint16_t hitPredictionMs;           // 0-audioForesightMs, default 0 -- predictive lead-up before an upcoming hit (see AudioBoard.h)
    uint8_t hitPredictionStyle;         // 0=disabled/1=exponential/2=pulse train, default 1 (see AudioBoard.h's HitPredictionStyle)
+   uint8_t soundReactivityEnabled;     // 0/1, default 1 (on) -- global kill switch for all sound-reactive light behavior (see AudioBoard.h)
 };
 
 static State state;
@@ -56,7 +57,7 @@ inline void load() {
       state.chinaBrightnessPercent = 100;
       state.noiseFloorPercent = 0;
       state.peakThresholdPercent = 31;
-      state.autoGainEnabled = 0;
+      state.agcMode = AGCoff;
       state.testHue = 0;
       state.testSat = 255;
       state.testBrightness = 255;
@@ -65,6 +66,7 @@ inline void load() {
       state.audioForesightMs = 0;
       state.hitPredictionMs = 0;
       state.hitPredictionStyle = 1; // PredictExponential
+      state.soundReactivityEnabled = 1;
       flash.write( 0, (byte *)&state, sizeof( State ) );
    }
 }
@@ -97,8 +99,8 @@ inline uint8_t loadedPeakThreshold() {
    return state.peakThresholdPercent;
 }
 
-inline bool loadedAutoGainEnabled() {
-   return state.autoGainEnabled != 0;
+inline uint8_t loadedAgcMode() {
+   return state.agcMode;
 }
 
 inline uint8_t loadedTestHue() {
@@ -131,6 +133,10 @@ inline uint16_t loadedHitPredictionMs() {
 
 inline uint8_t loadedHitPredictionStyle() {
    return state.hitPredictionStyle;
+}
+
+inline bool loadedSoundReactivityEnabled() {
+   return state.soundReactivityEnabled != 0;
 }
 
 inline void saveShow( uint8_t show ) {
@@ -169,8 +175,8 @@ inline void savePeakThreshold( uint8_t percent ) {
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 
-inline void saveAutoGainEnabled( bool enabled ) {
-   state.autoGainEnabled = enabled ? 1 : 0;
+inline void saveAgcMode( uint8_t mode ) {
+   state.agcMode = mode;
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 
@@ -211,6 +217,11 @@ inline void saveHitPredictionMs( uint16_t ms ) {
 
 inline void saveHitPredictionStyle( uint8_t style ) {
    state.hitPredictionStyle = style;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveSoundReactivityEnabled( bool enabled ) {
+   state.soundReactivityEnabled = enabled ? 1 : 0;
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 

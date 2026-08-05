@@ -257,17 +257,27 @@ class FlameShow : public LightShow {
          // as the rope (this whole block), but cools twice as fast -- a
          // shorter flash duration than the rope's own sparks, per request
          // (floods read as too long/lingering at the rope's cooling rate).
-         // Spark count is proportional, not fixed: the fraction of
-         // floodlights sparkling per cycle is its own rate, decoupled from
-         // the rope's sparkingRate -- per request ("floods entirely too
-         // hyper"), floods sparked at the SAME rate as the rope up to now,
-         // which read as too busy; floodSparkingRate is that same rate
-         // divided by 3, applied to each fixture count and rounded to the
-         // nearest whole fixture -- floods are still chosen at random.
+         //
+         // BUGFIX ("pot only affects the energy of the neopixels, not the
+         // floods"): floodSparkingRate used to be its own rate derived
+         // from the FIXED sparkingRate constant (same one the rope always
+         // uses, itself not pot-scaled -- only this whole block's own
+         // CADENCE is pot-driven) -- floods and rope were two independent
+         // simulations that merely happened to tick on the same clock, so
+         // nothing tied the floods' own visible energy to how hot the rope
+         // actually currently looks. Now measures the rope's own just-
+         // computed currTemperature[] directly (its real, live average
+         // heat, continually re-derived every tick) and drives floods from
+         // THAT instead -- floods are now a direct reflection of the
+         // rope's actual current energy, not a parallel, independently-
+         // tuned process.
+         uint32_t ropeTempSum = 0;
+         for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) ropeTempSum += currTemperature[ i ];
+         uint8_t ropeAvgTemp = (uint8_t)( ropeTempSum / NUM_NEO_LEDS_ACTUAL );
          uint8_t floodCoolingRate = qadd8( coolingRate, coolingRate ); // 2x rope's rate, clamped at 255
          for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) megabarHeat[ i ] = qsub8( megabarHeat[ i ], floodCoolingRate );
          for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) chinaHeat[ i ] = qsub8( chinaHeat[ i ], floodCoolingRate );
-         uint8_t floodSparkingRate = sparkingRate / 3;
+         uint8_t floodSparkingRate = ropeAvgTemp / 3; // /3 keeps the earlier "floods entirely too hyper" fix
          float sparkFraction = (float)floodSparkingRate / 255.0f;
          int megabarSparkCount = (int)( NUM_MEGABAR_LEDS * sparkFraction + 0.5f );
          int chinaSparkCount = (int)( NUM_CHINA_LEDS * sparkFraction + 0.5f );
@@ -323,7 +333,7 @@ class FlameShow : public LightShow {
       // EQ_HIT_BRIGHTNESS_FLOOR fix for the identical "reads dim at
       // anything less than a maxed hit" root cause.
       static constexpr float FLAME_HIT_BRIGHTNESS_FLOOR = 0.65f;
-      float dmxvalFrac = max( FLAME_HIT_BRIGHTNESS_FLOOR, (float)AudioBoard::getHitPercent( BandLow ) / 100.0f );
+      float dmxvalFrac = max( FLAME_HIT_BRIGHTNESS_FLOOR, (float)AudioBoard::getHitPercent( BandBass ) / 100.0f );
       int dmxval = (int)( dmxvalFrac * 255.0f + 0.5f );
       CRGB dmxclr = paletteColor( dmxval );
       LedUtil::gammaCorrect( dmxclr );

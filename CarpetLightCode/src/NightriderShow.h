@@ -197,26 +197,27 @@ class NightriderShow : public LightShow {
       LedUtil::reverse( carpet->ropeLeds + RIGHT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
       LedUtil::reverse( carpet->ropeLeds + LEFT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
 
-      int lowval = (int)AudioBoard::getNormalPercent( BandLow ) * 255 / 100; // AudioBoard's getters are percent now; converted back to this show's own existing 0-255 scale
-      static int lastlow = lowval;
-      if (lowval > 80 && lowval > lastlow) {
-         lastlow = lowval;
-      } else {
-         lastlow = lastlow > 15 ? lastlow - 15 : 0;
-      }
-      CRGB dmxclr1 = blend( clr1, clr2, lastlow );
-      LedUtil::fill( carpet->megabarLeds, dmxclr1, NUM_MEGABAR_LEDS );
+      // megabars stay purely cosmetic now -- no audio reactivity here, since
+      // per request all of this show's sound reactivity lives on china only
+      LedUtil::fill( carpet->megabarLeds, blend( clr1, clr2, 128 ), NUM_MEGABAR_LEDS );
 
-      int highval = (int)AudioBoard::getNormalPercent( BandHigh ) * 255 / 100; // see lowval's comment above
-      static int lasthigh = highval;
-      if (highval > 100 && highval > lasthigh) {
-         lasthigh = highval;
-      } else {
-         lasthigh = lasthigh > 25 ? lasthigh - 25 : 0;
-      }
-      CRGBW dmxclr2 = blend( clr1, clr2, lastlow );
-      dmxclr2.w = lasthigh;
-      LedUtil::fill( carpet->chinaLeds, dmxclr2, NUM_CHINA_LEDS );
+      // china: a slow, mellow breathing glow rather than the old snap-attack/
+      // fast-decay flash -- both bass and treble are low-pass filtered with a
+      // small coefficient so the light eases up and down with the music
+      // instead of jumping. Bass sets the chase-color brightness, treble
+      // fades in the white channel on top of it.
+      static float bassGlow = 0.0f;   // 0..255, smoothed BandBass level
+      static float trebleGlow = 0.0f; // 0..255, smoothed BandTreble level
+      static const float GLOW_SMOOTH = 0.03f; // low-pass coefficient -- small = slow/mellow follow, same each frame regardless of dt (called every loop at roughly constant rate)
+      float bassTarget = AudioBoard::getNormalPercent( BandBass ) * 2.55f;
+      float trebleTarget = AudioBoard::getNormalPercent( BandTreble ) * 2.55f;
+      bassGlow += ( bassTarget - bassGlow ) * GLOW_SMOOTH;
+      trebleGlow += ( trebleTarget - trebleGlow ) * GLOW_SMOOTH;
+
+      CRGBW chinaClr = blend( clr1, clr2, (uint8_t)bassGlow );
+      chinaClr.nscale8( (uint8_t)( 96 + bassGlow / 255.0f * 159 ) ); // never fully dark between beats, still breathes with them
+      chinaClr.w = (uint8_t)trebleGlow;
+      LedUtil::fill( carpet->chinaLeds, chinaClr, NUM_CHINA_LEDS );
 
       /*
       static uint8_t white = 0;

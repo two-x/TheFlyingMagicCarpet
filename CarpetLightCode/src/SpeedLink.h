@@ -70,6 +70,20 @@ class SpeedLink {
       return speedHundredthsMph_ / 100.0f;
    }
 
+   // 1 mph = 5280ft / 3600s = 1.4667 ft/s. Exposed as a standalone converter
+   // (not just off the live reading) since shows often need to convert an
+   // already-fetched/staleness-zeroed mph value rather than re-reading here.
+   static float mphToFtPerSec( float mph ) {
+      return mph * 1.46667f;
+   }
+
+   // feet/sec is the more directly useful unit for shows that scroll or
+   // position content along physical rope/fixture geometry (CarpetGeometry
+   // distances are all in feet)
+   static float getSpeedFtPerSec() {
+      return mphToFtPerSec( getSpeedMph() );
+   }
+
    // true if a speed packet has arrived within the last staleMs -- lets a
    // speed-reactive show fall back to "stopped" behavior if the link drops
    // instead of freezing on the last received value forever

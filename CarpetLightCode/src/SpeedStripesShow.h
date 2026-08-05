@@ -271,7 +271,7 @@ class SpeedStripesShow : public LightShow {
    float zebraChinaBrightnessFraction() {
       if ( !AudioBoard::silent_ ) zebraSilenceTimer_.reset();
       if ( zebraSilenceTimer_.elapsed() >= 10000 ) return 1.0f;
-      float bassFrac = AudioBoard::getHitPercent( BandLow ) / 100.0f;
+      float bassFrac = AudioBoard::getHitPercent( BandBass ) / 100.0f;
       return max( ZEBRA_CHINA_REST_FRACTION, bassFrac );
    }
    void renderZebraSide( int backCornerIdx, int frontCornerIdx, float satFraction ) {
@@ -286,8 +286,7 @@ class SpeedStripesShow : public LightShow {
       }
    }
    void updateZebra( uint32_t time, float dtSec, bool fresh, float speedMph ) {
-      static const float FT_PER_MPH_PER_SEC = 1.4667f; // same conversion the default variation's scroll uses
-      zebraPosFt_ += speedMph * FT_PER_MPH_PER_SEC * dtSec;
+      zebraPosFt_ += SpeedLink::mphToFtPerSec( speedMph ) * dtSec;
       float satFraction = zebraSatFraction( fresh ? speedMph : 0.0f );
 
       carpet->clearRope(); carpet->clearMegabars(); carpet->clearChinas();

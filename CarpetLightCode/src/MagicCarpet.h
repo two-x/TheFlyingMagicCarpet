@@ -432,14 +432,15 @@ class MagicCarpet {
    //    percent position (0=back corner, 100=front corner, see
    //    renderSideIndicator()).
    //  - true (auto-gain): a single white 10-LED window snapped to the back
-   //    corner (off) or front corner (on) as a simple on/off indicator.
+   //    corner (AGCoff), middle (AGCband), or front corner (AGCfull) --
+   //    a 3-position indicator, one snap point per AGCMode.
    //
    // fullSpectrumLevel (0-255, AudioBoard::getFullSpectrum() -- already
    // silence-gated and auto-gain-scaled if enabled) sets all megabars' blue
    // brightness uniformly.
    void showAudioMeter( uint8_t trebleLevel, uint8_t midLevel, uint8_t bassLevel,
                         bool isAutoGainSubsetting, float noiseFloorPercentToShow, float peakThresholdPercentToShow,
-                        bool autoGainOnToShow, uint8_t fullSpectrumLevel ) {
+                        uint8_t agcModeToShow, uint8_t fullSpectrumLevel ) {
       clearRope();
       // very simple per-bin floodlight confirmation, one raw hardware bin per
       // china fixture (blue, same convention as the megabar glow below) --
@@ -529,7 +530,7 @@ class MagicCarpet {
       // comment) -- this stops 33 LEDs short of each end of the 352-LED
       // channel, so it doesn't wrap into the front/back edges near the corners
       if ( isAutoGainSubsetting ) {
-         float snapPercent = autoGainOnToShow ? 100.0f : 0.0f;
+         float snapPercent = (float)agcModeToShow / (float)( NumAGCModes - 1 ) * 100.0f; // 0%=AGCoff, 50%=AGCband, 100%=AGCfull
          renderSideIndicator( BACK_RIGHT, FRONT_RIGHT, snapPercent, CRGB::White );
          renderSideIndicator( BACK_LEFT, FRONT_LEFT, snapPercent, CRGB::White );
       } else {
@@ -599,8 +600,8 @@ class MagicCarpet {
       int peakPos156 = ( (int)AudioBoard::getPeakThresholdRaw() * ( SIZEOF_SMALL_NEO - 1 ) + 127 ) / 255;
 
       if ( simMode ) {
-         uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( BandLow ) * 255 / 100 );
-         uint8_t normalRaw = (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandLow ) * 255 / 100 );
+         uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( BandBass ) * 255 / 100 );
+         uint8_t normalRaw = (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandBass ) * 255 / 100 );
          int normalPos = ( (int)normalRaw * ( SIZEOF_SMALL_NEO - 1 ) + 127 ) / 255;
          int hitPos = ( (int)hitRaw * ( SIZEOF_SMALL_NEO - 1 ) + 127 ) / 255;
 
@@ -626,7 +627,7 @@ class MagicCarpet {
          ropeLeds[ decayDot ] = CRGB::Blue; ropeLeds[ decayDot ].w = 0;
       } else {
          static const int segLen = SIZEOF_SMALL_NEO / 3; // 52
-         static const AudioBand segBand[ 3 ] = { BandHigh, BandMid, BandLow };
+         static const AudioBand segBand[ 3 ] = { BandTreble, BandMid, BandBass };
          static const CRGB segColor[ 3 ] = { CRGB::Blue, CRGB::Green, CRGB::Red };
          int peakPosSeg = ( (int)AudioBoard::getPeakThresholdRaw() * ( segLen - 1 ) + 127 ) / 255;
          int decayDotPosSeg = (int)( rangeFrac * ( segLen - 1 ) + 0.5f );
@@ -675,7 +676,7 @@ class MagicCarpet {
 
       clearChinas();
 
-      static const AudioBand segBand[ 3 ] = { BandHigh, BandMid, BandLow };
+      static const AudioBand segBand[ 3 ] = { BandTreble, BandMid, BandBass };
       static const CRGB segColor[ 3 ] = { CRGB::Blue, CRGB::Green, CRGB::Red };
       static const uint8_t MIN_BRIGHTNESS = 38; // 15% of 255
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
@@ -684,6 +685,25 @@ class MagicCarpet {
          CRGB c = segColor[ which ];
          c.nscale8( max( hitRaw, MIN_BRIGHTNESS ) );
          megabarLeds[ m ] = c;
+      }
+   }
+
+   // Global sound-reactivity toggle screen (SubAudioReactivityEnable): the
+   // chinas play a fake, steady series of "hits" as direct feedback for
+   // whichever state is currently live -- per request, so disabling it
+   // shows its own consequence directly (chinas doing nothing) rather
+   // than just a number/label. Rope/megabars stay off -- china-only, per
+   // request. Not audio-driven at all (deliberately fake/simulated, same
+   // idea as a config screen's other synthetic test signals) so it reads
+   // identically regardless of whatever's actually playing right now.
+   void showSoundReactivityToggle( bool liveEnabled ) {
+      clearRope();
+      clearMegabars();
+      static const uint32_t PERIOD_MS = 600, ON_MS = 120;
+      bool lit = liveEnabled && ( millis() % PERIOD_MS ) < ON_MS;
+      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
+         chinaLeds[ c ] = lit ? CRGB::White : CRGB::Black;
+         chinaLeds[ c ].w = lit ? 255 : 0;
       }
    }
 

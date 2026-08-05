@@ -17,6 +17,7 @@
 #include "BumpingAudioShow.h"
 #include "SpeedStripesShow.h"
 #include "LighthouseShow.h"
+#include "CarpetGeometry.h"
 
 // The Flying Magic Carpet (TM)
 MagicCarpet * carpet;
@@ -48,7 +49,7 @@ enum BrightnessSubsetting { SubBrightnessGlobal = 0, SubBrightnessHeadlight = 1,
 // repurposed to toggle which of the two the pot currently targets instead
 // (same kind of subsetting-specific short-press override as SubAudioHitDecay
 // below), rather than spending a whole subsetting slot on each.
-enum AudioSubsetting { SubAudioThreshold = 0, SubAudioHitDecay = 1, SubAudioHitPrediction = 2, SubAudioForesight = 3, SubAudioAutoGain = 4 };
+enum AudioSubsetting { SubAudioThreshold = 0, SubAudioHitDecay = 1, SubAudioHitPrediction = 2, SubAudioForesight = 3, SubAudioAutoGain = 4, SubAudioReactivityEnable = 5 };
 enum PowerTestSubsetting { SubPowerTestHue = 0, SubPowerTestSat = 1, SubPowerTestBrightness = 2 };
 static uint8_t configSubsetting = 0;
 static float noiseFloorPercent = 0.0f; // committed value; audio below this is "silence" -- see AudioBoard.h
@@ -57,7 +58,16 @@ static float peakThresholdPercent = 0.0f; // committed value; audio above this i
 // within SubAudioThreshold -- toggled by short press, always starts false
 // (noise floor) on a fresh visit to the subsetting (see cycleSubsetting()).
 static bool adjustingPeakThreshold = false;
-static bool liveAutoGainEnabled = false; // live (not-yet-committed) auto-gain toggle state, Audio subsetting SubAudioAutoGain
+static uint8_t liveAgcMode = AGCoff; // live (not-yet-committed) AGC mode, Audio subsetting SubAudioAutoGain -- see AGCMode in AudioBoard.h
+// fixed-width (4 chars) like every other short console label in this file --
+// "Off " keeps a trailing space so the live '\r' line never leaves a stray
+// character behind when switching down from "Band"/"Full"
+const char * agcModeName( uint8_t mode ) {
+   if ( mode == AGCoff ) return "Off ";
+   if ( mode == AGCband ) return "Band";
+   return "Full"; // AGCfull
+}
+static bool liveSoundReactivityEnabled = true; // live (not-yet-committed) global reactivity toggle, Audio subsetting SubAudioReactivityEnable
 static float committedHitDecayMs = 300.0f; // committed value; ms for a "hit" to decay from full to zero -- see AudioBoard.h
 static const float HIT_DECAY_RANGE_MS = 1000.0f; // adjustable range is 0-1000ms, per request
 // SubAudioHitDecay and SubAudioHitPrediction share this same sim/live test
@@ -75,7 +85,7 @@ static float committedHitPredictionMs = 0.0f; // committed value; predictive lea
 // SubAudioHitPrediction's pot adjusts the ms amount above; its encoder
 // (otherwise idle on this subsetting) cycles which shape the lead-up
 // follows instead -- same live/committed + revert-on-leave convention as
-// liveAutoGainEnabled above, just encoder- instead of pot-driven.
+// liveAgcMode above, just encoder- instead of pot-driven.
 static uint8_t committedHitPredictionStyle = 1; // PredictExponential, see AudioBoard.h's HitPredictionStyle
 static uint8_t liveHitPredictionStyle = 1;
 
@@ -118,7 +128,7 @@ static bool configPotTakenOver = false;
 
 uint8_t numSubsettingsFor( AppMode mode ) {
    if ( mode == ModeConfigBrightness ) return 3;
-   if ( mode == ModeConfigAudio ) return 5;
+   if ( mode == ModeConfigAudio ) return 6;
    if ( mode == ModeConfigPowerTest ) return 3;
    return 1;
 }
@@ -133,8 +143,9 @@ void resetTakeoverState() {
    configEntryPotPercent = carpet->pot->readLivePercent(); // config screens always see the true live pot, never the low-power simulation
    configPotTakenOver = false;
    carpet->encoder->resetPositionDelta();
-   liveAutoGainEnabled = AudioBoard::getAutoGainEnabled();
+   liveAgcMode = AudioBoard::getAgcMode();
    liveHitPredictionStyle = AudioBoard::getHitPredictionStyle();
+   liveSoundReactivityEnabled = AudioBoard::getSoundReactivityEnabled();
 }
 
 void enterConfigMode( AppMode mode ) {
@@ -223,6 +234,7 @@ const char * settingName( AppMode mode, uint8_t subsetting ) {
       if ( subsetting == SubAudioAutoGain ) return "AGC";
       if ( subsetting == SubAudioHitDecay ) return "HitDecay";
       if ( subsetting == SubAudioHitPrediction ) return "HitPredict";
+      if ( subsetting == SubAudioReactivityEnable ) return "SndReact";
       return "Foresight";
    }
    if ( mode == ModeConfigPowerTest ) {
@@ -257,7 +269,9 @@ void printSettingValue( AppMode mode, uint8_t subsetting, float livePercent, boo
       if ( pad ) printPad3( v ); else Serial.print( v );
       Serial.print( "%" );
    } else if ( mode == ModeConfigAudio && subsetting == SubAudioAutoGain ) {
-      Serial.print( liveAutoGainEnabled ? "Ena" : "Dis" ); // already fixed-width
+      Serial.print( agcModeName( liveAgcMode ) ); // "Off"/"Band"/"Full"
+   } else if ( mode == ModeConfigAudio && subsetting == SubAudioReactivityEnable ) {
+      Serial.print( liveSoundReactivityEnabled ? "Ena" : "Dis" ); // already fixed-width
    } else if ( mode == ModeConfigAudio ) { // SubAudioHitDecay or SubAudioForesight: both in ms (0-1000, not a percent)
       int v = (int)( livePercent + 0.5f );
       if ( pad ) printPad4( v ); else Serial.print( v );
@@ -291,7 +305,9 @@ void printEnteringSetting( AppMode mode, uint8_t subsetting ) {
          Serial.print( (int)( ( adjustingPeakThreshold ? peakThresholdPercent : noiseFloorPercent ) + 0.5f ) );
          Serial.println( "%" );
       } else if ( subsetting == SubAudioAutoGain ) {
-         Serial.println( AudioBoard::getAutoGainEnabled() ? "Ena" : "Dis" );
+         Serial.println( agcModeName( AudioBoard::getAgcMode() ) );
+      } else if ( subsetting == SubAudioReactivityEnable ) {
+         Serial.println( AudioBoard::getSoundReactivityEnabled() ? "Ena" : "Dis" );
       } else if ( subsetting == SubAudioHitDecay ) {
          Serial.print( (int)( committedHitDecayMs + 0.5f ) );
          Serial.println( "ms" );
@@ -322,14 +338,14 @@ void printLiveValue( AppMode mode, uint8_t subsetting, float livePercent ) {
    if ( mode == ModeConfigAudio && subsetting == SubAudioThreshold ) { // noise floor / peak threshold, merged
       // this line is already packed (Lo/Md/Hi + 7 bins) -- skip the usual
       // "NoiseFl:<value>"/"PkThresh:<value>" prefix entirely here, by request, to save chars
-      // curated 0-255 low/mid/high derived from the raw bins below (see
-      // AudioBoard::Into_3_Bins()) -- same values EqualizerShow/NightriderShow react to.
+      // curated bass/mid/treble derived from the raw bins below (see
+      // AudioBoard::bandRawBinMax()) -- same values EqualizerShow/NightriderShow react to.
       // one-char marker after each: '^' above AudioBoard::PEAK_THRESHOLD (a
       // "hit", same threshold EqualizerShow's strobe triggers on), '_' below
       // the noise floor, '-' in between
-      Serial.print( "Lo:" ); printPad3( AudioBoard::getNormalPercent( BandLow ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getRawPercent( BandLow ) );
+      Serial.print( "Lo:" ); printPad3( AudioBoard::getNormalPercent( BandBass ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getRawPercent( BandBass ) );
       Serial.print( " Md:" ); printPad3( AudioBoard::getNormalPercent( BandMid ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getRawPercent( BandMid ) );
-      Serial.print( " Hi:" ); printPad3( AudioBoard::getNormalPercent( BandHigh ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getRawPercent( BandHigh ) );
+      Serial.print( " Hi:" ); printPad3( AudioBoard::getNormalPercent( BandTreble ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getRawPercent( BandTreble ) );
       // the 7 raw bins themselves, no label prefix (kept minimal)
       Serial.print( " " );
       for ( int i = 0; i < 7; ++i ) {
@@ -411,7 +427,7 @@ void printWelcome() {
    Serial.print( " HeadliteBr:" ); Serial.print( (int)( carpet->getHeadlightBrightness() + 0.5f ) ); Serial.print( "%" );
    Serial.print( " ChinaBr:" ); Serial.print( (int)( carpet->getChinaBrightness() + 0.5f ) ); Serial.print( "%" );
    Serial.print( " NoiseFl:" ); Serial.print( (int)( noiseFloorPercent + 0.5f ) ); Serial.print( "%" );
-   Serial.print( " AGC:" ); Serial.print( AudioBoard::getAutoGainEnabled() ? "Ena" : "Dis" );
+   Serial.print( " AGC:" ); Serial.print( agcModeName( AudioBoard::getAgcMode() ) );
    Serial.print( " H:" ); Serial.print( committedTestHue );
    Serial.print( " S:" ); Serial.print( committedTestSat );
    Serial.print( " V:" ); Serial.print( committedTestBrightness );
@@ -427,6 +443,7 @@ void setup() {
    // setup the carpet
    carpet = theMagicCarpet();
    carpet->setup(); // also loads persisted show/variation state from flash (Nvm::load())
+   CarpetGeometry::begin(); // precomputes every fixture/neopixel's geometry once, before any show runs
 
    currMode = (ShowMode)Nvm::loadedShow();
    if ( currMode >= numModes ) currMode = ShowNightrider; // guard against stale/out-of-range flash data
@@ -441,7 +458,8 @@ void setup() {
    AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
    peakThresholdPercent = Nvm::loadedPeakThreshold();
    AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
-   AudioBoard::setAutoGainEnabled( Nvm::loadedAutoGainEnabled() );
+   AudioBoard::setAgcMode( Nvm::loadedAgcMode() );
+   AudioBoard::setSoundReactivityEnabled( Nvm::loadedSoundReactivityEnabled() );
    committedHitDecayMs = Nvm::loadedHitDecayMs();
    AudioBoard::setHitDecayMs( committedHitDecayMs );
    committedAudioForesightMs = Nvm::loadedAudioForesightMs();
@@ -517,11 +535,20 @@ void loop() {
          int delta = carpet->encoder->readPositionDelta();
          if ( delta != 0 ) {
             carpet->encoder->resetPositionDelta();
-            // direction picks the state directly, not a toggle: right (positive
-            // delta) always turns on, left (negative delta) always turns off.
-            // if this is backwards on the actual hardware (readPositionDelta's
-            // sign depends on encoder wiring, unverified), just flip this test.
-            liveAutoGainEnabled = ( delta > 0 );
+            // cycles through AGCoff -> AGCband -> AGCfull in that order, one
+            // step per detent regardless of the detent's raw magnitude --
+            // right advances, left goes back, CLAMPED at both ends (does
+            // NOT loop around), per request. If this is backwards on the
+            // actual hardware (readPositionDelta's sign depends on encoder
+            // wiring, unverified), just flip this test.
+            int newMode = (int)liveAgcMode + ( delta > 0 ? 1 : -1 );
+            liveAgcMode = (uint8_t)constrain( newMode, 0, (int)NumAGCModes - 1 );
+         }
+      } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioReactivityEnable ) {
+         int delta = carpet->encoder->readPositionDelta();
+         if ( delta != 0 ) {
+            carpet->encoder->resetPositionDelta();
+            liveSoundReactivityEnabled = ( delta > 0 ); // same direct-pick convention as AutoGain above
          }
       } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitPrediction ) {
          // pot (below) adjusts the ms amount; encoder rotation here cycles
@@ -593,6 +620,14 @@ void loop() {
          livePercent = livePercentFor( 0.0f, AUDIO_FORESIGHT_RANGE_MS, true, committedAudioForesightMs );
          AudioBoard::setAudioForesightMs( livePercent );
          carpet->showForesightAdjust( livePercent, AUDIO_FORESIGHT_RANGE_MS );
+      } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioReactivityEnable ) {
+         // per request: chinas play a fake, steady series of "hits" as
+         // direct feedback for whichever state (Ena/Dis) is currently live
+         // -- reactivity ON pulses them like a hit would; OFF leaves them
+         // dark, demonstrating exactly what turning this off actually does
+         // (rather than a meter/number, which wouldn't show the
+         // consequence as directly).
+         carpet->showSoundReactivityToggle( liveSoundReactivityEnabled );
       } else if ( appMode == ModeConfigAudio ) {
          // reference (committed) position for whichever of the two isn't
          // being actively adjusted right now -- both are always shown at
@@ -614,11 +649,11 @@ void loop() {
          }
 
          uint8_t fullSpectrumLevel = AudioBoard::getFullSpectrum(
-               configSubsetting == SubAudioAutoGain ? liveAutoGainEnabled : AudioBoard::getAutoGainEnabled() );
-         carpet->showAudioMeter( (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandHigh ) * 255 / 100 ),
+               ( configSubsetting == SubAudioAutoGain ? liveAgcMode : AudioBoard::getAgcMode() ) != AGCoff );
+         carpet->showAudioMeter( (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandTreble ) * 255 / 100 ),
                                  (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandMid ) * 255 / 100 ),
-                                 (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandLow ) * 255 / 100 ),
-                                 configSubsetting == SubAudioAutoGain, showNoiseFloor, showThreshold, liveAutoGainEnabled, fullSpectrumLevel );
+                                 (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandBass ) * 255 / 100 ),
+                                 configSubsetting == SubAudioAutoGain, showNoiseFloor, showThreshold, liveAgcMode, fullSpectrumLevel );
       } else { // ModeConfigPowerTest
          carpet->showPowerTest( liveTestHue, liveTestSat, liveTestBrightness );
       }
@@ -645,8 +680,11 @@ void loop() {
             Nvm::savePeakThreshold( (uint8_t)( peakThresholdPercent + 0.5f ) );
             AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioAutoGain ) {
-            AudioBoard::setAutoGainEnabled( liveAutoGainEnabled );
-            Nvm::saveAutoGainEnabled( liveAutoGainEnabled );
+            AudioBoard::setAgcMode( liveAgcMode );
+            Nvm::saveAgcMode( liveAgcMode );
+         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioReactivityEnable ) {
+            AudioBoard::setSoundReactivityEnabled( liveSoundReactivityEnabled );
+            Nvm::saveSoundReactivityEnabled( liveSoundReactivityEnabled );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
             committedHitDecayMs = livePercent;
             Nvm::saveHitDecayMs( (uint16_t)( committedHitDecayMs + 0.5f ) );
