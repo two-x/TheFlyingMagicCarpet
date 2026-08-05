@@ -3,3 +3,9 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Emscripten SDK -- large (~1.7GB) downloaded toolchain, not source. Install
+# locally via tools/wasm/README.md; the built .wasm/.js artifacts it produces
+# (tools/visualizer/wasm/) ARE committed so users of the visualizer never
+# need this installed themselves.
+tools/wasm/emsdk

@@ -93,23 +93,19 @@ class AudioBoard {
    static Timer hitTimer_;      // tracks dt between updateBandLevels() calls
    static bool simModeActive_;  // set true/false at the top of pollSimulated()/pollFrequencies() respectively
 
-   // edge-triggered "a new hit just started somewhere" flag -- deliberately
-   // a SINGLE class-level flag, not one per band (see NewHit() below): set
-   // whenever ANY band crosses from at-or-below to above the peak threshold
-   // during updateBandLevels(), consumed (cleared) by the next NewHit() call
-   // regardless of which band that call names.
-   static bool newHit_;
+   // edge-triggered "this band just started a new hit" flag -- one per band,
+   // set when THAT band crosses from at-or-below to above the peak threshold
+   // during updateBandLevels(), consumed (cleared) by the next NewHit(band)
+   // call for that same band. Independent per band -- a bass hit doesn't
+   // consume/clear treble's own pending flag or vice versa.
+   static bool newHit_[ NumFreqBands ];
    static bool hitWasAbove_[ NumFreqBands ]; // per-band edge-detection state feeding newHit_ above
 
-   // returns (and clears) whether a new hit has occurred on ANY band since
-   // the last time this was called -- band is accepted for call-site
-   // symmetry with every other per-band getter, but does NOT change which
-   // flag is read/cleared; see newHit_'s own comment for why this is a
-   // single shared flag rather than a genuinely per-band one.
+   // returns (and clears) whether THIS band has had a new hit since the last
+   // time this was called for it.
    static bool NewHit( AudioBand band = BandFull ) {
-      (void)band;
-      bool v = newHit_;
-      newHit_ = false;
+      bool v = newHit_[ band ];
+      newHit_[ band ] = false;
       return v;
    }
 
@@ -423,7 +419,7 @@ class AudioBoard {
     * band's own AGC history ring buffer, (e) recalculate this band's AGC
     * boost multiplier from that history, (f/g/h) derive the filtered level
     * per the live AGCMode, (i) recalculate this band's RMS from its own
-    * history, (j) detect a new-hit edge (sets the single shared newHit_
+    * history, (j) detect a new-hit edge (sets that band's own newHit_
     * flag), (k) update the hit level (100 flat on/through a hit, decaying
     * from 100 once the filtered level drops back below threshold, snapping
     * to 0 once decay rejoins the filtered level, with predictive lead-up
@@ -473,7 +469,7 @@ class AudioBoard {
          bl.levelRMS = computeBandRms_( band );                                      // i
 
          bool isAbove = soundReactivityEnabled_ && bl.levelFilt >= threshPct;
-         if ( isAbove && !hitWasAbove_[ b ] ) newHit_ = true;                        // j
+         if ( isAbove && !hitWasAbove_[ b ] ) newHit_[ b ] = true;                   // j
          hitWasAbove_[ b ] = isAbove;
 
          if ( isAbove ) {                                                           // k
@@ -823,7 +819,7 @@ AudioBoard::BandLevels AudioBoard::bandLevels_[ NumFreqBands ];
 float AudioBoard::hitDecayMs_ = 300.0f; // overwritten by Nvm at boot
 Timer AudioBoard::hitTimer_;
 bool AudioBoard::simModeActive_ = false;
-bool AudioBoard::newHit_ = false;
+bool AudioBoard::newHit_[ NumFreqBands ] = { false, false, false, false, false };
 bool AudioBoard::hitWasAbove_[ NumFreqBands ] = { false, false, false, false, false };
 float AudioBoard::hitPredictionMs_ = 0.0f; // overwritten by Nvm at boot
 uint8_t AudioBoard::hitPredictionStyle_ = PredictExponential; // overwritten by Nvm at boot
