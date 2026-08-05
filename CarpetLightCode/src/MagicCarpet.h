@@ -24,7 +24,9 @@
 #include "CRGBW.h"
 #include "LedController.h"
 #include "AudioBoard.h"
-#include "ArmDmx.h"
+#ifndef __EMSCRIPTEN__
+#include "ArmDmx.h" // #includes "sam.h" at file scope -- genuinely can't compile under Emscripten regardless of whether dmx_init/dmx_send are called (see the migration plan)
+#endif
 #include "Nvm.h"
 #include "SpeedLink.h"
 
@@ -191,12 +193,17 @@ class MagicCarpet {
       pot = new LedControl::Potentiometer( POT_ANALOG_PIN );
       encoder = LedControl::getEncoder( ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN );
 
+#ifndef __EMSCRIPTEN__
       // add dmx leds
       dmx_init( TOTAL_DMX_SIZE );
 
       // add eight channels of rope leds
       FastLED.addLeds<NEO_PORT_BANK,NUM_NEOPIXEL_STRIPS>( ropeShowLeds,
                                                           NUM_NEO_LEDS_PER_STRIP );
+#endif
+      // WASM: no real DMX/NeoPixel hardware to attach -- see the migration
+      // plan's output-path design (phase 5: protocol-level output
+      // simulation) for what replaces this.
 
       clear(); // there might be stale values left in the leds, start from scratch
 
@@ -237,11 +244,16 @@ class MagicCarpet {
       LedUtil::reverse( ropeLeds, SIZEOF_SMALL_NEO );
       LedUtil::reverse( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO, SIZEOF_SMALL_NEO );
 
+#ifndef __EMSCRIPTEN__
       // we don't have to pass the china light array separately. Instead, we treat
       // both arrays as a single big array, since they're contiguous in memory.
       dmx_send( ( uint8_t * ) megabarLeds );
 
       FastLED.show();
+#endif
+      // WASM: see the migration plan's output-path design (phase 5) -- for
+      // now (phase 4) the visualizer reads ropeLeds[]/megabarLeds[]/
+      // chinaLeds[] directly rather than through this hardware-output path.
    }
 
    void clearMegabars() {

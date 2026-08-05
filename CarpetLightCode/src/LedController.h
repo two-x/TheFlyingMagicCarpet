@@ -15,6 +15,17 @@
 #define MAX_VOLTAGE 1023
 
 // TODO: these are useful, move them somewhere common
+//
+// WASM build: no real port registers exist -- redirect to the HalShim pin
+// state (same array digitalWrite()/digitalRead() already use elsewhere),
+// so PushButtonEdge::isr()/EncoderImpl::callbackA()/callbackB() (below) work
+// completely unmodified when called directly by the WASM bridge's injector
+// functions in place of a real interrupt firing (see HalShim.h's own
+// comment on attachInterrupt() being a no-op under Emscripten).
+#ifdef __EMSCRIPTEN__
+inline void digitalWriteDirect( int pin, bool val ) { digitalWrite( pin, val ? HIGH : LOW ); }
+inline int digitalReadDirect( int pin ) { return digitalRead( pin ); }
+#else
 inline void digitalWriteDirect( int pin, bool val ) {
    if ( val ) {
       g_APinDescription[ pin ].pPort->PIO_SODR = g_APinDescription[ pin ].ulPin;
@@ -27,6 +38,7 @@ inline int digitalReadDirect( int pin ) {
    return !!( g_APinDescription[ pin ].pPort->PIO_PDSR &
               g_APinDescription[ pin ].ulPin );
 }
+#endif
 
 namespace LedControl {
 

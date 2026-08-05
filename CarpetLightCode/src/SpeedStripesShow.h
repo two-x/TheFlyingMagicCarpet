@@ -147,7 +147,7 @@ class SpeedStripesShow : public LightShow {
    static constexpr float ZEBRA_MIN_BLACK_WIDTH_FT = 0.5f; // smallest black-stripe width the pot will ever produce, once producing any at all
    static constexpr float ZEBRA_MIN_GAP_FT = 5.0f;         // colored gap between black stripes never shrinks below this
    static constexpr float ZEBRA_SCHEDULE_LOOKAHEAD_FT = 30.0f; // comfortably past any fixture's own |pos| offset
-   static constexpr float ZEBRA_CHINA_REST_FRACTION = 0.75f;   // china's resting brightness fraction of global max while there's been recent sound
+   static constexpr float ZEBRA_CHINA_REST_FRACTION = 0.70f;   // china's resting brightness fraction of global max while there's been recent sound
 
    float zebraPosFt_ = 0.0f; // feet, monotonically grows while moving -- this variation's own scrolling position
 

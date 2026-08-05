@@ -2,7 +2,11 @@
 #ifndef __UTILITIES_H
 #define __UTILITIES_H
 
+#ifdef __EMSCRIPTEN__
+#include "HalShim.h"
+#else
 #include <Arduino.h>
+#endif
 
 class Timer {
   protected:

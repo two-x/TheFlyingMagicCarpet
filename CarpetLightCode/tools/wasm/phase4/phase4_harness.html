@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><title>Phase 4</title></head>
+<body>
+<script src="phase4_test.js"></script>
+<script>
+Phase4Test().then((Module) => {
+  const setup = Module.cwrap('web_setup', null, []);
+  const tick = Module.cwrap('web_tick', null, ['number']);
+  const getRopePtr = Module.cwrap('web_getRopeLedsPtr', 'number', []);
+  const getNumRope = Module.cwrap('web_getNumRopeLeds', 'number', []);
+  const sizeofRope = Module.cwrap('web_sizeofRopeLed', 'number', []);
+  const getShowName = Module.cwrap('web_getCurrentShowName', 'string', []);
+  const getVariationName = Module.cwrap('web_getCurrentVariationName', 'string', []);
+  const forceShort = Module.cwrap('web_forcePressShort', null, []);
+
+  const out = [];
+  setup();
+  out.push('initialShow=' + getShowName() + '/' + getVariationName());
+
+  function sumRopeLeds() {
+    const ptr = getRopePtr();
+    const n = getNumRope() * sizeofRope();
+    let sum = 0;
+    const bytes = Module.HEAPU8.subarray(ptr, ptr + n);
+    for (let i = 0; i < bytes.length; i++) sum += bytes[i];
+    return sum;
+  }
+
+  let t = 0;
+  const sumsOverTime = [];
+  for (let i = 0; i < 20; i++) {
+    t += 30;
+    tick(t);
+    if (i % 5 === 0) sumsOverTime.push(sumRopeLeds());
+  }
+  out.push('ropeSumsOverTime=' + sumsOverTime.join(','));
+
+  // cycle through all 5 shows via short-press, confirm show name changes each time
+  const shows = [getShowName()];
+  for (let i = 0; i < 5; i++) {
+    forceShort();
+    t += 30; tick(t);
+    shows.push(getShowName());
+  }
+  out.push('showCycle=' + shows.join('->'));
+
+  document.title = out.join(' | ');
+}).catch((e) => {
+  document.title = 'FAIL ' + (e && e.message ? e.message : e);
+});
+</script>
+</body></html>

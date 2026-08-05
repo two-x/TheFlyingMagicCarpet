@@ -27,7 +27,9 @@
 #ifndef __SPEED_LINK_H
 #define __SPEED_LINK_H
 
+#ifndef __EMSCRIPTEN__
 #include <Wire.h>
+#endif
 #include "Utilities.h"
 
 #define LIGHTBOX_I2C_ADDR 0x69
@@ -41,6 +43,7 @@ class SpeedLink {
    static Timer lastUpdateTimer_;      // Timer's own start/tout fields are volatile, so this is ISR-safe
    static volatile uint8_t runmode_;
 
+#ifndef __EMSCRIPTEN__
    static void onReceive( int numBytes ) {
       if ( numBytes < 1 || !Wire.available() ) return;
       uint8_t byte1 = Wire.read();
@@ -55,12 +58,33 @@ class SpeedLink {
       }
       while ( Wire.available() ) Wire.read(); // drain anything unexpected/extra
    }
+#endif
 
  public:
    static void setup() {
+#ifndef __EMSCRIPTEN__
       Wire.begin( LIGHTBOX_I2C_ADDR );
       Wire.onReceive( onReceive );
+#endif
+      // WASM: no real I2C bus -- the visualizer injects speed/runmode
+      // directly via injectSpeedHundredthsMph()/injectRunmode() below
+      // instead (per the "poke it into the FW variable" model), so there's
+      // nothing else to set up here.
    }
+
+#ifdef __EMSCRIPTEN__
+   // direct-injection equivalents of what onReceive() does for a real 0x2/
+   // 0x1 packet, respectively -- same effect, just JS-triggered instead of
+   // I2C-triggered.
+   static void injectSpeedHundredthsMph( uint16_t v ) {
+      speedHundredthsMph_ = v;
+      everReceived_ = true;
+      lastUpdateTimer_.reset();
+   }
+   static void injectRunmode( uint8_t mode ) {
+      runmode_ = mode;
+   }
+#endif
 
    static uint16_t getSpeedHundredthsMph() {
       return speedHundredthsMph_;

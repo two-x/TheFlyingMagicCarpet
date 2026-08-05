@@ -1,0 +1,124 @@
+--- /tmp/fastled_fresh_check3/FastLED.h	2026-08-05 05:26:41
++++ tools/wasm/vendor/fastled_src/FastLED.h	2026-08-05 05:23:57
+@@ -44,12 +44,32 @@
+ #define __PROG_TYPES_COMPAT__
+ #endif
+ 
+-#ifdef __EMSCRIPTEN__
++// PATCHED for CarpetLightCode's WASM build (tools/wasm/README.md) -- opt out
++// of FastLED's own WASM-target Arduino-compatibility system
++// (millis/micros/min/max/constrain/analogRead/digitalWrite/Serial etc, built
++// for FastLED's own sketch-compiler/player pipeline) via
++// -DFASTLED_SKIP_WASM_ARDUINO_COMPAT. Our project provides its own
++// injectable equivalents (src/HalShim.h) that collide with these (same
++// names, different/incompatible linkage) when both are visible in the same
++// translation unit -- which is every real-firmware WASM build, since every
++// firmware file already includes HalShim.h via Utilities.h. Real hardware
++// and FastLED's own normal WASM usage are unaffected (this define is never
++// set outside our own tools/wasm/build.sh).
++#if defined(__EMSCRIPTEN__) && !defined(FASTLED_SKIP_WASM_ARDUINO_COMPAT)
+ #include "platforms/wasm/js.h"
+ #include "platforms/wasm/led_sysdefs_wasm.h"
+ #include "platforms/wasm/compiler/Arduino.h"
+ #include "platforms/wasm/js_fetch.h"
+ #endif
++#if defined(__EMSCRIPTEN__) && defined(FASTLED_SKIP_WASM_ARDUINO_COMPAT) && defined(FASTLED_FORCE_NAMESPACE)
++// PATCHED: platforms/stub/Arduino.h normally brings fl::CRGB/CHSV/etc into
++// global scope via FASTLED_USING_NAMESPACE (see fl/namespace.h) -- that
++// file's whole body is skipped above, so our own project code (which
++// refers to bare CRGB/CHSV, not fl::CRGB/fl::CHSV) needs this bridge
++// re-added on its own.
++namespace fl {}
++using namespace fl;
++#endif
+ 
+ #ifdef SmartMatrix_h
+ #include <SmartMatrix.h>
+@@ -84,7 +104,20 @@
+ #include "fastspi_types.h"
+ #include "dmx.h"
+ 
++// PATCHED for CarpetLightCode's WASM build -- see the earlier patch comment
++// in this file. platforms.h/chipsets.h/fastspi.h pull in FastLED's real
++// hardware-chipset-controller classes (ClocklessController etc, needed to
++// actually drive a physical LED strip) -- we never instantiate any of these
++// (MagicCarpet::setup()'s FastLED.addLeds<NEO_PORT_BANK,...> call is itself
++// excluded under __EMSCRIPTEN__, see MagicCarpet.h), and pulling them in
++// anyway drags in ANOTHER independent millis()/micros() collision inside
++// platforms/wasm/clockless.h's showPixels() body (a namespace-scoped,
++// non-dependent-name-lookup issue distinct from the ones already patched
++// elsewhere in this file). Skipping them entirely sidesteps that whole
++// class of problem, since we only need the portable pixel/color-math below.
++#if !defined(__EMSCRIPTEN__) || !defined(FASTLED_SKIP_WASM_ARDUINO_COMPAT)
+ #include "platforms.h"
++#endif
+ #include "fastled_progmem.h"
+ 
+ #include "lib8tion.h"
+@@ -97,8 +130,10 @@
+ #include "noise.h"
+ #include "power_mgt.h"
+ 
++#if !defined(__EMSCRIPTEN__) || !defined(FASTLED_SKIP_WASM_ARDUINO_COMPAT)
+ #include "fastspi.h"
+ #include "chipsets.h"
++#endif
+ #include "fl/engine_events.h"
+ 
+ #include "fl/leds.h"
+@@ -369,6 +404,35 @@
+ /// @returns the brightness scale, limited to max power
+ typedef fl::u8 (*power_func)(fl::u8 scale, fl::u32 data);
+ 
++// PATCHED for CarpetLightCode's WASM build -- see the earlier patch
++// comments in this file. The real CFastLED class below is packed with
++// per-chipset addLeds<>() template overloads referencing controller classes
++// from chipsets.h, which we've already excluded (never instantiated in our
++// WASM build -- both real call sites, MagicCarpet::setup()'s
++// FastLED.addLeds<NEO_PORT_BANK,...> and MagicCarpet::show()'s
++// FastLED.show(), are themselves excluded under __EMSCRIPTEN__). A few
++// OTHER call sites in this project do still call FastLED.delay()/
++// setBrightness() from code paths that are compiled (if not necessarily
++// exercised) on every target -- DemoShow.h and MagicCarpet::error(), an
++// infinite loop not reached in normal operation -- so the global `FastLED`
++// symbol and those two methods need to keep existing, just without any of
++// the chipset-specific machinery behind them.
++#if defined(__EMSCRIPTEN__) && defined(FASTLED_SKIP_WASM_ARDUINO_COMPAT)
++class CFastLED {
++public:
++	void delay( unsigned long ) {}
++	void setBrightness( fl::u8 ) {}
++	fl::u8 getBrightness() { return 255; }
++	void show() {}
++	void show( fl::u8 ) {}
++	void clear( bool = false ) {}
++	void showColor( const CRGB &, int = -1 ) {}
++	void setMaxRefreshRate( fl::u16, bool = false ) {}
++	int count() { return 0; }
++	int size() { return 0; }
++	CRGB * leds() { return nullptr; }
++};
++#else
+ /// High level controller interface for FastLED.
+ /// This class manages controllers, global settings, and trackings such as brightness
+ /// and refresh rates, and provides access functions for driving led data to controllers
+@@ -894,10 +958,19 @@
+ 	/// @returns pointer to the CRGB buffer for the first controller
+ 	CRGB *leds();
+ };
++#endif // defined(__EMSCRIPTEN__) && defined(FASTLED_SKIP_WASM_ARDUINO_COMPAT)
+ 
+ 
+ /// Global LED strip management instance
++#if defined(__EMSCRIPTEN__) && defined(FASTLED_SKIP_WASM_ARDUINO_COMPAT)
++// PATCHED: defined here (not in the real FastLED.cpp, whose other method
++// bodies reference the chipset machinery this build excludes) as a C++17
++// inline variable so it's still ODR-safe if this header is ever included
++// from more than one translation unit.
++inline CFastLED FastLED;
++#else
+ extern CFastLED FastLED;
++#endif
+ 
+ /// If no pin/port mappings are found, sends a warning message to the user
+ /// during compilation.

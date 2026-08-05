@@ -1,0 +1,17 @@
+--- /tmp/fastled_fresh_check3/platforms/stub/led_sysdefs_stub.h	2026-08-05 05:26:41
++++ tools/wasm/vendor/fastled_src/platforms/stub/led_sysdefs_stub.h	2026-08-05 05:18:01
+@@ -1,6 +1,13 @@
+ #pragma once
+ 
+-#ifdef __EMSCRIPTEN__
++// PATCHED for CarpetLightCode's WASM build -- see FastLED.h's own patch
++// comment for why. platforms/wasm/led_sysdefs_wasm.h cascades into the same
++// competing Arduino-compat system (via compiler/Arduino.h -> stub/Arduino.h)
++// FastLED.h's own patch already opts out of elsewhere; led_sysdefs_stub_
++// generic.h is a clean, minimal platform-typedefs-only file with no
++// competing millis/analogRead/Serial definitions, so route there instead
++// when FASTLED_SKIP_WASM_ARDUINO_COMPAT is set.
++#if defined(__EMSCRIPTEN__) && !defined(FASTLED_SKIP_WASM_ARDUINO_COMPAT)
+ #include "platforms/wasm/led_sysdefs_wasm.h"
+ #else
+ #include "led_sysdefs_stub_generic.h"

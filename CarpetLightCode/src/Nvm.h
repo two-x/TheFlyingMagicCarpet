@@ -10,11 +10,53 @@
 #ifndef __NVM_H
 #define __NVM_H
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+// WASM stand-in for DueFlashStorage -- same two methods every call site here
+// uses (readAddress/write), backed by a plain in-memory byte buffer instead
+// of real flash. Persisted across a page reload via localStorage (mirroring
+// "survives power-off/power-on" -- the real hardware property this class
+// exists for), through a tiny base64 round-trip via EM_ASM (localStorage
+// only stores strings). Re-loading is a no-op after the first read since
+// state[] already holds whatever was last read/written; load() re-reads
+// from localStorage once at startup, same as flash.readAddress() being the
+// one-time-at-boot read real hardware does.
+struct HalFlashStorage {
+   static const int SIZE = 256; // generous headroom past sizeof(State)
+   uint8_t buf[ SIZE ];
+   HalFlashStorage() {
+      memset( buf, 0xFF, SIZE ); // 0xFF matches real unprogrammed flash, so a fresh browser profile hits the same "first boot ever" reset-to-defaults path load() already handles
+      EM_ASM( {
+         const s = localStorage.getItem( "carpetNvm" );
+         if ( s ) {
+            const bytes = atob( s );
+            for ( let i = 0; i < bytes.length && i < $1; i++ ) {
+               HEAPU8[ $0 + i ] = bytes.charCodeAt( i );
+            }
+         }
+      }, buf, SIZE );
+   }
+   byte * readAddress( int ) { return buf; }
+   void write( int, byte * data, int len ) {
+      memcpy( buf, data, len );
+      EM_ASM( {
+         let bin = "";
+         for ( let i = 0; i < $1; i++ ) bin += String.fromCharCode( HEAPU8[ $0 + i ] );
+         localStorage.setItem( "carpetNvm", btoa( bin ) );
+      }, buf, SIZE );
+   }
+};
+#else
 #include <DueFlashStorage.h>
+#endif
 
 namespace Nvm {
 
+#ifdef __EMSCRIPTEN__
+static HalFlashStorage flash;
+#else
 static DueFlashStorage flash;
+#endif
 static const uint8_t MAGIC = 0x47; // bump this if State's layout ever changes
 static const uint8_t MAX_SHOWS = 8; // headroom for future shows, no relayout needed
 

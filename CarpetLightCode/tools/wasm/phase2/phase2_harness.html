@@ -1,0 +1,71 @@
+<!doctype html>
+<html><head><title>Phase 2</title></head>
+<body>
+<script src="phase2_test.js"></script>
+<script>
+Phase2Test().then((Module) => {
+  const setup = Module.cwrap('phase2_setup', null, []);
+  const setMillis = Module.cwrap('phase2_setMillis', null, ['number']);
+  const injectSteps = Module.cwrap('phase2_injectEncoderSteps', null, ['number']);
+  const readDelta = Module.cwrap('phase2_readPositionDelta', 'number', []);
+  const resetDelta = Module.cwrap('phase2_resetPositionDelta', null, []);
+  const injectBtn = Module.cwrap('phase2_injectButtonEdge', null, ['number']);
+  const update = Module.cwrap('phase2_update', null, []);
+  const short_ = Module.cwrap('phase2_short', 'number', []);
+  const medium = Module.cwrap('phase2_medium', 'number', []);
+  const long_ = Module.cwrap('phase2_long', 'number', []);
+  const double_ = Module.cwrap('phase2_double', 'number', []);
+  const setPotRaw = Module.cwrap('phase2_setPotRaw', null, ['number']);
+  const readPotPct = Module.cwrap('phase2_readPotPercent', 'number', []);
+
+  setup();
+  const out = [];
+  let t = 0;
+  setMillis(t);
+
+  // --- encoder ---
+  injectSteps(3);
+  out.push('encoder+3=' + readDelta());
+  resetDelta();
+  injectSteps(-2);
+  out.push('encoder-2=' + readDelta());
+  resetDelta();
+
+  // --- pot ---
+  setPotRaw(511); // ~50% of 1023
+  out.push('pot50pct=' + readPotPct().toFixed(1));
+
+  // --- short press: down then up quickly, then must wait past the
+  // 250ms double-press window before it resolves ---
+  t += 10; setMillis(t); injectBtn(true); update();
+  t += 50; setMillis(t); injectBtn(false); update(); // 50ms hold -> short range
+  out.push('rightAfterRelease short=' + short_());
+  t += 300; setMillis(t); update(); // past the 250ms double-press window
+  out.push('afterWindow short=' + short_());
+
+  // --- medium press: hold 300-1500ms ---
+  t += 10; setMillis(t); injectBtn(true); update();
+  t += 500; setMillis(t); update(); // still held, past medium threshold (300ms)
+  out.push('duringHold medium=' + medium());
+  t += 10; setMillis(t); injectBtn(false); update(); // release
+  out.push('afterRelease medium=' + medium());
+
+  // --- long press: hold >=1500ms ---
+  t += 10; setMillis(t); injectBtn(true); update();
+  t += 1600; setMillis(t); update();
+  out.push('duringLongHold long=' + long_());
+  t += 10; setMillis(t); injectBtn(false); update();
+
+  // --- double press: two short presses within the window ---
+  t += 10; setMillis(t); injectBtn(true); update();
+  t += 50; setMillis(t); injectBtn(false); update(); // release #1 -> pending short
+  t += 100; setMillis(t); injectBtn(true); update();  // press #2 within 250ms window -> double, valid immediately
+  out.push('secondPressDown double=' + double_());
+  t += 50; setMillis(t); injectBtn(false); update();
+
+  document.title = out.join(' | ');
+}).catch((e) => {
+  document.title = 'FAIL ' + e.message;
+});
+</script>
+</body></html>

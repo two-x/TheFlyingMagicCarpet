@@ -9,3 +9,4 @@
 # (tools/visualizer/wasm/) ARE committed so users of the visualizer never
 # need this installed themselves.
 tools/wasm/emsdk
+tools/wasm/vendor

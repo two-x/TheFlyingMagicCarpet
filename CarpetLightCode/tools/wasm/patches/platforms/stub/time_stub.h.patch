@@ -1,0 +1,20 @@
+--- /tmp/fastled_fresh_check3/platforms/stub/time_stub.h	2026-08-05 05:26:41
++++ tools/wasm/vendor/fastled_src/platforms/stub/time_stub.h	2026-08-05 05:19:18
+@@ -5,6 +5,11 @@
+ 
+ // Stub timing functions for Arduino compatibility
+ // These provide timing functionality when using the stub platform
++//
++// PATCHED for CarpetLightCode's WASM build -- see FastLED.h's own patch
++// comment. These collide (different language linkage) with src/HalShim.h's
++// own millis()/micros()/delay()/delayMicroseconds().
++#ifndef FASTLED_SKIP_WASM_ARDUINO_COMPAT
+ 
+ extern "C" {
+     uint32_t millis(void);
+@@ -16,3 +21,5 @@
+ 
+ // C++ function to override delay behavior for fast testing
+ void setDelayFunction(const fl::function<void(uint32_t)>& delayFunc);
++
++#endif // !FASTLED_SKIP_WASM_ARDUINO_COMPAT

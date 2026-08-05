@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><title>Phase 0</title></head>
+<body>
+<script src="phase0_test.js"></script>
+<script>
+Phase0Test().then((Module) => {
+  const r = Module.ccall('phase0_getR', 'number', [], []);
+  const g = Module.ccall('phase0_getG', 'number', [], []);
+  const b = Module.ccall('phase0_getB', 'number', [], []);
+  const hsvR = Module.ccall('phase0_getHsvR', 'number', [], []);
+  document.title = `blend=(${r},${g},${b}) hsvR=${hsvR}`;
+}).catch((e) => {
+  document.title = 'FAIL ' + e.message;
+});
+</script>
+</body></html>

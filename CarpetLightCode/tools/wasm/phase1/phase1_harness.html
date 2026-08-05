@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><title>Phase 1</title></head>
+<body>
+<script src="phase1_test.js"></script>
+<script>
+// AudioBand enum order: BandBass=0, BandMidbass=1, BandMid=2, BandTreble=3, BandFull=4
+const BandBass = 0;
+
+Phase1Test().then((Module) => {
+  const poll = Module.cwrap('phase1_poll', null, ['number','number','number','number','number','number','number','number']);
+  const getHit = Module.cwrap('phase1_getHitPercent', 'number', ['number']);
+  const getNormal = Module.cwrap('phase1_getNormalPercent', 'number', ['number']);
+  const getRaw = Module.cwrap('phase1_getRawPercent', 'number', ['number']);
+  const setThresh = Module.cwrap('phase1_setPeakThresholdPercent', null, ['number']);
+  const setNoiseFloor = Module.cwrap('phase1_setNoiseFloorPercent', null, ['number']);
+  const setDecay = Module.cwrap('phase1_setHitDecayMs', null, ['number']);
+
+  setThresh(50);      // 50% peak threshold
+  setNoiseFloor(5);
+  setDecay(300);       // 300ms full decay
+
+  const out = [];
+
+  // silence first several polls (bass bin at 0)
+  let t = 0;
+  for (let i = 0; i < 5; i++) { t += 30; poll(t, 0,0,0,0,0,0,0); }
+  out.push('afterSilence hit=' + getHit(BandBass) + ' normal=' + getNormal(BandBass) + ' raw=' + getRaw(BandBass));
+
+  // bass bin at 900/1023 (~88%), well above the 50% threshold -- should
+  // immediately jump hit to 100
+  t += 30; poll(t, 900,0,0,0,0,0,0);
+  out.push('duringHit hit=' + getHit(BandBass) + ' normal=' + getNormal(BandBass));
+
+  // back to silence -- hit should now DECAY (not snap to 0), tracking
+  // hitDecayMs (300ms full-scale) rather than jumping instantly
+  t += 30; poll(t, 0,0,0,0,0,0,0);
+  const justAfterDrop = getHit(BandBass);
+  t += 150; poll(t, 0,0,0,0,0,0,0); // +150ms, about half the 300ms decay
+  const midDecay = getHit(BandBass);
+  t += 300; poll(t, 0,0,0,0,0,0,0); // well past full decay
+  const afterFullDecay = getHit(BandBass);
+  out.push('decay: justAfterDrop=' + justAfterDrop + ' midDecay=' + midDecay + ' afterFullDecay=' + afterFullDecay);
+
+  document.title = out.join(' | ');
+}).catch((e) => {
+  document.title = 'FAIL ' + e.message;
+});
+</script>
+</body></html>

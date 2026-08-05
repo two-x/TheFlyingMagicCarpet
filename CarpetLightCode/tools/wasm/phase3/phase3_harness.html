@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><title>Phase 3</title></head>
+<body>
+<script src="phase3_test.js"></script>
+<script>
+Phase3Test().then((Module) => {
+  const nvmLoad = Module.cwrap('phase3_nvmLoad', null, []);
+  const loadedBr = Module.cwrap('phase3_loadedGlobalBrightness', 'number', []);
+  const saveBr = Module.cwrap('phase3_saveGlobalBrightness', null, ['number']);
+  const loadedAgc = Module.cwrap('phase3_loadedAgcMode', 'number', []);
+  const saveAgc = Module.cwrap('phase3_saveAgcMode', null, ['number']);
+  const speedSetup = Module.cwrap('phase3_speedSetup', null, []);
+  const injectSpeed = Module.cwrap('phase3_injectSpeed', null, ['number']);
+  const injectRunmode = Module.cwrap('phase3_injectRunmode', null, ['number']);
+  const getSpeedMph = Module.cwrap('phase3_getSpeedMph', 'number', []);
+  const isLowPower = Module.cwrap('phase3_isLowPower', 'number', []);
+  const isFresh = Module.cwrap('phase3_isFresh', 'number', ['number']);
+  const setMillis = Module.cwrap('phase3_setMillis', null, ['number']);
+
+  const out = [];
+  const params = new URLSearchParams(location.search);
+  const pass = params.get('pass') || '1';
+
+  nvmLoad();
+  if (pass === '1') {
+    out.push('freshDefaultBrightness=' + loadedBr());
+    saveBr(77);
+    saveAgc(2); // AGCfull
+    out.push('afterSaveBrightness=' + loadedBr() + ' agc=' + loadedAgc());
+  } else {
+    // second page load (localStorage-backed) -- confirm values persisted
+    out.push('reloadedBrightness=' + loadedBr() + ' agc=' + loadedAgc());
+  }
+
+  // --- SpeedLink direct injection (no Wire) ---
+  speedSetup();
+  setMillis(1000);
+  injectSpeed(2550); // 25.50 mph
+  injectRunmode(1);  // RUNMODE_LOW_POWER
+  out.push('speed=' + getSpeedMph().toFixed(2) + ' lowPower=' + isLowPower() + ' freshNow=' + isFresh(2000));
+  setMillis(1000 + 5000); // 5s later, past the 2000ms staleness window
+  out.push('freshAfter5s=' + isFresh(2000));
+
+  document.title = out.join(' | ');
+}).catch((e) => {
+  document.title = 'FAIL ' + e.message;
+});
+</script>
+</body></html>
