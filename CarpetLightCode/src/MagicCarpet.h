@@ -372,6 +372,45 @@ class MagicCarpet {
       }
    }
 
+   // Draws the noise-floor (blue) and peak-threshold (red) windows on one
+   // side strip together, instead of as two independent renderSideIndicator()
+   // calls -- the two used to be drawn with no knowledge of each other, so
+   // whenever they were close enough for their 10-LED windows to overlap
+   // (up to fully coincident when set equal), the red one (drawn second)
+   // silently painted over some or all of the blue one, making it
+   // invisible. Since noise floor is cross-clamped elsewhere to never
+   // exceed peak threshold, the windows can only ever collide from below --
+   // nudge them apart symmetrically (clamped to the strip's own ends)
+   // whenever they'd overlap, so both stay fully visible side by side
+   // instead of one hiding the other.
+   void renderSideIndicatorPair( int backCornerIdx, int frontCornerIdx, float noiseFloorPercent, float peakThresholdPercent ) {
+      const int segmentLen = abs( frontCornerIdx - backCornerIdx ) + 1;
+      static const int windowWidth = 10;
+      const int maxOffset = segmentLen - windowWidth;
+      int noiseOffset = (int)( constrain( noiseFloorPercent, 0.0f, 100.0f ) / 100.0f * maxOffset + 0.5f );
+      int peakOffset = (int)( constrain( peakThresholdPercent, 0.0f, 100.0f ) / 100.0f * maxOffset + 0.5f );
+      int gap = peakOffset - noiseOffset;
+      if ( gap < windowWidth ) {
+         int deficit = windowWidth - gap;
+         int pushDown = deficit / 2, pushUp = deficit - pushDown;
+         noiseOffset = max( 0, noiseOffset - pushDown );
+         peakOffset = min( maxOffset, peakOffset + pushUp );
+         if ( peakOffset - noiseOffset < windowWidth ) { // one side hit its bound -- compensate on the other
+            if ( noiseOffset == 0 ) peakOffset = min( maxOffset, windowWidth );
+            else if ( peakOffset == maxOffset ) noiseOffset = max( 0, maxOffset - windowWidth );
+         }
+      }
+      int direction = ( frontCornerIdx > backCornerIdx ) ? 1 : -1;
+      for ( int k = 0; k < windowWidth; ++k ) {
+         ropeLeds[ backCornerIdx + direction * ( noiseOffset + k ) ] = CRGB::Blue;
+         ropeLeds[ backCornerIdx + direction * ( noiseOffset + k ) ].w = 0;
+      }
+      for ( int k = 0; k < windowWidth; ++k ) {
+         ropeLeds[ backCornerIdx + direction * ( peakOffset + k ) ] = CRGB::Red;
+         ropeLeds[ backCornerIdx + direction * ( peakOffset + k ) ].w = 0;
+      }
+   }
+
    // audio configuration screen: a 3-band VU meter across the front rope
    // strip (ropeLeds[0..SIZEOF_SMALL_NEO-1], 156 LEDs), a position indicator
    // sliding along each side strip, and all megabars glowing blue
@@ -431,18 +470,29 @@ class MagicCarpet {
             chinaLeds[ i ].w = 0;
          }
       }
-      static const int segmentLen = SIZEOF_SMALL_NEO / 3; // 52
+      // Inset from BOTH outer ends of the 156-LED front string, so the
+      // meter no longer uses the whole thing -- per request, the outer
+      // ends (nearest each front corner) are hidden under the wings when
+      // they're up, so a meter using the full width was partly invisible
+      // then. PLACEHOLDER: 20 LEDs/side is a guess (~1.5ft on the small
+      // channel's ~13 LEDs/ft), not a measured value -- adjust to whatever
+      // the wings actually cover on the real car.
+      static const int wingInset = 20;
+      static const int usableLen = SIZEOF_SMALL_NEO - 2 * wingInset;
+      static const int segmentLen = usableLen / 3;
+      for ( int i = 0; i < wingInset; ++i ) { ropeLeds[ i ] = CRGB::Black; ropeLeds[ i ].w = 0; }
+      for ( int i = SIZEOF_SMALL_NEO - wingInset; i < SIZEOF_SMALL_NEO; ++i ) { ropeLeds[ i ] = CRGB::Black; ropeLeds[ i ].w = 0; }
       uint8_t levels[ 3 ] = { trebleLevel, midLevel, bassLevel };
       for ( int seg = 0; seg < 3; ++seg ) {
          int filledCount = ( (int)levels[ seg ] * segmentLen + 127 ) / 255; // round
          for ( int p = 0; p < segmentLen; ++p ) {
-            int i = seg * segmentLen + p;
+            int i = wingInset + seg * segmentLen + p;
             if ( p < filledCount ) {
                ropeLeds[ i ] = CRGB::Black;
                ropeLeds[ i ].w = 255;
             } else {
                uint8_t hue = (uint8_t)( 96 - ( 96 * p ) / ( segmentLen - 1 ) ); // green(96) -> red(0)
-               ropeLeds[ i ] = CHSV( hue, 255, 128 ); // 128 = 50% brightness
+               ropeLeds[ i ] = CHSV( hue, 255, 77 ); // 77 = 128 * 0.6 (dimmed 40% further per request)
                ropeLeds[ i ].w = 0;
             }
          }
@@ -468,10 +518,10 @@ class MagicCarpet {
             if ( noiseFloorPos > 0 ) --noiseFloorPos; else ++peakThresholdPos;
          }
          for ( int seg = 0; seg < 3; ++seg ) {
-            ropeLeds[ seg * segmentLen + noiseFloorPos ] = CRGB::Blue;
-            ropeLeds[ seg * segmentLen + noiseFloorPos ].w = 0;
-            ropeLeds[ seg * segmentLen + peakThresholdPos ] = CRGB::Red;
-            ropeLeds[ seg * segmentLen + peakThresholdPos ].w = 0;
+            ropeLeds[ wingInset + seg * segmentLen + noiseFloorPos ] = CRGB::Blue;
+            ropeLeds[ wingInset + seg * segmentLen + noiseFloorPos ].w = 0;
+            ropeLeds[ wingInset + seg * segmentLen + peakThresholdPos ] = CRGB::Red;
+            ropeLeds[ wingInset + seg * segmentLen + peakThresholdPos ].w = 0;
          }
       }
 
@@ -483,10 +533,8 @@ class MagicCarpet {
          renderSideIndicator( BACK_RIGHT, FRONT_RIGHT, snapPercent, CRGB::White );
          renderSideIndicator( BACK_LEFT, FRONT_LEFT, snapPercent, CRGB::White );
       } else {
-         renderSideIndicator( BACK_RIGHT, FRONT_RIGHT, noiseFloorPercentToShow, CRGB::Blue );
-         renderSideIndicator( BACK_LEFT, FRONT_LEFT, noiseFloorPercentToShow, CRGB::Blue );
-         renderSideIndicator( BACK_RIGHT, FRONT_RIGHT, peakThresholdPercentToShow, CRGB::Red );
-         renderSideIndicator( BACK_LEFT, FRONT_LEFT, peakThresholdPercentToShow, CRGB::Red );
+         renderSideIndicatorPair( BACK_RIGHT, FRONT_RIGHT, noiseFloorPercentToShow, peakThresholdPercentToShow );
+         renderSideIndicatorPair( BACK_LEFT, FRONT_LEFT, noiseFloorPercentToShow, peakThresholdPercentToShow );
       }
 
       LedUtil::fill( megabarLeds, CRGB( 0, 0, fullSpectrumLevel ), NUM_MEGABAR_LEDS );

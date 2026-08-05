@@ -140,7 +140,6 @@ class FlameShow : public LightShow {
 
    void update( uint32_t time ) {
       static uint32_t timestamp = 0;
-      static uint32_t rate = 10;
 
       // pick color: each encoder detent cycles to the next color combo
       int delta = carpet->encoder->readPositionDelta();
@@ -211,7 +210,25 @@ class FlameShow : public LightShow {
       coolingRate = coolingRate > 255 ? 255 : coolingRate;
       sparkingRate = sparkingRate > 255 ? 255 : sparkingRate;
 
-      if ( time - timestamp > rate ) {
+      // BUGFIX ("pot fritzing, whole strip strobes to black at ~8Hz at
+      // some pot settings"): this cadence gate used to be a hardcoded
+      // 10ms, with a SEPARATE plain (blocking) delay(potval) at the very
+      // end of update() actually controlling the pot's effect on speed.
+      // A blocking delay() freezes the entire main loop -- not just this
+      // show, ALL button/encoder/I2C polling too -- for up to 255ms at a
+      // time. Worse, since that blocking delay dominates the real elapsed
+      // time between update() calls, the 10ms gate above always passed
+      // trivially, so the ENTIRE cool+spark fire-sim pass ran as one lump
+      // once per (potval-length) blocked cycle instead of many small
+      // ticks. At pot~51%, potval~125ms -- almost exactly 8Hz -- and
+      // applying the fixed-magnitude coolingRate constant just once per
+      // that whole interval was enough to cool the entire rope to near-
+      // black before the next lump of sparks partially relit it, reading
+      // as a rope-wide strobe. Fixed by using potval AS this gate's own
+      // threshold (non-blocking -- the codebase's own established pattern
+      // for pot-controlled cadence elsewhere) and removing the blocking
+      // delay() entirely below.
+      if ( time - timestamp > potval ) {
          timestamp = time;
          // cool everything
          for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
@@ -241,15 +258,17 @@ class FlameShow : public LightShow {
          // shorter flash duration than the rope's own sparks, per request
          // (floods read as too long/lingering at the rope's cooling rate).
          // Spark count is proportional, not fixed: the fraction of
-         // floodlights sparkling per cycle equals the fraction of rope LEDs
-         // sparkling per cycle (sparkingRate/255, the same per-LED
-         // probability used just above), applied to each fixture count and
-         // rounded to the nearest whole fixture -- floods are still chosen
-         // at random.
+         // floodlights sparkling per cycle is its own rate, decoupled from
+         // the rope's sparkingRate -- per request ("floods entirely too
+         // hyper"), floods sparked at the SAME rate as the rope up to now,
+         // which read as too busy; floodSparkingRate is that same rate
+         // divided by 3, applied to each fixture count and rounded to the
+         // nearest whole fixture -- floods are still chosen at random.
          uint8_t floodCoolingRate = qadd8( coolingRate, coolingRate ); // 2x rope's rate, clamped at 255
          for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) megabarHeat[ i ] = qsub8( megabarHeat[ i ], floodCoolingRate );
          for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) chinaHeat[ i ] = qsub8( chinaHeat[ i ], floodCoolingRate );
-         float sparkFraction = (float)sparkingRate / 255.0f;
+         uint8_t floodSparkingRate = sparkingRate / 3;
+         float sparkFraction = (float)floodSparkingRate / 255.0f;
          int megabarSparkCount = (int)( NUM_MEGABAR_LEDS * sparkFraction + 0.5f );
          int chinaSparkCount = (int)( NUM_CHINA_LEDS * sparkFraction + 0.5f );
          for ( int s = 0; s < megabarSparkCount; ++s ) {
@@ -290,8 +309,22 @@ class FlameShow : public LightShow {
          */
       }
 
-      int dmxval = (int)AudioBoard::getNormalPercent( BandLow ) * 255 / 100; // AudioBoard's getters are percent now; converted back to this show's own 0-255 palette-index scale
-      //Serial.println( dmxval );
+      // BUGFIX ("floods hella dim/flickery"): this used to read
+      // getNormalPercent() -- the RAW, instantaneous post-gain level,
+      // which follows bass's actual waveform directly. At a bass
+      // frequency of 40-80Hz that waveform crosses back near zero dozens
+      // of times a second, so sampling it unsmoothed every loop iteration
+      // made the flood fill flicker essentially randomly between dark and
+      // lit rather than holding at a sustained brightness. getHitPercent()
+      // is the peak-held value every other hit-driven show already uses
+      // (decays smoothly over hitDecayMs_ instead of tracking the raw
+      // wave), which is what a "how hard is bass hitting right now" flood
+      // fill actually wants. Floor matches EqualizerShow's own
+      // EQ_HIT_BRIGHTNESS_FLOOR fix for the identical "reads dim at
+      // anything less than a maxed hit" root cause.
+      static constexpr float FLAME_HIT_BRIGHTNESS_FLOOR = 0.65f;
+      float dmxvalFrac = max( FLAME_HIT_BRIGHTNESS_FLOOR, (float)AudioBoard::getHitPercent( BandLow ) / 100.0f );
+      int dmxval = (int)( dmxvalFrac * 255.0f + 0.5f );
       CRGB dmxclr = paletteColor( dmxval );
       LedUtil::gammaCorrect( dmxclr );
       LedUtil::fill( carpet->megabarLeds, dmxclr, NUM_MEGABAR_LEDS );
@@ -313,9 +346,6 @@ class FlameShow : public LightShow {
          LedUtil::gammaCorrect( sparkClr );
          carpet->chinaLeds[ i ] = blend( (CRGB)carpet->chinaLeds[ i ], sparkClr, chinaHeat[ i ] );
       }
-
-      // use this instead of the rate
-      delay( potval );
    }
 };
 

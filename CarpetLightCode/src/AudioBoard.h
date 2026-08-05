@@ -135,7 +135,7 @@ class AudioBoard {
       if ( simModeActive_ ) return raw;
       if ( silent_ ) return 0;
       float gained = (float)raw;
-      if ( autoGainEnabled_ && rollingPeak_ > 0 ) {
+      if ( autoGainEnabled_ && !autoGainSuppressed_ && rollingPeak_ > 0 ) {
          gained *= ( 255.0f / (float)rollingPeak_ );
          if ( gained > 255.0f ) gained = 255.0f; // clip prevention, see getFullSpectrum()'s comment
       }
@@ -420,12 +420,16 @@ class AudioBoard {
      //
      // UPDATED per request: bass is bin0 alone (unchanged); mid is the
      // LARGER of bins 2/3 (400Hz/1000Hz) rather than an average of 4 bins;
-     // treble is the LARGER of bins 5/6 (6250Hz/16000Hz) rather than their
-     // average. max() preserves whichever sub-band actually has energy
-     // right now instead of diluting it against a quieter neighbor.
+     // treble is the LARGEST of bins 4/5/6 (2500/6250/16000Hz) rather than
+     // their average. max() preserves whichever sub-band actually has
+     // energy right now instead of diluting it against a quieter neighbor.
+     // UPDATED again per request: bin4 (2500Hz) added to treble -- some
+     // music's "highs" don't carry much energy up at 6250Hz+, so treble
+     // was missing hits entirely for it; 2500Hz was previously discarded
+     // by neither mid nor treble picking it up.
      bin_low = Frequencies_Mono[0];
      bin_mid = max( Frequencies_Mono[2], Frequencies_Mono[3] );
-     bin_high = max( Frequencies_Mono[5], Frequencies_Mono[6] );
+     bin_high = max( Frequencies_Mono[4], max( Frequencies_Mono[5], Frequencies_Mono[6] ) );
    }
 
 
@@ -644,6 +648,16 @@ class AudioBoard {
    static uint8_t rollingPeak_;
 
    static bool autoGainEnabled_;
+   // While set (see setAutoGainSuppressed()), convertRawToNormal() ignores
+   // autoGainEnabled_ as if it were off, without touching the persisted
+   // setting itself -- CarpetLightLogic.cpp sets this for as long as the
+   // noise-floor/peak-threshold config subsetting is active, since dialing
+   // either of those in against a live auto-gained signal is confusing
+   // (the gain constantly renormalizes what you're trying to measure
+   // against a fixed floor/threshold). rollingPeak_/emaAverage_ keep
+   // tracking in the background regardless, so auto-gain picks back up
+   // smoothly (no jump) once this is cleared.
+   static bool autoGainSuppressed_;
    static float noiseFloorPercent_; // 0-100
    static float peakThresholdPercent_; // 0-100
 
@@ -874,6 +888,10 @@ class AudioBoard {
    static bool getAutoGainEnabled() {
       return autoGainEnabled_;
    }
+   // see autoGainSuppressed_'s declaration comment
+   static void setAutoGainSuppressed( bool suppressed ) {
+      autoGainSuppressed_ = suppressed;
+   }
 
    static void setNoiseFloorPercent( float percent ) {
       noiseFloorPercent_ = constrain( percent, 0.0f, 100.0f );
@@ -994,6 +1012,7 @@ uint8_t AudioBoard::peakHead_ = 0;
 uint8_t AudioBoard::peakCount_ = 0;
 uint8_t AudioBoard::rollingPeak_ = 0;
 bool AudioBoard::autoGainEnabled_ = false;
+bool AudioBoard::autoGainSuppressed_ = false;
 float AudioBoard::noiseFloorPercent_ = 0.0f;
 float AudioBoard::peakThresholdPercent_ = 31.0f; // approx. the old hardcoded 80/255, overwritten by Nvm at boot
 float AudioBoard::emaAverage_ = 0.0f;

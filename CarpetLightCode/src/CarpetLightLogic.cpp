@@ -471,6 +471,15 @@ void loop() {
    static uint32_t clock;
    clock = millis();
 
+   // Suppress auto-gain while dialing in noise floor/peak threshold --
+   // reading either of those against a live-renormalizing signal is
+   // confusing, since the gain keeps rescaling what you're trying to
+   // measure against a fixed value. Set unconditionally from current state
+   // every loop (not just on entry) so it can't get stuck on if this
+   // subsetting is ever left through a path other than the usual
+   // short/medium/long presses.
+   AudioBoard::setAutoGainSuppressed( appMode == ModeConfigAudio && configSubsetting == SubAudioThreshold );
+
    // decay-rate/hit-prediction screens' simulated signal replaces real audio
    // polling entirely while it's active, never runs alongside it
    bool usingSimulatedAudio = ( appMode == ModeConfigAudio &&
@@ -671,22 +680,40 @@ void loop() {
          carpet->flashRope( 2 ); // confirms advancing to the next config setting
          enterConfigMode( nextConfigMode( appMode ) );
       } else if ( didShort ) {
+         // BUGFIX: subsettings SubAudioThreshold/SubAudioHitDecay/
+         // SubAudioHitPrediction override short-press's usual "cycle to
+         // next subsetting" meaning with their own toggle (which target the
+         // pot controls / simulated vs live signal) -- but the old code
+         // NEVER fell through to cycleSubsetting() from any of these three,
+         // so once Audio config was entered (always landing on
+         // SubAudioThreshold first), short press could never advance past
+         // it. SubAudioHitDecay/SubAudioHitPrediction/SubAudioForesight/
+         // SubAudioAutoGain were consequently unreachable through normal
+         // navigation -- almost certainly the actual bug behind "AGC enable
+         // missing from config." Fixed the same way for all three: toggle
+         // as before, but once the toggle returns to its own default
+         // (noise floor / simulated signal), this same short press ALSO
+         // advances to the next subsetting instead of stopping -- so it
+         // takes 2 short presses to see both states before moving on,
+         // rather than looping on one subsetting forever.
          if ( appMode == ModeConfigAudio && configSubsetting == SubAudioThreshold ) {
-            // this subsetting overrides short-press's usual "cycle to next
-            // subsetting" meaning -- it toggles which of noise floor/peak
-            // threshold the pot targets instead (see adjustingPeakThreshold's
-            // declaration comment)
             revertAudioLivePreview(); // undo whichever target's live preview was applied before switching
-            adjustingPeakThreshold = !adjustingPeakThreshold;
-            resetTakeoverState(); // fresh soft takeover for the newly-selected target
-            printEnteringSetting( appMode, configSubsetting );
+            if ( !adjustingPeakThreshold ) {
+               adjustingPeakThreshold = true;
+               resetTakeoverState(); // fresh soft takeover for the newly-selected target
+               printEnteringSetting( appMode, configSubsetting );
+            } else {
+               adjustingPeakThreshold = false; // back to default before advancing
+               cycleSubsetting();
+            }
          } else if ( appMode == ModeConfigAudio && ( configSubsetting == SubAudioHitDecay || configSubsetting == SubAudioHitPrediction ) ) {
-            // this subsetting overrides short-press's usual "cycle to next
-            // subsetting" meaning -- it toggles between the simulated and
-            // live signal instead (same kind of subsetting-specific
-            // override PowerTest establishes for encoder rotation)
-            audioSimMode = !audioSimMode;
-            if ( audioSimMode ) AudioBoard::resetSimulatedBand();
+            if ( audioSimMode ) {
+               audioSimMode = false;
+            } else {
+               audioSimMode = true; // back to default before advancing
+               AudioBoard::resetSimulatedBand();
+               cycleSubsetting();
+            }
          } else {
             revertAudioLivePreview();
             cycleSubsetting();

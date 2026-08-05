@@ -98,7 +98,6 @@ class LighthouseShow : public LightShow {
    float angle1_ = 0.0f, angle2_ = 180.0f; // deg, 0-360
    float vel1_ = 0.0f, vel2_ = 0.0f;       // deg/s, current (post-random-walk) value
    float hue1_ = 0.0f;                     // 0-255 float for precision; only ever increases
-   float chinaPhaseDeg_ = 0.0f;
 
    Timer frameTimer_; // tracks dt between update() calls
 
@@ -207,6 +206,20 @@ class LighthouseShow : public LightShow {
       if ( d >= outer ) return 0;
       float fadeFrac = ( d - halfWidthDeg ) / fadeWidthDeg; // 0..1
       return smoothstep8( (uint8_t)( fadeFrac * 255.0f + 0.5f ) );
+   }
+
+   // each china fixture's approximate physical position angle, same
+   // (x,y)->angleDeg() convention as ropeAngleDeg() above -- china sits
+   // near one of the car's 4 corners, 2 fixtures per corner (see
+   // SpeedStripesShow.h's china layout comment / README.md "China lights":
+   // [0,1] front-right, [2,3] front-left, [4,5] back-left, [6,7]
+   // back-right), so this just picks that corner's (x,y) and reuses the
+   // rope's own angle function -- no separate china-angle table needed.
+   float chinaAngleDeg( int c ) {
+      static const float halfWidthFt = 6.0f, halfLengthFt = 8.0f;
+      float x = ( c <= 1 || c >= 6 ) ? halfWidthFt : -halfWidthFt;
+      float y = ( c <= 3 ) ? halfLengthFt : -halfLengthFt;
+      return angleDeg( x, y );
    }
 
  public:
@@ -340,20 +353,28 @@ class LighthouseShow : public LightShow {
          carpet->ropeLeds[ i ].w = 0;
       }
 
-      // --- china: shared crossfade between the 2 beams' colors ---
-      // DISABLED FOR NOW, per request (debugging the rope/megabar seam bug
-      // without china in the picture) -- computation left intact, just not
-      // written to the fixtures, so re-enabling later is a one-line change.
-      float avgAbsVel = ( fabsf( vel1_ ) + fabsf( vel2_ ) ) / 2.0f; // deg/s, reused directly as a color-phase rate
-      chinaPhaseDeg_ = wrap360( chinaPhaseDeg_ + avgAbsVel * dtSec );
-      uint8_t chinaPhase8 = (uint8_t)( chinaPhaseDeg_ / 360.0f * 255.0f );
-      uint8_t chinaBlend = sin8( chinaPhase8 ); // smooth 0-255 oscillation, no float trig
-      CRGB chinaColor = blend( (CRGB)CHSV( hue1Byte, satByte, 255 ), (CRGB)CHSV( hue2Byte, satByte, 255 ), chinaBlend );
-      chinaColor.nscale8( 204 ); // 80% of this show's own max output
-      (void)chinaColor; // suppress unused-variable warning while disabled
-      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
-         carpet->chinaLeds[ i ] = CRGB::Black;
-         carpet->chinaLeds[ i ].w = 0;
+      // --- china: joins the 2 beams directly, per request -- same cluster
+      // falloff system as the megabars just above (reusing its constants),
+      // evaluated at each china's own physical corner angle
+      // (chinaAngleDeg()) instead of a megabar index. Replaces the earlier
+      // shared-crossfade idea below, which was left disabled and never
+      // shipped.
+      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
+         float a = chinaAngleDeg( c );
+         uint16_t hueSum = 0;
+         uint8_t maxBright = 0;
+         bool anySet = false;
+         for ( int cl = 0; cl < 4; ++cl ) {
+            float d = fabsf( circularDelta( a, clusterAngle[ cl ] ) );
+            uint8_t contribBright = clusterBrightness( d, MEGABAR_SEGMENT_HALF_WIDTH_DEG, MEGABAR_FADE_WIDTH_DEG );
+            if ( contribBright > 0 ) {
+               hueSum += clusterHue[ cl ];
+               maxBright = max( maxBright, contribBright );
+               anySet = true;
+            }
+         }
+         carpet->chinaLeds[ c ] = anySet ? (CRGB)CHSV( (uint8_t)hueSum, satByte, maxBright ) : CRGB::Black;
+         carpet->chinaLeds[ c ].w = 0;
       }
    }
 };
