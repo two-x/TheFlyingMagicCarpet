@@ -225,8 +225,14 @@ button.active {
 }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.btnrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 4px; }
 .btnrow button { flex: 1 1 auto; }
+/* AGC's label is the 3-state "AGCoff"/"AGCband"/"AGCfull" (see
+   updateAgcButtonUI()) -- noticeably longer than Mute/Delay's own fixed
+   labels, so it gets a bigger flex share and they get tighter padding,
+   otherwise AGCband/AGCfull wrap or force the whole row to grow. */
+.btnrow #btnMute, .btnrow #btnDelay { flex-grow: 0.7; padding-left: 6px; padding-right: 6px; }
+.btnrow #btnAgc { flex-grow: 1.6; }
 /* Fixed 2x2 grid (not flex-wrap) so the variation row's overall height
    never depends on how many variations the current show has (0-4 across
    the different shows) -- min-height reserves space for 2 full rows even
@@ -619,7 +625,7 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">soren55.lights @ d10348e - 2026-08-05 11:58 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">soren55.lights @ 578bdad - 2026-08-05 16:05 UTC</span>
 </header>
 
 <div class="deck">
@@ -805,6 +811,11 @@ footer {
 
 <footer>Schematic top-down. Scroll/pinch or ,/. to zoom (20-100ft). 3D tilt/orbit camera planned as a follow-up.</footer>
 
+<!-- The REAL compiled firmware (src/*.h/.cpp, via tools/wasm/build.sh) --
+     see tools/wasm/README.md. Defines the CarpetFirmware() module factory
+     used below to run the actual AudioBoard AGC/hit-detection pipeline,
+     not a JS reimplementation of it. -->
+<script src="wasm/carpet_fw.js"></script>
 <script>
 'use strict';
 
@@ -1339,238 +1350,102 @@ function spotRadiiFt(wash) {
 }
 
 /* =====================================================================
-   AUDIO BOARD -- JS port of AudioBoard.h's bin mapping + raw/normal/hit/
-   decay/foresight/prediction pipeline. Faithful to the C++ math; the
-   input bins come from a Web Audio FFT approximating the MSGEQ7's 7
-   datasheet center frequencies instead of a real chip.
+   WASM FIRMWARE -- loads the REAL compiled firmware (see tools/wasm/
+   README.md / build.sh). No hit-detection/AGC/level math is reimplemented
+   in JS here: the visualizer's only job is injecting the simulated raw
+   audio bins in and reading the firmware's own computed levels back out.
+   ===================================================================== */
+let wasmModule = null, wasmReady = false, wasmAdcBinsPtr = 0;
+CarpetFirmware().then((M) => {
+  M.ccall('web_setup', null, [], []);
+  wasmAdcBinsPtr = M.ccall('web_getAdcBinsBufferPtr', 'number', [], []);
+  wasmModule = M;
+  wasmReady = true;
+  // The audio config sliders/AGC button/prediction-style select were drawn
+  // with hardcoded placeholder DOM values before the real firmware (with
+  // its own Nvm-persisted settings) finished loading -- resync every one
+  // of them from the real AudioBoard now, so what's on screen matches what
+  // the firmware actually has, and so the FIRST drag of any of these
+  // sliders adjusts from the firmware's real current value instead of
+  // silently overwriting it with a stale placeholder. syncAudioConfigUI is
+  // defined further down (function declarations are hoisted; this promise
+  // callback also only ever runs as a microtask after the whole script's
+  // synchronous body -- including those definitions -- has executed).
+  syncAudioConfigUI();
+}).catch((e) => {
+  console.error('CarpetFirmware WASM module failed to load:', e);
+  document.getElementById('audioStatus').textContent = 'WASM firmware failed to load -- see console';
+});
+
+/* =====================================================================
+   AUDIO BOARD -- thin proxy over the real firmware's AudioBoard (src/
+   AudioBoard.h), NOT a JS reimplementation. poll() feeds one MSGEQ7-style
+   poll's worth of raw bins into the WASM firmware and lets its own
+   pollFrequencies()/AGC/hit-decay pipeline run for real; every getter
+   below reads that same computation's result back out. The visualizer's
+   only remaining local state is `bins` (display of the raw simulated
+   input signal itself, not anything computed from it) and the config-
+   screen convenience fields, which are get/set pairs that write straight
+   through to the firmware's own setters/getters (AudioBoard::setAgcMode()
+   etc.) -- so e.g. toggling the AGC button here changes the SAME AGC
+   state real hardware's config screen would, and every show/meter that
+   reads it downstream sees the real algorithm's real effect.
    ===================================================================== */
 const BAND_LOW = 0, BAND_MID = 1, BAND_HIGH = 2, BAND_FULL = 3;
+// local 0-3 band index -> AudioBoard.h's AudioBand enum (BandBass=0,
+// BandMidbass=1, BandMid=2, BandTreble=3, BandFull=4) -- see
+// bandRawBinMax()'s own comment for the bin groupings this matches
+// exactly (bass=bin0, mid=max(bin2,bin3), treble=max(bin4,bin5,bin6)).
+// BandMidbass has no local-band equivalent; the visualizer never asks for it.
+const WASM_BAND = [ 0, 2, 3, 4 ];
 const PREDICT_OFF = 0, PREDICT_EXP = 1, PREDICT_GUN = 2, PREDICT_DRUM = 3;
 
 const AudioBoard = {
-  bins: [0,0,0,0,0,0,0], // 7 raw 0-255 values, MSGEQ7-analog order
-  rawLevel: [0,0,0,0],
-  normalLevel: [0,0,0,0],
-  hitLevel: [0,0,0,0],
-  hitWasAbove: [false,false,false,false],
+  bins: [0,0,0,0,0,0,0], // 7 raw 0-255 values, MSGEQ7-analog order -- the simulated INPUT signal itself, not FW-computed output
 
-  noiseFloorPct: 8,
-  peakThresholdPct: 78,
-  // 0=off, 1=band, 2=full -- see AGCMode in AudioBoard.h. This JS mirror
-  // stays a simple 3-state on/off-ish flag (still just gates the one
-  // rollingPeak-based gain below, same as the old boolean did) rather than
-  // reimplementing the firmware's new per-band AGC algorithm -- that
-  // belongs to the planned WASM migration (see the FOLLOW-UP item), not a
-  // fresh JS port.
-  agcMode: 0,
-  soundReactivityEnabled: true, // global kill switch -- see getHitPct/getNormalPct above; matches AudioBoard.h's soundReactivityEnabled_
-  hitDecayMs: 300,
-  audioForesightMs: 0,
-  hitPredictionMs: 0,
-  hitPredictionStyle: PREDICT_EXP,
-
-  rollingPeak: 0,
-  peakBuf: [], // {v, t}
-  emaAverage: 0,
-  silent: true,
-  silenceSinceMs: 0,
-  lastPollT: 0,
-
-  historySize: 60,
-  history: { low: [], mid: [], high: [], full: [], t: [] },
-
-  peakThresholdRaw() { return Math.round(this.peakThresholdPct / 100 * 255); },
-  noiseFloorRaw() { return Math.round(this.noiseFloorPct / 100 * 255); },
-
-  rawFullSpectrum() { return Math.max(...this.bins); },
-
-  into3Bins() {
-    // Matches AudioBoard.h's Into_3_Bins() -- treble now also includes
-    // bin4 (2500Hz), per request (some music's highs don't reach 6250Hz+).
-    const b = this.bins;
-    const bass = b[0];
-    const mid = Math.max(b[2], b[3]);
-    const treble = Math.max(b[4], b[5], b[6]);
-    return [bass, mid, treble];
-  },
-
-  pushHistory(low, mid, high, full, t) {
-    const h = this.history;
-    h.low.push(low); h.mid.push(mid); h.high.push(high); h.full.push(full); h.t.push(t);
-    if (h.t.length > this.historySize) {
-      h.low.shift(); h.mid.shift(); h.high.shift(); h.full.shift(); h.t.shift();
-    }
-  },
-  lookupDelayed(bandArr, nowMs) {
-    const target = Math.max(0, nowMs - this.audioForesightMs);
-    const h = this.history;
-    if (h.t.length === 0) return 0;
-    let bestIdx = 0, bestDelta = Infinity;
-    for (let i = 0; i < h.t.length; i++) {
-      const d = Math.abs(h.t[i] - target);
-      if (d < bestDelta) { bestDelta = d; bestIdx = i; }
-    }
-    return bandArr[bestIdx];
-  },
-  currentDisplayMs(nowMs) { return Math.max(0, nowMs - this.audioForesightMs); },
-
-  // BUGFIX, ported to match a real firmware fix (src/AudioBoard.h,
-  // convertRawToNormal()): noise floor used to only feed the coarse,
-  // several-second-delayed whole-signal `silent` flag below -- it had no
-  // effect on any individual band's own level, so noise sitting right at
-  // the peak threshold kept registering hits forever even with the noise
-  // floor set well above it. Now anything under the noise floor (checked
-  // post-autogain, the same 0-255 domain peak threshold already compares
-  // against) is floored to 0 here, before it ever reaches
-  // updateHitTracking()'s peak comparison.
-  convertRawToNormal(raw) {
-    if (this.silent) return 0;
-    let gained = raw;
-    // Suppress auto-gain while dialing in noise floor/peak threshold --
-    // reading either against a live-renormalizing signal is confusing,
-    // since the gain keeps rescaling what you're trying to measure
-    // against a fixed value (ported to firmware too, see AudioBoard.h's
-    // autoGainSuppressed_). rollingPeak tracking itself is untouched, so
-    // auto-gain picks back up smoothly (no jump) once this subsetting is
-    // left.
-    const agcSuppressed = Ctl.appMode === 'audio' && Ctl.configSubsetting === 0;
-    if (this.agcMode !== 0 && !agcSuppressed && this.rollingPeak > 0) {
-      gained *= 255 / this.rollingPeak;
-      if (gained > 255) gained = 255;
-    }
-    if (gained < this.noiseFloorRaw()) gained = 0;
-    return Math.round(gained);
-  },
-
-  updateAutoGainAndSilence(nowMs, rawFull) {
-    this.peakBuf.push({ v: rawFull, t: nowMs });
-    while (this.peakBuf.length && nowMs - this.peakBuf[0].t > 4000) this.peakBuf.shift();
-    this.rollingPeak = this.peakBuf.reduce((m, s) => Math.max(m, s.v), 0);
-
-    const dt = this.lastPollT ? nowMs - this.lastPollT : 30;
-    this.lastPollT = nowMs;
-    const alpha = dt / (4000 + dt);
-    this.emaAverage += alpha * (rawFull - this.emaAverage);
-
-    const nf = this.noiseFloorRaw();
-    if (this.emaAverage >= nf) {
-      this.silenceSinceMs = nowMs;
-      this.silent = false;
-    } else if (nowMs - this.silenceSinceMs >= 4000) {
-      this.silent = true;
-    }
-  },
-
-  shapePulse(timeInto, width, peak) {
-    const ramp = width / 3;
-    if (timeInto < ramp) return peak * timeInto / ramp;
-    if (timeInto < width - ramp) return peak;
-    const remain = width - timeInto;
-    return peak * remain / ramp;
-  },
-  computePulseTrain(timeUntilHit) {
-    const LEAD = 300, MIN_SP = 30, MAX_SP = 90, WIDTH = 30;
-    if (timeUntilHit > LEAD) return 0;
-    let onset = LEAD;
-    while (true) {
-      if (timeUntilHit <= onset && (onset - timeUntilHit) < WIDTH) {
-        return this.shapePulse(onset - timeUntilHit, WIDTH, this.peakThresholdRaw());
-      }
-      if (onset === 0) return 0;
-      const spacing = MIN_SP + (onset * (MAX_SP - MIN_SP)) / LEAD;
-      onset = onset >= spacing ? onset - spacing : 0;
-    }
-  },
-  computeTwoPulse(timeUntilHit) {
-    const MAXLEAD = 400, SPACING = 45, WIDTH = 35;
-    let lead = Math.min(this.audioForesightMs, MAXLEAD);
-    if (timeUntilHit > lead) return 0;
-    const a = lead, b = Math.max(0, lead - SPACING);
-    const peak = this.peakThresholdRaw();
-    if (timeUntilHit <= a && (a - timeUntilHit) < WIDTH) return this.shapePulse(a - timeUntilHit, WIDTH, peak);
-    if (timeUntilHit <= b && (b - timeUntilHit) < WIDTH) return this.shapePulse(b - timeUntilHit, WIDTH, peak);
-    return 0;
-  },
-  computePredictedRamp(bandKey, displayMs) {
-    if (this.hitPredictionStyle === PREDICT_OFF || this.hitPredictionMs < 1) return 0;
-    const hp = this.hitPredictionMs;
-    const windowEnd = displayMs + hp;
-    const peakRaw = this.peakThresholdRaw();
-    const h = this.history;
-    const arr = h[bandKey];
-    let bestT = 0, found = false;
-    for (let i = 0; i < h.t.length; i++) {
-      const ts = h.t[i];
-      if (ts <= displayMs || ts > windowEnd) continue;
-      if (this.convertRawToNormal(arr[i]) < peakRaw) continue;
-      if (!found || ts < bestT) { bestT = ts; found = true; }
-    }
-    if (!found) return 0;
-    const timeUntilHit = bestT - displayMs;
-    if (this.hitPredictionStyle === PREDICT_GUN) return this.computePulseTrain(timeUntilHit);
-    if (this.hitPredictionStyle === PREDICT_DRUM) return this.computeTwoPulse(timeUntilHit);
-    const ramp = 255 * (hp - timeUntilHit) / timeUntilHit;
-    return Math.min(255, ramp);
-  },
-
-  updateHitTracking(nowMs, dtMs) {
-    const peakRaw = this.peakThresholdRaw();
-    const decayAmount = (255 / Math.max(1, this.hitDecayMs)) * dtMs;
-    const displayMs = this.currentDisplayMs(nowMs);
-    const keys = ['low','mid','high','full'];
-    for (let b = 0; b < 4; b++) {
-      const isAbove = this.normalLevel[b] >= peakRaw;
-      if (isAbove) this.hitLevel[b] = this.normalLevel[b];
-      else { this.hitLevel[b] = Math.max(0, this.hitLevel[b] - decayAmount); }
-      const predicted = this.computePredictedRamp(keys[b], displayMs);
-      if (predicted > this.hitLevel[b]) this.hitLevel[b] = predicted;
-      this.hitWasAbove[b] = isAbove;
-    }
-  },
-
-  // main per-frame update -- call with fresh 7 MSGEQ7-analog bins (0-255)
+  // main per-frame update -- call with fresh 7 MSGEQ7-analog bins (0-255).
+  // Scales to the real ADC's 0-1023 domain (see AudioBoard.h's scale()) and
+  // hands off to the real firmware -- pollFrequencies()/AGC/hit-decay all
+  // run for real, inside web_tick()'s loop() call.
   poll(nowMs, freshBins) {
     this.bins = freshBins;
-    const [bass, mid, treble] = this.into3Bins();
-    const full = this.rawFullSpectrum();
-    this.updateAutoGainAndSilence(nowMs, full);
-    this.pushHistory(bass, mid, treble, full, nowMs);
-
-    const dLow = this.lookupDelayed(this.history.low, nowMs);
-    const dMid = this.lookupDelayed(this.history.mid, nowMs);
-    const dHigh = this.lookupDelayed(this.history.high, nowMs);
-    const dFull = this.lookupDelayed(this.history.full, nowMs);
-    this.rawLevel = [dLow, dMid, dHigh, dFull];
-    this.normalLevel = this.rawLevel.map(v => this.convertRawToNormal(v));
-
-    const dt = this._lastHitT ? nowMs - this._lastHitT : 30;
-    this._lastHitT = nowMs;
-    this.updateHitTracking(nowMs, dt);
+    if (!wasmReady) return;
+    for (let i = 0; i < 7; i++) {
+      wasmModule.setValue(wasmAdcBinsPtr + i * 4, Math.round(freshBins[i] * 1023 / 255), 'i32');
+    }
+    wasmModule.ccall('web_injectAdcBins', null, [], []);
+    wasmModule.ccall('web_tick', null, ['number'], [Math.round(nowMs)]);
   },
 
-  pct(v) { return Math.round(v / 255 * 100); },
-  // BUGFIX: matches AudioBoard.h's getHitPercent()/getNormalPercent() --
-  // gated here, once, centrally so every show automatically goes quiet
-  // when sound reactivity is globally disabled, with no individual show
-  // needing its own check. Raw/rawPercent (unused here) stay ungated in
-  // firmware for diagnostic screens; same intent applies if this ever
-  // grows a raw-level getter.
-  // BUGFIX ("floods dim during sound reactivity"): matches
-  // AudioBoard::getHitPercent() -- during an actual hit (hitLevel above
-  // the live peak threshold), reports flat max (100%) instead of the
-  // literal analog level, so a hit always reads as a full, punchy flash.
-  // Outside an active hit (mid-decay), still returns the real, naturally-
-  // decaying value. Replaces an earlier flat-floor attempt at this fix
-  // (hitBrightnessByte(), since removed) which compressed away the
-  // reactive contrast and caused a real regression (megabars/china
-  // stopped visibly responding to individual hits).
-  getHitPct(band) {
-    if (!this.soundReactivityEnabled) return 0;
-    if (this.hitLevel[band] > this.peakThresholdRaw()) return 100;
-    return this.pct(this.hitLevel[band]);
-  },
-  getNormalPct(band) { return this.soundReactivityEnabled ? this.pct(this.normalLevel[band]) : 0; },
-  getRawPct(band) { return this.pct(this.rawLevel[band]); },
+  getHitPct(band) { return wasmReady ? wasmModule.ccall('web_audioGetHitPercent', 'number', ['number'], [WASM_BAND[band]]) : 0; },
+  getNormalPct(band) { return wasmReady ? wasmModule.ccall('web_audioGetNormalPercent', 'number', ['number'], [WASM_BAND[band]]) : 0; },
+  getRawPct(band) { return wasmReady ? wasmModule.ccall('web_audioGetRawPercent', 'number', ['number'], [WASM_BAND[band]]) : 0; },
+
+  get silent() { return wasmReady ? wasmModule.ccall('web_audioIsSilent', 'number', [], []) !== 0 : true; },
+
+  get agcMode() { return wasmReady ? wasmModule.ccall('web_audioGetAgcMode', 'number', [], []) : 0; },
+  set agcMode(v) { if (wasmReady) wasmModule.ccall('web_audioSetAgcMode', null, ['number'], [v]); },
+
+  get noiseFloorPct() { return wasmReady ? wasmModule.ccall('web_audioGetNoiseFloorPercent', 'number', [], []) : 8; },
+  set noiseFloorPct(v) { if (wasmReady) wasmModule.ccall('web_audioSetNoiseFloorPercent', null, ['number'], [v]); },
+
+  get peakThresholdPct() { return wasmReady ? wasmModule.ccall('web_audioGetPeakThresholdPercent', 'number', [], []) : 78; },
+  set peakThresholdPct(v) { if (wasmReady) wasmModule.ccall('web_audioSetPeakThresholdPercent', null, ['number'], [v]); },
+
+  get hitDecayMs() { return wasmReady ? wasmModule.ccall('web_audioGetHitDecayMs', 'number', [], []) : 300; },
+  set hitDecayMs(v) { if (wasmReady) wasmModule.ccall('web_audioSetHitDecayMs', null, ['number'], [v]); },
+
+  get audioForesightMs() { return wasmReady ? wasmModule.ccall('web_audioGetAudioForesightMs', 'number', [], []) : 0; },
+  set audioForesightMs(v) { if (wasmReady) wasmModule.ccall('web_audioSetAudioForesightMs', null, ['number'], [v]); },
+
+  get hitPredictionMs() { return wasmReady ? wasmModule.ccall('web_audioGetHitPredictionMs', 'number', [], []) : 0; },
+  set hitPredictionMs(v) { if (wasmReady) wasmModule.ccall('web_audioSetHitPredictionMs', null, ['number'], [v]); },
+
+  get hitPredictionStyle() { return wasmReady ? wasmModule.ccall('web_audioGetHitPredictionStyle', 'number', [], []) : PREDICT_EXP; },
+  set hitPredictionStyle(v) { if (wasmReady) wasmModule.ccall('web_audioSetHitPredictionStyle', null, ['number'], [v]); },
+
+  get soundReactivityEnabled() { return wasmReady ? wasmModule.ccall('web_audioGetSoundReactivityEnabled', 'number', [], []) !== 0 : true; },
+  set soundReactivityEnabled(v) { if (wasmReady) wasmModule.ccall('web_audioSetSoundReactivityEnabled', null, ['number'], [v ? 1 : 0]); },
 };
 
 /* =====================================================================
@@ -3350,8 +3225,8 @@ function updateLighthouseStrobe(nowMs) {
   const dtSec = Math.max(0, Math.min(0.5, (nowMs - lhStrobeLastMs) / 1000));
   lhStrobeLastMs = nowMs;
   lhSuppressionPeak = Math.max(0, lhSuppressionPeak - LH_SUPPRESSION_DECAY_PER_SEC * dtSec);
-  const isHit = AudioBoard.hitLevel[BAND_LOW] > 0;
   const bassHit = AudioBoard.getHitPct(BAND_LOW);
+  const isHit = bassHit > 0;
   if (isHit) {
     const silenceExpired = !lhHadHit || (nowMs - lhLastHitT) >= 3000;
     const exceedsPeak = bassHit > lhSuppressionPeak;
@@ -3630,7 +3505,7 @@ function cfgMeterScreen(nowMs) {
   // it was set. Edge-detected (not level-triggered) so a sustained loud
   // bin flashes once on crossing, not solid white the whole time it stays
   // above threshold.
-  const peakRaw = AudioBoard.peakThresholdRaw();
+  const peakRaw = Math.round(AudioBoard.peakThresholdPct / 100 * 255);
   for (let c = 0; c < 7; c++) {
     const bin = (AudioBoard.bins && AudioBoard.bins[c]) || 0;
     const above = bin > peakRaw;
@@ -4858,14 +4733,14 @@ document.getElementById('orientationSelect').addEventListener('change', (e) => {
   applyOrientation();
 });
 
-// The CI deploy workflow replaces soren55.lights @ d10348e - 2026-08-05 11:58 UTC with the real
+// The CI deploy workflow replaces soren55.lights @ 578bdad - 2026-08-05 16:05 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  if (el.textContent === 'soren55.lights @ d10348e - 2026-08-05 11:58 UTC') el.textContent = 'local build (not CI-deployed)';
+  if (el.textContent === 'soren55.lights @ 578bdad - 2026-08-05 16:05 UTC') el.textContent = 'local build (not CI-deployed)';
 }
 
 const potIndicator = document.querySelector('#potKnob .knob__indicator');
@@ -5199,6 +5074,20 @@ function syncPredictMsMax() {
   syncSlider('predictMsSlider', 'predictMsVal', AudioBoard.hitPredictionMs, 'ms');
 }
 bindSlider('foresightSlider', 'foresightVal', v => v+'ms', v => { AudioBoard.audioForesightMs = v; updateOutputDelayTime(); syncPredictMsMax(); });
+// Resyncs every audio-config control's DOM position/label from the real
+// firmware's own current AudioBoard state -- called once the WASM module
+// finishes loading (see the CarpetFirmware().then() block up top), since
+// these controls are drawn with placeholder values before that.
+function syncAudioConfigUI() {
+  syncSlider('noiseFloorSlider', 'noiseFloorVal', AudioBoard.noiseFloorPct, '%', 1);
+  syncSlider('peakThreshSlider', 'peakThreshVal', AudioBoard.peakThresholdPct, '%', 1);
+  syncSlider('hitDecaySlider', 'hitDecayVal', AudioBoard.hitDecayMs, 'ms');
+  syncSlider('foresightSlider', 'foresightVal', AudioBoard.audioForesightMs, 'ms');
+  syncPredictMsMax();
+  document.getElementById('predictStyleSelect').value = AudioBoard.hitPredictionStyle;
+  updateAgcButtonUI();
+  updateOutputDelayTime();
+}
 function bindToggleButton(id, onToggle) {
   const btn = document.getElementById(id);
   btn.addEventListener('click', () => {
@@ -5247,11 +5136,11 @@ bindSlider('chinaBrSlider', 'chinaBrVal', v => v+'%', v => Ctl.chinaBr = v);
 // on/off toggle, so it isn't bindToggleButton()'d -- click cycles to the
 // next state (wrapping around, unlike the encoder's clamped-at-both-ends
 // behavior above), always showing the current state as its own label
-// ("Off"/"Band"/"Full" -- same names as AGCoff/AGCband/AGCfull with "AGC"
-// dropped, per request), orange (.active) for either non-Off state.
+// ("AGCoff"/"AGCband"/"AGCfull", matching AudioBoard.h's AGCMode names
+// exactly, per request), orange (.active) for either non-Off state.
 function updateAgcButtonUI() {
   const btn = document.getElementById('btnAgc');
-  btn.textContent = ['Off', 'Band', 'Full'][AudioBoard.agcMode];
+  btn.textContent = ['AGCoff', 'AGCband', 'AGCfull'][AudioBoard.agcMode];
   btn.classList.toggle('active', AudioBoard.agcMode !== 0);
 }
 document.getElementById('btnAgc').addEventListener('click', () => {
