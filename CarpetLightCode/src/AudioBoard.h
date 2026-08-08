@@ -22,6 +22,9 @@
 #define HIGH_OUTPUT 11
 
 inline int scale( int x ) { return ( ( 255 * x ) / 1023 ); }
+// better:   inline int scale( int x ) { return ( ( 255 * x ) / ADC_MAX_VALUE ); } // see Utilities.h
+
+
 inline uint8_t rawToPercent( uint8_t raw ) { return (uint8_t)( ( (uint16_t)raw * 100 + 127 ) / 255 ); }
 
 // which band a getter call is asking about -- see AudioBoard's per-band
@@ -307,11 +310,13 @@ class AudioBoard {
       // deliberately the opposite of the chip's own datasheet levels, so
       // that what actually reaches the chip is correct. See also setup().
       for ( int freq_amp = 0; freq_amp < 7 ; ++freq_amp ) {
+        // after initial reset sequence, We left  pin STROBE LOW / chip STROBE HIGH 
+        digitalWrite(STROBE, HIGH); // chip STROBE LOW  // toggle pin of spectrum shield to get next bin value -- inverted: chip actually sees LOW here
+        delayMicroseconds( 70 );    // chip STROBE falling edge to OUT valid  To(min) = 36 us
         Frequencies_Mono[freq_amp] = analogRead(DC_One);
-        digitalWrite(STROBE, HIGH); //toggle pin of spectrum shield to get next bin value -- inverted: chip actually sees LOW here
-        delayMicroseconds( 200 );
-        digitalWrite(STROBE, LOW); // inverted: chip actually sees HIGH here
-        delayMicroseconds( 200 ); // datasheet min for read after hi edge on strobe is 63-67us
+        // delayMicroseconds( 10 ); // just padding to ensure read happens w/i chip strobe high pulse - not required
+        digitalWrite(STROBE, LOW);  // chip STROBE HIGH // will read on next chip LOW transition
+        delayMicroseconds( 35 );    // chip STROBE high pulse  Ts(min) = 18 us
       }
    }
 
@@ -797,19 +802,20 @@ class AudioBoard {
       pinMode(STROBE, OUTPUT);
       pinMode(RESET, OUTPUT);
       pinMode(DC_One, INPUT);
-      digitalWrite(STROBE, LOW);  // inverted: chip actually sees HIGH here
-      digitalWrite(RESET, LOW);   // inverted: chip actually sees HIGH here
 
-      //Initialize Spectrum Analyzers
-      digitalWrite(STROBE, LOW);  // inverted: chip actually sees HIGH here
-      delayMicroseconds(100);
-      digitalWrite(RESET, HIGH);  // inverted: chip actually sees LOW here
-      delayMicroseconds(100);
-      digitalWrite(STROBE, HIGH); // inverted: chip actually sees LOW here
-      delayMicroseconds(100);
-      digitalWrite(STROBE, LOW);  // inverted: chip actually sees HIGH here
-      delayMicroseconds(100);
-      digitalWrite(RESET, LOW);   // inverted: chip actually sees HIGH here
+      // initial reset sequence (per datasheet)
+      digitalWrite(STROBE, HIGH); // chip STROBE LOW  (ext inverter)
+      digitalWrite(RESET, HIGH);  // chip RESET  LOW  (ext inverter)
+      digitalWrite(STROBE, LOW);  // chip STROBE HIGH (ext inverter)
+      // delayMicroseconds(100);
+      digitalWrite(RESET, LOW);   // chip RESET  HIGH (ext inverter)
+      delayMicroseconds(100);     // chip Strb pulse width Ts(min) = 18 us
+      digitalWrite(STROBE, HIGH); // chip STROBE LOW  (ext inverter)
+      delayMicroseconds(100);     // chip Rst pulse width  Tr(min) = 100 us 
+      digitalWrite(STROBE, LOW);  // chip STROBE HIGH (ext inverter)
+      // delayMicroseconds(100);
+      digitalWrite(RESET, HIGH);  // chip RESET  LOW  (ext inverter)
+      delayMicroseconds(100);     // chip Rst falling to Strb falling Trs(min) = 72 us   // ensure any following strobe is valid
    }
 };
 
