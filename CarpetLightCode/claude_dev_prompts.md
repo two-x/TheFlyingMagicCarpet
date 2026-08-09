@@ -1,15 +1,19 @@
 # Claude Code standing prompts for this repo
 
-Four copy-pasteable prompts. Each one, pasted into a Claude Code session
+Five copy-pasteable prompts. Each one, pasted into a Claude Code session
 working in this repo (`CarpetLightCode`), sets up a **standing instruction**
 that applies to every future response in that session until you tell it
-otherwise — not a one-time task. Paste any subset of the 4; they're
-independent of each other.
+otherwise — not a one-time task. Paste any subset of the 5; they're
+independent of each other (prompt 5 is a little different — see its own
+section below).
 
 They're written to be self-contained: a fresh Claude session with no other
-context should be able to follow one correctly. You shouldn't need to edit
-these prompts over time — only if you specifically want to change *what
-counts as in scope* for one of them (e.g. "also update X when Y changes").
+context should be able to follow one correctly, reproducing the same
+content, formatting, and conventions (including terseness and the table of
+contents) this repo's docs currently have. You shouldn't need to hand-edit
+these prompts yourself over time — if you've also adopted prompt 5, Claude
+keeps this file's own instructions in sync as the codebase and conventions
+they describe evolve.
 
 ## How to use these
 
@@ -51,6 +55,16 @@ Formatting/style — match the file's existing conventions exactly:
 - Prose is dense technical documentation, not marketing copy or a tutorial:
   third person, explains WHY (a design rationale, a bug that motivated a
   fix, a hardware constraint) as often as WHAT. No emoji.
+- **Condensed, not padded.** Every fact, number, name, and rationale that's
+  currently in a section must survive an edit to it — but cut filler:
+  redundant restatement of something the previous sentence already said,
+  throat-clearing ("it's worth noting that," "the way this works is"),
+  and words that don't carry information. Prefer one tight sentence over
+  two loose ones; prefer a semicolon or em-dash clause over "and this
+  means that." A rough target: if you can cut 15-25% of a paragraph's
+  word count without losing a single fact, do it. This is a standing
+  property of the file, not a one-time pass — don't let new prose you add
+  regress back to a looser style than what's already there.
 - Bugfixes get an inline **Bugfix**: bold lead-in within the relevant
   paragraph, not a separate changelog section.
 - Wrap identifiers, filenames, and function/getter names in single
@@ -63,6 +77,33 @@ Formatting/style — match the file's existing conventions exactly:
 - Cross-reference other sections in parens, e.g. "(see 'Configuration
   mode' above)" — don't duplicate content that already lives elsewhere in
   the file.
+- **Headings stay anchor-friendly.** Avoid packing a heading with an
+  em-dash clause, a parenthetical file path, commas, or backticked code —
+  e.g. prefer `## Megabars` over `## Megabars — \`megabarLeds[12]\`, DMX
+  addr 1, 4, 7...34`. If the dropped detail (a filename, an array name)
+  isn't already stated in that section's first sentence or its own table,
+  add it there instead of putting it back in the heading. This isn't
+  cosmetic: both the GitHub-rendered anchor links below and the
+  visualizer's own anchor links depend on headings staying short, plain
+  text so their auto-generated slug stays stable and predictable.
+
+**Table of contents — keep it current.** Immediately under the file's
+top intro paragraphs (before the first `##` section) is a `## Contents`
+section: a markdown list of every `##`/`###` heading in the file, in
+order, with `###` headings nested one level under their parent `##` as a
+sub-list. Each entry is `[Heading text](#slug)`, where `slug` is the
+heading text lowercased, with anything that isn't a letter/digit/space/
+hyphen stripped out, then spaces turned into hyphens (e.g. "Encoder and
+button UI" → `#encoder-and-button-ui`). This is the same algorithm
+GitHub's own heading-anchor renderer uses for plain-text headings (part of
+why headings need to stay plain text, per above) — so these links work
+natively on github.com with zero extra tooling, AND work inside the
+visualizer's "FW readme" popup, which slugifies headings in its own
+markdown renderer (`slugify()` in carpet-visualizer.html) using the
+identical algorithm. Any time you add, remove, rename, or reorder a
+heading, update the `## Contents` list to match in the same edit — a
+stale TOC entry (wrong text, dead link, missing entry) is as much a bug
+as a wrong technical fact.
 
 IMPORTANT: tools/visualizer/carpet-visualizer.html embeds a byte-for-byte
 copy of this file's markdown source inside a
@@ -107,12 +148,29 @@ here; cross-reference it instead.
 
 Formatting — match the existing markup exactly:
 - Content is structured as numbered `<h3 id="help-slug">N. Title</h3>`
-  sections. The `<div class="help-toc">` block near the top of the modal
-  has one `<a href="#help-slug">N. Title</a>` per section — if you add,
-  remove, or reorder a top-level section, update the TOC list and every
-  section's number to match, in the same edit.
-- Subsections inside a numbered section are `<h4>` (no numbering/anchor).
-- Wrap identifiers/filenames/getter names in `<code>...</code>`.
+  top-level sections, each `id` a short kebab-case slug prefixed `help-`
+  (e.g. `help-purpose`, `help-config-tree`) — doesn't need to match the
+  visible title exactly, just be short, stable, and unique.
+- Subsections that are worth deep-linking to get `<h4 id="help-slug">` the
+  same way (e.g. `help-fw-io`, `help-dev-repo`); a purely cosmetic
+  subsection can stay a plain unlinked `<h4>`.
+- The `<ul class="help-toc">` block near the top of the modal mirrors the
+  heading structure exactly, as a **nested** list: one `<li><a
+  href="#help-slug">N. Title</a></li>` per top-level section, and where
+  that section has linked `<h4>` subsections, a nested `<ul>` of `<li><a
+  href="#help-slug">Subsection title</a></li>` inside that same `<li>`
+  (see the existing section 3 and section 6 entries for the exact
+  pattern). Any time you add, remove, rename, renumber, or reorder a
+  heading (top-level or linked subsection), update this TOC — and every
+  top-level section's leading number — to match, in the same edit. A
+  stale TOC entry is as much a bug as a wrong technical fact.
+- **Condensed, not padded** — same standard as prompt 1's README style:
+  keep every fact, tag, control name, and caveat currently present, but
+  cut restatement and filler. Don't let new content you add default to a
+  looser style than what's already here.
+- Wrap identifiers/filenames/getter names in `<code>...</code>` (this is
+  raw HTML, not markdown — literal backticks will render as backticks,
+  not code spans).
 - Where you're describing whether something is real firmware I/O, a
   visualizer-only dev convenience, or simulated external hardware, use the
   existing tag convention: `<span class="help-tag help-tag--fw">FW</span>`,
@@ -198,11 +256,48 @@ git add . <any-new-filenames>; git commit -m "[lightbox] 1) ... 2) ..."
   empty/no-op one.
 ```
 
+## 5. Keep this file itself in sync
+
+Use this so `claude_dev_prompts.md` never quietly drifts out of date with
+what prompts 1-4 actually need to say — e.g. if a future change adds a new
+file that needs README-syncing, changes the visualizer help's markup
+structure, changes the cheat-sheet generator's constants, or otherwise
+changes what detail/instructions one of the 4 prompts above ought to
+include. This is the one prompt of the 5 that's about *this file*, not
+about the codebase's docs/content directly.
+
+```text
+Upon each prompt answer from now on, until further notice: if anything in
+this response changes what one of the standing prompts in
+claude_dev_prompts.md should instruct — new content that prompt should
+cover, a changed file path or markup structure it references, a changed
+convention (formatting, TOC structure, slug algorithm, print spec,
+whatever) it should describe, a new prompt worth adding, or an existing
+instruction that's now simply wrong — update claude_dev_prompts.md to
+match, in the same response. Do NOT touch a prompt's content just because
+underlying code changed in a way that prompt would naturally handle on its
+own next run (e.g. a new show doesn't need prompt 3's own text edited,
+prompt 3 already says to re-derive the show list from source each time) —
+only edit when the *instructions themselves*, not just the content they'd
+produce, need to change.
+
+Keep each prompt's own internal detail level intact: these are meant to be
+detailed enough that a fresh Claude Code session, with no other context,
+can reproduce the exact same content, formatting, and conventions (style,
+terseness, TOC structure, etc.) as this repo currently has — not just the
+general idea. When updating a prompt, preserve that same level of
+specificity rather than summarizing it away.
+
+End your response by explicitly noting "claude_dev_prompts.md updated:
+<1-line summary>" or "claude_dev_prompts.md: no update needed this time"
+so it's clear you checked.
+```
+
 ---
 
 ## Notes for whoever's maintaining these
 
-- These 4 prompts were written together in one session and cross-reference
+- Prompts 1-4 were written together in one session and cross-reference
   each other's territory (README vs. visualizer-help vs. cheat-sheet each
   have a defined, non-overlapping scope — see each prompt's own "what
   counts as in scope" paragraph) specifically so a dev can adopt any subset
@@ -215,3 +310,16 @@ git add . <any-new-filenames>; git commit -m "[lightbox] 1) ... 2) ..."
 - Prompt 4's `[lightbox]` commit-tag prefix matches this repo's existing
   git history convention (see `git log`) — if that convention ever changes,
   update the literal string in prompt 4 to match.
+- Prompt 5 is what's supposed to keep the 3 notes above from ever going
+  stale by hand again — if a session with prompt 5 active is the one
+  making a change described in those notes, it should already have updated
+  the relevant prompt (and, ideally, this note) itself. These notes exist
+  as a human-readable summary/backstop, not as the source of truth for
+  what's in sync — the prompts' own text is.
+- README.md's and the visualizer help's current table-of-contents/heading-
+  anchor scheme (plain-text headings, GitHub-slug-compatible anchors, a
+  `## Contents` markdown list mirrored by a nested `<ul class="help-toc">`,
+  and the matching `slugify()` function in carpet-visualizer.html's
+  `renderMarkdown()`) and their condensed prose style were both introduced
+  in the same session that added prompt 5 — see prompts 1 and 2 above for
+  the full spec of each.
