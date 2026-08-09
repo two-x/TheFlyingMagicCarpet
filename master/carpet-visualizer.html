@@ -122,6 +122,125 @@ header h1 {
   font-size: 11px;
   cursor: pointer;
 }
+.settings-menu__link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--amber);
+  cursor: pointer;
+}
+.settings-menu__link:hover { text-decoration: underline; }
+
+/* ---------- help modal ---------- */
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.help-overlay[hidden] { display: none; }
+.help-modal {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  width: min(720px, 92vw);
+  height: min(80vh, 900px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.help-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.help-modal__header h2 {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.help-modal__close {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font-size: 13px;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+}
+.help-modal__close:hover { color: var(--text); border-color: var(--text-dim); }
+.help-modal__body {
+  overflow-y: auto;
+  padding: 4px 20px 20px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+.help-modal__body h3 {
+  color: var(--amber);
+  font-size: 13px;
+  margin: 22px 0 6px;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 4px;
+}
+.help-modal__body h3:first-child { margin-top: 12px; }
+.help-modal__body h4 {
+  color: var(--text);
+  font-size: 12px;
+  margin: 14px 0 4px;
+}
+.help-modal__body p { margin: 6px 0; }
+.help-modal__body ul, .help-modal__body ol { margin: 6px 0; padding-left: 20px; }
+.help-modal__body li { margin: 3px 0; }
+.help-modal__body code {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 1px 4px;
+  color: var(--text);
+}
+.help-modal__body table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 11.5px; }
+.help-modal__body th, .help-modal__body td {
+  border: 1px solid var(--line-soft);
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+.help-modal__body th { color: var(--text); background: var(--panel-2); }
+.help-modal__body .help-toc { columns: 2; column-gap: 24px; font-size: 11.5px; }
+.help-modal__body .help-toc a { color: var(--text-dim); text-decoration: none; }
+.help-modal__body .help-toc a:hover { color: var(--amber); text-decoration: underline; }
+.help-modal__body a { color: var(--amber); }
+.help-tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.help-tag--fw { background: rgba(90, 169, 255, 0.15); color: var(--blue); }
+.help-tag--shortcut { background: rgba(242, 163, 65, 0.15); color: var(--amber); }
+.help-tag--sim { background: rgba(107, 220, 143, 0.15); color: var(--green); }
 
 /* ---------- layout ---------- */
 /* Consolidated to one narrow control column so the stage gets almost all
@@ -360,8 +479,60 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 /* "?" sits between the two knobs, top-aligned with the knobs' own top
    edge (not vertically centered in the row) -- align-self overrides the
-   row's default center alignment for just this one child. */
-.knobs-tt { align-self: flex-start; }
+   row's default center alignment for just this one child. Also anchors
+   .expand-toggle's absolute positioning below: the row itself stretches
+   to the FULL panel width (flex-column default), so centering the toggle
+   on the ROW's own midpoint drifts off true knob-to-knob center whenever
+   the two knob-labels' text widths differ ("Encoder\npos 0" vs "Pot\n50%")
+   -- anchoring on this small, already knob-centered element instead keeps
+   it exactly centered between the two knobs regardless of label width. */
+.knobs-tt { align-self: flex-start; position: relative; }
+/* Expand/collapse toggle for the button-description table below --
+   replaces the old Settings-menu checkbox (per request: a direct,
+   in-place control instead of a buried menu toggle). A plain chevron, no
+   circle/border (standard web "expand control" styling), overlaid via
+   absolute positioning (relative to .knobs-tt, see its own comment) so it
+   costs the panel no extra vertical space of its own -- top:56px places
+   its own top edge at the knobs' bottom edge (56px = knob height),
+   translateY(-100%) then pulls it up so ITS bottom edge lands there
+   instead, per request. */
+.expand-toggle {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  width: 21px;
+  height: 21px;
+  transform: translate(-50%, -100%);
+  cursor: pointer;
+  user-select: none;
+}
+/* Drawn, not a text glyph -- a text chevron character renders as a solid
+   filled triangle in this font, not the open "V" stroke per request. Two
+   border edges of a rotated square form a clean open V/chevron instead.
+   12px arms (up from an 8px baseline, +50% per request). */
+.expand-toggle::before {
+  content: '';
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-right: 2px solid var(--text-faint);
+  border-bottom: 2px solid var(--text-faint);
+  transform: translate(-50%, -50%) rotate(45deg); /* points down: collapse the description table */
+  transition: transform 0.15s, border-color 0.15s;
+}
+.expand-toggle:hover::before { border-color: var(--text); }
+/* Collapsed state points up (expand it back open) -- per request, always
+   up or down, never sideways. */
+.expand-toggle.collapsed::before { transform: translate(-50%, -50%) rotate(-135deg); }
+/* Collapsed: the action table is hidden and the panel's own bottom
+   padding shrinks to match its top (that large bottom padding only
+   exists to clear the action table's last row against the panel's own
+   corner radius -- see .ctrl-panel's comment -- so it's dead weight with
+   nothing left to clear). */
+.ctrl-panel.collapsed .ctrl-panel__actions { display: none; }
+.ctrl-panel.collapsed { padding-bottom: 10px; }
 .knob-label {
   font-size: 9px;
   line-height: 1.5;
@@ -669,28 +840,20 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
    colors for full-range peak thresh setting and auto scaled value where
    the latter is a more muted version of the former") */
 .meter-stack .bar > .mark-autopeak { background: rgba(255, 255, 255, 0.45); }
-.expand-source-btn {
-  width: 100%;
-  margin-top: 6px;
-  font-size: 10px;
-  padding: 6px 8px;
-  background: var(--panel-2);
-  color: var(--text-dim);
-  border: 1px solid var(--line);
-}
-.expand-source-btn:hover { color: var(--text); border-color: var(--amber-dim); }
-.expand-source-btn.open { color: var(--amber); border-color: var(--amber-dim); }
-
+/* Debug aid (see AudioBoard::getMaxPercent()'s own comment): the FW's own
+   theoretical max percent (always 100) -- should always sit pinned at the
+   bar's far-right edge; if it visibly doesn't, that isolates the bug to
+   this bar's own rendering/scaling rather than the FW's audio math. */
+.meter-stack .bar > .mark-max { background: #ff5ac8; }
 .tone-expand {
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  margin-top: 2px;
+  margin-top: 6px;
   background: var(--panel-2);
   border-radius: 4px;
 }
-.tone-expand.open { display: flex; }
 
 /* ---------- footer ---------- */
 footer {
@@ -732,8 +895,10 @@ footer {
       <div class="settings-menu__section">
         <div class="settings-menu__heading">Visibility</div>
         <label class="settings-menu__row"><span>Input cap setting</span><input type="checkbox" id="showInputCapCheck" /></label>
-        <label class="settings-menu__row"><span>Button descriptions</span><input type="checkbox" id="showButtonDescCheck" checked /></label>
         <label class="settings-menu__row"><span>Colorize lamps</span><input type="checkbox" id="fixtureDotsCheck" checked /></label>
+      </div>
+      <div class="settings-menu__section">
+        <button class="settings-menu__link" id="openHelpBtn" type="button">Visualizer help</button>
       </div>
     </div>
   </div>
@@ -742,8 +907,150 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ 94dfb7b - 2026-08-09 09:18 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ b3b0d61 - 2026-08-09 20:40 UTC</span>
 </header>
+
+<div class="help-overlay" id="helpOverlay" hidden>
+  <div class="help-modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="help-modal__header">
+      <h2 id="helpTitle">Visualizer Help</h2>
+      <button class="help-modal__close" id="helpCloseBtn" title="Close" aria-label="Close">&#10005;</button>
+    </div>
+    <div class="help-modal__body">
+
+      <div class="help-toc">
+        <a href="#help-purpose">1. Purpose &amp; use cases</a>
+        <a href="#help-architecture">2. Architecture: a shell over real firmware</a>
+        <a href="#help-categories">3. What's real FW vs. a visualizer shortcut vs. simulated audio</a>
+        <a href="#help-config-tree">4. Firmware config menu map</a>
+        <a href="#help-shows">5. Light shows &amp; variations</a>
+        <a href="#help-dev">6. For developers</a>
+      </div>
+
+      <h3 id="help-purpose">1. Purpose &amp; use cases</h3>
+      <p>This page exists so anyone can debug, tune, and demo the carpet's real Arduino Due firmware from an ordinary browser tab, without physical access to the car. Typical uses:</p>
+      <ul>
+        <li>Checking a firmware change actually does what you intended <em>before</em> flashing real hardware.</li>
+        <li>Tracking down a light-show or audio-reactivity bug by feeding it a controlled, repeatable signal instead of chasing it live at an event.</li>
+        <li>Tuning audio settings (noise floor, peak threshold, AGC, hit decay/prediction) against a realistic simulated signal chain.</li>
+        <li>Walking a new contributor through every show/variation and the config menu without needing the car in front of you.</li>
+        <li>Demoing the car's behavior remotely.</li>
+      </ul>
+
+      <h3 id="help-architecture">2. Architecture: a shell over real firmware</h3>
+      <p>The single most important thing to understand: <strong>this page does not reimplement the light shows.</strong> The exact same C++ source that gets compiled and flashed onto the real Arduino Due (<code>src/*.cpp</code>, <code>src/*.h</code>) is <em>also</em> compiled to WebAssembly (via <code>tools/wasm/build.sh</code>) and shipped as <code>tools/visualizer/wasm/carpet_fw.js</code>. When this page loads, that WASM module boots up and starts running the firmware's real <code>setup()</code>/<code>loop()</code> — live, in your browser, right now.</p>
+      <p>Every frame, the page does exactly three things:</p>
+      <ol>
+        <li><strong>Inject simulated external input</strong> into the firmware's own variables/memory — a pot percentage, an encoder step, a button press, a vehicle speed, and (for audio) a set of 7 MSGEQ7 chip bin readings.</li>
+        <li><strong>Call the real firmware's own tick function</strong> (<code>web_tick()</code>, a thin wrapper around the real <code>loop()</code>) — the exact same code path that runs on hardware.</li>
+        <li><strong>Read back the firmware's own output</strong> — the LED color arrays it just computed (<code>ropeLeds[]</code>, <code>megabarLeds[]</code>, <code>chinaLeds[]</code>) — and draw them onto the on-screen car.</li>
+      </ol>
+      <p>Nothing about a light show's color, timing, or audio-reactivity logic is duplicated in JavaScript. If a show looks wrong here, it's wrong in the real firmware too (with one disclosed exception below) — that's the entire point of building it this way.</p>
+      <p><strong>Known gap:</strong> Nightrider's on-screen preview (<code>showNightrider()</code> in this file's JS) has not yet been migrated to read the real WASM LED buffers for that one show — it's still an approximation. Every other show, every config screen, and all audio processing reads real FW output. This is tracked as a known TODO, not a design choice.</p>
+
+      <h3 id="help-categories">3. What's real FW vs. a visualizer shortcut vs. simulated audio</h3>
+      <p>Every control on this page falls into one of three categories. Look for these tags:</p>
+      <p>
+        <span class="help-tag help-tag--fw">FW</span> writes into or reads from the real firmware, same effect as the physical hardware input it stands in for.
+        <span class="help-tag help-tag--shortcut">SHORTCUT</span> is a dev convenience that exists only in this browser tool, with no physical equivalent on the car.
+        <span class="help-tag help-tag--sim">SIM</span> models a piece of real external analog hardware (the audio signal chain) that the firmware doesn't control but reacts to.
+      </p>
+      <h4>Direct firmware I/O <span class="help-tag help-tag--fw">FW</span></h4>
+      <ul>
+        <li>The on-screen car and every light color on it — read straight from the firmware's own LED buffers.</li>
+        <li>The Encoder/Pot knob panel and its live action table (Short/Med/Long/XL/Double, Left/Right, Pot) — dragging these knobs injects the same signals the real encoder and potentiometer would produce; the action table describes what the firmware will actually do with them right now.</li>
+        <li>The show/variation dropdown and the row of variation buttons — equivalent to short-pressing the button to cycle shows and turning the encoder to cycle variations.</li>
+        <li>Every "Audio config screens" dropdown entry (Noise/Peak meter, Hit decay meter, Hit prediction, Foresight adjust, Sound reactivity toggle, Auto-peak toggle) — these render the real firmware's own config-mode screens.</li>
+        <li>The 4 VU meter bars (Bass/Mid/Treb/Full), including the raw-level overlay and the noise-floor/peak-threshold/auto-peak marks — all read from <code>AudioBoard</code>'s own real computed levels, not a JS approximation.</li>
+        <li>Peak thresh, Noise floor, Foresight, Hit predict, Hit prediction style, Hit decay sliders, and the Mute/AGC/AutoPk buttons — these call the same bridge functions the physical config menu ultimately calls, so the effect is identical; they just skip the multi-press menu navigation as a convenience (see <span class="help-tag help-tag--shortcut">SHORTCUT</span> distinction below — the sliders/buttons themselves are a UI shortcut, but the values they set are 100% real committed firmware state).</li>
+        <li>Global/Headlight/China brightness sliders and the Blacklight checkbox — same real brightness state the Brightness config screen adjusts.</li>
+      </ul>
+      <h4>Visualizer-only shortcuts <span class="help-tag help-tag--shortcut">SHORTCUT</span></h4>
+      <ul>
+        <li>The <strong>Settings</strong> menu (orientation, input-cap visibility, colorize lamps) — browser-only display preferences, no firmware equivalent.</li>
+        <li><strong>Zoom</strong> and <strong>Vehicle speed</strong> — camera/scene controls for this page's own rendering; vehicle speed is <em>not</em> currently read by any show, it's reserved for future use.</li>
+        <li>The ▾ button-description toggle on the encoder/pot panel, and the meter-stack's own collapse — pure screen-space conveniences.</li>
+        <li><strong>Mic / PC / File / Beats</strong> source-select buttons, and the tone-generator pattern dropdown — these choose and shape the <em>input</em> to the simulated audio hardware (see next section); the firmware never sees "which source" you picked, only the resulting simulated ADC readings.</li>
+      </ul>
+      <h4>Simulated realistic audio signal <span class="help-tag help-tag--sim">SIM</span></h4>
+      <p>The firmware's own audio code (<code>AudioBoard.h</code>) expects to read a real MSGEQ7 spectrum-analyzer chip over 7 analog pins, fed by a real analog signal chain: phone/laptop speaker &rarr; open air &rarr; the car's onboard microphone/circuit &rarr; op-amp gain &rarr; the chip itself &rarr; a voltage divider &rarr; the Due's ADC. This page builds a legitimate software model of <em>that whole external chain</em> (this is <strong>not</strong> a firmware reimplementation — it's modeling hardware the firmware doesn't contain) so the firmware's real noise-floor/peak-threshold/AGC/hit-decay logic gets exercised against an imperfect, realistic signal instead of a clean synthetic one:</p>
+      <ul>
+        <li><strong>Source</strong> (Mic/PC/File/Beats) — the "instrument" playing the music, i.e. what's upstream of the phone speaker.</li>
+        <li><strong>Source level</strong> — how hard that source is driving the signal (its own volume knob).</li>
+        <li><strong>Amplified noise</strong> — noise introduced before the phone's own volume control (hiss baked into the source).</li>
+        <li><strong>Phone volume</strong> — the phone/laptop speaker's own volume, applied to everything downstream of it. Defaults to 60%, not 100% — a real phone at a car meet is rarely maxed out, and this is exactly the kind of "quiet source" scenario AGC/Auto-peak exist to compensate for.</li>
+        <li><strong>Base noise</strong> — a noise floor added after the phone volume (ambient/circuit noise, independent of how loud the source is).</li>
+        <li><strong>Input cap</strong> — the simulated chip's own input coupling capacitor (DC-blocking filter), affecting low-frequency response.</li>
+        <li>The MSGEQ7 chip simulation itself is driven by the firmware's own <em>real</em> STROBE/RESET pin writes (captured via a pin-write log), never a guessed timing — see <code>tools/wasm/README.md</code> for the datasheet-accurate model.</li>
+      </ul>
+      <p>The <strong>bins</strong> row and the raw-level VU overlay show you what the simulated chip is actually handing the firmware; the firmware's own AGC/noise-floor/peak-threshold logic then decides what to do with it, same as it would with a real signal.</p>
+
+      <h3 id="help-config-tree">4. Firmware config menu map</h3>
+      <p>From <strong>Show mode</strong>, a <strong>Long</strong> press enters config, starting at Brightness; <strong>Medium</strong> cycles Brightness &rarr; Audio &rarr; PowerTest &rarr; (wraps); <strong>Short</strong> cycles subsettings within the current screen; the <strong>Pot</strong> adjusts whichever value is shown; <strong>Double</strong> saves &amp; exits; <strong>Long</strong> (again) cancels without saving.</p>
+      <table>
+        <tr><th>Screen</th><th>Subsetting</th><th>Pot / Encoder role</th><th>Light feedback</th></tr>
+        <tr><td rowspan="3">① Brightness</td><td>Global</td><td>Pot: 0-100%</td><td>Whole car preview at that brightness</td></tr>
+        <tr><td>Headlight</td><td>Pot: 50-100%</td><td>Headlight pair preview; other megabars shown at full for comparison</td></tr>
+        <tr><td>China</td><td>Pot: 0-100%</td><td>China lights preview</td></tr>
+        <tr><td rowspan="7">② Audio</td><td>Noise floor / Peak thresh (Short swaps target)</td><td>Pot: 0-100%</td><td>Blue/red marker dots on a live meter, plus the 7 raw bins</td></tr>
+        <tr><td>Hit decay</td><td>Pot: 0-1000ms</td><td>VU-style meter with a decay-rate preview dot</td></tr>
+        <tr><td>Hit prediction</td><td>Pot: 0-Foresight ms; Encoder: style (off/exp/gun/drum)</td><td>Same meter, showing the predictive lead-up</td></tr>
+        <tr><td>Foresight</td><td>Pot: 0-1000ms</td><td>Dedicated foresight-adjust screen</td></tr>
+        <tr><td>Auto-Gain (AGC)</td><td>Encoder: Off/Band/Full (clamped)</td><td>Full-spectrum megabar glow, gained or not</td></tr>
+        <tr><td>Sound Reactivity</td><td>Encoder: on/off</td><td>Chinas pulse like a real hit when on, stay dark when off</td></tr>
+        <tr><td>Auto-Peak</td><td>Encoder: on/off</td><td>Front-edge neos: left half lit = off, right half lit = on</td></tr>
+        <tr><td rowspan="3">③ PowerTest</td><td>Hue</td><td>Encoder adjusts (Pot: no effect)</td><td>Whole car in that solid color</td></tr>
+        <tr><td>Saturation</td><td>Encoder adjusts</td><td>Same preview</td></tr>
+        <tr><td>Brightness (Val)</td><td>Encoder adjusts</td><td>Same preview</td></tr>
+      </table>
+      <p>Global buttons, any show: <strong>Short</strong> next show &middot; <strong>Medium</strong> no effect &middot; <strong>Long</strong> enter config &middot; <strong>Extra-long</strong> lights on/off &middot; <strong>Double</strong> UV (blacklight) toggle, or on the Equalizer show, toggles its triple-strobe instead. <strong>Encoder rotate</strong> (any show): previous/next variation.</p>
+
+      <h3 id="help-shows">5. Light shows &amp; variations</h3>
+      <table>
+        <tr><th>Show</th><th>Variations</th><th>Pot role</th></tr>
+        <tr><td>Nightrider</td><td>manual hue &middot; auto hue cycle &middot; auto with sound</td><td>manual hue: sets hue. Both auto variations: flood sin/cos frequency (0.25-2Hz)</td></tr>
+        <tr><td>FlameSparkle</td><td>waterflames &middot; flames &middot; shifting hues &middot; hue to white</td><td>All: "energy" — fire-sim cadence + hue-drift ceiling (shared with Nightrider/Lighthouse's own energy setting)</td></tr>
+        <tr><td>Equalizer</td><td>chase &middot; VU meter &middot; sub_standard &middot; new_standard (default) &middot; pixel_war</td><td>chase/VU meter/sub_standard: live peak threshold. new_standard/pixel_war: effects-cycle length (2-128 bass beats, log-spaced)</td></tr>
+        <tr><td>SpeedStripes</td><td>default &middot; zebra</td><td>default: no effect. zebra: black-stripe width (0-40ft)</td></tr>
+        <tr><td>Lighthouse</td><td>default &middot; no strobe &middot; china react</td><td>All: rotation speed (shared energy setting)</td></tr>
+      </table>
+      <p>Encoder rotate cycles variations within whichever show is selected, same on every show. See <code>user_guide_gdocs_arial.txt</code> (repo root) for a print-ready quick-reference card covering this same map plus the full button/config layout, generated from <code>tools/gen_user_guide.py</code>.</p>
+
+      <h3 id="help-dev">6. For developers</h3>
+      <h4>Repo &amp; deployment</h4>
+      <ul>
+        <li>Firmware source: <code>CarpetLightCode/src/</code>. This visualizer: <code>CarpetLightCode/tools/visualizer/carpet-visualizer.html</code>. WASM build: <code>CarpetLightCode/tools/wasm/</code> (run <code>tools/wasm/build.sh</code> after sourcing <code>tools/wasm/emsdk/emsdk_env.sh</code> to rebuild <code>tools/visualizer/wasm/carpet_fw.js</code> after any firmware change).</li>
+        <li><strong>Local use:</strong> open <code>carpet-visualizer.html</code> directly from disk (<code>file://</code>) — the WASM is base64-inlined into the built <code>.js</code>, so no local server is needed.</li>
+        <li><strong>CI deploy:</strong> <code>.github/workflows/deploy-visualizer.yml</code> publishes this page to GitHub Pages on every push, one subfolder per branch: <code>https://two-x.github.io/TheFlyingMagicCarpet/&lt;branch-name-with-/-replaced-by-&#45;&gt;/carpet-visualizer.html</code>. The small text in the top-right of the header (branch @ commit - time) confirms exactly what's live on any deployed copy; it stays as literal placeholder text on a local/undeployed copy.</li>
+        <li><strong>Quick-reference card generator:</strong> <code>tools/gen_user_guide.py</code> (run <code>python3 tools/gen_user_guide.py</code>, requires <code>pip install python-docx</code>) regenerates <code>user_guide_gdocs_arial.txt</code> and <code>.docx</code> at the repo root — a print-ready control-box sticker (6&times;1.5in) covering shows/variations/config menu/buttons. Edit the <code>CELLS</code> list in that script (not the generated files) when a firmware change affects that content, then re-run it.</li>
+      </ul>
+      <h4>Adding or modifying a light show / variation</h4>
+      <p>Every show is a small class in <code>src/*Show.h</code> implementing the <code>LightShow</code> base (<code>src/LightShow.h</code>):</p>
+      <ul>
+        <li><code>void start()</code> — called once when the show becomes active; reset any per-show state here.</li>
+        <li><code>void update(uint32_t timeMs)</code> — called every <code>loop()</code> iteration; write colors into <code>carpet-&gt;ropeLeds[]</code>/<code>megabarLeds[]</code>/<code>chinaLeds[]</code> here.</li>
+        <li><code>uint8_t variation()</code> / <code>const char * variationName()</code> — current variation index and its short display name.</li>
+        <li>Register a new show in <code>CarpetLightLogic.cpp</code>'s <code>ShowMode</code> enum and <code>makeShow()</code>; a new variation is usually just another entry in that show's own <code>enum Variation</code> plus a case in <code>variationName()</code> — the encoder-cycling/wraparound logic is generic and needs no change.</li>
+      </ul>
+      <p><strong>Inputs available to a show</strong> (all real, all in <code>AudioBoard.h</code> unless noted):</p>
+      <ul>
+        <li>Per-band audio levels — <code>AudioBoard::getNormalPercent(band)</code> (the filtered "current level" every show should react to), <code>getHitPercent(band)</code> (peak-held 0-100, jumps to 100 on a hit and decays over the configured hit-decay time — what most percussive effects want), <code>getRawPercent(band)</code>, <code>getRmsPercent(band)</code>, and the edge flag <code>AudioBoard::NewHit(band)</code> (fires exactly once per real hit onset — prefer this over hand-rolling a threshold-crossing check, which can miss closely-spaced hits). <code>band</code> is one of <code>BandBass/BandMidbass/BandMid/BandTreble/BandFull</code>.</li>
+        <li>Fixture geometry — <code>carpet-&gt;ropeLeds[NUM_NEO_LEDS_ACTUAL]</code>, <code>megabarLeds[NUM_MEGABAR_LEDS]</code>, <code>chinaLeds[NUM_CHINA_LEDS]</code> (CRGB/CRGBW arrays, index-addressed). Positional constants for the rope (<code>FRONT</code>/<code>FRONT_RIGHT</code>/<code>RIGHT</code>/.../<code>FRONT_LEFT</code>, and matching clock-position aliases <code>TWELVE</code>/<code>ONE_THIRTY</code>/etc.) are defined in <code>MagicCarpet.h</code> — low index is the car's left, increasing clockwise. There is no separate (x,y) coordinate table in firmware (that's a visualizer-only rendering concept in this file's own JS) — real shows work purely off these index/angle conventions.</li>
+        <li>Pot/encoder — <code>carpet-&gt;pot-&gt;readPercent()</code>, <code>carpet-&gt;encoder-&gt;readPositionDelta()</code>/<code>resetPositionDelta()</code>.</li>
+      </ul>
+      <p><strong>UI conventions to stay consistent with other shows:</strong></p>
+      <ul>
+        <li>If your show's pot role is "how energetic/fast should this feel," use the shared <code>PotEnergyTakeover</code> helper (<code>LightShow.h</code>) rather than reading the pot directly — it gives soft takeover (no jump when switching shows) and shares one committed value across Nightrider/Flame/Lighthouse.</li>
+        <li>For any other pot-driven live value, use the same soft-takeover pattern by hand (see <code>EqualizerShow</code>'s <code>potEntryPercent_</code>/<code>potTakenOver_</code>) — never let the value jump the instant a show becomes active just because the pot happens to be sitting somewhere else.</li>
+        <li>For organic, non-repeating drift (hue cycling, slow wandering values), use the <code>RandomWalk</code> pattern already duplicated in <code>FlameShow.h</code>/<code>LighthouseShow.h</code> rather than inventing a new one — this codebase prefers small per-show duplicated helpers over a shared base-class mechanism.</li>
+        <li>Use the <code>Timer</code> class (<code>Utilities.h</code>) for any time-gated cadence instead of hand-rolling <code>millis()</code> diffing.</li>
+        <li>Encoder rotation is reserved for variation cycling on every show unless you're inside a config screen — don't repurpose it for anything else within a show's own <code>update()</code>.</li>
+      </ul>
+      <p>After any firmware change, rebuild the WASM (<code>tools/wasm/build.sh</code>) before your changes will show up here — this file always runs whatever was last built, not the live source tree.</p>
+
+    </div>
+  </div>
+</div>
 
 <div class="deck">
 
@@ -777,7 +1084,7 @@ footer {
               <div class="knob__center-btn" id="encoderCenterBtn"></div>
             </div>
           </div>
-          <span class="tt knobs-tt"><span class="tt-trigger">?</span><span class="tt-bubble">Short: next show, or next config subsetting. Medium: next config screen (Brightness→Audio→PowerTest). Long: enter config / cancel out of it. Double: blacklight toggle, or commit &amp; exit config. Extra-long: lights on/off. In config, Pot/Encoder drive whichever subsetting is shown in the status bar. Encoder knob: click its left/right half for one detent left/right; its center circle is the encoder's own pushbutton, firing Short/Medium/Long/X-long/Double the same as the buttons below based on how long you hold it. Pot knob: click and drag up/right to increase, down/left to decrease.</span></span>
+          <span class="tt knobs-tt"><span class="tt-trigger">?</span><span class="tt-bubble">Short: next show, or next config subsetting. Medium: next config screen (Brightness→Audio→PowerTest). Long: enter config / cancel out of it. Double: blacklight toggle, or commit &amp; exit config. Extra-long: lights on/off. In config, Pot/Encoder drive whichever subsetting is shown in the status bar. Encoder knob: click its left/right half for one detent left/right; its center circle is the encoder's own pushbutton, firing Short/Medium/Long/X-long/Double the same as the buttons below based on how long you hold it. Pot knob: click and drag up/right to increase, down/left to decrease.</span><div class="expand-toggle" id="ctrlPanelToggle" title="show/hide button descriptions"></div></span>
           <div class="knob-wrap">
             <div class="knob knob--pot" id="potKnob">
               <div class="knob__indicator"></div>
@@ -832,7 +1139,6 @@ footer {
       </div>
     </div>
 
-    <h2>Quick Adjust <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Direct override, always live — a second, independent path to the same values config mode adjusts.</span></span></h2>
     <div class="group">
       <div class="row"><label>Hit decay</label><span class="val" id="hitDecayVal">300ms</span></div>
       <input type="range" id="hitDecaySlider" min="0" max="3000" step="10" value="300" />
@@ -847,7 +1153,6 @@ footer {
       <div class="row"><label>Blacklight</label><input type="checkbox" id="blacklightCheck" /></div>
     </div>
 
-    <h2>Audio</h2>
     <div class="group">
       <!-- Per request: Phone volume leads the Audio section (applies
            uniformly to every source now -- mic/system/file/tone -- plus
@@ -898,9 +1203,9 @@ footer {
            sits upstream of Phone volume (scaled with it), base noise
            downstream (a fixed floor independent of it). -->
       <div class="row"><label>Amplified noise</label><span class="val" id="ampNoiseVal">1%</span></div>
-      <input type="range" id="ampNoiseSlider" min="0" max="5" step="0.1" value="1" />
+      <input type="range" id="ampNoiseSlider" min="0" max="5" step="0.05" value="0.25" />
       <div class="row"><label>Base noise</label><span class="val" id="baseNoiseVal">1%</span></div>
-      <input type="range" id="baseNoiseSlider" min="0" max="5" step="0.1" value="1" />
+      <input type="range" id="baseNoiseSlider" min="0" max="5" step="0.05" value="0.25" />
       <!-- Input coupling capacitor (X nF, feeding the simulated chip's
            1M-ohm input impedance) -- just a value entry. Hidden by default
            (per request) -- toggled via Settings > Visibility > "Input cap
@@ -924,12 +1229,11 @@ footer {
     </div>
     <div class="group">
       <div class="meter-stack" id="meterStack">
-        <div class="mrow bass"><span class="lbl">Bass</span><div class="bar"><i class="raw" id="barBassRaw"></i><i id="barBassHit"></i><span class="mark mark-noise" id="markBassNoise"></span><span class="mark mark-peak" id="markBassPeak"></span><span class="mark mark-autopeak" id="markBassAutoPeak"></span></div></div>
-        <div class="mrow mid"><span class="lbl">Mid</span><div class="bar"><i class="raw" id="barMidRaw"></i><i id="barMidHit"></i><span class="mark mark-noise" id="markMidNoise"></span><span class="mark mark-peak" id="markMidPeak"></span><span class="mark mark-autopeak" id="markMidAutoPeak"></span></div></div>
-        <div class="mrow treble"><span class="lbl">Treb</span><div class="bar"><i class="raw" id="barTrebleRaw"></i><i id="barTrebleHit"></i><span class="mark mark-noise" id="markTrebleNoise"></span><span class="mark mark-peak" id="markTreblePeak"></span><span class="mark mark-autopeak" id="markTrebleAutoPeak"></span></div></div>
-        <div class="mrow full"><span class="lbl">Full</span><div class="bar"><i class="raw" id="barFullRaw"></i><i id="barFullHit"></i><span class="mark mark-noise" id="markFullNoise"></span><span class="mark mark-peak" id="markFullPeak"></span><span class="mark mark-autopeak" id="markFullAutoPeak"></span></div></div>
+        <div class="mrow bass"><span class="lbl">Bass</span><div class="bar"><i class="raw" id="barBassRaw"></i><i id="barBassHit"></i><span class="mark mark-noise" id="markBassNoise"></span><span class="mark mark-peak" id="markBassPeak"></span><span class="mark mark-autopeak" id="markBassAutoPeak"></span><span class="mark mark-max" id="markBassMax"></span></div></div>
+        <div class="mrow mid"><span class="lbl">Mid</span><div class="bar"><i class="raw" id="barMidRaw"></i><i id="barMidHit"></i><span class="mark mark-noise" id="markMidNoise"></span><span class="mark mark-peak" id="markMidPeak"></span><span class="mark mark-autopeak" id="markMidAutoPeak"></span><span class="mark mark-max" id="markMidMax"></span></div></div>
+        <div class="mrow treble"><span class="lbl">Treb</span><div class="bar"><i class="raw" id="barTrebleRaw"></i><i id="barTrebleHit"></i><span class="mark mark-noise" id="markTrebleNoise"></span><span class="mark mark-peak" id="markTreblePeak"></span><span class="mark mark-autopeak" id="markTrebleAutoPeak"></span><span class="mark mark-max" id="markTrebleMax"></span></div></div>
+        <div class="mrow full"><span class="lbl">Full</span><div class="bar"><i class="raw" id="barFullRaw"></i><i id="barFullHit"></i><span class="mark mark-noise" id="markFullNoise"></span><span class="mark mark-peak" id="markFullPeak"></span><span class="mark mark-autopeak" id="markFullAutoPeak"></span><span class="mark mark-max" id="markFullMax"></span></div></div>
       </div>
-      <button id="expandSourceBtn" class="expand-source-btn">Expand source controls &#9662;</button>
       <div class="tone-expand" id="toneExpand">
         <div class="row"><label style="flex:none;">Tone generator pattern</label></div>
         <select id="tonePatternSelect">
@@ -1579,8 +1883,13 @@ const AudioBoard = {
   set autoPeakEnabled(v) { if (wasmReady) wasmModule.ccall('web_audioSetAutoPeakEnabled', null, ['number'], [v ? 1 : 0]); },
   // live preview of what auto-peak's scaled threshold currently is -- kept
   // updating regardless of autoPeakEnabled so the UI can show it even while
-  // auto-peak itself is off (see AudioBoard::getAutoScaledPeakThresholdPercent()).
+  // auto-peak itself is off (see AudioBoard::getBandAutoScaledPeakThresholdPercent()).
+  // The slider dot always reflects BandFull, per request; the per-row VU
+  // marks each use getBandAutoScaledPeakThresholdPct(band) below instead.
   get autoScaledPeakThresholdPct() { return wasmReady ? wasmModule.ccall('web_audioGetAutoScaledPeakThresholdPercent', 'number', [], []) : 78; },
+  getBandAutoScaledPeakThresholdPct(band) { return wasmReady ? wasmModule.ccall('web_audioGetBandAutoScaledPeakThresholdPercent', 'number', ['number'], [WASM_BAND[band]]) : 78; },
+  // debug aid -- see web_audioGetMaxPercent()'s own comment
+  getMaxPct() { return wasmReady ? wasmModule.ccall('web_audioGetMaxPercent', 'number', [], []) : 100; },
 
   get hitDecayMs() { return wasmReady ? wasmModule.ccall('web_audioGetHitDecayMs', 'number', [], []) : 300; },
   set hitDecayMs(v) { if (wasmReady) wasmModule.ccall('web_audioSetHitDecayMs', null, ['number'], [v]); },
@@ -1705,7 +2014,7 @@ function rewireVPath() {
 // into the recording); baseNoise sits downstream (a fixed self-noise floor
 // independent of playback level, like a mic preamp's own noise).
 let toneSettings = { pattern: 'boombap' };
-let ampNoisePct = 1, baseNoisePct = 1; // 0-5%, UI-bound below
+let ampNoisePct = 0.25, baseNoisePct = 0.25; // 0-5%, UI-bound below
 function makeNoiseGen(ctx, levelGetter) {
   const node = ctx.createScriptProcessor ? ctx.createScriptProcessor(2048, 1, 1) : null;
   if (node) node.onaudioprocess = (e) => {
@@ -2047,7 +2356,13 @@ function sampleSourceLevelFromStream(ctx, stream) {
 //            are slow/sustained but still wants an occasional punchy
 //            hip-hop-style kick mixed in (see "chris").
 //   snare -- a short mid/broadband transient (the "snap" of a snare hit).
-//   hihat -- treble (BAND_HIGH).
+//   hihat -- treble (BAND_HIGH), normally at hihatHz1/hihatHz2. A step
+//            value of 2 is the same short percussive hit, just shifted
+//            down to midHihatHz (BAND_MID's own 1000Hz bin) instead --
+//            per request, several patterns pair a quick treble hihat hit
+//            with a slightly-lower one right after it; this gives that
+//            2nd hit real BAND_MID content instead of also landing in
+//            treble, without needing a separate mid: pattern.
 //   mid   -- BAND_MID, genre-appropriate (chord stabs / vocal line /
 //            sample chop / etc, see each pattern's own comment) -- mostly
 //            tonal rather than noisy, and can also use the 2=sustained
@@ -2061,13 +2376,13 @@ const TONE_PATTERNS = {
   simple: { bpm: 100,
     kick:  [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
+    hihat: [0,0,1,0,0,0,2,0,0,0,1,0,0,0,2,0], // alternates treble/mid-companion (step 2) each hit -- see hihat's own comment above
     mid:   [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // one plain mid pulse per bar -- generic baseline, no genre character
   },
   house: { bpm: 128,
     kick:  [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0],
+    hihat: [0,0,1,0,0,0,2,0,0,0,1,0,0,0,2,0], // alternates treble/mid-companion (step 2) each hit -- see hihat's own comment above
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   // Treble reworked per request: rapid-fire hihat spurts clustered right
@@ -2078,13 +2393,13 @@ const TONE_PATTERNS = {
   trap: { bpm: 140,
     kick:  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,1,0,0,0,1,1,1,1,1,1,0,0,0,0,0], // bursts around kick@0, kick@6, kick@9; quiet stretches elsewhere
+    hihat: [1,2,0,0,0,1,2,1,2,1,2,0,0,0,0,0], // bursts around kick@0, kick@6, kick@9, quiet stretches elsewhere -- alternates treble/mid-companion (step 2) within each burst, see hihat's own comment above
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   boombap: { bpm: 90,
     kick:  [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],
+    hihat: [1,0,2,0,1,0,2,0,1,0,2,0,1,0,2,0], // alternates treble/mid-companion (step 2) each hit -- see hihat's own comment above
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   // "Chris" -- a bass-music genre: treble is intentionally IDENTICAL to
@@ -2098,20 +2413,32 @@ const TONE_PATTERNS = {
   // long ones, like a hip-hop kick's own quick punch (borrows boombap's
   // fast default decay, not kickDecayMs), at kick2Hz (28Hz, same sub-bass
   // register) -- see the synthesis loop below for how steps 2/3 map to these.
-  // sustainCycleHits (per request): every 4 kick hits (long OR short, in
-  // order), the envelope doesn't decay/cap out at all -- it holds flat
-  // until the very next kick hit re-triggers it, so the bass level stays
-  // continuously above the peak threshold for that whole 4-hit block
-  // (the leading-edge phase reset on each re-trigger, see kickPhase=0
-  // below, still gives every individual hit an audible transient even
-  // though the envelope was already elevated). The next 4 hits behave
-  // normally (their usual decay/cap), then it alternates back, forever.
-  // See kickHitCounter in useTone() below.
-  chris: { bpm: 90 * 0.75, kickHz: 30, kick2Hz: 28, kickDecayMs: 250, sustainCycleHits: 4,
-    kick:  [2,0,0,0,3,0,0,0,2,0,0,0,3,0,0,0], // long sustained hits at 0/8, short hip-hop-style hits between them at 4/12
-    snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // same as boombap, per request
-    mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass-focused genre, bass/treble only
+  // sustainSteps (per request): a 2-bar (32-step) pattern -- steps
+  // [0,sustainSteps) are the "extended" bar: the envelope doesn't decay/
+  // cap out at all once a hit lands there, it holds flat until the VERY
+  // NEXT hit re-triggers it, so the bass level stays continuously above
+  // the peak threshold for that whole bar. Steps [sustainSteps,end)
+  // behave normally (their usual decay/cap). Per follow-up request, the
+  // extended bar packs hits TWICE as densely as the normal bar (every 2
+  // steps instead of every 4) so it still lasts exactly one bar in real
+  // time despite having twice as many hits in it.
+  // BUGFIX ("can only barely hear the leading edge after the 1st hit"):
+  // a sustained hit's onset used to be marked ONLY by the sine's own
+  // phase-reset discontinuity (kickPhase=0), which is a subtle click, not
+  // a real transient -- inaudible once the envelope was already sitting
+  // at 1.0 with nothing left to rise through. Fixed with a dedicated
+  // kickAccentEnv layer (see the synthesis loop below): a brief amplitude
+  // pop added on top of whatever the sustained/decaying envelope is
+  // currently doing, fired fresh at every hit's own onset regardless of
+  // sustain state -- so each hit reads as a real percussive accent, not
+  // just a phase glitch.
+  chris: { bpm: 90 * 0.75, kickHz: 30, kick2Hz: 28, kickDecayMs: 250, sustainSteps: 16,
+    // bar 1 (steps 0-15, extended/sustained): hits every 2 steps, alternating long/short.
+    // bar 2 (steps 16-31, normal): the original 4-hits-per-bar pattern, unchanged.
+    kick:  [2,0,3,0,2,0,3,0,2,0,3,0,2,0,3,0,  2,0,0,0,3,0,0,0,2,0,0,0,3,0,0,0],
+    snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,  0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+    hihat: [1,0,2,0,1,0,2,0,1,0,2,0,1,0,2,0,  1,0,2,0,1,0,2,0,1,0,2,0,1,0,2,0], // same as boombap, per request (incl. its treble/mid-companion alternation, see hihat's own comment above), repeated across both bars
+    mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass-focused genre, bass/treble only
   },
   // Oldies power-ballad (e.g. "Total Eclipse of the Heart"), not EDM --
   // per request, the midrange here represents SINGING: a slow, sustained,
@@ -2137,7 +2464,7 @@ function useTone() {
   let midEnv = 0, midPhase = 0, kickSustainRemaining = 0, midSustainRemaining = 0;
   let kickFreqActive = 55, kickDecayActive = 0.9994; // which of kick/kick2's Hz+decay is currently sounding
   let sampleInStep = 0, stepIdx = -1;
-  let kickHitCounter = 0; // counts every kick hit (steps valued 2 or 3) -- see pat.sustainCycleHits above
+  let kickAccentEnv = 0; // brief onset "pop" layered on top of kickEnv, see its own comment below
   if (toneGenNode) {
     toneGenNode.onaudioprocess = (e) => {
       const out = e.outputBuffer.getChannelData(0);
@@ -2171,38 +2498,56 @@ function useTone() {
       // so mid/snare land as distinct contributions within BAND_MID
       // (max of the 400Hz and 1000Hz bins).
       const snareHz = 900, hihatHz1 = 6250, hihatHz2 = 15500, midHz = 400;
+      // BAND_MID's own upper (1000Hz) bin -- see hihat step-value 2 above.
+      const midHihatHz = 1000;
+      let hihatFreqActive1 = hihatHz1, hihatFreqActive2 = hihatHz2; // which pair is currently sounding -- treble (default) or the midHihatHz companion (step value 2)
       const KICK_SUSTAIN_SAMPLES = Math.round(0.4 * ctx.sampleRate); // up to 400ms hold for step-value 2 (kick or mid)
+      // Onset "pop" for every kick hit, ON TOP of whatever kickEnv is
+      // already doing -- fixes "can only barely hear the leading edge
+      // after the 1st hit" during a sustained block (see pat.sustainSteps
+      // above): once kickEnv is already sitting at 1.0 from a prior hit,
+      // a fresh hit has no envelope-level rise left to give it an audible
+      // attack, just the sine's own phase-reset (a subtle click). This
+      // accent fires at full strength on EVERY hit regardless of kickEnv's
+      // current level, then decays fast (~15ms), so each hit always reads
+      // as a real percussive transient.
+      const KICK_ACCENT_AMOUNT = 0.6;
+      const kickAccentDecay = Math.exp(-1 / (0.015 * ctx.sampleRate));
       for (let i = 0; i < out.length; i++) {
         if (++sampleInStep >= samplesPerStep) {
           sampleInStep = 0;
-          stepIdx = (stepIdx + 1) % 16;
+          stepIdx = (stepIdx + 1) % pat.kick.length;
           const kickStep = pat.kick[stepIdx] || 0;
           if (kickStep) {
             kickEnv = 1; kickPhase = 0;
+            kickAccentEnv = KICK_ACCENT_AMOUNT;
             kickSustainRemaining = kickStep === 2 ? KICK_SUSTAIN_SAMPLES : 0;
             // step 3 = short secondary hit: kick2Hz/kick2Decay, no sustain, never overlaps a long hit's own timing
             if (kickStep === 3) { kickFreqActive = kick2Hz; kickDecayActive = kick2Decay; }
             else { kickFreqActive = kickHz; kickDecayActive = kickDecay; }
-            if (pat.sustainCycleHits) {
-              kickHitCounter++;
-              const blockIdx = Math.floor((kickHitCounter - 1) / pat.sustainCycleHits);
-              if (blockIdx % 2 === 0) kickSustainRemaining = Infinity; // held flat until the next hit's own onset above resets it
-            }
+            // steps within [0, sustainSteps) hold flat until the next hit's own onset re-triggers them (see pat.sustainSteps's own comment above)
+            if (pat.sustainSteps && stepIdx < pat.sustainSteps) kickSustainRemaining = Infinity;
           }
           if (pat.snare[stepIdx]) { snareEnv = 1; snarePhase = 0; }
-          if (pat.hihat[stepIdx]) { hihatEnv = 1; hihatPhase = 0; hihatPhase2 = 0; }
+          const hihatStep = pat.hihat[stepIdx] || 0;
+          if (hihatStep) {
+            hihatEnv = 1; hihatPhase = 0; hihatPhase2 = 0;
+            if (hihatStep === 2) { hihatFreqActive1 = midHihatHz; hihatFreqActive2 = midHihatHz; }
+            else { hihatFreqActive1 = hihatHz1; hihatFreqActive2 = hihatHz2; }
+          }
           const midStep = (pat.mid && pat.mid[stepIdx]) || 0;
           if (midStep) { midEnv = 1; midPhase = 0; midSustainRemaining = midStep >= 2 ? KICK_SUSTAIN_SAMPLES : 0; }
         }
         if (kickSustainRemaining > 0) kickSustainRemaining--; else kickEnv *= kickDecayActive;
+        kickAccentEnv *= kickAccentDecay;
         if (midSustainRemaining > 0) midSustainRemaining--; else midEnv *= midDecay;
         snareEnv *= snareDecay; hihatEnv *= hihatDecay;
         kickPhase += kickFreqActive / ctx.sampleRate;
         snarePhase += snareHz / ctx.sampleRate;
-        hihatPhase += hihatHz1 / ctx.sampleRate;
-        hihatPhase2 += hihatHz2 / ctx.sampleRate;
+        hihatPhase += hihatFreqActive1 / ctx.sampleRate;
+        hihatPhase2 += hihatFreqActive2 / ctx.sampleRate;
         midPhase += midHz / ctx.sampleRate;
-        const kickSample = Math.sin(kickPhase * 2 * Math.PI) * kickEnv;
+        const kickSample = Math.sin(kickPhase * 2 * Math.PI) * (kickEnv + kickAccentEnv);
         const snareSample = ((Math.random() * 2 - 1) * 0.5 + Math.sin(snarePhase * 2 * Math.PI) * 0.5) * snareEnv;
         const hihatSample = ((Math.random() * 2 - 1) * 0.35 + Math.sin(hihatPhase * 2 * Math.PI) * 0.4 + Math.sin(hihatPhase2 * 2 * Math.PI) * 0.25) * hihatEnv;
         // mostly tonal (chord/vocal-like), light noise texture -- not a percussive hit
@@ -4616,7 +4961,7 @@ const VARIATIONS = {
 // Per-show default variation index, shown on first load / whenever that
 // show is freshly selected -- defaults to 0 unless listed here.
 // SpeedStripes defaults to the china-lights variant per request.
-const DEFAULT_VARIATION = { speedstripes: 1 };
+const DEFAULT_VARIATION = { speedstripes: 1, equalizer: 2 }; // equalizer: new_standard, matches Nvm.h's real FW default
 function refreshVariationRow() {
   const row = document.getElementById('variationRow');
   row.innerHTML = '';
@@ -5080,20 +5425,48 @@ document.getElementById('orientationSelect').addEventListener('change', (e) => {
 document.getElementById('showInputCapCheck').addEventListener('change', (e) => {
   document.getElementById('inputCapGroup').style.display = e.target.checked ? '' : 'none';
 });
+// Visualizer help modal -- opened from the Settings menu.
+{
+  const overlay = document.getElementById('helpOverlay');
+  const openBtn = document.getElementById('openHelpBtn');
+  const closeBtn = document.getElementById('helpCloseBtn');
+  const open = () => { overlay.hidden = false; };
+  const close = () => { overlay.hidden = true; };
+  openBtn.addEventListener('click', (e) => { e.stopPropagation(); open(); document.getElementById('settingsMenu').hidden = true; });
+  closeBtn.addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hidden) close(); });
+}
 // Button descriptions (the Short:/Med:/Long:/XL:/Pot:/etc. action-cell
-// table in the encoder/pot box) -- shown by default, toggled here.
-document.getElementById('showButtonDescCheck').addEventListener('change', (e) => {
-  document.getElementById('ctrlPanelActions').style.display = e.target.checked ? '' : 'none';
-});
+// table in the encoder/pot box) -- shown by default, toggled via the small
+// V-arrow directly on the panel (replaces the old Settings-menu checkbox,
+// per request -- a direct in-place control instead of a buried menu
+// toggle). Persisted across reloads, same as any other UI-only preference.
+{
+  const panel = document.getElementById('ctrlPanel');
+  const toggle = document.getElementById('ctrlPanelToggle');
+  const collapsed = localStorage.getItem('ctrlPanelCollapsed') === '1';
+  function applyCtrlPanelCollapsed(c) {
+    panel.classList.toggle('collapsed', c);
+    toggle.classList.toggle('collapsed', c); // points up when collapsed (expand it back), down when expanded (collapse it) -- see .expand-toggle's own CSS
+    toggle.title = c ? 'show button descriptions' : 'hide button descriptions';
+  }
+  applyCtrlPanelCollapsed(collapsed);
+  toggle.addEventListener('click', () => {
+    const nowCollapsed = !panel.classList.contains('collapsed');
+    applyCtrlPanelCollapsed(nowCollapsed);
+    localStorage.setItem('ctrlPanelCollapsed', nowCollapsed ? '1' : '0');
+  });
+}
 
-// The CI deploy workflow replaces master @ 94dfb7b - 2026-08-09 09:18 UTC with the real
+// The CI deploy workflow replaces master @ b3b0d61 - 2026-08-09 20:40 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  if (el.textContent === 'master @ 94dfb7b - 2026-08-09 09:18 UTC') el.textContent = 'local build (not CI-deployed)';
+  if (el.textContent === 'master @ b3b0d61 - 2026-08-09 20:40 UTC') el.textContent = 'local build (not CI-deployed)';
 }
 
 const potIndicator = document.querySelector('#potKnob .knob__indicator');
@@ -5457,12 +5830,6 @@ document.getElementById('ampNoiseSlider').addEventListener('input', applyAmpNois
 document.getElementById('baseNoiseSlider').addEventListener('input', applyBaseNoiseUI);
 document.getElementById('inputCapSlider').addEventListener('input', applyInputCapUI);
 
-document.getElementById('expandSourceBtn').addEventListener('click', () => {
-  const btn = document.getElementById('expandSourceBtn');
-  const open = document.getElementById('toneExpand').classList.toggle('open');
-  btn.classList.toggle('open', open);
-  btn.innerHTML = (open ? 'Collapse source controls' : 'Expand source controls') + ' &#9662;';
-});
 document.getElementById('tonePatternSelect').addEventListener('change', (e) => { toneSettings.pattern = e.target.value; });
 // Bespoke (not bindSlider) so a drag past the current foresight value can
 // snap the thumb's own DOM position back, not just clamp the stored number.
@@ -5543,18 +5910,28 @@ function tick(now) {
     // <i> painted first, DOM order) is that same band's RAW level
     // (getRawPct(), pre-AGC/pre-filter), 35%-desaturated -- pokes out past
     // the filtered bar's own end wherever raw currently reads higher.
-    const autoScaledPeakPct = AudioBoard.autoScaledPeakThresholdPct;
-    const setBar = (barId, rawId, noiseId, peakId, autoPeakId, band) => {
+    const maxPct = AudioBoard.getMaxPct(); // debug aid -- see its own comment; should always be 100
+    const setBar = (barId, rawId, noiseId, peakId, autoPeakId, maxId, band) => {
       document.getElementById(barId).style.width = AudioBoard.getNormalPct(band) + '%';
       document.getElementById(rawId).style.width = AudioBoard.getRawPct(band) + '%';
       document.getElementById(noiseId).style.left = AudioBoard.noiseFloorPct + '%';
       document.getElementById(peakId).style.left = AudioBoard.peakThresholdPct + '%';
-      document.getElementById(autoPeakId).style.left = autoScaledPeakPct + '%';
+      // per request: each row's own auto-peak mark reflects THAT band, not
+      // a single shared value (only the settings-panel slider dot, wired
+      // separately below, always reflects BandFull).
+      document.getElementById(autoPeakId).style.left = AudioBoard.getBandAutoScaledPeakThresholdPct(band) + '%';
+      // at exactly 100% (its only real value), a plain left:100% would sit
+      // fully OUTSIDE the bar (marks position by their own left edge, not
+      // centered) and be invisible under the bar's overflow:hidden -- back
+      // off by the mark's own 2px width so a correctly-100% reading is
+      // actually visible pinned at the right edge, which is the entire
+      // point of this marker.
+      document.getElementById(maxId).style.left = `calc(${maxPct}% - 2px)`;
     };
-    setBar('barBassHit', 'barBassRaw', 'markBassNoise', 'markBassPeak', 'markBassAutoPeak', BAND_LOW);
-    setBar('barMidHit', 'barMidRaw', 'markMidNoise', 'markMidPeak', 'markMidAutoPeak', BAND_MID);
-    setBar('barTrebleHit', 'barTrebleRaw', 'markTrebleNoise', 'markTreblePeak', 'markTrebleAutoPeak', BAND_HIGH);
-    setBar('barFullHit', 'barFullRaw', 'markFullNoise', 'markFullPeak', 'markFullAutoPeak', BAND_FULL);
+    setBar('barBassHit', 'barBassRaw', 'markBassNoise', 'markBassPeak', 'markBassAutoPeak', 'markBassMax', BAND_LOW);
+    setBar('barMidHit', 'barMidRaw', 'markMidNoise', 'markMidPeak', 'markMidAutoPeak', 'markMidMax', BAND_MID);
+    setBar('barTrebleHit', 'barTrebleRaw', 'markTrebleNoise', 'markTreblePeak', 'markTrebleAutoPeak', 'markTrebleMax', BAND_HIGH);
+    setBar('barFullHit', 'barFullRaw', 'markFullNoise', 'markFullPeak', 'markFullAutoPeak', 'markFullMax', BAND_FULL);
     // Peak thresh slider's own auto-peak preview dot -- same value as the
     // VU marks above, positioned to approximate a native range thumb's
     // inset math (6.5px = half the 13px thumb, see .auto-peak-dot's CSS).
