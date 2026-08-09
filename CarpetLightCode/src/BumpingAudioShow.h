@@ -54,9 +54,6 @@ static const int NEWSTD_LEFT_RIGHT_MEGABARS[6] = { 2, 3, 4, 8, 9, 10 };
 // [0,3,4,7] aimed along a side edge.
 static const int NEWSTD_CHINA_FRONTBACK[4] = { 1, 2, 5, 6 };
 static const int NEWSTD_CHINA_SIDES[4] = { 0, 3, 4, 7 };
-// pixel_war china pairing: each of the 8 chinas paired with the one one
-// address above it.
-static const int PW_CHINA_PAIRS[4][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 } };
 // sub_standard megabar cycle option 3: each megabar paired with its exact
 // opposite (180deg away -- +6 positions around the 12-megabar, 30deg-spaced
 // ring, same angle convention as LighthouseShow.h/NEWSTD_FRONT_REAR_MEGABARS
@@ -94,23 +91,20 @@ class EqualizerShow : public LightShow {
       uint8_t option = 0;
       uint8_t numOptions = 3;
       int hitsSinceChange = 0;
-      int nextChangeHits = 8;
       void reset( uint8_t numOpts ) {
          numOptions = numOpts;
          option = 0;
          hitsSinceChange = 0;
-         rerollThreshold();
       }
-      void rerollThreshold() {
-         int x = 2 + random( 3 ); // 2, 3, or 4
-         nextChangeHits = x * 4;  // 8, 12, or 16
-      }
-      // call once per bass-hit edge -- returns true if the option just changed
-      bool onBassEdge() {
-         if ( ++hitsSinceChange < nextChangeHits ) return false;
+      // call once per bass-hit edge, passing the CURRENT pot-controlled
+      // cycle length in beats (see EqualizerShow::cycleBeats_/
+      // potToCycleBeats()) -- returns true if the option just changed.
+      // Used to internally random-reroll its own 8/12/16 threshold; that's
+      // now a single shared, deterministic, pot-adjustable value instead.
+      bool onBassEdge( int cycleBeats ) {
+         if ( ++hitsSinceChange < cycleBeats ) return false;
          hitsSinceChange = 0;
          option = ( numOptions > 1 ) ? (uint8_t)random( numOptions ) : 0;
-         rerollThreshold();
          return true;
       }
    };
@@ -118,14 +112,26 @@ class EqualizerShow : public LightShow {
    Timer megabarOptionTimer_; // time-since-entering-current-megabar-option -- only option 1 (front/rear vs L/R) still needs an interior timer, for its own 2s sub-swap
    bool newStdCycle1TrebleIsMod3_ = true;
    bool newStdCycle2FrontRearIsBass_ = true;
-   bool newStdCycle3BassAssignment_[ NUM_MEGABAR_LEDS ] = { false };
+   // cycle 2 (few-random-floods) only: which color a megabar renders while
+   // lit -- set at PICK time (see below), not pre-assigned, so a megabar
+   // always shows the color of whichever band actually just picked it
+   // (BUGFIX: "the random megabars only respond to bass, yet sometimes one
+   // of them is in the treble color" -- the old newStdCycle3BassAssignment_
+   // pre-randomized each megabar's color ONCE on entering this option,
+   // independent of which band's edge actually picked it on any given hit,
+   // so picks and colors could mismatch).
+   bool newStdMegabarIsBass_[ NUM_MEGABAR_LEDS ] = { false };
+   // bass's own pick count re-rolls (2-4) on every bass hit; treble's pick
+   // count is always ceil(that/2) of whatever bass most recently rolled --
+   // remembered here since bass/treble hits land on independent edges (see
+   // updateNewStandard()'s two separate NewHit() checks below).
+   uint8_t newStdLastBassPickCount_ = 2;
    float newStdMegabarHeat_[ NUM_MEGABAR_LEDS ] = { 0.0f }; // cycle 2 only
    // sub_standard megabar option 3 (opposite-pair-swap) -- reshuffled on
    // EVERY bass hit while this option is active (a per-hit shuffle, distinct
    // from megabarCycler_'s own much-slower option-change cadence above), per
    // request: 3 of the 6 SUBSTD_MEGABAR_PAIRS are bass, the other 3 treble.
    bool subPairIsBass_[ 6 ] = { true, true, true, false, false, false };
-   uint8_t newStdPrevBassHit_ = 0, newStdPrevTrebleHit_ = 0;
 
    // Shared "no sound" flood behavior (all 4 variations, per request):
    // floods sit at a dim 15% baseline, and every 100-500ms a random flood
@@ -150,7 +156,10 @@ class EqualizerShow : public LightShow {
    uint32_t newStdMegabarFadeStartMs_ = 0;
    CRGB newStdLastMegabarColor_[ NUM_MEGABAR_LEDS ];
 
-   // pixel_war: territory war (rope), hit-picked megabars, paired china.
+   // pixel_war ("war"): restored per request to the original, simpler
+   // concept -- BOTH colors respond to bass hits (no treble input at all
+   // anymore), trading turns every cycleBeats_ (pot-controlled, shared
+   // with new_standard -- see that member's own comment) bass hits.
    static constexpr float PW_MIN_FRAC = 0.125f, PW_MAX_FRAC = 0.875f; // 12.5%..87.5% of the loop
    static constexpr float PW_FADE_FRAC = 1.0f / 14.0f; // border cross-fade width
    static constexpr float PW_HIT_IMPULSE = 0.12f;  // territory fraction jumped per qualifying hit edge
@@ -159,12 +168,25 @@ class EqualizerShow : public LightShow {
    float pwBassFrac_ = 0.5f;
    float pwRotationOffsetLed_ = 0.0f, pwWalkspeed_ = 0.0f, pwWalkAccumMs_ = 0.0f;
    float pwMegabarHeat_[ NUM_MEGABAR_LEDS ] = { 0.0f };
-   bool pwMegabarColorIsB_[ NUM_MEGABAR_LEDS ] = { true };
-   static const int PW_MAX_PICK = 3; // 3 for a bass hit, 2 for treble -- see updatePixelWar()
-   int pwLastPicked_[ PW_MAX_PICK ] = { -1, -1, -1 };
-   uint8_t pwPrevBassHit_ = 0, pwPrevTrebleHit_ = 0;
-   bool pwChinaPairIsBass_[ 4 ] = { true, true, false, false };
-   int pwChinaHitCount_ = 0;
+   // which color source a megabar renders while lit, set at PICK time (per
+   // request, "always use the right color for its freq band, like china") --
+   // 0=bass (activeColor, respects the war's current turn), 1=treble
+   // (Tcolor, fixed -- doesn't participate in turn-trading), 2=mid (green,
+   // fixed). See PW_BASS_PICK/PW_TREBLE_PICK/PW_MID_PICK below.
+   enum PwColorSrc { PwSrcBass = 0, PwSrcTreble = 1, PwSrcMid = 2 };
+   uint8_t pwMegabarColorSrc_[ NUM_MEGABAR_LEDS ] = { PwSrcBass };
+   // per request: the war/territory mechanic itself stays bass-only, but the
+   // megabar flash pool now also includes independently-triggered treble
+   // and midrange pickers -- treble count is always ceil(bass count/2),
+   // mid is a fixed extra one. Each pool re-picks on its OWN band's real
+   // hit edge (see AudioBoard::NewHit() below), independent of the others.
+   static const int PW_BASS_PICK = 2;
+   static const int PW_TREBLE_PICK = 1; // ceil(PW_BASS_PICK/2)
+   static const int PW_MID_PICK = 1;
+   static const int PW_MAX_PICK = PW_BASS_PICK + PW_TREBLE_PICK + PW_MID_PICK; // shared anti-repeat memory
+   int pwLastPicked_[ PW_MAX_PICK ] = { -1, -1, -1, -1 };
+   bool pwTurnIsB_ = true;  // whose turn it currently is
+   int pwTurnHitCount_ = 0; // bass hits so far this turn, vs cycleBeats_
 
    // triple-strobe on bass hits (see updateStrobe()) -- nonvolatile, toggled
    // by a double press while this show is active (see CarpetLightLogic.cpp)
@@ -181,17 +203,35 @@ class EqualizerShow : public LightShow {
    Timer lastHitTimer_;      // timeout armed to SILENCE_RESET_MS on the first hit
    int suppressionPeak_ = 0;
 
-   // pot adjusts AudioBoard's shared peak threshold while this show (either
-   // variation) is active -- soft takeover, same convention as config mode's
-   // livePercentFor(): holds at the last-committed value until the pot
-   // actually moves since this show became active, so it doesn't jump.
+   // pot adjusts AudioBoard's shared peak threshold while Chase/VU meter/
+   // sub_standard are active -- soft takeover, same convention as config
+   // mode's livePercentFor(): holds at the last-committed value until the
+   // pot actually moves since this show became active, so it doesn't jump.
    // Reverted back to the committed value on leaving this show (see
    // CarpetLightLogic.cpp's show-change block), so casual live tweaking here
-   // never overwrites what's saved to flash.
+   // never overwrites what's saved to flash. new_standard/pixel_war no
+   // longer use the pot for this -- see cycleBeats_ below, their own
+   // separate pot role.
    static constexpr float POT_TAKEOVER_THRESHOLD_PERCENT = 2.0f;
    float potEntryPercent_ = 0.0f;
    bool potTakenOver_ = false;
    SettlePrinter thresholdPrinter_;
+
+   // new_standard/pixel_war only: pot controls how many bass beats each
+   // "effects cycle" lasts (china/megabar option-cycler advance threshold
+   // for new_standard; the color-turn interval for pixel_war). 15 discrete
+   // values, always even: fixed 2/4/6/8 at the low end, then log-ramped
+   // (rounded to nearest 2) from 8 up to 128 across the rest of the pot's
+   // travel -- worked out by hand per spec: ratio r = (128/8)^(1/11),
+   // v_i = 8*r^i for i=1..11, each rounded to the nearest multiple of 2.
+   static const uint8_t CYCLE_BEATS_TABLE[ 15 ];
+   uint8_t cycleBeats_ = 8; // default -- see table index 3
+   static uint8_t potToCycleBeats( float potPercent ) {
+      int idx = (int)( potPercent / 100.0f * 14.0f + 0.5f );
+      if ( idx < 0 ) idx = 0;
+      if ( idx > 14 ) idx = 14;
+      return CYCLE_BEATS_TABLE[ idx ];
+   }
 
  public:
    EqualizerShow( MagicCarpet * carpetArg, uint8_t initialVariation = 0, bool initialStrobeEnabled = false )
@@ -228,9 +268,9 @@ class EqualizerShow : public LightShow {
       chinaCycler_.reset( 3 );
       megabarCycler_.reset( variation_ == VarSubStandard ? 4 : 3 );
       megabarOptionTimer_.reset();
-      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdMegabarHeat_[ m ] = 0.0f;
+      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) { newStdMegabarHeat_[ m ] = 0.0f; newStdMegabarIsBass_[ m ] = false; }
+      newStdLastBassPickCount_ = 2;
       for ( int p = 0; p < 6; ++p ) subPairIsBass_[ p ] = ( p < 3 );
-      newStdPrevBassHit_ = 0; newStdPrevTrebleHit_ = 0;
       for ( int i = 0; i < NEWSTD_NUM_FLOODS; ++i ) { newStdFloodIsB_[ i ] = ( i % 2 == 0 ); newStdFloodBrightness_[ i ] = 0.15f; }
       newStdSwapArmed_ = false;
       for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) newStdLastChinaColor_[ c ] = CRGB::Black;
@@ -239,15 +279,10 @@ class EqualizerShow : public LightShow {
 
       pwBassFrac_ = 0.5f;
       pwRotationOffsetLed_ = 0.0f; pwWalkspeed_ = 0.0f; pwWalkAccumMs_ = 0.0f;
-      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) pwMegabarHeat_[ m ] = 0.0f;
+      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) { pwMegabarHeat_[ m ] = 0.0f; pwMegabarColorSrc_[ m ] = PwSrcBass; }
       for ( int n = 0; n < PW_MAX_PICK; ++n ) pwLastPicked_[ n ] = -1;
-      pwPrevBassHit_ = 0; pwPrevTrebleHit_ = 0;
-      // randomly assign 2 of the 4 china pairs to bass, 2 to treble
-      int idxs[ 4 ] = { 0, 1, 2, 3 };
-      for ( int i = 3; i > 0; --i ) { int j = random( i + 1 ); int t = idxs[ i ]; idxs[ i ] = idxs[ j ]; idxs[ j ] = t; }
-      for ( int p = 0; p < 4; ++p ) pwChinaPairIsBass_[ p ] = false;
-      pwChinaPairIsBass_[ idxs[ 0 ] ] = true; pwChinaPairIsBass_[ idxs[ 1 ] ] = true;
-      pwChinaHitCount_ = 0;
+      pwTurnIsB_ = true;
+      pwTurnHitCount_ = 0;
    }
 
    void update( uint32_t time ) {
@@ -264,15 +299,21 @@ class EqualizerShow : public LightShow {
       float dtSec = (float)eqFrameTimer_.elapsed() / 1000.0f;
       eqFrameTimer_.reset();
 
-      // pot -> live peak threshold, soft takeover (see member comment above)
       float potPercent = carpet->pot->readPercent();
-      if ( !potTakenOver_ ) {
-         if ( fabsf( potPercent - potEntryPercent_ ) >= POT_TAKEOVER_THRESHOLD_PERCENT ) potTakenOver_ = true;
+      if ( variation_ == VarNewStandard || variation_ == VarPixelWar ) {
+         // pot -> effects-cycle length in beats, for these 2 variations only
+         // -- see cycleBeats_'s own member comment.
+         cycleBeats_ = potToCycleBeats( potPercent );
+      } else {
+         // pot -> live peak threshold, soft takeover (see member comment above)
+         if ( !potTakenOver_ ) {
+            if ( fabsf( potPercent - potEntryPercent_ ) >= POT_TAKEOVER_THRESHOLD_PERCENT ) potTakenOver_ = true;
+         }
+         if ( potTakenOver_ ) {
+            AudioBoard::setPeakThresholdPercent( potPercent );
+         }
+         thresholdPrinter_.update( (int)( AudioBoard::getPeakThresholdPercent() + 0.5f ), "PkThresh:", "%" );
       }
-      if ( potTakenOver_ ) {
-         AudioBoard::setPeakThresholdPercent( potPercent );
-      }
-      thresholdPrinter_.update( (int)( AudioBoard::getPeakThresholdPercent() + 0.5f ), "PkThresh:", "%" );
 
       if ( variation_ == VarNewStandard ) {
          updateNewStandard( time, dtSec, false );
@@ -763,15 +804,26 @@ class EqualizerShow : public LightShow {
 
       // Shared bass/treble edge, used below both to drive china/megabar's
       // OptionCycler (bass edges only, per request) and cycle-2/sub_standard-
-      // option-3's own per-hit heat/pair-reshuffle mechanics.
-      bool bassEdge = bassHit > 20 && newStdPrevBassHit_ <= 20;
-      bool trebleEdge = trebleHit > 20 && newStdPrevTrebleHit_ <= 20;
-      newStdPrevBassHit_ = bassHit; newStdPrevTrebleHit_ = trebleHit;
+      // option-3's own per-hit heat/pair-reshuffle mechanics. Uses the real
+      // FW edge flag (AudioBoard::NewHit(), computed against the live peak
+      // threshold at the true ~30ms audio poll rate) rather than a hand-
+      // rolled ">20% and was <=20%" check sampled once per render frame --
+      // BUGFIX ("megabars sometimes don't respond to a hit even though
+      // chinas do"): the old check missed any hit whose predecessor hadn't
+      // yet decayed back below the hardcoded 20% mark by the time the next
+      // hit rose (common at faster tempos / slower hit-decay settings),
+      // since china's own per-frame amplitude-based render still visibly
+      // brightened even on a missed edge while megabar's edge-gated pick
+      // logic silently did nothing. NewHit() can't miss a hit this way --
+      // it's set the instant updateBandLevels() sees the real crossing,
+      // independent of render-frame timing.
+      bool bassEdge = AudioBoard::NewHit( BandBass );
+      bool trebleEdge = AudioBoard::NewHit( BandTreble );
 
       bool chinaChanged = false, megabarChanged = false;
       if ( bassEdge ) {
-         chinaChanged = chinaCycler_.onBassEdge();
-         megabarChanged = megabarCycler_.onBassEdge();
+         chinaChanged = chinaCycler_.onBassEdge( cycleBeats_ );
+         megabarChanged = megabarCycler_.onBassEdge( cycleBeats_ );
       }
 
       // CHINA: 3 options (collapsed from the old 4-count cycle, whose
@@ -812,7 +864,7 @@ class EqualizerShow : public LightShow {
          if ( megabarCycler_.option == 0 ) newStdCycle1TrebleIsMod3_ = random( 2 ) == 0;
          if ( megabarCycler_.option == 1 ) newStdCycle2FrontRearIsBass_ = random( 2 ) == 0;
          if ( megabarCycler_.option == 2 ) {
-            for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) { newStdCycle3BassAssignment_[ m ] = random( 2 ) == 0; newStdMegabarHeat_[ m ] = 0.0f; }
+            for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdMegabarHeat_[ m ] = 0.0f;
          }
          if ( megabarCycler_.option == 3 ) {
             for ( int p = 0; p < 6; ++p ) subPairIsBass_[ p ] = ( p < 3 ); // reshuffled for real on the next bass hit anyway -- see option 3's own render block
@@ -832,32 +884,49 @@ class EqualizerShow : public LightShow {
          for ( int i = 0; i < 6; ++i ) carpet->megabarLeds[ NEWSTD_FRONT_REAR_MEGABARS[ i ] ] = frontRearIsBass ? bassMb : trebleMb;
          for ( int i = 0; i < 6; ++i ) carpet->megabarLeds[ NEWSTD_LEFT_RIGHT_MEGABARS[ i ] ] = frontRearIsBass ? trebleMb : bassMb;
       } else if ( megabarCycler_.option == 2 ) {
-         // fixed half/half bass-treble assignment; each hit lights 2
-         // currently-black megabars in their own assigned color, falling
-         // back to the 2 currently-dimmest if none are fully black.
-         if ( bassEdge || trebleEdge ) {
+         // Few-random-floods phase. On each qualifying BASS edge, a fresh
+         // 2-4 (re-rolled every hit, per request) currently-black megabars
+         // light up in Bcolor; on each qualifying TREBLE edge, ceil(that
+         // bass count/2) currently-black megabars light up in Tcolor --
+         // each band's own pool is picked independently, at THAT band's own
+         // hit, and the megabar's color is set right then (fixing the old
+         // "picked megabar shows the wrong band's color" mismatch -- see
+         // newStdMegabarIsBass_'s own comment above). Falls back to the N
+         // dimmest if fewer than N are fully black.
+         auto pickAndLight = [&]( int numToPick, bool isBass ) {
             int black[ NUM_MEGABAR_LEDS ], blackCount = 0;
             for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) if ( newStdMegabarHeat_[ m ] <= 0.02f ) black[ blackCount++ ] = m;
-            int pick[ 2 ] = { -1, -1 };
-            if ( blackCount >= 2 ) {
-               for ( int n = 0; n < 2; ++n ) {
+            int pick[ 4 ] = { -1, -1, -1, -1 }; // 4 = max possible numToPick (bass's own 2-4 range)
+            if ( blackCount >= numToPick ) {
+               for ( int n = 0; n < numToPick; ++n ) {
                   int j = random( blackCount );
                   pick[ n ] = black[ j ];
                   black[ j ] = black[ --blackCount ];
                }
             } else {
-               // 2 dimmest -- simple selection over 12 entries
+               // N dimmest -- simple selection over 12 entries
                int order[ NUM_MEGABAR_LEDS ]; for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) order[ m ] = m;
                for ( int a = 0; a < NUM_MEGABAR_LEDS - 1; ++a )
                   for ( int b = a + 1; b < NUM_MEGABAR_LEDS; ++b )
                      if ( newStdMegabarHeat_[ order[ b ] ] < newStdMegabarHeat_[ order[ a ] ] ) { int t = order[ a ]; order[ a ] = order[ b ]; order[ b ] = t; }
-               pick[ 0 ] = order[ 0 ]; pick[ 1 ] = order[ 1 ];
+               for ( int n = 0; n < numToPick; ++n ) pick[ n ] = order[ n ];
             }
-            for ( int n = 0; n < 2; ++n ) if ( pick[ n ] >= 0 ) newStdMegabarHeat_[ pick[ n ] ] = 1.0f;
+            for ( int n = 0; n < numToPick; ++n ) if ( pick[ n ] >= 0 ) {
+               newStdMegabarHeat_[ pick[ n ] ] = 1.0f;
+               newStdMegabarIsBass_[ pick[ n ] ] = isBass;
+            }
+         };
+         if ( bassEdge ) {
+            newStdLastBassPickCount_ = 2 + random( 3 ); // 2-4
+            pickAndLight( newStdLastBassPickCount_, true );
+         }
+         if ( trebleEdge ) {
+            int numTreble = ( newStdLastBassPickCount_ + 1 ) / 2; // ceil(bass/2)
+            pickAndLight( numTreble, false );
          }
          for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
             newStdMegabarHeat_[ m ] = max( 0.0f, newStdMegabarHeat_[ m ] - dtSec / 0.4f );
-            CRGB base = newStdCycle3BassAssignment_[ m ] ? Bcolor : Tcolor;
+            CRGB base = newStdMegabarIsBass_[ m ] ? Bcolor : Tcolor;
             base.nscale8( (uint8_t)( newStdMegabarHeat_[ m ] * 255.0f + 0.5f ) );
             carpet->megabarLeds[ m ] = base;
          }
@@ -886,38 +955,59 @@ class EqualizerShow : public LightShow {
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdLastMegabarColor_[ m ] = carpet->megabarLeds[ m ];
    }
 
+   // Restored per request to the original, simpler "war" concept: BOTH
+   // colors reference bass hits (no treble input anywhere in here anymore)
+   // -- they trade turns, one qualifying bass hit at a time, every
+   // cycleBeats_ hits (the pot-controlled, shared-with-new_standard cycle
+   // length -- see that member's own comment). Only the currently-"turned"
+   // color visibly reacts to each hit; territory/megabar-pick/china-flash
+   // all key off whichever color currently has the turn.
    void updatePixelWar( uint32_t time, float dtSec ) {
       bool silent = AudioBoard::silent_;
       newStdSatTimeS_ += dtSec;
       if ( !silent ) newStdHueTimeS_ += dtSec;
       CRGB Bcolor, Tcolor;
       newStdColors( Bcolor, Tcolor );
-      uint8_t bassHit = AudioBoard::getHitPercent( BandBass ), trebleHit = AudioBoard::getHitPercent( BandTreble );
+      static const CRGB Mcolor = CRGB::Green; // fixed, per request -- midrange flood pool's own color
+      uint8_t bassHit = AudioBoard::getHitPercent( BandBass );
 
       if ( silent ) {
          updateSilenceFloods( time, dtSec, Bcolor, Tcolor );
          return;
       }
 
-      bool bassEdge = bassHit > 20 && pwPrevBassHit_ <= 20;
-      bool trebleEdge = trebleHit > 20 && pwPrevTrebleHit_ <= 20;
-      pwPrevBassHit_ = bassHit; pwPrevTrebleHit_ = trebleHit;
+      // Same NewHit()-based edge detection as new_standard above (see its
+      // own comment) -- fixes the same "megabar misses a hit chinas still
+      // show" class of bug here too.
+      bool bassEdge = AudioBoard::NewHit( BandBass );
+      bool trebleEdge = AudioBoard::NewHit( BandTreble );
+      bool midEdge = AudioBoard::NewHit( BandMid );
 
-      // ROPE: two territories fighting over the loop, slowly rotating.
+      if ( bassEdge ) {
+         if ( ++pwTurnHitCount_ >= cycleBeats_ ) {
+            pwTurnHitCount_ = 0;
+            pwTurnIsB_ = !pwTurnIsB_;
+         }
+      }
+      CRGB activeColor = pwTurnIsB_ ? Bcolor : Tcolor;
+
+      // ROPE: territory war -- every qualifying bass hit pushes territory
+      // toward whichever color currently has the turn.
       pwStepRandomWalk( dtSec * 1000.0f );
-      if ( bassEdge ) pwBassFrac_ += PW_HIT_IMPULSE;
-      if ( trebleEdge ) pwBassFrac_ -= PW_HIT_IMPULSE;
+      if ( bassEdge ) pwBassFrac_ += pwTurnIsB_ ? PW_HIT_IMPULSE : -PW_HIT_IMPULSE;
       pwBassFrac_ += ( 0.5f - pwBassFrac_ ) * PW_RECOVER_RATE * dtSec;
       pwBassFrac_ = constrain( pwBassFrac_, PW_MIN_FRAC, PW_MAX_FRAC );
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) { carpet->ropeLeds[ i ] = pwColorAt( i, Bcolor, Tcolor ); carpet->ropeLeds[ i ].w = 0; }
 
-      // MEGABARS: on every hit, some number of random megabars (excluding
-      // whichever the previous hit picked, and any still mid-flash) light up
-      // in that hit's own color, then fade -- 3 for a bass hit (per
-      // request), 2 for treble.
-      if ( bassEdge || trebleEdge ) {
-         bool isB = bassEdge; // if both edge the same frame, bass wins the tie
-         int numToPick = isB ? 3 : 2;
+      // MEGABARS: 3 independent pools, each picking its own currently-dark
+      // megabars on its OWN band's real hit edge, then fading -- bass
+      // (PW_BASS_PICK, the war's activeColor -- respects whoever's turn it
+      // currently is) + treble (PW_TREBLE_PICK = ceil(bass/2), always
+      // Tcolor) + mid (PW_MID_PICK, always Mcolor/green), per request.
+      // wasLastPicked avoidance is shared across all 3 pools (one combined
+      // memory, PW_MAX_PICK slots) so back-to-back picks from DIFFERENT
+      // bands still avoid immediately repeating a spot.
+      auto pwPickAndLight = [&]( int numToPick, uint8_t colorSrc ) {
          int eligible[ NUM_MEGABAR_LEDS ], eligibleCount = 0;
          for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
             if ( pwMegabarHeat_[ m ] > 0.02f ) continue;
@@ -930,48 +1020,32 @@ class EqualizerShow : public LightShow {
             eligibleCount = 0;
             for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) if ( pwMegabarHeat_[ m ] <= 0.02f ) eligible[ eligibleCount++ ] = m;
          }
-         int picked[ PW_MAX_PICK ] = { -1, -1, -1 };
          for ( int n = 0; n < numToPick && eligibleCount > 0; ++n ) {
             int j = random( eligibleCount );
-            picked[ n ] = eligible[ j ];
+            int m = eligible[ j ];
             eligible[ j ] = eligible[ --eligibleCount ];
+            pwMegabarHeat_[ m ] = 1.0f;
+            pwMegabarColorSrc_[ m ] = colorSrc;
+            for ( int s = PW_MAX_PICK - 1; s > 0; --s ) pwLastPicked_[ s ] = pwLastPicked_[ s - 1 ];
+            pwLastPicked_[ 0 ] = m;
          }
-         for ( int n = 0; n < PW_MAX_PICK; ++n ) if ( picked[ n ] >= 0 ) { pwMegabarHeat_[ picked[ n ] ] = 1.0f; pwMegabarColorIsB_[ picked[ n ] ] = isB; }
-         for ( int n = 0; n < PW_MAX_PICK; ++n ) pwLastPicked_[ n ] = picked[ n ];
-      }
+      };
+      if ( bassEdge ) pwPickAndLight( PW_BASS_PICK, PwSrcBass );
+      if ( trebleEdge ) pwPickAndLight( PW_TREBLE_PICK, PwSrcTreble );
+      if ( midEdge ) pwPickAndLight( PW_MID_PICK, PwSrcMid );
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
          pwMegabarHeat_[ m ] = max( 0.0f, pwMegabarHeat_[ m ] - dtSec / 0.4f );
-         CRGB base = pwMegabarColorIsB_[ m ] ? Bcolor : Tcolor;
+         CRGB base = ( pwMegabarColorSrc_[ m ] == PwSrcBass ) ? activeColor : ( pwMegabarColorSrc_[ m ] == PwSrcTreble ) ? Tcolor : Mcolor;
          base.nscale8( (uint8_t)( pwMegabarHeat_[ m ] * 255.0f + 0.5f ) );
          carpet->megabarLeds[ m ] = base;
       }
 
-      // CHINA: 4 pairs, 2 assigned to bass and 2 to treble -- each pair
-      // shows its assigned band's color, brightness tracking that band's
-      // own hit level live. Every 4 hit edges, a random pair swaps bands
-      // with a random pair currently on the other band, keeping the 2/2
-      // split.
-      if ( bassEdge ) ++pwChinaHitCount_;
-      if ( trebleEdge ) ++pwChinaHitCount_;
-      if ( pwChinaHitCount_ >= 4 ) {
-         pwChinaHitCount_ -= 4;
-         int grabbed = random( 4 );
-         int opposite[ 4 ], oppositeCount = 0;
-         for ( int p = 0; p < 4; ++p ) if ( pwChinaPairIsBass_[ p ] != pwChinaPairIsBass_[ grabbed ] ) opposite[ oppositeCount++ ] = p;
-         if ( oppositeCount > 0 ) {
-            int other = opposite[ random( oppositeCount ) ];
-            bool tmp = pwChinaPairIsBass_[ grabbed ];
-            pwChinaPairIsBass_[ grabbed ] = pwChinaPairIsBass_[ other ];
-            pwChinaPairIsBass_[ other ] = tmp;
-         }
-      }
-      for ( int p = 0; p < 4; ++p ) {
-         bool isBass = pwChinaPairIsBass_[ p ];
-         uint8_t hitPct = isBass ? bassHit : trebleHit;
-         CRGB lit = isBass ? Bcolor : Tcolor;
-         lit.nscale8( (uint8_t)( (uint16_t)hitPct * 255 / 100 ) );
-         for ( int k = 0; k < 2; ++k ) { int c = PW_CHINA_PAIRS[ p ][ k ]; carpet->chinaLeds[ c ] = lit; carpet->chinaLeds[ c ].w = 0; }
-      }
+      // CHINA: all 8 flash together in the ACTIVE color, brightness
+      // tracking the live bass hit level -- simpler than the old 2-band
+      // pair-split, since there's no treble input left to split against.
+      CRGB chinaLit = activeColor;
+      chinaLit.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
+      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) { carpet->chinaLeds[ c ] = chinaLit; carpet->chinaLeds[ c ].w = 0; }
    }
 
    static CRGB vuMeterColor( bool bassLit, bool trebleLit, const CRGB & bassClr, const CRGB & trebleClr ) {
@@ -1040,3 +1114,4 @@ class EqualizerShow : public LightShow {
       }
    }
 };
+const uint8_t EqualizerShow::CYCLE_BEATS_TABLE[ 15 ] = { 2, 4, 6, 8, 10, 14, 18, 22, 28, 36, 46, 60, 78, 100, 128 };

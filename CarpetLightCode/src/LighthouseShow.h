@@ -12,9 +12,9 @@
  *
  *    THE ALGORITHM (per explicit spec): each beam is 2 cones, fixed
  *    180deg apart, cone tips at the origin. Each cone's leading/trailing
- *    edges are a fixed CONE_FULL_WIDTH_DEG (33.75deg) apart -- a light at
+ *    edges are a fixed CONE_FULL_WIDTH_DEG (25.3deg) apart -- a light at
  *    some angle is lit at full brightness whenever it's within that
- *    33.75deg window, with an additional angle-based fade zone
+ *    25.3deg window, with an additional angle-based fade zone
  *    (CONE_FADE_DEG, 25% of the cone's own width) on each side easing
  *    down to black. This ONE falloff function (coneBrightnessAt()) is now
  *    used identically for rope, megabars, AND china -- evaluated at each
@@ -163,16 +163,16 @@ class LighthouseShow : public LightShow {
       return (uint8_t)smooth;
    }
 
-   // Per spec: each cone is CONE_FULL_WIDTH_DEG (45deg) wide, leading to
+   // Per spec: each cone is CONE_FULL_WIDTH_DEG (25.3deg) wide, leading to
    // trailing edge -- full brightness inside that window, then an
    // additional fade zone on each side (25% of the cone's own width) easing
    // to black, nothing beyond that. ONE shared shape for rope/megabar/china
    // alike (see class comment) -- no more separately-tuned per-fixture-type
    // widths.
-   static constexpr float CONE_FULL_WIDTH_DEG = 33.75f;                            // 45 * 0.75 -- 25% narrower per request
-   static constexpr float CONE_HALF_WIDTH_DEG = CONE_FULL_WIDTH_DEG / 2.0f;       // 16.875
-   static constexpr float CONE_FADE_DEG = CONE_FULL_WIDTH_DEG * 0.25f;            // 8.4375, each side
-   static const uint32_t CHINA_REACT_HOLD_MS = 110; // VarChinaReact's full-brightness hold before its trailing decay kicks in, see updateChinaReact()
+   static constexpr float CONE_FULL_WIDTH_DEG = 25.3125f;                          // 33.75 * 0.75 -- another 25% narrower per follow-up request (was 45 originally)
+   static constexpr float CONE_HALF_WIDTH_DEG = CONE_FULL_WIDTH_DEG / 2.0f;       // 12.65625
+   static constexpr float CONE_FADE_DEG = CONE_FULL_WIDTH_DEG * 0.25f;            // 6.328125, each side
+   static const uint32_t CHINA_REACT_HOLD_MS = 220; // doubled per request -- VarChinaReact's full-brightness hold before its trailing decay kicks in, see updateChinaReact()
    static uint8_t coneBrightnessAt( float d ) {
       if ( d <= CONE_HALF_WIDTH_DEG ) return 255;
       float outer = CONE_HALF_WIDTH_DEG + CONE_FADE_DEG;

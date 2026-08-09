@@ -202,7 +202,21 @@ struct SettlePrinter {
 // in any ONE of them updates this one value, so it becomes the new starting
 // point for all the others too, next time you're on one of them. Not
 // persisted to flash -- live-only, same as each of these was before.
-static float globalEnergyPercent = 100.0f; // defaults to fully energetic
+static float globalEnergyPercent = 100.0f; // placeholder until the real pot is read for the very first time -- see globalEnergyEverTakenOver_ below
+// BUGFIX ("Flame is wildly hyperactive on first-ever entry, calms down
+// after touching the pot"): globalEnergyPercent's hardcoded 100.0f default
+// used to stick until the pot moved >=2% from wherever it was when the
+// CURRENT show's own PotEnergyTakeover::reset() ran -- fine for switching
+// BETWEEN shows that already share a committed energy level (deliberately
+// avoids a jump), but wrong for the very first show entered in the group
+// all session: there's no prior committed value to protect yet, so
+// defaulting to 100% (rather than wherever the pot's actually resting)
+// meant fresh sessions started at max fire-sim cadence/hue-rate -- looks
+// chaotic on Flame specifically since cooling/sparking magnitude per step
+// is fixed, so cadence alone (potval) controls real-time churn rate.
+// Fixed by treating the very first update() call across the WHOLE group
+// (tracked once, globally, never per-show) as an automatic takeover.
+static bool globalEnergyEverTakenOver_ = false;
 static SettlePrinter globalEnergyPrinter_; // shared across the whole group, not per-show
 
 // small reusable per-show soft-takeover tracker binding the pot to
@@ -227,7 +241,13 @@ struct PotEnergyTakeover {
    // shared value, for every show in the group) once it has
    float update( MagicCarpet * carpet ) {
       float potPercent = carpet->pot->readPercent();
-      if ( !takenOver ) {
+      if ( !globalEnergyEverTakenOver_ ) {
+         // nothing committed yet anywhere in the group -- no prior value to
+         // protect against jumping away from, so just take the real pot
+         // reading immediately rather than sitting at the 100% placeholder
+         takenOver = true;
+         globalEnergyEverTakenOver_ = true;
+      } else if ( !takenOver ) {
          static const float THRESHOLD_PERCENT = 2.0f;
          if ( fabsf( potPercent - entryPercent ) >= THRESHOLD_PERCENT ) takenOver = true;
       }

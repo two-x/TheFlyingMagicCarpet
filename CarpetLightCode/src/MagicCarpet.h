@@ -719,6 +719,25 @@ class MagicCarpet {
       }
    }
 
+   // Auto-peak enable toggle screen (SubAudioAutoPeak): per request, the
+   // front edge's own neos (indices [0, SIZEOF_SMALL_NEO), the small-neo
+   // strip -- FRONT is its midpoint) light up half at a time to show state
+   // directly -- left half (index < FRONT) lit when disabled, right half
+   // (index >= FRONT) lit when enabled, same left-to-right-as-index-
+   // increases convention showPowerTest()'s own left/right split uses.
+   // Rest of rope/megabars/china stay dark so the split reads cleanly.
+   void showAutoPeakToggle( bool liveEnabled ) {
+      clearRope();
+      clearMegabars();
+      clearChinas();
+      int litStart = liveEnabled ? FRONT : 0;
+      int litEnd = liveEnabled ? SIZEOF_SMALL_NEO : FRONT; // exclusive
+      for ( int i = litStart; i < litEnd; ++i ) {
+         ropeLeds[ i ] = CRGB::White;
+         ropeLeds[ i ].w = 0;
+      }
+   }
+
    // power-saving A/B test: left half of the rig (rope's left side + left
    // half of both front/back edges, china[2..5]) shows the given HSV color
    // rendered straight to RGB (w=0); the right half (rope's right side +

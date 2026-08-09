@@ -1,0 +1,342 @@
+#!/usr/bin/env python3
+"""Generates the control-box quick-reference sticker (user_guide_gdocs_arial.txt
+and .docx) from the content table below. This script IS the source of truth for
+that content -- edit the SECTIONS list here (not the generated files) whenever a
+firmware change affects show/variation order, the config menu, or button/pot/
+encoder behavior, then re-run this script.
+
+Usage: python3 tools/gen_user_guide.py   (run from the CarpetLightCode repo root,
+or anywhere -- paths below are relative to this script's own location)
+
+Requires: python-docx (pip install python-docx)
+"""
+import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+try:
+    from docx import Document
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+except ImportError:
+    raise SystemExit("Missing dependency: pip install python-docx")
+
+REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TXT_PATH = os.path.join(REPO_DIR, "user_guide_gdocs_arial.txt")
+DOCX_PATH = os.path.join(REPO_DIR, "user_guide_gdocs_arial.docx")
+
+TITLE = "CARPET LIGHT CTRL BOX — DEV QUICK REF"
+
+LEGEND = "S=Short M=Med L=Long XL=X-Long D=Double press | Enc=encoder rotate | Pot=potentiometer"
+
+# Each cell below becomes one column-block in both the .txt (flowed top-to-
+# bottom, left-to-right reading order matching Google Docs' own multi-column
+# auto-flow) and the .docx (one table cell each -- see build_docx()). Keep
+# each block short enough to fit ~8-9 lines at 10pt in a 1.5in-tall column;
+# trim secondary detail (exact ms ranges, etc.) before trimming show/config
+# structure, per the guide's own stated priority.
+CELLS = [
+    ("GLOBAL BUTTONS (any show)", [
+        "S: next show",
+        "M: (no effect)",
+        "L: enter config",
+        "XL: lights on/off",
+        "D: UV on/off",
+        "  (EQ show: D=triple-",
+        "   strobe toggle instead)",
+        "Enc-rot: prev/next",
+        "  variation (any show)",
+    ]),
+    ("1 Nightrider (3 var)", [
+        "▸ manual hue",
+        "  Pot: set hue",
+        "▸ auto hue cycle",
+        "  Pot: flood Hz",
+        "  (0.25-2Hz)",
+        "▸ auto with sound",
+        "  Pot: flood Hz",
+        "  china flash on bass",
+    ]),
+    ("2 FlameSparkle (4 var)", [
+        "▸ waterflames",
+        "▸ flames",
+        "▸ shifting hues",
+        "▸ hue to white",
+        "All: Pot = energy",
+        "  (fire-sim speed +",
+        "  hue-drift rate)",
+    ]),
+    ("3 Equalizer (5 var)", [
+        "▸ chase",
+        "▸ VU meter",
+        "▸ sub_standard",
+        "  Pot: peak thresh",
+        "▸ new_standard",
+        "▸ pixel_war",
+        "  Pot: cycle length",
+        "  (2-128 beats, log)",
+        "D: toggle triple-strobe",
+    ]),
+    ("4 SpeedStripes (2 var)", [
+        "▸ default",
+        "  Pot: no effect",
+        "▸ zebra",
+        "  Pot: stripe width",
+    ]),
+    ("5 Lighthouse (3 var)", [
+        "▸ default",
+        "▸ no strobe",
+        "▸ china react",
+        "All: Pot = rotation",
+        "  speed",
+    ]),
+    ("CONFIG MENU NAV (from L)", [
+        "Enters @ ① Brightness",
+        "M: next screen (wraps)",
+        "S: next subsetting",
+        "Pot: adjust live value",
+        "D: SAVE + exit",
+        "L: CANCEL (no save)",
+    ]),
+    ("① Brightness (3 sub)", [
+        "Global / Headlight",
+        "  (50-100%) / China",
+        "",
+        "③ PowerTest (3 sub)",
+        "Hue / Sat / Val",
+        "  Enc adjusts each",
+        "  (Pot: no effect)",
+    ]),
+    ("② Audio (7 sub, in order)", [
+        "NoiseFlr ⇄ PkThresh",
+        "  (S swaps target)",
+        "HitDecay  0-1000ms",
+        "HitPredict 0-Foresight",
+        "  Enc: style (off/exp/",
+        "  machine-gun/drum)",
+        "Foresight  0-1000ms",
+    ]),
+    ("② Audio (cont'd)", [
+        "AGC       Enc:Off/",
+        "  Band/Full",
+        "SndReact  Enc: on/off",
+        "AutoPk    Enc: on/off",
+        "  front-edge neo:",
+        "  L-half lit=off,",
+        "  R-half lit=on",
+    ]),
+]
+
+COLUMN_BREAK_MARK = "▓▓▓ COLUMN BREAK ▓▓▓"
+# indices (into CELLS) after which a manual Google Docs column break is
+# suggested -- keeps the 2 biggest topics (shows, config) each starting
+# clean at the top of a column regardless of exact text reflow.
+SUGGESTED_BREAKS_AFTER = {0, 6}
+
+RECOMMENDED_FONT_PT = 10
+RECOMMENDED_COLUMNS = 6
+PAGE_W_IN, PAGE_H_IN = 6.0, 1.5
+MARGIN_IN = 0.04  # ~1mm
+
+REGEN_PROMPT_SAME = (
+    "In CarpetLightCode, re-run `python3 tools/gen_user_guide.py` to regenerate "
+    "user_guide_gdocs_arial.txt and .docx (content/layout unchanged, timestamp updated)."
+)
+
+REGEN_PROMPT_UPDATE = (
+    "The CarpetLightCode control-box quick-reference (user_guide_gdocs_arial.txt/.docx, "
+    "generated by tools/gen_user_guide.py) is stale. Re-read src/CarpetLightLogic.cpp, "
+    "src/*Show.h, and src/Nvm.h to confirm the current show/variation list and order, "
+    "the config menu's top-level modes and each mode's subsettings (in order), and "
+    "each show/variation's pot and encoder role plus the global button map. Update the "
+    "CELLS content in tools/gen_user_guide.py to match (keep the existing abbreviation "
+    "style, column grouping, and print specs: 6x1.5in, ~1mm margins, Arial 10pt, 6 "
+    "columns), then re-run the script."
+)
+
+
+def now_pacific_str():
+    return datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d %I:%M %p %Z")
+
+
+def build_txt():
+    lines = []
+    lines.append(TITLE)
+    lines.append(LEGEND)
+    lines.append("")
+    for idx, (header, body) in enumerate(CELLS):
+        lines.append(header)
+        for l in body:
+            lines.append("  " + l.strip() if l.strip() else "")
+        lines.append("")
+        if idx in SUGGESTED_BREAKS_AFTER:
+            lines.append(COLUMN_BREAK_MARK)
+            lines.append("")
+
+    footer_gen_time = now_pacific_str()
+    footer = f"""
+-----
+Generated: {footer_gen_time} (Pacific)
+
+HOW TO FORMAT THIS FOR PRINT (one-time, before each new print run):
+1. Select all text above (down to but not including this "-----" footer)
+   and copy it.
+2. In Google Docs: File > Page setup > Custom, set page size to
+   {PAGE_W_IN}in x {PAGE_H_IN}in, margins {MARGIN_IN}in (~1mm) on all sides.
+3. Paste the copied text (Ctrl/Cmd+Shift+V, "paste without formatting")
+   at the top of the doc.
+4. Select all pasted text: set font to Arial, size {RECOMMENDED_FONT_PT}pt,
+   single line spacing. Bold each block's header line (the short-name
+   lines like "GLOBAL BUTTONS" / "1 Nightrider (3 var)" / etc.) for
+   visual structure.
+5. Format > Columns > More options: set {RECOMMENDED_COLUMNS} columns,
+   spacing ~0.1in.
+6. At each line reading "{COLUMN_BREAK_MARK}": delete that line, place
+   the cursor at that exact spot, then Insert > Break > Column break.
+   This keeps the 2 major sections (shows, then config menu) each
+   starting cleanly at the top of their own column.
+7. Check the whole block still fits within the {PAGE_H_IN}in page height
+   with no overflow to a 2nd page. If it overflows: first try trimming
+   the least-essential lines (exact ms ranges, secondary parentheticals)
+   before shrinking the font further.
+8. Font-size basis: {RECOMMENDED_FONT_PT}pt Arial has a cap-height of
+   about 2.5mm, the stated minimum readable size -- this is a starting
+   estimate, not a guarantee (actual legibility depends on your printer's
+   DPI and paper). Print ONE test copy at actual size and confirm it's
+   legible before printing the final sheet. If a 9pt test print still
+   reads fine, dropping down one point buys meaningfully more breathing
+   room in each column -- do NOT go smaller than 9pt.
+9. Print at 100% scale (NOT "fit to page"), trim with scissors, tape to
+   the ctrlbox. Leave >=1mm margin outside the printed text when trimming.
+
+ALTERNATIVE: a ready-made Word table version (already laid out in
+{RECOMMENDED_COLUMNS} columns, {PAGE_W_IN}x{PAGE_H_IN}in page, Arial
+{RECOMMENDED_FONT_PT}pt, bold headers) ships alongside this file as
+user_guide_gdocs_arial.docx -- open it in Google Docs (File > Open >
+Upload, or drag into Drive) and it should need little to no further
+formatting; use the steps above only if you'd rather build it up from
+the plain text instead, or if the .docx doesn't convert cleanly.
+
+Claude code prompt to regenerate this content:
+{REGEN_PROMPT_SAME}
+
+/*
+{REGEN_PROMPT_UPDATE}
+*/
+"""
+    return "\n".join(lines) + footer
+
+
+def set_cell_margins(cell, top=40, start=60, bottom=40, end=60):
+    tcPr = cell._tc.get_or_add_tcPr()
+    mar = OxmlElement('w:tcMar')
+    for tag, val in (('w:top', top), ('w:start', start), ('w:bottom', bottom), ('w:end', end)):
+        node = OxmlElement(tag)
+        node.set(qn('w:w'), str(val))
+        node.set(qn('w:type'), 'dxa')
+        mar.append(node)
+    tcPr.append(mar)
+
+
+def set_row_height_exact(row, height_in):
+    trPr = row._tr.get_or_add_trPr()
+    trHeight = OxmlElement('w:trHeight')
+    trHeight.set(qn('w:val'), str(int(height_in * 1440)))
+    trHeight.set(qn('w:hRule'), 'exact')
+    trPr.append(trHeight)
+
+
+def set_page_size(section, width_in, height_in, margin_in):
+    section.page_width = Inches(width_in)
+    section.page_height = Inches(height_in)
+    section.top_margin = Inches(margin_in)
+    section.bottom_margin = Inches(margin_in)
+    section.left_margin = Inches(margin_in)
+    section.right_margin = Inches(margin_in)
+    section.header_distance = Inches(0)
+    section.footer_distance = Inches(0)
+
+
+def build_docx():
+    doc = Document()
+    section = doc.sections[0]
+    set_page_size(section, PAGE_W_IN, PAGE_H_IN, MARGIN_IN)
+
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(RECOMMENDED_FONT_PT)
+
+    n = len(CELLS)
+    cols = RECOMMENDED_COLUMNS
+    rows = -(-n // cols)  # ceil
+
+    table = doc.add_table(rows=rows, cols=cols)
+    table.autofit = False
+    table.allow_autofit = False
+    col_w = Inches((PAGE_W_IN - 2 * MARGIN_IN) / cols)
+    for row in table.rows:
+        set_row_height_exact(row, PAGE_H_IN - 2 * MARGIN_IN)
+        for cell in row.cells:
+            cell.width = col_w
+            set_cell_margins(cell)
+            cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+
+    i = 0
+    for r in range(rows):
+        for c in range(cols):
+            cell = table.cell(r, c)
+            if i < n:
+                header, body = CELLS[i]
+                p = cell.paragraphs[0]
+                p.paragraph_format.space_after = Pt(1)
+                run = p.add_run(header)
+                run.bold = True
+                run.font.size = Pt(RECOMMENDED_FONT_PT)
+                run.font.name = 'Arial'
+                for line in body:
+                    bp = cell.add_paragraph()
+                    bp.paragraph_format.space_after = Pt(0)
+                    bp.paragraph_format.space_before = Pt(0)
+                    brun = bp.add_run(line if line else " ")
+                    brun.font.size = Pt(RECOMMENDED_FONT_PT)
+                    brun.font.name = 'Arial'
+            i += 1
+
+    # thin light-gray borders -- doubles as a visual trim guide, remove in
+    # gdocs (Format > Table > Table properties > border color: none / border
+    # width 0) if not wanted on the final print.
+    tbl = table._tbl
+    tblPr = tbl.tblPr
+    borders = OxmlElement('w:tblBorders')
+    for edge in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        el = OxmlElement(f'w:{edge}')
+        el.set(qn('w:val'), 'single')
+        el.set(qn('w:sz'), '2')
+        el.set(qn('w:space'), '0')
+        el.set(qn('w:color'), 'BFBFBF')
+        borders.append(el)
+    tblPr.append(borders)
+
+    gen_time = now_pacific_str()
+    doc.add_paragraph().add_run(
+        f"Generated {gen_time} (Pacific) by tools/gen_user_guide.py -- see "
+        f"user_guide_gdocs_arial.txt for full print-prep steps and the Claude Code "
+        f"regeneration prompts."
+    ).font.size = Pt(6)
+
+    doc.save(DOCX_PATH)
+
+
+def main():
+    with open(TXT_PATH, 'w') as f:
+        f.write(build_txt())
+    print(f"Wrote {TXT_PATH}")
+    build_docx()
+    print(f"Wrote {DOCX_PATH}")
+
+
+if __name__ == '__main__':
+    main()

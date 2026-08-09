@@ -66,6 +66,14 @@ class FlameShow : public LightShow {
    RandomWalk hueRateWalk_;
    float shiftHue_ = 0.0f;   // 0-255, only ever increases (same "always one direction" rule as Lighthouse)
    Timer hueFrameTimer_;     // tracks dt between update() calls for the hue drift
+   // Floods (megabar/china) used to share the rope's own shiftHue_/
+   // shiftingPalette_ outright -- per request, their hue drift is now a
+   // separate, independently-tracked value advancing at exactly 1/3 the
+   // rope's rate (reusing the SAME per-frame hueRate, just divided by 3, so
+   // it still speeds up/slows down proportionally with the pot exactly like
+   // the rope's own drift does -- "same as the neos, just 3x slower").
+   float floodShiftHue_ = 0.0f;
+   CRGBPalette16 floodShiftingPalette_;
    // variation 2's saturation random-walks 87%-100%, same range/technique as
    // LighthouseShow's satWalk_ -- duplicated here per this codebase's
    // convention rather than shared.
@@ -123,6 +131,15 @@ class FlameShow : public LightShow {
       if ( mode_ == VarFlames ) return ColorFromPalette( flames, index );
       return ColorFromPalette( shiftingPalette_, index );
    }
+   // Floods' own version -- identical to paletteColor() for modes 0/1 (no
+   // drift to slow down there, the palette's fixed), but modes 2/3 read
+   // from floodShiftingPalette_ (the independently, 3x-slower-drifting
+   // hue) instead of the rope's own shiftingPalette_.
+   CRGB floodPaletteColor( uint8_t index ) {
+      if ( mode_ == VarWaterflames ) return ColorFromPalette( waterflames, index );
+      if ( mode_ == VarFlames ) return ColorFromPalette( flames, index );
+      return ColorFromPalette( floodShiftingPalette_, index );
+   }
 
    void start() {
       CRGB clr = ColorFromPalette( flames, 0 );
@@ -176,6 +193,11 @@ class FlameShow : public LightShow {
       shiftHue_ += hueRate * hueDtSec;
       while ( shiftHue_ >= 256.0f ) shiftHue_ -= 256.0f;
       uint8_t shiftHueByte = (uint8_t)shiftHue_;
+      // floods' own drift -- exactly 1/3 the rope's rate, see this member's
+      // own comment above.
+      floodShiftHue_ += ( hueRate / 3.0f ) * hueDtSec;
+      while ( floodShiftHue_ >= 256.0f ) floodShiftHue_ -= 256.0f;
+      uint8_t floodShiftHueByte = (uint8_t)floodShiftHue_;
       if ( mode_ == VarHueToWhite || mode_ == VarShiftingHues ) {
          // shared by both hue-shifting variations: saturation random-walks
          // 75%-100% (widened from a fixed/87%-100% range -- was reading as
@@ -186,6 +208,8 @@ class FlameShow : public LightShow {
             // one color (the drifting hue) fading to the other (fixed white)
             CRGB driftClr = CHSV( shiftHueByte, satByte, 255 );
             shiftingPalette_ = CRGBPalette16( driftClr, driftClr, CRGB::White, CRGB::White );
+            CRGB floodDriftClr = CHSV( floodShiftHueByte, satByte, 255 );
+            floodShiftingPalette_ = CRGBPalette16( floodDriftClr, floodDriftClr, CRGB::White, CRGB::White );
          } else {
             // two complementary colors, both full brightness -- one drifting
             // hue (shiftHueByte, same rotation as before) and its complement
@@ -197,6 +221,9 @@ class FlameShow : public LightShow {
             CRGB colorA = CHSV( shiftHueByte, satByte, 255 );
             CRGB colorB = CHSV( (uint8_t)( shiftHueByte + 128 ), satByte, 255 );
             shiftingPalette_ = CRGBPalette16( colorA, colorA, colorB, colorB );
+            CRGB floodColorA = CHSV( floodShiftHueByte, satByte, 255 );
+            CRGB floodColorB = CHSV( (uint8_t)( floodShiftHueByte + 128 ), satByte, 255 );
+            floodShiftingPalette_ = CRGBPalette16( floodColorA, floodColorA, floodColorB, floodColorB );
          }
       } else {
          shiftingPalette_ = CRGBPalette16( CHSV( shiftHueByte, 255, 60 ), CHSV( shiftHueByte, 255, 140 ),
@@ -335,7 +362,7 @@ class FlameShow : public LightShow {
       static constexpr float FLAME_HIT_BRIGHTNESS_FLOOR = 0.65f;
       float dmxvalFrac = max( FLAME_HIT_BRIGHTNESS_FLOOR, (float)AudioBoard::getHitPercent( BandBass ) / 100.0f );
       int dmxval = (int)( dmxvalFrac * 255.0f + 0.5f );
-      CRGB dmxclr = paletteColor( dmxval );
+      CRGB dmxclr = floodPaletteColor( dmxval );
       LedUtil::gammaCorrect( dmxclr );
       LedUtil::fill( carpet->megabarLeds, dmxclr, NUM_MEGABAR_LEDS );
       LedUtil::fill( carpet->chinaLeds, dmxclr, NUM_CHINA_LEDS );
@@ -347,12 +374,12 @@ class FlameShow : public LightShow {
       // (the active palette) and same gamma correction as the base, for
       // consistency -- see the megabarHeat_/chinaHeat_ member comment.
       for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
-         CRGB sparkClr = paletteColor( megabarHeat[ i ] );
+         CRGB sparkClr = floodPaletteColor( megabarHeat[ i ] );
          LedUtil::gammaCorrect( sparkClr );
          carpet->megabarLeds[ i ] = blend( carpet->megabarLeds[ i ], sparkClr, megabarHeat[ i ] );
       }
       for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
-         CRGB sparkClr = paletteColor( chinaHeat[ i ] );
+         CRGB sparkClr = floodPaletteColor( chinaHeat[ i ] );
          LedUtil::gammaCorrect( sparkClr );
          carpet->chinaLeds[ i ] = blend( (CRGB)carpet->chinaLeds[ i ], sparkClr, chinaHeat[ i ] );
       }

@@ -221,7 +221,7 @@ class AudioBoard {
       if ( hitPredictionStyle_ == PredictDisabled || hitPredictionMs_ < 1.0f ) return 0;
       uint32_t hp = (uint32_t)hitPredictionMs_;
       uint32_t windowEnd = displayMs + hp;
-      float threshPct = constrain( peakThresholdPercent_, 0.0f, 100.0f );
+      float threshPct = getEffectivePeakThresholdPercent();
       uint32_t bestHitMs = 0;
       bool found = false;
       for ( uint16_t i = 0; i < historyCount_; ++i ) {
@@ -255,7 +255,7 @@ class AudioBoard {
    // threshold, false otherwise -- NOT a plain nonzero test (hit stays
    // nonzero throughout its decay tail after dropping back below threshold,
    // which shouldn't still read as "a hit" once decayed past that point).
-   static bool getHitNonzero( AudioBand band = BandFull ) { return soundReactivityEnabled_ && bandLevels_[ band ].levelHit > peakThresholdPercent_; }
+   static bool getHitNonzero( AudioBand band = BandFull ) { return soundReactivityEnabled_ && bandLevels_[ band ].levelHit > getEffectivePeakThresholdPercent(); }
    static uint8_t getRmsPercent( AudioBand band = BandFull ) { return (uint8_t)( bandLevels_[ band ].levelRMS + 0.5f ); }
    static bool getRmsNonzero( AudioBand band = BandFull ) { return bandLevels_[ band ].levelRMS > 0.0f; }
 
@@ -404,6 +404,23 @@ class AudioBoard {
    static float noiseFloorPercent_; // 0-100
    static float peakThresholdPercent_; // 0-100
 
+   // --- auto-peak: scales peakThresholdPercent_ against a tracked recent
+   // loudness ceiling instead of the full 0-100 range, so a quiet source
+   // still reliably crosses the threshold. Tracks the raw full-spectrum
+   // level's (rawFullSpectrum(), 0-255) own rolling max over a trailing 15s
+   // window -- same timestamped-ring-buffer approach as rollingPeak_ above,
+   // just a longer window (15s vs 4s) since this is meant to characterize
+   // "how loud does this source get" rather than drive a fast-reacting
+   // control loop. Updated once per poll from updateFullSpectrumAndSilence().
+   static bool autoPeakEnabled_; // persisted -- see setAutoPeakEnabled()
+   static const uint16_t AUTO_PEAK_WINDOW_MS = 15000;
+   static const uint16_t AUTO_PEAK_BUFFER_SIZE = 550; // ~15s at ~30ms poll rate, with margin
+   static uint8_t autoPeakSamples_[ AUTO_PEAK_BUFFER_SIZE ];
+   static uint32_t autoPeakTimestamps_[ AUTO_PEAK_BUFFER_SIZE ];
+   static uint16_t autoPeakHead_;
+   static uint16_t autoPeakCount_;
+   static uint8_t autoPeakTrackedMax_; // 0-255, this band's own trailing-15s raw max
+
    static void setAgcMode( uint8_t mode ) { agcMode_ = ( mode >= NumAGCModes ) ? ( NumAGCModes - 1 ) : mode; }
    static uint8_t getAgcMode() { return agcMode_; }
    // While set (see CarpetLightLogic.cpp), forces AGCoff behavior for as
@@ -441,7 +458,7 @@ class AudioBoard {
       uint32_t dtMs = hitTimer_.elapsed();
       hitTimer_.reset();
       float noiseFloorPct = constrain( noiseFloorPercent_, 0.0f, 100.0f );
-      float threshPct = constrain( peakThresholdPercent_, 0.0f, 100.0f );
+      float threshPct = getEffectivePeakThresholdPercent();
       uint32_t displayMs = currentDisplayMs( nowMs );
       uint8_t effectiveAgcMode = autoGainSuppressed_ ? (uint8_t)AGCoff : agcMode_;
 
@@ -544,6 +561,20 @@ class AudioBoard {
          }
       }
       rollingPeak_ = peak;
+
+      // auto-peak's own trailing 15s max, same sliding-window-max technique
+      // as rollingPeak_ just above, just a longer window
+      autoPeakSamples_[ autoPeakHead_ ] = raw;
+      autoPeakTimestamps_[ autoPeakHead_ ] = nowMs;
+      autoPeakHead_ = ( autoPeakHead_ + 1 ) % AUTO_PEAK_BUFFER_SIZE;
+      if ( autoPeakCount_ < AUTO_PEAK_BUFFER_SIZE ) autoPeakCount_++;
+      uint8_t autoPeak = 0;
+      for ( uint16_t i = 0; i < autoPeakCount_; ++i ) {
+         if ( nowMs - autoPeakTimestamps_[ i ] <= AUTO_PEAK_WINDOW_MS && autoPeakSamples_[ i ] > autoPeak ) {
+            autoPeak = autoPeakSamples_[ i ];
+         }
+      }
+      autoPeakTrackedMax_ = autoPeak;
 
       // rolling average via EMA, tuned for a ~4s time constant regardless of
       // the actual (slightly variable) interval between polls
@@ -669,6 +700,44 @@ class AudioBoard {
    }
    static uint8_t getPeakThresholdRaw() {
       return (uint8_t)( constrain( peakThresholdPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f );
+   }
+
+   static void setAutoPeakEnabled( bool enabled ) { autoPeakEnabled_ = enabled; }
+   static bool getAutoPeakEnabled() { return autoPeakEnabled_; }
+
+   // Auto-peak's scaled result is never allowed to drop below this fraction
+   // of the plain peakThresholdPercent_ setting -- without a floor, a source
+   // that's been quiet for the whole 15s window would scale the threshold
+   // down to near-0, making even faint noise register as a "hit." Percent
+   // of the base setting, not of 0-100.
+   static const uint8_t AUTO_PEAK_MIN_PERCENT_OF_BASE = 50;
+
+   // peakThresholdPercent_ re-expressed against the tracked 15s loudness
+   // ceiling (autoPeakTrackedMax_) instead of the full 0-100 range -- e.g. a
+   // 31% setting against a source that's only ever reaching 60% of full
+   // scale reads back as ~18.6%, so hits still trigger reliably on a quiet
+   // source. Floored at AUTO_PEAK_MIN_PERCENT_OF_BASE% of the plain setting
+   // (see above). Computed unconditionally (regardless of autoPeakEnabled_)
+   // so the UI can always preview what enabling it would do; falls back to
+   // the plain setting if nothing's been tracked yet (autoPeakTrackedMax_==0,
+   // e.g. right after boot/reset).
+   static float getAutoScaledPeakThresholdPercent() {
+      float base = constrain( peakThresholdPercent_, 0.0f, 100.0f );
+      if ( autoPeakTrackedMax_ == 0 ) return base;
+      float trackedMaxPct = (float)autoPeakTrackedMax_ / 255.0f * 100.0f;
+      float scaled = base * ( trackedMaxPct / 100.0f );
+      float floor = base * ( (float)AUTO_PEAK_MIN_PERCENT_OF_BASE / 100.0f );
+      if ( scaled < floor ) scaled = floor;
+      return constrain( scaled, 0.0f, 100.0f );
+   }
+
+   // THE common getter -- every actual threshold comparison in this file
+   // (hit detection, predictive lookahead) goes through this, never
+   // peakThresholdPercent_ directly, so auto-peak applies uniformly
+   // everywhere a "is this a hit" decision is made. Returns the auto-scaled
+   // value when auto-peak is enabled, the plain slider setting otherwise.
+   static float getEffectivePeakThresholdPercent() {
+      return autoPeakEnabled_ ? getAutoScaledPeakThresholdPercent() : constrain( peakThresholdPercent_, 0.0f, 100.0f );
    }
 
    // --- audio foresight ---
@@ -845,6 +914,13 @@ bool AudioBoard::soundReactivityEnabled_ = true;
 uint8_t AudioBoard::agcMode_ = AGCoff; // overwritten by Nvm at boot
 float AudioBoard::noiseFloorPercent_ = 0.0f;
 float AudioBoard::peakThresholdPercent_ = 31.0f; // approx. the old hardcoded 80/255, overwritten by Nvm at boot
+
+bool AudioBoard::autoPeakEnabled_ = false; // overwritten by Nvm at boot
+uint8_t AudioBoard::autoPeakSamples_[ AudioBoard::AUTO_PEAK_BUFFER_SIZE ];
+uint32_t AudioBoard::autoPeakTimestamps_[ AudioBoard::AUTO_PEAK_BUFFER_SIZE ];
+uint16_t AudioBoard::autoPeakHead_ = 0;
+uint16_t AudioBoard::autoPeakCount_ = 0;
+uint8_t AudioBoard::autoPeakTrackedMax_ = 0;
 float AudioBoard::emaAverage_ = 0.0f;
 Timer AudioBoard::pollTimer_;
 Timer AudioBoard::silenceTimer_;

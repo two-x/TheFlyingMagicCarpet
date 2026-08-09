@@ -27,16 +27,30 @@ html, body {
   padding: 0;
   overflow-x: hidden;
 }
+/* Whole-page grid (not just flex-column) so the sidebar can span BOTH the
+   header's row and the stage's row -- per request, the sidebar reaches the
+   very top of the browser area instead of starting below the header/title
+   bar. header sits in column 1 only (above the stage); .deck's own two
+   children (stage-wrap, sidebar panel) become direct grid items of body
+   via display:contents below, rather than .deck running its own nested
+   grid, so they can each be placed independently into this outer grid. */
 body {
   padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: minmax(480px, 1fr) 230px;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
   min-height: 100vh;
+}
+@media (max-width: 900px) {
+  body { grid-template-columns: 1fr; }
+  .panel:not(.stage-wrap) { grid-column: 1 !important; grid-row: auto !important; height: auto !important; }
 }
 
 /* ---------- header ---------- */
 header {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   align-items: baseline;
   gap: 12px;
@@ -59,12 +73,6 @@ header h1 {
   margin: 0;
   color: var(--amber);
 }
-header .sub {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-faint);
-  letter-spacing: 0.04em;
-}
 .build-info {
   font-family: var(--mono);
   font-size: 9px;
@@ -75,19 +83,62 @@ header .sub {
   text-overflow: ellipsis;
 }
 
+/* ---------- settings menu (header) ---------- */
+.settings-menu-wrap { position: relative; }
+#settingsBtn {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.settings-menu[hidden] { display: none; } /* explicit -- the display:flex two rules down otherwise outranks the [hidden] UA-stylesheet default, since author CSS beats it */
+.settings-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.settings-menu__section { display: flex; flex-direction: column; gap: 4px; }
+.settings-menu__section + .settings-menu__section { border-top: 1px solid var(--line-soft); padding-top: 6px; }
+.settings-menu__heading {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.settings-menu__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 /* ---------- layout ---------- */
 /* Consolidated to one narrow control column so the stage gets almost all
    the width -- needed once the flood ground-coloration model (which
    reaches well past the car) is in view, per request. Borders/margins
    trimmed throughout for the same reason ("I hate borders and margins"). */
 .deck {
-  display: grid;
-  grid-template-columns: minmax(480px, 1fr) 230px;
-  gap: 8px;
-  align-items: start;
+  display: contents;
 }
-@media (max-width: 900px) {
-  .deck { grid-template-columns: 1fr; }
+.stage-wrap {
+  grid-column: 1;
+  grid-row: 2;
+}
+.panel:not(.stage-wrap) {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  height: 100%;
 }
 
 .panel {
@@ -198,6 +249,25 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
   border: 2px solid #0d0c10;
 }
+/* Peak thresh's auto-peak preview dot -- a small marker riding along the
+   same track, showing where AudioBoard::getAutoScaledPeakThresholdPercent()
+   currently sits (muted amber, vs. the slider thumb's own full-saturation
+   amber for the plain setting), positioned in tick() to approximate a
+   native range thumb's own inset math (6.5px = half the 13px thumb). */
+.slider-wrap { position: relative; }
+.auto-peak-dot {
+  position: absolute;
+  top: 50%;
+  left: 6.5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--amber) 55%, #888 45%);
+  border: 1px solid #0d0c10;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 2;
+}
 
 select, button, input[type="text"], input[type="file"]::file-selector-button {
   font-family: var(--sans);
@@ -233,6 +303,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
    AGCband/AGCfull wrap or force the whole row to grow. */
 .btnrow #btnMute { flex-grow: 0.7; padding-left: 6px; padding-right: 6px; }
 .btnrow #btnAgc { flex-grow: 1.6; }
+.btnrow #btnAutoPeak { flex-grow: 1; }
 /* Fixed 2x2 grid (not flex-wrap) so the variation row's overall height
    never depends on how many variations the current show has (0-4 across
    the different shows) -- min-height reserves space for 2 full rows even
@@ -511,7 +582,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
      letterboxes any leftover space rather than needlessly shrinking the
      render, so there's no more tension between "big enough" and "never
      overflows the viewport." */
-  height: calc(100vh - 130px); /* header + footer + body padding/gaps, see .deck > .panel:not(.stage-wrap) below for why this number matters beyond just the stage */
+  height: 100%; /* fills its own grid row (body's grid-template-rows: auto 1fr) -- the 1fr row already claims exactly the remaining viewport height below the header */
 }
 /* BUGFIX (continued): the stage canvas being properly height-bounded
    wasn't actually enough on its own -- the SIDE CONTROL PANEL (all the
@@ -527,8 +598,15 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
    forcing the other's container to grow.
 */
 .deck > .panel:not(.stage-wrap) {
-  height: calc(100vh - 130px);
   overflow-y: auto;
+  /* Scrollbar hidden per request (mouse wheel / shift+wheel still scrolls
+     it fine) -- scrolling itself is untouched, only the visible track/thumb
+     chrome goes away. */
+  scrollbar-width: none;      /* Firefox */
+  -ms-overflow-style: none;   /* legacy Edge/IE */
+}
+.deck > .panel:not(.stage-wrap)::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/new Edge */
 }
 #stageCanvas {
   width: 100%;
@@ -546,7 +624,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .meter-stack {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   padding: 4px 6px;
   border-radius: 4px;
   background: var(--panel-2);
@@ -562,21 +640,35 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   text-transform: uppercase;
   color: var(--text-faint);
 }
-.meter-stack .bar { flex: 1; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; position: relative; }
-.meter-stack .bar > i { display: block; height: 100%; width: 0%; border-radius: 2px; }
+.meter-stack .bar { flex: 1; height: 9px; border-radius: 2px; background: var(--line); overflow: hidden; position: relative; }
+.meter-stack .bar > i { display: block; height: 100%; width: 0%; border-radius: 2px; position: absolute; left: 0; top: 0; }
 .meter-stack .bass i { background: var(--red); }
 .meter-stack .mid i { background: var(--green); }
 .meter-stack .treble i { background: var(--blue); }
 .meter-stack .full i { background: var(--amber); }
+/* Raw (unfiltered) level, superimposed under the filtered-level bar (see
+   DOM order -- .raw comes first, so the filtered bar paints over it;
+   only visible where raw's own width extends past the filtered bar's) --
+   35% desaturated (blended 35% toward neutral gray) version of that row's
+   own color, per request. */
+.meter-stack .bass i.raw { background: color-mix(in srgb, var(--red) 65%, #888 35%); }
+.meter-stack .mid i.raw { background: color-mix(in srgb, var(--green) 65%, #888 35%); }
+.meter-stack .treble i.raw { background: color-mix(in srgb, var(--blue) 65%, #888 35%); }
+.meter-stack .full i.raw { background: color-mix(in srgb, var(--amber) 65%, #888 35%); }
 /* Noise floor / peak threshold reference lines -- 1px vertical marks
    overlaid on every band's bar, positioned every frame from the SAME
    AudioBoard.noiseFloorPct/peakThresholdPct getters the sliders use (real
    FW values, not a separate JS-side copy), so the bar's live fill can
    always be visually compared against exactly where the FW's own
    thresholds currently sit. */
-.meter-stack .bar > .mark { position: absolute; top: 0; bottom: 0; width: 1px; pointer-events: none; }
-.meter-stack .bar > .mark-noise { background: var(--text-faint); }
+.meter-stack .bar > .mark { position: absolute; top: 0; bottom: 0; width: 2px; pointer-events: none; }
+.meter-stack .bar > .mark-noise { background: #999; } /* medium gray, per request -- distinct from --text-faint (too dark/muted to read clearly here) */
 .meter-stack .bar > .mark-peak { background: #fff; }
+/* auto-peak's live scaled threshold (see AudioBoard::getAutoScaledPeakThresholdPercent())
+   -- a muted version of mark-peak's own solid white, per request ("use
+   colors for full-range peak thresh setting and auto scaled value where
+   the latter is a more muted version of the former") */
+.meter-stack .bar > .mark-autopeak { background: rgba(255, 255, 255, 0.45); }
 .expand-source-btn {
   width: 100%;
   margin-top: 6px;
@@ -623,12 +715,28 @@ footer {
 <body>
 
 <header>
-  <h1>&#9679; Flying Magic Carpet</h1>
-  <span class="sub">light console &mdash; audio-reactive preview</span>
-  <select id="orientationSelect" title="Viewport orientation">
-    <option value="landscape" selected>Landscape</option>
-    <option value="portrait">Portrait</option>
-  </select>
+  <h1>Magic Carpet Light Visualizer</h1>
+  <div class="settings-menu-wrap">
+    <button id="settingsBtn" title="Settings" aria-haspopup="true" aria-expanded="false">&#9881; Settings</button>
+    <div class="settings-menu" id="settingsMenu" hidden>
+      <div class="settings-menu__section">
+        <div class="settings-menu__heading">Layout</div>
+        <label class="settings-menu__row">
+          <span>Orientation</span>
+          <select id="orientationSelect" title="Viewport orientation">
+            <option value="landscape" selected>Landscape</option>
+            <option value="portrait">Portrait</option>
+          </select>
+        </label>
+      </div>
+      <div class="settings-menu__section">
+        <div class="settings-menu__heading">Visibility</div>
+        <label class="settings-menu__row"><span>Input cap setting</span><input type="checkbox" id="showInputCapCheck" /></label>
+        <label class="settings-menu__row"><span>Button descriptions</span><input type="checkbox" id="showButtonDescCheck" checked /></label>
+        <label class="settings-menu__row"><span>Colorize lamps</span><input type="checkbox" id="fixtureDotsCheck" checked /></label>
+      </div>
+    </div>
+  </div>
   <!-- Replaced with the real branch/short-SHA/push-time by
        .github/workflows/deploy-visualizer.yml at deploy time -- stays as
        this placeholder text for a local file:// open or a non-deployed
@@ -705,6 +813,7 @@ footer {
           <option value="cfg_predict">Hit prediction</option>
           <option value="cfg_foresight">Foresight adjust</option>
           <option value="cfg_reactivity">Sound reactivity toggle</option>
+          <option value="cfg_autopeak">Auto-peak toggle</option>
         </optgroup>
       </select>
       <div class="btnrow" id="variationRow"></div>
@@ -721,7 +830,6 @@ footer {
         <span class="val" id="zoomVal">50ft</span>
         <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Scroll/pinch on the stage, or the , and . keys, to zoom (20-100ft).</span></span>
       </div>
-      <div class="row"><label>Colorize lamps</label><input type="checkbox" id="fixtureDotsCheck" checked /></div>
     </div>
 
     <h2>Quick Adjust <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Direct override, always live — a second, independent path to the same values config mode adjusts.</span></span></h2>
@@ -748,7 +856,10 @@ footer {
       <div class="row"><label>Phone volume</label><span class="val" id="volumeVal">60%</span></div>
       <input type="range" id="volumeSlider" min="0" max="100" step="1" value="60" />
       <div class="row"><label>Peak thresh</label><span class="val" id="peakThreshVal">78%</span></div>
-      <input type="range" id="peakThreshSlider" min="0" max="100" step="1" value="78" />
+      <div class="slider-wrap">
+        <input type="range" id="peakThreshSlider" min="0" max="100" step="1" value="78" />
+        <span class="auto-peak-dot" id="autoPeakDot" title="auto-peak scaled value"></span>
+      </div>
       <div class="row"><label>Noise floor</label><span class="val" id="noiseFloorVal">8%</span></div>
       <input type="range" id="noiseFloorSlider" min="0" max="100" step="1" value="8" />
     </div>
@@ -756,6 +867,7 @@ footer {
       <div class="btnrow">
         <button id="btnMute" class="active" disabled>Mute</button>
         <button id="btnAgc">AGC</button>
+        <button id="btnAutoPeak">AutoPk</button>
       </div>
     </div>
     <div class="group">
@@ -790,9 +902,13 @@ footer {
       <div class="row"><label>Base noise</label><span class="val" id="baseNoiseVal">1%</span></div>
       <input type="range" id="baseNoiseSlider" min="0" max="5" step="0.1" value="1" />
       <!-- Input coupling capacitor (X nF, feeding the simulated chip's
-           1M-ohm input impedance) -- just a value entry, per request. -->
-      <div class="row"><label>Input cap</label><span class="val" id="inputCapVal">10nF</span></div>
-      <input type="number" id="inputCapSlider" min="1" max="1000" step="1" value="10" />
+           1M-ohm input impedance) -- just a value entry. Hidden by default
+           (per request) -- toggled via Settings > Visibility > "Input cap
+           setting". -->
+      <div id="inputCapGroup" style="display:none;">
+        <div class="row"><label>Input cap</label><span class="val" id="inputCapVal">10nF</span></div>
+        <input type="number" id="inputCapSlider" min="1" max="1000" step="1" value="10" />
+      </div>
       <input type="file" id="fileInput" accept="audio/*" style="display:none;" />
       <div class="row">
         <label id="audioStatus">idle</label>
@@ -808,10 +924,10 @@ footer {
     </div>
     <div class="group">
       <div class="meter-stack" id="meterStack">
-        <div class="mrow bass"><span class="lbl">Bass</span><div class="bar"><i id="barBassHit"></i><span class="mark mark-noise" id="markBassNoise"></span><span class="mark mark-peak" id="markBassPeak"></span></div></div>
-        <div class="mrow mid"><span class="lbl">Mid</span><div class="bar"><i id="barMidHit"></i><span class="mark mark-noise" id="markMidNoise"></span><span class="mark mark-peak" id="markMidPeak"></span></div></div>
-        <div class="mrow treble"><span class="lbl">Treb</span><div class="bar"><i id="barTrebleHit"></i><span class="mark mark-noise" id="markTrebleNoise"></span><span class="mark mark-peak" id="markTreblePeak"></span></div></div>
-        <div class="mrow full"><span class="lbl">Full</span><div class="bar"><i id="barFullHit"></i><span class="mark mark-noise" id="markFullNoise"></span><span class="mark mark-peak" id="markFullPeak"></span></div></div>
+        <div class="mrow bass"><span class="lbl">Bass</span><div class="bar"><i class="raw" id="barBassRaw"></i><i id="barBassHit"></i><span class="mark mark-noise" id="markBassNoise"></span><span class="mark mark-peak" id="markBassPeak"></span><span class="mark mark-autopeak" id="markBassAutoPeak"></span></div></div>
+        <div class="mrow mid"><span class="lbl">Mid</span><div class="bar"><i class="raw" id="barMidRaw"></i><i id="barMidHit"></i><span class="mark mark-noise" id="markMidNoise"></span><span class="mark mark-peak" id="markMidPeak"></span><span class="mark mark-autopeak" id="markMidAutoPeak"></span></div></div>
+        <div class="mrow treble"><span class="lbl">Treb</span><div class="bar"><i class="raw" id="barTrebleRaw"></i><i id="barTrebleHit"></i><span class="mark mark-noise" id="markTrebleNoise"></span><span class="mark mark-peak" id="markTreblePeak"></span><span class="mark mark-autopeak" id="markTrebleAutoPeak"></span></div></div>
+        <div class="mrow full"><span class="lbl">Full</span><div class="bar"><i class="raw" id="barFullRaw"></i><i id="barFullHit"></i><span class="mark mark-noise" id="markFullNoise"></span><span class="mark mark-peak" id="markFullPeak"></span><span class="mark mark-autopeak" id="markFullAutoPeak"></span></div></div>
       </div>
       <button id="expandSourceBtn" class="expand-source-btn">Expand source controls &#9662;</button>
       <div class="tone-expand" id="toneExpand">
@@ -1459,6 +1575,13 @@ const AudioBoard = {
   get peakThresholdPct() { return wasmReady ? wasmModule.ccall('web_audioGetPeakThresholdPercent', 'number', [], []) : 78; },
   set peakThresholdPct(v) { if (wasmReady) wasmModule.ccall('web_audioSetPeakThresholdPercent', null, ['number'], [v]); },
 
+  get autoPeakEnabled() { return wasmReady ? wasmModule.ccall('web_audioGetAutoPeakEnabled', 'number', [], []) !== 0 : false; },
+  set autoPeakEnabled(v) { if (wasmReady) wasmModule.ccall('web_audioSetAutoPeakEnabled', null, ['number'], [v ? 1 : 0]); },
+  // live preview of what auto-peak's scaled threshold currently is -- kept
+  // updating regardless of autoPeakEnabled so the UI can show it even while
+  // auto-peak itself is off (see AudioBoard::getAutoScaledPeakThresholdPercent()).
+  get autoScaledPeakThresholdPct() { return wasmReady ? wasmModule.ccall('web_audioGetAutoScaledPeakThresholdPercent', 'number', [], []) : 78; },
+
   get hitDecayMs() { return wasmReady ? wasmModule.ccall('web_audioGetHitDecayMs', 'number', [], []) : 300; },
   set hitDecayMs(v) { if (wasmReady) wasmModule.ccall('web_audioSetHitDecayMs', null, ['number'], [v]); },
 
@@ -1510,7 +1633,6 @@ let baseNoiseGen = null, baseNoiseSum = null; // step 6: noise added AFTER phone
 let foresightDelay = null, muteGain = null, legGain = null; // A path (8A/9A): FIFO delay sized to Foresight, then mute, then the Mic/System on/off leg gate
 let dcBlockFilter = null, dcBlockNf = -1; // V path (8V): recreated whenever the X-nF UI value changes, since IIRFilterNode coefficients are fixed at creation
 let vBandNodes = null;   // V path (9V) filter-bank outputs, one BiquadFilterNode chain per MSGEQ7 bin
-let aBandNodes = null;   // A path VU-meter filter-bank outputs (same bank design, fed from the DELAYED/audible signal instead)
 let currentSourceIsAppGenerated = false; // File/Tone = true (we own the signal, can delay/mute its SPEAKER leg); Mic/System = false
 
 // MSGEQ7 datasheet-derived bin centers + log-midpoint cutoffs between them
@@ -1750,43 +1872,11 @@ function computeInjectionBins() {
   });
 }
 
-// --- A-path: "what you're hearing right now" VU meter -----------------
-// Same 7-band filter bank design as the chip sim (reused, not re-derived),
-// fed from the DELAYED/audible signal instead of the real-time V signal --
-// a standard fast-attack/slow-decay level meter (no chip-strobe quirk;
-// there's no "read" event for a live UI meter to key decay off of).
-let bandLevelA_ = [0, 0, 0, 0, 0, 0, 0];
-function connectAPeakTrackers(ctx) {
-  const dummy = ctx.createGain(); dummy.gain.value = 0; dummy.connect(ctx.destination);
-  aBandNodes.forEach((node, i) => {
-    const sp = ctx.createScriptProcessor ? ctx.createScriptProcessor(256, 1, 1) : null;
-    if (!sp) return;
-    sp.onaudioprocess = (e) => {
-      const buf = e.inputBuffer.getChannelData(0);
-      let v = bandLevelA_[i];
-      const ATTACK = 0.6, RELEASE = 0.05; // per-buffer (256 samples, ~5.8ms @44.1kHz) smoothing coefficients
-      for (let k = 0; k < buf.length; k++) {
-        const rect = Math.abs(buf[k]);
-        v += (rect > v ? ATTACK : RELEASE) * (rect - v);
-      }
-      bandLevelA_[i] = v;
-    };
-    node.connect(sp); sp.connect(dummy);
-  });
-}
-// bass/mid/treble/full grouping matches AudioBoard.h's own bandRawBinMax()
-// (bass=bin0, mid=max(bin2,bin3), treble=max(bin4,bin5,bin6), full=max all)
-// -- same grouping the 4 VU bargraph rows already use, just computed from
-// the A-path's own band levels instead of the FW.
-function vuBandLevel(which) {
-  const b = bandLevelA_;
-  let v;
-  if (which === BAND_LOW) v = b[0];
-  else if (which === BAND_MID) v = Math.max(b[2], b[3]);
-  else if (which === BAND_HIGH) v = Math.max(b[4], b[5], b[6]);
-  else v = Math.max(...b);
-  return Math.round(Math.min(1, v) * 100);
-}
+// The A-path "what you're hearing right now" VU meter (a separate 7-band
+// filter bank tapped off the delayed/audible signal) was removed here --
+// the VU bargraphs now track the real FW's own getNormalPct() again (see
+// tick()'s setBar() calls), since comparing them against the noise-floor/
+// peak-threshold marks only makes sense on the SAME (real FW) scale.
 
 // Builds the shared processing graph exactly once (idempotent) -- every
 // useX() source connects itself to ensureMonoIn()'s return value.
@@ -1817,10 +1907,6 @@ function ensureAudioGraph(ctx) {
   muteGain.connect(legGain);
   legGain.connect(ctx.destination);
   applyVolumeUI();
-
-  // A path VU meter (tapped post-delay -- "the audio being heard")
-  aBandNodes = createMsgeq7FilterBank(ctx, foresightDelay);
-  connectAPeakTrackers(ctx);
 
   // V path (steps 8V/9V)
   rewireVPath();
@@ -2012,7 +2098,16 @@ const TONE_PATTERNS = {
   // long ones, like a hip-hop kick's own quick punch (borrows boombap's
   // fast default decay, not kickDecayMs), at kick2Hz (28Hz, same sub-bass
   // register) -- see the synthesis loop below for how steps 2/3 map to these.
-  chris: { bpm: 90 * 0.75, kickHz: 30, kick2Hz: 28, kickDecayMs: 250,
+  // sustainCycleHits (per request): every 4 kick hits (long OR short, in
+  // order), the envelope doesn't decay/cap out at all -- it holds flat
+  // until the very next kick hit re-triggers it, so the bass level stays
+  // continuously above the peak threshold for that whole 4-hit block
+  // (the leading-edge phase reset on each re-trigger, see kickPhase=0
+  // below, still gives every individual hit an audible transient even
+  // though the envelope was already elevated). The next 4 hits behave
+  // normally (their usual decay/cap), then it alternates back, forever.
+  // See kickHitCounter in useTone() below.
+  chris: { bpm: 90 * 0.75, kickHz: 30, kick2Hz: 28, kickDecayMs: 250, sustainCycleHits: 4,
     kick:  [2,0,0,0,3,0,0,0,2,0,0,0,3,0,0,0], // long sustained hits at 0/8, short hip-hop-style hits between them at 4/12
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
     hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // same as boombap, per request
@@ -2042,6 +2137,7 @@ function useTone() {
   let midEnv = 0, midPhase = 0, kickSustainRemaining = 0, midSustainRemaining = 0;
   let kickFreqActive = 55, kickDecayActive = 0.9994; // which of kick/kick2's Hz+decay is currently sounding
   let sampleInStep = 0, stepIdx = -1;
+  let kickHitCounter = 0; // counts every kick hit (steps valued 2 or 3) -- see pat.sustainCycleHits above
   if (toneGenNode) {
     toneGenNode.onaudioprocess = (e) => {
       const out = e.outputBuffer.getChannelData(0);
@@ -2087,6 +2183,11 @@ function useTone() {
             // step 3 = short secondary hit: kick2Hz/kick2Decay, no sustain, never overlaps a long hit's own timing
             if (kickStep === 3) { kickFreqActive = kick2Hz; kickDecayActive = kick2Decay; }
             else { kickFreqActive = kickHz; kickDecayActive = kickDecay; }
+            if (pat.sustainCycleHits) {
+              kickHitCounter++;
+              const blockIdx = Math.floor((kickHitCounter - 1) / pat.sustainCycleHits);
+              if (blockIdx % 2 === 0) kickSustainRemaining = Infinity; // held flat until the next hit's own onset above resets it
+            }
           }
           if (pat.snare[stepIdx]) { snareEnv = 1; snarePhase = 0; }
           if (pat.hihat[stepIdx]) { hihatEnv = 1; hihatPhase = 0; hihatPhase2 = 0; }
@@ -3621,6 +3722,21 @@ function renderSideIndicatorPair(backCornerIdx, frontCornerIdx, noiseFloorPercen
 // -- see its own comment below for what this fixes.
 const cfgMeterChinaWasAbove = new Array(7).fill(false);
 const cfgMeterChinaFlashUntil = new Array(7).fill(0);
+// If no real hit has landed in the last 1.5s (e.g. dialing in noise floor/
+// peak threshold with no audio source playing), synthesize a steady series
+// of typical-width hits at 3/sec so there's still SOMETHING to look at
+// while adjusting -- display-only, never touches AudioBoard/FW state, just
+// a local stand-in signal for this one screen's own rendering.
+let cfgMeterLastRealHitMs = -99999;
+function cfgMeterFeedbackHitPct(nowMs) {
+  const realHit = AudioBoard.getHitPct(BAND_FULL);
+  if (realHit > 0) cfgMeterLastRealHitMs = nowMs;
+  if (nowMs - cfgMeterLastRealHitMs <= 1500) return realHit;
+  const PERIOD_MS = 1000 / 3; // 3 fake hits/sec
+  const WIDTH_FRAC = 0.35;    // "typical" pulse width within each period
+  const phase = (nowMs % PERIOD_MS) / PERIOD_MS;
+  return phase < WIDTH_FRAC ? Math.round(100 * (1 - phase / WIDTH_FRAC)) : 0;
+}
 function cfgMeterScreen(nowMs) {
   clearRope(); clearChinas(); clearMegabars();
   // Inset from BOTH outer ends of the 156-LED front string (ported to
@@ -3694,7 +3810,12 @@ function cfgMeterScreen(nowMs) {
     cfgMeterChinaWasAbove[c] = above;
     chinaLeds[c] = (nowMs < cfgMeterChinaFlashUntil[c]) ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: bin };
   }
-  const full = AudioBoard.getNormalPct(BAND_FULL)/100*255;
+  // Megabars pulse with the full-range HIT level (not bass, and not a
+  // steady level) so they actually demonstrate what these thresholds do to
+  // real hit detection -- falls back to a synthesized series of typical
+  // hits if no real audio has landed in the last 1.5s, see
+  // cfgMeterFeedbackHitPct().
+  const full = cfgMeterFeedbackHitPct(nowMs) / 100 * 255;
   for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = { r: 0, g: 0, b: full };
 }
 function cfgDecayOrPredictScreen() {
@@ -3738,6 +3859,22 @@ function cfgReactivityScreen(nowMs) {
   const PERIOD_MS = 600, ON_MS = 120;
   const lit = AudioBoard.soundReactivityEnabled && (nowMs % PERIOD_MS) < ON_MS;
   for (let c = 0; c < NUM_CHINA; c++) chinaLeds[c] = lit ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
+}
+
+// Auto-peak toggle screen (SubAudioAutoPeak) -- mirrors MagicCarpet::
+// showAutoPeakToggle() exactly: front edge's own neos (indices
+// [0, SIZEOF_SMALL_NEO), matching the real FW's ropeLeds[] index range for
+// this same physical strip) light up half at a time -- left half lit when
+// disabled, right half when enabled. SIZEOF_SMALL_NEO/2 here is this file's
+// own equivalent of the real FW's FRONT constant (SIZEOF_SMALL_NEO_HALF) --
+// both agree low index = left, high index = right within the front strip.
+function cfgAutoPeakScreen() {
+  clearRope(); clearMegabars(); clearChinas();
+  const enabled = AudioBoard.autoPeakEnabled;
+  const mid = SIZEOF_SMALL_NEO / 2;
+  const start = enabled ? mid : 0;
+  const end = enabled ? SIZEOF_SMALL_NEO : mid;
+  for (let i = start; i < end; i++) ropeLeds[i] = { r: 255, g: 255, b: 255 };
 }
 
 // Brightness config screens: solid white preview across whichever fixture
@@ -3799,6 +3936,7 @@ function renderCurrent(nowMs, dtMs) {
     case 'cfg_predict': cfgDecayOrPredictScreen(); break;
     case 'cfg_foresight': cfgForesightScreen(); break;
     case 'cfg_reactivity': cfgReactivityScreen(nowMs); break;
+    case 'cfg_autopeak': cfgAutoPeakScreen(); break;
     case 'brightness': brightnessScreen(); break;
     case 'powertest': powerTestScreen(); break;
   }
@@ -4468,12 +4606,12 @@ function draw() {
    UI WIRING
    ===================================================================== */
 const VARIATIONS = {
-  nightrider: ['Manual hue', 'Auto cycle', 'Auto cycle, no audio'],
+  nightrider: ['Manual hue', 'Auto cycle', 'Auto with sound'],
   flame: ['Waterflames', 'Flames', 'Shift hues', 'Hue-white'],
   equalizer: ['Chase', 'VU meter', 'new_standard', 'pixel_war'],
   speedstripes: ['Rope+MB', 'Rope+MB+China', 'Zebra'],
   lighthouse: ['Default', 'No Strobe', 'China React'],
-  cfg_meter: [], cfg_decay: [], cfg_predict: [], cfg_foresight: [], cfg_reactivity: [],
+  cfg_meter: [], cfg_decay: [], cfg_predict: [], cfg_foresight: [], cfg_reactivity: [], cfg_autopeak: [],
 };
 // Per-show default variation index, shown on first load / whenever that
 // show is freshly selected -- defaults to 0 unless listed here.
@@ -4503,7 +4641,7 @@ document.getElementById('showSelect').addEventListener('change', (e) => {
   // whichever path (buttons or dropdown) got you there.
   if (v.startsWith('cfg_')) {
     Ctl.appMode = 'audio';
-    Ctl.configSubsetting = ['cfg_meter','cfg_decay','cfg_predict','cfg_foresight','cfg_meter','cfg_reactivity'].indexOf(v);
+    Ctl.configSubsetting = ['cfg_meter','cfg_decay','cfg_predict','cfg_foresight','cfg_meter','cfg_reactivity','cfg_autopeak'].indexOf(v);
     if (Ctl.configSubsetting < 0) Ctl.configSubsetting = 0;
   } else {
     Ctl.appMode = 'show';
@@ -4640,10 +4778,10 @@ window.addEventListener('keydown', (e) => {
    subsetting is currently active instead of their normal-mode meaning. */
 const SUBSETTING_NAMES = {
   brightness: ['Global Brightness', 'Headlight Brightness', 'China Brightness'],
-  audio: ['Noise Floor / Peak Threshold', 'Hit Decay', 'Hit Prediction', 'Foresight', 'Auto-Gain', 'Sound Reactivity'],
+  audio: ['Noise Floor / Peak Threshold', 'Hit Decay', 'Hit Prediction', 'Foresight', 'Auto-Gain', 'Sound Reactivity', 'Auto-Peak'],
   powertest: ['Hue', 'Saturation', 'Brightness'],
 };
-const AUDIO_SUB_SCREEN = ['cfg_meter', 'cfg_decay', 'cfg_predict', 'cfg_foresight', 'cfg_meter', 'cfg_reactivity'];
+const AUDIO_SUB_SCREEN = ['cfg_meter', 'cfg_decay', 'cfg_predict', 'cfg_foresight', 'cfg_meter', 'cfg_reactivity', 'cfg_autopeak'];
 function subsettingCount(mode) { return (SUBSETTING_NAMES[mode] || []).length; }
 function configCurrModeFor(appMode, sub) {
   if (appMode === 'brightness') return 'brightness';
@@ -4668,6 +4806,7 @@ function currentSubsettingValueText() {
       case 3: return AudioBoard.audioForesightMs + 'ms';
       case 4: return ['off', 'band', 'full'][AudioBoard.agcMode];
       case 5: return AudioBoard.soundReactivityEnabled ? 'on' : 'off';
+      case 6: return AudioBoard.autoPeakEnabled ? 'on' : 'off';
     }
   }
   if (Ctl.appMode === 'powertest') {
@@ -4723,6 +4862,9 @@ function describeInputActions() {
     a.pot = 'no effect';
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 5) {
     a.left = a.right = 'toggle react';
+    a.pot = 'no effect';
+  } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 6) {
+    a.left = a.right = 'toggle auto-pk';
     a.pot = 'no effect';
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 2) {
     a.left = 'prev style';
@@ -4867,6 +5009,9 @@ function applyEncoderStep(dir) {
     updateAgcButtonUI();
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 5) {
     AudioBoard.soundReactivityEnabled = !AudioBoard.soundReactivityEnabled;
+  } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 6) {
+    AudioBoard.autoPeakEnabled = !AudioBoard.autoPeakEnabled;
+    updateAutoPeakButtonUI();
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 2) {
     AudioBoard.hitPredictionStyle = (AudioBoard.hitPredictionStyle + dir + 4) % 4;
     document.getElementById('predictStyleSelect').value = AudioBoard.hitPredictionStyle;
@@ -4912,6 +5057,33 @@ applyOrientation();
 document.getElementById('orientationSelect').addEventListener('change', (e) => {
   Ctl.orientation = e.target.value;
   applyOrientation();
+});
+
+// Settings menu (header gear button) -- replaces the old bare orientation
+// dropdown with a general multi-level menu (Layout / Visibility sections).
+{
+  const btn = document.getElementById('settingsBtn');
+  const menu = document.getElementById('settingsMenu');
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = menu.hidden;
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+  });
+  menu.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', () => {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  });
+}
+// Input cap setting -- hidden by default (per request), toggled here.
+document.getElementById('showInputCapCheck').addEventListener('change', (e) => {
+  document.getElementById('inputCapGroup').style.display = e.target.checked ? '' : 'none';
+});
+// Button descriptions (the Short:/Med:/Long:/XL:/Pot:/etc. action-cell
+// table in the encoder/pot box) -- shown by default, toggled here.
+document.getElementById('showButtonDescCheck').addEventListener('change', (e) => {
+  document.getElementById('ctrlPanelActions').style.display = e.target.checked ? '' : 'none';
 });
 
 // The CI deploy workflow replaces BUILD_INFO_PLACEHOLDER with the real
@@ -5267,6 +5439,7 @@ function syncAudioConfigUI() {
   syncPredictMsMax();
   document.getElementById('predictStyleSelect').value = AudioBoard.hitPredictionStyle;
   updateAgcButtonUI();
+  updateAutoPeakButtonUI();
   updateOutputDelayTime();
 }
 function bindToggleButton(id, onToggle) {
@@ -5323,6 +5496,16 @@ document.getElementById('btnAgc').addEventListener('click', () => {
   updateAgcButtonUI();
   updateStatusPanel();
 });
+// AutoPk -- plain on/off (see AudioBoard::autoPeakEnabled_), backed by the
+// real FW getter/setter rather than bindToggleButton()'s own DOM-only state,
+// so the button's initial state reflects whatever was persisted/loaded.
+function updateAutoPeakButtonUI() {
+  document.getElementById('btnAutoPeak').classList.toggle('active', AudioBoard.autoPeakEnabled);
+}
+document.getElementById('btnAutoPeak').addEventListener('click', () => {
+  AudioBoard.autoPeakEnabled = !AudioBoard.autoPeakEnabled;
+  updateAutoPeakButtonUI();
+});
 updateAgcButtonUI();
 document.getElementById('blacklightCheck').addEventListener('change', (e) => Ctl.blacklight = e.target.checked);
 document.getElementById('fixtureDotsCheck').addEventListener('change', (e) => Ctl.showFixtureDots = e.target.checked);
@@ -5351,22 +5534,31 @@ function tick(now) {
     renderCurrent(now, dtMs);
     draw();
 
-    // meters -- track each band's level in the AUDIBLE (A-path) signal,
-    // via the SAME MSGEQ7 filter-bank algorithm the chip sim uses (see
-    // vuBandLevel()), NOT the FW's own getNormalPct() -- this is "what
-    // you're hearing," a concept with no FW equivalent at all, since the
-    // FW only ever sees the real-time V-path. Noise floor/peak threshold
-    // marks are still positioned from the real FW getters the sliders use,
-    // so the bar's live fill stays directly comparable against those.
-    const setBar = (barId, noiseId, peakId, pct) => {
-      document.getElementById(barId).style.width = pct + '%';
+    // meters -- BACK to tracking the real FW's own getNormalPct() (its
+    // "filter_level", i.e. levelFilt) per band, NOT a JS-computed "what
+    // you're hearing" A-path meter -- per request, comparing the bar
+    // against the noise-floor/peak-threshold marks only makes sense if
+    // both live on the SAME scale, and those marks are (and always were)
+    // real FW percentages. Superimposed underneath (see the HTML's .raw
+    // <i> painted first, DOM order) is that same band's RAW level
+    // (getRawPct(), pre-AGC/pre-filter), 35%-desaturated -- pokes out past
+    // the filtered bar's own end wherever raw currently reads higher.
+    const autoScaledPeakPct = AudioBoard.autoScaledPeakThresholdPct;
+    const setBar = (barId, rawId, noiseId, peakId, autoPeakId, band) => {
+      document.getElementById(barId).style.width = AudioBoard.getNormalPct(band) + '%';
+      document.getElementById(rawId).style.width = AudioBoard.getRawPct(band) + '%';
       document.getElementById(noiseId).style.left = AudioBoard.noiseFloorPct + '%';
       document.getElementById(peakId).style.left = AudioBoard.peakThresholdPct + '%';
+      document.getElementById(autoPeakId).style.left = autoScaledPeakPct + '%';
     };
-    setBar('barBassHit', 'markBassNoise', 'markBassPeak', vuBandLevel(BAND_LOW));
-    setBar('barMidHit', 'markMidNoise', 'markMidPeak', vuBandLevel(BAND_MID));
-    setBar('barTrebleHit', 'markTrebleNoise', 'markTreblePeak', vuBandLevel(BAND_HIGH));
-    setBar('barFullHit', 'markFullNoise', 'markFullPeak', vuBandLevel(BAND_FULL));
+    setBar('barBassHit', 'barBassRaw', 'markBassNoise', 'markBassPeak', 'markBassAutoPeak', BAND_LOW);
+    setBar('barMidHit', 'barMidRaw', 'markMidNoise', 'markMidPeak', 'markMidAutoPeak', BAND_MID);
+    setBar('barTrebleHit', 'barTrebleRaw', 'markTrebleNoise', 'markTreblePeak', 'markTrebleAutoPeak', BAND_HIGH);
+    setBar('barFullHit', 'barFullRaw', 'markFullNoise', 'markFullPeak', 'markFullAutoPeak', BAND_FULL);
+    // Peak thresh slider's own auto-peak preview dot -- same value as the
+    // VU marks above, positioned to approximate a native range thumb's
+    // inset math (6.5px = half the 13px thumb, see .auto-peak-dot's CSS).
+    document.getElementById('autoPeakDot').style.left = `calc(6.5px + ${autoScaledPeakPct / 100} * (100% - 13px))`;
     const chip = document.getElementById('silentChip');
     if (audioGraphReady) {
       chip.textContent = AudioBoard.silent ? 'silent' : 'live';

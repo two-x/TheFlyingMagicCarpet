@@ -49,7 +49,7 @@ enum BrightnessSubsetting { SubBrightnessGlobal = 0, SubBrightnessHeadlight = 1,
 // repurposed to toggle which of the two the pot currently targets instead
 // (same kind of subsetting-specific short-press override as SubAudioHitDecay
 // below), rather than spending a whole subsetting slot on each.
-enum AudioSubsetting { SubAudioThreshold = 0, SubAudioHitDecay = 1, SubAudioHitPrediction = 2, SubAudioForesight = 3, SubAudioAutoGain = 4, SubAudioReactivityEnable = 5 };
+enum AudioSubsetting { SubAudioThreshold = 0, SubAudioHitDecay = 1, SubAudioHitPrediction = 2, SubAudioForesight = 3, SubAudioAutoGain = 4, SubAudioReactivityEnable = 5, SubAudioAutoPeak = 6 };
 enum PowerTestSubsetting { SubPowerTestHue = 0, SubPowerTestSat = 1, SubPowerTestBrightness = 2 };
 static uint8_t configSubsetting = 0;
 static float noiseFloorPercent = 0.0f; // committed value; audio below this is "silence" -- see AudioBoard.h
@@ -68,6 +68,7 @@ const char * agcModeName( uint8_t mode ) {
    return "Full"; // AGCfull
 }
 static bool liveSoundReactivityEnabled = true; // live (not-yet-committed) global reactivity toggle, Audio subsetting SubAudioReactivityEnable
+static bool liveAutoPeakEnabled = false; // live (not-yet-committed) auto-peak toggle, Audio subsetting SubAudioAutoPeak -- see AudioBoard::autoPeakEnabled_
 static float committedHitDecayMs = 300.0f; // committed value; ms for a "hit" to decay from full to zero -- see AudioBoard.h
 static const float HIT_DECAY_RANGE_MS = 1000.0f; // adjustable range is 0-1000ms, per request
 // SubAudioHitDecay and SubAudioHitPrediction share this same sim/live test
@@ -128,7 +129,7 @@ static bool configPotTakenOver = false;
 
 uint8_t numSubsettingsFor( AppMode mode ) {
    if ( mode == ModeConfigBrightness ) return 3;
-   if ( mode == ModeConfigAudio ) return 6;
+   if ( mode == ModeConfigAudio ) return 7;
    if ( mode == ModeConfigPowerTest ) return 3;
    return 1;
 }
@@ -146,6 +147,7 @@ void resetTakeoverState() {
    liveAgcMode = AudioBoard::getAgcMode();
    liveHitPredictionStyle = AudioBoard::getHitPredictionStyle();
    liveSoundReactivityEnabled = AudioBoard::getSoundReactivityEnabled();
+   liveAutoPeakEnabled = AudioBoard::getAutoPeakEnabled();
 }
 
 void enterConfigMode( AppMode mode ) {
@@ -235,6 +237,7 @@ const char * settingName( AppMode mode, uint8_t subsetting ) {
       if ( subsetting == SubAudioHitDecay ) return "HitDecay";
       if ( subsetting == SubAudioHitPrediction ) return "HitPredict";
       if ( subsetting == SubAudioReactivityEnable ) return "SndReact";
+      if ( subsetting == SubAudioAutoPeak ) return "AutoPk";
       return "Foresight";
    }
    if ( mode == ModeConfigPowerTest ) {
@@ -272,6 +275,8 @@ void printSettingValue( AppMode mode, uint8_t subsetting, float livePercent, boo
       Serial.print( agcModeName( liveAgcMode ) ); // "Off"/"Band"/"Full"
    } else if ( mode == ModeConfigAudio && subsetting == SubAudioReactivityEnable ) {
       Serial.print( liveSoundReactivityEnabled ? "Ena" : "Dis" ); // already fixed-width
+   } else if ( mode == ModeConfigAudio && subsetting == SubAudioAutoPeak ) {
+      Serial.print( liveAutoPeakEnabled ? "Ena" : "Dis" ); // already fixed-width
    } else if ( mode == ModeConfigAudio ) { // SubAudioHitDecay or SubAudioForesight: both in ms (0-1000, not a percent)
       int v = (int)( livePercent + 0.5f );
       if ( pad ) printPad4( v ); else Serial.print( v );
@@ -308,6 +313,8 @@ void printEnteringSetting( AppMode mode, uint8_t subsetting ) {
          Serial.println( agcModeName( AudioBoard::getAgcMode() ) );
       } else if ( subsetting == SubAudioReactivityEnable ) {
          Serial.println( AudioBoard::getSoundReactivityEnabled() ? "Ena" : "Dis" );
+      } else if ( subsetting == SubAudioAutoPeak ) {
+         Serial.println( AudioBoard::getAutoPeakEnabled() ? "Ena" : "Dis" );
       } else if ( subsetting == SubAudioHitDecay ) {
          Serial.print( (int)( committedHitDecayMs + 0.5f ) );
          Serial.println( "ms" );
@@ -469,6 +476,7 @@ void setup() {
    AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
    AudioBoard::setAgcMode( Nvm::loadedAgcMode() );
    AudioBoard::setSoundReactivityEnabled( Nvm::loadedSoundReactivityEnabled() );
+   AudioBoard::setAutoPeakEnabled( Nvm::loadedAutoPeakEnabled() );
    committedHitDecayMs = Nvm::loadedHitDecayMs();
    AudioBoard::setHitDecayMs( committedHitDecayMs );
    committedAudioForesightMs = Nvm::loadedAudioForesightMs();
@@ -559,6 +567,12 @@ void loop() {
             carpet->encoder->resetPositionDelta();
             liveSoundReactivityEnabled = ( delta > 0 ); // same direct-pick convention as AutoGain above
          }
+      } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioAutoPeak ) {
+         int delta = carpet->encoder->readPositionDelta();
+         if ( delta != 0 ) {
+            carpet->encoder->resetPositionDelta();
+            liveAutoPeakEnabled = ( delta > 0 ); // same direct-pick convention as SndReact above
+         }
       } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitPrediction ) {
          // pot (below) adjusts the ms amount; encoder rotation here cycles
          // which shape the lead-up follows instead, wrapping through
@@ -637,6 +651,8 @@ void loop() {
          // (rather than a meter/number, which wouldn't show the
          // consequence as directly).
          carpet->showSoundReactivityToggle( liveSoundReactivityEnabled );
+      } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioAutoPeak ) {
+         carpet->showAutoPeakToggle( liveAutoPeakEnabled );
       } else if ( appMode == ModeConfigAudio ) {
          // reference (committed) position for whichever of the two isn't
          // being actively adjusted right now -- both are always shown at
@@ -694,6 +710,9 @@ void loop() {
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioReactivityEnable ) {
             AudioBoard::setSoundReactivityEnabled( liveSoundReactivityEnabled );
             Nvm::saveSoundReactivityEnabled( liveSoundReactivityEnabled );
+         } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioAutoPeak ) {
+            AudioBoard::setAutoPeakEnabled( liveAutoPeakEnabled );
+            Nvm::saveAutoPeakEnabled( liveAutoPeakEnabled );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
             committedHitDecayMs = livePercent;
             Nvm::saveHitDecayMs( (uint16_t)( committedHitDecayMs + 0.5f ) );

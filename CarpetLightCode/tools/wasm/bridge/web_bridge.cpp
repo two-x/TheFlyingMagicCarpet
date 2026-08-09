@@ -96,6 +96,13 @@ EMSCRIPTEN_KEEPALIVE
 float web_audioGetPeakThresholdPercent() { return AudioBoard::getPeakThresholdPercent(); }
 
 EMSCRIPTEN_KEEPALIVE
+void web_audioSetAutoPeakEnabled( int enabled ) { AudioBoard::setAutoPeakEnabled( enabled != 0 ); }
+EMSCRIPTEN_KEEPALIVE
+int web_audioGetAutoPeakEnabled() { return AudioBoard::getAutoPeakEnabled() ? 1 : 0; }
+EMSCRIPTEN_KEEPALIVE
+float web_audioGetAutoScaledPeakThresholdPercent() { return AudioBoard::getAutoScaledPeakThresholdPercent(); }
+
+EMSCRIPTEN_KEEPALIVE
 void web_audioSetHitDecayMs( float ms ) { AudioBoard::setHitDecayMs( ms ); }
 EMSCRIPTEN_KEEPALIVE
 float web_audioGetHitDecayMs() { return AudioBoard::getHitDecayMs(); }

@@ -57,7 +57,7 @@ static HalFlashStorage flash;
 #else
 static DueFlashStorage flash;
 #endif
-static const uint8_t MAGIC = 0x47; // bump this if State's layout ever changes
+static const uint8_t MAGIC = 0x48; // bump this if State's layout ever changes -- bumped for the new autoPeakEnabled field
 static const uint8_t MAX_SHOWS = 8; // headroom for future shows, no relayout needed
 
 // all brightness/threshold fields are percentages (0-100), never raw 0-255
@@ -82,6 +82,7 @@ struct State {
    uint16_t hitPredictionMs;           // 0-audioForesightMs, default 0 -- predictive lead-up before an upcoming hit (see AudioBoard.h)
    uint8_t hitPredictionStyle;         // 0=disabled/1=exponential/2=pulse train, default 1 (see AudioBoard.h's HitPredictionStyle)
    uint8_t soundReactivityEnabled;     // 0/1, default 1 (on) -- global kill switch for all sound-reactive light behavior (see AudioBoard.h)
+   uint8_t autoPeakEnabled;            // 0/1, default 0 (off) -- scales peak threshold to the tracked 15s loudness ceiling (see AudioBoard.h)
 };
 
 static State state;
@@ -94,6 +95,11 @@ inline void load() {
       state.magic = MAGIC;
       state.currShow = 0;
       for ( uint8_t i = 0; i < MAX_SHOWS; ++i ) state.variation[ i ] = 0;
+      // Equalizer (show index 2 -- see CarpetLightLogic.cpp's ShowMode enum;
+      // can't reference it by name here, that enum's defined after this
+      // header gets included) defaults to new_standard (EqualizerShow's
+      // VarNewStandard, also index 2) instead of Chase, per request.
+      state.variation[ 2 ] = 2;
       state.globalBrightnessPercent = 100;
       state.headlightBrightnessPercent = 50;
       state.chinaBrightnessPercent = 100;
@@ -109,6 +115,7 @@ inline void load() {
       state.hitPredictionMs = 0;
       state.hitPredictionStyle = 1; // PredictExponential
       state.soundReactivityEnabled = 1;
+      state.autoPeakEnabled = 0;
       flash.write( 0, (byte *)&state, sizeof( State ) );
    }
 }
@@ -179,6 +186,10 @@ inline uint8_t loadedHitPredictionStyle() {
 
 inline bool loadedSoundReactivityEnabled() {
    return state.soundReactivityEnabled != 0;
+}
+
+inline bool loadedAutoPeakEnabled() {
+   return state.autoPeakEnabled != 0;
 }
 
 inline void saveShow( uint8_t show ) {
@@ -264,6 +275,11 @@ inline void saveHitPredictionStyle( uint8_t style ) {
 
 inline void saveSoundReactivityEnabled( bool enabled ) {
    state.soundReactivityEnabled = enabled ? 1 : 0;
+   flash.write( 0, (byte *)&state, sizeof( State ) );
+}
+
+inline void saveAutoPeakEnabled( bool enabled ) {
+   state.autoPeakEnabled = enabled ? 1 : 0;
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 
