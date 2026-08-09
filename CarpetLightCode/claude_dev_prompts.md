@@ -229,31 +229,85 @@ this time" so it's clear you checked.
 ## 4. Always end with a ready-to-paste git add/commit line
 
 Use this any time you want Claude to stop short of actually committing, but
-still hand you an exact command reflecting everything it just changed.
+still hand you an exact command (or commands) reflecting everything it just
+changed. Written for this specific repo's shape: a single git repository
+rooted at `~/Documents/TheFlyingMagicCarpet` containing two independent
+codebases as sibling subdirectories — `CANTroller2/` (the vehicle control
+box firmware, commit prefix `[control]`) and `CarpetLightCode/` (the light
+show firmware, commit prefix `[lightbox]`). A commit must never contain
+changes from both.
 
 ```text
 Upon each prompt answer from now on, until further notice: end every
 response (as long as any file was created, edited, staged, or otherwise
-changed during it) with a single ready-to-paste shell line in this exact
-form:
+changed during it, anywhere in the ~/Documents/TheFlyingMagicCarpet repo)
+with one or more ready-to-paste shell lines reflecting what changed,
+following the rules below.
 
-git add . <any-new-filenames>; git commit -m "[lightbox] 1) ... 2) ..."
+This repo has two independent codebases living side by side in one git
+repo: CANTroller2/ ("control code," commit prefix [control]) and
+CarpetLightCode/ ("lightbox code," commit prefix [lightbox]). Before
+producing any commit line, check (e.g. via `git status --short` from the
+repo root) which of the two subtrees actually have changes right now —
+not just what this one response touched, but everything currently
+unstaged/untracked in the repo, since a stray leftover change in the
+other codebase must not get silently swept into this response's commit
+either.
 
-- List each genuinely distinct change as its own numbered item (1), 2), 3)
-  ...) inside the -m string — not one item per file, one item per
-  logical/behavioral change, even if it touched several files.
-- Keep each numbered item to one concise sentence/clause.
-- "<any-new-filenames>" is literal instruction to you, not something to
-  print verbatim: if `git status` shows any untracked (new) files this
-  response created, list them explicitly after the "." (e.g.
-  `git add . tools/new_thing.py;`); if there are no untracked files, just
-  use `git add .` alone.
-- Do NOT actually run `git commit` yourself — only ever print this line for
-  the user to copy/paste and run themselves. Running `git add` yourself
-  first (to check what's untracked) is fine; running the commit is not.
+- **If changes exist in only one of the two subtrees**: print a single
+  block in this exact form:
+
+  git add CarpetLightCode/path/to/changed1.h CarpetLightCode/path/to/changed2.html; git commit -m "[lightbox] 1) Section: detail 2) Section: detail"
+
+  (or the `CANTroller2/`/`[control]` equivalent). The `git add` argument
+  list must be the **actual specific changed/new file paths** (from
+  `git status`), each one explicitly prefixed with that one codebase's
+  directory — never a bare `git add .`, and never a directory-level `git
+  add CarpetLightCode/` either, since either form silently sweeps in
+  whatever else happens to be sitting unstaged in that subtree (a leftover
+  WIP change unrelated to this response) along with what you actually
+  meant to commit. List every file precisely, every time.
+
+- **If changes exist in BOTH subtrees**: say so explicitly in your
+  response (e.g. "Both control and lightbox code changed — two separate
+  commits needed"), then print TWO separate blocks back to back, one per
+  codebase, each in the form above with that codebase's own prefix. Never
+  merge them into one `git add`/`git commit` pair, even if it feels like
+  one logical change spanning both — if the change genuinely spans both
+  codebases, it still gets described from each codebase's own point of
+  view in its own commit, split at the directory boundary.
+
+- **Keep the whole message short.** List each genuinely distinct change as
+  its own numbered item (1), 2), 3)...) inside a given -m string — one
+  item per logical/behavioral change within THAT codebase, not one item
+  per file. Each item is `Section: detail` — a few words naming the
+  code section/subsystem/file the change is in (e.g. `AudioBoard`,
+  `pixel_war`, `README`, `visualizer help`, `BrakeControl`, `runmodes`),
+  a colon, then a short, terse detail clause — a phrase, not a full
+  sentence, and not the padded, rationale-heavy style used in this
+  repo's actual doc prose (README.md etc.) or in your own chat responses.
+  Compare:
+  - Too long: "1) Redesigned AudioBoard's AutoPeak from a 15-second
+    tracked-loudness scale to a per-bin 50ms hit-rate debounce that only
+    gates a new edge and never interrupts an already-ongoing hit"
+  - Right length: "1) AudioBoard: AutoPeak now a per-bin 50ms hit-rate
+    debounce, not a 15s loudness scale"
+- This applies equally to newly-created (untracked) files: include them by
+  their exact path too, same as modified tracked files — `git status`
+  shows both.
+- Do NOT actually run `git commit` yourself — only ever print these lines
+  for the user to copy/paste and run themselves. Running `git status`/
+  `git add` yourself first (to check what's changed/untracked) is fine;
+  running the commit is not.
 - If literally nothing changed in a given response (a pure question/answer
-  with no file edits), skip this line entirely rather than printing an
-  empty/no-op one.
+  with no file edits, in either subtree), skip this entirely rather than
+  printing an empty/no-op line.
+- Edge case: a change to a file outside both `CANTroller2/` and
+  `CarpetLightCode/` (e.g. the repo-root `README.md`, `.github/`) doesn't
+  cleanly belong to either prefix — call this out explicitly rather than
+  guessing which prefix to force it under, and ask which it should ride
+  along with (or whether it needs its own commit) if it's not obvious
+  from context.
 ```
 
 ## 5. Keep this file itself in sync
@@ -307,9 +361,15 @@ so it's clear you checked.
   update. Same for prompt 3 if `tools/gen_cheat_sheet_card.py`'s constants
   are renamed/restructured, or prompt 1 if README.md's own house style
   changes.
-- Prompt 4's `[lightbox]` commit-tag prefix matches this repo's existing
-  git history convention (see `git log`) — if that convention ever changes,
-  update the literal string in prompt 4 to match.
+- Prompt 4's `[lightbox]`/`[control]` commit-tag prefixes, and the
+  `CarpetLightCode`/`CANTroller2` directory split they're keyed off of,
+  match this repo's existing git history convention (see `git log`) and
+  actual directory layout — if either ever changes (a rename, a 3rd
+  codebase added to the repo, prefixes changed), update prompt 4 to match.
+  `CANTroller2/claude_dev_prompts.md` has its own copy of the commit-line
+  prompt (its half of this same split-commit rule, `[control]`-prefixed
+  only) — keep the shared rule (never mix codebases in one commit)
+  consistent between both files if it changes.
 - Prompt 5 is what's supposed to keep the 3 notes above from ever going
   stale by hand again — if a session with prompt 5 active is the one
   making a change described in those notes, it should already have updated
