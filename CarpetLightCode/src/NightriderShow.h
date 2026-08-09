@@ -299,7 +299,7 @@ class NightriderShow : public LightShow {
       // color).
       uint8_t chinaWhite = 0;
       if ( variation_ == VarAutoWithSound ) {
-         chinaWhite = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( BandBass ) * 255 / 100 );
+         chinaWhite = (uint8_t)( (uint16_t)AudioBoard::getBandHitPercent( BandBass ) * 255 / 100 );
       }
       for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
          CRGBW & px = carpet->chinaLeds[ c ];

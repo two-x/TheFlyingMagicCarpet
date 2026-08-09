@@ -68,13 +68,13 @@ EMSCRIPTEN_KEEPALIVE
 void web_injectAdcBins() { halSetAnalogCycle( DC_One, adcBinsScratch_, 7 ); }
 
 EMSCRIPTEN_KEEPALIVE
-int web_audioGetHitPercent( int band ) { return AudioBoard::getHitPercent( (AudioBand)band ); }
+int web_audioGetHitPercent( int band ) { return AudioBoard::getBandHitPercent( (AudioBand)band ); }
 EMSCRIPTEN_KEEPALIVE
-int web_audioGetNormalPercent( int band ) { return AudioBoard::getNormalPercent( (AudioBand)band ); }
+int web_audioGetNormalPercent( int band ) { return AudioBoard::getBandNormalPercent( (AudioBand)band ); }
 EMSCRIPTEN_KEEPALIVE
-int web_audioGetRawPercent( int band ) { return AudioBoard::getRawPercent( (AudioBand)band ); }
+int web_audioGetRawPercent( int band ) { return AudioBoard::getBandRawPercent( (AudioBand)band ); }
 EMSCRIPTEN_KEEPALIVE
-int web_audioGetRmsPercent( int band ) { return AudioBoard::getRmsPercent( (AudioBand)band ); }
+int web_audioGetRmsPercent( int band ) { return AudioBoard::getBandRmsPercent( (AudioBand)band ); }
 EMSCRIPTEN_KEEPALIVE
 int web_audioGetOverallLevelPercent() { return AudioBoard::getOverallLevelPercent(); }
 EMSCRIPTEN_KEEPALIVE
@@ -99,8 +99,19 @@ EMSCRIPTEN_KEEPALIVE
 void web_audioSetAutoPeakEnabled( int enabled ) { AudioBoard::setAutoPeakEnabled( enabled != 0 ); }
 EMSCRIPTEN_KEEPALIVE
 int web_audioGetAutoPeakEnabled() { return AudioBoard::getAutoPeakEnabled() ? 1 : 0; }
+// slider dot: always BandFull, per request (the default arg)
 EMSCRIPTEN_KEEPALIVE
-float web_audioGetAutoScaledPeakThresholdPercent() { return AudioBoard::getAutoScaledPeakThresholdPercent(); }
+float web_audioGetAutoScaledPeakThresholdPercent() { return AudioBoard::getBandAutoScaledPeakThresholdPercent(); }
+// VU marks: one call per row, that row's own band
+EMSCRIPTEN_KEEPALIVE
+float web_audioGetBandAutoScaledPeakThresholdPercent( int band ) { return AudioBoard::getBandAutoScaledPeakThresholdPercent( (AudioBand)band ); }
+// debug aid: the theoretical max percent value (always exactly 100, but
+// sourced from the FW's own percent domain rather than hardcoded in JS) --
+// per request, a calibration marker that should always render at the VU
+// bar's own far-right edge; if it doesn't, the bug is in the bar's own
+// rendering/scaling, not the FW's audio math.
+EMSCRIPTEN_KEEPALIVE
+int web_audioGetMaxPercent() { return 100; }
 
 EMSCRIPTEN_KEEPALIVE
 void web_audioSetHitDecayMs( float ms ) { AudioBoard::setHitDecayMs( ms ); }

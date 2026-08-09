@@ -360,7 +360,7 @@ class FlameShow : public LightShow {
       // EQ_HIT_BRIGHTNESS_FLOOR fix for the identical "reads dim at
       // anything less than a maxed hit" root cause.
       static constexpr float FLAME_HIT_BRIGHTNESS_FLOOR = 0.65f;
-      float dmxvalFrac = max( FLAME_HIT_BRIGHTNESS_FLOOR, (float)AudioBoard::getHitPercent( BandBass ) / 100.0f );
+      float dmxvalFrac = max( FLAME_HIT_BRIGHTNESS_FLOOR, (float)AudioBoard::getBandHitPercent( BandBass ) / 100.0f );
       int dmxval = (int)( dmxvalFrac * 255.0f + 0.5f );
       CRGB dmxclr = floodPaletteColor( dmxval );
       LedUtil::gammaCorrect( dmxclr );

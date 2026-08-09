@@ -161,11 +161,22 @@ class EqualizerShow : public LightShow {
    // anymore), trading turns every cycleBeats_ (pot-controlled, shared
    // with new_standard -- see that member's own comment) bass hits.
    static constexpr float PW_MIN_FRAC = 0.125f, PW_MAX_FRAC = 0.875f; // 12.5%..87.5% of the loop
-   static constexpr float PW_FADE_FRAC = 1.0f / 14.0f; // border cross-fade width
-   static constexpr float PW_HIT_IMPULSE = 0.12f;  // territory fraction jumped per qualifying hit edge
-   static constexpr float PW_RECOVER_RATE = 0.35f; // fraction/sec pulled back toward center between hits
-   static constexpr float PW_WALK_MAX = 150.0f;    // LED/s
+   static constexpr float PW_FADE_FRAC = 1.0f / 42.0f; // border cross-fade width -- 1/3 of the original 1/14, per request
+   static constexpr float PW_HIT_IMPULSE = 0.24f;  // territory fraction jumped per qualifying hit edge (2x the original 0.12, per request)
+   static constexpr float PW_RECOVER_FRAC = 0.5f;  // fraction of EACH hit's own impulse given back afterward, per request -- net territory gain per hit is PW_HIT_IMPULSE * (1 - PW_RECOVER_FRAC)
+   // Impact and recovery are 2 distinct, time-separated phases (per
+   // request), not one combined instantaneous step: the full impulse
+   // lands immediately on the hit; PW_RECOVER_FRAC of it is given back
+   // PW_RECOVER_DELAY_MS later (a baseline ~300ms "impact, then rebound"
+   // feel, halved per the follow-up "reduce the time between impact and
+   // recovery by 2x"). pwPendingRecoveryFrac_/pwRecoveryDelayRemainingMs_
+   // track whichever recovery is currently counting down; a new hit before
+   // the previous recovery lands simply replaces it (see updatePixelWar()).
+   static constexpr float PW_RECOVER_DELAY_MS = 150.0f;
+   static constexpr float PW_WALK_MAX = 37.5f;     // LED/s -- 25% of the original 150 (rate of travel around the rope's perimeter reduced 75% per request)
    float pwBassFrac_ = 0.5f;
+   float pwPendingRecoveryFrac_ = 0.0f;      // 0 = no recovery currently pending
+   float pwRecoveryDelayRemainingMs_ = 0.0f;
    float pwRotationOffsetLed_ = 0.0f, pwWalkspeed_ = 0.0f, pwWalkAccumMs_ = 0.0f;
    float pwMegabarHeat_[ NUM_MEGABAR_LEDS ] = { 0.0f };
    // which color source a megabar renders while lit, set at PICK time (per
@@ -179,7 +190,7 @@ class EqualizerShow : public LightShow {
    // megabar flash pool now also includes independently-triggered treble
    // and midrange pickers -- treble count is always ceil(bass count/2),
    // mid is a fixed extra one. Each pool re-picks on its OWN band's real
-   // hit edge (see AudioBoard::NewHit() below), independent of the others.
+   // hit edge (see AudioBoard::NewBandHit() below), independent of the others.
    static const int PW_BASS_PICK = 2;
    static const int PW_TREBLE_PICK = 1; // ceil(PW_BASS_PICK/2)
    static const int PW_MID_PICK = 1;
@@ -278,6 +289,7 @@ class EqualizerShow : public LightShow {
       newStdChinaFadeStartMs_ = 0; newStdMegabarFadeStartMs_ = 0;
 
       pwBassFrac_ = 0.5f;
+      pwPendingRecoveryFrac_ = 0.0f; pwRecoveryDelayRemainingMs_ = 0.0f;
       pwRotationOffsetLed_ = 0.0f; pwWalkspeed_ = 0.0f; pwWalkAccumMs_ = 0.0f;
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) { pwMegabarHeat_[ m ] = 0.0f; pwMegabarColorSrc_[ m ] = PwSrcBass; }
       for ( int n = 0; n < PW_MAX_PICK; ++n ) pwLastPicked_[ n ] = -1;
@@ -456,7 +468,7 @@ class EqualizerShow : public LightShow {
       // subsetting) instead of this show's own ad-hoc lastlow tracking --
       // per request, all EqualizerShow variations use hit instead of level.
       CRGB dmxclr;
-      uint8_t lastlow = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( BandBass ) * 255 / 100 );
+      uint8_t lastlow = (uint8_t)( (uint16_t)AudioBoard::getBandHitPercent( BandBass ) * 255 / 100 );
       dmxclr = blend( CRGB::Black, clr2, lastlow );
       carpet->megabarLeds[1] = dmxclr;
       carpet->megabarLeds[2] = dmxclr;
@@ -468,7 +480,7 @@ class EqualizerShow : public LightShow {
       carpet->megabarLeds[11] = dmxclr;
 
 
-      int highval = (int)( (uint16_t)AudioBoard::getHitPercent( BandTreble ) * 255 / 100 );
+      int highval = (int)( (uint16_t)AudioBoard::getBandHitPercent( BandTreble ) * 255 / 100 );
       // Serial.print("highval: ");
       // Serial.println(highval);
       /*static int lasthigh = highval;
@@ -581,8 +593,8 @@ class EqualizerShow : public LightShow {
       // hit already implements this meter's attack/decay ballistics (see
       // AudioBoard::updateBandLevels(), tunable via the Audio config
       // screen's decay-rate subsetting), so no more local peak-hold state.
-      int vuLastBass = (int)( (uint16_t)AudioBoard::getHitPercent( BandBass ) * 255 / 100 );
-      int vuLastTreble = (int)( (uint16_t)AudioBoard::getHitPercent( BandTreble ) * 255 / 100 );
+      int vuLastBass = (int)( (uint16_t)AudioBoard::getBandHitPercent( BandBass ) * 255 / 100 );
+      int vuLastTreble = (int)( (uint16_t)AudioBoard::getBandHitPercent( BandTreble ) * 255 / 100 );
 
       static const float halfLen_ = SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER; // true corner to center, 143
       static const float maxReach_ = halfLen_ * 1.15f; // 100%-level reach: 15% of halfLen_ past center
@@ -678,11 +690,11 @@ class EqualizerShow : public LightShow {
    // to read as reactive at all, causing a real regression (megabars/
    // china stopped visibly responding to individual hits, since even "no
    // hit" now looked 65% as bright as "hit"). Fixed for real in
-   // AudioBoard::getHitPercent() itself instead -- during an actual hit it
+   // AudioBoard::getBandHitPercent() itself instead -- during an actual hit it
    // now reports flat max (100%) rather than the literal analog level, so
    // quiet moments stay genuinely dark (full contrast/reactivity) while
    // hits themselves always read as a full, punchy flash. This file just
-   // uses AudioBoard::getHitPercent()'s return value directly again, same
+   // uses AudioBoard::getBandHitPercent()'s return value directly again, same
    // as any other show.
    void newStdColors( CRGB & Bcolor, CRGB & Tcolor ) {
       float hueFrac = ( 1.0f - cosf( 2.0f * PI * newStdHueTimeS_ / NEWSTD_HUE_PERIOD_S ) ) / 2.0f;
@@ -767,7 +779,7 @@ class EqualizerShow : public LightShow {
       if ( !silent ) newStdHueTimeS_ += dtSec;
       CRGB Bcolor, Tcolor;
       newStdColors( Bcolor, Tcolor );
-      uint8_t bassHit = AudioBoard::getHitPercent( BandBass ), trebleHit = AudioBoard::getHitPercent( BandTreble );
+      uint8_t bassHit = AudioBoard::getBandHitPercent( BandBass ), trebleHit = AudioBoard::getBandHitPercent( BandTreble );
 
       // sub_standard's only difference from new_standard: megabars get a 4th
       // cycle option (see below). If the numOptions just changed (variation
@@ -805,7 +817,7 @@ class EqualizerShow : public LightShow {
       // Shared bass/treble edge, used below both to drive china/megabar's
       // OptionCycler (bass edges only, per request) and cycle-2/sub_standard-
       // option-3's own per-hit heat/pair-reshuffle mechanics. Uses the real
-      // FW edge flag (AudioBoard::NewHit(), computed against the live peak
+      // FW edge flag (AudioBoard::NewBandHit(), computed against the live peak
       // threshold at the true ~30ms audio poll rate) rather than a hand-
       // rolled ">20% and was <=20%" check sampled once per render frame --
       // BUGFIX ("megabars sometimes don't respond to a hit even though
@@ -817,8 +829,8 @@ class EqualizerShow : public LightShow {
       // logic silently did nothing. NewHit() can't miss a hit this way --
       // it's set the instant updateBandLevels() sees the real crossing,
       // independent of render-frame timing.
-      bool bassEdge = AudioBoard::NewHit( BandBass );
-      bool trebleEdge = AudioBoard::NewHit( BandTreble );
+      bool bassEdge = AudioBoard::NewBandHit( BandBass );
+      bool trebleEdge = AudioBoard::NewBandHit( BandTreble );
 
       bool chinaChanged = false, megabarChanged = false;
       if ( bassEdge ) {
@@ -969,7 +981,7 @@ class EqualizerShow : public LightShow {
       CRGB Bcolor, Tcolor;
       newStdColors( Bcolor, Tcolor );
       static const CRGB Mcolor = CRGB::Green; // fixed, per request -- midrange flood pool's own color
-      uint8_t bassHit = AudioBoard::getHitPercent( BandBass );
+      uint8_t bassHit = AudioBoard::getBandHitPercent( BandBass );
 
       if ( silent ) {
          updateSilenceFloods( time, dtSec, Bcolor, Tcolor );
@@ -978,10 +990,16 @@ class EqualizerShow : public LightShow {
 
       // Same NewHit()-based edge detection as new_standard above (see its
       // own comment) -- fixes the same "megabar misses a hit chinas still
-      // show" class of bug here too.
-      bool bassEdge = AudioBoard::NewHit( BandBass );
-      bool trebleEdge = AudioBoard::NewHit( BandTreble );
-      bool midEdge = AudioBoard::NewHit( BandMid );
+      // show" class of bug here too. Per request, this cycle's treble/mid
+      // triggers are sourced from specific bins rather than the curated
+      // AudioBand groupings: treble is just the top 2 bins (FreqBin5/6 --
+      // 6250/16000Hz), NOT AudioBand's own BandTreble (which also includes
+      // FreqBin4/2500Hz); midrange is FreqBin2/3/4 (400/1000/2500Hz) --
+      // AudioBand's own BandMid (FreqBin2/3 only) plus the 2500Hz bin taken
+      // out of treble above.
+      bool bassEdge = AudioBoard::NewBandHit( BandBass );
+      bool trebleEdge = AudioBoard::NewBinHit( FreqBin5 ) || AudioBoard::NewBinHit( FreqBin6 );
+      bool midEdge = AudioBoard::NewBinHit( FreqBin2 ) || AudioBoard::NewBinHit( FreqBin3 ) || AudioBoard::NewBinHit( FreqBin4 );
 
       if ( bassEdge ) {
          if ( ++pwTurnHitCount_ >= cycleBeats_ ) {
@@ -992,18 +1010,44 @@ class EqualizerShow : public LightShow {
       CRGB activeColor = pwTurnIsB_ ? Bcolor : Tcolor;
 
       // ROPE: territory war -- every qualifying bass hit pushes territory
-      // toward whichever color currently has the turn.
+      // toward whichever color currently has the turn immediately (the
+      // impact); PW_RECOVER_FRAC of that same push is given back
+      // PW_RECOVER_DELAY_MS later (the recovery) -- 2 distinct,
+      // time-separated phases, not one combined instantaneous step (see
+      // PW_RECOVER_DELAY_MS's own comment). A hit that lands while a
+      // previous recovery is still pending replaces it outright (that
+      // earlier impulse's own give-back is superseded by this newer hit's
+      // own, rather than stacking).
       pwStepRandomWalk( dtSec * 1000.0f );
-      if ( bassEdge ) pwBassFrac_ += pwTurnIsB_ ? PW_HIT_IMPULSE : -PW_HIT_IMPULSE;
-      pwBassFrac_ += ( 0.5f - pwBassFrac_ ) * PW_RECOVER_RATE * dtSec;
+      if ( bassEdge ) {
+         float impulse = pwTurnIsB_ ? PW_HIT_IMPULSE : -PW_HIT_IMPULSE;
+         pwBassFrac_ += impulse;
+         pwPendingRecoveryFrac_ = impulse * PW_RECOVER_FRAC;
+         pwRecoveryDelayRemainingMs_ = PW_RECOVER_DELAY_MS;
+      } else if ( pwPendingRecoveryFrac_ != 0.0f ) {
+         pwRecoveryDelayRemainingMs_ -= dtSec * 1000.0f;
+         if ( pwRecoveryDelayRemainingMs_ <= 0.0f ) {
+            pwBassFrac_ -= pwPendingRecoveryFrac_;
+            pwPendingRecoveryFrac_ = 0.0f;
+         }
+      }
       pwBassFrac_ = constrain( pwBassFrac_, PW_MIN_FRAC, PW_MAX_FRAC );
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) { carpet->ropeLeds[ i ] = pwColorAt( i, Bcolor, Tcolor ); carpet->ropeLeds[ i ].w = 0; }
 
       // MEGABARS: 3 independent pools, each picking its own currently-dark
       // megabars on its OWN band's real hit edge, then fading -- bass
-      // (PW_BASS_PICK, the war's activeColor -- respects whoever's turn it
-      // currently is) + treble (PW_TREBLE_PICK = ceil(bass/2), always
-      // Tcolor) + mid (PW_MID_PICK, always Mcolor/green), per request.
+      // (PW_BASS_PICK, always Bcolor) + treble (PW_TREBLE_PICK =
+      // ceil(bass/2), always Tcolor) + mid (PW_MID_PICK, always Mcolor/
+      // green), per request. BUGFIX ("bass hits respond using treble
+      // color"): the bass pool used to render with activeColor (whichever
+      // color currently has the WAR's turn -- Bcolor or Tcolor, alternating)
+      // instead of a fixed Bcolor, so during T's turn a genuine bass hit
+      // would render identically to a treble hit, indistinguishable from
+      // each other. activeColor stays turn-dependent for the ROPE/CHINA
+      // (that's the actual "war" visual, unchanged) -- only the megabar
+      // flash pool's bass color is now fixed, same as treble/mid always
+      // were, so each pool's color always identifies which band triggered
+      // it, like china's own bass/treble split does.
       // wasLastPicked avoidance is shared across all 3 pools (one combined
       // memory, PW_MAX_PICK slots) so back-to-back picks from DIFFERENT
       // bands still avoid immediately repeating a spot.
@@ -1035,7 +1079,7 @@ class EqualizerShow : public LightShow {
       if ( midEdge ) pwPickAndLight( PW_MID_PICK, PwSrcMid );
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
          pwMegabarHeat_[ m ] = max( 0.0f, pwMegabarHeat_[ m ] - dtSec / 0.4f );
-         CRGB base = ( pwMegabarColorSrc_[ m ] == PwSrcBass ) ? activeColor : ( pwMegabarColorSrc_[ m ] == PwSrcTreble ) ? Tcolor : Mcolor;
+         CRGB base = ( pwMegabarColorSrc_[ m ] == PwSrcBass ) ? Bcolor : ( pwMegabarColorSrc_[ m ] == PwSrcTreble ) ? Tcolor : Mcolor;
          base.nscale8( (uint8_t)( pwMegabarHeat_[ m ] * 255.0f + 0.5f ) );
          carpet->megabarLeds[ m ] = base;
       }
@@ -1075,8 +1119,8 @@ class EqualizerShow : public LightShow {
          return;
       }
 
-      bool isHit = AudioBoard::getHitNonzero( BandBass );
-      int bassHit = AudioBoard::getHitPercent( BandBass );
+      bool isHit = AudioBoard::getBandHitNonzero( BandBass );
+      int bassHit = AudioBoard::getBandHitPercent( BandBass );
 
       if ( isHit ) {
          static const uint32_t SILENCE_RESET_MS = 3000;

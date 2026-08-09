@@ -350,9 +350,9 @@ void printLiveValue( AppMode mode, uint8_t subsetting, float livePercent ) {
       // one-char marker after each: '^' above AudioBoard::PEAK_THRESHOLD (a
       // "hit", same threshold EqualizerShow's strobe triggers on), '_' below
       // the noise floor, '-' in between
-      Serial.print( "Lo:" ); printPad3( AudioBoard::getNormalPercent( BandBass ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getRawPercent( BandBass ) );
-      Serial.print( " Md:" ); printPad3( AudioBoard::getNormalPercent( BandMid ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getRawPercent( BandMid ) );
-      Serial.print( " Hi:" ); printPad3( AudioBoard::getNormalPercent( BandTreble ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getRawPercent( BandTreble ) );
+      Serial.print( "Lo:" ); printPad3( AudioBoard::getBandNormalPercent( BandBass ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getBandRawPercent( BandBass ) );
+      Serial.print( " Md:" ); printPad3( AudioBoard::getBandNormalPercent( BandMid ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getBandRawPercent( BandMid ) );
+      Serial.print( " Hi:" ); printPad3( AudioBoard::getBandNormalPercent( BandTreble ) ); Serial.print( "%" ); printLevelMarker( AudioBoard::getBandRawPercent( BandTreble ) );
       // the 7 raw bins themselves, no label prefix (kept minimal)
       Serial.print( " " );
       for ( int i = 0; i < 7; ++i ) {
@@ -675,9 +675,9 @@ void loop() {
 
          uint8_t fullSpectrumLevel = AudioBoard::getFullSpectrum(
                ( configSubsetting == SubAudioAutoGain ? liveAgcMode : AudioBoard::getAgcMode() ) != AGCoff );
-         carpet->showAudioMeter( (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandTreble ) * 255 / 100 ),
-                                 (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandMid ) * 255 / 100 ),
-                                 (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandBass ) * 255 / 100 ),
+         carpet->showAudioMeter( (uint8_t)( (uint16_t)AudioBoard::getBandNormalPercent( BandTreble ) * 255 / 100 ),
+                                 (uint8_t)( (uint16_t)AudioBoard::getBandNormalPercent( BandMid ) * 255 / 100 ),
+                                 (uint8_t)( (uint16_t)AudioBoard::getBandNormalPercent( BandBass ) * 255 / 100 ),
                                  configSubsetting == SubAudioAutoGain, showNoiseFloor, showThreshold, liveAgcMode, fullSpectrumLevel );
       } else { // ModeConfigPowerTest
          carpet->showPowerTest( liveTestHue, liveTestSat, liveTestBrightness );

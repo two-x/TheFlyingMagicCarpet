@@ -205,12 +205,12 @@ class LighthouseShow : public LightShow {
    }
 
    // Edge-triggered "new hit" detector for VarChinaReact -- deliberately
-   // NOT AudioBoard::getHitPercent() (the usual smoothly-decaying hit
+   // NOT AudioBoard::getBandHitPercent() (the usual smoothly-decaying hit
    // value every other show uses) per explicit request; this just watches
    // the live post-gain level cross up through the same 20% threshold
    // convention used elsewhere in this codebase for edge detection.
    static bool newHitEdge( AudioBand band, uint8_t & prevPct ) {
-      uint8_t pct = AudioBoard::getNormalPercent( band );
+      uint8_t pct = AudioBoard::getBandNormalPercent( band );
       bool edge = pct > 20 && prevPct <= 20;
       prevPct = pct;
       return edge;
@@ -407,8 +407,8 @@ class LighthouseShow : public LightShow {
    Timer strobeTimer_, lastHitTimer_;
    int suppressionPeak_ = 0;
    void updateStrobe_( uint32_t time ) {
-      bool isHit = AudioBoard::getHitNonzero( BandBass );
-      int bassHit = AudioBoard::getHitPercent( BandBass );
+      bool isHit = AudioBoard::getBandHitNonzero( BandBass );
+      int bassHit = AudioBoard::getBandHitPercent( BandBass );
       if ( isHit ) {
          static const uint32_t SILENCE_RESET_MS = 3000;
          bool silenceExpired = !hadHit_ || lastHitTimer_.elapsed( SILENCE_RESET_MS );

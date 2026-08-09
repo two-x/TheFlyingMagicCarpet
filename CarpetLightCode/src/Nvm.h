@@ -57,7 +57,7 @@ static HalFlashStorage flash;
 #else
 static DueFlashStorage flash;
 #endif
-static const uint8_t MAGIC = 0x48; // bump this if State's layout ever changes -- bumped for the new autoPeakEnabled field
+static const uint8_t MAGIC = 0x4D; // bump this if State's layout ever changes -- bumped so peakThresholdPercent's new default (68%) actually takes effect on already-flashed boards
 static const uint8_t MAX_SHOWS = 8; // headroom for future shows, no relayout needed
 
 // all brightness/threshold fields are percentages (0-100), never raw 0-255
@@ -70,9 +70,9 @@ struct State {
    uint8_t headlightBrightnessPercent; // 50-100, per-fixture, default 50 (see MagicCarpet.h)
    uint8_t chinaBrightnessPercent;     // 0-100, default 100 (unrestricted)
    uint8_t noiseFloorPercent;          // 0-100, default 0 -- audio below this is "silence" (see AudioBoard.h)
-   uint8_t peakThresholdPercent;       // 0-100, default 31 (approx. the old hardcoded 80/255) -- audio above
+   uint8_t peakThresholdPercent;       // 0-100, default 68 -- audio above
                                         // this counts as a "hit"/peak (see AudioBoard.h::PEAK_THRESHOLD)
-   uint8_t agcMode;                    // AGCoff/AGCband/AGCfull, default AGCoff -- see AudioBoard.h's AGCMode
+   uint8_t agcMode;                    // AGCoff/AGCband/AGCfull, default AGCband -- see AudioBoard.h's AGCMode
    uint8_t testHue;                    // 0-255, default 0 -- power-saving test color (see CarpetLightLogic.cpp)
    uint8_t testSat;                    // 0-255, default 255
    uint8_t testBrightness;             // 0-255, default 255
@@ -104,8 +104,8 @@ inline void load() {
       state.headlightBrightnessPercent = 50;
       state.chinaBrightnessPercent = 100;
       state.noiseFloorPercent = 0;
-      state.peakThresholdPercent = 31;
-      state.agcMode = AGCoff;
+      state.peakThresholdPercent = 68;
+      state.agcMode = AGCband;
       state.testHue = 0;
       state.testSat = 255;
       state.testBrightness = 255;

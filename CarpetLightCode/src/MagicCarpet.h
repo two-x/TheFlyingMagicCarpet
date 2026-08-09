@@ -612,8 +612,8 @@ class MagicCarpet {
       int peakPos156 = ( (int)AudioBoard::getPeakThresholdRaw() * ( SIZEOF_SMALL_NEO - 1 ) + 127 ) / 255;
 
       if ( simMode ) {
-         uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( BandBass ) * 255 / 100 );
-         uint8_t normalRaw = (uint8_t)( (uint16_t)AudioBoard::getNormalPercent( BandBass ) * 255 / 100 );
+         uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getBandHitPercent( BandBass ) * 255 / 100 );
+         uint8_t normalRaw = (uint8_t)( (uint16_t)AudioBoard::getBandNormalPercent( BandBass ) * 255 / 100 );
          int normalPos = ( (int)normalRaw * ( SIZEOF_SMALL_NEO - 1 ) + 127 ) / 255;
          int hitPos = ( (int)hitRaw * ( SIZEOF_SMALL_NEO - 1 ) + 127 ) / 255;
 
@@ -644,7 +644,7 @@ class MagicCarpet {
          int peakPosSeg = ( (int)AudioBoard::getPeakThresholdRaw() * ( segLen - 1 ) + 127 ) / 255;
          int decayDotPosSeg = (int)( rangeFrac * ( segLen - 1 ) + 0.5f );
          for ( int seg = 0; seg < 3; ++seg ) {
-            uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( segBand[ seg ] ) * 255 / 100 );
+            uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getBandHitPercent( segBand[ seg ] ) * 255 / 100 );
             int hitPos = ( (int)hitRaw * ( segLen - 1 ) + 127 ) / 255;
             renderVuBar( seg * segLen, segLen, hitPos, segColor[ seg ], peakPosSeg, decayDotPosSeg );
          }
@@ -652,7 +652,7 @@ class MagicCarpet {
          // each showing that band's own hit value
          for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
             int which = m % 3;
-            uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( segBand[ which ] ) * 255 / 100 );
+            uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getBandHitPercent( segBand[ which ] ) * 255 / 100 );
             CRGB c = segColor[ which ];
             c.nscale8( hitRaw );
             megabarLeds[ m ] = c;
@@ -693,7 +693,7 @@ class MagicCarpet {
       static const uint8_t MIN_BRIGHTNESS = 38; // 15% of 255
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
          int which = m % 3;
-         uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getHitPercent( segBand[ which ] ) * 255 / 100 );
+         uint8_t hitRaw = (uint8_t)( (uint16_t)AudioBoard::getBandHitPercent( segBand[ which ] ) * 255 / 100 );
          CRGB c = segColor[ which ];
          c.nscale8( max( hitRaw, MIN_BRIGHTNESS ) );
          megabarLeds[ m ] = c;

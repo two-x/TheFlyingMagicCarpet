@@ -271,7 +271,7 @@ class SpeedStripesShow : public LightShow {
    float zebraChinaBrightnessFraction() {
       if ( !AudioBoard::silent_ ) zebraSilenceTimer_.reset();
       if ( zebraSilenceTimer_.elapsed() >= 10000 ) return 1.0f;
-      float bassFrac = AudioBoard::getHitPercent( BandBass ) / 100.0f;
+      float bassFrac = AudioBoard::getBandHitPercent( BandBass ) / 100.0f;
       return max( ZEBRA_CHINA_REST_FRACTION, bassFrac );
    }
    void renderZebraSide( int backCornerIdx, int frontCornerIdx, float satFraction ) {
