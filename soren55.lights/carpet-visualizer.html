@@ -27,16 +27,30 @@ html, body {
   padding: 0;
   overflow-x: hidden;
 }
+/* Whole-page grid (not just flex-column) so the sidebar can span BOTH the
+   header's row and the stage's row -- per request, the sidebar reaches the
+   very top of the browser area instead of starting below the header/title
+   bar. header sits in column 1 only (above the stage); .deck's own two
+   children (stage-wrap, sidebar panel) become direct grid items of body
+   via display:contents below, rather than .deck running its own nested
+   grid, so they can each be placed independently into this outer grid. */
 body {
   padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: minmax(480px, 1fr) 230px;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
   min-height: 100vh;
+}
+@media (max-width: 900px) {
+  body { grid-template-columns: 1fr; }
+  .panel:not(.stage-wrap) { grid-column: 1 !important; grid-row: auto !important; height: auto !important; }
 }
 
 /* ---------- header ---------- */
 header {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   align-items: baseline;
   gap: 12px;
@@ -59,12 +73,6 @@ header h1 {
   margin: 0;
   color: var(--amber);
 }
-header .sub {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-faint);
-  letter-spacing: 0.04em;
-}
 .build-info {
   font-family: var(--mono);
   font-size: 9px;
@@ -75,19 +83,62 @@ header .sub {
   text-overflow: ellipsis;
 }
 
+/* ---------- settings menu (header) ---------- */
+.settings-menu-wrap { position: relative; }
+#settingsBtn {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.settings-menu[hidden] { display: none; } /* explicit -- the display:flex two rules down otherwise outranks the [hidden] UA-stylesheet default, since author CSS beats it */
+.settings-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.settings-menu__section { display: flex; flex-direction: column; gap: 4px; }
+.settings-menu__section + .settings-menu__section { border-top: 1px solid var(--line-soft); padding-top: 6px; }
+.settings-menu__heading {
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.settings-menu__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 /* ---------- layout ---------- */
 /* Consolidated to one narrow control column so the stage gets almost all
    the width -- needed once the flood ground-coloration model (which
    reaches well past the car) is in view, per request. Borders/margins
    trimmed throughout for the same reason ("I hate borders and margins"). */
 .deck {
-  display: grid;
-  grid-template-columns: minmax(480px, 1fr) 230px;
-  gap: 8px;
-  align-items: start;
+  display: contents;
 }
-@media (max-width: 900px) {
-  .deck { grid-template-columns: 1fr; }
+.stage-wrap {
+  grid-column: 1;
+  grid-row: 2;
+}
+.panel:not(.stage-wrap) {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  height: 100%;
 }
 
 .panel {
@@ -198,6 +249,25 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
   border: 2px solid #0d0c10;
 }
+/* Peak thresh's auto-peak preview dot -- a small marker riding along the
+   same track, showing where AudioBoard::getAutoScaledPeakThresholdPercent()
+   currently sits (muted amber, vs. the slider thumb's own full-saturation
+   amber for the plain setting), positioned in tick() to approximate a
+   native range thumb's own inset math (6.5px = half the 13px thumb). */
+.slider-wrap { position: relative; }
+.auto-peak-dot {
+  position: absolute;
+  top: 50%;
+  left: 6.5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--amber) 55%, #888 45%);
+  border: 1px solid #0d0c10;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 2;
+}
 
 select, button, input[type="text"], input[type="file"]::file-selector-button {
   font-family: var(--sans);
@@ -228,11 +298,12 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .btnrow { display: flex; flex-wrap: wrap; gap: 4px; }
 .btnrow button { flex: 1 1 auto; }
 /* AGC's label is the 3-state "AGCoff"/"AGCband"/"AGCfull" (see
-   updateAgcButtonUI()) -- noticeably longer than Mute/Delay's own fixed
-   labels, so it gets a bigger flex share and they get tighter padding,
-   otherwise AGCband/AGCfull wrap or force the whole row to grow. */
-.btnrow #btnMute, .btnrow #btnDelay { flex-grow: 0.7; padding-left: 6px; padding-right: 6px; }
+   updateAgcButtonUI()) -- noticeably longer than Mute's own fixed label,
+   so it gets a bigger flex share and Mute gets tighter padding, otherwise
+   AGCband/AGCfull wrap or force the whole row to grow. */
+.btnrow #btnMute { flex-grow: 0.7; padding-left: 6px; padding-right: 6px; }
 .btnrow #btnAgc { flex-grow: 1.6; }
+.btnrow #btnAutoPeak { flex-grow: 1; }
 /* Fixed 2x2 grid (not flex-wrap) so the variation row's overall height
    never depends on how many variations the current show has (0-4 across
    the different shows) -- min-height reserves space for 2 full rows even
@@ -511,7 +582,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
      letterboxes any leftover space rather than needlessly shrinking the
      render, so there's no more tension between "big enough" and "never
      overflows the viewport." */
-  height: calc(100vh - 130px); /* header + footer + body padding/gaps, see .deck > .panel:not(.stage-wrap) below for why this number matters beyond just the stage */
+  height: 100%; /* fills its own grid row (body's grid-template-rows: auto 1fr) -- the 1fr row already claims exactly the remaining viewport height below the header */
 }
 /* BUGFIX (continued): the stage canvas being properly height-bounded
    wasn't actually enough on its own -- the SIDE CONTROL PANEL (all the
@@ -527,8 +598,15 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
    forcing the other's container to grow.
 */
 .deck > .panel:not(.stage-wrap) {
-  height: calc(100vh - 130px);
   overflow-y: auto;
+  /* Scrollbar hidden per request (mouse wheel / shift+wheel still scrolls
+     it fine) -- scrolling itself is untouched, only the visible track/thumb
+     chrome goes away. */
+  scrollbar-width: none;      /* Firefox */
+  -ms-overflow-style: none;   /* legacy Edge/IE */
+}
+.deck > .panel:not(.stage-wrap)::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/new Edge */
 }
 #stageCanvas {
   width: 100%;
@@ -546,7 +624,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .meter-stack {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   padding: 4px 6px;
   border-radius: 4px;
   background: var(--panel-2);
@@ -562,12 +640,35 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   text-transform: uppercase;
   color: var(--text-faint);
 }
-.meter-stack .bar { flex: 1; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
-.meter-stack .bar > i { display: block; height: 100%; width: 0%; border-radius: 2px; }
+.meter-stack .bar { flex: 1; height: 9px; border-radius: 2px; background: var(--line); overflow: hidden; position: relative; }
+.meter-stack .bar > i { display: block; height: 100%; width: 0%; border-radius: 2px; position: absolute; left: 0; top: 0; }
 .meter-stack .bass i { background: var(--red); }
 .meter-stack .mid i { background: var(--green); }
 .meter-stack .treble i { background: var(--blue); }
 .meter-stack .full i { background: var(--amber); }
+/* Raw (unfiltered) level, superimposed under the filtered-level bar (see
+   DOM order -- .raw comes first, so the filtered bar paints over it;
+   only visible where raw's own width extends past the filtered bar's) --
+   35% desaturated (blended 35% toward neutral gray) version of that row's
+   own color, per request. */
+.meter-stack .bass i.raw { background: color-mix(in srgb, var(--red) 65%, #888 35%); }
+.meter-stack .mid i.raw { background: color-mix(in srgb, var(--green) 65%, #888 35%); }
+.meter-stack .treble i.raw { background: color-mix(in srgb, var(--blue) 65%, #888 35%); }
+.meter-stack .full i.raw { background: color-mix(in srgb, var(--amber) 65%, #888 35%); }
+/* Noise floor / peak threshold reference lines -- 1px vertical marks
+   overlaid on every band's bar, positioned every frame from the SAME
+   AudioBoard.noiseFloorPct/peakThresholdPct getters the sliders use (real
+   FW values, not a separate JS-side copy), so the bar's live fill can
+   always be visually compared against exactly where the FW's own
+   thresholds currently sit. */
+.meter-stack .bar > .mark { position: absolute; top: 0; bottom: 0; width: 2px; pointer-events: none; }
+.meter-stack .bar > .mark-noise { background: #999; } /* medium gray, per request -- distinct from --text-faint (too dark/muted to read clearly here) */
+.meter-stack .bar > .mark-peak { background: #fff; }
+/* auto-peak's live scaled threshold (see AudioBoard::getAutoScaledPeakThresholdPercent())
+   -- a muted version of mark-peak's own solid white, per request ("use
+   colors for full-range peak thresh setting and auto scaled value where
+   the latter is a more muted version of the former") */
+.meter-stack .bar > .mark-autopeak { background: rgba(255, 255, 255, 0.45); }
 .expand-source-btn {
   width: 100%;
   margin-top: 6px;
@@ -614,18 +715,34 @@ footer {
 <body>
 
 <header>
-  <h1>&#9679; Flying Magic Carpet</h1>
-  <span class="sub">light console &mdash; audio-reactive preview</span>
-  <select id="orientationSelect" title="Viewport orientation">
-    <option value="landscape" selected>Landscape</option>
-    <option value="portrait">Portrait</option>
-  </select>
+  <h1>Magic Carpet Light Visualizer</h1>
+  <div class="settings-menu-wrap">
+    <button id="settingsBtn" title="Settings" aria-haspopup="true" aria-expanded="false">&#9881; Settings</button>
+    <div class="settings-menu" id="settingsMenu" hidden>
+      <div class="settings-menu__section">
+        <div class="settings-menu__heading">Layout</div>
+        <label class="settings-menu__row">
+          <span>Orientation</span>
+          <select id="orientationSelect" title="Viewport orientation">
+            <option value="landscape" selected>Landscape</option>
+            <option value="portrait">Portrait</option>
+          </select>
+        </label>
+      </div>
+      <div class="settings-menu__section">
+        <div class="settings-menu__heading">Visibility</div>
+        <label class="settings-menu__row"><span>Input cap setting</span><input type="checkbox" id="showInputCapCheck" /></label>
+        <label class="settings-menu__row"><span>Button descriptions</span><input type="checkbox" id="showButtonDescCheck" checked /></label>
+        <label class="settings-menu__row"><span>Colorize lamps</span><input type="checkbox" id="fixtureDotsCheck" checked /></label>
+      </div>
+    </div>
+  </div>
   <!-- Replaced with the real branch/short-SHA/push-time by
        .github/workflows/deploy-visualizer.yml at deploy time -- stays as
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">soren55.lights @ ba5d6ef - 2026-08-08 20:12 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">soren55.lights @ 94dfb7b - 2026-08-09 09:18 UTC</span>
 </header>
 
 <div class="deck">
@@ -696,6 +813,7 @@ footer {
           <option value="cfg_predict">Hit prediction</option>
           <option value="cfg_foresight">Foresight adjust</option>
           <option value="cfg_reactivity">Sound reactivity toggle</option>
+          <option value="cfg_autopeak">Auto-peak toggle</option>
         </optgroup>
       </select>
       <div class="btnrow" id="variationRow"></div>
@@ -712,7 +830,6 @@ footer {
         <span class="val" id="zoomVal">50ft</span>
         <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Scroll/pinch on the stage, or the , and . keys, to zoom (20-100ft).</span></span>
       </div>
-      <div class="row"><label>Colorize lamps</label><input type="checkbox" id="fixtureDotsCheck" checked /></div>
     </div>
 
     <h2>Quick Adjust <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">Direct override, always live — a second, independent path to the same values config mode adjusts.</span></span></h2>
@@ -739,15 +856,18 @@ footer {
       <div class="row"><label>Phone volume</label><span class="val" id="volumeVal">60%</span></div>
       <input type="range" id="volumeSlider" min="0" max="100" step="1" value="60" />
       <div class="row"><label>Peak thresh</label><span class="val" id="peakThreshVal">78%</span></div>
-      <input type="range" id="peakThreshSlider" min="0" max="100" step="1" value="78" />
+      <div class="slider-wrap">
+        <input type="range" id="peakThreshSlider" min="0" max="100" step="1" value="78" />
+        <span class="auto-peak-dot" id="autoPeakDot" title="auto-peak scaled value"></span>
+      </div>
       <div class="row"><label>Noise floor</label><span class="val" id="noiseFloorVal">8%</span></div>
       <input type="range" id="noiseFloorSlider" min="0" max="100" step="1" value="8" />
     </div>
     <div class="group">
       <div class="btnrow">
         <button id="btnMute" class="active" disabled>Mute</button>
-        <button id="btnDelay" disabled>Delay</button>
         <button id="btnAgc">AGC</button>
+        <button id="btnAutoPeak">AutoPk</button>
       </div>
     </div>
     <div class="group">
@@ -774,19 +894,40 @@ footer {
       </div>
       <div class="row"><label>Source level</label><span class="val" id="sourceLevelVal">100%</span></div>
       <input type="range" id="sourceLevelSlider" min="50" max="150" step="1" value="100" />
+      <!-- Universal now (every source, not just Beats) -- amplified noise
+           sits upstream of Phone volume (scaled with it), base noise
+           downstream (a fixed floor independent of it). -->
+      <div class="row"><label>Amplified noise</label><span class="val" id="ampNoiseVal">1%</span></div>
+      <input type="range" id="ampNoiseSlider" min="0" max="5" step="0.1" value="1" />
+      <div class="row"><label>Base noise</label><span class="val" id="baseNoiseVal">1%</span></div>
+      <input type="range" id="baseNoiseSlider" min="0" max="5" step="0.1" value="1" />
+      <!-- Input coupling capacitor (X nF, feeding the simulated chip's
+           1M-ohm input impedance) -- just a value entry. Hidden by default
+           (per request) -- toggled via Settings > Visibility > "Input cap
+           setting". -->
+      <div id="inputCapGroup" style="display:none;">
+        <div class="row"><label>Input cap</label><span class="val" id="inputCapVal">10nF</span></div>
+        <input type="number" id="inputCapSlider" min="1" max="1000" step="1" value="10" />
+      </div>
       <input type="file" id="fileInput" accept="audio/*" style="display:none;" />
       <div class="row">
         <label id="audioStatus">idle</label>
         <span class="tt"><span class="tt-trigger">?</span><span class="tt-bubble">"PC" opens the browser's screen/window/tab-share picker — "share audio" only captures audio from WHATEVER you pick there, not your whole PC by default. To hear Spotify or another app, pick "Entire Screen" (or, on Windows, that app's own "Window") in the picker, NOT "Chrome Tab" — a Chrome Tab share only captures that one tab's own audio, which is silent if the music is playing somewhere else (a common mix-up: picking the tab this page is running in, or another browser tab, captures nothing useful). Chrome/Edge only. If Mic errors instead of showing a permission prompt, this page is likely in an embedded preview frame that blocks mic access — open the artifact in its own browser tab and try again.</span></span>
         <span class="chip" id="silentChip">&mdash;</span>
       </div>
+      <!-- MSGEQ7 simulation structural validation (e.g. "RESET fired more
+           than once") -- see msgeq7.errorMsg / processPinLog(). Hidden
+           unless the FW's real STROBE/RESET writes actually violate it. -->
+      <div class="row" id="msgeq7ErrorRow" style="display:none;">
+        <span class="chip silent" id="msgeq7ErrorChip" style="width:100%; white-space:normal;"></span>
+      </div>
     </div>
     <div class="group">
       <div class="meter-stack" id="meterStack">
-        <div class="mrow bass"><span class="lbl">Bass</span><div class="bar"><i id="barBassHit"></i></div></div>
-        <div class="mrow mid"><span class="lbl">Mid</span><div class="bar"><i id="barMidHit"></i></div></div>
-        <div class="mrow treble"><span class="lbl">Treb</span><div class="bar"><i id="barTrebleHit"></i></div></div>
-        <div class="mrow full"><span class="lbl">Full</span><div class="bar"><i id="barFullHit"></i></div></div>
+        <div class="mrow bass"><span class="lbl">Bass</span><div class="bar"><i class="raw" id="barBassRaw"></i><i id="barBassHit"></i><span class="mark mark-noise" id="markBassNoise"></span><span class="mark mark-peak" id="markBassPeak"></span><span class="mark mark-autopeak" id="markBassAutoPeak"></span></div></div>
+        <div class="mrow mid"><span class="lbl">Mid</span><div class="bar"><i class="raw" id="barMidRaw"></i><i id="barMidHit"></i><span class="mark mark-noise" id="markMidNoise"></span><span class="mark mark-peak" id="markMidPeak"></span><span class="mark mark-autopeak" id="markMidAutoPeak"></span></div></div>
+        <div class="mrow treble"><span class="lbl">Treb</span><div class="bar"><i class="raw" id="barTrebleRaw"></i><i id="barTrebleHit"></i><span class="mark mark-noise" id="markTrebleNoise"></span><span class="mark mark-peak" id="markTreblePeak"></span><span class="mark mark-autopeak" id="markTrebleAutoPeak"></span></div></div>
+        <div class="mrow full"><span class="lbl">Full</span><div class="bar"><i class="raw" id="barFullRaw"></i><i id="barFullHit"></i><span class="mark mark-noise" id="markFullNoise"></span><span class="mark mark-peak" id="markFullPeak"></span><span class="mark mark-autopeak" id="markFullAutoPeak"></span></div></div>
       </div>
       <button id="expandSourceBtn" class="expand-source-btn">Expand source controls &#9662;</button>
       <div class="tone-expand" id="toneExpand">
@@ -799,10 +940,6 @@ footer {
           <option value="chris">Chris (bass music)</option>
           <option value="classic">Classic</option>
         </select>
-        <div class="row"><label>Base noise</label><span class="val" id="toneBaseNoiseVal">1%</span></div>
-        <input type="range" id="toneBaseNoiseSlider" min="0" max="5" step="0.1" value="1" />
-        <div class="row"><label>Amplified noise</label><span class="val" id="toneAmpNoiseVal">1%</span></div>
-        <input type="range" id="toneAmpNoiseSlider" min="0" max="5" step="0.1" value="1" />
       </div>
     </div>
   </div>
@@ -1361,6 +1498,7 @@ CarpetFirmware().then((M) => {
   wasmAdcBinsPtr = M.ccall('web_getAdcBinsBufferPtr', 'number', [], []);
   wasmModule = M;
   wasmReady = true;
+  processPinLog(); // drains setup()'s own one-time RESET+STROBE sequence (see the MSGEQ7 sim's own comments) before the first poll() ever runs
   // The audio config sliders/AGC button/prediction-style select were drawn
   // with hardcoded placeholder DOM values before the real firmware (with
   // its own Nvm-persisted settings) finished loading -- resync every one
@@ -1401,17 +1539,22 @@ const WASM_BAND = [ 0, 2, 3, 4 ];
 const PREDICT_OFF = 0, PREDICT_EXP = 1, PREDICT_GUN = 2, PREDICT_DRUM = 3;
 
 const AudioBoard = {
-  bins: [0,0,0,0,0,0,0], // 7 raw 0-255 values, MSGEQ7-analog order -- the simulated INPUT signal itself, not FW-computed output
+  bins: [0,0,0,0,0,0,0], // 7 raw 0-255 values, MSGEQ7-analog order -- display-only, derived from bandPeakV_ (the chip sim's own state), NOT the actual injected ADC codes (see computeInjectionBins(), a different domain for a different purpose)
 
-  // main per-frame update -- call with fresh 7 MSGEQ7-analog bins (0-255).
-  // Scales to the real ADC's 0-1023 domain (see AudioBoard.h's scale()) and
+  // main per-frame update. Drains the FW's real STROBE/RESET pin log from
+  // the PREVIOUS web_tick() (advancing the simulated chip's bin pointer +
+  // applying the datasheet's 10%-per-read decay -- see processPinLog()),
+  // computes this tick's injection from the MSGEQ7 simulation's own
+  // continuously-running peak detectors (see computeInjectionBins()), then
   // hands off to the real firmware -- pollFrequencies()/AGC/hit-decay all
   // run for real, inside web_tick()'s loop() call.
-  poll(nowMs, freshBins) {
-    this.bins = freshBins;
+  poll(nowMs) {
     if (!wasmReady) return;
+    processPinLog();
+    this.bins = bandPeakV_.map((v) => Math.round(Math.min(1, v) * 255));
+    const injected = computeInjectionBins();
     for (let i = 0; i < 7; i++) {
-      wasmModule.setValue(wasmAdcBinsPtr + i * 4, Math.round(freshBins[i] * 1023 / 255), 'i32');
+      wasmModule.setValue(wasmAdcBinsPtr + i * 4, injected[i], 'i32');
     }
     wasmModule.ccall('web_injectAdcBins', null, [], []);
     wasmModule.ccall('web_tick', null, ['number'], [Math.round(nowMs)]);
@@ -1431,6 +1574,13 @@ const AudioBoard = {
 
   get peakThresholdPct() { return wasmReady ? wasmModule.ccall('web_audioGetPeakThresholdPercent', 'number', [], []) : 78; },
   set peakThresholdPct(v) { if (wasmReady) wasmModule.ccall('web_audioSetPeakThresholdPercent', null, ['number'], [v]); },
+
+  get autoPeakEnabled() { return wasmReady ? wasmModule.ccall('web_audioGetAutoPeakEnabled', 'number', [], []) !== 0 : false; },
+  set autoPeakEnabled(v) { if (wasmReady) wasmModule.ccall('web_audioSetAutoPeakEnabled', null, ['number'], [v ? 1 : 0]); },
+  // live preview of what auto-peak's scaled threshold currently is -- kept
+  // updating regardless of autoPeakEnabled so the UI can show it even while
+  // auto-peak itself is off (see AudioBoard::getAutoScaledPeakThresholdPercent()).
+  get autoScaledPeakThresholdPct() { return wasmReady ? wasmModule.ccall('web_audioGetAutoScaledPeakThresholdPercent', 'number', [], []) : 78; },
 
   get hitDecayMs() { return wasmReady ? wasmModule.ccall('web_audioGetHitDecayMs', 'number', [], []) : 300; },
   set hitDecayMs(v) { if (wasmReady) wasmModule.ccall('web_audioSetHitDecayMs', null, ['number'], [v]); },
@@ -1453,61 +1603,393 @@ const AudioBoard = {
    pseudo-MSGEQ7 bins via a Web Audio FFT sampled near each datasheet
    center frequency (63/160/400/1000/2500/6250/16000 Hz).
    ===================================================================== */
-const BIN_FREQS = [63, 160, 400, 1000, 2500, 6250, 16000];
-let audioCtx = null, analyser = null, sourceNode = null, fftData = null;
-let toneTimer = null;
-let outputDelay = null, outputGain = null; // speaker-bound chain, app-generated sources only
-let sourceGain = null;  // Phone-volume-scaled gain EVERY source (mic/system/file/tone) routes through
-let sourceLevelGain = null; // "Source level" trim (50-150%, default 100%) -- see applySourceLevelUI/ensureSourceLevelGain. Sits UPSTREAM of sourceGain (Phone volume): raw source -> sourceLevelGain -> sourceGain -> analyser/speakerSum. Distinct concept from Phone volume -- this is a per-source input trim (like a mixer channel's own gain knob), not an overall "how hot is this recording" control.
-let noiseNode = null;   // persistent noise generator -- created once, keeps running across source switches/None
-let noiseGain = null;   // Phone-volume-scaled noise gain -- same slider as sourceGain, per request
-let speakerSum = null;  // source+noise combined into ONE signal, BEFORE mute/outputGain touch it (see applyVolumeUI)
+/* =====================================================================
+   AUDIO INPUT -- physically-modeled pipeline, per the project's own
+   architecture rule (visualizer may simulate external hardware, never FW
+   logic). Signal flow (see each function's own comment for the exact
+   step it implements):
+
+     source -> mono -> source-level -> +ampNoise -> phone-volume
+             -> +baseNoise -> split into A and V
+     A (audible):  -> foresight delay -> mute -> real speakers
+     V (visible):  -> DC-block/1M-ohm input filter -> simulated MSGEQ7
+                      chip (7-band filter bank + real STROBE/RESET-driven
+                      peak-detector-with-decay) -> voltage divider
+                      -> Due ADC quantize -> injected into the REAL
+                      firmware's own analogRead() calls.
+
+   The MSGEQ7 model and the input filter are legitimate visualizer code
+   (external hardware with no FW equivalent), but are driven by the FW's
+   own real STROBE/RESET pin writes and its own real ADC_RESOLUTION_BITS
+   constant (both read via the WASM bridge) -- never an independent guess.
+   ===================================================================== */
+let audioCtx = null, sourceNode = null, toneTimer = null;
+let audioGraphReady = false; // true once ensureAudioGraph() has built the shared chain (idempotent, mirrors the old `analyser` truthiness check)
+let monoGain = null;         // step 2: channelCount=1 + 'discrete' interpretation picks channel 0 only, no averaging
+let sourceLevelGain = null;  // step 3: "Source level" slider (50-150%)
+let ampNoiseGen = null, ampNoiseSum = null; // step 4: noise added BEFORE phone-volume, so it's scaled by it like the source itself
+let sourceGain = null;       // step 5: "Phone volume" slider
+let baseNoiseGen = null, baseNoiseSum = null; // step 6: noise added AFTER phone-volume, NOT scaled by it -- checkpoint: "phone's OS output" (baseNoiseSum's output)
+let foresightDelay = null, muteGain = null, legGain = null; // A path (8A/9A): FIFO delay sized to Foresight, then mute, then the Mic/System on/off leg gate
+let dcBlockFilter = null, dcBlockNf = -1; // V path (8V): recreated whenever the X-nF UI value changes, since IIRFilterNode coefficients are fixed at creation
+let vBandNodes = null;   // V path (9V) filter-bank outputs, one BiquadFilterNode chain per MSGEQ7 bin
 let currentSourceIsAppGenerated = false; // File/Tone = true (we own the signal, can delay/mute its SPEAKER leg); Mic/System = false
 
-// Speaker output chain: speakerSum -> outputDelay -> outputGain -> destination.
-// Kept SEPARATE from the ->analyser connections below (analyser always sees
-// the real-time, undelayed, un-muted signal) so delaying/muting what you
-// HEAR never affects the show's actual timing/reactivity -- only this
-// preview path.
-function ensureOutputChain(ctx) {
-  if (!outputDelay) {
-    outputDelay = ctx.createDelay(1.0); // max 1000ms, matches foresight's own 0-1000ms range
-    outputGain = ctx.createGain();
-    ensureSpeakerSum(ctx).connect(outputDelay);
-    outputDelay.connect(outputGain);
-    outputGain.connect(ctx.destination);
-    applyVolumeUI();
-  }
-  return outputDelay;
+// MSGEQ7 datasheet-derived bin centers + log-midpoint cutoffs between them
+// (step 9V-a) -- shared by both filter-bank instances (V-path chip sim and
+// A-path VU meter) so "same algorithm" actually means the same code, not a
+// second hand-copied version.
+const MSGEQ7_BIN_HZ = [63, 160, 400, 1000, 2500, 6250, 16000];
+const MSGEQ7_CUTOFF_HZ = MSGEQ7_BIN_HZ.slice(0, 6).map((f, i) => Math.sqrt(f * MSGEQ7_BIN_HZ[i + 1])); // geometric mean = log-scale midpoint
+// step 9V-b: band i is bandpassed between CUTOFF[i-1] and CUTOFF[i] --
+// bin0 is lowpass-only (no lower cutoff), bin6 is highpass-only (no upper).
+function createMsgeq7FilterBank(ctx, input) {
+  return MSGEQ7_BIN_HZ.map((_, i) => {
+    let node = input;
+    if (i > 0) {
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = MSGEQ7_CUTOFF_HZ[i - 1];
+      node.connect(hp); node = hp;
+    }
+    if (i < 6) {
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = MSGEQ7_CUTOFF_HZ[i];
+      node.connect(lp); node = lp;
+    }
+    return node;
+  });
 }
-// BUGFIX: Phone volume used to only reach outputGain (what you HEAR) for
-// File/Tone -- the analyser (what the light code reacts to) was wired
-// straight to the source for Mic/System, completely bypassing volume, and
-// the noise floor ignored volume entirely for every source. sourceGain is
-// now the ONE gain node every source (mic/system/file/tone) routes through
-// on its way to the analyser, and noiseGain applies that same slider to
-// the noise floor too -- per request, Phone volume now uniformly scales
-// what the lights see for all 4 sources AND the noise floor together, so
-// it doubles as an overall "how hot is this recording" level control.
-function ensureSourceGain(ctx) {
-  if (!sourceGain) { sourceGain = ctx.createGain(); applyVolumeUI(); }
-  return sourceGain;
+
+// step 8V: DC-blocking input filter -- an X nF series capacitor feeding the
+// chip's 1M-ohm input impedance is a real single-pole RC highpass, exactly
+// representable (not just approximated) as a 1st-order IIR filter via the
+// standard bilinear-transformed coefficients -- more faithful to "simulate
+// the HW input filter circuitry" than a 2nd-order BiquadFilterNode would be.
+function inputCapNf() {
+  const el = document.getElementById('inputCapSlider');
+  const nf = el ? +el.value : 10;
+  return nf > 0 ? nf : 10;
 }
-// "Source level" (50-150%, default 100%) -- every source connects itself
-// HERE now (not directly to sourceGain), so both trims stack: raw source ->
-// sourceLevelGain -> sourceGain (Phone volume) -> analyser/speakerSum.
-function ensureSourceLevelGain(ctx) {
-  if (!sourceLevelGain) {
-    sourceLevelGain = ctx.createGain();
-    sourceLevelGain.connect(ensureSourceGain(ctx));
-    applySourceLevelUI();
+function rebuildDcBlock(ctx) {
+  const nf = inputCapNf();
+  if (dcBlockFilter && nf === dcBlockNf) return dcBlockFilter;
+  const R = 1e6, C = nf * 1e-9;
+  const dt = 1 / ctx.sampleRate;
+  const alpha = (R * C) / (R * C + dt);
+  const newFilter = ctx.createIIRFilter([alpha, -alpha], [1, -alpha]);
+  if (dcBlockFilter) {
+    try { baseNoiseSum.disconnect(dcBlockFilter); } catch (e) {}
+    try { dcBlockFilter.disconnect(); } catch (e) {}
   }
-  return sourceLevelGain;
+  baseNoiseSum.connect(newFilter);
+  dcBlockFilter = newFilter; dcBlockNf = nf;
+  return dcBlockFilter; // caller (rewireVPath) connects this into a fresh filter bank
+}
+function applyInputCapUI() {
+  document.getElementById('inputCapVal').textContent = inputCapNf() + 'nF';
+  if (audioGraphReady) rewireVPath();
+}
+// V-path bandpass filter bank needs a fresh instance whenever the DC-block
+// filter is rebuilt (its output node changed) -- cheap (7 small filters),
+// rebuilt on the rare "user tweaked the input cap value" edit rather than
+// every frame.
+function rewireVPath() {
+  const ctx = audioCtx;
+  rebuildDcBlock(ctx);
+  vBandNodes = createMsgeq7FilterBank(ctx, dcBlockFilter);
+  connectVPeakTrackers(ctx);
+}
+
+// step 4/6: white noise generators -- both pk-pk fractions of full scale.
+// ampNoise sits upstream of Phone volume (scaled by it, like content baked
+// into the recording); baseNoise sits downstream (a fixed self-noise floor
+// independent of playback level, like a mic preamp's own noise).
+let toneSettings = { pattern: 'boombap' };
+let ampNoisePct = 1, baseNoisePct = 1; // 0-5%, UI-bound below
+function makeNoiseGen(ctx, levelGetter) {
+  const node = ctx.createScriptProcessor ? ctx.createScriptProcessor(2048, 1, 1) : null;
+  if (node) node.onaudioprocess = (e) => {
+    const out = e.outputBuffer.getChannelData(0);
+    const lvl = levelGetter() / 100;
+    for (let i = 0; i < out.length; i++) out[i] = (Math.random() * 2 - 1) * lvl;
+  };
+  return node;
+}
+
+// step 8A/9A: FIFO delay sized to Foresight, then mute, feeding real
+// speakers -- Foresight is deliberately the ONE control that writes into
+// both the real FW (AudioBoard::audioForesightMs_, via AudioBoard's own
+// setter -- drives the FW's own hit-prediction/lookahead math) AND this
+// local delay time, since the two are meant to cancel out: V is injected
+// into the FW in real time (undelayed), while A reaches your ears exactly
+// audioForesightMs LATER, so the lights you see and the sound you hear
+// line up exactly as they always did -- the one audible side effect is
+// silence for the first audioForesightMs of playback while the FIFO
+// fills. No other control should ever need to touch both sides like this.
+function updateOutputDelayTime() {
+  if (!foresightDelay) return;
+  foresightDelay.delayTime.value = Math.min(1.0, AudioBoard.audioForesightMs / 1000);
+}
+function applyVolumeUI() {
+  const volSlider = document.getElementById('volumeSlider');
+  const vol = +volSlider.value / 100;
+  document.getElementById('volumeVal').textContent = volSlider.value + '%';
+  const muted = document.getElementById('btnMute').classList.contains('active');
+  if (sourceGain) sourceGain.gain.value = vol;
+  if (muteGain) muteGain.gain.value = muted ? 0 : 1;
 }
 function applySourceLevelUI() {
   const slider = document.getElementById('sourceLevelSlider');
   document.getElementById('sourceLevelVal').textContent = slider.value + '%';
   if (sourceLevelGain) sourceLevelGain.gain.value = +slider.value / 100;
+}
+function applyAmpNoiseUI() {
+  const slider = document.getElementById('ampNoiseSlider');
+  ampNoisePct = +slider.value;
+  document.getElementById('ampNoiseVal').textContent = ampNoisePct + '%';
+}
+function applyBaseNoiseUI() {
+  const slider = document.getElementById('baseNoiseSlider');
+  baseNoisePct = +slider.value;
+  document.getElementById('baseNoiseVal').textContent = baseNoisePct + '%';
+}
+// External sources (Mic/System) can't be delayed or muted -- we don't own
+// that audio, it's already reaching the speakers on its own via the OS, so
+// there's no speaker-bound signal of ours to delay or mute; Foresight
+// still applies to the V-path/FW side regardless (see updateOutputDelayTime's
+// own comment), it just has no matching audible delay to "cancel" against.
+function setAppGeneratedSource(isAppGenerated) {
+  currentSourceIsAppGenerated = isAppGenerated;
+  document.getElementById('btnMute').disabled = !isAppGenerated;
+  if (legGain) legGain.gain.value = isAppGenerated ? 1 : 0;
+  updateOutputDelayTime();
+}
+
+function ensureCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {}); // no-op if the browser's autoplay policy hasn't unlocked it yet (no real gesture so far) -- see unlockAudioOnFirstGesture below for what actually clears that
+  return audioCtx;
+}
+
+// --- V-path: MSGEQ7 chip simulation (step 9V) ------------------------
+// Each band's continuously-running peak detector (bandPeakV_) only ever
+// GROWS on its own (real chip peak detectors don't self-decay between
+// reads) -- decay happens exclusively in processPinLog(), 10% per real
+// observed read, straight from the datasheet ("The multiplexor read rate
+// also controls the decay time (10% decay per read)").
+let bandPeakV_ = [0, 0, 0, 0, 0, 0, 0];
+function connectVPeakTrackers(ctx) {
+  const dummy = ctx.createGain(); dummy.gain.value = 0; dummy.connect(ctx.destination); // ScriptProcessors only fire onaudioprocess while connected to a live destination graph
+  vBandNodes.forEach((node, i) => {
+    const sp = ctx.createScriptProcessor ? ctx.createScriptProcessor(256, 1, 1) : null;
+    if (!sp) return;
+    sp.onaudioprocess = (e) => {
+      const buf = e.inputBuffer.getChannelData(0);
+      let peak = bandPeakV_[i];
+      for (let k = 0; k < buf.length; k++) peak = Math.max(peak, Math.abs(buf[k]));
+      bandPeakV_[i] = peak;
+    };
+    node.connect(sp); sp.connect(dummy);
+  });
+}
+
+// step 9V-c..g + validation: drains the FW's real pin-write log (HalShim.h)
+// and drives the chip's bin pointer + reset/strobe bookkeeping from the
+// ACTUAL observed transitions, never a guessed schedule. STROBE/RESET are
+// hardware-inverted between the Due and the chip (external level-
+// conversion transistors, see AudioBoard.h's own setup() comments) --
+// fwVal is inverted here to get the level the chip itself actually sees.
+//
+// RESET is active-HIGH and LEVEL-gated, confirmed directly against the
+// real FW's own setup()/Read_Frequencies() sequence: a strobe's leading
+// (falling) edge only advances the bin pointer while RESET is NOT
+// currently asserted. setup()'s own one strobe pulse happens WHILE RESET
+// is still asserted, so it's inert by design -- the pointer only actually
+// becomes valid (bin0) on Read_Frequencies()'s own first strobe-then-read,
+// which is the first falling edge to occur after RESET's real release.
+// Verified by hand-tracing the exact real pin log against this model.
+const msgeq7 = {
+  resetLevel: null, resetIsAsserted: null, resetPulseCount: 0,
+  strobeLevel: null,
+  pointer: -1, // -1 = not yet valid (no reset release observed yet)
+  errorMsg: null,
+};
+function processPinLog() {
+  if (!wasmReady) return;
+  const count = wasmModule.ccall('web_getPinLogCount', 'number', [], []);
+  if (count === 0) return;
+  const pinsPtr = wasmModule.ccall('web_getPinLogPinsPtr', 'number', [], []);
+  const valsPtr = wasmModule.ccall('web_getPinLogValsPtr', 'number', [], []);
+  const strobePin = wasmModule.ccall('web_getStrobePin', 'number', [], []);
+  const resetPin = wasmModule.ccall('web_getResetPin', 'number', [], []);
+  for (let i = 0; i < count; i++) {
+    const pin = wasmModule.getValue(pinsPtr + i * 4, 'i32');
+    const fwVal = wasmModule.getValue(valsPtr + i * 4, 'i32');
+    const chipLevel = fwVal ? 0 : 1; // inverted -- see comment above
+    if (pin === resetPin) {
+      if (msgeq7.resetIsAsserted === null) {
+        msgeq7.resetIsAsserted = (chipLevel === 1); // baseline -- no action, just establishes the starting level
+      } else {
+        const wasAsserted = msgeq7.resetIsAsserted;
+        msgeq7.resetIsAsserted = (chipLevel === 1);
+        if (wasAsserted && !msgeq7.resetIsAsserted) { // HIGH->LOW: release
+          msgeq7.resetPulseCount++;
+          msgeq7.pointer = -1;
+          if (msgeq7.resetPulseCount > 1) {
+            msgeq7.errorMsg = 'AudioBoard sent RESET ' + msgeq7.resetPulseCount + ' times -- datasheet/design expects exactly once, during setup()';
+          }
+        }
+      }
+    } else if (pin === strobePin) {
+      const prev = msgeq7.strobeLevel;
+      msgeq7.strobeLevel = chipLevel;
+      if (prev === 1 && chipLevel === 0) { // HIGH->LOW: strobe's leading/falling edge
+        if (!msgeq7.resetIsAsserted) { // level-gated -- only counts while RESET is currently released
+          if (msgeq7.pointer >= 0) bandPeakV_[msgeq7.pointer] *= 0.9; // 10% decay on the bin this strobe just moved AWAY from -- it was "read" first, per Read_Frequencies()'s strobe-then-read order
+          msgeq7.pointer = (msgeq7.pointer + 1) % 7;
+        }
+      }
+    }
+  }
+  wasmModule.ccall('web_clearPinLog', null, [], []);
+}
+// step 10V/11V/12V: voltage divider then Due ADC quantize, using the FW's
+// own real ADC_RESOLUTION_BITS (via the bridge) -- never a hardcoded
+// guess. bandPeakV_ is injected in FIXED bin order every tick: since
+// Read_Frequencies() always strobes through all 7 bins in one call, the
+// pointer returns to the SAME starting position (bin0) at the start of
+// every call regardless of history, so array-index order == bin order
+// always holds (verified against the real setup()+Read_Frequencies()
+// sequence -- see msgeq7's own comment).
+const VOLTAGE_DIVIDER_RATIO = 3.2 / 5; // 10k series into 17.8k to ground
+function computeInjectionBins() {
+  const adcMax = wasmReady ? wasmModule.ccall('web_getAdcMaxValue', 'number', [], []) : 1023;
+  return bandPeakV_.map((peak) => {
+    const chipVoltsOut = peak * 5.0; // MSGEQ7's own output swings toward VDD=5V with input amplitude, see datasheet Output Swing spec
+    const adcVolts = chipVoltsOut * VOLTAGE_DIVIDER_RATIO;
+    const raw = Math.round((adcVolts / 3.3) * adcMax); // Due's analog inputs measure 0-3.3V, see datasheet
+    return Math.max(0, Math.min(adcMax, raw));
+  });
+}
+
+// The A-path "what you're hearing right now" VU meter (a separate 7-band
+// filter bank tapped off the delayed/audible signal) was removed here --
+// the VU bargraphs now track the real FW's own getNormalPct() again (see
+// tick()'s setBar() calls), since comparing them against the noise-floor/
+// peak-threshold marks only makes sense on the SAME (real FW) scale.
+
+// Builds the shared processing graph exactly once (idempotent) -- every
+// useX() source connects itself to ensureMonoIn()'s return value.
+function ensureAudioGraph(ctx) {
+  if (audioGraphReady) return;
+  monoGain = ctx.createGain();
+  monoGain.channelCount = 1; monoGain.channelCountMode = 'explicit'; monoGain.channelInterpretation = 'discrete'; // step 2: picks channel 0 only, no averaging
+  sourceLevelGain = ctx.createGain(); // step 3
+  monoGain.connect(sourceLevelGain);
+  ampNoiseSum = ctx.createGain(); // step 4 -- summing junction, source-level output + ampNoise generator both feed in
+  sourceLevelGain.connect(ampNoiseSum);
+  ampNoiseGen = makeNoiseGen(ctx, () => ampNoisePct);
+  if (ampNoiseGen) ampNoiseGen.connect(ampNoiseSum);
+  sourceGain = ctx.createGain(); // step 5
+  ampNoiseSum.connect(sourceGain);
+  baseNoiseSum = ctx.createGain(); // step 6 -- summing junction, phone-volume output + baseNoise generator, UNSCALED by phone volume
+  sourceGain.connect(baseNoiseSum);
+  baseNoiseGen = makeNoiseGen(ctx, () => baseNoisePct);
+  if (baseNoiseGen) baseNoiseGen.connect(baseNoiseSum);
+
+  // A path (steps 7/8A/9A)
+  foresightDelay = ctx.createDelay(1.0); // max 1000ms, matches Foresight's own 0-1000ms range
+  baseNoiseSum.connect(foresightDelay);
+  muteGain = ctx.createGain();
+  foresightDelay.connect(muteGain);
+  legGain = ctx.createGain(); // Mic/System on/off -- we don't own their speaker leg, see setAppGeneratedSource()
+  legGain.gain.value = currentSourceIsAppGenerated ? 1 : 0;
+  muteGain.connect(legGain);
+  legGain.connect(ctx.destination);
+  applyVolumeUI();
+
+  // V path (steps 8V/9V)
+  rewireVPath();
+
+  applySourceLevelUI();
+  applyAmpNoiseUI();
+  applyBaseNoiseUI();
+  applyInputCapUI();
+  updateOutputDelayTime();
+  audioGraphReady = true;
+}
+function ensureMonoIn(ctx) { ensureAudioGraph(ctx); return monoGain; }
+
+// Only tears down the CURRENT raw source (mic stream / file buffer / tone
+// generator) -- the shared graph (noise/gain/filter chain) is a persistent
+// singleton, never torn down here, so the noise floor keeps running across
+// every source switch and through "None" too (see useNone()).
+function teardownSource() {
+  if (toneTimer) { clearInterval(toneTimer); toneTimer = null; }
+  if (sourceNode) { try { sourceNode.disconnect(); } catch (e) {} sourceNode = null; }
+}
+// "None" -- all 4 source buttons toggled off. Leaves the shared graph (and
+// the persistent noise generators feeding it) alive; only the actual
+// source signal goes away, matching "None means no source, not no sound
+// at all" (the simulated noise floor is meant to always be present, like a
+// real system's own self-noise).
+function useNone() {
+  teardownSource();
+  const ctx = ensureCtx();
+  ensureAudioGraph(ctx);
+  setAppGeneratedSource(false);
+  document.getElementById('audioStatus').textContent = 'off (noise floor only)';
+}
+async function useMic() {
+  teardownSource();
+  const ctx = ensureCtx();
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  sourceNode = ctx.createMediaStreamSource(stream);
+  sourceNode.connect(ensureMonoIn(ctx));
+  setAppGeneratedSource(false);
+  document.getElementById('audioStatus').textContent = 'microphone live';
+}
+async function useSystemAudio() {
+  teardownSource();
+  const ctx = ensureCtx();
+  // Chrome/Edge only: getDisplayMedia's audio track is the only way a page
+  // can capture real OS/tab output (Spotify, etc.) without an OS-level
+  // loopback device. video:true is required by most browsers to even show
+  // the "share audio" checkbox -- the video track is discarded immediately.
+  const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  const audioTracks = stream.getAudioTracks();
+  stream.getVideoTracks().forEach(t => t.stop());
+  if (audioTracks.length === 0) {
+    audioTracks.forEach(t => t.stop());
+    throw new Error('no audio was shared -- reopen and check "share tab audio" / "share system audio" in the picker');
+  }
+  sourceNode = ctx.createMediaStreamSource(stream);
+  sourceNode.connect(ensureMonoIn(ctx));
+  setAppGeneratedSource(false);
+  document.getElementById('audioStatus').textContent = 'system/tab audio live';
+  sampleSourceLevelFromStream(ctx, stream); // per request: Source level jumps to reflect the OS source the instant it's enabled -- see that function's own comment for why this is a best-effort proxy, not a literal OS-mixer reading
+}
+// File is decoded and played entirely INSIDE our own graph (Web Audio's
+// own decodeAudioData()+AudioBufferSourceNode, not a native <audio> tag
+// that would bypass our processing) -- no separate MP3-decode library
+// needed, this already flows through the full pipeline above, delay/mute
+// included, same as Tone.
+function useFile(file) {
+  teardownSource();
+  const ctx = ensureCtx();
+  const reader = new FileReader();
+  reader.onload = () => {
+    ctx.decodeAudioData(reader.result, (buf) => {
+      const src = ctx.createBufferSource();
+      src.buffer = buf; src.loop = true;
+      src.connect(ensureMonoIn(ctx));
+      src.start();
+      sourceNode = src;
+      setAppGeneratedSource(true);
+      document.getElementById('audioStatus').textContent = 'file: ' + file.name;
+    });
+  };
+  reader.readAsArrayBuffer(file);
 }
 // Best-effort proxy for "jump to the current OS volume level (including 0
 // if OS-muted) when system audio is enabled" -- NO browser API exposes the
@@ -1547,177 +2029,6 @@ function sampleSourceLevelFromStream(ctx, stream) {
     }
   }
   requestAnimationFrame(sample);
-}
-// Persistent noise floor -- created once, kept running even with no
-// source selected at all ("None"). Represents a fixed self-noise floor
-// (e.g. a mic preamp's own noise) -- per request, now scales with Phone
-// volume same as every other source, instead of being pinned at a fixed
-// level Phone volume couldn't touch.
-function ensureNoiseGain(ctx) {
-  if (!noiseGain) {
-    noiseGain = ctx.createGain();
-    noiseNode = ctx.createScriptProcessor ? ctx.createScriptProcessor(2048, 1, 1) : null;
-    if (noiseNode) {
-      noiseNode.onaudioprocess = (e) => {
-        const out = e.outputBuffer.getChannelData(0);
-        for (let i = 0; i < out.length; i++) out[i] = (Math.random() * 2 - 1) * toneSettings.baseNoise;
-      };
-      noiseNode.connect(noiseGain);
-    }
-    applyVolumeUI();
-  }
-  return noiseGain;
-}
-// BUGFIX ("combine source+noise as one before mute/reactivity code
-// touches it"): source and noise used to reach the speakers via two
-// INDEPENDENT paths (outputGain for the source, a separate mute-gated
-// node for noise) -- mute effectively applied twice, separately, rather
-// than once to a single combined signal. speakerSum is a plain summing
-// junction (Web Audio sums multiple inputs to the same node natively) that
-// both sourceGain and noiseGain feed into; only ITS combined output goes
-// on to outputDelay/outputGain/mute. Its own gain is toggled 0/1 by
-// setAppGeneratedSource() -- silences the whole speaker leg for Mic/System
-// (which already reach real speakers on their own via the OS; connecting
-// them again here would double them up), while leaving the analyser leg
-// (sourceGain/noiseGain -> analyser, wired directly in setupAnalyser(),
-// never routed through speakerSum) completely unaffected either way.
-function ensureSpeakerSum(ctx) {
-  if (!speakerSum) {
-    speakerSum = ctx.createGain();
-    speakerSum.gain.value = currentSourceIsAppGenerated ? 1 : 0;
-    ensureSourceGain(ctx).connect(speakerSum);
-    ensureNoiseGain(ctx).connect(speakerSum);
-  }
-  return speakerSum;
-}
-// Mute only silences what reaches the SPEAKERS -- per an earlier request
-// it must not touch what the light code sees at all, so sourceGain/
-// noiseGain's OWN analyser-bound connections ignore it entirely; only
-// outputGain (downstream of speakerSum's already-combined signal) does.
-function applyVolumeUI() {
-  const volSlider = document.getElementById('volumeSlider');
-  const vol = +volSlider.value / 100;
-  document.getElementById('volumeVal').textContent = volSlider.value + '%';
-  const muted = document.getElementById('btnMute').classList.contains('active');
-  if (sourceGain) sourceGain.gain.value = vol;
-  if (noiseGain) noiseGain.gain.value = vol;
-  // volume is already applied once, upstream at sourceGain/noiseGain
-  // (speakerSum combines their already-scaled output) -- outputGain here
-  // only ever applies mute, never volume again on top of it.
-  if (outputGain) outputGain.gain.value = muted ? 0 : 1;
-}
-function updateOutputDelayTime() {
-  if (!outputDelay) return;
-  const delayOn = currentSourceIsAppGenerated && document.getElementById('btnDelay').classList.contains('active');
-  outputDelay.delayTime.value = delayOn ? Math.min(1.0, AudioBoard.audioForesightMs / 1000) : 0;
-}
-// External sources (Mic/System) can't be delayed or muted -- we don't own
-// that audio, it's already reaching the speakers on its own via the OS, so
-// there's no speaker-bound signal of ours to delay or mute. Per request,
-// Phone volume now DOES apply to them though (see ensureSourceGain) --
-// it's scaling what the LIGHTS see, which we can always do regardless of
-// who owns the speaker output. Foresight is also forced to 0 and disabled
-// for external sources, since a nonzero foresight with no way to delay-
-// match what you're hearing would just desync the lights with no way to
-// compensate.
-function setAppGeneratedSource(isAppGenerated) {
-  currentSourceIsAppGenerated = isAppGenerated;
-  document.getElementById('btnDelay').disabled = !isAppGenerated;
-  document.getElementById('btnMute').disabled = !isAppGenerated;
-  document.getElementById('foresightSlider').disabled = !isAppGenerated;
-  // silences the WHOLE speaker leg (source+noise, already combined -- see
-  // ensureSpeakerSum) for external sources, so we never double up on what
-  // the OS is already independently playing to real speakers; the
-  // analyser leg is wired separately in setupAnalyser() and is completely
-  // unaffected by this either way.
-  if (speakerSum) speakerSum.gain.value = isAppGenerated ? 1 : 0;
-  if (!isAppGenerated) {
-    document.getElementById('btnDelay').classList.remove('active');
-    AudioBoard.audioForesightMs = 0;
-    document.getElementById('foresightSlider').value = 0;
-    document.getElementById('foresightVal').textContent = '0ms';
-    syncPredictMsMax();
-  }
-  updateOutputDelayTime();
-}
-
-function ensureCtx() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {}); // no-op if the browser's autoplay policy hasn't unlocked it yet (no real gesture so far) -- see unlockAudioOnFirstGesture below for what actually clears that
-  return audioCtx;
-}
-// Only tears down the CURRENT raw source (mic stream / file buffer / tone
-// generator) -- noiseNode/noiseGain are a persistent singleton, never torn
-// down here, so the noise floor keeps running across every source switch
-// and through "None" too (see useNone()).
-function teardownSource() {
-  if (toneTimer) { clearInterval(toneTimer); toneTimer = null; }
-  if (sourceNode) { try { sourceNode.disconnect(); } catch (e) {} sourceNode = null; }
-}
-// "None" -- all 4 source buttons toggled off. BUGFIX (Phone volume "stops
-// working" with no source selected): this used to null out `analyser`
-// entirely, which also killed the noise floor's own reactivity -- Phone
-// volume had nothing left to amplify. Now leaves the analyser (and the
-// persistent noise floor feeding it) alive; only the actual source signal
-// goes away, matching "None means no source, not no sound at all" (the
-// simulated noise floor is meant to always be present, like a real
-// system's own self-noise).
-function useNone() {
-  teardownSource();
-  const ctx = ensureCtx();
-  setupAnalyser(ctx);
-  setAppGeneratedSource(false);
-  document.getElementById('audioStatus').textContent = 'off (noise floor only)';
-}
-async function useMic() {
-  teardownSource();
-  const ctx = ensureCtx();
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  sourceNode = ctx.createMediaStreamSource(stream);
-  setupAnalyser(ctx);
-  sourceNode.connect(ensureSourceLevelGain(ctx)); // per request: Phone volume now scales mic too
-  setAppGeneratedSource(false);
-  document.getElementById('audioStatus').textContent = 'microphone live';
-}
-async function useSystemAudio() {
-  teardownSource();
-  const ctx = ensureCtx();
-  // Chrome/Edge only: getDisplayMedia's audio track is the only way a page
-  // can capture real OS/tab output (Spotify, etc.) without an OS-level
-  // loopback device. video:true is required by most browsers to even show
-  // the "share audio" checkbox -- the video track is discarded immediately.
-  const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-  const audioTracks = stream.getAudioTracks();
-  stream.getVideoTracks().forEach(t => t.stop());
-  if (audioTracks.length === 0) {
-    audioTracks.forEach(t => t.stop());
-    throw new Error('no audio was shared -- reopen and check "share tab audio" / "share system audio" in the picker');
-  }
-  sourceNode = ctx.createMediaStreamSource(stream);
-  setupAnalyser(ctx);
-  sourceNode.connect(ensureSourceLevelGain(ctx)); // per request: Phone volume now scales system/tab audio too
-  setAppGeneratedSource(false);
-  document.getElementById('audioStatus').textContent = 'system/tab audio live';
-  sampleSourceLevelFromStream(ctx, stream); // per request: Source level jumps to reflect the OS source the instant it's enabled -- see that function's own comment for why this is a best-effort proxy, not a literal OS-mixer reading
-}
-function useFile(file) {
-  teardownSource();
-  const ctx = ensureCtx();
-  const reader = new FileReader();
-  reader.onload = () => {
-    ctx.decodeAudioData(reader.result, (buf) => {
-      const src = ctx.createBufferSource();
-      src.buffer = buf; src.loop = true;
-      setupAnalyser(ctx);
-      src.connect(ensureSourceLevelGain(ctx)); // sourceGain is already wired to the fresh analyser (setupAnalyser) and to speakerSum (ensureOutputChain) below
-      ensureOutputChain(ctx);
-      src.start();
-      sourceNode = src;
-      setAppGeneratedSource(true);
-      document.getElementById('audioStatus').textContent = 'file: ' + file.name;
-    });
-  };
-  reader.readAsArrayBuffer(file);
 }
 // Tone generator patterns -- 16-step sequencers covering a spread of
 // common genre feels, plus the original simple kick+broadband as a
@@ -1787,7 +2098,16 @@ const TONE_PATTERNS = {
   // long ones, like a hip-hop kick's own quick punch (borrows boombap's
   // fast default decay, not kickDecayMs), at kick2Hz (28Hz, same sub-bass
   // register) -- see the synthesis loop below for how steps 2/3 map to these.
-  chris: { bpm: 90 * 0.75, kickHz: 30, kick2Hz: 28, kickDecayMs: 250,
+  // sustainCycleHits (per request): every 4 kick hits (long OR short, in
+  // order), the envelope doesn't decay/cap out at all -- it holds flat
+  // until the very next kick hit re-triggers it, so the bass level stays
+  // continuously above the peak threshold for that whole 4-hit block
+  // (the leading-edge phase reset on each re-trigger, see kickPhase=0
+  // below, still gives every individual hit an audible transient even
+  // though the envelope was already elevated). The next 4 hits behave
+  // normally (their usual decay/cap), then it alternates back, forever.
+  // See kickHitCounter in useTone() below.
+  chris: { bpm: 90 * 0.75, kickHz: 30, kick2Hz: 28, kickDecayMs: 250, sustainCycleHits: 4,
     kick:  [2,0,0,0,3,0,0,0,2,0,0,0,3,0,0,0], // long sustained hits at 0/8, short hip-hop-style hits between them at 4/12
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
     hihat: [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], // same as boombap, per request
@@ -1807,26 +2127,17 @@ const TONE_PATTERNS = {
 };
 // Noise has 2 independent components, both pk-pk fractions of full scale,
 // for testing AGC/noise-floor against a somewhat-realistic signal:
-//   - baseNoise: the universal noise floor's own level (see ensureNoiseGain
-//     at the top of the file) -- per request now scales with Phone volume
-//     like every source, representing e.g. a mic preamp's self-noise
-//     riding along with how "hot" the recording is.
-//   - ampNoise: mixed directly into the Tone generator's own synthesis
-//     (below), so it's inherently already scaled by Phone volume via
-//     sourceGain like the rest of that signal -- like noise baked into a
-//     specific recording, as opposed to baseNoise's general-purpose floor.
-let toneSettings = { pattern: 'boombap', baseNoise: 0.01, ampNoise: 0.01 };
-
 function useTone() {
   teardownSource();
   const ctx = ensureCtx();
-  setupAnalyser(ctx);
+  ensureAudioGraph(ctx);
   const bufSize = 2048;
   const toneGenNode = ctx.createScriptProcessor ? ctx.createScriptProcessor(bufSize, 1, 1) : null; // renamed from the old local `noiseNode` -- this is the synthesized kick/snare/hihat/mid signal, not noise; avoids shadowing the module-level noiseNode (the persistent, universal noise floor -- see ensureNoiseGain)
   let kickEnv = 0, kickPhase = 0, snareEnv = 0, snarePhase = 0, hihatEnv = 0, hihatPhase = 0, hihatPhase2 = 0;
   let midEnv = 0, midPhase = 0, kickSustainRemaining = 0, midSustainRemaining = 0;
   let kickFreqActive = 55, kickDecayActive = 0.9994; // which of kick/kick2's Hz+decay is currently sounding
   let sampleInStep = 0, stepIdx = -1;
+  let kickHitCounter = 0; // counts every kick hit (steps valued 2 or 3) -- see pat.sustainCycleHits above
   if (toneGenNode) {
     toneGenNode.onaudioprocess = (e) => {
       const out = e.outputBuffer.getChannelData(0);
@@ -1844,9 +2155,10 @@ function useTone() {
       const kick2Hz = pat.kick2Hz || kickHz;
       const kick2Decay = 0.9994;
       const snareDecay = 0.9985, hihatDecay = 0.9978, midDecay = 0.9975;
-      // BAND_MID/BAND_HIGH sample specific narrow FFT bins (max of bins at
-      // ~400/1000Hz for mid, ~6250/16000Hz for treble -- see BIN_FREQS).
-      // Pure broadband noise spreads its energy across the WHOLE spectrum,
+      // BAND_MID/BAND_HIGH sample specific narrow MSGEQ7 bins (max of bins
+      // at ~400/1000Hz for mid, ~6250/16000Hz for treble -- see
+      // MSGEQ7_BIN_HZ). Pure broadband noise spreads its energy across the
+      // WHOLE spectrum,
       // so only a thin sliver of it ever lands in any one sampled bin --
       // meanwhile the kick's plain sine tone dumps ALL its energy into
       // exactly one bin and blows past the hit threshold every time. This
@@ -1871,6 +2183,11 @@ function useTone() {
             // step 3 = short secondary hit: kick2Hz/kick2Decay, no sustain, never overlaps a long hit's own timing
             if (kickStep === 3) { kickFreqActive = kick2Hz; kickDecayActive = kick2Decay; }
             else { kickFreqActive = kickHz; kickDecayActive = kickDecay; }
+            if (pat.sustainCycleHits) {
+              kickHitCounter++;
+              const blockIdx = Math.floor((kickHitCounter - 1) / pat.sustainCycleHits);
+              if (blockIdx % 2 === 0) kickSustainRemaining = Infinity; // held flat until the next hit's own onset above resets it
+            }
           }
           if (pat.snare[stepIdx]) { snareEnv = 1; snarePhase = 0; }
           if (pat.hihat[stepIdx]) { hihatEnv = 1; hihatPhase = 0; hihatPhase2 = 0; }
@@ -1890,52 +2207,17 @@ function useTone() {
         const hihatSample = ((Math.random() * 2 - 1) * 0.35 + Math.sin(hihatPhase * 2 * Math.PI) * 0.4 + Math.sin(hihatPhase2 * 2 * Math.PI) * 0.25) * hihatEnv;
         // mostly tonal (chord/vocal-like), light noise texture -- not a percussive hit
         const midSample = (Math.sin(midPhase * 2 * Math.PI) * 0.8 + (Math.random() * 2 - 1) * 0.15) * midEnv;
-        const ampNoiseSample = (Math.random() * 2 - 1) * toneSettings.ampNoise;
-        out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + midSample * 0.6 + ampNoiseSample));
+        out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + midSample * 0.6));
       }
     };
-    toneGenNode.connect(ensureSourceLevelGain(ctx)); // scales with Phone volume; already wired to the fresh analyser (setupAnalyser) and to speakerSum (ensureOutputChain) below
-    ensureOutputChain(ctx);
+    // amplified-noise/base-noise are universal (steps 4/6, every source
+    // including Tone) now, not baked into this synthesis -- see
+    // ensureAudioGraph()'s ampNoiseSum/baseNoiseSum.
+    toneGenNode.connect(ensureMonoIn(ctx));
     sourceNode = toneGenNode;
   }
-  // The old tone-specific noise generator (baseNoiseNode) is gone -- the
-  // module-level noiseNode/ensureNoiseGain (see top of file) is now a
-  // persistent, universal noise floor shared by every source, not
-  // recreated per-Tone-session, per request ("noise values should be
-  // added to all sources").
   setAppGeneratedSource(true);
   document.getElementById('audioStatus').textContent = 'synthetic test tone';
-}
-function setupAnalyser(ctx) {
-  analyser = ctx.createAnalyser();
-  analyser.fftSize = 2048;
-  analyser.smoothingTimeConstant = 0.2;
-  fftData = new Uint8Array(analyser.frequencyBinCount);
-  // sourceGain/noiseGain are persistent singletons (created once, reused
-  // across source switches) -- reconnect them to this fresh analyser every
-  // time one's created. Every source (mic/system/file/tone) is expected to
-  // connect itself INTO sourceGain (see each useX() function) rather than
-  // to the analyser directly, so Phone volume uniformly scales all 4, per
-  // request.
-  ensureSourceGain(ctx).connect(analyser);
-  ensureNoiseGain(ctx).connect(analyser);
-}
-function readBins() {
-  if (!analyser || !fftData) return [0,0,0,0,0,0,0];
-  analyser.getByteFrequencyData(fftData);
-  const nyquist = audioCtx.sampleRate / 2;
-  const out = [];
-  for (const f of BIN_FREQS) {
-    const idx = Math.min(fftData.length - 1, Math.round(f / nyquist * fftData.length));
-    // average a small window around the target bin for stability
-    let sum = 0, n = 0;
-    for (let k = -2; k <= 2; k++) {
-      const j = idx + k;
-      if (j >= 0 && j < fftData.length) { sum += fftData[j]; n++; }
-    }
-    out.push(n ? Math.round(sum / n) : 0);
-  }
-  return out;
 }
 
 /* =====================================================================
@@ -3440,6 +3722,21 @@ function renderSideIndicatorPair(backCornerIdx, frontCornerIdx, noiseFloorPercen
 // -- see its own comment below for what this fixes.
 const cfgMeterChinaWasAbove = new Array(7).fill(false);
 const cfgMeterChinaFlashUntil = new Array(7).fill(0);
+// If no real hit has landed in the last 1.5s (e.g. dialing in noise floor/
+// peak threshold with no audio source playing), synthesize a steady series
+// of typical-width hits at 3/sec so there's still SOMETHING to look at
+// while adjusting -- display-only, never touches AudioBoard/FW state, just
+// a local stand-in signal for this one screen's own rendering.
+let cfgMeterLastRealHitMs = -99999;
+function cfgMeterFeedbackHitPct(nowMs) {
+  const realHit = AudioBoard.getHitPct(BAND_FULL);
+  if (realHit > 0) cfgMeterLastRealHitMs = nowMs;
+  if (nowMs - cfgMeterLastRealHitMs <= 1500) return realHit;
+  const PERIOD_MS = 1000 / 3; // 3 fake hits/sec
+  const WIDTH_FRAC = 0.35;    // "typical" pulse width within each period
+  const phase = (nowMs % PERIOD_MS) / PERIOD_MS;
+  return phase < WIDTH_FRAC ? Math.round(100 * (1 - phase / WIDTH_FRAC)) : 0;
+}
 function cfgMeterScreen(nowMs) {
   clearRope(); clearChinas(); clearMegabars();
   // Inset from BOTH outer ends of the 156-LED front string (ported to
@@ -3513,7 +3810,12 @@ function cfgMeterScreen(nowMs) {
     cfgMeterChinaWasAbove[c] = above;
     chinaLeds[c] = (nowMs < cfgMeterChinaFlashUntil[c]) ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: bin };
   }
-  const full = AudioBoard.getNormalPct(BAND_FULL)/100*255;
+  // Megabars pulse with the full-range HIT level (not bass, and not a
+  // steady level) so they actually demonstrate what these thresholds do to
+  // real hit detection -- falls back to a synthesized series of typical
+  // hits if no real audio has landed in the last 1.5s, see
+  // cfgMeterFeedbackHitPct().
+  const full = cfgMeterFeedbackHitPct(nowMs) / 100 * 255;
   for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = { r: 0, g: 0, b: full };
 }
 function cfgDecayOrPredictScreen() {
@@ -3557,6 +3859,22 @@ function cfgReactivityScreen(nowMs) {
   const PERIOD_MS = 600, ON_MS = 120;
   const lit = AudioBoard.soundReactivityEnabled && (nowMs % PERIOD_MS) < ON_MS;
   for (let c = 0; c < NUM_CHINA; c++) chinaLeds[c] = lit ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
+}
+
+// Auto-peak toggle screen (SubAudioAutoPeak) -- mirrors MagicCarpet::
+// showAutoPeakToggle() exactly: front edge's own neos (indices
+// [0, SIZEOF_SMALL_NEO), matching the real FW's ropeLeds[] index range for
+// this same physical strip) light up half at a time -- left half lit when
+// disabled, right half when enabled. SIZEOF_SMALL_NEO/2 here is this file's
+// own equivalent of the real FW's FRONT constant (SIZEOF_SMALL_NEO_HALF) --
+// both agree low index = left, high index = right within the front strip.
+function cfgAutoPeakScreen() {
+  clearRope(); clearMegabars(); clearChinas();
+  const enabled = AudioBoard.autoPeakEnabled;
+  const mid = SIZEOF_SMALL_NEO / 2;
+  const start = enabled ? mid : 0;
+  const end = enabled ? SIZEOF_SMALL_NEO : mid;
+  for (let i = start; i < end; i++) ropeLeds[i] = { r: 255, g: 255, b: 255 };
 }
 
 // Brightness config screens: solid white preview across whichever fixture
@@ -3618,6 +3936,7 @@ function renderCurrent(nowMs, dtMs) {
     case 'cfg_predict': cfgDecayOrPredictScreen(); break;
     case 'cfg_foresight': cfgForesightScreen(); break;
     case 'cfg_reactivity': cfgReactivityScreen(nowMs); break;
+    case 'cfg_autopeak': cfgAutoPeakScreen(); break;
     case 'brightness': brightnessScreen(); break;
     case 'powertest': powerTestScreen(); break;
   }
@@ -4287,12 +4606,12 @@ function draw() {
    UI WIRING
    ===================================================================== */
 const VARIATIONS = {
-  nightrider: ['Manual hue', 'Auto cycle', 'Auto cycle, no audio'],
+  nightrider: ['Manual hue', 'Auto cycle', 'Auto with sound'],
   flame: ['Waterflames', 'Flames', 'Shift hues', 'Hue-white'],
   equalizer: ['Chase', 'VU meter', 'new_standard', 'pixel_war'],
   speedstripes: ['Rope+MB', 'Rope+MB+China', 'Zebra'],
   lighthouse: ['Default', 'No Strobe', 'China React'],
-  cfg_meter: [], cfg_decay: [], cfg_predict: [], cfg_foresight: [], cfg_reactivity: [],
+  cfg_meter: [], cfg_decay: [], cfg_predict: [], cfg_foresight: [], cfg_reactivity: [], cfg_autopeak: [],
 };
 // Per-show default variation index, shown on first load / whenever that
 // show is freshly selected -- defaults to 0 unless listed here.
@@ -4322,7 +4641,7 @@ document.getElementById('showSelect').addEventListener('change', (e) => {
   // whichever path (buttons or dropdown) got you there.
   if (v.startsWith('cfg_')) {
     Ctl.appMode = 'audio';
-    Ctl.configSubsetting = ['cfg_meter','cfg_decay','cfg_predict','cfg_foresight','cfg_meter','cfg_reactivity'].indexOf(v);
+    Ctl.configSubsetting = ['cfg_meter','cfg_decay','cfg_predict','cfg_foresight','cfg_meter','cfg_reactivity','cfg_autopeak'].indexOf(v);
     if (Ctl.configSubsetting < 0) Ctl.configSubsetting = 0;
   } else {
     Ctl.appMode = 'show';
@@ -4459,10 +4778,10 @@ window.addEventListener('keydown', (e) => {
    subsetting is currently active instead of their normal-mode meaning. */
 const SUBSETTING_NAMES = {
   brightness: ['Global Brightness', 'Headlight Brightness', 'China Brightness'],
-  audio: ['Noise Floor / Peak Threshold', 'Hit Decay', 'Hit Prediction', 'Foresight', 'Auto-Gain', 'Sound Reactivity'],
+  audio: ['Noise Floor / Peak Threshold', 'Hit Decay', 'Hit Prediction', 'Foresight', 'Auto-Gain', 'Sound Reactivity', 'Auto-Peak'],
   powertest: ['Hue', 'Saturation', 'Brightness'],
 };
-const AUDIO_SUB_SCREEN = ['cfg_meter', 'cfg_decay', 'cfg_predict', 'cfg_foresight', 'cfg_meter', 'cfg_reactivity'];
+const AUDIO_SUB_SCREEN = ['cfg_meter', 'cfg_decay', 'cfg_predict', 'cfg_foresight', 'cfg_meter', 'cfg_reactivity', 'cfg_autopeak'];
 function subsettingCount(mode) { return (SUBSETTING_NAMES[mode] || []).length; }
 function configCurrModeFor(appMode, sub) {
   if (appMode === 'brightness') return 'brightness';
@@ -4487,6 +4806,7 @@ function currentSubsettingValueText() {
       case 3: return AudioBoard.audioForesightMs + 'ms';
       case 4: return ['off', 'band', 'full'][AudioBoard.agcMode];
       case 5: return AudioBoard.soundReactivityEnabled ? 'on' : 'off';
+      case 6: return AudioBoard.autoPeakEnabled ? 'on' : 'off';
     }
   }
   if (Ctl.appMode === 'powertest') {
@@ -4542,6 +4862,9 @@ function describeInputActions() {
     a.pot = 'no effect';
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 5) {
     a.left = a.right = 'toggle react';
+    a.pot = 'no effect';
+  } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 6) {
+    a.left = a.right = 'toggle auto-pk';
     a.pot = 'no effect';
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 2) {
     a.left = 'prev style';
@@ -4686,6 +5009,9 @@ function applyEncoderStep(dir) {
     updateAgcButtonUI();
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 5) {
     AudioBoard.soundReactivityEnabled = !AudioBoard.soundReactivityEnabled;
+  } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 6) {
+    AudioBoard.autoPeakEnabled = !AudioBoard.autoPeakEnabled;
+    updateAutoPeakButtonUI();
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 2) {
     AudioBoard.hitPredictionStyle = (AudioBoard.hitPredictionStyle + dir + 4) % 4;
     document.getElementById('predictStyleSelect').value = AudioBoard.hitPredictionStyle;
@@ -4733,14 +5059,41 @@ document.getElementById('orientationSelect').addEventListener('change', (e) => {
   applyOrientation();
 });
 
-// The CI deploy workflow replaces soren55.lights @ ba5d6ef - 2026-08-08 20:12 UTC with the real
+// Settings menu (header gear button) -- replaces the old bare orientation
+// dropdown with a general multi-level menu (Layout / Visibility sections).
+{
+  const btn = document.getElementById('settingsBtn');
+  const menu = document.getElementById('settingsMenu');
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = menu.hidden;
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+  });
+  menu.addEventListener('click', (e) => e.stopPropagation());
+  document.addEventListener('click', () => {
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+  });
+}
+// Input cap setting -- hidden by default (per request), toggled here.
+document.getElementById('showInputCapCheck').addEventListener('change', (e) => {
+  document.getElementById('inputCapGroup').style.display = e.target.checked ? '' : 'none';
+});
+// Button descriptions (the Short:/Med:/Long:/XL:/Pot:/etc. action-cell
+// table in the encoder/pot box) -- shown by default, toggled here.
+document.getElementById('showButtonDescCheck').addEventListener('change', (e) => {
+  document.getElementById('ctrlPanelActions').style.display = e.target.checked ? '' : 'none';
+});
+
+// The CI deploy workflow replaces soren55.lights @ 94dfb7b - 2026-08-09 09:18 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  if (el.textContent === 'soren55.lights @ ba5d6ef - 2026-08-08 20:12 UTC') el.textContent = 'local build (not CI-deployed)';
+  if (el.textContent === 'soren55.lights @ 94dfb7b - 2026-08-09 09:18 UTC') el.textContent = 'local build (not CI-deployed)';
 }
 
 const potIndicator = document.querySelector('#potKnob .knob__indicator');
@@ -5086,6 +5439,7 @@ function syncAudioConfigUI() {
   syncPredictMsMax();
   document.getElementById('predictStyleSelect').value = AudioBoard.hitPredictionStyle;
   updateAgcButtonUI();
+  updateAutoPeakButtonUI();
   updateOutputDelayTime();
 }
 function bindToggleButton(id, onToggle) {
@@ -5097,9 +5451,11 @@ function bindToggleButton(id, onToggle) {
   });
 }
 bindToggleButton('btnMute', () => applyVolumeUI());
-bindToggleButton('btnDelay', () => updateOutputDelayTime());
 document.getElementById('volumeSlider').addEventListener('input', applyVolumeUI);
 document.getElementById('sourceLevelSlider').addEventListener('input', applySourceLevelUI);
+document.getElementById('ampNoiseSlider').addEventListener('input', applyAmpNoiseUI);
+document.getElementById('baseNoiseSlider').addEventListener('input', applyBaseNoiseUI);
+document.getElementById('inputCapSlider').addEventListener('input', applyInputCapUI);
 
 document.getElementById('expandSourceBtn').addEventListener('click', () => {
   const btn = document.getElementById('expandSourceBtn');
@@ -5108,14 +5464,6 @@ document.getElementById('expandSourceBtn').addEventListener('click', () => {
   btn.innerHTML = (open ? 'Collapse source controls' : 'Expand source controls') + ' &#9662;';
 });
 document.getElementById('tonePatternSelect').addEventListener('change', (e) => { toneSettings.pattern = e.target.value; });
-document.getElementById('toneBaseNoiseSlider').addEventListener('input', (e) => {
-  toneSettings.baseNoise = +e.target.value / 100;
-  document.getElementById('toneBaseNoiseVal').textContent = e.target.value + '%';
-});
-document.getElementById('toneAmpNoiseSlider').addEventListener('input', (e) => {
-  toneSettings.ampNoise = +e.target.value / 100;
-  document.getElementById('toneAmpNoiseVal').textContent = e.target.value + '%';
-});
 // Bespoke (not bindSlider) so a drag past the current foresight value can
 // snap the thumb's own DOM position back, not just clamp the stored number.
 document.getElementById('predictMsSlider').addEventListener('input', (e) => {
@@ -5148,6 +5496,16 @@ document.getElementById('btnAgc').addEventListener('click', () => {
   updateAgcButtonUI();
   updateStatusPanel();
 });
+// AutoPk -- plain on/off (see AudioBoard::autoPeakEnabled_), backed by the
+// real FW getter/setter rather than bindToggleButton()'s own DOM-only state,
+// so the button's initial state reflects whatever was persisted/loaded.
+function updateAutoPeakButtonUI() {
+  document.getElementById('btnAutoPeak').classList.toggle('active', AudioBoard.autoPeakEnabled);
+}
+document.getElementById('btnAutoPeak').addEventListener('click', () => {
+  AudioBoard.autoPeakEnabled = !AudioBoard.autoPeakEnabled;
+  updateAutoPeakButtonUI();
+});
 updateAgcButtonUI();
 document.getElementById('blacklightCheck').addEventListener('change', (e) => Ctl.blacklight = e.target.checked);
 document.getElementById('fixtureDotsCheck').addEventListener('change', (e) => Ctl.showFixtureDots = e.target.checked);
@@ -5171,25 +5529,43 @@ function tick(now) {
     const dtMs = now - lastFrameT;
     lastFrameT = now;
 
-    if (analyser) {
-      const bins = readBins();
-      AudioBoard.poll(now, bins);
-    }
+    if (audioGraphReady) AudioBoard.poll(now);
 
     renderCurrent(now, dtMs);
     draw();
 
-    // meters
-    const setBar = (barId, pct) => { document.getElementById(barId).style.width = pct + '%'; };
-    setBar('barBassHit', AudioBoard.getHitPct(BAND_LOW));
-    setBar('barMidHit', AudioBoard.getHitPct(BAND_MID));
-    setBar('barTrebleHit', AudioBoard.getHitPct(BAND_HIGH));
-    setBar('barFullHit', AudioBoard.getHitPct(BAND_FULL));
+    // meters -- BACK to tracking the real FW's own getNormalPct() (its
+    // "filter_level", i.e. levelFilt) per band, NOT a JS-computed "what
+    // you're hearing" A-path meter -- per request, comparing the bar
+    // against the noise-floor/peak-threshold marks only makes sense if
+    // both live on the SAME scale, and those marks are (and always were)
+    // real FW percentages. Superimposed underneath (see the HTML's .raw
+    // <i> painted first, DOM order) is that same band's RAW level
+    // (getRawPct(), pre-AGC/pre-filter), 35%-desaturated -- pokes out past
+    // the filtered bar's own end wherever raw currently reads higher.
+    const autoScaledPeakPct = AudioBoard.autoScaledPeakThresholdPct;
+    const setBar = (barId, rawId, noiseId, peakId, autoPeakId, band) => {
+      document.getElementById(barId).style.width = AudioBoard.getNormalPct(band) + '%';
+      document.getElementById(rawId).style.width = AudioBoard.getRawPct(band) + '%';
+      document.getElementById(noiseId).style.left = AudioBoard.noiseFloorPct + '%';
+      document.getElementById(peakId).style.left = AudioBoard.peakThresholdPct + '%';
+      document.getElementById(autoPeakId).style.left = autoScaledPeakPct + '%';
+    };
+    setBar('barBassHit', 'barBassRaw', 'markBassNoise', 'markBassPeak', 'markBassAutoPeak', BAND_LOW);
+    setBar('barMidHit', 'barMidRaw', 'markMidNoise', 'markMidPeak', 'markMidAutoPeak', BAND_MID);
+    setBar('barTrebleHit', 'barTrebleRaw', 'markTrebleNoise', 'markTreblePeak', 'markTrebleAutoPeak', BAND_HIGH);
+    setBar('barFullHit', 'barFullRaw', 'markFullNoise', 'markFullPeak', 'markFullAutoPeak', BAND_FULL);
+    // Peak thresh slider's own auto-peak preview dot -- same value as the
+    // VU marks above, positioned to approximate a native range thumb's
+    // inset math (6.5px = half the 13px thumb, see .auto-peak-dot's CSS).
+    document.getElementById('autoPeakDot').style.left = `calc(6.5px + ${autoScaledPeakPct / 100} * (100% - 13px))`;
     const chip = document.getElementById('silentChip');
-    if (analyser) {
+    if (audioGraphReady) {
       chip.textContent = AudioBoard.silent ? 'silent' : 'live';
       chip.className = 'chip' + (AudioBoard.silent ? ' silent' : ' on');
     }
+    document.getElementById('msgeq7ErrorRow').style.display = msgeq7.errorMsg ? '' : 'none';
+    if (msgeq7.errorMsg) document.getElementById('msgeq7ErrorChip').textContent = msgeq7.errorMsg;
   } catch (err) {
     if (err !== lastTickError) {
       lastTickError = err;
