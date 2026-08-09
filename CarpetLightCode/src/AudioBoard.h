@@ -81,10 +81,17 @@ class AudioBoard {
    //                 level."
    //   levelHit   -- peak-hold derived from levelFilt: jumps to a flat 100
    //                 the instant levelFilt reaches the live peak threshold,
-   //                 stays at 100 for as long as it does, then decays
-   //                 (time-based, hitDecayMs_) once levelFilt drops back
-   //                 below threshold -- snapping the rest of the way to 0
-   //                 as soon as the decaying value rejoins levelFilt, rather
+   //                 holds there for HIT_SUSTAIN_HOLD_MS (75ms); if the same
+   //                 hit is still ongoing past that, eases down to
+   //                 HIT_SUSTAIN_PERCENT (90%) over the next
+   //                 HIT_SUSTAIN_EASE_MS (25ms) and holds there for as long
+   //                 as the hit continues -- so a long sustained tone
+   //                 doesn't sit pinned at 100 the whole time. Once
+   //                 levelFilt actually drops back below threshold, decays
+   //                 (time-based, hitDecayMs_) from whatever levelHit
+   //                 currently holds -- 100, mid-ease, or the 90% floor, not
+   //                 always from 100 -- snapping the rest of the way to 0 as
+   //                 soon as the decaying value rejoins levelFilt, rather
    //                 than lingering below it. Predictive lead-up (see
    //                 computePredictedRamp()) can also push this up ahead of
    //                 an actual crossing, peaking at 100.
@@ -481,6 +488,21 @@ class AudioBoard {
    static bool autoPeakHadHit_[ NumBins ];       // has this bin ever accepted a hit yet
    static uint32_t autoPeakLastHitMs_[ NumBins ]; // timestamp of that bin's own last ACCEPTED hit
 
+   // Hit sustain envelope: a hit starts at a flat 100% (so the leading edge
+   // always reads full strength -- unrelated to auto-peak, which only ever
+   // gates whether the edge is accepted in the first place). If the SAME
+   // hit is still continuously above threshold past HIT_SUSTAIN_HOLD_MS
+   // since its own onset, ease down to HIT_SUSTAIN_PERCENT over the
+   // following HIT_SUSTAIN_EASE_MS, then hold there for as long as the hit
+   // continues -- so a long sustained tone doesn't sit pinned at 100% the
+   // whole time. Once the hit actually ends (isAbove goes false), the
+   // existing decay path takes over from whatever levelHit currently holds
+   // (100, mid-ease, or the 90% sustain floor), not always from 100.
+   static const uint16_t HIT_SUSTAIN_HOLD_MS = 75;
+   static const uint16_t HIT_SUSTAIN_EASE_MS = 25;
+   static constexpr float HIT_SUSTAIN_PERCENT = 90.0f;
+   static uint32_t hitOnsetMs_[ NumBins ]; // timestamp this bin's CURRENT hit (if any) began
+
    static void setAgcMode( uint8_t mode ) { agcMode_ = ( mode >= NumAGCModes ) ? ( NumAGCModes - 1 ) : mode; }
    static uint8_t getAgcMode() { return agcMode_; }
    // While set (see CarpetLightLogic.cpp), forces AGCoff behavior for as
@@ -559,17 +581,27 @@ class AudioBoard {
 
          float threshPct = getEffectivePeakThresholdPercent( (AudioBin)bin );
          bool isAbove = soundReactivityEnabled_ && bl.levelFilt >= threshPct;
-         if ( isAbove && !hitWasAbove_[ bin ] ) {                                    // j
+         bool freshEdge = isAbove && !hitWasAbove_[ bin ];
+         if ( freshEdge ) {                                                         // j
             newHit_[ bin ] = true;
+            hitOnsetMs_[ bin ] = nowMs; // this hit's own start -- see the hold/ease/sustain envelope below
             autoPeakLastHitMs_[ bin ] = nowMs; // this bin's own newest ACCEPTED hit -- see the auto-peak debounce rule above
             autoPeakHadHit_[ bin ] = true;
          }
          hitWasAbove_[ bin ] = isAbove;
 
          if ( isAbove ) {                                                           // k
-            bl.levelHit = 100.0f;
+            uint32_t heldMs = nowMs - hitOnsetMs_[ bin ];
+            if ( heldMs <= HIT_SUSTAIN_HOLD_MS ) {
+               bl.levelHit = 100.0f;
+            } else if ( heldMs <= (uint32_t)HIT_SUSTAIN_HOLD_MS + HIT_SUSTAIN_EASE_MS ) {
+               float f = (float)( heldMs - HIT_SUSTAIN_HOLD_MS ) / (float)HIT_SUSTAIN_EASE_MS; // 0..1
+               bl.levelHit = 100.0f - f * ( 100.0f - HIT_SUSTAIN_PERCENT );
+            } else {
+               bl.levelHit = HIT_SUSTAIN_PERCENT;
+            }
          } else if ( bl.levelHit > 0.0f ) {
-            bl.levelHit -= ( 100.0f / hitDecayMs_ ) * (float)dtMs;
+            bl.levelHit -= ( 100.0f / hitDecayMs_ ) * (float)dtMs; // decays from whatever levelHit currently holds (100, mid-ease, or the 90% sustain floor) -- see the hold/ease/sustain envelope above
             if ( bl.levelHit < 0.0f ) bl.levelHit = 0.0f;
             if ( bl.levelHit <= bl.levelFilt ) bl.levelHit = 0.0f;
          }
@@ -1001,6 +1033,7 @@ float AudioBoard::peakThresholdPercent_ = 31.0f; // approx. the old hardcoded 80
 bool AudioBoard::autoPeakEnabled_ = false; // overwritten by Nvm at boot
 bool AudioBoard::autoPeakHadHit_[ NumBins ] = { false };
 uint32_t AudioBoard::autoPeakLastHitMs_[ NumBins ] = { 0 };
+uint32_t AudioBoard::hitOnsetMs_[ NumBins ] = { 0 };
 float AudioBoard::emaAverage_ = 0.0f;
 Timer AudioBoard::pollTimer_;
 Timer AudioBoard::silenceTimer_;
