@@ -8,6 +8,19 @@
 #include <Arduino.h>
 #endif
 
+// The Due's ADC resolution, as one shared constant: set for real here
+// (setup() calls analogReadResolution(ADC_RESOLUTION_BITS)) and read back
+// from here everywhere a raw ADC reading's range matters (AudioBoard.h's
+// scale(), LedController.h's Potentiometer), instead of each spot
+// independently hardcoding its own assumed max value -- which is exactly
+// how those two drifted apart before (scale() hardcoded 1023, nothing
+// actually configured the ADC to be 10-bit, it just happened to default
+// there). The WASM visualizer also reads this same constant back via the
+// bridge (web_getAdcResolutionBits()) so its simulated ADC quantization
+// step always matches whatever this is currently set to.
+#define ADC_RESOLUTION_BITS 10
+#define ADC_MAX_VALUE ( ( 1 << ADC_RESOLUTION_BITS ) - 1 )
+
 class Timer {
   protected:
     volatile uint32_t start, tout;

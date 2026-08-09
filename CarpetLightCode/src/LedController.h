@@ -12,7 +12,7 @@
 #include "Utilities.h"
 
 // max voltage from an analog input pin
-#define MAX_VOLTAGE 1023
+#define MAX_VOLTAGE ADC_MAX_VALUE // see Utilities.h -- one shared ADC-range constant, not a value of its own
 
 // TODO: these are useful, move them somewhere common
 //

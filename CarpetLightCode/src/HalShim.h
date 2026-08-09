@@ -110,7 +110,38 @@ inline void delayMicroseconds( uint32_t ) {}
 static const int HAL_NUM_PINS = 128;
 static int hal_pinState_[ HAL_NUM_PINS ] = { 0 };
 inline void pinMode( int, int ) {}
-inline void digitalWrite( int pin, int val ) { if ( pin >= 0 && pin < HAL_NUM_PINS ) hal_pinState_[ pin ] = val; }
+// analogReadResolution() has nothing to configure here -- there's no real
+// ADC to reconfigure, the visualizer independently reads the FW's own
+// ADC_RESOLUTION_BITS constant (Utilities.h) via the bridge instead of
+// observing this call. Still needs to exist so setup()'s real call to it
+// compiles under WASM.
+inline void analogReadResolution( int ) {}
+
+// Every digitalWrite() gets appended to a small log JS can drain after each
+// web_setup()/web_tick() call. Built specifically so the visualizer can
+// simulate the MSGEQ7 chip (src/AudioBoard.h) by watching the REAL
+// STROBE/RESET pin writes the FW's own Read_Frequencies()/setup() produce,
+// rather than guessing at their timing independently -- matches this
+// project's rule that simulated-external-hardware behavior (the chip, not
+// the FW) is legitimate visualizer code, but it must be driven by the FW's
+// actual output, never an assumption about what the FW "should" be doing.
+// Generic (logs every pin, not just STROBE/RESET) to keep this shim free of
+// AudioBoard-specific knowledge; the visualizer filters by pin number,
+// which it reads from AudioBoard.h's own STROBE/RESET #defines via the
+// bridge rather than hardcoding 6/7 a third time.
+static const int HAL_PIN_LOG_CAPACITY = 128;
+static int hal_pinLogPin_[ HAL_PIN_LOG_CAPACITY ];
+static int hal_pinLogVal_[ HAL_PIN_LOG_CAPACITY ];
+static int hal_pinLogCount_ = 0;
+inline void halClearPinLog() { hal_pinLogCount_ = 0; }
+inline void digitalWrite( int pin, int val ) {
+   if ( pin >= 0 && pin < HAL_NUM_PINS ) hal_pinState_[ pin ] = val;
+   if ( hal_pinLogCount_ < HAL_PIN_LOG_CAPACITY ) {
+      hal_pinLogPin_[ hal_pinLogCount_ ] = pin;
+      hal_pinLogVal_[ hal_pinLogCount_ ] = val;
+      ++hal_pinLogCount_;
+   }
+}
 inline int digitalRead( int pin ) { return ( pin >= 0 && pin < HAL_NUM_PINS ) ? hal_pinState_[ pin ] : LOW; }
 
 // analogRead() usually just returns a pin's fixed injected value, EXCEPT

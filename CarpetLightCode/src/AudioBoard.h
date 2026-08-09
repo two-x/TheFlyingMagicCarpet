@@ -21,8 +21,7 @@
 #define MID_OUTPUT 10
 #define HIGH_OUTPUT 11
 
-inline int scale( int x ) { return ( ( 255 * x ) / 1023 ); }
-// better:   inline int scale( int x ) { return ( ( 255 * x ) / ADC_MAX_VALUE ); } // see Utilities.h
+inline int scale( int x ) { return ( ( 255 * x ) / ADC_MAX_VALUE ); } // see Utilities.h
 
 
 inline uint8_t rawToPercent( uint8_t raw ) { return (uint8_t)( ( (uint16_t)raw * 100 + 127 ) / 255 ); }

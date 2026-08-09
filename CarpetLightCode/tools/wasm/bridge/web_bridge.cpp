@@ -120,4 +120,28 @@ void web_audioSetSoundReactivityEnabled( int enabled ) { AudioBoard::setSoundRea
 EMSCRIPTEN_KEEPALIVE
 int web_audioGetSoundReactivityEnabled() { return AudioBoard::getSoundReactivityEnabled() ? 1 : 0; }
 
+// ---------------------------------------------------------------------
+// MSGEQ7 chip simulation support. The visualizer models the physical
+// MSGEQ7 chip + surrounding analog circuitry itself (legitimate -- it's
+// external hardware, not FW logic), but it must be driven by the FW's own
+// REAL STROBE/RESET pin writes and the FW's own real ADC-range constant,
+// never an independent guess at either. See HalShim.h's pin-write log.
+EMSCRIPTEN_KEEPALIVE
+int web_getAdcResolutionBits() { return ADC_RESOLUTION_BITS; }
+EMSCRIPTEN_KEEPALIVE
+int web_getAdcMaxValue() { return ADC_MAX_VALUE; }
+EMSCRIPTEN_KEEPALIVE
+int web_getStrobePin() { return STROBE; }
+EMSCRIPTEN_KEEPALIVE
+int web_getResetPin() { return RESET; }
+
+EMSCRIPTEN_KEEPALIVE
+int * web_getPinLogPinsPtr() { return hal_pinLogPin_; }
+EMSCRIPTEN_KEEPALIVE
+int * web_getPinLogValsPtr() { return hal_pinLogVal_; }
+EMSCRIPTEN_KEEPALIVE
+int web_getPinLogCount() { return hal_pinLogCount_; }
+EMSCRIPTEN_KEEPALIVE
+void web_clearPinLog() { halClearPinLog(); }
+
 }

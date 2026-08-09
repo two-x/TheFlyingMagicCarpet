@@ -438,6 +438,15 @@ void printWelcome() {
 
 void setup() {
    Serial.begin(115200); // Due's Programming Port UART -- independent of upload/bootloader protocol, safe to raise
+   // Explicitly configures the real ADC hardware to ADC_RESOLUTION_BITS
+   // (see Utilities.h) instead of relying on the Due core's own implicit
+   // 10-bit default -- makes the assumption real/enforced rather than
+   // incidental, and gives the WASM visualizer's simulated ADC quantization
+   // step (which reads this same constant back via the bridge) one single
+   // place to ever go out of sync with, instead of two independently-
+   // hardcoded guesses (AudioBoard.h's scale() and LedController.h's
+   // MAX_VOLTAGE used to each hardcode 1023 on their own).
+   analogReadResolution( ADC_RESOLUTION_BITS );
    // AudioBoard::setup();
 
    // setup the carpet
