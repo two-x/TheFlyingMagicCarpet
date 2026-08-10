@@ -950,7 +950,7 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ 2ebe995 - 2026-08-10 03:02 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ d658302 - 2026-08-10 03:34 UTC</span>
 </header>
 
 <div class="help-overlay" id="helpOverlay" hidden>
@@ -2391,6 +2391,15 @@ const BAND_LOW = 0, BAND_MID = 1, BAND_HIGH = 2, BAND_FULL = 3;
 const WASM_BAND = [ 0, 2, 3, 4 ];
 const PREDICT_OFF = 0, PREDICT_EXP = 1, PREDICT_GUN = 2, PREDICT_DRUM = 3;
 
+// local show-key string <-> CarpetLightLogic.cpp's real ShowMode enum index
+// (ShowNightrider=0, ShowFlame=1, ShowEqualizer=2, ShowSpeedStripes=3,
+// ShowLighthouse=4) -- NOT the same order as the old local-only showOrder[]
+// array used by the dormant renderInterfaceMode()/doShortPress() cycling
+// code, which was never index-matched to real firmware and must not be
+// reused for real injection.
+const WASM_INDEX_TO_SHOW = [ 'nightrider', 'flame', 'equalizer', 'speedstripes', 'lighthouse' ];
+const SHOW_TO_WASM_INDEX = { nightrider: 0, flame: 1, equalizer: 2, speedstripes: 3, lighthouse: 4 };
+
 const AudioBoard = {
   bins: [0,0,0,0,0,0,0], // 7 raw 0-255 values, MSGEQ7-analog order -- display-only, derived from bandPeakV_ (the chip sim's own state), NOT the actual injected ADC codes (see computeInjectionBins(), a different domain for a different purpose)
 
@@ -2906,12 +2915,16 @@ function sampleSourceLevelFromStream(ctx, stream) {
 //            hip-hop-style kick mixed in (see "chris").
 //   snare -- a short mid/broadband transient (the "snap" of a snare hit).
 //   hihat -- treble (BAND_HIGH), normally at hihatHz1/hihatHz2. A step
-//            value of 2 is the same short percussive hit, just shifted
-//            down to midHihatHz (BAND_MID's own 1000Hz bin) instead --
-//            per request, several patterns pair a quick treble hihat hit
-//            with a slightly-lower one right after it; this gives that
-//            2nd hit real BAND_MID content instead of also landing in
-//            treble, without needing a separate mid: pattern.
+//            value of 2 is a DIFFERENT, independently-enveloped percussive
+//            hit at midHihatHz (BAND_MID's own 1000Hz bin) -- noise-
+//            dominant with only a light tone component and a short punchy
+//            decay, reads as a clap/perc snap, not a pitched note. (A
+//            prior version reused the treble hit's own sound just shifted
+//            in pitch, alternating evenly through the whole bar -- that
+//            read as a repeating pitched "wooden xylophone" figure rather
+//            than genre-typical percussion; fixed per request.) Gives
+//            genre-typical patterns real BAND_MID content without needing
+//            a separate mid: pattern.
 //   mid   -- BAND_MID, genre-appropriate (chord stabs / vocal line /
 //            sample chop / etc, see each pattern's own comment) -- mostly
 //            tonal rather than noisy, and can also use the 2=sustained
@@ -2928,27 +2941,37 @@ const TONE_PATTERNS = {
     hihat: [0,0,1,0,0,0,2,0,0,0,1,0,0,0,2,0], // alternates treble/mid-companion (step 2) each hit -- see hihat's own comment above
     mid:   [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // one plain mid pulse per bar -- generic baseline, no genre character
   },
+  // Hihat reworked per request: the old pattern alternated treble/step-2
+  // evenly through the whole bar (1,0,2,0,1,0,2,0...), which combined with
+  // the old shared-envelope step-2 timbre to read as a repeating pitched
+  // "wooden xylophone" figure instead of genre percussion. Now: treble
+  // hits (kept exactly as before) plus ONE 3-hit roll of the (now
+  // noise-dominant, punchy) step-2 percussion, landing right after the
+  // bar's final treble hit -- a typical house/hip-hop/trap fill placement,
+  // not a constant alternating texture.
   house: { bpm: 128,
     kick:  [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [0,0,1,0,0,0,2,0,0,0,1,0,0,0,2,0], // alternates treble/mid-companion (step 2) each hit -- see hihat's own comment above
+    hihat: [0,0,1,0,0,0,0,0,0,0,1,2,2,2,0,0], // treble@2,10 (unchanged), 3-hit roll@11-13 right after the 2nd treble
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   // Treble reworked per request: rapid-fire hihat spurts clustered right
   // before/after each kick (the classic trap hihat "roll"), with real
   // silence in between -- previously near-constant-density throughout,
   // which read as one steady texture rather than distinct bursts tied to
-  // the kick hits.
+  // the kick hits. Step-2 roll placement reworked per the house comment
+  // above -- one 3-hit roll after the last treble hit, not interleaved
+  // through every burst.
   trap: { bpm: 140,
     kick:  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,2,0,0,0,1,2,1,2,1,2,0,0,0,0,0], // bursts around kick@0, kick@6, kick@9, quiet stretches elsewhere -- alternates treble/mid-companion (step 2) within each burst, see hihat's own comment above
+    hihat: [1,0,0,0,0,1,0,1,0,1,2,2,2,0,0,0], // treble bursts@0,5,7,9 (unchanged), 3-hit roll@10-12 right after the last one
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   boombap: { bpm: 90,
     kick:  [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,0,2,0,1,0,2,0,1,0,2,0,1,0,2,0], // alternates treble/mid-companion (step 2) each hit -- see hihat's own comment above
+    hihat: [1,0,0,0,1,0,0,0,1,0,0,0,1,2,2,2], // steady treble@0,4,8,12 (unchanged), 3-hit roll@13-15 right after the last one
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   // "Chris" -- a bass-music genre: treble is intentionally IDENTICAL to
@@ -2986,7 +3009,7 @@ const TONE_PATTERNS = {
     // bar 2 (steps 16-31, normal): the original 4-hits-per-bar pattern, unchanged.
     kick:  [2,0,3,0,2,0,3,0,2,0,3,0,2,0,3,0,  2,0,0,0,3,0,0,0,2,0,0,0,3,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,  0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,0,2,0,1,0,2,0,1,0,2,0,1,0,2,0,  1,0,2,0,1,0,2,0,1,0,2,0,1,0,2,0], // same as boombap, per request (incl. its treble/mid-companion alternation, see hihat's own comment above), repeated across both bars
+    hihat: [1,0,0,0,1,0,0,0,1,0,0,0,1,2,2,2,  1,0,0,0,1,0,0,0,1,0,0,0,1,2,2,2], // same as boombap (per request), repeated across both bars -- see boombap's own comment above for the roll placement
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass-focused genre, bass/treble only
   },
   // Oldies power-ballad (e.g. "Total Eclipse of the Heart"), not EDM --
@@ -3010,6 +3033,7 @@ function useTone() {
   const bufSize = 2048;
   const toneGenNode = ctx.createScriptProcessor ? ctx.createScriptProcessor(bufSize, 1, 1) : null; // renamed from the old local `noiseNode` -- this is the synthesized kick/snare/hihat/mid signal, not noise; avoids shadowing the module-level noiseNode (the persistent, universal noise floor -- see ensureNoiseGain)
   let kickEnv = 0, kickPhase = 0, snareEnv = 0, snarePhase = 0, hihatEnv = 0, hihatPhase = 0, hihatPhase2 = 0;
+  let hihatMidEnv = 0, hihatMidPhase = 0; // step-value-2 hihat hits -- independent envelope/phase from the treble hit, see TONE_PATTERNS' hihat comment
   let midEnv = 0, midPhase = 0, kickSustainRemaining = 0, midSustainRemaining = 0;
   let kickFreqActive = 55, kickDecayActive = 0.9994; // which of kick/kick2's Hz+decay is currently sounding
   let sampleInStep = 0, stepIdx = -1;
@@ -3048,8 +3072,12 @@ function useTone() {
       // (max of the 400Hz and 1000Hz bins).
       const snareHz = 900, hihatHz1 = 6250, hihatHz2 = 15500, midHz = 400;
       // BAND_MID's own upper (1000Hz) bin -- see hihat step-value 2 above.
+      // Noise-dominant, short/punchy decay (clap/perc snap) -- deliberately
+      // NOT reusing the treble hihat's tone-heavy blend/slower decay, which
+      // is what made the old shared-envelope version read as a pitched
+      // "wooden xylophone" note instead of a percussion hit.
       const midHihatHz = 1000;
-      let hihatFreqActive1 = hihatHz1, hihatFreqActive2 = hihatHz2; // which pair is currently sounding -- treble (default) or the midHihatHz companion (step value 2)
+      const hihatMidDecay = Math.exp(-1 / (0.09 * ctx.sampleRate)); // ~90ms
       const KICK_SUSTAIN_SAMPLES = Math.round(0.4 * ctx.sampleRate); // up to 400ms hold for step-value 2 (kick or mid)
       // Onset "pop" for every kick hit, ON TOP of whatever kickEnv is
       // already doing -- fixes "can only barely hear the leading edge
@@ -3079,29 +3107,29 @@ function useTone() {
           }
           if (pat.snare[stepIdx]) { snareEnv = 1; snarePhase = 0; }
           const hihatStep = pat.hihat[stepIdx] || 0;
-          if (hihatStep) {
-            hihatEnv = 1; hihatPhase = 0; hihatPhase2 = 0;
-            if (hihatStep === 2) { hihatFreqActive1 = midHihatHz; hihatFreqActive2 = midHihatHz; }
-            else { hihatFreqActive1 = hihatHz1; hihatFreqActive2 = hihatHz2; }
-          }
+          if (hihatStep === 1) { hihatEnv = 1; hihatPhase = 0; hihatPhase2 = 0; }
+          else if (hihatStep === 2) { hihatMidEnv = 1; hihatMidPhase = 0; }
           const midStep = (pat.mid && pat.mid[stepIdx]) || 0;
           if (midStep) { midEnv = 1; midPhase = 0; midSustainRemaining = midStep >= 2 ? KICK_SUSTAIN_SAMPLES : 0; }
         }
         if (kickSustainRemaining > 0) kickSustainRemaining--; else kickEnv *= kickDecayActive;
         kickAccentEnv *= kickAccentDecay;
         if (midSustainRemaining > 0) midSustainRemaining--; else midEnv *= midDecay;
-        snareEnv *= snareDecay; hihatEnv *= hihatDecay;
+        snareEnv *= snareDecay; hihatEnv *= hihatDecay; hihatMidEnv *= hihatMidDecay;
         kickPhase += kickFreqActive / ctx.sampleRate;
         snarePhase += snareHz / ctx.sampleRate;
-        hihatPhase += hihatFreqActive1 / ctx.sampleRate;
-        hihatPhase2 += hihatFreqActive2 / ctx.sampleRate;
+        hihatPhase += hihatHz1 / ctx.sampleRate;
+        hihatPhase2 += hihatHz2 / ctx.sampleRate;
+        hihatMidPhase += midHihatHz / ctx.sampleRate;
         midPhase += midHz / ctx.sampleRate;
         const kickSample = Math.sin(kickPhase * 2 * Math.PI) * (kickEnv + kickAccentEnv);
         const snareSample = ((Math.random() * 2 - 1) * 0.5 + Math.sin(snarePhase * 2 * Math.PI) * 0.5) * snareEnv;
         const hihatSample = ((Math.random() * 2 - 1) * 0.35 + Math.sin(hihatPhase * 2 * Math.PI) * 0.4 + Math.sin(hihatPhase2 * 2 * Math.PI) * 0.25) * hihatEnv;
+        // noise-dominant clap/perc snap, BAND_MID frequency -- see hihat step-value 2 comment in TONE_PATTERNS
+        const hihatMidSample = ((Math.random() * 2 - 1) * 0.7 + Math.sin(hihatMidPhase * 2 * Math.PI) * 0.3) * hihatMidEnv;
         // mostly tonal (chord/vocal-like), light noise texture -- not a percussive hit
         const midSample = (Math.sin(midPhase * 2 * Math.PI) * 0.8 + (Math.random() * 2 - 1) * 0.15) * midEnv;
-        out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + midSample * 0.6));
+        out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + hihatMidSample * 0.7 + midSample * 0.6));
       }
     };
     // amplified-noise/base-noise are universal (steps 4/6, every source
@@ -5548,6 +5576,11 @@ function refreshVariationRow() {
       Ctl.variation = idx;
       [...row.children].forEach(c => c.classList.remove('active'));
       b.classList.add('active');
+      // Real injection, same convenience-control category as show
+      // selection above -- see web_setCurrentVariation()'s own comment.
+      if (wasmReady && Ctl.currMode in SHOW_TO_WASM_INDEX) {
+        wasmModule.ccall('web_setCurrentVariation', null, ['number'], [idx]);
+      }
     };
     row.appendChild(b);
   });
@@ -5561,9 +5594,22 @@ document.getElementById('showSelect').addEventListener('change', (e) => {
     Ctl.appMode = 'audio';
     Ctl.configSubsetting = ['cfg_meter','cfg_decay','cfg_predict','cfg_foresight','cfg_meter','cfg_reactivity','cfg_autopeak'].indexOf(v);
     if (Ctl.configSubsetting < 0) Ctl.configSubsetting = 0;
+    // KNOWN GAP: config-screen dropdown entries don't yet inject a real
+    // appMode/configSubsetting jump into WASM (no web_enterConfigMode()-
+    // style setter exists yet) -- selecting one of these from the dropdown
+    // updates local UI state only, same limitation as A2's still-pending
+    // pot/encoder/button wiring. Flagged here rather than silently left
+    // looking like it works. Show selection below IS real.
   } else {
     Ctl.appMode = 'show';
     Ctl.prevShowMode = v;
+    // Real injection -- convenience control per claude_dev_prompts.md
+    // prompt 6 (jumps straight to a show index, which real hardware can
+    // only reach by repeated short-press, but the resulting FW state is
+    // 100% real either way). See web_setCurrentShow()'s own comment.
+    if (wasmReady && v in SHOW_TO_WASM_INDEX) {
+      wasmModule.ccall('web_setCurrentShow', null, ['number'], [SHOW_TO_WASM_INDEX[v]]);
+    }
   }
   Ctl.currMode = v;
   showT0 = performance.now();
@@ -6205,14 +6251,14 @@ initModal( {
   });
 }
 
-// The CI deploy workflow replaces master @ 2ebe995 - 2026-08-10 03:02 UTC with the real
+// The CI deploy workflow replaces master @ d658302 - 2026-08-10 03:34 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  if (el.textContent === 'master @ 2ebe995 - 2026-08-10 03:02 UTC') el.textContent = 'local build (not CI-deployed)';
+  if (el.textContent === 'master @ d658302 - 2026-08-10 03:34 UTC') el.textContent = 'local build (not CI-deployed)';
 }
 
 const potIndicator = document.querySelector('#potKnob .knob__indicator');
@@ -6648,6 +6694,40 @@ updateStatusPanel();
 // what happens inside it, and a failure is surfaced visibly in the status
 // bar instead of hard-freezing silently.
 let lastTickError = null;
+// Dev Tool role only. Real FW show/variation state is authoritative,
+// always -- this re-derives Ctl.currMode/Ctl.variation and the dropdown/
+// variation-row UI from web_getCurrentShowIndex()/web_getCurrentVariationIndex()
+// every frame, rather than trusting whatever a click handler last set
+// locally. Per claude_dev_prompts.md prompt 6: visualizer indications of
+// which show/variation is active must always come from the firmware, even
+// when the change originated in the visualizer itself -- this is what
+// actually guarantees that (a hard sync, not "the button that changes it
+// also happens to set the right local value").
+function syncShowStateFromWasm() {
+  if (!wasmReady) return;
+  const realIdx = wasmModule.ccall('web_getCurrentShowIndex', 'number', [], []);
+  const realShow = WASM_INDEX_TO_SHOW[realIdx];
+  if (realShow && realShow !== Ctl.currMode) {
+    Ctl.currMode = realShow;
+    Ctl.appMode = 'show';
+    document.getElementById('showSelect').value = realShow;
+    showT0 = performance.now();
+    resetLighthouseState(); resetSpeedStripesState(); resetFlameState(); resetNewStandardState(); resetPixelWarState();
+    Ctl.blacklight = false; // volatile, force-reset off on every show change -- see btnShort's handler for details
+    document.getElementById('blacklightCheck').checked = false;
+    refreshVariationRow();
+    updateStatusPanel();
+  }
+  if (Ctl.currMode in SHOW_TO_WASM_INDEX) {
+    const realVariation = wasmModule.ccall('web_getCurrentVariationIndex', 'number', [], []);
+    if (realVariation !== Ctl.variation) {
+      Ctl.variation = realVariation;
+      const row = document.getElementById('variationRow');
+      [...row.children].forEach((c, i) => c.classList.toggle('active', i === realVariation));
+    }
+  }
+}
+
 function tick(now) {
   try {
     const dtMs = now - lastFrameT;
@@ -6655,6 +6735,7 @@ function tick(now) {
 
     if (audioGraphReady) AudioBoard.poll(now);
 
+    syncShowStateFromWasm();
     renderCurrent(now, dtMs);
     draw();
 
