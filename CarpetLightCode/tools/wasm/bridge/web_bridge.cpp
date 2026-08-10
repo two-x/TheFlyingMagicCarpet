@@ -124,6 +124,40 @@ EMSCRIPTEN_KEEPALIVE
 const char * web_getSettingName() { return settingName( appMode, configSubsetting ); }
 
 // ---------------------------------------------------------------------
+// Direct show/variation selection -- a "convenience control" (see
+// claude_dev_prompts.md prompt 6): real hardware can only CYCLE shows via
+// repeated short-press, so jumping straight to an arbitrary index has no
+// physical-hardware equivalent action, same category as the audio sliders
+// already skipping real hardware's multi-press menu navigation. The value
+// landed on is 100% real committed state either way -- makeShow()/start()
+// are the exact same calls the real short-press handler makes.
+EMSCRIPTEN_KEEPALIVE
+int web_getNumShows() { return (int)numModes; }
+EMSCRIPTEN_KEEPALIVE
+int web_getCurrentShowIndex() { return (int)currMode; }
+EMSCRIPTEN_KEEPALIVE
+int web_getCurrentVariationIndex() { return (int)currLightShow->variation(); }
+EMSCRIPTEN_KEEPALIVE
+void web_setCurrentShow( int mode ) {
+   if ( mode < 0 || mode >= (int)numModes || (ShowMode)mode == currMode ) return;
+   currMode = (ShowMode)mode;
+   Nvm::saveShow( currMode );
+   delete currLightShow;
+   currLightShow = makeShow( currMode, currVariation[ currMode ] );
+   currLightShow->start();
+   prevMode = currMode;
+}
+EMSCRIPTEN_KEEPALIVE
+void web_setCurrentVariation( int variation ) {
+   if ( variation < 0 || variation == (int)currVariation[ currMode ] ) return;
+   currVariation[ currMode ] = (uint8_t)variation;
+   Nvm::saveVariation( currMode, (uint8_t)variation );
+   delete currLightShow;
+   currLightShow = makeShow( currMode, (uint8_t)variation );
+   currLightShow->start();
+}
+
+// ---------------------------------------------------------------------
 // Brightness + blacklight -- the visualizer's "Quick Adjust" panel sliders
 // call these directly (a real, always-live shortcut to the same state the
 // Brightness config screens adjust -- see claude_dev_prompts.md's
