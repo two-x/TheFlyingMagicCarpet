@@ -1,11 +1,11 @@
 # Claude Code standing prompts for this repo
 
-Five copy-pasteable prompts. Each one, pasted into a Claude Code session
+Six copy-pasteable prompts. Each one, pasted into a Claude Code session
 working in this repo (`CarpetLightCode`), sets up a **standing instruction**
 that applies to every future response in that session until you tell it
-otherwise — not a one-time task. Paste any subset of the 5; they're
-independent of each other (prompt 5 is a little different — see its own
-section below).
+otherwise — not a one-time task. Paste any subset of the 6; they're
+independent of each other (prompts 5 and 6 are a little different — see
+their own sections below).
 
 They're written to be self-contained: a fresh Claude session with no other
 context should be able to follow one correctly, reproducing the same
@@ -124,7 +124,11 @@ you checked.
 Use this if you're changing the visualizer (`tools/visualizer/carpet-visualizer.html`)
 itself, OR changing firmware behavior that the visualizer's Help popup
 documents (its config-menu map, its "inputs available to a show" getter
-reference, etc).
+reference, etc). See also prompt 6 below — a separate, standing
+architectural rule (not a sync-on-change prompt like this one) that governs
+*how* any code you write in this file is allowed to get its values, which
+matters for any change here that touches rendering or input handling, not
+just the Help text.
 
 ```text
 Upon each prompt answer from now on, until further notice, for each change
@@ -231,11 +235,17 @@ this time" so it's clear you checked.
 Use this any time you want Claude to stop short of actually committing, but
 still hand you an exact command (or commands) reflecting everything it just
 changed. Written for this specific repo's shape: a single git repository
-rooted at `~/Documents/TheFlyingMagicCarpet` containing two independent
-codebases as sibling subdirectories — `CANTroller2/` (the vehicle control
-box firmware, commit prefix `[control]`) and `CarpetLightCode/` (the light
-show firmware, commit prefix `[lightbox]`). A commit must never contain
-changes from both.
+rooted at `~/Documents/TheFlyingMagicCarpet` containing two commit
+categories as sibling subdirectories — `CANTroller2/` (the vehicle control
+box firmware, commit prefix `[control]`) and everything belonging to the
+light show system, commit prefix `[lightbox]`: `CarpetLightCode/` itself,
+`CarpetLightWifiESP/` (the WiFi radio bridge firmware), and any future
+ESP-based WiFi/radio bridge codebase added for the light show system --
+all of these share the `[lightbox]` prefix and count as ONE side of the
+split for this rule's purposes, even though they're separate directories.
+A commit must never contain changes from both categories (control vs.
+lightbox), but changes spanning `CarpetLightCode/` and
+`CarpetLightWifiESP/` together in one `[lightbox]` commit are fine.
 
 ```text
 Upon each prompt answer from now on, until further notice: end every
@@ -244,38 +254,52 @@ changed during it, anywhere in the ~/Documents/TheFlyingMagicCarpet repo)
 with one or more ready-to-paste shell lines reflecting what changed,
 following the rules below.
 
-This repo has two independent codebases living side by side in one git
-repo: CANTroller2/ ("control code," commit prefix [control]) and
-CarpetLightCode/ ("lightbox code," commit prefix [lightbox]). Before
-producing any commit line, check (e.g. via `git status --short` from the
-repo root) which of the two subtrees actually have changes right now —
-not just what this one response touched, but everything currently
-unstaged/untracked in the repo, since a stray leftover change in the
-other codebase must not get silently swept into this response's commit
+This repo has two commit categories living side by side in one git repo:
+CANTroller2/ ("control code," commit prefix [control]) and the light show
+system ("lightbox code," commit prefix [lightbox]) -- which spans MULTIPLE
+directories: CarpetLightCode/ itself, CarpetLightWifiESP/ (the WiFi radio
+bridge firmware), and any future ESP-based WiFi/radio bridge codebase
+added for the light show system. Treat all lightbox-prefixed directories
+as one side of the split -- a single [lightbox] commit may include changes
+from CarpetLightCode/ and CarpetLightWifiESP/ together, that's not mixing
+categories. Only mixing control-prefixed and lightbox-prefixed changes in
+one commit is disallowed. Before producing any commit line, check (e.g.
+via `git status --short` from the repo root) which category(ies) actually
+have changes right now -- not just what this one response touched, but
+everything currently unstaged/untracked in the repo, since a stray
+leftover change in the other category must not get silently swept into
+this response's commit
 either.
 
-- **If changes exist in only one of the two subtrees**: print a single
-  block in this exact form:
+- **If changes exist in only one category**: print a single block in this
+  exact form:
 
-  git add CarpetLightCode/path/to/changed1.h CarpetLightCode/path/to/changed2.html; git commit -m "[lightbox] 1) Section: detail 2) Section: detail"
+  git add CarpetLightCode/path/to/changed1.h CarpetLightWifiESP/path/to/changed2.cpp; git commit -m "[lightbox] 1) Section: detail 2) Section: detail"
 
-  (or the `CANTroller2/`/`[control]` equivalent). The `git add` argument
-  list must be the **actual specific changed/new file paths** (from
-  `git status`), each one explicitly prefixed with that one codebase's
-  directory — never a bare `git add .`, and never a directory-level `git
-  add CarpetLightCode/` either, since either form silently sweeps in
-  whatever else happens to be sitting unstaged in that subtree (a leftover
-  WIP change unrelated to this response) along with what you actually
-  meant to commit. List every file precisely, every time.
+  (or the `CANTroller2/`/`[control]` equivalent — control only ever spans
+  one directory today). Note the example above deliberately shows a
+  `[lightbox]` commit touching BOTH `CarpetLightCode/` and
+  `CarpetLightWifiESP/` paths in one `git add` — that's normal and
+  expected, not a mixing violation, since both directories share the
+  `[lightbox]` category. The `git add` argument list must be the **actual
+  specific changed/new file paths** (from `git status`), each one
+  explicitly prefixed with its own directory — never a bare `git add .`,
+  and never a directory-level `git add CarpetLightCode/` either, since
+  either form silently sweeps in whatever else happens to be sitting
+  unstaged in that tree (a leftover WIP change unrelated to this response)
+  along with what you actually meant to commit. List every file precisely,
+  every time.
 
-- **If changes exist in BOTH subtrees**: say so explicitly in your
-  response (e.g. "Both control and lightbox code changed — two separate
-  commits needed"), then print TWO separate blocks back to back, one per
-  codebase, each in the form above with that codebase's own prefix. Never
-  merge them into one `git add`/`git commit` pair, even if it feels like
-  one logical change spanning both — if the change genuinely spans both
-  codebases, it still gets described from each codebase's own point of
-  view in its own commit, split at the directory boundary.
+- **If changes exist in BOTH categories** (control and lightbox): say so
+  explicitly in your response (e.g. "Both control and lightbox code
+  changed — two separate commits needed"), then print TWO separate blocks
+  back to back, one per category, each in the form above with that
+  category's own prefix. Never merge them into one `git add`/`git commit`
+  pair, even if it feels like one logical change spanning both — if the
+  change genuinely spans control and lightbox, it still gets described
+  from each category's own point of view in its own commit, split at the
+  category boundary (not necessarily a single directory boundary, now that
+  lightbox spans more than one directory).
 
 - **Keep the whole message short.** List each genuinely distinct change as
   its own numbered item (1), 2), 3)...) inside a given -m string — one
@@ -342,9 +366,139 @@ terseness, TOC structure, etc.) as this repo currently has — not just the
 general idea. When updating a prompt, preserve that same level of
 specificity rather than summarizing it away.
 
+**Flag it, don't silently absorb it.** Whenever the user's own message --
+not just a code change you made -- gives an instruction meant to apply
+going forward (a new standing rule, a correction to how you should behave,
+a scope change to something already documented here), or implies one of
+these prompts now needs updating, say so explicitly in your response
+before or while acting on it -- e.g. "this is a new standing instruction,
+updating prompt N" or "this changes what prompt N covers, updating it
+now." Do not just quietly start behaving differently, and do not just
+quietly edit this file without calling out that that's what's happening.
+This applies even to small-seeming instructions -- err toward flagging.
+(This exact rule was itself added because of a real miss: a git-commit
+line was skipped for several responses in a row despite prompt 4 already
+covering it, and README/Help-content sync was skipped despite prompts 1/2
+already covering it -- both should have been caught immediately rather
+than only surfacing when the user asked "where's my commit line?" and
+"confirm you updated the README." Losing track of an already-documented
+standing instruction is exactly as much a miss as failing to document a
+new one -- both get flagged the same way.)
+
 End your response by explicitly noting "claude_dev_prompts.md updated:
 <1-line summary>" or "claude_dev_prompts.md: no update needed this time"
 so it's clear you checked.
+```
+
+## 6. Respect the zero-duplication mandate for the visualizer
+
+Not a "do X after each change" action prompt like 1-5 — a standing
+architectural rule to read *before* touching `tools/visualizer/carpet-visualizer.html`
+or anything it depends on (`tools/wasm/bridge/web_bridge.cpp`,
+`tools/wasm/build.sh`, the Due-side `RadioLink`-style classes if/when the
+realtime radio interface role exists). Paste this whenever you're about to
+work on the visualizer, not on a recurring "end of response" basis.
+
+```text
+This repo has a standing architectural mandate for
+tools/visualizer/carpet-visualizer.html, violated once already (found,
+reported, then left unfixed for the rest of that session) and not to be
+violated again without explicit case-by-case approval:
+
+**Dev Tool role**: zero duplication of firmware logic or values in
+JavaScript, ever. Every light color, every button-press classification,
+every config-mode navigation state, every audio-processed value must come
+from the REAL firmware running inside the compiled WASM module -- injected
+in (injectPotPercent/injectEncoderDelta/injectButtonDown/Up/injectAdcBins/
+etc.) and read back out (real LED buffer pointers, AudioBoard getters,
+status/nav getters), never computed independently in JS. If you're about
+to write JS that mimics what a C++ function in src/*.h already does --
+stop, that's the violation. Add a real getter/injector to
+tools/wasm/bridge/web_bridge.cpp and call that instead of reimplementing
+the logic.
+
+**Interface role** (the realtime WiFi-to-real-Due monitor/control mode, if
+present): the same mandate applies, MINUS explicitly pre-approved
+exceptions. As of this prompt's most recent update, there are exactly TWO:
+
+1. **Light-value rendering.** This role deliberately renders shows locally
+   in JS (`renderInterfaceMode()` and the functions it calls) from relayed
+   real audio/settings data, rather than streaming real LED bytes over the
+   radio link, for bandwidth reasons (see README.md / the plan file for
+   the full rationale). Must be re-ported from the real FW whenever the
+   corresponding `src/*Show.h` logic changes -- it does not update itself.
+
+2. **Pot/encoder/button become monitor-only (no remote control), not a
+   duplication exception exactly, but a deliberate scope restriction worth
+   documenting just as explicitly.** In Interface role, the visualizer's
+   pot/encoder/button panel must NEVER inject simulated input to control
+   the real Due -- only Dev Tool role's local WASM path does that (see
+   `web_injectPotPercent`/`web_injectEncoderDelta`/`web_injectButtonDown`/
+   `Up` in `tools/wasm/bridge/web_bridge.cpp`, Dev Tool role only). Instead
+   this panel is a pure one-way mirror: the pot angle line, encoder
+   button, CW/CCW arrows, and press-tier labels (Short/Medium/Long/
+   X-long/Double) render desaturated red by default and turn orange ONLY
+   when a real event/value relayed from the Due says so (a real button-
+   down/up, a real encoder step, a real live pot percentage) -- never from
+   a local heuristic inferring that something is probably happening (e.g.
+   watching a value drift and guessing someone's turning it). That
+   distinction is exactly what keeps this compliant with the mandate
+   rather than being a duplication itself -- if you ever find yourself
+   writing code that infers UI activity instead of being told it
+   explicitly by a relayed message, stop, that's the violation. Rationale:
+   a person may be physically operating the real light box's own pot/
+   encoder/button at the same time someone's watching the tablet --
+   letting the tablet also drive those same inputs would mean two control
+   sources fighting over one physical input. "Convenience controls" (see
+   below) are NOT covered by this restriction -- those remain real
+   one-way remote commands, same as ever, since setting an exact value
+   doesn't have the same physical-conflict problem simulating a
+   relative/physical input does.
+
+**Term: "convenience controls".** Any visualizer UI element that reads or
+writes a real FW-STORED value -- the show/variation selector, and any
+slider/button/toggle corresponding to a real, persisted (or live) FW
+setting (brightness levels, AGC mode, peak threshold, noise floor, hit
+decay/prediction/foresight, AutoPeak, sound-reactivity, blacklight, the
+AudioSource FW setting if it exists, etc.). This is the same category the
+Help modal's own FW/SHORTCUT/SIM tagging already documents for Dev Tool
+role (a UI shortcut that skips real hardware's multi-press menu
+navigation, but the value it sets is 100% real committed firmware state)
+-- convenience controls stay real, direct, one-way remote commands in
+BOTH roles, not just Dev Tool. This does NOT need mandate-exception
+treatment: the command goes out, the real Due's real code decides what
+happens, no FW logic is duplicated locally either way. Convenience
+controls are explicitly NOT the same thing as the pot/encoder/button
+panel above -- that panel simulates a raw physical input (a relative
+motion or a hold duration), which is exactly the physical-conflict case
+this restriction exists for; a convenience control sets an exact value
+instead, which doesn't have that problem. The one thing explicitly NOT a
+"convenience control": anything corresponding only to a VISUALIZER-local
+value with no real FW equivalent at all (the Mic/PC/File/Beats audio
+source picker, the Tone generator's pattern choice, injected-noise/
+source-level/phone-volume sliders, input-cap toggle -- the SIM-tagged
+audio-signal-chain modeling controls) -- those are Dev-Tool-only concepts
+by nature (there's no local signal chain to configure once real audio is
+either coming from the real chip or relayed over radio) and simply don't
+apply/appear in Interface role at all.
+
+Everything else not covered by the two exceptions above -- button-press
+classification, config-mode navigation, audio-processed values -- must
+still originate from the real Due, relayed over the radio link, never
+computed locally. Do NOT introduce a third exception on your own judgment,
+however reasonable it seems in the moment -- if a task seems to require
+one, stop and ask for explicit approval before writing the code, stating
+exactly what would be duplicated (or what new scope restriction you're
+proposing) and why you think it's justified. Both exceptions above must
+remain reachable ONLY from Interface role -- Dev Tool role must have zero
+code paths into either one; if you touch code near this boundary, verify
+that's still true rather than assuming it.
+
+If you ever find an existing violation of this mandate while working on
+something unrelated, report it immediately in that same response rather
+than quietly noting it and moving on -- silently deprioritizing a found
+violation is the exact failure mode that already happened once and is why
+this prompt exists.
 ```
 
 ---

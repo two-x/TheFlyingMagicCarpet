@@ -150,11 +150,27 @@ inline int digitalRead( int pin ) { return ( pin >= 0 && pin < HAL_NUM_PINS ) ? 
 // inject a short sequence for a pin instead of a single value, consumed one
 // call at a time and wrapping (so it also works if some future caller polls
 // more than 7 times without a fresh inject).
+//
+// BUGFIX: real Due hardware's analogRead() auto-offsets any pin number
+// below A0 (54, see framework-arduino-sam's variant.h) by adding A0 to it
+// (wiring_analog.c) -- this is exactly what makes POT_ANALOG_PIN==3 and
+// ENCODER_SW_PIN==3 (MagicCarpet.h, a literal-value coincidence, see
+// README.md's "Encoder and button UI" section) address two genuinely
+// different physical pins on real hardware (A3 vs D3) despite the shared
+// source-code literal. This shim didn't replicate that offset -- analogRead()
+// and digitalRead() indexed the exact same hal_pinState_[] slot for "pin 3",
+// so injecting a pot value here would have silently corrupted the encoder
+// button's digital pin state (and vice versa) the first time anything
+// actually injected both. Never caught before because nothing injected real
+// pot/button values until this fix landed alongside real input injection --
+// but it's a pre-existing shim bug, not something introduced by that.
+static const int HAL_A0 = 54;
 static const int HAL_MAX_ANALOG_CYCLE = 8;
 static int hal_analogCycle_[ HAL_NUM_PINS ][ HAL_MAX_ANALOG_CYCLE ];
 static int hal_analogCycleLen_[ HAL_NUM_PINS ] = { 0 };
 static int hal_analogCycleIdx_[ HAL_NUM_PINS ] = { 0 };
 inline int analogRead( int pin ) {
+   if ( pin < HAL_A0 ) pin += HAL_A0; // match real Due's own auto-offset -- see BUGFIX comment above
    if ( pin < 0 || pin >= HAL_NUM_PINS ) return 0;
    if ( hal_analogCycleLen_[ pin ] > 0 ) {
       int v = hal_analogCycle_[ pin ][ hal_analogCycleIdx_[ pin ] % hal_analogCycleLen_[ pin ] ];
@@ -164,6 +180,15 @@ inline int analogRead( int pin ) {
    return hal_pinState_[ pin ];
 }
 inline void halSetPinState( int pin, int val ) { if ( pin >= 0 && pin < HAL_NUM_PINS ) hal_pinState_[ pin ] = val; }
+// Analog-injection counterpart to halSetPinState() -- applies the same
+// below-A0 auto-offset analogRead() itself applies on read, so callers
+// (the WASM bridge) can inject by the same plain pin number the real FW's
+// own source uses (e.g. POT_ANALOG_PIN==3) without needing to know about
+// HAL_A0/the offset scheme themselves. See analogRead()'s BUGFIX comment.
+inline void halSetAnalogPinState( int pin, int val ) {
+   if ( pin < HAL_A0 ) pin += HAL_A0;
+   halSetPinState( pin, val );
+}
 // call once per simulated poll (e.g. once per 7-bin MSGEQ7 read) -- resets
 // the cycle position to the start of THIS injection, so each poll starts
 // from bin 0 regardless of how many reads the previous poll consumed.

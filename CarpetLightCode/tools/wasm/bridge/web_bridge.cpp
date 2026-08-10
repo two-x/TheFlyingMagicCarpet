@@ -34,6 +34,8 @@ EMSCRIPTEN_KEEPALIVE
 int web_sizeofRopeLed() { return sizeof( carpet->ropeLeds[ 0 ] ); }
 EMSCRIPTEN_KEEPALIVE
 int web_sizeofMegabarLed() { return sizeof( carpet->megabarLeds[ 0 ] ); }
+EMSCRIPTEN_KEEPALIVE
+int web_sizeofChinaLed() { return sizeof( carpet->chinaLeds[ 0 ] ); }
 
 EMSCRIPTEN_KEEPALIVE
 const char * web_getCurrentShowName() { return showName( currMode ); }
@@ -41,8 +43,8 @@ EMSCRIPTEN_KEEPALIVE
 const char * web_getCurrentVariationName() { return currLightShow->variationName(); }
 
 // test-only convenience -- real UI drives this via the encoder/button
-// injectors from phase 2, this just makes show-cycling easy to poke at
-// directly for this harness
+// injectors below, this just makes show-cycling easy to poke at directly
+// for a bare harness
 EMSCRIPTEN_KEEPALIVE
 void web_forcePressShort() {
    using namespace LedControl;
@@ -50,6 +52,107 @@ void web_forcePressShort() {
    halSetMillis( hal_millis_ + 50 );
    digitalWrite( PushButtonEdge::pin_, HIGH ); PushButtonEdge::isr();
 }
+
+// ---------------------------------------------------------------------
+// Real input injection -- the visualizer's zero-duplication mandate (see
+// claude_dev_prompts.md) requires the Dev Tool role to drive the REAL
+// PushButton/Encoder/Potentiometer state machines, not classify presses
+// or navigate config-mode in JS. These mirror what web_forcePressShort()
+// already did for its own narrow case, generalized so JS controls timing.
+
+// Button down/up -- JS calls these on real mousedown/mouseup (or touch
+// start/end), letting the real PushButton::update() state machine (run
+// every web_tick()) classify the press tier from genuine elapsed time
+// between the two calls, exactly as the real interrupt-driven hardware
+// path would. See PushButtonEdge::isr()'s own "active low" comment --
+// down pulls the pin LOW.
+EMSCRIPTEN_KEEPALIVE
+void web_injectButtonDown() {
+   using namespace LedControl;
+   digitalWrite( PushButtonEdge::pin_, LOW );
+   PushButtonEdge::isr();
+}
+EMSCRIPTEN_KEEPALIVE
+void web_injectButtonUp() {
+   using namespace LedControl;
+   digitalWrite( PushButtonEdge::pin_, HIGH );
+   PushButtonEdge::isr();
+}
+
+// Encoder rotation -- EncoderImpl::updatePosition() (LedController.h)
+// only ever looks at the CURRENT a_/b_ pin values (a_^b_ decides
+// increment vs decrement), not a true quadrature edge sequence, so one
+// call per unit step with a_/b_ set to encode the desired direction is
+// exactly equivalent to what the real A/B interrupts would have produced
+// -- no need to simulate a multi-edge quadrature waveform.
+EMSCRIPTEN_KEEPALIVE
+void web_injectEncoderDelta( int steps ) {
+   using namespace LedControl;
+   int dir = ( steps > 0 ) ? 1 : -1;
+   int n = steps > 0 ? steps : -steps;
+   for ( int i = 0; i < n; ++i ) {
+      EncoderImpl::a_ = ( dir > 0 ) ? 1 : 0;
+      EncoderImpl::b_ = 0;
+      EncoderImpl::updatePosition();
+   }
+}
+
+// Pot -- writes the real Potentiometer's own analog pin via the HalShim's
+// analog-injection path (halSetAnalogPinState(), which applies the same
+// below-A0 auto-offset real analogRead() does -- see HalShim.h's BUGFIX
+// comment; POT_ANALOG_PIN and ENCODER_SW_PIN share the literal value 3 in
+// source, real hardware disambiguates via that offset, and the shim now
+// does too).
+EMSCRIPTEN_KEEPALIVE
+void web_injectPotPercent( float pct ) {
+   if ( pct < 0.0f ) pct = 0.0f;
+   if ( pct > 100.0f ) pct = 100.0f;
+   int raw = (int)( pct / 100.0f * (float)MAX_VOLTAGE + 0.5f );
+   halSetAnalogPinState( POT_ANALOG_PIN, raw );
+}
+
+// ---------------------------------------------------------------------
+// App-mode / config-navigation status -- lets JS show real status text
+// (which screen/subsetting is active) without tracking that state
+// independently. settingName()/appMode/configSubsetting are CarpetLightLogic.cpp's
+// own real state, visible here since this file #includes it directly.
+EMSCRIPTEN_KEEPALIVE
+int web_getAppMode() { return (int)appMode; }
+EMSCRIPTEN_KEEPALIVE
+int web_getConfigSubsetting() { return (int)configSubsetting; }
+EMSCRIPTEN_KEEPALIVE
+const char * web_getSettingName() { return settingName( appMode, configSubsetting ); }
+
+// ---------------------------------------------------------------------
+// Brightness + blacklight -- the visualizer's "Quick Adjust" panel sliders
+// call these directly (a real, always-live shortcut to the same state the
+// Brightness config screens adjust -- see claude_dev_prompts.md's
+// help-fw-io/help-shortcuts distinction), rather than scaling
+// ropeLeds/megabarLeds/chinaLeds a second time in JS after reading them
+// back already-scaled by the real MagicCarpet::applyBrightnessCeiling().
+EMSCRIPTEN_KEEPALIVE
+void web_setGlobalBrightness( float pct ) { carpet->setGlobalBrightness( pct ); }
+EMSCRIPTEN_KEEPALIVE
+float web_getGlobalBrightness() { return carpet->getGlobalBrightness(); }
+EMSCRIPTEN_KEEPALIVE
+void web_setHeadlightBrightness( float pct ) { carpet->setHeadlightBrightness( pct ); }
+EMSCRIPTEN_KEEPALIVE
+float web_getHeadlightBrightness() { return carpet->getHeadlightBrightness(); }
+EMSCRIPTEN_KEEPALIVE
+void web_setChinaBrightness( float pct ) { carpet->setChinaBrightness( pct ); }
+EMSCRIPTEN_KEEPALIVE
+float web_getChinaBrightness() { return carpet->getChinaBrightness(); }
+// Mirrors exactly what the real double-press handler in CarpetLightLogic.cpp
+// does (toggle blacklightOn, call carpet->setBlacklight()) -- both touched
+// together so the Quick Adjust checkbox and a real double-press can never
+// silently disagree about the current state.
+EMSCRIPTEN_KEEPALIVE
+void web_setBlacklightOn( int on ) {
+   blacklightOn = ( on != 0 );
+   carpet->setBlacklight( blacklightOn );
+}
+EMSCRIPTEN_KEEPALIVE
+int web_getBlacklightOn() { return blacklightOn ? 1 : 0; }
 
 // ---------------------------------------------------------------------
 // Audio injection + readback. Per the visualizer's architecture rule (see
