@@ -950,7 +950,7 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ b1c1b02 - 2026-08-09 21:50 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ 2ebe995 - 2026-08-10 03:02 UTC</span>
 </header>
 
 <div class="help-overlay" id="helpOverlay" hidden>
@@ -1004,8 +1004,8 @@ footer {
         <li><strong>Call the real firmware's tick function</strong> (<code>web_tick()</code>, a thin wrapper around real <code>loop()</code>) — the exact code path hardware runs.</li>
         <li><strong>Read back the firmware's own output</strong> — the LED arrays it just computed (<code>ropeLeds[]</code>, <code>megabarLeds[]</code>, <code>chinaLeds[]</code>) — and draw them onto the on-screen car.</li>
       </ol>
-      <p>No show's color, timing, or audio-reactivity logic is duplicated in JavaScript. If a show looks wrong here, it's wrong in real firmware too (one disclosed exception below) — that's the whole point of this design.</p>
-      <p><strong>Known gap:</strong> Nightrider's on-screen preview (<code>showNightrider()</code> in this file's JS) hasn't yet been migrated to read real WASM LED buffers — still an approximation. Every other show, config screen, and all audio processing reads real FW output. A known TODO, not a design choice.</p>
+      <p>No show's color, timing, or audio-reactivity logic is duplicated in JavaScript for Dev Tool role — this was violated for a stretch of this project's history (all 5 shows were silently JS-reimplemented, not just one), found, and fixed: light output (every show, every config screen) now reads real WASM LED buffers (<code>readLedsFromWasm()</code>) with zero exceptions. If a show looks wrong here, it's wrong in real firmware too — that's the whole point of this design. See <code>claude_dev_prompts.md</code>'s prompt 6 for the standing rule that exists specifically to keep this from regressing a third time.</p>
+      <p><strong>Known gap:</strong> input injection is partially wired. Audio (7 MSGEQ7 bins) is fully real end-to-end. Pot/encoder/button injectors exist in the bridge (<code>web_injectPotPercent</code>/<code>web_injectEncoderDelta</code>/<code>web_injectButtonDown</code>/<code>Up</code>) but aren't called from this page's UI yet, so dragging the pot or pressing the encoder doesn't drive the real firmware yet — whatever show/config-screen the firmware booted into or was last saved on is what you'll see, regardless of what the on-screen controls show locally. A known, tracked gap, not a design choice.</p>
 
       <h3 id="help-categories">3. What's real FW vs. a visualizer shortcut vs. simulated audio</h3>
       <p>Every control here falls into one of three categories:</p>
@@ -2327,6 +2327,46 @@ CarpetFirmware().then((M) => {
   console.error('CarpetFirmware WASM module failed to load:', e);
   document.getElementById('audioStatus').textContent = 'WASM firmware failed to load -- see console';
 });
+
+/* =====================================================================
+   LED OUTPUT READBACK -- Dev Tool role only. Reads the REAL firmware's
+   own computed LED colors back out of WASM memory after each web_tick(),
+   into the SAME local ropeLeds/megabarLeds/chinaLeds arrays draw() has
+   always consumed (draw() itself needs no changes -- it was always
+   agnostic to where those arrays' contents came from). This is the
+   zero-duplication mandate's core fix (see claude_dev_prompts.md, prompt
+   6): no show is JS-reimplemented for this role anymore, not even
+   Nightrider. Byte layout matches each array's real C++ struct exactly
+   (src/CRGBW.h): ropeLeds=CRGBW [R,G,B,W], megabarLeds=CRGB [R,G,B],
+   chinaLeds=CRGBWUA [R,G,B,W,A,U] -- only R/G/B are read here since
+   that's all draw()'s canvas rendering ever consumes. Pointers/strides
+   are queried once and cached (they're static FW globals, never move).
+   ===================================================================== */
+let wasmLedPtrs = null;
+function readLedsFromWasm() {
+  if (!wasmReady) return;
+  if (!wasmLedPtrs) {
+    wasmLedPtrs = {
+      rope: wasmModule.ccall('web_getRopeLedsPtr', 'number', [], []),
+      megabar: wasmModule.ccall('web_getMegabarLedsPtr', 'number', [], []),
+      china: wasmModule.ccall('web_getChinaLedsPtr', 'number', [], []),
+      ropeStride: wasmModule.ccall('web_sizeofRopeLed', 'number', [], []),
+      megabarStride: wasmModule.ccall('web_sizeofMegabarLed', 'number', [], []),
+      chinaStride: wasmModule.ccall('web_sizeofChinaLed', 'number', [], []),
+    };
+  }
+  const heap = wasmModule.HEAPU8;
+  const copyRgb = (destArr, basePtr, stride) => {
+    for (let i = 0; i < destArr.length; i++) {
+      const o = basePtr + i * stride;
+      const led = destArr[i];
+      led.r = heap[o]; led.g = heap[o + 1]; led.b = heap[o + 2];
+    }
+  };
+  copyRgb(ropeLeds, wasmLedPtrs.rope, wasmLedPtrs.ropeStride);
+  copyRgb(megabarLeds, wasmLedPtrs.megabar, wasmLedPtrs.megabarStride);
+  copyRgb(chinaLeds, wasmLedPtrs.china, wasmLedPtrs.chinaStride);
+}
 
 /* =====================================================================
    AUDIO BOARD -- thin proxy over the real firmware's AudioBoard (src/
@@ -4778,7 +4818,31 @@ function powerTestScreen() {
   for (const c of POWERTEST_CHINA_RIGHT) chinaLeds[c] = backHalf;
 }
 
+// visualizerRole: 'dev' (Dev Tool, the only role reachable today -- the
+// Interface role's UI toggle is a separate, not-yet-built piece, see
+// ~/.claude/plans/quiet-watching-cherny.md) or 'interface'. Dev Tool MUST
+// call readLedsFromWasm() only, never renderInterfaceMode() below -- see
+// claude_dev_prompts.md prompt 6, the zero-duplication mandate this
+// split exists to enforce structurally, not just by convention.
+let visualizerRole = 'dev';
+
 function renderCurrent(nowMs, dtMs) {
+  if (visualizerRole === 'interface') {
+    renderInterfaceMode(nowMs, dtMs);
+  } else {
+    readLedsFromWasm();
+  }
+}
+
+// Interface-role-only renderer -- a deliberate, approved exception to the
+// zero-duplication mandate (claude_dev_prompts.md prompt 6): re-implements
+// show/config-screen rendering in JS rather than streaming real LED bytes
+// over the radio link, for bandwidth. NEVER called when visualizerRole
+// is 'dev' -- see renderCurrent() above. Must be re-ported from the real
+// FW whenever the corresponding src/*Show.h / MagicCarpet::showXXX()
+// logic changes (see claude_dev_prompts.md prompt 6's "Interface role"
+// paragraph) -- it does not update itself.
+function renderInterfaceMode(nowMs, dtMs) {
   switch (Ctl.currMode) {
     case 'nightrider': showNightrider(nowMs, dtMs); break;
     case 'flame': showFlame(nowMs, dtMs); break;
@@ -6110,7 +6174,7 @@ function initModal( { overlayId, openBtnId, closeBtnId, headerId, popoutBtnId, t
    closeBtn.addEventListener( 'click', close );
    overlay.addEventListener( 'click', ( e ) => { if ( e.target === overlay ) close(); } );
    document.addEventListener( 'keydown', ( e ) => { if ( e.key === 'Escape' && !overlay.hidden ) close(); } );
-   popoutBtn.addEventListener( 'click', () => popoutModal( body, title ) );
+   popoutBtn.addEventListener( 'click', () => { popoutModal( body, title ); close(); } );
    makeModalDraggable( header, modal );
 }
 
@@ -6141,14 +6205,14 @@ initModal( {
   });
 }
 
-// The CI deploy workflow replaces master @ b1c1b02 - 2026-08-09 21:50 UTC with the real
+// The CI deploy workflow replaces master @ 2ebe995 - 2026-08-10 03:02 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  if (el.textContent === 'master @ b1c1b02 - 2026-08-09 21:50 UTC') el.textContent = 'local build (not CI-deployed)';
+  if (el.textContent === 'master @ 2ebe995 - 2026-08-10 03:02 UTC') el.textContent = 'local build (not CI-deployed)';
 }
 
 const potIndicator = document.querySelector('#potKnob .knob__indicator');
@@ -6526,9 +6590,17 @@ document.getElementById('predictMsSlider').addEventListener('input', (e) => {
   updateStatusPanel();
 });
 syncPredictMsMax();
-bindSlider('globalBrSlider', 'globalBrVal', v => v+'%', v => Ctl.globalBr = v);
-bindSlider('headlightBrSlider', 'headlightBrVal', v => v+'%', v => Ctl.headlightBr = v);
-bindSlider('chinaBrSlider', 'chinaBrVal', v => v+'%', v => Ctl.chinaBr = v);
+// Quick Adjust brightness sliders -- a real, always-live shortcut to the
+// SAME state the Brightness config screens adjust (see claude_dev_prompts.md's
+// help-fw-io/help-shortcuts distinction). Dev Tool role: call the real
+// web_set*Brightness() injectors (added for the zero-duplication mandate
+// fix, prompt 6) so real MagicCarpet::applyBrightnessCeiling() actually
+// scales what readLedsFromWasm() reads back -- Ctl.globalBr/etc. are kept
+// in sync too since Interface role's renderInterfaceMode() still reads
+// them locally (see that function's own comment).
+bindSlider('globalBrSlider', 'globalBrVal', v => v+'%', v => { Ctl.globalBr = v; if (wasmReady) wasmModule.ccall('web_setGlobalBrightness', null, ['number'], [v]); });
+bindSlider('headlightBrSlider', 'headlightBrVal', v => v+'%', v => { Ctl.headlightBr = v; if (wasmReady) wasmModule.ccall('web_setHeadlightBrightness', null, ['number'], [v]); });
+bindSlider('chinaBrSlider', 'chinaBrVal', v => v+'%', v => { Ctl.chinaBr = v; if (wasmReady) wasmModule.ccall('web_setChinaBrightness', null, ['number'], [v]); });
 // AGC is 3-state (Off/Band/Full, matching firmware's AGCMode), not a plain
 // on/off toggle, so it isn't bindToggleButton()'d -- click cycles to the
 // next state (wrapping around, unlike the encoder's clamped-at-both-ends
@@ -6556,7 +6628,10 @@ document.getElementById('btnAutoPeak').addEventListener('click', () => {
   updateAutoPeakButtonUI();
 });
 updateAgcButtonUI();
-document.getElementById('blacklightCheck').addEventListener('change', (e) => Ctl.blacklight = e.target.checked);
+document.getElementById('blacklightCheck').addEventListener('change', (e) => {
+  Ctl.blacklight = e.target.checked;
+  if (wasmReady) wasmModule.ccall('web_setBlacklightOn', null, ['number'], [e.target.checked ? 1 : 0]);
+});
 document.getElementById('fixtureDotsCheck').addEventListener('change', (e) => Ctl.showFixtureDots = e.target.checked);
 document.getElementById('predictStyleSelect').addEventListener('change', (e) => { AudioBoard.hitPredictionStyle = +e.target.value; updateStatusPanel(); });
 updateStatusPanel();
