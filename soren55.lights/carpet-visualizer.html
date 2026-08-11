@@ -950,7 +950,7 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">soren55.lights @ d658302 - 2026-08-10 03:34 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">soren55.lights @ 20e784c - 2026-08-11 14:34 UTC</span>
 </header>
 
 <div class="help-overlay" id="helpOverlay" hidden>
@@ -6251,14 +6251,14 @@ initModal( {
   });
 }
 
-// The CI deploy workflow replaces soren55.lights @ d658302 - 2026-08-10 03:34 UTC with the real
+// The CI deploy workflow replaces soren55.lights @ 20e784c - 2026-08-11 14:34 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  if (el.textContent === 'soren55.lights @ d658302 - 2026-08-10 03:34 UTC') el.textContent = 'local build (not CI-deployed)';
+  if (el.textContent === 'soren55.lights @ 20e784c - 2026-08-11 14:34 UTC') el.textContent = 'local build (not CI-deployed)';
 }
 
 const potIndicator = document.querySelector('#potKnob .knob__indicator');
