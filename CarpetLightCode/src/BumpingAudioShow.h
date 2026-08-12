@@ -1039,12 +1039,13 @@ class EqualizerShow : public LightShow {
       // triggers are sourced from specific bins rather than the curated
       // AudioBand groupings: treble is just the top 2 bins (FreqBin5/6 --
       // 6250/16000Hz), NOT AudioBand's own BandTreble (which also includes
-      // FreqBin4/2500Hz); midrange is FreqBin2/3/4 (400/1000/2500Hz) --
-      // AudioBand's own BandMid (FreqBin2/3 only) plus the 2500Hz bin taken
-      // out of treble above.
+      // FreqBin4/2500Hz); midrange is FreqBin2/3 (400/1000Hz) -- AudioBand's
+      // own BandMid, unchanged (FreqBin4/2500Hz, formerly also included
+      // here, dropped per follow-up request -- now tracked by neither
+      // trebleEdge nor midEdge).
       bool bassEdge = AudioBoard::NewBandHit( BandBass );
       bool trebleEdge = AudioBoard::NewBinHit( FreqBin5 ) || AudioBoard::NewBinHit( FreqBin6 );
-      bool midEdge = AudioBoard::NewBinHit( FreqBin2 ) || AudioBoard::NewBinHit( FreqBin3 ) || AudioBoard::NewBinHit( FreqBin4 );
+      bool midEdge = AudioBoard::NewBinHit( FreqBin2 ) || AudioBoard::NewBinHit( FreqBin3 );
 
       if ( bassEdge ) {
          // pixel_war's own turn length is 50% longer than the shared
