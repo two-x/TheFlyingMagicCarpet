@@ -2915,14 +2915,14 @@ function sampleSourceLevelFromStream(ctx, stream) {
 //            hip-hop-style kick mixed in (see "chris").
 //   snare -- a short mid/broadband transient (the "snap" of a snare hit).
 //   hihat -- treble (BAND_HIGH), normally at hihatHz1/hihatHz2. A step
-//            value of 2 is the SAME noise/tone blend and decay as the
-//            snare hit, just retuned to midHihatHz (BAND_MID's own
-//            1000Hz bin) -- independently enveloped (its own onset/decay,
-//            doesn't reset the treble hit's), per request. Genre patterns
-//            use this for a short 2-hit accent (not repeated through the
-//            whole bar -- see each pattern's own comment) rather than a
-//            longer roll. Gives genre-typical patterns real BAND_MID
-//            content without needing a separate mid: pattern.
+//            value of 2 is a bassdrum hit (pure sine, kick's own fast
+//            default decay via kick2Decay -- no noise), just retuned to
+//            midHihatHz (BAND_MID range, 750Hz) -- independently
+//            enveloped (its own onset/decay, doesn't reset the kick's),
+//            per request. Genre patterns use this for a single accent hit
+//            (not repeated through the whole bar -- see each pattern's own
+//            comment). Gives genre-typical patterns real BAND_MID content
+//            without needing a separate mid: pattern.
 //   mid   -- BAND_MID, genre-appropriate (chord stabs / vocal line /
 //            sample chop / etc, see each pattern's own comment) -- mostly
 //            tonal rather than noisy, and can also use the 2=sustained
@@ -3113,7 +3113,7 @@ function useTone() {
         if (kickSustainRemaining > 0) kickSustainRemaining--; else kickEnv *= kickDecayActive;
         kickAccentEnv *= kickAccentDecay;
         if (midSustainRemaining > 0) midSustainRemaining--; else midEnv *= midDecay;
-        snareEnv *= snareDecay; hihatEnv *= hihatDecay; hihatMidEnv *= snareDecay;
+        snareEnv *= snareDecay; hihatEnv *= hihatDecay; hihatMidEnv *= kick2Decay;
         kickPhase += kickFreqActive / ctx.sampleRate;
         snarePhase += snareHz / ctx.sampleRate;
         hihatPhase += hihatHz1 / ctx.sampleRate;
@@ -3123,8 +3123,8 @@ function useTone() {
         const kickSample = Math.sin(kickPhase * 2 * Math.PI) * (kickEnv + kickAccentEnv);
         const snareSample = ((Math.random() * 2 - 1) * 0.5 + Math.sin(snarePhase * 2 * Math.PI) * 0.5) * snareEnv;
         const hihatSample = ((Math.random() * 2 - 1) * 0.35 + Math.sin(hihatPhase * 2 * Math.PI) * 0.4 + Math.sin(hihatPhase2 * 2 * Math.PI) * 0.25) * hihatEnv;
-        // literally the snare hit's own noise/tone mix and decay, just retuned to BAND_MID (1000Hz) -- see hihat step-value 2 comment in TONE_PATTERNS
-        const hihatMidSample = ((Math.random() * 2 - 1) * 0.5 + Math.sin(hihatMidPhase * 2 * Math.PI) * 0.5) * hihatMidEnv;
+        // literally a bassdrum hit (pure sine, kick's own fast default decay via kick2Decay) -- just retuned to BAND_MID -- see hihat step-value 2 comment in TONE_PATTERNS
+        const hihatMidSample = Math.sin(hihatMidPhase * 2 * Math.PI) * hihatMidEnv;
         // mostly tonal (chord/vocal-like), light noise texture -- not a percussive hit
         const midSample = (Math.sin(midPhase * 2 * Math.PI) * 0.8 + (Math.random() * 2 - 1) * 0.15) * midEnv;
         out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + hihatMidSample * 0.7 + midSample * 0.6));
