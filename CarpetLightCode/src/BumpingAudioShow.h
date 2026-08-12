@@ -54,6 +54,9 @@ static const int NEWSTD_LEFT_RIGHT_MEGABARS[6] = { 2, 3, 4, 8, 9, 10 };
 // [0,3,4,7] aimed along a side edge.
 static const int NEWSTD_CHINA_FRONTBACK[4] = { 1, 2, 5, 6 };
 static const int NEWSTD_CHINA_SIDES[4] = { 0, 3, 4, 7 };
+// pixel_war china pairing: each of the 8 chinas paired with the one
+// address above it.
+static const int PW_CHINA_PAIRS[4][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 } };
 // sub_standard megabar cycle option 3: each megabar paired with its exact
 // opposite (180deg away -- +6 positions around the 12-megabar, 30deg-spaced
 // ring, same angle convention as LighthouseShow.h/NEWSTD_FRONT_REAR_MEGABARS
@@ -198,6 +201,17 @@ class EqualizerShow : public LightShow {
    int pwLastPicked_[ PW_MAX_PICK ] = { -1, -1, -1, -1 };
    bool pwTurnIsB_ = true;  // whose turn it currently is
    int pwTurnHitCount_ = 0; // bass hits so far this turn, vs cycleBeats_
+   // CHINA: 4 pairs (PW_CHINA_PAIRS), 2 assigned to bass and 2 to treble --
+   // each pair shows its assigned band's color, brightness tracking that
+   // band's own live hit level. Every 4 combined bass+treble hit edges, a
+   // random pair swaps assignment with a random pair currently on the
+   // other band, keeping the 2/2 split -- so which corner/side is bass vs
+   // treble drifts over time instead of being fixed. Restored per request
+   // (was simplified away to a single all-bass color when treble had been
+   // dropped from this variation entirely; treble's back now, see
+   // trebleEdge above, so this is a faithful restore, not new design).
+   bool pwChinaPairIsBass_[ 4 ] = { true, true, false, false };
+   int pwChinaHitCount_ = 0;
 
    // triple-strobe on bass hits (see updateStrobe()) -- nonvolatile, toggled
    // by a double press while this show is active (see CarpetLightLogic.cpp)
@@ -295,6 +309,14 @@ class EqualizerShow : public LightShow {
       for ( int n = 0; n < PW_MAX_PICK; ++n ) pwLastPicked_[ n ] = -1;
       pwTurnIsB_ = true;
       pwTurnHitCount_ = 0;
+      // randomly assign 2 of the 4 china pairs to bass, 2 to treble
+      {
+         int idxs[ 4 ] = { 0, 1, 2, 3 };
+         for ( int i = 3; i > 0; --i ) { int j = random( i + 1 ); int t = idxs[ i ]; idxs[ i ] = idxs[ j ]; idxs[ j ] = t; }
+         for ( int p = 0; p < 4; ++p ) pwChinaPairIsBass_[ p ] = false;
+         pwChinaPairIsBass_[ idxs[ 0 ] ] = true; pwChinaPairIsBass_[ idxs[ 1 ] ] = true;
+         pwChinaHitCount_ = 0;
+      }
    }
 
    void update( uint32_t time ) {
@@ -792,7 +814,9 @@ class EqualizerShow : public LightShow {
       }
 
       // ROPE: the default variation's single traveling segment, plus 3 more
-      // evenly spaced (a quarter of the loop) apart, all in Bcolor.
+      // evenly spaced (a quarter of the loop) apart, all in Bcolor, over a
+      // Tcolor background (per request -- was CRGB::Black; anywhere far
+      // from a segment now shows the treble color instead of going dark).
       float chasePos = fmodf( (float)time / 1000.0f * 60.0f, (float)NUM_NEO_LEDS_ACTUAL );
       float quarter = (float)NUM_NEO_LEDS_ACTUAL / 4.0f;
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
@@ -803,7 +827,7 @@ class EqualizerShow : public LightShow {
             if ( d < nearest ) nearest = d;
          }
          uint8_t amt = (uint8_t)max( 0.0f, 255.0f - nearest * 4.0f );
-         carpet->ropeLeds[ i ] = blend( CRGB::Black, Bcolor, amt );
+         carpet->ropeLeds[ i ] = blend( Tcolor, Bcolor, amt );
          carpet->ropeLeds[ i ].w = 0;
       }
 
@@ -982,6 +1006,7 @@ class EqualizerShow : public LightShow {
       newStdColors( Bcolor, Tcolor );
       static const CRGB Mcolor = CRGB::Green; // fixed, per request -- midrange flood pool's own color
       uint8_t bassHit = AudioBoard::getBandHitPercent( BandBass );
+      uint8_t trebleHit = AudioBoard::getBandHitPercent( BandTreble ); // china pair brightness only -- see CHINA section below
 
       if ( silent ) {
          updateSilenceFloods( time, dtSec, Bcolor, Tcolor );
@@ -1007,7 +1032,6 @@ class EqualizerShow : public LightShow {
             pwTurnIsB_ = !pwTurnIsB_;
          }
       }
-      CRGB activeColor = pwTurnIsB_ ? Bcolor : Tcolor;
 
       // ROPE: territory war -- every qualifying bass hit pushes territory
       // toward whichever color currently has the turn immediately (the
@@ -1039,15 +1063,16 @@ class EqualizerShow : public LightShow {
       // (PW_BASS_PICK, always Bcolor) + treble (PW_TREBLE_PICK =
       // ceil(bass/2), always Tcolor) + mid (PW_MID_PICK, always Mcolor/
       // green), per request. BUGFIX ("bass hits respond using treble
-      // color"): the bass pool used to render with activeColor (whichever
-      // color currently has the WAR's turn -- Bcolor or Tcolor, alternating)
-      // instead of a fixed Bcolor, so during T's turn a genuine bass hit
-      // would render identically to a treble hit, indistinguishable from
-      // each other. activeColor stays turn-dependent for the ROPE/CHINA
-      // (that's the actual "war" visual, unchanged) -- only the megabar
-      // flash pool's bass color is now fixed, same as treble/mid always
-      // were, so each pool's color always identifies which band triggered
-      // it, like china's own bass/treble split does.
+      // color"): the bass pool used to render with whichever color
+      // currently has the WAR's turn (Bcolor or Tcolor, alternating, via
+      // pwColorAt()) instead of a fixed Bcolor, so during T's turn a
+      // genuine bass hit would render identically to a treble hit,
+      // indistinguishable from each other. The turn-dependent color stays
+      // in the ROPE only (via pwColorAt() -- that's the actual "war"
+      // visual, unchanged) -- the megabar flash pool's bass color is fixed,
+      // same as treble/mid always were, and CHINA's bass/treble pairs
+      // likewise always render their own fixed Bcolor/Tcolor -- so every
+      // pool's color always identifies which band triggered it.
       // wasLastPicked avoidance is shared across all 3 pools (one combined
       // memory, PW_MAX_PICK slots) so back-to-back picks from DIFFERENT
       // bands still avoid immediately repeating a spot.
@@ -1076,7 +1101,18 @@ class EqualizerShow : public LightShow {
       };
       if ( bassEdge ) pwPickAndLight( PW_BASS_PICK, PwSrcBass );
       if ( trebleEdge ) pwPickAndLight( PW_TREBLE_PICK, PwSrcTreble );
-      if ( midEdge ) pwPickAndLight( PW_MID_PICK, PwSrcMid );
+      // Per request: at most 1 megabar shows mid/green at any instant. Bass/
+      // treble pools are allowed to have several mid-fade megabars glowing at
+      // once (that's the intended "war" density), but mid's own pool must
+      // never show more than PW_MID_PICK(=1) simultaneously -- with only the
+      // pick-and-fade mechanism above, 2 midEdge hits landing within the same
+      // 0.4s fade window (e.g. a quick roll of mid-range percussion hits)
+      // would each pick a DIFFERENT megabar, leaving multiple green at once.
+      // Force any currently-lit mid megabar dark before picking the new one.
+      if ( midEdge ) {
+         for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) if ( pwMegabarColorSrc_[ m ] == PwSrcMid ) pwMegabarHeat_[ m ] = 0.0f;
+         pwPickAndLight( PW_MID_PICK, PwSrcMid );
+      }
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
          pwMegabarHeat_[ m ] = max( 0.0f, pwMegabarHeat_[ m ] - dtSec / 0.4f );
          CRGB base = ( pwMegabarColorSrc_[ m ] == PwSrcBass ) ? Bcolor : ( pwMegabarColorSrc_[ m ] == PwSrcTreble ) ? Tcolor : Mcolor;
@@ -1084,12 +1120,32 @@ class EqualizerShow : public LightShow {
          carpet->megabarLeds[ m ] = base;
       }
 
-      // CHINA: all 8 flash together in the ACTIVE color, brightness
-      // tracking the live bass hit level -- simpler than the old 2-band
-      // pair-split, since there's no treble input left to split against.
-      CRGB chinaLit = activeColor;
-      chinaLit.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
-      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) { carpet->chinaLeds[ c ] = chinaLit; carpet->chinaLeds[ c ].w = 0; }
+      // CHINA: 4 pairs, 2 assigned to bass and 2 to treble -- each pair
+      // shows its assigned band's color, brightness tracking that band's
+      // own hit level live. Every 4 hit edges, a random pair swaps bands
+      // with a random pair currently on the other band, keeping the 2/2
+      // split.
+      if ( bassEdge ) ++pwChinaHitCount_;
+      if ( trebleEdge ) ++pwChinaHitCount_;
+      if ( pwChinaHitCount_ >= 4 ) {
+         pwChinaHitCount_ -= 4;
+         int grabbed = random( 4 );
+         int opposite[ 4 ], oppositeCount = 0;
+         for ( int p = 0; p < 4; ++p ) if ( pwChinaPairIsBass_[ p ] != pwChinaPairIsBass_[ grabbed ] ) opposite[ oppositeCount++ ] = p;
+         if ( oppositeCount > 0 ) {
+            int other = opposite[ random( oppositeCount ) ];
+            bool tmp = pwChinaPairIsBass_[ grabbed ];
+            pwChinaPairIsBass_[ grabbed ] = pwChinaPairIsBass_[ other ];
+            pwChinaPairIsBass_[ other ] = tmp;
+         }
+      }
+      for ( int p = 0; p < 4; ++p ) {
+         bool isBass = pwChinaPairIsBass_[ p ];
+         uint8_t hitPct = isBass ? bassHit : trebleHit;
+         CRGB lit = isBass ? Bcolor : Tcolor;
+         lit.nscale8( (uint8_t)( (uint16_t)hitPct * 255 / 100 ) );
+         for ( int k = 0; k < 2; ++k ) { int c = PW_CHINA_PAIRS[ p ][ k ]; carpet->chinaLeds[ c ] = lit; carpet->chinaLeds[ c ].w = 0; }
+      }
    }
 
    static CRGB vuMeterColor( bool bassLit, bool trebleLit, const CRGB & bassClr, const CRGB & trebleClr ) {
