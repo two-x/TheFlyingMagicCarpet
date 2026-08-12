@@ -3070,12 +3070,11 @@ function useTone() {
       // so mid/snare land as distinct contributions within BAND_MID
       // (max of the 400Hz and 1000Hz bins).
       const snareHz = 900, hihatHz1 = 6250, hihatHz2 = 15500, midHz = 400;
-      // BAND_MID range (400-2500Hz bins) -- see hihat step-value 2 above.
-      // Per request, this is the snare hit's own noise/tone mix and decay,
-      // just retuned (independent envelope/phase, so it doesn't reset the
-      // snare hit's own onset) -- not a separate percussion timbre. Lowered
-      // from 1000 to 750Hz per follow-up request.
-      const midHihatHz = 750;
+      // BAND_MID range -- see hihat step-value 2 above. Per request, this is
+      // the kick's own pure-sine/fast-decay sound, just retuned (independent
+      // envelope/phase, so it doesn't reset the kick's own onset) -- not a
+      // separate percussion timbre. 1000 -> 750 -> 300Hz across follow-up requests.
+      const midHihatHz = 300;
       const KICK_SUSTAIN_SAMPLES = Math.round(0.4 * ctx.sampleRate); // up to 400ms hold for step-value 2 (kick or mid)
       // Onset "pop" for every kick hit, ON TOP of whatever kickEnv is
       // already doing -- fixes "can only barely hear the leading edge
