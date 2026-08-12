@@ -1122,13 +1122,14 @@ class EqualizerShow : public LightShow {
 
       // CHINA: 4 pairs, 2 assigned to bass and 2 to treble -- each pair
       // shows its assigned band's color, brightness tracking that band's
-      // own hit level live. Every 4 hit edges, a random pair swaps bands
-      // with a random pair currently on the other band, keeping the 2/2
-      // split.
+      // own hit level live. Every 8 hit edges (per request, half as often
+      // as the original 4), a random pair swaps bands with a random pair
+      // currently on the other band, keeping the 2/2 split.
+      static const int PW_CHINA_SWAP_HITS = 8;
       if ( bassEdge ) ++pwChinaHitCount_;
       if ( trebleEdge ) ++pwChinaHitCount_;
-      if ( pwChinaHitCount_ >= 4 ) {
-         pwChinaHitCount_ -= 4;
+      if ( pwChinaHitCount_ >= PW_CHINA_SWAP_HITS ) {
+         pwChinaHitCount_ -= PW_CHINA_SWAP_HITS;
          int grabbed = random( 4 );
          int opposite[ 4 ], oppositeCount = 0;
          for ( int p = 0; p < 4; ++p ) if ( pwChinaPairIsBass_[ p ] != pwChinaPairIsBass_[ grabbed ] ) opposite[ oppositeCount++ ] = p;
