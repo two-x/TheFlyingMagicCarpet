@@ -111,6 +111,20 @@ void web_injectPotPercent( float pct ) {
    halSetAnalogPinState( POT_ANALOG_PIN, raw );
 }
 
+// Vehicle speed -- SpeedLink's own direct-injection equivalents of a real
+// I2C speed packet (see SpeedLink.h's injectSpeedHundredthsMph()/
+// injectRunmode(), already written for exactly this, just never wired to
+// the bridge/UI before now). Real FW consumers (SpeedStripesShow.h) read
+// this back through SpeedLink::isFresh()/getSpeedMph() -- no duplication
+// of speed-reactive logic here, only the raw injected value.
+EMSCRIPTEN_KEEPALIVE
+void web_injectSpeedMph( float mph ) {
+   if ( mph < 0.0f ) mph = 0.0f;
+   SpeedLink::injectSpeedHundredthsMph( (uint16_t)( mph * 100.0f + 0.5f ) );
+}
+EMSCRIPTEN_KEEPALIVE
+void web_injectRunmode( int mode ) { SpeedLink::injectRunmode( (uint8_t)mode ); }
+
 // ---------------------------------------------------------------------
 // App-mode / config-navigation status -- lets JS show real status text
 // (which screen/subsetting is active) without tracking that state

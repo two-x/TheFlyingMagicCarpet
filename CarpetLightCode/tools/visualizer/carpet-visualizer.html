@@ -5687,6 +5687,14 @@ function unlockAudioOnFirstGesture() {
 document.getElementById('speedSlider').addEventListener('input', (e) => {
   Ctl.speedMph = +e.target.value;
   document.getElementById('speedVal').textContent = Ctl.speedMph + ' mph';
+  // Real injection into SpeedLink (was local-JS-only, Ctl.speedMph, which
+  // only ever fed the old JS-simulated Interface-mode renderer -- Dev Tool
+  // mode's real SpeedStripesShow reads real vehicle speed via SpeedLink,
+  // which had no way to receive a simulated value at all until now, so it
+  // was permanently stuck in "stopped" mode (SpeedLink::isFresh() always
+  // false). See SpeedLink.h's own injectSpeedHundredthsMph(), already
+  // written for exactly this, just never wired to the bridge/UI before.
+  if (wasmReady) wasmModule.ccall('web_injectSpeedMph', null, ['number'], [Ctl.speedMph]);
 });
 
 /* ----- zoom: 20-100ft viewer distance, works in 2D (and will in 3D once
@@ -6291,6 +6299,11 @@ function setPotFromCursor(clientX, clientY) {
   updatePotKnob();
   flashActionCell('actPot'); // re-armed on every drag event, so it stays lit for the whole turn, not just a single blip
   updateInputActionTable();
+  // Real pot injection -- was still local-JS-only (Ctl.pot), meaning
+  // dragging this knob never actually reached the real firmware's pot
+  // reading, so any real pot-driven behavior (energy-linked show speed,
+  // config-mode live values, etc.) couldn't be exercised in Dev Tool mode.
+  if (wasmReady) wasmModule.ccall('web_injectPotPercent', null, ['number'], [Ctl.pot]);
   if (Ctl.appMode !== 'show') applyConfigPot();
 }
 document.getElementById('potKnob').addEventListener('mousedown', (e) => {

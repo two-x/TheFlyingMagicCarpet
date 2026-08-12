@@ -398,25 +398,24 @@ class LighthouseShow : public LightShow {
    }
 
  private:
-   // triple-strobe on bass hits -- same timing/suppression convention as
-   // EqualizerShow's own strobe (BumpingAudioShow.h): 3 pulses, 30ms on/
-   // 20ms gap, with hit-suppression so it doesn't refire on every single
-   // hit at the same level.
+   // triple-strobe on bass hits: 3 pulses, 30ms on/20ms gap.
+   // BUGFIX ("only strobes a couple times then stops"): this used to
+   // additionally require each new hit's level to EXCEED the previous
+   // strobing hit's own level (suppressionPeak_), or a full 3s of silence,
+   // before re-arming -- fine for a track with rising dynamics, but a
+   // fairly steady bassline (typical of most music, including the Beats
+   // synthetic patterns) hits roughly the same level every time, so only
+   // the very first hit ever strobed and it never re-armed again short of
+   // a genuine 3s silence gap. Simplified: any qualifying hit re-triggers
+   // as soon as the PREVIOUS strobe sequence has finished (~130ms) --
+   // strobeActive_ alone already prevents re-triggering mid-sequence, no
+   // loudness/silence gating needed on top of that.
    bool strobeActive_ = false;
-   bool hadHit_ = false;
-   Timer strobeTimer_, lastHitTimer_;
-   int suppressionPeak_ = 0;
+   Timer strobeTimer_;
    void updateStrobe_( uint32_t time ) {
       bool isHit = AudioBoard::getBandHitNonzero( BandBass );
-      int bassHit = AudioBoard::getBandHitPercent( BandBass );
-      if ( isHit ) {
-         static const uint32_t SILENCE_RESET_MS = 3000;
-         bool silenceExpired = !hadHit_ || lastHitTimer_.elapsed( SILENCE_RESET_MS );
-         bool exceedsPeak = bassHit > suppressionPeak_;
-         if ( !strobeActive_ && ( silenceExpired || exceedsPeak ) ) {
-            strobeActive_ = true; strobeTimer_.reset(); suppressionPeak_ = bassHit;
-         }
-         hadHit_ = true; lastHitTimer_.reset();
+      if ( isHit && !strobeActive_ ) {
+         strobeActive_ = true; strobeTimer_.reset();
       }
       if ( !strobeActive_ ) return;
       static const uint32_t onMs = 30, gapMs = 20;
