@@ -356,11 +356,18 @@ class FlameShow : public LightShow {
       // is the peak-held value every other hit-driven show already uses
       // (decays smoothly over hitDecayMs_ instead of tracking the raw
       // wave), which is what a "how hard is bass hitting right now" flood
-      // fill actually wants. Floor matches EqualizerShow's own
-      // EQ_HIT_BRIGHTNESS_FLOOR fix for the identical "reads dim at
-      // anything less than a maxed hit" root cause.
-      static constexpr float FLAME_HIT_BRIGHTNESS_FLOOR = 0.65f;
-      float dmxvalFrac = max( FLAME_HIT_BRIGHTNESS_FLOOR, (float)AudioBoard::getBandHitPercent( BandBass ) / 100.0f );
+      // fill actually wants.
+      // BUGFIX ("used to be good, floods always on now, not reactive"): a
+      // 65% brightness FLOOR was added here alongside the switch above (to
+      // match EqualizerShow's own floor, added for a genuinely different
+      // complaint -- "reads dim at anything less than a maxed hit"), but
+      // that's a separate concern from the flicker this function actually
+      // fixes: getHitPercent() already decays smoothly to a real 0% in
+      // silence, so the flicker problem was already solved without any
+      // floor at all. The floor just meant floods could never read as
+      // genuinely dark/off again, which is what "always on" was really
+      // about. Removed -- silence now reads as silence.
+      float dmxvalFrac = (float)AudioBoard::getBandHitPercent( BandBass ) / 100.0f;
       int dmxval = (int)( dmxvalFrac * 255.0f + 0.5f );
       CRGB dmxclr = floodPaletteColor( dmxval );
       LedUtil::gammaCorrect( dmxclr );
