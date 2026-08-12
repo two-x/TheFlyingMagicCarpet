@@ -2942,17 +2942,16 @@ const TONE_PATTERNS = {
   // Hihat reworked per request: the old pattern alternated treble/step-2
   // evenly through the whole bar (1,0,2,0,1,0,2,0...), which read as a
   // repeating pitched "wooden xylophone" figure instead of genre
-  // percussion. Now: treble hits (kept exactly as before) plus a short
-  // 2-hit step-2 accent (the treble sound itself, retuned to 1000Hz --
-  // see hihat's own comment above) landing right after the bar's final
-  // treble hit -- a typical house/hip-hop/trap fill placement, not a
-  // constant alternating texture. (A brief intermediate version used a
-  // 3rd, noise-dominant hit here -- reverted per follow-up request back
-  // to a 2-hit accent using the treble hit's own tone.)
+  // percussion. Now: treble hits (kept exactly as before) plus a single
+  // step-2 accent (the snare hit's own tone/noise mix, retuned -- see
+  // hihat's own comment above) landing right after the bar's final treble
+  // hit -- a typical house/hip-hop/trap fill placement, not a constant
+  // alternating texture. (Earlier intermediate versions used 3 then 2
+  // hits here -- reduced per follow-up request to a single accent hit.)
   house: { bpm: 128,
     kick:  [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [0,0,1,0,0,0,0,0,0,0,1,2,2,0,0,0], // treble@2,10 (unchanged), 2-hit accent@11-12 right after the 2nd treble
+    hihat: [0,0,1,0,0,0,0,0,0,0,1,2,0,0,0,0], // treble@2,10 (unchanged), single accent@11 right after the 2nd treble
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   // Treble reworked per request: rapid-fire hihat spurts clustered right
@@ -2960,18 +2959,18 @@ const TONE_PATTERNS = {
   // silence in between -- previously near-constant-density throughout,
   // which read as one steady texture rather than distinct bursts tied to
   // the kick hits. Step-2 accent placement reworked per the house comment
-  // above -- a 2-hit accent after the last treble hit, not interleaved
+  // above -- a single accent after the last treble hit, not interleaved
   // through every burst.
   trap: { bpm: 140,
     kick:  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,0,0,0,0,1,0,1,0,1,2,2,0,0,0,0], // treble bursts@0,5,7,9 (unchanged), 2-hit accent@10-11 right after the last one
+    hihat: [1,0,0,0,0,1,0,1,0,1,2,0,0,0,0,0], // treble bursts@0,5,7,9 (unchanged), single accent@10 right after the last one
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   boombap: { bpm: 90,
     kick:  [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,0,0,0,1,0,0,0,1,0,0,0,1,2,2,0], // steady treble@0,4,8,12 (unchanged), 2-hit accent@13-14 right after the last one
+    hihat: [1,0,0,0,1,0,0,0,1,0,0,0,1,2,0,0], // steady treble@0,4,8,12 (unchanged), single accent@13 right after the last one
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   // "Chris" -- a bass-music genre: treble is intentionally IDENTICAL to
@@ -3009,7 +3008,7 @@ const TONE_PATTERNS = {
     // bar 2 (steps 16-31, normal): the original 4-hits-per-bar pattern, unchanged.
     kick:  [2,0,3,0,2,0,3,0,2,0,3,0,2,0,3,0,  2,0,0,0,3,0,0,0,2,0,0,0,3,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,  0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,0,0,0,1,0,0,0,1,0,0,0,1,2,2,0,  1,0,0,0,1,0,0,0,1,0,0,0,1,2,2,0], // same as boombap (per request), repeated across both bars -- see boombap's own comment above for the accent placement
+    hihat: [1,0,0,0,1,0,0,0,1,0,0,0,1,2,0,0,  1,0,0,0,1,0,0,0,1,0,0,0,1,2,0,0], // same as boombap (per request), repeated across both bars -- see boombap's own comment above for the accent placement
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass-focused genre, bass/treble only
   },
   // Oldies power-ballad (e.g. "Total Eclipse of the Heart"), not EDM --
@@ -3071,11 +3070,12 @@ function useTone() {
       // so mid/snare land as distinct contributions within BAND_MID
       // (max of the 400Hz and 1000Hz bins).
       const snareHz = 900, hihatHz1 = 6250, hihatHz2 = 15500, midHz = 400;
-      // BAND_MID's own upper (1000Hz) bin -- see hihat step-value 2 above.
-      // Per request, this IS the treble hit's own tone/decay, just retuned
-      // to 1000Hz (independent envelope/phase, so it doesn't reset the
-      // treble hit's own onset) -- not a separate percussion timbre.
-      const midHihatHz = 1000;
+      // BAND_MID range (400-2500Hz bins) -- see hihat step-value 2 above.
+      // Per request, this is the snare hit's own noise/tone mix and decay,
+      // just retuned (independent envelope/phase, so it doesn't reset the
+      // snare hit's own onset) -- not a separate percussion timbre. Lowered
+      // from 1000 to 750Hz per follow-up request.
+      const midHihatHz = 750;
       const KICK_SUSTAIN_SAMPLES = Math.round(0.4 * ctx.sampleRate); // up to 400ms hold for step-value 2 (kick or mid)
       // Onset "pop" for every kick hit, ON TOP of whatever kickEnv is
       // already doing -- fixes "can only barely hear the leading edge

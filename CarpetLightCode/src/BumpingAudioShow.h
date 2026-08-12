@@ -163,9 +163,9 @@ class EqualizerShow : public LightShow {
    // concept -- BOTH colors respond to bass hits (no treble input at all
    // anymore), trading turns every cycleBeats_ (pot-controlled, shared
    // with new_standard -- see that member's own comment) bass hits.
-   static constexpr float PW_MIN_FRAC = 0.125f, PW_MAX_FRAC = 0.875f; // 12.5%..87.5% of the loop
+   static constexpr float PW_MIN_FRAC = 0.125f, PW_MAX_FRAC = 0.875f; // 12.5%..87.5% of the loop -- now a WIDTH bound on B's territory arc, see pwLoFrac_/pwHiFrac_ below
    static constexpr float PW_FADE_FRAC = 1.0f / 42.0f; // border cross-fade width -- 1/3 of the original 1/14, per request
-   static constexpr float PW_HIT_IMPULSE = 0.24f;  // territory fraction jumped per qualifying hit edge (2x the original 0.12, per request)
+   static constexpr float PW_HIT_IMPULSE = 0.12f;  // per-EDGE territory fraction jumped per qualifying hit edge (half the original 0.24, per request -- BOTH edges of B's arc now move on every hit, see pwLoFrac_/pwHiFrac_ below, so total arc-width change per hit is unchanged at 0.24 even though each edge's own individual movement is halved)
    static constexpr float PW_RECOVER_FRAC = 0.5f;  // fraction of EACH hit's own impulse given back afterward, per request -- net territory gain per hit is PW_HIT_IMPULSE * (1 - PW_RECOVER_FRAC)
    // Impact and recovery are 2 distinct, time-separated phases (per
    // request), not one combined instantaneous step: the full impulse
@@ -177,7 +177,16 @@ class EqualizerShow : public LightShow {
    // the previous recovery lands simply replaces it (see updatePixelWar()).
    static constexpr float PW_RECOVER_DELAY_MS = 150.0f;
    static constexpr float PW_WALK_MAX = 37.5f;     // LED/s -- 25% of the original 150 (rate of travel around the rope's perimeter reduced 75% per request)
-   float pwBassFrac_ = 0.5f;
+   // B's territory is the arc [pwLoFrac_, pwHiFrac_) going forward around the
+   // loop (wrapping through 0 if pwHiFrac_ < pwLoFrac_ once normalized) --
+   // BOTH edges move on every hit/recovery (per request; used to be a single
+   // moving edge against a border fixed at position 0, so half the segment
+   // never visibly reacted to a hit). Left unwrapped/unclamped as state (can
+   // drift outside 0..1 indefinitely without issue -- normalized only at
+   // render time in pwColorAt()); width is clamped to [PW_MIN_FRAC,
+   // PW_MAX_FRAC] and the pair re-centered after every update, see
+   // updatePixelWar().
+   float pwLoFrac_ = 0.0f, pwHiFrac_ = 0.5f;
    float pwPendingRecoveryFrac_ = 0.0f;      // 0 = no recovery currently pending
    float pwRecoveryDelayRemainingMs_ = 0.0f;
    float pwRotationOffsetLed_ = 0.0f, pwWalkspeed_ = 0.0f, pwWalkAccumMs_ = 0.0f;
@@ -302,7 +311,7 @@ class EqualizerShow : public LightShow {
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdLastMegabarColor_[ m ] = CRGB::Black;
       newStdChinaFadeStartMs_ = 0; newStdMegabarFadeStartMs_ = 0;
 
-      pwBassFrac_ = 0.5f;
+      pwLoFrac_ = 0.0f; pwHiFrac_ = 0.5f;
       pwPendingRecoveryFrac_ = 0.0f; pwRecoveryDelayRemainingMs_ = 0.0f;
       pwRotationOffsetLed_ = 0.0f; pwWalkspeed_ = 0.0f; pwWalkAccumMs_ = 0.0f;
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) { pwMegabarHeat_[ m ] = 0.0f; pwMegabarColorSrc_[ m ] = PwSrcBass; }
@@ -779,16 +788,27 @@ class EqualizerShow : public LightShow {
          pwRotationOffsetLed_ += pwWalkspeed_ * 0.05f;
       }
    }
+   // Wraps an arbitrary (possibly negative, possibly >1) fraction into [0,1).
+   static float pwWrap01( float x ) {
+      float w = fmodf( x, 1.0f );
+      if ( w < 0.0f ) w += 1.0f;
+      return w;
+   }
    CRGB pwColorAt( int i, const CRGB & Bcolor, const CRGB & Tcolor ) {
       float raw = fmodf( (float)i + pwRotationOffsetLed_, (float)NUM_NEO_LEDS_ACTUAL );
       if ( raw < 0.0f ) raw += (float)NUM_NEO_LEDS_ACTUAL;
       float normPos = raw / (float)NUM_NEO_LEDS_ACTUAL;
       float halfFade = PW_FADE_FRAC / 2.0f;
-      float dWrap = min( normPos, 1.0f - normPos );
-      float dMid = fabsf( normPos - pwBassFrac_ );
-      dMid = min( dMid, 1.0f - dMid );
-      bool inB = normPos < pwBassFrac_;
-      float nearestD = min( dWrap, dMid );
+      // B's territory is the arc going forward from lo to hi (wrapping
+      // through 0 if hi < lo once normalized) -- 2 independent borders now,
+      // vs. the old single moving border against a border fixed at 0.
+      float lo = pwWrap01( pwLoFrac_ ), hi = pwWrap01( pwHiFrac_ );
+      float width = pwWrap01( hi - lo );
+      float posFromLo = pwWrap01( normPos - lo );
+      bool inB = posFromLo < width;
+      float dLo = fabsf( normPos - lo ); dLo = min( dLo, 1.0f - dLo );
+      float dHi = fabsf( normPos - hi ); dHi = min( dHi, 1.0f - dHi );
+      float nearestD = min( dLo, dHi );
       if ( nearestD >= halfFade ) return inB ? Bcolor : Tcolor;
       float f = 0.5f - 0.5f * ( nearestD / halfFade );
       uint8_t f255 = (uint8_t)( f * 255.0f + 0.5f );
@@ -1027,16 +1047,21 @@ class EqualizerShow : public LightShow {
       bool midEdge = AudioBoard::NewBinHit( FreqBin2 ) || AudioBoard::NewBinHit( FreqBin3 ) || AudioBoard::NewBinHit( FreqBin4 );
 
       if ( bassEdge ) {
-         if ( ++pwTurnHitCount_ >= cycleBeats_ ) {
+         // pixel_war's own turn length is 50% longer than the shared
+         // cycleBeats_ (new_standard's own option-cycle length, untouched),
+         // per request -- scaled only here, not by changing cycleBeats_
+         // itself.
+         int pwCycleBeats = (int)( (float)cycleBeats_ * 1.5f + 0.5f );
+         if ( ++pwTurnHitCount_ >= pwCycleBeats ) {
             pwTurnHitCount_ = 0;
             pwTurnIsB_ = !pwTurnIsB_;
          }
       }
 
-      // ROPE: territory war -- every qualifying bass hit pushes territory
-      // toward whichever color currently has the turn immediately (the
-      // impact); PW_RECOVER_FRAC of that same push is given back
-      // PW_RECOVER_DELAY_MS later (the recovery) -- 2 distinct,
+      // ROPE: territory war -- every qualifying bass hit pushes BOTH edges
+      // of B's territory arc toward whichever color currently has the turn
+      // immediately (the impact); PW_RECOVER_FRAC of that same push is
+      // given back PW_RECOVER_DELAY_MS later (the recovery) -- 2 distinct,
       // time-separated phases, not one combined instantaneous step (see
       // PW_RECOVER_DELAY_MS's own comment). A hit that lands while a
       // previous recovery is still pending replaces it outright (that
@@ -1045,17 +1070,25 @@ class EqualizerShow : public LightShow {
       pwStepRandomWalk( dtSec * 1000.0f );
       if ( bassEdge ) {
          float impulse = pwTurnIsB_ ? PW_HIT_IMPULSE : -PW_HIT_IMPULSE;
-         pwBassFrac_ += impulse;
+         pwLoFrac_ -= impulse; pwHiFrac_ += impulse;
          pwPendingRecoveryFrac_ = impulse * PW_RECOVER_FRAC;
          pwRecoveryDelayRemainingMs_ = PW_RECOVER_DELAY_MS;
       } else if ( pwPendingRecoveryFrac_ != 0.0f ) {
          pwRecoveryDelayRemainingMs_ -= dtSec * 1000.0f;
          if ( pwRecoveryDelayRemainingMs_ <= 0.0f ) {
-            pwBassFrac_ -= pwPendingRecoveryFrac_;
+            pwLoFrac_ += pwPendingRecoveryFrac_; pwHiFrac_ -= pwPendingRecoveryFrac_;
             pwPendingRecoveryFrac_ = 0.0f;
          }
       }
-      pwBassFrac_ = constrain( pwBassFrac_, PW_MIN_FRAC, PW_MAX_FRAC );
+      // Clamp B's arc width to [PW_MIN_FRAC, PW_MAX_FRAC], re-centering both
+      // edges around their current midpoint -- and wrap that midpoint into
+      // [0,1) so pwLoFrac_/pwHiFrac_ never drift unboundedly over long runtimes.
+      {
+         float width = constrain( pwHiFrac_ - pwLoFrac_, PW_MIN_FRAC, PW_MAX_FRAC );
+         float center = pwWrap01( ( pwLoFrac_ + pwHiFrac_ ) * 0.5f );
+         pwLoFrac_ = center - width * 0.5f;
+         pwHiFrac_ = center + width * 0.5f;
+      }
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) { carpet->ropeLeds[ i ] = pwColorAt( i, Bcolor, Tcolor ); carpet->ropeLeds[ i ].w = 0; }
 
       // MEGABARS: 3 independent pools, each picking its own currently-dark
