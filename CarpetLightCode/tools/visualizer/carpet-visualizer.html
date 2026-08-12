@@ -2915,8 +2915,8 @@ function sampleSourceLevelFromStream(ctx, stream) {
 //            hip-hop-style kick mixed in (see "chris").
 //   snare -- a short mid/broadband transient (the "snap" of a snare hit).
 //   hihat -- treble (BAND_HIGH), normally at hihatHz1/hihatHz2. A step
-//            value of 2 is the SAME tone/noise blend and decay as the
-//            treble hit, just retuned to midHihatHz (BAND_MID's own
+//            value of 2 is the SAME noise/tone blend and decay as the
+//            snare hit, just retuned to midHihatHz (BAND_MID's own
 //            1000Hz bin) -- independently enveloped (its own onset/decay,
 //            doesn't reset the treble hit's), per request. Genre patterns
 //            use this for a short 2-hit accent (not repeated through the
@@ -3113,7 +3113,7 @@ function useTone() {
         if (kickSustainRemaining > 0) kickSustainRemaining--; else kickEnv *= kickDecayActive;
         kickAccentEnv *= kickAccentDecay;
         if (midSustainRemaining > 0) midSustainRemaining--; else midEnv *= midDecay;
-        snareEnv *= snareDecay; hihatEnv *= hihatDecay; hihatMidEnv *= hihatDecay;
+        snareEnv *= snareDecay; hihatEnv *= hihatDecay; hihatMidEnv *= snareDecay;
         kickPhase += kickFreqActive / ctx.sampleRate;
         snarePhase += snareHz / ctx.sampleRate;
         hihatPhase += hihatHz1 / ctx.sampleRate;
@@ -3123,10 +3123,8 @@ function useTone() {
         const kickSample = Math.sin(kickPhase * 2 * Math.PI) * (kickEnv + kickAccentEnv);
         const snareSample = ((Math.random() * 2 - 1) * 0.5 + Math.sin(snarePhase * 2 * Math.PI) * 0.5) * snareEnv;
         const hihatSample = ((Math.random() * 2 - 1) * 0.35 + Math.sin(hihatPhase * 2 * Math.PI) * 0.4 + Math.sin(hihatPhase2 * 2 * Math.PI) * 0.25) * hihatEnv;
-        // a simple, clean tone at BAND_MID -- no noise component (per request,
-        // even the treble hit's own light noise mix read as a rattly/maraca
-        // texture once retuned down to 1000Hz) -- see hihat step-value 2 comment in TONE_PATTERNS
-        const hihatMidSample = Math.sin(hihatMidPhase * 2 * Math.PI) * hihatMidEnv;
+        // literally the snare hit's own noise/tone mix and decay, just retuned to BAND_MID (1000Hz) -- see hihat step-value 2 comment in TONE_PATTERNS
+        const hihatMidSample = ((Math.random() * 2 - 1) * 0.5 + Math.sin(hihatMidPhase * 2 * Math.PI) * 0.5) * hihatMidEnv;
         // mostly tonal (chord/vocal-like), light noise texture -- not a percussive hit
         const midSample = (Math.sin(midPhase * 2 * Math.PI) * 0.8 + (Math.random() * 2 - 1) * 0.15) * midEnv;
         out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + hihatMidSample * 0.7 + midSample * 0.6));
