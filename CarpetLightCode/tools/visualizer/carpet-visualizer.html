@@ -3073,8 +3073,15 @@ function useTone() {
       // BAND_MID range -- see hihat step-value 2 above. Per request, this is
       // the kick's own pure-sine/fast-decay sound, just retuned (independent
       // envelope/phase, so it doesn't reset the kick's own onset) -- not a
-      // separate percussion timbre. 1000 -> 750 -> 300Hz across follow-up requests.
-      const midHihatHz = 300;
+      // separate percussion timbre. 1000 -> 750 -> 300 -> 200Hz across
+      // follow-up requests. NOTE: pixel_war's own midEdge detector (real FW,
+      // BumpingAudioShow.h) only watches FreqBin2/3/4 (400/1000/2500Hz), not
+      // FreqBin1 (~160Hz midbass) -- at 200Hz this tone may register more in
+      // FreqBin1 than FreqBin2 on real hardware, weakening or dropping out
+      // pixel_war's green mid response to this specific hit (may show up as
+      // a bass response instead). Flagging, not fixing preemptively -- let
+      // me know if that's what you hear on the car.
+      const midHihatHz = 200;
       const KICK_SUSTAIN_SAMPLES = Math.round(0.4 * ctx.sampleRate); // up to 400ms hold for step-value 2 (kick or mid)
       // Onset "pop" for every kick hit, ON TOP of whatever kickEnv is
       // already doing -- fixes "can only barely hear the leading edge
