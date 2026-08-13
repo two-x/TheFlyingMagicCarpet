@@ -5687,14 +5687,11 @@ function unlockAudioOnFirstGesture() {
 document.getElementById('speedSlider').addEventListener('input', (e) => {
   Ctl.speedMph = +e.target.value;
   document.getElementById('speedVal').textContent = Ctl.speedMph + ' mph';
-  // Real injection into SpeedLink (was local-JS-only, Ctl.speedMph, which
-  // only ever fed the old JS-simulated Interface-mode renderer -- Dev Tool
-  // mode's real SpeedStripesShow reads real vehicle speed via SpeedLink,
-  // which had no way to receive a simulated value at all until now, so it
-  // was permanently stuck in "stopped" mode (SpeedLink::isFresh() always
-  // false). See SpeedLink.h's own injectSpeedHundredthsMph(), already
-  // written for exactly this, just never wired to the bridge/UI before.
-  if (wasmReady) wasmModule.ccall('web_injectSpeedMph', null, ['number'], [Ctl.speedMph]);
+  // Real injection into WASM happens continuously in tick() (every frame,
+  // not just here on drag -- see its own comment: SpeedLink::isFresh() has
+  // a 4s staleness window, so a single injection on change alone would go
+  // stale within seconds of releasing the slider). This handler only needs
+  // to update Ctl.speedMph -- tick() picks up the new value on its own.
 });
 
 /* ----- zoom: 20-100ft viewer distance, works in 2D (and will in 3D once
@@ -6751,6 +6748,16 @@ function tick(now) {
     lastFrameT = now;
 
     if (audioGraphReady) AudioBoard.poll(now);
+
+    // Real vehicle speed, injected EVERY frame -- SpeedLink::isFresh() has
+    // a 4s staleness window (mirroring how a real CANTroller2 I2C stream
+    // continuously repeats its speed packet, not a one-shot value), so a
+    // single injection on slider-drag alone goes stale within seconds of
+    // releasing it, right back to "stopped". This is the actual reason
+    // SpeedStripes read as permanently frozen even after wiring the slider
+    // to inject on change -- the injection needs to keep happening for as
+    // long as the visualizer is running, same as the real hardware would.
+    if (wasmReady) wasmModule.ccall('web_injectSpeedMph', null, ['number'], [Ctl.speedMph]);
 
     syncShowStateFromWasm();
     renderCurrent(now, dtMs);
