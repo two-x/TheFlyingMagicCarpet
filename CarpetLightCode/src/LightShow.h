@@ -253,24 +253,7 @@ struct PotEnergyTakeover {
       }
       if ( takenOver ) globalEnergyPercent = potPercent;
       globalEnergyPrinter_.update( (int)( globalEnergyPercent + 0.5f ), "energy:", "%" );
-      // BUGFIX ("all energy-linked shows dead -- Lighthouse's 2 beams
-      // frozen at their identical starting angles read as just one"):
-      // globalEnergyPercent mirrors the pot's LIVE position 1:1 once taken
-      // over (by design -- it's a real-time dial, see above), so a pot
-      // resting at/near 0% (the default in the visualizer, and possible on
-      // real hardware if it's sitting at its physical minimum) doesn't just
-      // make Lighthouse/SpeedStripes/Flame/Nightrider "calm" the way a
-      // deliberate 0% does elsewhere -- it's an outright rotation-speed
-      // multiplier of exactly 0, forever, until the pot moves. A one-time
-      // floor on just the initial takeover doesn't help: the very next
-      // frame re-mirrors the still-0% pot and overwrites it right back.
-      // Floor the RETURNED value on every call instead (not the stored
-      // globalEnergyPercent itself, which still faithfully tracks the
-      // pot's true position for anything that wants to display it) so
-      // these shows are always at least "slow" rather than "dead", while
-      // genuinely turning the pot up still works exactly as before.
-      static const float ENERGY_FLOOR_PERCENT = 20.0f;
-      return max( globalEnergyPercent, ENERGY_FLOOR_PERCENT );
+      return globalEnergyPercent;
    }
 };
 

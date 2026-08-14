@@ -73,7 +73,6 @@
 #include "LightShow.h"
 #include "SpeedLink.h"
 #include "AudioBoard.h"
-#include "CarpetGeometry.h"
 #include <math.h>
 
 class SpeedStripesShow : public LightShow {
@@ -81,65 +80,6 @@ class SpeedStripesShow : public LightShow {
    enum Variation { VarDefault = 0, VarZebra = 1 };
    static const uint8_t numVariations_ = 2;
    uint8_t variation_;
-
-   // BUGFIX ("front/back appear swapped"): every megabar/china front/rear/
-   // side role below used to be a hardcoded index assumption (e.g. "china
-   // idx 1,2 are the front pair, idx 0,7 are side fixtures") ported from
-   // README wording about which edge each fixture's PAIR is *aimed*
-   // along -- but a china pair's 2 members (e.g. idx 0 and 1) are mounted
-   // at the IDENTICAL real (x,y) ground-spot position (see
-   // CarpetGeometry.h's buildFloodPositions_ -- both share one xFt/yFt,
-   // only their aim direction differs), so idx 0 was getting a "1/3 back
-   // from front" side sample while idx 1, physically the same spot, got
-   // the real front-edge sample -- two adjacent chinas at one corner
-   // showing different, position-inconsistent content. Fixed per request:
-   // classify every megabar/china's role from CarpetGeometry's real
-   // ground-spot yFt (front-to-back position, Y+ = front) instead of any
-   // assumed index/aim mapping. China's 8 fixtures turn out to mount in 4
-   // corner PAIRS with only 2 distinct yFt values, so real position alone
-   // naturally sorts all 8 into just front/rear -- there is no "side"
-   // china case once you stop trusting aim-based grouping. Megabars have
-   // 12 distinct yFt values; the 3 with the largest yFt become "front"
-   // (closest to the front edge), the 3 smallest become "rear", the
-   // remaining 6 are "side" fixtures sampled at their own real fractional
-   // along-length position (not an assumed 1/3, 1/2, 2/3 split). Computed
-   // once in start(), not per-frame -- this is fixed geometry, not
-   // something that changes at runtime.
-   static constexpr float HALF_CAR_LENGTH_FT = CarpetGeometry::CAR_LENGTH_FT / 2.0f;
-   enum FbRole { RoleFront = 0, RoleRear = 1, RoleSide = 2 };
-   uint8_t megabarRole_[ NUM_MEGABAR_LEDS ];
-   float megabarSideFrac_[ NUM_MEGABAR_LEDS ]; // valid only where megabarRole_==RoleSide -- 0=at front edge, 1=at back edge
-   uint8_t chinaRole_[ NUM_CHINA_LEDS ];        // RoleFront or RoleRear only, see comment above
-
-   void classifyFixturesFromGeometry() {
-      // megabars: sort indices by real yFt descending (insertion sort --
-      // only 12 elements, runs once per show-entry, not per frame)
-      int order[ NUM_MEGABAR_LEDS ];
-      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) order[ i ] = i;
-      for ( int i = 1; i < NUM_MEGABAR_LEDS; ++i ) {
-         int key = order[ i ];
-         float keyY = CarpetGeometry::getMegabarPosition( key ).yFt;
-         int j = i - 1;
-         while ( j >= 0 && CarpetGeometry::getMegabarPosition( order[ j ] ).yFt < keyY ) {
-            order[ j + 1 ] = order[ j ]; --j;
-         }
-         order[ j + 1 ] = key;
-      }
-      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
-         int m = order[ i ];
-         if ( i < 3 ) megabarRole_[ m ] = RoleFront;
-         else if ( i >= NUM_MEGABAR_LEDS - 3 ) megabarRole_[ m ] = RoleRear;
-         else {
-            megabarRole_[ m ] = RoleSide;
-            float yFt = CarpetGeometry::getMegabarPosition( m ).yFt;
-            megabarSideFrac_[ m ] = constrain( ( HALF_CAR_LENGTH_FT - yFt ) / ( 2.0f * HALF_CAR_LENGTH_FT ), 0.0f, 1.0f );
-         }
-      }
-      // china: purely front (yFt>0) or rear -- see class comment above
-      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
-         chinaRole_[ c ] = ( CarpetGeometry::getChinaPosition( c ).yFt > 0.0f ) ? RoleFront : RoleRear;
-      }
-   }
 
    static const int stripeWidth_ = SIZEOF_LARGE_NEO / 4; // 88 LEDs = 4ft, a quarter of the car's 16ft length
    // sampleWave()'s period is always stripeWidth_*2 at every call site in
@@ -215,12 +155,13 @@ class SpeedStripesShow : public LightShow {
    static const int ZEBRA_SCHEDULE_MAX = 24; // generous fixed ring-buffer size -- worst case (min width+gap alternating) across 2x lookahead is well under this
    ZebraSeg zebraSchedule_[ ZEBRA_SCHEDULE_MAX ];
    int zebraScheduleHead_ = 0, zebraScheduleCount_ = 0;
-   float zebraFrontierPos_ = 0.0f; // pre-seeded for real in start(), see its own BUGFIX comment
+   float zebraFrontierPos_ = 0.0f;
+   bool zebraFrontierValid_ = false;
 
    Timer zebraSilenceTimer_; // time since AudioBoard was last NOT silent
 
    void resetZebraSchedule() {
-      zebraScheduleHead_ = 0; zebraScheduleCount_ = 0;
+      zebraScheduleHead_ = 0; zebraScheduleCount_ = 0; zebraFrontierValid_ = false;
    }
    ZebraSeg & zebraScheduleAt( int i ) { return zebraSchedule_[ ( zebraScheduleHead_ + i ) % ZEBRA_SCHEDULE_MAX ]; }
    void zebraSchedulePush( float startPos, float endPos, float width, bool isBlack ) {
@@ -274,10 +215,7 @@ class SpeedStripesShow : public LightShow {
    // any turn above that immediately produces at least
    // ZEBRA_MIN_BLACK_WIDTH_FT and scales up to 40ft at 100%.
    void zebraEnsureScheduleTo( float neededPos ) {
-      // zebraFrontierPos_/zebraFrontierValid_ are pre-seeded in start(),
-      // behind the earliest position any query in a frame will ever ask
-      // for -- see its own BUGFIX comment for why a lazy first-call-wins
-      // init here was wrong.
+      if ( !zebraFrontierValid_ ) { zebraFrontierPos_ = neededPos; zebraFrontierValid_ = true; }
       float potPercent = carpet->pot->readPercent();
       float potWidth = potPercent <= 0.0f ? 0.0f : ZEBRA_MIN_BLACK_WIDTH_FT + ( potPercent / 100.0f ) * ( 40.0f - ZEBRA_MIN_BLACK_WIDTH_FT );
       while ( zebraFrontierPos_ < neededPos ) {
@@ -337,19 +275,16 @@ class SpeedStripesShow : public LightShow {
       return max( ZEBRA_CHINA_REST_FRACTION, bassFrac );
    }
    void renderZebraSide( int backCornerIdx, int frontCornerIdx, float satFraction ) {
-      static const float ledsPerFootLength = SIZEOF_LARGE_NEO / CarpetGeometry::CAR_LENGTH_FT;
+      static const float halfLengthFt = 8.0f;
+      static const float ledsPerFootLength = SIZEOF_LARGE_NEO / 16.0f;
       int direction = ( frontCornerIdx > backCornerIdx ) ? 1 : -1;
       for ( int localOffset = 0; localOffset < SIZEOF_LARGE_NEO; ++localOffset ) {
          int idx = backCornerIdx + direction * localOffset;
-         float posFt = zebraPosFt_ + ( (float)localOffset / ledsPerFootLength - HALF_CAR_LENGTH_FT );
+         float posFt = zebraPosFt_ + ( (float)localOffset / ledsPerFootLength - halfLengthFt );
          carpet->ropeLeds[ idx ] = zebraColorAt( posFt, satFraction );
          carpet->ropeLeds[ idx ].w = 0;
       }
    }
-   // Converts a fixture's real fracBackFromFront (0=at the front edge,
-   // 1=at the back edge, see classifyFixturesFromGeometry()) into zebra's
-   // own +front/-back feet-from-zebraPosFt_ offset.
-   static float zebraFracToFt( float frac ) { return HALF_CAR_LENGTH_FT * ( 1.0f - 2.0f * frac ); }
    void updateZebra( uint32_t time, float dtSec, bool fresh, float speedMph ) {
       zebraPosFt_ += SpeedLink::mphToFtPerSec( speedMph ) * dtSec;
       float satFraction = zebraSatFraction( fresh ? speedMph : 0.0f );
@@ -361,8 +296,9 @@ class SpeedStripesShow : public LightShow {
       // variation, which turns them off) they just take on the nearest
       // corner's own zebra color, matching whichever stripe is currently
       // at that end of the car.
-      CRGB frontEdgeClr = zebraColorAt( zebraPosFt_ + HALF_CAR_LENGTH_FT, satFraction );
-      CRGB backEdgeClr  = zebraColorAt( zebraPosFt_ - HALF_CAR_LENGTH_FT, satFraction );
+      static const float halfLengthFt = 8.0f;
+      CRGB frontEdgeClr = zebraColorAt( zebraPosFt_ + halfLengthFt, satFraction );
+      CRGB backEdgeClr  = zebraColorAt( zebraPosFt_ - halfLengthFt, satFraction );
       for ( int i = 0; i < SIZEOF_SMALL_NEO; ++i ) { carpet->ropeLeds[ i ] = frontEdgeClr; carpet->ropeLeds[ i ].w = 0; }
       for ( int i = SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO; i < SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO; ++i ) {
          carpet->ropeLeds[ i ] = backEdgeClr; carpet->ropeLeds[ i ].w = 0;
@@ -372,26 +308,35 @@ class SpeedStripesShow : public LightShow {
 
       // Megabars: always global max, excluded from sound reactivity
       // entirely, per request -- china alone carries zebra's audio
-      // response now. Role (front/rear/side) and, for side fixtures, exact
-      // position all come from classifyFixturesFromGeometry() -- real
-      // CarpetGeometry yFt, not an assumed index -- see class comment.
-      CRGB frontLeadClr = zebraColorAt( zebraPosFt_ + HALF_CAR_LENGTH_FT + ZEBRA_STRIPE_WIDTH_FT, satFraction );
-      CRGB rearLeadClr  = zebraColorAt( zebraPosFt_ - HALF_CAR_LENGTH_FT - ZEBRA_STRIPE_WIDTH_FT, satFraction );
-      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
-         if ( megabarRole_[ m ] == RoleFront ) carpet->megabarLeds[ m ] = frontLeadClr;
-         else if ( megabarRole_[ m ] == RoleRear ) carpet->megabarLeds[ m ] = rearLeadClr;
-         else carpet->megabarLeds[ m ] = zebraColorAt( zebraPosFt_ + zebraFracToFt( megabarSideFrac_[ m ] ), satFraction );
-      }
+      // response now.
+      CRGB frontLeadClr = zebraColorAt( zebraPosFt_ + halfLengthFt + ZEBRA_STRIPE_WIDTH_FT, satFraction );
+      carpet->megabarLeds[ 11 ] = frontLeadClr;
+      carpet->megabarLeds[ 0 ]  = frontLeadClr; // headlight -- brightness still governed separately, see MagicCarpet
+      carpet->megabarLeds[ 1 ]  = frontLeadClr;
+      CRGB rearLeadClr = zebraColorAt( zebraPosFt_ - halfLengthFt - ZEBRA_STRIPE_WIDTH_FT, satFraction );
+      carpet->megabarLeds[ 5 ] = rearLeadClr;
+      carpet->megabarLeds[ 6 ] = rearLeadClr;
+      carpet->megabarLeds[ 7 ] = rearLeadClr;
+      CRGB clr13 = zebraColorAt( zebraPosFt_ + halfLengthFt * ( 1.0f / 3.0f ), satFraction );
+      CRGB clr12 = zebraColorAt( zebraPosFt_, satFraction );
+      CRGB clr23 = zebraColorAt( zebraPosFt_ - halfLengthFt * ( 1.0f / 3.0f ), satFraction );
+      carpet->megabarLeds[ 2 ]  = clr13;
+      carpet->megabarLeds[ 3 ]  = clr12;
+      carpet->megabarLeds[ 4 ]  = clr23;
+      carpet->megabarLeds[ 10 ] = clr13;
+      carpet->megabarLeds[ 9 ]  = clr12;
+      carpet->megabarLeds[ 8 ]  = clr23;
 
-      // China: real front/rear role from classifyFixturesFromGeometry()
-      // (no "side" case -- china mounts in 4 corner pairs, only 2 distinct
-      // yFt values exist, see class comment) -- sound-reactive brightness
-      // on top.
+      // China: same positions as megabars' front/rear/side groups, per
+      // README's china layout ([1,2] front edge, [5,6] back edge, [0]/[3]
+      // 1/3 back, [7]/[4] 2/3 back) -- sound-reactive brightness on top.
       float chinaBrightness = zebraChinaBrightnessFraction();
-      CRGB frontEdgeChina = zebraColorAt( zebraPosFt_ + HALF_CAR_LENGTH_FT, satFraction );
-      CRGB rearEdgeChina  = zebraColorAt( zebraPosFt_ - HALF_CAR_LENGTH_FT, satFraction );
+      CRGB frontEdgeChina = zebraColorAt( zebraPosFt_ + halfLengthFt, satFraction );
+      CRGB rearEdgeChina  = zebraColorAt( zebraPosFt_ - halfLengthFt, satFraction );
+      CRGB china13 = clr13, china23 = clr23;
+      CRGB * chinaSrc[ NUM_CHINA_LEDS ] = { &china13, &frontEdgeChina, &frontEdgeChina, &china13, &china23, &rearEdgeChina, &rearEdgeChina, &china23 };
       for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
-         CRGB clr = ( chinaRole_[ c ] == RoleFront ) ? frontEdgeChina : rearEdgeChina;
+         CRGB clr = *chinaSrc[ c ];
          clr.nscale8( (uint8_t)( chinaBrightness * 255.0f + 0.5f ) );
          carpet->chinaLeds[ c ] = clr;
          carpet->chinaLeds[ c ].w = 0;
@@ -506,24 +451,7 @@ class SpeedStripesShow : public LightShow {
       meanderHue_ = 0.0f;
       zebraPosFt_ = 0.0f;
       resetZebraSchedule();
-      // BUGFIX ("blackout stripes not appearing"): zebraFrontierPos_ used
-      // to lazily initialize to whatever position the FIRST caller within
-      // the first frame happened to query (see zebraEnsureScheduleTo()) --
-      // but updateZebra() queries a whole spread of positions in one frame
-      // (rear preview at -halfLength-stripeWidth up through front preview
-      // at +halfLength+stripeWidth, roughly -14ft to +14ft), and whichever
-      // one ran first "used up" the initial lookahead, permanently
-      // stranding every OTHER position queried that frame (and every
-      // frame after, until the car had physically driven far enough to
-      // catch up) with nothing generated for it -- zebraBlackFractionAt()
-      // falls through to its "outside the generated range" 0.0 (never
-      // black) default for those. Pre-seeding the frontier here, behind
-      // the earliest position any query will ever ask for, means the
-      // whole spread is covered by a real generated schedule from frame 1
-      // onward.
-      zebraFrontierPos_ = -HALF_CAR_LENGTH_FT - ZEBRA_STRIPE_WIDTH_FT - ZEBRA_SCHEDULE_LOOKAHEAD_FT;
       zebraSilenceTimer_.reset();
-      classifyFixturesFromGeometry();
    }
 
    void update( uint32_t time ) {
@@ -596,35 +524,49 @@ class SpeedStripesShow : public LightShow {
       carpet->clearMegabars();
       carpet->clearChinas();
 
-      static const float LEDS_PER_FOOT = SIZEOF_LARGE_NEO / CarpetGeometry::CAR_LENGTH_FT; // 22
+      static const float CAR_LENGTH_FT = 16.0f; // front-to-back, measured
+      static const float LEDS_PER_FOOT = SIZEOF_LARGE_NEO / CAR_LENGTH_FT; // 22
       static const float EDGE_APPROACH_FT = 1.0f; // china "about 1ft from edge" pickup point
 
-      // Megabars/china: role (front/rear/side) and, for side fixtures,
-      // exact along-length position all come from
-      // classifyFixturesFromGeometry() -- real CarpetGeometry yFt, not an
-      // assumed index -- see class comment above. Front megabars preview a
-      // stripe-width (4ft) out; front china pick it up right at the 1ft
-      // mark; rear mirrors both. Side megabars sample their own real
-      // fractional back-from-front position (not an assumed 1/3, 1/2, 2/3
-      // split); china has no side case (see class comment).
+      // front: megabars preview a stripe-width (4ft) out; china pick it up right at the 1ft mark
       CRGB frontLeadClr = sampleWave( ( SIZEOF_LARGE_NEO - 1 ) + stripeWidth_ + scrollOffset_, satFraction, meanderOffset );
+      carpet->megabarLeds[ 11 ] = frontLeadClr;
+      carpet->megabarLeds[ 0 ]  = frontLeadClr; // headlight -- brightness still governed separately, see MagicCarpet
+      carpet->megabarLeds[ 1 ]  = frontLeadClr;
       CRGB frontEdgeClr = sampleWave( ( SIZEOF_LARGE_NEO - 1 ) + LEDS_PER_FOOT * EDGE_APPROACH_FT + scrollOffset_, satFraction, meanderOffset );
-      CRGB rearLeadClr  = sampleWave( -(float)stripeWidth_ + scrollOffset_, satFraction, meanderOffset );
-      CRGB rearEdgeClr  = sampleWave( -LEDS_PER_FOOT * EDGE_APPROACH_FT + scrollOffset_, satFraction, meanderOffset );
+      carpet->chinaLeds[ 1 ] = frontEdgeClr; carpet->chinaLeds[ 1 ].w = 0;
+      carpet->chinaLeds[ 2 ] = frontEdgeClr; carpet->chinaLeds[ 2 ].w = 0;
 
-      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
-         if ( megabarRole_[ m ] == RoleFront ) carpet->megabarLeds[ m ] = frontLeadClr;
-         else if ( megabarRole_[ m ] == RoleRear ) carpet->megabarLeds[ m ] = rearLeadClr;
-         else {
-            float pos = localOffsetForFracBackFromFront( megabarSideFrac_[ m ] ) + scrollOffset_;
-            carpet->megabarLeds[ m ] = sampleWave( pos, satFraction, meanderOffset );
-         }
-      }
-      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
-         CRGB clr = ( chinaRole_[ c ] == RoleFront ) ? frontEdgeClr : rearEdgeClr;
-         carpet->chinaLeds[ c ] = clr;
-         carpet->chinaLeds[ c ].w = 0;
-      }
+      // rear: mirror of the above, behind the back corner
+      CRGB rearLeadClr = sampleWave( -(float)stripeWidth_ + scrollOffset_, satFraction, meanderOffset );
+      carpet->megabarLeds[ 5 ] = rearLeadClr;
+      carpet->megabarLeds[ 6 ] = rearLeadClr;
+      carpet->megabarLeds[ 7 ] = rearLeadClr;
+      CRGB rearEdgeClr = sampleWave( -LEDS_PER_FOOT * EDGE_APPROACH_FT + scrollOffset_, satFraction, meanderOffset );
+      carpet->chinaLeds[ 5 ] = rearEdgeClr; carpet->chinaLeds[ 5 ].w = 0;
+      carpet->chinaLeds[ 6 ] = rearEdgeClr; carpet->chinaLeds[ 6 ].w = 0;
+
+      // side positions, shared by the side china and the remaining side megabars
+      float pos13 = localOffsetForFracBackFromFront( 1.0f / 3.0f ) + scrollOffset_;
+      float pos12 = localOffsetForFracBackFromFront( 0.5f ) + scrollOffset_;
+      float pos23 = localOffsetForFracBackFromFront( 2.0f / 3.0f ) + scrollOffset_;
+      CRGB clr13 = sampleWave( pos13, satFraction, meanderOffset );
+      CRGB clr12 = sampleWave( pos12, satFraction, meanderOffset );
+      CRGB clr23 = sampleWave( pos23, satFraction, meanderOffset );
+
+      // side china: front one on each side at 1/3 back from front, rear one at 2/3
+      carpet->chinaLeds[ 0 ] = clr13; carpet->chinaLeds[ 0 ].w = 0; // front-right, right edge
+      carpet->chinaLeds[ 7 ] = clr23; carpet->chinaLeds[ 7 ].w = 0; // back-right, right edge
+      carpet->chinaLeds[ 3 ] = clr13; carpet->chinaLeds[ 3 ].w = 0; // front-left, left edge
+      carpet->chinaLeds[ 4 ] = clr23; carpet->chinaLeds[ 4 ].w = 0; // back-left, left edge
+
+      // remaining 3 megabars per side, same 1/3, 1/2, 2/3 partition
+      carpet->megabarLeds[ 2 ]  = clr13; // 60 deg, left, nearer front
+      carpet->megabarLeds[ 3 ]  = clr12; // 90 deg, dead left
+      carpet->megabarLeds[ 4 ]  = clr23; // 120 deg, left, nearer back
+      carpet->megabarLeds[ 10 ] = clr13; // 300 deg, right, nearer front
+      carpet->megabarLeds[ 9 ]  = clr12; // 270 deg, dead right
+      carpet->megabarLeds[ 8 ]  = clr23; // 240 deg, right, nearer back
    }
 };
 

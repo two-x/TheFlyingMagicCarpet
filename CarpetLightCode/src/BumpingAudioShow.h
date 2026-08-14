@@ -18,7 +18,6 @@
  */
 
 #include "LightShow.h"
-#include "CarpetGeometry.h"
 #include <math.h>
 
 const CRGB topC[] {
@@ -50,24 +49,11 @@ const CRGB bottomC[] {
 // edges its angle sits closest to.
 static const int NEWSTD_FRONT_REAR_MEGABARS[6] = { 0, 1, 5, 6, 7, 11 };
 static const int NEWSTD_LEFT_RIGHT_MEGABARS[6] = { 2, 3, 4, 8, 9, 10 };
-// BUGFIX ("china should split front/back vs sides"): this used to be a
-// hardcoded NEWSTD_CHINA_FRONTBACK[4]={1,2,5,6}/NEWSTD_CHINA_SIDES[4]=
-// {0,3,4,7} split, ported from README wording about which edge each
-// china's PAIR is *aimed* along -- but a china pair's 2 members (e.g. idx
-// 0 and 1) mount at the IDENTICAL real ground-spot (x,y), per
-// CarpetGeometry.h's buildFloodPositions_ (only their aim direction
-// differs), so idx 0 was grouped as "side" while idx 1, physically the
-// same corner, was grouped "front" -- two adjacent chinas at one corner
-// rendering different colors. China's 8 fixtures mount in 4 corner pairs
-// with only 2 distinct yFt (front-to-back) values, so real position alone
-// naturally sorts all 8 into just front/back -- see the render call
-// below, which derives this from CarpetGeometry::getChinaPosition().yFt
-// directly instead of any assumed index/aim mapping. (Same fix applied to
-// SpeedStripesShow.h for the identical issue, per request -- see its own
-// comment.)
-// pixel_war china pairing: each of the 8 chinas paired with the one
-// address above it.
-static const int PW_CHINA_PAIRS[4][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 } };
+// China grouping, per README's china layout / SpeedStripesShow.h's own
+// comment: [1,2] aimed along the front edge, [5,6] along the back edge,
+// [0,3,4,7] aimed along a side edge.
+static const int NEWSTD_CHINA_FRONTBACK[4] = { 1, 2, 5, 6 };
+static const int NEWSTD_CHINA_SIDES[4] = { 0, 3, 4, 7 };
 // sub_standard megabar cycle option 3: each megabar paired with its exact
 // opposite (180deg away -- +6 positions around the 12-megabar, 30deg-spaced
 // ring, same angle convention as LighthouseShow.h/NEWSTD_FRONT_REAR_MEGABARS
@@ -174,9 +160,9 @@ class EqualizerShow : public LightShow {
    // concept -- BOTH colors respond to bass hits (no treble input at all
    // anymore), trading turns every cycleBeats_ (pot-controlled, shared
    // with new_standard -- see that member's own comment) bass hits.
-   static constexpr float PW_MIN_FRAC = 0.125f, PW_MAX_FRAC = 0.875f; // 12.5%..87.5% of the loop -- now a WIDTH bound on B's territory arc, see pwLoFrac_/pwHiFrac_ below
+   static constexpr float PW_MIN_FRAC = 0.125f, PW_MAX_FRAC = 0.875f; // 12.5%..87.5% of the loop
    static constexpr float PW_FADE_FRAC = 1.0f / 42.0f; // border cross-fade width -- 1/3 of the original 1/14, per request
-   static constexpr float PW_HIT_IMPULSE = 0.12f;  // per-EDGE territory fraction jumped per qualifying hit edge (half the original 0.24, per request -- BOTH edges of B's arc now move on every hit, see pwLoFrac_/pwHiFrac_ below, so total arc-width change per hit is unchanged at 0.24 even though each edge's own individual movement is halved)
+   static constexpr float PW_HIT_IMPULSE = 0.24f;  // territory fraction jumped per qualifying hit edge (2x the original 0.12, per request)
    static constexpr float PW_RECOVER_FRAC = 0.5f;  // fraction of EACH hit's own impulse given back afterward, per request -- net territory gain per hit is PW_HIT_IMPULSE * (1 - PW_RECOVER_FRAC)
    // Impact and recovery are 2 distinct, time-separated phases (per
    // request), not one combined instantaneous step: the full impulse
@@ -188,16 +174,7 @@ class EqualizerShow : public LightShow {
    // the previous recovery lands simply replaces it (see updatePixelWar()).
    static constexpr float PW_RECOVER_DELAY_MS = 150.0f;
    static constexpr float PW_WALK_MAX = 37.5f;     // LED/s -- 25% of the original 150 (rate of travel around the rope's perimeter reduced 75% per request)
-   // B's territory is the arc [pwLoFrac_, pwHiFrac_) going forward around the
-   // loop (wrapping through 0 if pwHiFrac_ < pwLoFrac_ once normalized) --
-   // BOTH edges move on every hit/recovery (per request; used to be a single
-   // moving edge against a border fixed at position 0, so half the segment
-   // never visibly reacted to a hit). Left unwrapped/unclamped as state (can
-   // drift outside 0..1 indefinitely without issue -- normalized only at
-   // render time in pwColorAt()); width is clamped to [PW_MIN_FRAC,
-   // PW_MAX_FRAC] and the pair re-centered after every update, see
-   // updatePixelWar().
-   float pwLoFrac_ = 0.0f, pwHiFrac_ = 0.5f;
+   float pwBassFrac_ = 0.5f;
    float pwPendingRecoveryFrac_ = 0.0f;      // 0 = no recovery currently pending
    float pwRecoveryDelayRemainingMs_ = 0.0f;
    float pwRotationOffsetLed_ = 0.0f, pwWalkspeed_ = 0.0f, pwWalkAccumMs_ = 0.0f;
@@ -205,33 +182,22 @@ class EqualizerShow : public LightShow {
    // which color source a megabar renders while lit, set at PICK time (per
    // request, "always use the right color for its freq band, like china") --
    // 0=bass (activeColor, respects the war's current turn), 1=treble
-   // (Tcolor, fixed -- doesn't participate in turn-trading). See
-   // PW_BASS_PICK/PW_TREBLE_PICK below. (Mid/green reactivity removed
-   // entirely per follow-up request -- was PwSrcMid=2/Mcolor/PW_MID_PICK.)
-   enum PwColorSrc { PwSrcBass = 0, PwSrcTreble = 1 };
+   // (Tcolor, fixed -- doesn't participate in turn-trading), 2=mid (green,
+   // fixed). See PW_BASS_PICK/PW_TREBLE_PICK/PW_MID_PICK below.
+   enum PwColorSrc { PwSrcBass = 0, PwSrcTreble = 1, PwSrcMid = 2 };
    uint8_t pwMegabarColorSrc_[ NUM_MEGABAR_LEDS ] = { PwSrcBass };
    // per request: the war/territory mechanic itself stays bass-only, but the
-   // megabar flash pool also includes an independently-triggered treble
-   // picker -- treble count is always ceil(bass count/2). Each pool
-   // re-picks on its OWN band's real hit edge (see AudioBoard::NewBandHit()
-   // below), independent of the other.
+   // megabar flash pool now also includes independently-triggered treble
+   // and midrange pickers -- treble count is always ceil(bass count/2),
+   // mid is a fixed extra one. Each pool re-picks on its OWN band's real
+   // hit edge (see AudioBoard::NewBandHit() below), independent of the others.
    static const int PW_BASS_PICK = 2;
    static const int PW_TREBLE_PICK = 1; // ceil(PW_BASS_PICK/2)
-   static const int PW_MAX_PICK = PW_BASS_PICK + PW_TREBLE_PICK; // shared anti-repeat memory
-   int pwLastPicked_[ PW_MAX_PICK ] = { -1, -1, -1 };
+   static const int PW_MID_PICK = 1;
+   static const int PW_MAX_PICK = PW_BASS_PICK + PW_TREBLE_PICK + PW_MID_PICK; // shared anti-repeat memory
+   int pwLastPicked_[ PW_MAX_PICK ] = { -1, -1, -1, -1 };
    bool pwTurnIsB_ = true;  // whose turn it currently is
    int pwTurnHitCount_ = 0; // bass hits so far this turn, vs cycleBeats_
-   // CHINA: 4 pairs (PW_CHINA_PAIRS), 2 assigned to bass and 2 to treble --
-   // each pair shows its assigned band's color, brightness tracking that
-   // band's own live hit level. Every 4 combined bass+treble hit edges, a
-   // random pair swaps assignment with a random pair currently on the
-   // other band, keeping the 2/2 split -- so which corner/side is bass vs
-   // treble drifts over time instead of being fixed. Restored per request
-   // (was simplified away to a single all-bass color when treble had been
-   // dropped from this variation entirely; treble's back now, see
-   // trebleEdge above, so this is a faithful restore, not new design).
-   bool pwChinaPairIsBass_[ 4 ] = { true, true, false, false };
-   int pwChinaHitCount_ = 0;
 
    // triple-strobe on bass hits (see updateStrobe()) -- nonvolatile, toggled
    // by a double press while this show is active (see CarpetLightLogic.cpp)
@@ -322,21 +288,13 @@ class EqualizerShow : public LightShow {
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdLastMegabarColor_[ m ] = CRGB::Black;
       newStdChinaFadeStartMs_ = 0; newStdMegabarFadeStartMs_ = 0;
 
-      pwLoFrac_ = 0.0f; pwHiFrac_ = 0.5f;
+      pwBassFrac_ = 0.5f;
       pwPendingRecoveryFrac_ = 0.0f; pwRecoveryDelayRemainingMs_ = 0.0f;
       pwRotationOffsetLed_ = 0.0f; pwWalkspeed_ = 0.0f; pwWalkAccumMs_ = 0.0f;
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) { pwMegabarHeat_[ m ] = 0.0f; pwMegabarColorSrc_[ m ] = PwSrcBass; }
       for ( int n = 0; n < PW_MAX_PICK; ++n ) pwLastPicked_[ n ] = -1;
       pwTurnIsB_ = true;
       pwTurnHitCount_ = 0;
-      // randomly assign 2 of the 4 china pairs to bass, 2 to treble
-      {
-         int idxs[ 4 ] = { 0, 1, 2, 3 };
-         for ( int i = 3; i > 0; --i ) { int j = random( i + 1 ); int t = idxs[ i ]; idxs[ i ] = idxs[ j ]; idxs[ j ] = t; }
-         for ( int p = 0; p < 4; ++p ) pwChinaPairIsBass_[ p ] = false;
-         pwChinaPairIsBass_[ idxs[ 0 ] ] = true; pwChinaPairIsBass_[ idxs[ 1 ] ] = true;
-         pwChinaHitCount_ = 0;
-      }
    }
 
    void update( uint32_t time ) {
@@ -799,27 +757,16 @@ class EqualizerShow : public LightShow {
          pwRotationOffsetLed_ += pwWalkspeed_ * 0.05f;
       }
    }
-   // Wraps an arbitrary (possibly negative, possibly >1) fraction into [0,1).
-   static float pwWrap01( float x ) {
-      float w = fmodf( x, 1.0f );
-      if ( w < 0.0f ) w += 1.0f;
-      return w;
-   }
    CRGB pwColorAt( int i, const CRGB & Bcolor, const CRGB & Tcolor ) {
       float raw = fmodf( (float)i + pwRotationOffsetLed_, (float)NUM_NEO_LEDS_ACTUAL );
       if ( raw < 0.0f ) raw += (float)NUM_NEO_LEDS_ACTUAL;
       float normPos = raw / (float)NUM_NEO_LEDS_ACTUAL;
       float halfFade = PW_FADE_FRAC / 2.0f;
-      // B's territory is the arc going forward from lo to hi (wrapping
-      // through 0 if hi < lo once normalized) -- 2 independent borders now,
-      // vs. the old single moving border against a border fixed at 0.
-      float lo = pwWrap01( pwLoFrac_ ), hi = pwWrap01( pwHiFrac_ );
-      float width = pwWrap01( hi - lo );
-      float posFromLo = pwWrap01( normPos - lo );
-      bool inB = posFromLo < width;
-      float dLo = fabsf( normPos - lo ); dLo = min( dLo, 1.0f - dLo );
-      float dHi = fabsf( normPos - hi ); dHi = min( dHi, 1.0f - dHi );
-      float nearestD = min( dLo, dHi );
+      float dWrap = min( normPos, 1.0f - normPos );
+      float dMid = fabsf( normPos - pwBassFrac_ );
+      dMid = min( dMid, 1.0f - dMid );
+      bool inB = normPos < pwBassFrac_;
+      float nearestD = min( dWrap, dMid );
       if ( nearestD >= halfFade ) return inB ? Bcolor : Tcolor;
       float f = 0.5f - 0.5f * ( nearestD / halfFade );
       uint8_t f255 = (uint8_t)( f * 255.0f + 0.5f );
@@ -845,9 +792,7 @@ class EqualizerShow : public LightShow {
       }
 
       // ROPE: the default variation's single traveling segment, plus 3 more
-      // evenly spaced (a quarter of the loop) apart, all in Bcolor, over a
-      // Tcolor background (per request -- was CRGB::Black; anywhere far
-      // from a segment now shows the treble color instead of going dark).
+      // evenly spaced (a quarter of the loop) apart, all in Bcolor.
       float chasePos = fmodf( (float)time / 1000.0f * 60.0f, (float)NUM_NEO_LEDS_ACTUAL );
       float quarter = (float)NUM_NEO_LEDS_ACTUAL / 4.0f;
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
@@ -858,7 +803,7 @@ class EqualizerShow : public LightShow {
             if ( d < nearest ) nearest = d;
          }
          uint8_t amt = (uint8_t)max( 0.0f, 255.0f - nearest * 4.0f );
-         carpet->ropeLeds[ i ] = blend( Tcolor, Bcolor, amt );
+         carpet->ropeLeds[ i ] = blend( CRGB::Black, Bcolor, amt );
          carpet->ropeLeds[ i ].w = 0;
       }
 
@@ -904,9 +849,8 @@ class EqualizerShow : public LightShow {
       bassChina.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
       trebleChina.nscale8( (uint8_t)( (uint16_t)trebleHit * 255 / 100 ) );
       if ( chinaCycler_.option == 0 ) {
-         for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
-            carpet->chinaLeds[ c ] = ( CarpetGeometry::getChinaPosition( c ).yFt > 0.0f ) ? bassChina : trebleChina;
-         }
+         for ( int i = 0; i < 4; ++i ) carpet->chinaLeds[ NEWSTD_CHINA_FRONTBACK[ i ] ] = bassChina;
+         for ( int i = 0; i < 4; ++i ) carpet->chinaLeds[ NEWSTD_CHINA_SIDES[ i ] ] = trebleChina;
       } else if ( chinaCycler_.option == 1 ) {
          for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) carpet->chinaLeds[ c ] = bassChina;
       } else {
@@ -1036,8 +980,8 @@ class EqualizerShow : public LightShow {
       if ( !silent ) newStdHueTimeS_ += dtSec;
       CRGB Bcolor, Tcolor;
       newStdColors( Bcolor, Tcolor );
+      static const CRGB Mcolor = CRGB::Green; // fixed, per request -- midrange flood pool's own color
       uint8_t bassHit = AudioBoard::getBandHitPercent( BandBass );
-      uint8_t trebleHit = AudioBoard::getBandHitPercent( BandTreble ); // china pair brightness only -- see CHINA section below
 
       if ( silent ) {
          updateSilenceFloods( time, dtSec, Bcolor, Tcolor );
@@ -1046,30 +990,29 @@ class EqualizerShow : public LightShow {
 
       // Same NewHit()-based edge detection as new_standard above (see its
       // own comment) -- fixes the same "megabar misses a hit chinas still
-      // show" class of bug here too. Per request, treble's trigger is
-      // sourced from specific bins rather than the curated AudioBand
-      // grouping: just the top 2 bins (FreqBin5/6 -- 6250/16000Hz), NOT
-      // AudioBand's own BandTreble (which also includes FreqBin4/2500Hz).
-      // (Midrange/green reactivity removed entirely per follow-up request.)
+      // show" class of bug here too. Per request, this cycle's treble/mid
+      // triggers are sourced from specific bins rather than the curated
+      // AudioBand groupings: treble is just the top 2 bins (FreqBin5/6 --
+      // 6250/16000Hz), NOT AudioBand's own BandTreble (which also includes
+      // FreqBin4/2500Hz); midrange is FreqBin2/3/4 (400/1000/2500Hz) --
+      // AudioBand's own BandMid (FreqBin2/3 only) plus the 2500Hz bin taken
+      // out of treble above.
       bool bassEdge = AudioBoard::NewBandHit( BandBass );
       bool trebleEdge = AudioBoard::NewBinHit( FreqBin5 ) || AudioBoard::NewBinHit( FreqBin6 );
+      bool midEdge = AudioBoard::NewBinHit( FreqBin2 ) || AudioBoard::NewBinHit( FreqBin3 ) || AudioBoard::NewBinHit( FreqBin4 );
 
       if ( bassEdge ) {
-         // pixel_war's own turn length is 50% longer than the shared
-         // cycleBeats_ (new_standard's own option-cycle length, untouched),
-         // per request -- scaled only here, not by changing cycleBeats_
-         // itself.
-         int pwCycleBeats = (int)( (float)cycleBeats_ * 1.5f + 0.5f );
-         if ( ++pwTurnHitCount_ >= pwCycleBeats ) {
+         if ( ++pwTurnHitCount_ >= cycleBeats_ ) {
             pwTurnHitCount_ = 0;
             pwTurnIsB_ = !pwTurnIsB_;
          }
       }
+      CRGB activeColor = pwTurnIsB_ ? Bcolor : Tcolor;
 
-      // ROPE: territory war -- every qualifying bass hit pushes BOTH edges
-      // of B's territory arc toward whichever color currently has the turn
-      // immediately (the impact); PW_RECOVER_FRAC of that same push is
-      // given back PW_RECOVER_DELAY_MS later (the recovery) -- 2 distinct,
+      // ROPE: territory war -- every qualifying bass hit pushes territory
+      // toward whichever color currently has the turn immediately (the
+      // impact); PW_RECOVER_FRAC of that same push is given back
+      // PW_RECOVER_DELAY_MS later (the recovery) -- 2 distinct,
       // time-separated phases, not one combined instantaneous step (see
       // PW_RECOVER_DELAY_MS's own comment). A hit that lands while a
       // previous recovery is still pending replaces it outright (that
@@ -1078,42 +1021,34 @@ class EqualizerShow : public LightShow {
       pwStepRandomWalk( dtSec * 1000.0f );
       if ( bassEdge ) {
          float impulse = pwTurnIsB_ ? PW_HIT_IMPULSE : -PW_HIT_IMPULSE;
-         pwLoFrac_ -= impulse; pwHiFrac_ += impulse;
+         pwBassFrac_ += impulse;
          pwPendingRecoveryFrac_ = impulse * PW_RECOVER_FRAC;
          pwRecoveryDelayRemainingMs_ = PW_RECOVER_DELAY_MS;
       } else if ( pwPendingRecoveryFrac_ != 0.0f ) {
          pwRecoveryDelayRemainingMs_ -= dtSec * 1000.0f;
          if ( pwRecoveryDelayRemainingMs_ <= 0.0f ) {
-            pwLoFrac_ += pwPendingRecoveryFrac_; pwHiFrac_ -= pwPendingRecoveryFrac_;
+            pwBassFrac_ -= pwPendingRecoveryFrac_;
             pwPendingRecoveryFrac_ = 0.0f;
          }
       }
-      // Clamp B's arc width to [PW_MIN_FRAC, PW_MAX_FRAC], re-centering both
-      // edges around their current midpoint -- and wrap that midpoint into
-      // [0,1) so pwLoFrac_/pwHiFrac_ never drift unboundedly over long runtimes.
-      {
-         float width = constrain( pwHiFrac_ - pwLoFrac_, PW_MIN_FRAC, PW_MAX_FRAC );
-         float center = pwWrap01( ( pwLoFrac_ + pwHiFrac_ ) * 0.5f );
-         pwLoFrac_ = center - width * 0.5f;
-         pwHiFrac_ = center + width * 0.5f;
-      }
+      pwBassFrac_ = constrain( pwBassFrac_, PW_MIN_FRAC, PW_MAX_FRAC );
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) { carpet->ropeLeds[ i ] = pwColorAt( i, Bcolor, Tcolor ); carpet->ropeLeds[ i ].w = 0; }
 
-      // MEGABARS: 2 independent pools, each picking its own currently-dark
+      // MEGABARS: 3 independent pools, each picking its own currently-dark
       // megabars on its OWN band's real hit edge, then fading -- bass
       // (PW_BASS_PICK, always Bcolor) + treble (PW_TREBLE_PICK =
-      // ceil(bass/2), always Tcolor), per request. BUGFIX ("bass hits
-      // respond using treble color"): the bass pool used to render with
-      // whichever color currently has the WAR's turn (Bcolor or Tcolor,
-      // alternating, via pwColorAt()) instead of a fixed Bcolor, so during
-      // T's turn a genuine bass hit would render identically to a treble
-      // hit, indistinguishable from each other. The turn-dependent color
-      // stays in the ROPE only (via pwColorAt() -- that's the actual "war"
-      // visual, unchanged) -- the megabar flash pool's bass color is fixed,
-      // same as treble always was, and CHINA's bass/treble pairs likewise
-      // always render their own fixed Bcolor/Tcolor -- so every pool's
-      // color always identifies which band triggered it.
-      // wasLastPicked avoidance is shared across both pools (one combined
+      // ceil(bass/2), always Tcolor) + mid (PW_MID_PICK, always Mcolor/
+      // green), per request. BUGFIX ("bass hits respond using treble
+      // color"): the bass pool used to render with activeColor (whichever
+      // color currently has the WAR's turn -- Bcolor or Tcolor, alternating)
+      // instead of a fixed Bcolor, so during T's turn a genuine bass hit
+      // would render identically to a treble hit, indistinguishable from
+      // each other. activeColor stays turn-dependent for the ROPE/CHINA
+      // (that's the actual "war" visual, unchanged) -- only the megabar
+      // flash pool's bass color is now fixed, same as treble/mid always
+      // were, so each pool's color always identifies which band triggered
+      // it, like china's own bass/treble split does.
+      // wasLastPicked avoidance is shared across all 3 pools (one combined
       // memory, PW_MAX_PICK slots) so back-to-back picks from DIFFERENT
       // bands still avoid immediately repeating a spot.
       auto pwPickAndLight = [&]( int numToPick, uint8_t colorSrc ) {
@@ -1141,40 +1076,20 @@ class EqualizerShow : public LightShow {
       };
       if ( bassEdge ) pwPickAndLight( PW_BASS_PICK, PwSrcBass );
       if ( trebleEdge ) pwPickAndLight( PW_TREBLE_PICK, PwSrcTreble );
+      if ( midEdge ) pwPickAndLight( PW_MID_PICK, PwSrcMid );
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
          pwMegabarHeat_[ m ] = max( 0.0f, pwMegabarHeat_[ m ] - dtSec / 0.4f );
-         CRGB base = ( pwMegabarColorSrc_[ m ] == PwSrcBass ) ? Bcolor : Tcolor;
+         CRGB base = ( pwMegabarColorSrc_[ m ] == PwSrcBass ) ? Bcolor : ( pwMegabarColorSrc_[ m ] == PwSrcTreble ) ? Tcolor : Mcolor;
          base.nscale8( (uint8_t)( pwMegabarHeat_[ m ] * 255.0f + 0.5f ) );
          carpet->megabarLeds[ m ] = base;
       }
 
-      // CHINA: 4 pairs, 2 assigned to bass and 2 to treble -- each pair
-      // shows its assigned band's color, brightness tracking that band's
-      // own hit level live. Every 8 hit edges (per request, half as often
-      // as the original 4), a random pair swaps bands with a random pair
-      // currently on the other band, keeping the 2/2 split.
-      static const int PW_CHINA_SWAP_HITS = 8;
-      if ( bassEdge ) ++pwChinaHitCount_;
-      if ( trebleEdge ) ++pwChinaHitCount_;
-      if ( pwChinaHitCount_ >= PW_CHINA_SWAP_HITS ) {
-         pwChinaHitCount_ -= PW_CHINA_SWAP_HITS;
-         int grabbed = random( 4 );
-         int opposite[ 4 ], oppositeCount = 0;
-         for ( int p = 0; p < 4; ++p ) if ( pwChinaPairIsBass_[ p ] != pwChinaPairIsBass_[ grabbed ] ) opposite[ oppositeCount++ ] = p;
-         if ( oppositeCount > 0 ) {
-            int other = opposite[ random( oppositeCount ) ];
-            bool tmp = pwChinaPairIsBass_[ grabbed ];
-            pwChinaPairIsBass_[ grabbed ] = pwChinaPairIsBass_[ other ];
-            pwChinaPairIsBass_[ other ] = tmp;
-         }
-      }
-      for ( int p = 0; p < 4; ++p ) {
-         bool isBass = pwChinaPairIsBass_[ p ];
-         uint8_t hitPct = isBass ? bassHit : trebleHit;
-         CRGB lit = isBass ? Bcolor : Tcolor;
-         lit.nscale8( (uint8_t)( (uint16_t)hitPct * 255 / 100 ) );
-         for ( int k = 0; k < 2; ++k ) { int c = PW_CHINA_PAIRS[ p ][ k ]; carpet->chinaLeds[ c ] = lit; carpet->chinaLeds[ c ].w = 0; }
-      }
+      // CHINA: all 8 flash together in the ACTIVE color, brightness
+      // tracking the live bass hit level -- simpler than the old 2-band
+      // pair-split, since there's no treble input left to split against.
+      CRGB chinaLit = activeColor;
+      chinaLit.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
+      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) { carpet->chinaLeds[ c ] = chinaLit; carpet->chinaLeds[ c ].w = 0; }
    }
 
    static CRGB vuMeterColor( bool bassLit, bool trebleLit, const CRGB & bassClr, const CRGB & trebleClr ) {
