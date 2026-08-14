@@ -18,6 +18,7 @@
  */
 
 #include "LightShow.h"
+#include "CarpetGeometry.h"
 #include <math.h>
 
 const CRGB topC[] {
@@ -49,11 +50,21 @@ const CRGB bottomC[] {
 // edges its angle sits closest to.
 static const int NEWSTD_FRONT_REAR_MEGABARS[6] = { 0, 1, 5, 6, 7, 11 };
 static const int NEWSTD_LEFT_RIGHT_MEGABARS[6] = { 2, 3, 4, 8, 9, 10 };
-// China grouping, per README's china layout / SpeedStripesShow.h's own
-// comment: [1,2] aimed along the front edge, [5,6] along the back edge,
-// [0,3,4,7] aimed along a side edge.
-static const int NEWSTD_CHINA_FRONTBACK[4] = { 1, 2, 5, 6 };
-static const int NEWSTD_CHINA_SIDES[4] = { 0, 3, 4, 7 };
+// BUGFIX ("china should split front/back vs sides"): this used to be a
+// hardcoded NEWSTD_CHINA_FRONTBACK[4]={1,2,5,6}/NEWSTD_CHINA_SIDES[4]=
+// {0,3,4,7} split, ported from README wording about which edge each
+// china's PAIR is *aimed* along -- but a china pair's 2 members (e.g. idx
+// 0 and 1) mount at the IDENTICAL real ground-spot (x,y), per
+// CarpetGeometry.h's buildFloodPositions_ (only their aim direction
+// differs), so idx 0 was grouped as "side" while idx 1, physically the
+// same corner, was grouped "front" -- two adjacent chinas at one corner
+// rendering different colors. China's 8 fixtures mount in 4 corner pairs
+// with only 2 distinct yFt (front-to-back) values, so real position alone
+// naturally sorts all 8 into just front/back -- see the render call
+// below, which derives this from CarpetGeometry::getChinaPosition().yFt
+// directly instead of any assumed index/aim mapping. (Same fix applied to
+// SpeedStripesShow.h for the identical issue, per request -- see its own
+// comment.)
 // pixel_war china pairing: each of the 8 chinas paired with the one
 // address above it.
 static const int PW_CHINA_PAIRS[4][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 } };
@@ -893,8 +904,9 @@ class EqualizerShow : public LightShow {
       bassChina.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
       trebleChina.nscale8( (uint8_t)( (uint16_t)trebleHit * 255 / 100 ) );
       if ( chinaCycler_.option == 0 ) {
-         for ( int i = 0; i < 4; ++i ) carpet->chinaLeds[ NEWSTD_CHINA_FRONTBACK[ i ] ] = bassChina;
-         for ( int i = 0; i < 4; ++i ) carpet->chinaLeds[ NEWSTD_CHINA_SIDES[ i ] ] = trebleChina;
+         for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
+            carpet->chinaLeds[ c ] = ( CarpetGeometry::getChinaPosition( c ).yFt > 0.0f ) ? bassChina : trebleChina;
+         }
       } else if ( chinaCycler_.option == 1 ) {
          for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) carpet->chinaLeds[ c ] = bassChina;
       } else {

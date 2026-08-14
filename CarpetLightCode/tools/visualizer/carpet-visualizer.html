@@ -6430,7 +6430,7 @@ window.addEventListener('mouseup', (e) => {
    until the double-press window closes with no second press; medium/long
    are decided on release. */
 const ENC_BTN_MEDIUM_MS = 300, ENC_BTN_LONG_MS = 1500, ENC_BTN_XLONG_MS = 3000, ENC_BTN_DOUBLE_WINDOW_MS = 250;
-let encBtnDown = false, encBtnPressStartMs = 0, encBtnLiveActionFired = false;
+let encBtnDown = false, encBtnPressStartMs = 0;
 let encBtnHoldTimer = null;
 let encBtnAwaitingSecondPress = false, encBtnSecondPressWindowStartMs = 0, encBtnShortPendingTimer = null;
 // Live green threshold-cross indicators (separate from the amber
@@ -6450,6 +6450,27 @@ function fireEncBtnAction(type) {
   flashActionCell(ENC_BTN_ACTION_TO_CELL[type]);
   updateInputActionTable();
 }
+// BUGFIX ("short press doesn't advance shows -- dropdown does though"):
+// this whole button-down/up pair used to CLASSIFY the press itself here in
+// JS (hold-duration thresholds, double-press window) and directly mutate
+// local state via fireEncBtnAction()/doShortPress()/etc -- a real mandate
+// violation (button-press classification duplicated in JS instead of
+// coming from the real firmware's own PushButtonEdge state machine), and
+// it was never updated when the show/variation dropdown was fixed
+// earlier this session to inject into and read back from the real WASM
+// firmware -- so a real short press never reached the real FW at all, and
+// whatever it did to local Ctl state got silently overwritten right back
+// by syncShowStateFromWasm() reading the (unchanged) real firmware state
+// every frame. Fixed: this now ONLY injects real button-down/up events
+// (web_injectButtonDown/Up(), the same functions the show/variation
+// dropdown fix already established this session) -- the REAL
+// PushButton state machine inside the compiled firmware classifies the
+// press purely from real elapsed time between these 2 injected edges,
+// exactly as real hardware would, and fires the REAL action (show cycle,
+// config-mode entry/nav, etc) itself. The green threshold-cross flashes
+// below stay local (pure UI polish reflecting elapsed REAL time against
+// the same published, real threshold constants -- not a prediction of
+// what the firmware will decide) but no longer trigger any action.
 function encoderCenterBtnDown() {
   const btn = document.getElementById('encoderCenterBtn');
   btn.classList.add('pressed');
@@ -6457,16 +6478,11 @@ function encoderCenterBtnDown() {
   encBtnMediumFlashed = false; encBtnLongFlashed = false;
   flashActionCellGreen('actShort'); // per request: short's own "threshold" is button-down itself
   if (encBtnAwaitingSecondPress && (now - encBtnSecondPressWindowStartMs) <= ENC_BTN_DOUBLE_WINDOW_MS) {
-    encBtnAwaitingSecondPress = false;
-    clearTimeout(encBtnShortPendingTimer);
-    encBtnLiveActionFired = true;
     flashActionCellGreen('actDouble'); // per request: on the 2nd button-down
-    fireEncBtnAction('double');
-  } else {
-    encBtnAwaitingSecondPress = false;
-    clearTimeout(encBtnShortPendingTimer);
-    encBtnLiveActionFired = false;
   }
+  encBtnAwaitingSecondPress = false;
+  clearTimeout(encBtnShortPendingTimer);
+  if (wasmReady) wasmModule.ccall('web_injectButtonDown', null, [], []);
   encBtnDown = true;
   encBtnPressStartMs = now;
   clearInterval(encBtnHoldTimer);
@@ -6474,11 +6490,7 @@ function encoderCenterBtnDown() {
     const heldMs = performance.now() - encBtnPressStartMs;
     if (!encBtnMediumFlashed && heldMs >= ENC_BTN_MEDIUM_MS) { encBtnMediumFlashed = true; flashActionCellGreen('actMed'); }
     if (!encBtnLongFlashed && heldMs >= ENC_BTN_LONG_MS) { encBtnLongFlashed = true; flashActionCellGreen('actLong'); }
-    if (!encBtnLiveActionFired && heldMs >= ENC_BTN_XLONG_MS) {
-      encBtnLiveActionFired = true;
-      flashActionCellGreen('actXL');
-      fireEncBtnAction('xlong');
-    }
+    if (heldMs >= ENC_BTN_XLONG_MS) { clearInterval(encBtnHoldTimer); flashActionCellGreen('actXL'); }
   }, 20);
 }
 // Per request: every action-cell except Pot is clickable, firing that
@@ -6498,18 +6510,16 @@ function encoderCenterBtnUp() {
   document.getElementById('encoderCenterBtn').classList.remove('pressed');
   clearInterval(encBtnHoldTimer);
   const heldMs = performance.now() - encBtnPressStartMs;
-  if (!encBtnLiveActionFired) {
-    if (heldMs >= ENC_BTN_XLONG_MS) fireEncBtnAction('xlong'); // safety net, matches classifyOnRelease()
-    else if (heldMs >= ENC_BTN_LONG_MS) fireEncBtnAction('long');
-    else if (heldMs >= ENC_BTN_MEDIUM_MS) fireEncBtnAction('medium');
-    else {
-      encBtnAwaitingSecondPress = true;
-      encBtnSecondPressWindowStartMs = performance.now();
-      encBtnShortPendingTimer = setTimeout(() => {
-        encBtnAwaitingSecondPress = false;
-        fireEncBtnAction('short');
-      }, ENC_BTN_DOUBLE_WINDOW_MS);
-    }
+  if (wasmReady) wasmModule.ccall('web_injectButtonUp', null, [], []);
+  // Local double-press-window bookkeeping below is now purely for the
+  // visual "flash green on 2nd button-down" cue in encoderCenterBtnDown()
+  // above -- the REAL double-press classification happens inside the real
+  // firmware, from the 2 real injected edges' own timestamps, same as
+  // every other press tier (see this function pair's own comment).
+  if (heldMs < ENC_BTN_MEDIUM_MS) {
+    encBtnAwaitingSecondPress = true;
+    encBtnSecondPressWindowStartMs = performance.now();
+    encBtnShortPendingTimer = setTimeout(() => { encBtnAwaitingSecondPress = false; }, ENC_BTN_DOUBLE_WINDOW_MS);
   }
 }
 
@@ -6740,6 +6750,12 @@ function syncShowStateFromWasm() {
       [...row.children].forEach((c, i) => c.classList.toggle('active', i === realVariation));
     }
   }
+  // Keeps the action-description table (Short/Med/Long/XL/Double column)
+  // fresh regardless of which async path changed real FW state -- used to
+  // only refresh from inside fireEncBtnAction() (now removed, see
+  // encoderCenterBtnDown/Up's own comment), which missed xlong (fires
+  // live, mid-hold) and double (fires on the 2nd button-down) entirely.
+  updateInputActionTable();
 }
 
 function tick(now) {
