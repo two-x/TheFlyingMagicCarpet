@@ -416,7 +416,7 @@ LightShow * makeShow( ShowMode mode, uint8_t variation ) {
 const char * showName( ShowMode mode ) {
    switch ( mode ) {
       case ShowNightrider:   return "Nightrider";
-      case ShowFlame:        return "FlameSparkle";
+      case ShowFlame:        return "Flame";
       case ShowEqualizer:    return "Equalizer";
       case ShowSpeedStripes: return "SpeedStripes";
       case ShowLighthouse:   return "Lighthouse";

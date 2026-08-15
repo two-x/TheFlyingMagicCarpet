@@ -41,6 +41,13 @@ EMSCRIPTEN_KEEPALIVE
 const char * web_getCurrentShowName() { return showName( currMode ); }
 EMSCRIPTEN_KEEPALIVE
 const char * web_getCurrentVariationName() { return currLightShow->variationName(); }
+// Real per-show variation count (LightShow::numVariations(), overridden by
+// each show) -- lets the visualizer enumerate the REAL variation list for
+// every show at launch instead of hardcoding one, per the zero-duplication
+// mandate. Reflects whichever show is currently selected; the visualizer's
+// enumeration pass calls web_setCurrentShow() first for each show in turn.
+EMSCRIPTEN_KEEPALIVE
+int web_getNumVariations() { return currLightShow->numVariations(); }
 
 // test-only convenience -- real UI drives this via the encoder/button
 // injectors below, this just makes show-cycling easy to poke at directly

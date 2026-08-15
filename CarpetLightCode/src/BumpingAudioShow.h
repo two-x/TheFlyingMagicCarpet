@@ -18,6 +18,7 @@
  */
 
 #include "LightShow.h"
+#include "CarpetGeometry.h"
 #include <math.h>
 
 const CRGB topC[] {
@@ -108,6 +109,28 @@ class EqualizerShow : public LightShow {
          return true;
       }
    };
+   // VU meter (variation 1) floods -- ported from the visualizer's own JS
+   // mirror (showEqualizer()'s variation-1 branch in carpet-visualizer.html),
+   // whose own comment on this exact spot says it plumbly: "not in the real
+   // firmware yet ... added per request so the floods aren't dark during
+   // this variation." Confirmed via direct testing: with the JS's fix never
+   // ported back, updateVuMeter() clears megabar/china every call and never
+   // refills them except during silence's swap-flash idle pattern -- floods
+   // stay completely black through any amount of real, actual sound. Real
+   // front/back role from CarpetGeometry (yFt>0 = front), not the JS
+   // mirror's visualizer-only canvas-pixel CAR_Y comparison.
+   enum VuFbRole { VuRoleFront = 0, VuRoleBack = 1 };
+   uint8_t vuMegabarRole_[ NUM_MEGABAR_LEDS ];
+   uint8_t vuChinaRole_[ NUM_CHINA_LEDS ];
+   void classifyVuFloodsFromGeometry() {
+      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
+         vuMegabarRole_[ m ] = ( CarpetGeometry::getMegabarPosition( m ).yFt > 0.0f ) ? VuRoleFront : VuRoleBack;
+      }
+      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
+         vuChinaRole_[ c ] = ( CarpetGeometry::getChinaPosition( c ).yFt > 0.0f ) ? VuRoleFront : VuRoleBack;
+      }
+   }
+
    OptionCycler chinaCycler_, megabarCycler_;
    Timer megabarOptionTimer_; // time-since-entering-current-megabar-option -- only option 1 (front/rear vs L/R) still needs an interior timer, for its own 2s sub-swap
    bool newStdCycle1TrebleIsMod3_ = true;
@@ -251,6 +274,7 @@ class EqualizerShow : public LightShow {
    uint8_t variation() {
       return variation_;
    }
+   uint8_t numVariations() { return numVariations_; }
 
    const char * variationName() {
       if ( variation_ == VarChase ) return "chase";
@@ -274,6 +298,7 @@ class EqualizerShow : public LightShow {
       potEntryPercent_ = carpet->pot->readPercent();
       potTakenOver_ = false;
       eqFrameTimer_.reset();
+      classifyVuFloodsFromGeometry();
 
       newStdHueTimeS_ = 0.0f; newStdSatTimeS_ = 0.0f;
       chinaCycler_.reset( 3 );
@@ -652,6 +677,18 @@ class EqualizerShow : public LightShow {
          float distFromBack = i - BACK_LEFT;
          float distFromFront = FRONT_LEFT - i;
          carpet->ropeLeds[ i ] = vuMeterColor( distFromBack < bassLitCount, distFromFront < trebleLitCount, bassClr, trebleClr );
+      }
+
+      // Floods (megabar/china) -- see the class member comment above
+      // (vuMegabarRole_/vuChinaRole_/classifyVuFloodsFromGeometry()) for
+      // why this exists: without it these sit fully cleared/black for as
+      // long as any real sound is present, only ever lighting during
+      // silence's swap-flash idle pattern.
+      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
+         carpet->megabarLeds[ m ] = ( vuMegabarRole_[ m ] == VuRoleFront ) ? trebleClr : bassClr;
+      }
+      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
+         carpet->chinaLeds[ c ] = ( vuChinaRole_[ c ] == VuRoleFront ) ? trebleClr : bassClr;
       }
    }
 

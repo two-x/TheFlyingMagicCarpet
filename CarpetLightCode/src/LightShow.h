@@ -294,6 +294,12 @@ class LightShow {
    // -- used for the console print on selection (see CarpetLightLogic.cpp).
    // shows without meaningful variations can leave this as the default.
    virtual const char * variationName() { return "default"; }
+   // total number of selectable variations this show has -- used by the
+   // visualizer to enumerate the real variation list at launch (never
+   // hardcoded there, see tools/wasm/bridge/web_bridge.cpp's
+   // web_getNumVariations()). Shows without meaningful variations can
+   // leave this as the default.
+   virtual uint8_t numVariations() { return 1; }
    virtual ~LightShow() {}
 };
 

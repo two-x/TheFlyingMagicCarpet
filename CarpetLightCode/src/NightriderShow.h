@@ -86,6 +86,7 @@ class NightriderShow : public LightShow {
    uint8_t variation() {
       return variation_;
    }
+   uint8_t numVariations() { return numVariations_; }
 
    const char * variationName() {
       if ( variation_ == VarManualHue ) return "manual hue";

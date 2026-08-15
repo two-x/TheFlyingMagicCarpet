@@ -10,6 +10,7 @@
 
 #include "LightShow.h"
 #include "AudioBoard.h"
+#include "CarpetGeometry.h"
 
 // TODO: build a better flame palette. maybe use presets? or pass in a palette?
 static const CRGBPalette256 flames(
@@ -96,73 +97,45 @@ class FlameShow : public LightShow {
    uint8_t megabarHeat[ NUM_MEGABAR_LEDS ] = { 0 };
    uint8_t chinaHeat[ NUM_CHINA_LEDS ] = { 0 };
 
-   // Silence-only idle "breathing" base for floods (megabar/china) --
-   // replaces the flat audio-tinted fill below, but ONLY while bass has
-   // been quiet for a sustained period (floodIsSilent_ below -- real
-   // sound reactivity is completely untouched and takes back over the
-   // instant bass returns). Deliberately NOT AudioBoard::silent_: that
-   // flag compares against noiseFloorPercent_, which defaults to 0% --
-   // at 0% the threshold is literally zero, so silent_ can never become
-   // true no matter how quiet the input actually is (confirmed: a fresh
-   // boot's own status line prints "NoiseFl:0%"). Tracks the SAME bass
-   // hit-percent already driving the reactive fill below instead, with
-   // its own 4s hold (matching AudioBoard::silent_'s window) so a normal
-   // gap between beats doesn't flicker between the two render modes.
-   static const uint32_t FLOOD_SILENCE_HOLD_MS = 4000;
-   Timer floodNotSilentTimer_;
-   bool floodIsSilent_ = false;
+   // Floods (megabar/china) real base-color logic -- ported from the
+   // visualizer's own JS mirror (showFlame() in carpet-visualizer.html),
+   // which had been left completely unchanged since before the WASM
+   // migration (predates the switch to real FW LED readback in Dev Tool
+   // mode) while the real FW here had only ever done a flat single-color
+   // fill. The JS mirror turns out to be the "golden" behavior everyone
+   // remembered -- this replaces the old flat fill with the real thing.
+   //
+   // Hit-reactive gate: any real bass/treble hit within
+   // HIT_REACTIVE_WINDOW_MS switches ALL floods to sound-reactive mode
+   // (megabars alternate bass color/treble color per fixture; china
+   // splits front/rear, with a periodic slow swap of which physical group
+   // currently shows which color). Otherwise (idle) each fixture
+   // independently sits at one of the palette's two reference colors
+   // (cool/hot ends), re-picked whenever that fixture sparks -- sparkle
+   // itself (megabarHeat_/chinaHeat_ above) is unchanged either way.
+   //
+   // China's real front/rear role comes from CarpetGeometry (see
+   // classifyChinaFromGeometry(), called once in start()) rather than the
+   // JS mirror's own old hardcoded FLAME_CHINA_FRONTBACK/SIDES index
+   // lists -- china only has 2 distinct real ground-spot positions
+   // (front/rear, no "side" case), same fix already applied to
+   // SpeedStripesShow.h/BumpingAudioShow.h's china grouping.
+   static const uint32_t HIT_REACTIVE_WINDOW_MS = 3000;
+   static const uint8_t FLOOD_LO_INDEX = 40, FLOOD_HI_INDEX = 230; // palette reference points, matches the JS mirror
+   Timer lastHitTimer_;
+   bool everHit_ = false; // starts idle at boot, same as the JS mirror's flameLastHitMs=-99999
+   bool megabarColorPick_[ NUM_MEGABAR_LEDS ]; // idle mode: true=lo, false=hi -- this fixture's current base color
+   bool chinaColorPick_[ NUM_CHINA_LEDS ];
+   bool chinaSwapBassOnFront_ = true;
+   Timer chinaSwapTimer_;
+   enum FbRole { RoleFront = 0, RoleRear = 1 };
+   uint8_t chinaRole_[ NUM_CHINA_LEDS ];
 
-   // Roughly half the fixtures sit at a resting IDLE_ON_BRIGHTNESS_FRAC brightness at any
-   // moment, each smoothly fading to black on a slow, pot-adjustable,
-   // staggered schedule while a different random one fades back up to
-   // take its place -- floods "breathe" instead of sitting static at one
-   // vivid color. Sparkle (megabarHeat_/chinaHeat_ below) layers on top
-   // of either base unchanged, full brightness, per request.
-   static constexpr float IDLE_ON_BRIGHTNESS_FRAC = 0.65f;
-   static constexpr uint32_t IDLE_FADE_DURATION_MS = 2500; // time for one fixture to fade fully in or out -- exact number not specified, chosen to read as a slow, visible breathe
-   static const int MAX_IDLE_FIXTURES = NUM_MEGABAR_LEDS > NUM_CHINA_LEDS ? NUM_MEGABAR_LEDS : NUM_CHINA_LEDS;
-   struct IdleBreather {
-      float frac[ MAX_IDLE_FIXTURES ] = { 0 };
-      float target[ MAX_IDLE_FIXTURES ] = { 0 };
-      bool inited = false;
-      Timer swapTimer;
-
-      // Slow, pot-adjustable cadence -- same energyFrac input every other
-      // cadence in this file uses, but landing in a "several seconds"
-      // range and explicitly 1/3 as frequent as sparkle's own energy
-      // scaling, per request ("1/3 the energy level of the current
-      // sparkle effects") -- same "same rate, divided by 3" precedent as
-      // floodShiftHue_ above, just applied to a period instead of a rate.
-      static uint32_t swapIntervalMs( float energyFrac ) {
-         const float BASE_MS = 6000.0f, MIN_MS = 2000.0f;
-         return (uint32_t)( BASE_MS - ( BASE_MS - MIN_MS ) * energyFrac );
+   void classifyChinaFromGeometry() {
+      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
+         chinaRole_[ c ] = ( CarpetGeometry::getChinaPosition( c ).yFt > 0.0f ) ? RoleFront : RoleRear;
       }
-
-      void step( int count, float dtSec, float energyFrac ) {
-         if ( !inited ) {
-            inited = true;
-            for ( int i = 0; i < count; ++i ) { target[ i ] = ( i % 2 == 0 ) ? 1.0f : 0.0f; frac[ i ] = target[ i ]; }
-            swapTimer.set( swapIntervalMs( energyFrac ) );
-         }
-         if ( swapTimer.expired() ) {
-            swapTimer.set( swapIntervalMs( energyFrac ) );
-            int onCand[ MAX_IDLE_FIXTURES ], onCount = 0;
-            int offCand[ MAX_IDLE_FIXTURES ], offCount = 0;
-            for ( int i = 0; i < count; ++i ) {
-               if ( target[ i ] > 0.5f ) onCand[ onCount++ ] = i;
-               else offCand[ offCount++ ] = i;
-            }
-            if ( onCount > 0 ) target[ onCand[ random( onCount ) ] ] = 0.0f;
-            if ( offCount > 0 ) target[ offCand[ random( offCount ) ] ] = 1.0f;
-         }
-         float maxStep = dtSec * 1000.0f / IDLE_FADE_DURATION_MS;
-         for ( int i = 0; i < count; ++i ) {
-            if ( frac[ i ] < target[ i ] ) frac[ i ] = min( target[ i ], frac[ i ] + maxStep );
-            else if ( frac[ i ] > target[ i ] ) frac[ i ] = max( target[ i ], frac[ i ] - maxStep );
-         }
-      }
-   };
-   IdleBreather megabarIdle_, chinaIdle_;
+   }
 
    // sparkle cadence + variations 2/3's hue-rate ceiling both driven by the
    // shared energy setting (see LightShow.h) -- adjusting it here also
@@ -177,6 +150,7 @@ class FlameShow : public LightShow {
    uint8_t variation() {
       return mode_;
    }
+   uint8_t numVariations() { return numModes_; }
 
    const char * variationName() {
       if ( mode_ == VarWaterflames ) return "waterflames";
@@ -221,6 +195,14 @@ class FlameShow : public LightShow {
       satWalk_.rampStart = satWalk_.rampTarget = 0.90f;
       satWalk_.initialized = true;
       satWalk_.tickTimer.set( 800 + random( 400 ) );
+
+      // floods: real china front/rear roles, initial random per-fixture
+      // idle color pick, initial china bass/treble swap timer -- see the
+      // member comment above.
+      classifyChinaFromGeometry();
+      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) megabarColorPick_[ i ] = random8( 2 ) == 0;
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) chinaColorPick_[ i ] = random8( 2 ) == 0;
+      chinaSwapTimer_.set( 2000 + random( 5000 ) );
    }
 
    void update( uint32_t time ) {
@@ -379,10 +361,12 @@ class FlameShow : public LightShow {
          for ( int s = 0; s < megabarSparkCount; ++s ) {
             uint8_t idx = random8( NUM_MEGABAR_LEDS );
             megabarHeat[ idx ] = qadd8( megabarHeat[ idx ], random8( 160, 255 ) );
+            megabarColorPick_[ idx ] = random8( 2 ) == 0; // re-roll idle base color on each spark, matches JS mirror
          }
          for ( int s = 0; s < chinaSparkCount; ++s ) {
             uint8_t idx = random8( NUM_CHINA_LEDS );
             chinaHeat[ idx ] = qadd8( chinaHeat[ idx ], random8( 160, 255 ) );
+            chinaColorPick_[ idx ] = random8( 2 ) == 0;
          }
 
          // assign color
@@ -414,76 +398,52 @@ class FlameShow : public LightShow {
          */
       }
 
-      // BUGFIX ("floods hella dim/flickery"): this used to read
-      // getNormalPercent() -- the RAW, instantaneous post-gain level,
-      // which follows bass's actual waveform directly. At a bass
-      // frequency of 40-80Hz that waveform crosses back near zero dozens
-      // of times a second, so sampling it unsmoothed every loop iteration
-      // made the flood fill flicker essentially randomly between dark and
-      // lit rather than holding at a sustained brightness. getHitPercent()
-      // is the peak-held value every other hit-driven show already uses
-      // (decays smoothly over hitDecayMs_ instead of tracking the raw
-      // wave), which is what a "how hard is bass hitting right now" flood
-      // fill actually wants.
-      // BUGFIX ("used to be good, floods always on now, not reactive"): a
-      // 65% brightness FLOOR was added here alongside the switch above (to
-      // match EqualizerShow's own floor, added for a genuinely different
-      // complaint -- "reads dim at anything less than a maxed hit"), but
-      // that's a separate concern from the flicker this function actually
-      // fixes: getHitPercent() already decays smoothly to a real 0% in
-      // silence, so the flicker problem was already solved without any
-      // floor at all. The floor just meant floods could never read as
-      // genuinely dark/off again, which is what "always on" was really
-      // about. Removed -- silence now reads as silence.
+      // Floods -- see the class member comment above for the full design
+      // (ported from the visualizer's showFlame() JS mirror).
       float bassHitPercent = AudioBoard::getBandHitPercent( BandBass );
-      if ( bassHitPercent > 1.0f ) { floodNotSilentTimer_.reset(); floodIsSilent_ = false; }
-      else if ( floodNotSilentTimer_.elapsed() >= FLOOD_SILENCE_HOLD_MS ) floodIsSilent_ = true;
+      float trebleHitPercent = AudioBoard::getBandHitPercent( BandTreble );
+      if ( bassHitPercent > 0.0f || trebleHitPercent > 0.0f ) { lastHitTimer_.reset(); everHit_ = true; }
+      bool hitReactive = everHit_ && lastHitTimer_.elapsed() < HIT_REACTIVE_WINDOW_MS;
 
-      if ( floodIsSilent_ ) {
-         // Silence-only idle "breathing" base -- see IdleBreather/
-         // IDLE_ON_BRIGHTNESS_FRAC comment above.
-         megabarIdle_.step( NUM_MEGABAR_LEDS, hueDtSec, energyFrac );
-         chinaIdle_.step( NUM_CHINA_LEDS, hueDtSec, energyFrac );
-         CRGB restColor = floodPaletteColor( 0 );
+      if ( hitReactive ) {
+         if ( chinaSwapTimer_.expired() ) {
+            chinaSwapBassOnFront_ = !chinaSwapBassOnFront_;
+            chinaSwapTimer_.set( 2000 + random( 5000 ) );
+         }
+         CRGB bassClr = floodPaletteColor( FLOOD_LO_INDEX );
+         bassClr.nscale8( (uint8_t)( bassHitPercent / 100.0f * 255.0f + 0.5f ) );
+         LedUtil::gammaCorrect( bassClr );
+         CRGB trebleClr = floodPaletteColor( FLOOD_HI_INDEX );
+         trebleClr.nscale8( (uint8_t)( trebleHitPercent / 100.0f * 255.0f + 0.5f ) );
+         LedUtil::gammaCorrect( trebleClr );
+         for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) carpet->megabarLeds[ i ] = ( i % 2 == 0 ) ? bassClr : trebleClr;
+         for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
+            bool showsBass = ( ( chinaRole_[ c ] == RoleFront ) == chinaSwapBassOnFront_ );
+            carpet->chinaLeds[ c ] = showsBass ? bassClr : trebleClr;
+         }
+      } else {
+         // Idle sparkle: each fixture sits at one of the palette's two
+         // reference colors (its own current megabarColorPick_/
+         // chinaColorPick_, re-rolled on each spark -- see the spark loop
+         // above), blended with its own spark heat on top -- 0 stays the
+         // base color, 255 is a fully bright spark, so a pulse rises and
+         // fades smoothly instead of snapping on/off.
+         CRGB loColor = floodPaletteColor( FLOOD_LO_INDEX );
+         CRGB hiColor = floodPaletteColor( FLOOD_HI_INDEX );
          for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
-            CRGB clr = restColor;
-            clr.nscale8( (uint8_t)( IDLE_ON_BRIGHTNESS_FRAC * megabarIdle_.frac[ i ] * 255.0f + 0.5f ) );
+            CRGB base = megabarColorPick_[ i ] ? loColor : hiColor;
+            CRGB sparkClr = floodPaletteColor( megabarHeat[ i ] );
+            CRGB clr = blend( base, sparkClr, megabarHeat[ i ] );
             LedUtil::gammaCorrect( clr );
             carpet->megabarLeds[ i ] = clr;
          }
-         for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
-            CRGB clr = restColor;
-            clr.nscale8( (uint8_t)( IDLE_ON_BRIGHTNESS_FRAC * chinaIdle_.frac[ i ] * 255.0f + 0.5f ) );
+         for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
+            CRGB base = chinaColorPick_[ c ] ? loColor : hiColor;
+            CRGB sparkClr = floodPaletteColor( chinaHeat[ c ] );
+            CRGB clr = blend( base, sparkClr, chinaHeat[ c ] );
             LedUtil::gammaCorrect( clr );
-            carpet->chinaLeds[ i ] = clr;
+            carpet->chinaLeds[ c ] = clr;
          }
-      } else {
-         // Sound present -- exactly sha 59d94b4's sound-reactive fill,
-         // untouched (only its 65% brightness floor was ever removed, see
-         // BUGFIX comment above).
-         float dmxvalFrac = bassHitPercent / 100.0f;
-         int dmxval = (int)( dmxvalFrac * 255.0f + 0.5f );
-         CRGB dmxclr = floodPaletteColor( dmxval );
-         LedUtil::gammaCorrect( dmxclr );
-         LedUtil::fill( carpet->megabarLeds, dmxclr, NUM_MEGABAR_LEDS );
-         LedUtil::fill( carpet->chinaLeds, dmxclr, NUM_CHINA_LEDS );
-      }
-
-      // floodlight sparkle: blend each fixture's spark color on top of the
-      // audio-tinted base, using heat itself as the blend fraction -- 0
-      // stays the base color, 255 is a fully bright spark, so a pulse rises
-      // and fades smoothly instead of snapping on/off. Same color source
-      // (the active palette) and same gamma correction as the base, for
-      // consistency -- see the megabarHeat_/chinaHeat_ member comment.
-      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
-         CRGB sparkClr = floodPaletteColor( megabarHeat[ i ] );
-         LedUtil::gammaCorrect( sparkClr );
-         carpet->megabarLeds[ i ] = blend( carpet->megabarLeds[ i ], sparkClr, megabarHeat[ i ] );
-      }
-      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
-         CRGB sparkClr = floodPaletteColor( chinaHeat[ i ] );
-         LedUtil::gammaCorrect( sparkClr );
-         carpet->chinaLeds[ i ] = blend( (CRGB)carpet->chinaLeds[ i ], sparkClr, chinaHeat[ i ] );
       }
    }
 };

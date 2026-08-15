@@ -156,7 +156,7 @@ async function testFlame() {
   section('FlameShow');
   const ctx = makeCtx(await freshBoot());
   ctx.selectShow(ShowMode.Flame);
-  check('show name is FlameSparkle', ctx.showName() === 'FlameSparkle', ctx.showName());
+  check('show name is Flame', ctx.showName() === 'Flame', ctx.showName());
 
   for (const variationName of ['waterflames', 'flames', 'shifting hues', 'hue to white']) {
     ctx.selectVariationByName(variationName);

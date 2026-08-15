@@ -269,6 +269,7 @@ class LighthouseShow : public LightShow {
       : LightShow( carpetArg ), variation_( initialVariation % numVariations_ ) {}
 
    uint8_t variation() { return variation_; }
+   uint8_t numVariations() { return numVariations_; }
    const char * variationName() {
       if ( variation_ == VarDefault ) return "default";
       if ( variation_ == VarNoStrobe ) return "no strobe";
