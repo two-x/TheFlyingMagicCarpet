@@ -950,7 +950,7 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">soren55.lights @ 20e784c - 2026-08-11 14:34 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">soren55.lights @ f8c5150 - 2026-08-15 20:09 UTC</span>
 </header>
 
 <div class="help-overlay" id="helpOverlay" hidden>
@@ -1616,12 +1616,9 @@ None of that abstraction exists in code yet — this doc records the raw hardwar
 
     <div class="group">
       <select id="showSelect">
-        <optgroup label="Light shows">
-          <option value="nightrider">Nightrider</option>
-          <option value="lighthouse">Lighthouse</option>
-          <option value="flame">FlameSparkle</option>
-          <option value="equalizer">Equalizer</option>
-          <option value="speedstripes">SpeedStripes</option>
+        <optgroup label="Light shows" id="lightShowOptGroup">
+          <!-- populated dynamically at launch from the real firmware --
+               see enumerateShowsFromWasm() -- never hardcoded here again. -->
         </optgroup>
         <optgroup label="Audio config screens">
           <option value="cfg_meter">Noise/Peak meter</option>
@@ -2311,6 +2308,8 @@ CarpetFirmware().then((M) => {
   wasmAdcBinsPtr = M.ccall('web_getAdcBinsBufferPtr', 'number', [], []);
   wasmModule = M;
   wasmReady = true;
+  enumerateShowsFromWasm(M);
+  refreshVariationRow();
   processPinLog(); // drains setup()'s own one-time RESET+STROBE sequence (see the MSGEQ7 sim's own comments) before the first poll() ever runs
   // The audio config sliders/AGC button/prediction-style select were drawn
   // with hardcoded placeholder DOM values before the real firmware (with
@@ -2391,14 +2390,77 @@ const BAND_LOW = 0, BAND_MID = 1, BAND_HIGH = 2, BAND_FULL = 3;
 const WASM_BAND = [ 0, 2, 3, 4 ];
 const PREDICT_OFF = 0, PREDICT_EXP = 1, PREDICT_GUN = 2, PREDICT_DRUM = 3;
 
-// local show-key string <-> CarpetLightLogic.cpp's real ShowMode enum index
-// (ShowNightrider=0, ShowFlame=1, ShowEqualizer=2, ShowSpeedStripes=3,
-// ShowLighthouse=4) -- NOT the same order as the old local-only showOrder[]
-// array used by the dormant renderInterfaceMode()/doShortPress() cycling
-// code, which was never index-matched to real firmware and must not be
-// reused for real injection.
-const WASM_INDEX_TO_SHOW = [ 'nightrider', 'flame', 'equalizer', 'speedstripes', 'lighthouse' ];
-const SHOW_TO_WASM_INDEX = { nightrider: 0, flame: 1, equalizer: 2, speedstripes: 3, lighthouse: 4 };
+// local show-key string <-> CarpetLightLogic.cpp's real ShowMode enum index.
+// Populated once, dynamically, by enumerateShowsFromWasm() below -- NEVER
+// hardcoded here. A show's key is its real web_getCurrentShowName() output
+// lowercased (e.g. "Flame" -> "flame"); its VARIATIONS[] entries are its
+// real web_getCurrentVariationName() strings, in real index order.
+let WASM_INDEX_TO_SHOW = [];
+let SHOW_TO_WASM_INDEX = {};
+let SHOW_ORDER = []; // display order: real compile-time default first, then wrapping through the rest in real index order (matches encoder-right cycling)
+let VARIATIONS = {};
+
+// Enumerates every real show and every real variation of each, straight
+// from the compiled firmware -- replaces what used to be 3 separate
+// hand-maintained JS structures (WASM_INDEX_TO_SHOW/SHOW_TO_WASM_INDEX/
+// VARIATIONS), which had drifted out of sync with the real FW (confirmed:
+// SpeedStripes was hardcoded with 3 variations, "Rope+MB+China"/"Zebra"
+// included, but the real firmware only has 2 -- selecting the fake 3rd
+// entry silently wrapped the real FW back to variation 0 via its own
+// constructor's modulo, while the JS-only highlight stayed on the fake
+// entry, looking like "the button does nothing"). Runs once, right after
+// web_setup(), before anything else touches show/variation state. Uses
+// the real setters/getters to walk every show/variation combination, but
+// carefully restores each show's own real variation index (and the
+// overall original show) before returning, since web_setCurrentShow()/
+// web_setCurrentVariation() persist to Nvm as a side effect -- this must
+// leave that persisted state byte-for-byte as it found it.
+function enumerateShowsFromWasm(M) {
+  const numShows = M.ccall('web_getNumShows', 'number', [], []);
+  const origShowIdx = M.ccall('web_getCurrentShowIndex', 'number', [], []);
+  const origVarIdx = M.ccall('web_getCurrentVariationIndex', 'number', [], []);
+
+  const indexToShow = [], toWasmIndex = {}, variations = {};
+  const displayNames = {}; // real-cased name (e.g. "SpeedStripes"), keyed by lowercased key
+  for (let s = 0; s < numShows; s++) {
+    M.ccall('web_setCurrentShow', null, ['number'], [s]);
+    const realName = M.ccall('web_getCurrentShowName', 'string', [], []);
+    const showKey = realName.toLowerCase();
+    indexToShow[s] = showKey;
+    toWasmIndex[showKey] = s;
+    displayNames[showKey] = realName;
+    const showOrigVarIdx = M.ccall('web_getCurrentVariationIndex', 'number', [], []);
+    const numVar = M.ccall('web_getNumVariations', 'number', [], []);
+    const names = [];
+    for (let v = 0; v < numVar; v++) {
+      M.ccall('web_setCurrentVariation', null, ['number'], [v]);
+      names.push(M.ccall('web_getCurrentVariationName', 'string', [], []));
+    }
+    variations[showKey] = names;
+    M.ccall('web_setCurrentVariation', null, ['number'], [showOrigVarIdx]); // restore this show's own real variation before moving on
+  }
+  M.ccall('web_setCurrentShow', null, ['number'], [origShowIdx]); // restore the original show
+  M.ccall('web_setCurrentVariation', null, ['number'], [origVarIdx]);
+
+  WASM_INDEX_TO_SHOW = indexToShow;
+  SHOW_TO_WASM_INDEX = toWasmIndex;
+  VARIATIONS = variations;
+  SHOW_ORDER = [];
+  for (let i = 0; i < numShows; i++) SHOW_ORDER.push(indexToShow[(origShowIdx + i) % numShows]);
+
+  // rebuild the dropdown's light-show options, in SHOW_ORDER
+  const group = document.getElementById('lightShowOptGroup');
+  group.innerHTML = '';
+  for (const key of SHOW_ORDER) {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = displayNames[key];
+    group.appendChild(opt);
+  }
+  Ctl.currMode = indexToShow[origShowIdx];
+  Ctl.variation = origVarIdx;
+  document.getElementById('showSelect').value = Ctl.currMode;
+}
 
 const AudioBoard = {
   bins: [0,0,0,0,0,0,0], // 7 raw 0-255 values, MSGEQ7-analog order -- display-only, derived from bandPeakV_ (the chip sim's own state), NOT the actual injected ADC codes (see computeInjectionBins(), a different domain for a different purpose)
@@ -2915,16 +2977,14 @@ function sampleSourceLevelFromStream(ctx, stream) {
 //            hip-hop-style kick mixed in (see "chris").
 //   snare -- a short mid/broadband transient (the "snap" of a snare hit).
 //   hihat -- treble (BAND_HIGH), normally at hihatHz1/hihatHz2. A step
-//            value of 2 is a DIFFERENT, independently-enveloped percussive
-//            hit at midHihatHz (BAND_MID's own 1000Hz bin) -- noise-
-//            dominant with only a light tone component and a short punchy
-//            decay, reads as a clap/perc snap, not a pitched note. (A
-//            prior version reused the treble hit's own sound just shifted
-//            in pitch, alternating evenly through the whole bar -- that
-//            read as a repeating pitched "wooden xylophone" figure rather
-//            than genre-typical percussion; fixed per request.) Gives
-//            genre-typical patterns real BAND_MID content without needing
-//            a separate mid: pattern.
+//            value of 2 is a bassdrum hit (pure sine, kick's own fast
+//            default decay via kick2Decay -- no noise), just retuned to
+//            midHihatHz (BAND_MID range, 750Hz) -- independently
+//            enveloped (its own onset/decay, doesn't reset the kick's),
+//            per request. Genre patterns use this for a single accent hit
+//            (not repeated through the whole bar -- see each pattern's own
+//            comment). Gives genre-typical patterns real BAND_MID content
+//            without needing a separate mid: pattern.
 //   mid   -- BAND_MID, genre-appropriate (chord stabs / vocal line /
 //            sample chop / etc, see each pattern's own comment) -- mostly
 //            tonal rather than noisy, and can also use the 2=sustained
@@ -2938,40 +2998,41 @@ const TONE_PATTERNS = {
   simple: { bpm: 100,
     kick:  [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [0,0,1,0,0,0,2,0,0,0,1,0,0,0,2,0], // alternates treble/mid-companion (step 2) each hit -- see hihat's own comment above
+    hihat: [0,0,1,0,0,0,2,0,0,0,1,0,0,0,0,0], // treble@2,10; single step-2 accent@6 (per request, removed the 2nd repeat@14 -- was 2 spaced-apart repeats half a measure apart)
     mid:   [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], // one plain mid pulse per bar -- generic baseline, no genre character
   },
   // Hihat reworked per request: the old pattern alternated treble/step-2
-  // evenly through the whole bar (1,0,2,0,1,0,2,0...), which combined with
-  // the old shared-envelope step-2 timbre to read as a repeating pitched
-  // "wooden xylophone" figure instead of genre percussion. Now: treble
-  // hits (kept exactly as before) plus ONE 3-hit roll of the (now
-  // noise-dominant, punchy) step-2 percussion, landing right after the
-  // bar's final treble hit -- a typical house/hip-hop/trap fill placement,
-  // not a constant alternating texture.
+  // evenly through the whole bar (1,0,2,0,1,0,2,0...), which read as a
+  // repeating pitched "wooden xylophone" figure instead of genre
+  // percussion. Now: treble hits (kept exactly as before) plus a single
+  // step-2 accent (the snare hit's own tone/noise mix, retuned -- see
+  // hihat's own comment above) landing right after the bar's final treble
+  // hit -- a typical house/hip-hop/trap fill placement, not a constant
+  // alternating texture. (Earlier intermediate versions used 3 then 2
+  // hits here -- reduced per follow-up request to a single accent hit.)
   house: { bpm: 128,
     kick:  [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [0,0,1,0,0,0,0,0,0,0,1,2,2,2,0,0], // treble@2,10 (unchanged), 3-hit roll@11-13 right after the 2nd treble
+    hihat: [0,0,1,0,0,0,0,0,0,0,1,2,0,0,0,0], // treble@2,10 (unchanged), single accent@11 right after the 2nd treble
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   // Treble reworked per request: rapid-fire hihat spurts clustered right
   // before/after each kick (the classic trap hihat "roll"), with real
   // silence in between -- previously near-constant-density throughout,
   // which read as one steady texture rather than distinct bursts tied to
-  // the kick hits. Step-2 roll placement reworked per the house comment
-  // above -- one 3-hit roll after the last treble hit, not interleaved
+  // the kick hits. Step-2 accent placement reworked per the house comment
+  // above -- a single accent after the last treble hit, not interleaved
   // through every burst.
   trap: { bpm: 140,
     kick:  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,0,0,0,0,1,0,1,0,1,2,2,2,0,0,0], // treble bursts@0,5,7,9 (unchanged), 3-hit roll@10-12 right after the last one
+    hihat: [1,0,0,0,0,1,0,1,0,1,2,0,0,0,0,0], // treble bursts@0,5,7,9 (unchanged), single accent@10 right after the last one
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   boombap: { bpm: 90,
     kick:  [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,0,0,0,1,0,0,0,1,0,0,0,1,2,2,2], // steady treble@0,4,8,12 (unchanged), 3-hit roll@13-15 right after the last one
+    hihat: [1,0,0,0,1,0,0,0,1,0,0,0,1,2,0,0], // steady treble@0,4,8,12 (unchanged), single accent@13 right after the last one
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass/treble only
   },
   // "Chris" -- a bass-music genre: treble is intentionally IDENTICAL to
@@ -3009,7 +3070,7 @@ const TONE_PATTERNS = {
     // bar 2 (steps 16-31, normal): the original 4-hits-per-bar pattern, unchanged.
     kick:  [2,0,3,0,2,0,3,0,2,0,3,0,2,0,3,0,  2,0,0,0,3,0,0,0,2,0,0,0,3,0,0,0],
     snare: [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,  0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-    hihat: [1,0,0,0,1,0,0,0,1,0,0,0,1,2,2,2,  1,0,0,0,1,0,0,0,1,0,0,0,1,2,2,2], // same as boombap (per request), repeated across both bars -- see boombap's own comment above for the roll placement
+    hihat: [1,0,0,0,1,0,0,0,1,0,0,0,1,2,0,0,  1,0,0,0,1,0,0,0,1,0,0,0,1,2,0,0], // same as boombap (per request), repeated across both bars -- see boombap's own comment above for the accent placement
     mid:   [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], // removed per request -- bass-focused genre, bass/treble only
   },
   // Oldies power-ballad (e.g. "Total Eclipse of the Heart"), not EDM --
@@ -3071,13 +3132,18 @@ function useTone() {
       // so mid/snare land as distinct contributions within BAND_MID
       // (max of the 400Hz and 1000Hz bins).
       const snareHz = 900, hihatHz1 = 6250, hihatHz2 = 15500, midHz = 400;
-      // BAND_MID's own upper (1000Hz) bin -- see hihat step-value 2 above.
-      // Noise-dominant, short/punchy decay (clap/perc snap) -- deliberately
-      // NOT reusing the treble hihat's tone-heavy blend/slower decay, which
-      // is what made the old shared-envelope version read as a pitched
-      // "wooden xylophone" note instead of a percussion hit.
-      const midHihatHz = 1000;
-      const hihatMidDecay = Math.exp(-1 / (0.09 * ctx.sampleRate)); // ~90ms
+      // BAND_MID range -- see hihat step-value 2 above. Per request, this is
+      // the kick's own pure-sine/fast-decay sound, just retuned (independent
+      // envelope/phase, so it doesn't reset the kick's own onset) -- not a
+      // separate percussion timbre. 1000 -> 750 -> 300 -> 200Hz across
+      // follow-up requests. NOTE: pixel_war's own midEdge detector (real FW,
+      // BumpingAudioShow.h) only watches FreqBin2/3/4 (400/1000/2500Hz), not
+      // FreqBin1 (~160Hz midbass) -- at 200Hz this tone may register more in
+      // FreqBin1 than FreqBin2 on real hardware, weakening or dropping out
+      // pixel_war's green mid response to this specific hit (may show up as
+      // a bass response instead). Flagging, not fixing preemptively -- let
+      // me know if that's what you hear on the car.
+      const midHihatHz = 200;
       const KICK_SUSTAIN_SAMPLES = Math.round(0.4 * ctx.sampleRate); // up to 400ms hold for step-value 2 (kick or mid)
       // Onset "pop" for every kick hit, ON TOP of whatever kickEnv is
       // already doing -- fixes "can only barely hear the leading edge
@@ -3115,7 +3181,7 @@ function useTone() {
         if (kickSustainRemaining > 0) kickSustainRemaining--; else kickEnv *= kickDecayActive;
         kickAccentEnv *= kickAccentDecay;
         if (midSustainRemaining > 0) midSustainRemaining--; else midEnv *= midDecay;
-        snareEnv *= snareDecay; hihatEnv *= hihatDecay; hihatMidEnv *= hihatMidDecay;
+        snareEnv *= snareDecay; hihatEnv *= hihatDecay; hihatMidEnv *= kick2Decay;
         kickPhase += kickFreqActive / ctx.sampleRate;
         snarePhase += snareHz / ctx.sampleRate;
         hihatPhase += hihatHz1 / ctx.sampleRate;
@@ -3125,8 +3191,8 @@ function useTone() {
         const kickSample = Math.sin(kickPhase * 2 * Math.PI) * (kickEnv + kickAccentEnv);
         const snareSample = ((Math.random() * 2 - 1) * 0.5 + Math.sin(snarePhase * 2 * Math.PI) * 0.5) * snareEnv;
         const hihatSample = ((Math.random() * 2 - 1) * 0.35 + Math.sin(hihatPhase * 2 * Math.PI) * 0.4 + Math.sin(hihatPhase2 * 2 * Math.PI) * 0.25) * hihatEnv;
-        // noise-dominant clap/perc snap, BAND_MID frequency -- see hihat step-value 2 comment in TONE_PATTERNS
-        const hihatMidSample = ((Math.random() * 2 - 1) * 0.7 + Math.sin(hihatMidPhase * 2 * Math.PI) * 0.3) * hihatMidEnv;
+        // literally a bassdrum hit (pure sine, kick's own fast default decay via kick2Decay) -- just retuned to BAND_MID -- see hihat step-value 2 comment in TONE_PATTERNS
+        const hihatMidSample = Math.sin(hihatMidPhase * 2 * Math.PI) * hihatMidEnv;
         // mostly tonal (chord/vocal-like), light noise texture -- not a percussive hit
         const midSample = (Math.sin(midPhase * 2 * Math.PI) * 0.8 + (Math.random() * 2 - 1) * 0.15) * midEnv;
         out[i] = Math.max(-1, Math.min(1, kickSample * 0.8 + snareSample * 0.7 + hihatSample * 0.8 + hihatMidSample * 0.7 + midSample * 0.6));
@@ -3477,139 +3543,14 @@ function resetFlameState() {
   flameLastHitMs = -99999; flameChinaSwapNextAt = 0;
 }
 
-function showFlame(nowMs, dtMs) {
-  const dtSec = Math.max(0, Math.min(0.2, dtMs / 1000));
-  const energyFrac = Ctl.pot / 100;
-  const variation = Ctl.variation;
-
-  const BASE_MAX_HUE_RATE = 255 / 20;
-  const maxHueRate = BASE_MAX_HUE_RATE * (0.5 + 0.5 * energyFrac);
-  const hueRate = randomWalkValue(flameHueRateWalk, nowMs, 0, maxHueRate, maxHueRate * 0.1);
-  flameShiftHue = (flameShiftHue + hueRate * dtSec) % 256;
-  const driftHue = Math.round(flameShiftHue);
-  const satByte = Math.round(randomWalkValue(flameSatWalk, nowMs, 0.75, 1.0, 0.013) * 255);
-  const [loColor, hiColor] = floodHuePair(variation, driftHue, satByte);
-
-  // Cadence gate -- THE actual fix for both "way more hyper than before"
-  // and "the pot doesn't seem to do anything". Real firmware rate-limits
-  // its WHOLE fire-sim/sparkle cycle with delay(potval) at the end of its
-  // loop (pot up = less delay = faster ticks, pot down = more delay = much
-  // calmer). The visualizer was running this cool/diffuse/spark step every
-  // single animation frame (~60/sec) regardless of pot -- scaling spark
-  // PROBABILITY per pot was never going to be enough on top of a fixed
-  // 60fps update rate. This restores the real per-tick gating; between
-  // ticks the rope/flood arrays just hold their last value (nothing here
-  // clears them), matching how the real hardware actually looks frozen
-  // between updates during a slow (low-pot) cycle.
-  const potval = 255 * (1 - energyFrac); // ms between ticks, same inverted formula as real firmware
-  const dueForTick = (nowMs - flameLastStepMs) >= potval;
-  // hoisted to function scope -- the idle flood-sparkle branch below (which
-  // runs independent of dueForTick) also needs this; declaring it inside
-  // the if-block made it block-scoped and threw "coolingRate is not
-  // defined" the moment that branch actually ran, which (like the
-  // flameLastStepMs bug) killed the whole render loop, not just this show.
-  const coolingRate = 75;
-  if (dueForTick) {
-    flameLastStepMs = nowMs;
-    // Rope fire sim -- cool, diffuse to neighbors, add random sparks, map
-    // through the palette. Rate is now fixed per-tick (cadence itself
-    // carries the pot's effect); NeoPixel activity level still scales
-    // LINEARLY with pot overall since tick rate is linear in energyFrac.
-    const sparkingRateRope = 190;
-    for (let i = 0; i < NUM_NEO; i++) flamePrevTemp[i] = Math.max(0, flamePrevTemp[i] - coolingRate);
-    for (let i = 0; i < NUM_NEO; i++) {
-      const lw = i > 0 ? i - 1 : NUM_NEO - 1;
-      const hi = i < NUM_NEO - 1 ? i + 1 : 0;
-      flameCurrTemp[i] = (flamePrevTemp[lw] + flamePrevTemp[hi] + flamePrevTemp[i]) / 3;
-    }
-    for (let i = 0; i < NUM_NEO; i++) {
-      if (Math.random() * 255 < sparkingRateRope) flameCurrTemp[i] = Math.min(255, flameCurrTemp[i] + 160 + Math.random() * 95);
-    }
-    for (let i = 0; i < NUM_NEO; i++) {
-      ropeLeds[i] = flamePaletteColor(variation, flameCurrTemp[i], driftHue, satByte);
-      flamePrevTemp[i] = flameCurrTemp[i];
-    }
-  }
-
-  // Hit-reactive gate: any real bass/treble hit within the last 3s switches
-  // ALL floods to pure sound-reactive mode (half bass/one color, half
-  // treble/the other, china split front-back vs sides swapping every
-  // random 2-7s); otherwise floods run the idle sparkle behavior below,
-  // undisturbed. Per correction: hit-mode colors are the rope's own
-  // current 2-color identity (loColor/hiColor), not an independent
-  // meandering hue/saturation.
-  const bassHitPct = AudioBoard.getHitPct(BAND_LOW), trebleHitPct = AudioBoard.getHitPct(BAND_HIGH);
-  if (bassHitPct > 0 || trebleHitPct > 0) flameLastHitMs = nowMs;
-  const hitReactive = (nowMs - flameLastHitMs) < 3000;
-
-  if (hitReactive) {
-    if (nowMs >= flameChinaSwapNextAt) {
-      flameChinaSwapBassOnSides = !flameChinaSwapBassOnSides;
-      flameChinaSwapNextAt = nowMs + (2000 + Math.random() * 5000);
-    }
-    // NOTE: loColor/hiColor are palette REFERENCE points (a fire palette's
-    // cool ~40 and hot ~230 heat stops) and are NOT equally bright by
-    // design (cool end is meant to look dim, hot end blown out). Used to
-    // "fix" that here by force-brightening loColor up toward hiColor's sum
-    // via equalizeBrightnessPair -- reverted, since for hue/white palettes
-    // (where hiColor IS white, sum=765) that meant boosting loColor almost
-    // all the way to white too, destroying its hue (confirmed: this is why
-    // waterflames/hue-to-white briefly rendered every hit as plain white).
-    // Fixed for real at the RENDERING level instead -- see
-    // drawGroundEllipse()/drawWash()'s brightness metric, which is now
-    // hue-independent.
-    const bassClr = scale255(loColor, Math.round(bassHitPct / 100 * 255));
-    const trebleClr = scale255(hiColor, Math.round(trebleHitPct / 100 * 255));
-    for (let m = 0; m < NUM_MEGABAR; m++) megabarLeds[m] = (m % 2 === 0) ? bassClr : trebleClr;
-    const sidesFollowBass = flameChinaSwapBassOnSides;
-    for (const c of FLAME_CHINA_SIDES) chinaLeds[c] = sidesFollowBass ? bassClr : trebleClr;
-    for (const c of FLAME_CHINA_FRONTBACK) chinaLeds[c] = sidesFollowBass ? trebleClr : bassClr;
-  } else {
-    // Idle: base fill randomly picked PER FLOOD between the palette's two
-    // reference colors (previously every flood shared one synchronized
-    // color -- per request, each independently shows one or the other),
-    // re-rolled whenever that fixture sparks. Floodlight sparkle cools 2x
-    // the rope's rate (shorter flashes), matching FlameShow.h's
-    // floodCoolingRate.
-    //
-    // BUGFIX ("pot only affects the energy of the neopixels, not the
-    // floods"): sparkFractionFloods used to be a fixed constant, matching
-    // FlameShow.h's own (then-)fixed floodSparkingRate -- floods and rope
-    // were two independent processes that merely happened to share a
-    // cadence, so nothing tied the floods' own visible energy to how hot
-    // the rope actually currently looks. Now measures the rope's own
-    // flameCurrTemp[] directly (its real, live average heat, continually
-    // re-derived every frame) and drives floods from THAT instead, same
-    // fix as FlameShow.h's own ropeAvgTemp.
-    const flameRopeAvgTemp = flameCurrTemp.reduce((a, t) => a + t, 0) / NUM_NEO;
-    const sparkFractionFloods = (flameRopeAvgTemp / 3) / 255;
-    const floodCoolingRate = Math.min(255, coolingRate * 2);
-    for (let i = 0; i < NUM_MEGABAR; i++) flameMegabarHeat[i] = Math.max(0, flameMegabarHeat[i] - floodCoolingRate);
-    for (let i = 0; i < NUM_CHINA; i++) flameChinaHeat[i] = Math.max(0, flameChinaHeat[i] - floodCoolingRate);
-    const megabarSparkCount = Math.round(NUM_MEGABAR * sparkFractionFloods);
-    const chinaSparkCount = Math.round(NUM_CHINA * sparkFractionFloods);
-    for (let s = 0; s < megabarSparkCount; s++) {
-      const idx = Math.floor(Math.random() * NUM_MEGABAR);
-      flameMegabarHeat[idx] = Math.min(255, flameMegabarHeat[idx] + 160 + Math.random() * 95);
-      flameMegabarColorPick[idx] = Math.random() < 0.5;
-    }
-    for (let s = 0; s < chinaSparkCount; s++) {
-      const idx = Math.floor(Math.random() * NUM_CHINA);
-      flameChinaHeat[idx] = Math.min(255, flameChinaHeat[idx] + 160 + Math.random() * 95);
-      flameChinaColorPick[idx] = Math.random() < 0.5;
-    }
-    for (let m = 0; m < NUM_MEGABAR; m++) {
-      const base = flameMegabarColorPick[m] ? loColor : hiColor;
-      const sparkClr = flamePaletteColor(variation, flameMegabarHeat[m], driftHue, satByte);
-      megabarLeds[m] = blend(base, sparkClr, flameMegabarHeat[m]);
-    }
-    for (let c = 0; c < NUM_CHINA; c++) {
-      const base = flameChinaColorPick[c] ? loColor : hiColor;
-      const sparkClr = flamePaletteColor(variation, flameChinaHeat[c], driftHue, satByte);
-      chinaLeds[c] = blend(base, sparkClr, flameChinaHeat[c]);
-    }
-  }
-}
+// RETIRED: this was the only place Flame's real algorithm lived (real
+// FlameShow.h had only ever done a flat single-color flood fill). Per the
+// zero-duplication mandate, the real logic now lives in FlameShow.h
+// itself (ported from this function, unchanged since before the WASM
+// migration) -- see its class comment. Interface mode isn't a connected
+// feature yet (no ESP32 radio bridge exists), so this is a no-op rather
+// than a second copy of the algorithm to keep in sync.
+function showFlame(nowMs, dtMs) {}
 
 // True corner-to-corner geometry, matching BumpingAudioShow.h's updateVuMeter()
 // exactly: SIZEOF_LARGE_NEO_CORNER (33 LEDs) inset from each side channel's
@@ -5551,23 +5492,20 @@ function draw() {
 /* =====================================================================
    UI WIRING
    ===================================================================== */
-const VARIATIONS = {
-  nightrider: ['Manual hue', 'Auto cycle', 'Auto with sound'],
-  flame: ['Waterflames', 'Flames', 'Shift hues', 'Hue-white'],
-  equalizer: ['Chase', 'VU meter', 'new_standard', 'pixel_war'],
-  speedstripes: ['Rope+MB', 'Rope+MB+China', 'Zebra'],
-  lighthouse: ['Default', 'No Strobe', 'China React'],
-  cfg_meter: [], cfg_decay: [], cfg_predict: [], cfg_foresight: [], cfg_reactivity: [], cfg_autopeak: [],
-};
-// Per-show default variation index, shown on first load / whenever that
-// show is freshly selected -- defaults to 0 unless listed here.
-// SpeedStripes defaults to the china-lights variant per request.
-const DEFAULT_VARIATION = { speedstripes: 1, equalizer: 2 }; // equalizer: new_standard, matches Nvm.h's real FW default
+// VARIATIONS is populated dynamically by enumerateShowsFromWasm() (see
+// above) -- never hardcoded here. Its cfg_* keys are simply absent, which
+// `VARIATIONS[Ctl.currMode] || []` below already handles the same way the
+// old hardcoded empty-array entries did.
 function refreshVariationRow() {
   const row = document.getElementById('variationRow');
   row.innerHTML = '';
   const opts = VARIATIONS[Ctl.currMode] || [];
-  Ctl.variation = DEFAULT_VARIATION[Ctl.currMode] || 0;
+  // Real current variation index for whichever show is now selected -- the
+  // real FW remembers each show's own last-used variation (currVariation[]
+  // in web_bridge.cpp), so this is never a guessed/hardcoded default.
+  Ctl.variation = ( wasmReady && Ctl.currMode in SHOW_TO_WASM_INDEX )
+    ? wasmModule.ccall( 'web_getCurrentVariationIndex', 'number', [], [] )
+    : 0;
   opts.forEach((name, idx) => {
     const b = document.createElement('button');
     b.textContent = name;
@@ -5683,6 +5621,11 @@ function unlockAudioOnFirstGesture() {
 document.getElementById('speedSlider').addEventListener('input', (e) => {
   Ctl.speedMph = +e.target.value;
   document.getElementById('speedVal').textContent = Ctl.speedMph + ' mph';
+  // Real injection into WASM happens continuously in tick() (every frame,
+  // not just here on drag -- see its own comment: SpeedLink::isFresh() has
+  // a 4s staleness window, so a single injection on change alone would go
+  // stale within seconds of releasing the slider). This handler only needs
+  // to update Ctl.speedMph -- tick() picks up the new value on its own.
 });
 
 /* ----- zoom: 20-100ft viewer distance, works in 2D (and will in 3D once
@@ -6251,14 +6194,14 @@ initModal( {
   });
 }
 
-// The CI deploy workflow replaces soren55.lights @ 20e784c - 2026-08-11 14:34 UTC with the real
+// The CI deploy workflow replaces soren55.lights @ f8c5150 - 2026-08-15 20:09 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  if (el.textContent === 'soren55.lights @ 20e784c - 2026-08-11 14:34 UTC') el.textContent = 'local build (not CI-deployed)';
+  if (el.textContent === 'soren55.lights @ f8c5150 - 2026-08-15 20:09 UTC') el.textContent = 'local build (not CI-deployed)';
 }
 
 const potIndicator = document.querySelector('#potKnob .knob__indicator');
@@ -6287,6 +6230,11 @@ function setPotFromCursor(clientX, clientY) {
   updatePotKnob();
   flashActionCell('actPot'); // re-armed on every drag event, so it stays lit for the whole turn, not just a single blip
   updateInputActionTable();
+  // Real pot injection -- was still local-JS-only (Ctl.pot), meaning
+  // dragging this knob never actually reached the real firmware's pot
+  // reading, so any real pot-driven behavior (energy-linked show speed,
+  // config-mode live values, etc.) couldn't be exercised in Dev Tool mode.
+  if (wasmReady) wasmModule.ccall('web_injectPotPercent', null, ['number'], [Ctl.pot]);
   if (Ctl.appMode !== 'show') applyConfigPot();
 }
 document.getElementById('potKnob').addEventListener('mousedown', (e) => {
@@ -6416,7 +6364,7 @@ window.addEventListener('mouseup', (e) => {
    until the double-press window closes with no second press; medium/long
    are decided on release. */
 const ENC_BTN_MEDIUM_MS = 300, ENC_BTN_LONG_MS = 1500, ENC_BTN_XLONG_MS = 3000, ENC_BTN_DOUBLE_WINDOW_MS = 250;
-let encBtnDown = false, encBtnPressStartMs = 0, encBtnLiveActionFired = false;
+let encBtnDown = false, encBtnPressStartMs = 0;
 let encBtnHoldTimer = null;
 let encBtnAwaitingSecondPress = false, encBtnSecondPressWindowStartMs = 0, encBtnShortPendingTimer = null;
 // Live green threshold-cross indicators (separate from the amber
@@ -6431,11 +6379,54 @@ let encBtnAwaitingSecondPress = false, encBtnSecondPressWindowStartMs = 0, encBt
 let encBtnMediumFlashed = false, encBtnLongFlashed = false;
 const ENC_BTN_ACTION_TO_CELL = { short: 'actShort', medium: 'actMed', long: 'actLong', xlong: 'actXL', double: 'actDouble' };
 const ENC_BTN_ACTION_FN = { short: doShortPress, medium: doMediumPress, long: doLongPress, xlong: doXLongPress, double: doDoublePress };
+// BUGFIX ("clicking the action-cell text still uses the old local
+// classification"): this used to call ENC_BTN_ACTION_FN[type]() --
+// doShortPress()/doMediumPress()/etc, the SAME dead local-JS classification
+// encoderCenterBtnDown/Up's own BUGFIX comment already replaced for the
+// real encoder button -- so clicking a text shortcut (e.g. "Short:") never
+// reached the real firmware at all, unlike actually holding the encoder
+// button. Fixed the same way: inject a real button-down, then a real
+// button-up after a REAL elapsed delay matching that tier's own threshold
+// (see ENC_BTN_MEDIUM_MS/LONG_MS/XLONG_MS/DOUBLE_WINDOW_MS above) -- the
+// real PushButton state machine inside the firmware classifies it from
+// those 2 real timestamps, exactly as an actual press would.
+const ENC_BTN_TIER_HOLD_MS = { short: 10, medium: ENC_BTN_MEDIUM_MS + 10, long: ENC_BTN_LONG_MS + 10, xlong: ENC_BTN_XLONG_MS + 10, double: 10 };
 function fireEncBtnAction(type) {
-  ENC_BTN_ACTION_FN[type]();
+  if (wasmReady) wasmModule.ccall('web_injectButtonDown', null, [], []);
+  setTimeout(() => {
+    if (!wasmReady) return;
+    wasmModule.ccall('web_injectButtonUp', null, [], []);
+    if (type === 'double') {
+      setTimeout(() => {
+        wasmModule.ccall('web_injectButtonDown', null, [], []);
+        setTimeout(() => wasmModule.ccall('web_injectButtonUp', null, [], []), 10);
+      }, 50); // well within ENC_BTN_DOUBLE_WINDOW_MS
+    }
+  }, ENC_BTN_TIER_HOLD_MS[type]);
   flashActionCell(ENC_BTN_ACTION_TO_CELL[type]);
   updateInputActionTable();
 }
+// BUGFIX ("short press doesn't advance shows -- dropdown does though"):
+// this whole button-down/up pair used to CLASSIFY the press itself here in
+// JS (hold-duration thresholds, double-press window) and directly mutate
+// local state via fireEncBtnAction()/doShortPress()/etc -- a real mandate
+// violation (button-press classification duplicated in JS instead of
+// coming from the real firmware's own PushButtonEdge state machine), and
+// it was never updated when the show/variation dropdown was fixed
+// earlier this session to inject into and read back from the real WASM
+// firmware -- so a real short press never reached the real FW at all, and
+// whatever it did to local Ctl state got silently overwritten right back
+// by syncShowStateFromWasm() reading the (unchanged) real firmware state
+// every frame. Fixed: this now ONLY injects real button-down/up events
+// (web_injectButtonDown/Up(), the same functions the show/variation
+// dropdown fix already established this session) -- the REAL
+// PushButton state machine inside the compiled firmware classifies the
+// press purely from real elapsed time between these 2 injected edges,
+// exactly as real hardware would, and fires the REAL action (show cycle,
+// config-mode entry/nav, etc) itself. The green threshold-cross flashes
+// below stay local (pure UI polish reflecting elapsed REAL time against
+// the same published, real threshold constants -- not a prediction of
+// what the firmware will decide) but no longer trigger any action.
 function encoderCenterBtnDown() {
   const btn = document.getElementById('encoderCenterBtn');
   btn.classList.add('pressed');
@@ -6443,16 +6434,11 @@ function encoderCenterBtnDown() {
   encBtnMediumFlashed = false; encBtnLongFlashed = false;
   flashActionCellGreen('actShort'); // per request: short's own "threshold" is button-down itself
   if (encBtnAwaitingSecondPress && (now - encBtnSecondPressWindowStartMs) <= ENC_BTN_DOUBLE_WINDOW_MS) {
-    encBtnAwaitingSecondPress = false;
-    clearTimeout(encBtnShortPendingTimer);
-    encBtnLiveActionFired = true;
     flashActionCellGreen('actDouble'); // per request: on the 2nd button-down
-    fireEncBtnAction('double');
-  } else {
-    encBtnAwaitingSecondPress = false;
-    clearTimeout(encBtnShortPendingTimer);
-    encBtnLiveActionFired = false;
   }
+  encBtnAwaitingSecondPress = false;
+  clearTimeout(encBtnShortPendingTimer);
+  if (wasmReady) wasmModule.ccall('web_injectButtonDown', null, [], []);
   encBtnDown = true;
   encBtnPressStartMs = now;
   clearInterval(encBtnHoldTimer);
@@ -6460,11 +6446,7 @@ function encoderCenterBtnDown() {
     const heldMs = performance.now() - encBtnPressStartMs;
     if (!encBtnMediumFlashed && heldMs >= ENC_BTN_MEDIUM_MS) { encBtnMediumFlashed = true; flashActionCellGreen('actMed'); }
     if (!encBtnLongFlashed && heldMs >= ENC_BTN_LONG_MS) { encBtnLongFlashed = true; flashActionCellGreen('actLong'); }
-    if (!encBtnLiveActionFired && heldMs >= ENC_BTN_XLONG_MS) {
-      encBtnLiveActionFired = true;
-      flashActionCellGreen('actXL');
-      fireEncBtnAction('xlong');
-    }
+    if (heldMs >= ENC_BTN_XLONG_MS) { clearInterval(encBtnHoldTimer); flashActionCellGreen('actXL'); }
   }, 20);
 }
 // Per request: every action-cell except Pot is clickable, firing that
@@ -6484,18 +6466,16 @@ function encoderCenterBtnUp() {
   document.getElementById('encoderCenterBtn').classList.remove('pressed');
   clearInterval(encBtnHoldTimer);
   const heldMs = performance.now() - encBtnPressStartMs;
-  if (!encBtnLiveActionFired) {
-    if (heldMs >= ENC_BTN_XLONG_MS) fireEncBtnAction('xlong'); // safety net, matches classifyOnRelease()
-    else if (heldMs >= ENC_BTN_LONG_MS) fireEncBtnAction('long');
-    else if (heldMs >= ENC_BTN_MEDIUM_MS) fireEncBtnAction('medium');
-    else {
-      encBtnAwaitingSecondPress = true;
-      encBtnSecondPressWindowStartMs = performance.now();
-      encBtnShortPendingTimer = setTimeout(() => {
-        encBtnAwaitingSecondPress = false;
-        fireEncBtnAction('short');
-      }, ENC_BTN_DOUBLE_WINDOW_MS);
-    }
+  if (wasmReady) wasmModule.ccall('web_injectButtonUp', null, [], []);
+  // Local double-press-window bookkeeping below is now purely for the
+  // visual "flash green on 2nd button-down" cue in encoderCenterBtnDown()
+  // above -- the REAL double-press classification happens inside the real
+  // firmware, from the 2 real injected edges' own timestamps, same as
+  // every other press tier (see this function pair's own comment).
+  if (heldMs < ENC_BTN_MEDIUM_MS) {
+    encBtnAwaitingSecondPress = true;
+    encBtnSecondPressWindowStartMs = performance.now();
+    encBtnShortPendingTimer = setTimeout(() => { encBtnAwaitingSecondPress = false; }, ENC_BTN_DOUBLE_WINDOW_MS);
   }
 }
 
@@ -6726,6 +6706,12 @@ function syncShowStateFromWasm() {
       [...row.children].forEach((c, i) => c.classList.toggle('active', i === realVariation));
     }
   }
+  // Keeps the action-description table (Short/Med/Long/XL/Double column)
+  // fresh regardless of which async path changed real FW state -- used to
+  // only refresh from inside fireEncBtnAction() (now removed, see
+  // encoderCenterBtnDown/Up's own comment), which missed xlong (fires
+  // live, mid-hold) and double (fires on the 2nd button-down) entirely.
+  updateInputActionTable();
 }
 
 function tick(now) {
@@ -6734,6 +6720,26 @@ function tick(now) {
     lastFrameT = now;
 
     if (audioGraphReady) AudioBoard.poll(now);
+
+    // Real vehicle speed, injected EVERY frame -- SpeedLink::isFresh() has
+    // a 4s staleness window (mirroring how a real CANTroller2 I2C stream
+    // continuously repeats its speed packet, not a one-shot value), so a
+    // single injection on slider-drag alone goes stale within seconds of
+    // releasing it, right back to "stopped". This is the actual reason
+    // SpeedStripes read as permanently frozen even after wiring the slider
+    // to inject on change -- the injection needs to keep happening for as
+    // long as the visualizer is running, same as the real hardware would.
+    if (wasmReady) wasmModule.ccall('web_injectSpeedMph', null, ['number'], [Ctl.speedMph]);
+
+    // Real pot position, injected EVERY frame -- same reasoning as speed
+    // above. Before this, web_injectPotPercent() only ever fired from the
+    // knob's drag handler, so the real firmware's pot reading sat stuck at
+    // the raw uninitialized default (0%) until the user dragged the knob
+    // at least once -- even though Ctl.pot itself already defaults to 50
+    // in JS (see const Ctl = {...} above). That's what froze Lighthouse's
+    // beam (and any other PotEnergyTakeover-linked show) dead on boot: the
+    // on-screen knob showed 50%, but WASM never heard about it.
+    if (wasmReady) wasmModule.ccall('web_injectPotPercent', null, ['number'], [Ctl.pot]);
 
     syncShowStateFromWasm();
     renderCurrent(now, dtMs);
