@@ -6775,6 +6775,16 @@ function tick(now) {
     // long as the visualizer is running, same as the real hardware would.
     if (wasmReady) wasmModule.ccall('web_injectSpeedMph', null, ['number'], [Ctl.speedMph]);
 
+    // Real pot position, injected EVERY frame -- same reasoning as speed
+    // above. Before this, web_injectPotPercent() only ever fired from the
+    // knob's drag handler, so the real firmware's pot reading sat stuck at
+    // the raw uninitialized default (0%) until the user dragged the knob
+    // at least once -- even though Ctl.pot itself already defaults to 50
+    // in JS (see const Ctl = {...} above). That's what froze Lighthouse's
+    // beam (and any other PotEnergyTakeover-linked show) dead on boot: the
+    // on-screen knob showed 50%, but WASM never heard about it.
+    if (wasmReady) wasmModule.ccall('web_injectPotPercent', null, ['number'], [Ctl.pot]);
+
     syncShowStateFromWasm();
     renderCurrent(now, dtMs);
     draw();

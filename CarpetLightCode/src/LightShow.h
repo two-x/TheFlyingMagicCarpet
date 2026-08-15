@@ -253,7 +253,16 @@ struct PotEnergyTakeover {
       }
       if ( takenOver ) globalEnergyPercent = potPercent;
       globalEnergyPrinter_.update( (int)( globalEnergyPercent + 0.5f ), "energy:", "%" );
-      return globalEnergyPercent;
+      // Floor the RETURNED value only (not globalEnergyPercent itself) --
+      // a pot resting at literal 0% (the visualizer's default, and in
+      // principle reachable on real hardware too) would otherwise multiply
+      // straight through to zero velocity/cadence in shows that do
+      // value*energyFrac directly (Lighthouse), freezing them dead until
+      // the pot moves. Flooring the stored value instead was tried first
+      // and didn't work -- the next frame just re-synced to the still-0%
+      // pot and undid it.
+      static const float ENERGY_FLOOR_PERCENT = 20.0f;
+      return fmaxf( globalEnergyPercent, ENERGY_FLOOR_PERCENT );
    }
 };
 

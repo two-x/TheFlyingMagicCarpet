@@ -96,6 +96,74 @@ class FlameShow : public LightShow {
    uint8_t megabarHeat[ NUM_MEGABAR_LEDS ] = { 0 };
    uint8_t chinaHeat[ NUM_CHINA_LEDS ] = { 0 };
 
+   // Silence-only idle "breathing" base for floods (megabar/china) --
+   // replaces the flat audio-tinted fill below, but ONLY while bass has
+   // been quiet for a sustained period (floodIsSilent_ below -- real
+   // sound reactivity is completely untouched and takes back over the
+   // instant bass returns). Deliberately NOT AudioBoard::silent_: that
+   // flag compares against noiseFloorPercent_, which defaults to 0% --
+   // at 0% the threshold is literally zero, so silent_ can never become
+   // true no matter how quiet the input actually is (confirmed: a fresh
+   // boot's own status line prints "NoiseFl:0%"). Tracks the SAME bass
+   // hit-percent already driving the reactive fill below instead, with
+   // its own 4s hold (matching AudioBoard::silent_'s window) so a normal
+   // gap between beats doesn't flicker between the two render modes.
+   static const uint32_t FLOOD_SILENCE_HOLD_MS = 4000;
+   Timer floodNotSilentTimer_;
+   bool floodIsSilent_ = false;
+
+   // Roughly half the fixtures sit at a resting IDLE_ON_BRIGHTNESS_FRAC brightness at any
+   // moment, each smoothly fading to black on a slow, pot-adjustable,
+   // staggered schedule while a different random one fades back up to
+   // take its place -- floods "breathe" instead of sitting static at one
+   // vivid color. Sparkle (megabarHeat_/chinaHeat_ below) layers on top
+   // of either base unchanged, full brightness, per request.
+   static constexpr float IDLE_ON_BRIGHTNESS_FRAC = 0.65f;
+   static constexpr uint32_t IDLE_FADE_DURATION_MS = 2500; // time for one fixture to fade fully in or out -- exact number not specified, chosen to read as a slow, visible breathe
+   static const int MAX_IDLE_FIXTURES = NUM_MEGABAR_LEDS > NUM_CHINA_LEDS ? NUM_MEGABAR_LEDS : NUM_CHINA_LEDS;
+   struct IdleBreather {
+      float frac[ MAX_IDLE_FIXTURES ] = { 0 };
+      float target[ MAX_IDLE_FIXTURES ] = { 0 };
+      bool inited = false;
+      Timer swapTimer;
+
+      // Slow, pot-adjustable cadence -- same energyFrac input every other
+      // cadence in this file uses, but landing in a "several seconds"
+      // range and explicitly 1/3 as frequent as sparkle's own energy
+      // scaling, per request ("1/3 the energy level of the current
+      // sparkle effects") -- same "same rate, divided by 3" precedent as
+      // floodShiftHue_ above, just applied to a period instead of a rate.
+      static uint32_t swapIntervalMs( float energyFrac ) {
+         const float BASE_MS = 6000.0f, MIN_MS = 2000.0f;
+         return (uint32_t)( BASE_MS - ( BASE_MS - MIN_MS ) * energyFrac );
+      }
+
+      void step( int count, float dtSec, float energyFrac ) {
+         if ( !inited ) {
+            inited = true;
+            for ( int i = 0; i < count; ++i ) { target[ i ] = ( i % 2 == 0 ) ? 1.0f : 0.0f; frac[ i ] = target[ i ]; }
+            swapTimer.set( swapIntervalMs( energyFrac ) );
+         }
+         if ( swapTimer.expired() ) {
+            swapTimer.set( swapIntervalMs( energyFrac ) );
+            int onCand[ MAX_IDLE_FIXTURES ], onCount = 0;
+            int offCand[ MAX_IDLE_FIXTURES ], offCount = 0;
+            for ( int i = 0; i < count; ++i ) {
+               if ( target[ i ] > 0.5f ) onCand[ onCount++ ] = i;
+               else offCand[ offCount++ ] = i;
+            }
+            if ( onCount > 0 ) target[ onCand[ random( onCount ) ] ] = 0.0f;
+            if ( offCount > 0 ) target[ offCand[ random( offCount ) ] ] = 1.0f;
+         }
+         float maxStep = dtSec * 1000.0f / IDLE_FADE_DURATION_MS;
+         for ( int i = 0; i < count; ++i ) {
+            if ( frac[ i ] < target[ i ] ) frac[ i ] = min( target[ i ], frac[ i ] + maxStep );
+            else if ( frac[ i ] > target[ i ] ) frac[ i ] = max( target[ i ], frac[ i ] - maxStep );
+         }
+      }
+   };
+   IdleBreather megabarIdle_, chinaIdle_;
+
    // sparkle cadence + variations 2/3's hue-rate ceiling both driven by the
    // shared energy setting (see LightShow.h) -- adjusting it here also
    // becomes the new starting point for NightriderShow and LighthouseShow
@@ -356,16 +424,50 @@ class FlameShow : public LightShow {
       // is the peak-held value every other hit-driven show already uses
       // (decays smoothly over hitDecayMs_ instead of tracking the raw
       // wave), which is what a "how hard is bass hitting right now" flood
-      // fill actually wants. Floor matches EqualizerShow's own
-      // EQ_HIT_BRIGHTNESS_FLOOR fix for the identical "reads dim at
-      // anything less than a maxed hit" root cause.
-      static constexpr float FLAME_HIT_BRIGHTNESS_FLOOR = 0.65f;
-      float dmxvalFrac = max( FLAME_HIT_BRIGHTNESS_FLOOR, (float)AudioBoard::getBandHitPercent( BandBass ) / 100.0f );
-      int dmxval = (int)( dmxvalFrac * 255.0f + 0.5f );
-      CRGB dmxclr = floodPaletteColor( dmxval );
-      LedUtil::gammaCorrect( dmxclr );
-      LedUtil::fill( carpet->megabarLeds, dmxclr, NUM_MEGABAR_LEDS );
-      LedUtil::fill( carpet->chinaLeds, dmxclr, NUM_CHINA_LEDS );
+      // fill actually wants.
+      // BUGFIX ("used to be good, floods always on now, not reactive"): a
+      // 65% brightness FLOOR was added here alongside the switch above (to
+      // match EqualizerShow's own floor, added for a genuinely different
+      // complaint -- "reads dim at anything less than a maxed hit"), but
+      // that's a separate concern from the flicker this function actually
+      // fixes: getHitPercent() already decays smoothly to a real 0% in
+      // silence, so the flicker problem was already solved without any
+      // floor at all. The floor just meant floods could never read as
+      // genuinely dark/off again, which is what "always on" was really
+      // about. Removed -- silence now reads as silence.
+      float bassHitPercent = AudioBoard::getBandHitPercent( BandBass );
+      if ( bassHitPercent > 1.0f ) { floodNotSilentTimer_.reset(); floodIsSilent_ = false; }
+      else if ( floodNotSilentTimer_.elapsed() >= FLOOD_SILENCE_HOLD_MS ) floodIsSilent_ = true;
+
+      if ( floodIsSilent_ ) {
+         // Silence-only idle "breathing" base -- see IdleBreather/
+         // IDLE_ON_BRIGHTNESS_FRAC comment above.
+         megabarIdle_.step( NUM_MEGABAR_LEDS, hueDtSec, energyFrac );
+         chinaIdle_.step( NUM_CHINA_LEDS, hueDtSec, energyFrac );
+         CRGB restColor = floodPaletteColor( 0 );
+         for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
+            CRGB clr = restColor;
+            clr.nscale8( (uint8_t)( IDLE_ON_BRIGHTNESS_FRAC * megabarIdle_.frac[ i ] * 255.0f + 0.5f ) );
+            LedUtil::gammaCorrect( clr );
+            carpet->megabarLeds[ i ] = clr;
+         }
+         for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
+            CRGB clr = restColor;
+            clr.nscale8( (uint8_t)( IDLE_ON_BRIGHTNESS_FRAC * chinaIdle_.frac[ i ] * 255.0f + 0.5f ) );
+            LedUtil::gammaCorrect( clr );
+            carpet->chinaLeds[ i ] = clr;
+         }
+      } else {
+         // Sound present -- exactly sha 59d94b4's sound-reactive fill,
+         // untouched (only its 65% brightness floor was ever removed, see
+         // BUGFIX comment above).
+         float dmxvalFrac = bassHitPercent / 100.0f;
+         int dmxval = (int)( dmxvalFrac * 255.0f + 0.5f );
+         CRGB dmxclr = floodPaletteColor( dmxval );
+         LedUtil::gammaCorrect( dmxclr );
+         LedUtil::fill( carpet->megabarLeds, dmxclr, NUM_MEGABAR_LEDS );
+         LedUtil::fill( carpet->chinaLeds, dmxclr, NUM_CHINA_LEDS );
+      }
 
       // floodlight sparkle: blend each fixture's spark color on top of the
       // audio-tinted base, using heat itself as the blend fraction -- 0
