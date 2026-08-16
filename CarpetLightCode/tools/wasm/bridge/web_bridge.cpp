@@ -30,6 +30,21 @@ EMSCRIPTEN_KEEPALIVE
 int web_getNumMegabarLeds() { return NUM_MEGABAR_LEDS; }
 EMSCRIPTEN_KEEPALIVE
 int web_getNumChinaLeds() { return NUM_CHINA_LEDS; }
+
+// Real fixture ground-spot positions, straight from CarpetGeometry.h --
+// the visualizer reads these instead of maintaining its own position
+// tables, per the zero-duplication mandate (a previous, JS-only china
+// nudge for rendering legibility had silently diverged from the real
+// geometry here -- fixed by making CarpetGeometry.h the one real source
+// and having the visualizer simply extract it, no nudging of its own).
+EMSCRIPTEN_KEEPALIVE
+float web_getMegabarXFt( int idx ) { return CarpetGeometry::getMegabarPosition( (uint8_t)idx ).xFt; }
+EMSCRIPTEN_KEEPALIVE
+float web_getMegabarYFt( int idx ) { return CarpetGeometry::getMegabarPosition( (uint8_t)idx ).yFt; }
+EMSCRIPTEN_KEEPALIVE
+float web_getChinaXFt( int idx ) { return CarpetGeometry::getChinaPosition( (uint8_t)idx ).xFt; }
+EMSCRIPTEN_KEEPALIVE
+float web_getChinaYFt( int idx ) { return CarpetGeometry::getChinaPosition( (uint8_t)idx ).yFt; }
 EMSCRIPTEN_KEEPALIVE
 int web_sizeofRopeLed() { return sizeof( carpet->ropeLeds[ 0 ] ); }
 EMSCRIPTEN_KEEPALIVE

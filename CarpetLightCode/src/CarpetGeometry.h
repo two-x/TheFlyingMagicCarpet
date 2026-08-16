@@ -215,19 +215,37 @@ class CarpetGeometry {
       //
       // China: 2 fixtures per corner (front-right/front-left/back-left/
       // back-right), one aimed along the near front/back edge, one aimed
-      // along the near side edge -- ported from the visualizer's
-      // CHINA_POS/CHINA_AIM_DEG (its cosmetic inter-pair pixel nudge is
-      // dropped here; both fixtures in a pair are treated as mounted at
-      // the same real corner point, which the real hardware approximates
-      // closely enough for light-math purposes).
+      // along the near side edge. BUGFIX (mandate violation, not a
+      // measurement question): this used to treat both fixtures in a pair
+      // as co-located, deliberately dropping the visualizer's own
+      // CHINA_POS nudge as "cosmetic, just for rendering legibility" --
+      // but that reasoning was backwards. Two real, distinct fixtures
+      // physically cannot occupy the same point; the nudge's DIRECTION in
+      // the visualizer's table isn't arbitrary either -- each fixture is
+      // offset toward its own real aim direction (the side-aimed one sits
+      // slightly further out to the side, the front/back-aimed one
+      // slightly further toward that edge), which is exactly the
+      // physically sensible way to mount 2 fixtures sharing one corner
+      // bracket but aimed 90 degrees apart. Only the exact MAGNITUDE
+      // (chosen in the visualizer for 2 rendered dots to look distinct,
+      // not from a tape measure) was ever actually cosmetic -- kept here
+      // as the best available estimate (0.262ft) until a real measurement
+      // replaces it. This is now the ONE real source for this geometry;
+      // the visualizer reads it back rather than keeping its own nudged
+      // copy (see web_getChinaXFt/YFt in web_bridge.cpp).
       static const float CORNER_INSET_FT = 1.25f;
       static const float cx = halfW - CORNER_INSET_FT, cy = halfH - CORNER_INSET_FT;
+      static const float CHINA_NUDGE_FT = 0.262f; // see BUGFIX comment above -- estimate, not yet measured
       static const float rotationFactor = 15.0f; // matches CHINA_AIM_DEG's own "X" constant
       const float chXY[ NUM_CHINA_LEDS ][ 2 ] = {
-         {  cx,  cy }, {  cx,  cy },  // 0,1 front-right
-         { -cx,  cy }, { -cx,  cy },  // 2,3 front-left
-         { -cx, -cy }, { -cx, -cy },  // 4,5 back-left
-         {  cx, -cy }, {  cx, -cy },  // 6,7 back-right
+         {  cx + CHINA_NUDGE_FT,  cy },                    // 0 front-right, aimed side  -> nudged further right
+         {  cx,  cy + CHINA_NUDGE_FT },                    // 1 front-right, aimed front -> nudged further front
+         { -cx,  cy + CHINA_NUDGE_FT },                    // 2 front-left, aimed front  -> nudged further front
+         { -cx - CHINA_NUDGE_FT,  cy },                    // 3 front-left, aimed side   -> nudged further left
+         { -cx - CHINA_NUDGE_FT, -cy },                    // 4 back-left, aimed side    -> nudged further left
+         { -cx, -cy - CHINA_NUDGE_FT },                    // 5 back-left, aimed back    -> nudged further back
+         {  cx, -cy - CHINA_NUDGE_FT },                    // 6 back-right, aimed back   -> nudged further back
+         {  cx + CHINA_NUDGE_FT, -cy },                    // 7 back-right, aimed side   -> nudged further right
       };
       // beam aim, compass-from-forward (front=0,right=90,back=180,left=270)
       // -- converted from CHINA_AIM_DEG's own front=180 convention by

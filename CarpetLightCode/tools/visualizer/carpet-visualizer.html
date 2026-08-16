@@ -2123,92 +2123,33 @@ function edgeInsetPoint(deg, insetFt) {
   }
   return { x: CAR_X + x, y: CAR_Y + y };
 }
-// Megabar positions are hand-tuned rather than a uniform formula -- too
-// many one-off exceptions to keep it generic. Latest correction round:
-//   - m3/m9 (left-/right-center): confirmed correct, the reference points
-//     everything else below is measured against.
-//   - m2/m4 and m8/m10 (the side-edge member of each corner pair -- next
-//     to m3 on the left, m9 on the right): X now matches m3/m9's X exactly
-//     (previously these were incorrectly pulled further inward). Y (their
-//     distance along the side edge) unchanged.
-//   - m1/m11 ("front facing," the front-edge member of each front corner
-//     pair): pulled inward to nearly (not quite) match m2/m10's X -- a
-//     small deliberate gap (FRONT_NEAR_GAP_FT) rather than landing exactly
-//     on top of them. Y unchanged. m5/m7 (the back-edge equivalents)
-//     mirrored the same way for consistency, since only the front pair was
-//     called out explicitly this round -- flag if the back should've been
-//     left alone.
-//   - m0 (front-facing, center): 1ft inset from the front edge, drawn as
-//     TWO small lamps (see draw()) -- physically two fixtures, not one.
-//   - m6 (back-facing, center): 1ft inset from the back edge, its own
-//     exception, otherwise untouched.
-// Values in feet from car center (X=right+, Y=back+), converted to px.
-const STD_INSET_FT = 2.5;
-const FRONT_INSET_FT = 2.0, BACK_INSET_FT = 1.5; // front pair (m0) moved 6in forward (away from center, was 2.5), back-facing (m6) 0.5ft further back toward center
-const FRONT_NEAR_GAP_FT = 0.3; // m1/m11/m5/m7's small deliberate gap beyond m2/m10/m4/m8's X
-const CORNER_PULL_FT = 1.0; // m1/m5/m7/m11 (the true corner-nearest four) pulled toward center, X only
-{
-  const halfW = CAR_W_FT / 2, halfH = CAR_H_FT / 2; // 6, 8
-  const sideEdgeY = halfW / Math.tan(60 * Math.PI / 180); // m2/m4/m8/m10's side-edge |Y|, ~3.46ft, unchanged
-  const centerX = halfW - STD_INSET_FT;                    // m3/m9's X, and now m2/m4/m8/m10's X too -- 3.5ft
-  const nearX = centerX + FRONT_NEAR_GAP_FT - CORNER_PULL_FT; // m1/m5/m7/m11's X, pulled 1ft toward center
-  var MEGABAR_POS_FT = [
-    { x: 0, y: -(halfH - FRONT_INSET_FT) },                 // 0 front-facing (drawn as 2 lamps)
-    { x: -nearX, y: -(halfH - STD_INSET_FT) },               // 1 front edge, left of center
-    { x: -centerX, y: -sideEdgeY },                          // 2 left edge, front end
-    { x: -centerX, y: 0 },                                   // 3 left-center (reference, unchanged)
-    { x: -centerX, y: sideEdgeY },                           // 4 left edge, back end
-    { x: -nearX, y: (halfH - STD_INSET_FT) },                // 5 back edge, left of center
-    { x: 0, y: (halfH - BACK_INSET_FT) },                    // 6 back-facing
-    { x: nearX, y: (halfH - STD_INSET_FT) },                 // 7 back edge, right of center
-    { x: centerX, y: sideEdgeY },                            // 8 right edge, back end
-    { x: centerX, y: 0 },                                    // 9 right-center (reference, unchanged)
-    { x: centerX, y: -sideEdgeY },                           // 10 right edge, front end
-    { x: nearX, y: -(halfH - STD_INSET_FT) },                // 11 front edge, right of center
-  ].map(p => ({ x: CAR_X + p.x * PX_PER_FT, y: CAR_Y + p.y * PX_PER_FT }));
-}
+// Megabar/china ground-spot positions are read from the REAL firmware
+// (CarpetGeometry.h, via web_getMegabarXFt/YFt and web_getChinaXFt/YFt)
+// once WASM is ready -- see syncFixturePositionsFromWasm() below. Never
+// hand-tuned or independently nudged here again: a previous version of
+// this file kept its own china position table with a "cosmetic" rendering
+// nudge that had silently diverged from the real geometry (the real
+// fixtures genuinely aren't co-located -- CarpetGeometry.h now models
+// that for real; see its own comment). These start as safe car-center
+// placeholders so nothing referencing them crashes before WASM loads.
+let MEGABAR_POS_FT = new Array(NUM_MEGABAR).fill(0).map(() => ({ x: CAR_X, y: CAR_Y }));
+let CHINA_POS = new Array(NUM_CHINA).fill(0).map(() => ({ x: CAR_X, y: CAR_Y }));
 function megabarPos(m) { return MEGABAR_POS_FT[m]; }
-
-// china: 2 fixtures per corner, aimed 90 degrees apart (one out to the
-// side, one out the front/back). "Basically touching" but the spec calls
-// for a specific 30% overlap between the two 9px-radius dots, so
-// center-to-center distance = 2*9*(1-0.30) = 12.6px; since the two are
-// nudged along perpendicular (not opposing) directions, each nudge
-// magnitude is that distance / sqrt(2) to land on the right separation.
-// [0,1]=front-right, [2,3]=front-left, [4,5]=back-left, [6,7]=back-right,
-// matching PowerTest's left/right china grouping.
-const CHINA_CORNER_INSET_FT = 1.25; // 15in, pulled back from the corner a bit more so the pair reads as two dots
-const CHINA_DOT_RADIUS_PX = 9;
-const CHINA_OVERLAP_FRAC = 0.30;
-const CHINA_PAIR_DIST_PX = 2 * CHINA_DOT_RADIUS_PX * (1 - CHINA_OVERLAP_FRAC);
-const CHINA_NUDGE_PX = CHINA_PAIR_DIST_PX / Math.SQRT2;
-{
-  const ci = CHINA_CORNER_INSET_FT * PX_PER_FT;
-  const halfW = CAR_W / 2, halfH = CAR_H / 2;
-  var CHINA_CORNERS = {
-    frontRight: { x: CAR_X + halfW - ci, y: CAR_Y - halfH + ci },
-    frontLeft:  { x: CAR_X - halfW + ci, y: CAR_Y - halfH + ci },
-    backLeft:   { x: CAR_X - halfW + ci, y: CAR_Y + halfH - ci },
-    backRight:  { x: CAR_X + halfW - ci, y: CAR_Y + halfH - ci },
-  };
+function syncFixturePositionsFromWasm(M) {
+  // CarpetGeometry.h's convention is Y+ = front; this file's own canvas
+  // convention draws front toward smaller pixel Y (car nose at the top),
+  // hence the sign flip on Y only -- X needs no flip (right+ matches both).
+  for (let m = 0; m < NUM_MEGABAR; m++) {
+    const xFt = M.ccall('web_getMegabarXFt', 'number', ['number'], [m]);
+    const yFt = M.ccall('web_getMegabarYFt', 'number', ['number'], [m]);
+    MEGABAR_POS_FT[m] = { x: CAR_X + xFt * PX_PER_FT, y: CAR_Y - yFt * PX_PER_FT };
+  }
+  for (let c = 0; c < NUM_CHINA; c++) {
+    const xFt = M.ccall('web_getChinaXFt', 'number', ['number'], [c]);
+    const yFt = M.ccall('web_getChinaYFt', 'number', ['number'], [c]);
+    CHINA_POS[c] = { x: CAR_X + xFt * PX_PER_FT, y: CAR_Y - yFt * PX_PER_FT };
+  }
 }
-// Index-to-aim convention corrected to match the real firmware exactly
-// (README.md / SpeedStripesShow.h are explicit about this: china [1,2] aim
-// along the front edge, [5,6] along the back edge, [0,3,4,7] along a side
-// edge) -- indices 0/1 and 6/7 were previously swapped here relative to
-// that, a real bug (not just a rendering choice): any code writing "this
-// is the front-aimed one" to index 1 was landing on the fixture actually
-// drawn/aimed as the side one, and vice versa.
-const CHINA_POS = [
-  { x: CHINA_CORNERS.frontRight.x + CHINA_NUDGE_PX, y: CHINA_CORNERS.frontRight.y }, // 0 front-right, aimed side
-  { x: CHINA_CORNERS.frontRight.x, y: CHINA_CORNERS.frontRight.y - CHINA_NUDGE_PX }, // 1 front-right, aimed front
-  { x: CHINA_CORNERS.frontLeft.x, y: CHINA_CORNERS.frontLeft.y - CHINA_NUDGE_PX },   // 2 front-left, aimed front
-  { x: CHINA_CORNERS.frontLeft.x - CHINA_NUDGE_PX, y: CHINA_CORNERS.frontLeft.y },   // 3 front-left, aimed side
-  { x: CHINA_CORNERS.backLeft.x - CHINA_NUDGE_PX, y: CHINA_CORNERS.backLeft.y },     // 4 back-left, aimed side
-  { x: CHINA_CORNERS.backLeft.x, y: CHINA_CORNERS.backLeft.y + CHINA_NUDGE_PX },     // 5 back-left, aimed back
-  { x: CHINA_CORNERS.backRight.x, y: CHINA_CORNERS.backRight.y + CHINA_NUDGE_PX },   // 6 back-right, aimed back
-  { x: CHINA_CORNERS.backRight.x + CHINA_NUDGE_PX, y: CHINA_CORNERS.backRight.y },   // 7 back-right, aimed side
-];
 
 /* =====================================================================
    CarpetGeometry -- mirrors src/CarpetGeometry.h exactly (same coordinate
@@ -2229,11 +2170,13 @@ const CarpetGeometry = (() => {
   // as CarpetGeometry.h's own positionAngleDeg field, so callers who want
   // "where a rotating beam sweeps past" never need their own live atan2.
   const positionAngleDeg = (xFt, yFt) => wrap360(Math.atan2(xFt, yFt) * 180 / Math.PI);
-  const megabar = [], china = [];
-  for (let m = 0; m < NUM_MEGABAR; m++) {
-    const { xFt, yFt } = toFt(megabarPos(m));
-    megabar.push({ id: m, type: 'megabar', xFt, yFt, beamAngleDeg: megabarAngle(m), positionAngleDeg: positionAngleDeg(xFt, yFt), distanceFt: Math.sqrt(xFt * xFt + yFt * yFt) });
-  }
+  // BUGFIX: megabar/china used to be precomputed ONCE here, in this IIFE,
+  // which runs synchronously at page-parse time -- before WASM (and
+  // therefore syncFixturePositionsFromWasm()) has ever run. That baked in
+  // the car-center placeholders MEGABAR_POS_FT/CHINA_POS start with and
+  // never refreshed, even after the real geometry arrived. Computed live
+  // from megabarPos()/CHINA_POS[] on every call instead, so this always
+  // reflects whatever those currently hold.
   const CHINA_ROTATION_FACTOR = 15; // matches CarpetGeometry.h's own rotationFactor
   const chinaAimFromForward = [
     wrap360((180 - CHINA_ROTATION_FACTOR) + 180), wrap360((270 + CHINA_ROTATION_FACTOR) + 180),
@@ -2241,9 +2184,13 @@ const CarpetGeometry = (() => {
     wrap360((360 - CHINA_ROTATION_FACTOR) + 180), wrap360((90 + CHINA_ROTATION_FACTOR) + 180),
     wrap360((270 - CHINA_ROTATION_FACTOR) + 180), wrap360((0 + CHINA_ROTATION_FACTOR) + 180),
   ];
-  for (let c = 0; c < NUM_CHINA; c++) {
+  function megabarGeom(m) {
+    const { xFt, yFt } = toFt(megabarPos(m));
+    return { id: m, type: 'megabar', xFt, yFt, beamAngleDeg: megabarAngle(m), positionAngleDeg: positionAngleDeg(xFt, yFt), distanceFt: Math.sqrt(xFt * xFt + yFt * yFt) };
+  }
+  function chinaGeom(c) {
     const { xFt, yFt } = toFt(CHINA_POS[c]);
-    china.push({ id: c, type: 'china', xFt, yFt, beamAngleDeg: chinaAimFromForward[c], positionAngleDeg: positionAngleDeg(xFt, yFt), distanceFt: Math.sqrt(xFt * xFt + yFt * yFt) });
+    return { id: c, type: 'china', xFt, yFt, beamAngleDeg: chinaAimFromForward[c], positionAngleDeg: positionAngleDeg(xFt, yFt), distanceFt: Math.sqrt(xFt * xFt + yFt * yFt) };
   }
 
   // Per-neopixel geometry -- same sharp-cornered percent-of-dimension
@@ -2274,8 +2221,8 @@ const CarpetGeometry = (() => {
       const rad = angleFromForwardDeg * Math.PI / 180;
       return this.getSurfaceHeightAt(distFt * Math.sin(rad), distFt * Math.cos(rad));
     },
-    getMegabarPosition(m) { return megabar[m]; },
-    getChinaPosition(c) { return china[c]; },
+    getMegabarPosition(m) { return megabarGeom(m); },
+    getChinaPosition(c) { return chinaGeom(c); },
     getNeoGeom(i) { return neo[i]; },
     getNumPixelsOnStrand(strand) { return (strand === 'front' || strand === 'back') ? SIZEOF_SMALL_NEO : SIZEOF_LARGE_NEO; },
     getNumPixelsTotal() { return NUM_NEO; },
@@ -2308,6 +2255,7 @@ CarpetFirmware().then((M) => {
   wasmAdcBinsPtr = M.ccall('web_getAdcBinsBufferPtr', 'number', [], []);
   wasmModule = M;
   wasmReady = true;
+  syncFixturePositionsFromWasm(M);
   enumerateShowsFromWasm(M);
   refreshVariationRow();
   processPinLog(); // drains setup()'s own one-time RESET+STROBE sequence (see the MSGEQ7 sim's own comments) before the first poll() ever runs
@@ -6201,7 +6149,14 @@ initModal( {
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  if (el.textContent === 'BUILD_INFO_PLACEHOLDER') el.textContent = 'local build (not CI-deployed)';
+  const isLocal = el.textContent === 'BUILD_INFO_PLACEHOLDER';
+  if (isLocal) el.textContent = 'local build (not CI-deployed)';
+  // Page title, so a bookmark dragged from this tab defaults to a name
+  // that says which branch it's actually pointed at -- same BUILD_INFO
+  // stamp the header already uses (see deploy-visualizer.yml), just
+  // parsed for the branch segment instead of shown whole.
+  const branchName = isLocal ? 'local' : el.textContent.split(' @ ')[0];
+  document.title = 'Magic Carpet Light Visualizer - ' + branchName;
 }
 
 const potIndicator = document.querySelector('#potKnob .knob__indicator');

@@ -26,6 +26,7 @@
 #include "AudioBoard.h"
 #ifndef __EMSCRIPTEN__
 #include "ArmDmx.h" // #includes "sam.h" at file scope -- genuinely can't compile under Emscripten regardless of whether dmx_init/dmx_send are called (see the migration plan)
+#include "Ws281xDma.h" // right/left long strips -- see its own header comment. Same Emscripten-incompatibility reason as ArmDmx.h above.
 #endif
 #include "Nvm.h"
 #include "SpeedLink.h"
@@ -47,15 +48,23 @@
 // Neopixel constants
 // TODO: convert the user-facing values to constexpr global vars
 //
-// NUM_NEOPIXEL_STRIPS/NEO_PIN4-7 intentionally stay at 8 below even though
-// only 4 rope strips physically exist -- do NOT "fix" this to 4, it'll
-// silently corrupt memory. See README.md, "Perimeter rope lights".
+// BUGFIX/HARDWARE CHANGE: the 2 long strips (right/left, 352 LEDs each)
+// moved off the PORTD bank onto their own dedicated USART DMA channels
+// (see Ws281xDma.h) -- driving them there instead of bit-banging frees up
+// real loop time and was the actual point of the physical rewiring. The
+// PORTD bank now only carries the 2 SHORT strips (front/back), so
+// NUM_NEOPIXEL_STRIPS drops from 8 (of which only 4 were ever real, and
+// only 4 of THOSE ever actually had data written to them -- see show()'s
+// old commented-out slots 2/3) down to the 2 lanes it actually needs.
+// Do NOT "fix" this back up to 8 -- see git history for why it was ever
+// that large (a fixed hardware lane-count quirk of the old single-bank
+// approach), it no longer applies now that right/left aren't on this bank.
 #define SIZEOF_SMALL_NEO 156 // 108
 #define SIZEOF_LARGE_NEO 352 // 145
 #define SIZEOF_SMALL_NEO_HALF 78
 #define SIZEOF_LARGE_NEO_HALF 176
 #define SIZEOF_LARGE_NEO_CORNER 33
-#define NUM_NEOPIXEL_STRIPS 8
+#define NUM_NEOPIXEL_STRIPS 2
 #define NUM_NEO_LEDS_ACTUAL ((SIZEOF_SMALL_NEO * 2) + (SIZEOF_LARGE_NEO * 2))
 #define NUM_NEO_LEDS_PER_STRIP LedUtil::resizeCRGBW( SIZEOF_LARGE_NEO )
 #define NUM_NEO_SHOW_LEDS ( NUM_NEO_LEDS_PER_STRIP * NUM_NEOPIXEL_STRIPS )
@@ -67,14 +76,32 @@
 #define NEO2_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO ) // large
 #define NEO3_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO * 2 ) // small
 #define NEO_PORT_BANK ( WS2811_PORTD )
+// Real, current pin assignments for all 4 physical rope strands. These are
+// the actual source of truth: change one here to match new real wiring and
+// the corresponding setup below either derives its hardware config from it
+// directly (right/left, USART-based) or is checked against it with a
+// static_assert that fails the BUILD if it no longer matches (front/back,
+// PORTD-based -- FastLED's own WS2811_PORTD driver hardcodes its lane-to-
+// pin order internally with no parameter to reconfigure it, confirmed
+// straight from FastLED's platform source, so a define/reality mismatch
+// there can't be fixed by "reading the define" -- only caught).
+//
+// strand#0 FRONT (156px, short) -- PORTD bank lane 0, plain bit-banged via FastLED (not USART/DMA)
 #define NEO_PIN0 25
-#define NEO_PIN1 26
-#define NEO_PIN2 27
-#define NEO_PIN3 28
-#define NEO_PIN4 14
-#define NEO_PIN5 15
-#define NEO_PIN6 29
-#define NEO_PIN7 11
+// strand#1 BACK (156px, short) -- PORTD bank lane 1, plain bit-banged via FastLED (not USART/DMA).
+// Moved here from the old right-strip pin (26), now freed by right's move to USART3 below.
+#define NEO_PIN_BACK 26
+// strand#2 RIGHT (352px, long) -- USART3/TXD3, DMA-driven (see Ws281xDma.h). Moved here from the old back-strip pin (14).
+#define NEO_PIN_RIGHT 14
+// strand#3 LEFT (352px, long) -- USART1/TXD1, DMA-driven (see Ws281xDma.h). Moved here from its original pin (15).
+#define NEO_PIN_LEFT 16
+// FastLED's WS2811_PORTD driver's own hardcoded 2-lane pin order (see
+// clockless_block_arm_sam.h's InlineBlockClocklessController::init() --
+// LANES=2 always drives pins 25 then 26, unconditionally). If NEO_PIN0/
+// NEO_PIN_BACK above are ever edited to anything else, this makes the
+// build fail loudly instead of silently driving the wrong physical pins.
+static_assert( NEO_PIN0 == 25 && NEO_PIN_BACK == 26,
+   "NEO_PIN0/NEO_PIN_BACK must stay 25/26 -- FastLED's WS2811_PORTD 2-lane order is hardcoded in the library, not read from these defines" );
 
 /* Positional Constants
  *
@@ -112,7 +139,13 @@ class MagicCarpet {
    /* FastLED doesn't support rgbw leds. We work around this by offsetting the color
     * values to accomodate the white value. See CRGBW.h for more details.
     */
-   CRGB ropeShowLeds[ NUM_NEO_SHOW_LEDS ];
+   CRGB ropeShowLeds[ NUM_NEO_SHOW_LEDS ]; // front+back only now, see NUM_NEOPIXEL_STRIPS's own comment
+   // right/left's own converted buffers -- driven via Ws281xDma::show(),
+   // not FastLED, so they're not part of ropeShowLeds above.
+#ifndef __EMSCRIPTEN__
+   CRGB rightShowLeds[ NUM_NEO_LEDS_PER_STRIP ];
+   CRGB leftShowLeds[ NUM_NEO_LEDS_PER_STRIP ];
+#endif
 
    // see README.md, "Brightness system"
    float globalBrightness_ = 100.0f;   // 0-100
@@ -197,9 +230,11 @@ class MagicCarpet {
       // add dmx leds
       dmx_init( TOTAL_DMX_SIZE );
 
-      // add eight channels of rope leds
+      // front+back only now -- right/left moved to Ws281xDma (USART DMA),
+      // see NUM_NEOPIXEL_STRIPS's own comment.
       FastLED.addLeds<NEO_PORT_BANK,NUM_NEOPIXEL_STRIPS>( ropeShowLeds,
                                                           NUM_NEO_LEDS_PER_STRIP );
+      Ws281xDma::setup( NEO_PIN_RIGHT, NEO_PIN_LEFT );
 #endif
       // WASM: no real DMX/NeoPixel hardware to attach -- see the migration
       // plan's output-path design (phase 5: protocol-level output
@@ -222,23 +257,24 @@ class MagicCarpet {
       // LedUtil::reverse( ropeLeds + NEO2_OFFSET, SIZEOF_LARGE_NEO );
       LedUtil::reverse( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO, SIZEOF_SMALL_NEO );
 
+      // front -> PORTD lane 0 (p25), back -> PORTD lane 1 (p26, its new pin
+      // -- see NEO_PIN_BACK's comment). right/left convert into their own
+      // dedicated buffers below instead -- they're driven via Ws281xDma
+      // (USART DMA), not this FastLED/PORTD path, since their move off
+      // PORTD is the entire point of the physical rewiring.
       LedUtil::convertNeoArray( ropeLeds, ropeShowLeds,
                                 SIZEOF_SMALL_NEO );
-      LedUtil::convertNeoArray( ropeLeds + SIZEOF_SMALL_NEO,
-                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP,
-                                SIZEOF_LARGE_NEO );
-      // LedUtil::convertNeoArray( ropeLeds + NEO2_OFFSET,
-      //                           ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 2,
-      //                           SIZEOF_LARGE_NEO );
-      // LedUtil::convertNeoArray( ropeLeds + NEO3_OFFSET,
-      //                           ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 3,
-      //                           SIZEOF_SMALL_NEO );
       LedUtil::convertNeoArray( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO,
-                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 4,
+                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP,
                                 SIZEOF_SMALL_NEO );
-      LedUtil::convertNeoArray( ropeLeds + (SIZEOF_SMALL_NEO * 2) + SIZEOF_LARGE_NEO,
-                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 5,
+#ifndef __EMSCRIPTEN__
+      LedUtil::convertNeoArray( ropeLeds + SIZEOF_SMALL_NEO,
+                                rightShowLeds,
                                 SIZEOF_LARGE_NEO );
+      LedUtil::convertNeoArray( ropeLeds + (SIZEOF_SMALL_NEO * 2) + SIZEOF_LARGE_NEO,
+                                leftShowLeds,
+                                SIZEOF_LARGE_NEO );
+#endif
 
       // make sure to reverse the values so the user has a consistent view
       LedUtil::reverse( ropeLeds, SIZEOF_SMALL_NEO );
@@ -249,7 +285,8 @@ class MagicCarpet {
       // both arrays as a single big array, since they're contiguous in memory.
       dmx_send( ( uint8_t * ) megabarLeds );
 
-      FastLED.show();
+      FastLED.show(); // front+back only now, see NUM_NEOPIXEL_STRIPS's own comment
+      Ws281xDma::show( ( uint8_t * ) rightShowLeds, ( uint8_t * ) leftShowLeds );
 #endif
       // WASM: see the migration plan's output-path design (phase 5) -- for
       // now (phase 4) the visualizer reads ropeLeds[]/megabarLeds[]/
