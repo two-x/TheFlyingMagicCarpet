@@ -950,7 +950,7 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">soren55.lights @ 249da74 - 2026-08-17 03:42 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">soren55.lights @ df3045b - 2026-08-17 05:54 UTC</span>
 </header>
 
 <div class="help-overlay" id="helpOverlay" hidden>
@@ -2190,7 +2190,20 @@ function syncFixturePositionsFromWasm(M) {
   // convention draws front toward smaller pixel Y (car nose at the top),
   // hence the sign flip on Y only -- X needs no flip (right+ matches both).
   const toPx = (xFt, yFt) => ({ x: CAR_X + xFt * PX_PER_FT, y: CAR_Y - yFt * PX_PER_FT });
-  const aimDeg = (fromXFt, fromYFt, toXFt, toYFt) => wrap360Global( Math.atan2( toXFt - fromXFt, toYFt - fromYFt ) * 180 / Math.PI );
+  // BUGFIX: when fromXFt/fromYFt and toXFt/toYFt coincide (fixture position
+  // == ground spot, e.g. megabar's 0/90/180/270deg, which weren't part of
+  // the fixture-vs-spot recalculation), the aim vector is zero-length and
+  // atan2(0,0) degenerates to a fixed 0deg -- NOT the same as "radially
+  // outward from center" it was assumed to fall back to. 0deg's own
+  // radial-outward direction happens to BE 0deg, masking this everywhere
+  // except 90/180/270deg, which all silently aimed straight forward
+  // instead of right/back/left. Falls back to the TO point's own real
+  // position-angle-from-center whenever the vector is (near-)zero.
+  const aimDeg = (fromXFt, fromYFt, toXFt, toYFt) => {
+    const dx = toXFt - fromXFt, dy = toYFt - fromYFt;
+    if (Math.hypot(dx, dy) < 0.01) return wrap360Global( Math.atan2( toXFt, toYFt ) * 180 / Math.PI );
+    return wrap360Global( Math.atan2( dx, dy ) * 180 / Math.PI );
+  };
   for (let m = 0; m < NUM_MEGABAR; m++) {
     const xFt = M.ccall('web_getMegabarXFt', 'number', ['number'], [m]);
     const yFt = M.ccall('web_getMegabarYFt', 'number', ['number'], [m]);
@@ -2198,7 +2211,14 @@ function syncFixturePositionsFromWasm(M) {
     const fxFt = M.ccall('web_getMegabarFixtureXFt', 'number', ['number'], [m]);
     const fyFt = M.ccall('web_getMegabarFixtureYFt', 'number', ['number'], [m]);
     MEGABAR_FIXTURE_POS[m] = toPx(fxFt, fyFt);
-    MEGABAR_AIM_DEG[m] = wrap360Global( Math.atan2( xFt, yFt ) * 180 / Math.PI ); // radially outward -- mount==ground spot, no fixture-vs-groundspot vector to use
+    // Real aim: direction from the physical fixture to where its light
+    // actually lands -- same as china's own aim computation. 8 of the 12
+    // megabars (all but 0/90/180/270deg) now have a real fixture-vs-
+    // groundspot offset (temporary comparison change, see CarpetGeometry.h's
+    // buildFloods_()); for the other 4, fixture==spot, so aimDeg()'s own
+    // zero-vector fallback (see its comment) gives the real radial-outward
+    // angle instead.
+    MEGABAR_AIM_DEG[m] = aimDeg(fxFt, fyFt, xFt, yFt);
   }
   for (let c = 0; c < NUM_CHINA; c++) {
     const xFt = M.ccall('web_getChinaXFt', 'number', ['number'], [c]);
@@ -3888,7 +3908,14 @@ function draw() {
     const wash = m === HEADLIGHT_INDEX ? MEGABAR_FRONT_WASH : MEGABAR_WASH;
     const color = m === HEADLIGHT_INDEX ? headlightRenderColor : megabarLeds[m];
     const mult = m === HEADLIGHT_INDEX ? MEGABAR_MULT * 2 * headlightHf : MEGABAR_MULT;
-    drawGroundEllipse(megabarPos(m), megabarAngle(m), wash, color, mult);
+    // Origin must be the FIXTURE (where the beam starts), not the ground
+    // spot (megabarPos(m), where it lands) -- same reasoning as china
+    // below: drawGroundEllipse() already projects further out from origin
+    // by wash.centerDist, so passing the ground spot as origin would
+    // double-count that throw distance for the 8 megabars that now have a
+    // real fixture-vs-groundspot offset (temporary comparison change, see
+    // CarpetGeometry.h's buildFloods_()).
+    drawGroundEllipse(MEGABAR_FIXTURE_POS[m], megabarAngle(m), wash, color, mult);
   }
   for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
     // BUGFIX: origin here must be the FIXTURE (where the beam starts),
@@ -3903,7 +3930,7 @@ function draw() {
     const wash = m === HEADLIGHT_INDEX ? MEGABAR_FRONT_WASH : MEGABAR_WASH;
     const color = m === HEADLIGHT_INDEX ? headlightRenderColor : megabarLeds[m];
     const mult = m === HEADLIGHT_INDEX ? MEGABAR_MULT * 2 * headlightHf : MEGABAR_MULT; // see the ground-ellipse loop above for why
-    drawWash(megabarPos(m), megabarAngle(m), wash, color, mult);
+    drawWash(MEGABAR_FIXTURE_POS[m], megabarAngle(m), wash, color, mult);
   }
   for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
     drawWash(CHINA_FIXTURE_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH_FOR[cIdx], chinaLeds[cIdx], CHINA_AIR_MULT); // same fixture-as-origin fix as drawGroundEllipse above
@@ -3949,7 +3976,9 @@ function draw() {
   // side, overlapping ~25%; every other megabar is one normal dot.
   const MB_R = 8;
   for (let m = 0; m < NUM_MEGABAR; m++) {
-    const p = megabarPos(m);
+    // Fixture-icon marker represents the physical FIXTURE, not the ground
+    // spot -- same reasoning as china's own fixture-icon marker.
+    const p = MEGABAR_FIXTURE_POS[m];
     // BUGFIX (recurring): megabarLeds[HEADLIGHT_INDEX] stores the PER-LAMP
     // color (headlightBr 50-100% of global, see renderCurrent()) -- correct
     // for driving the real 2-lamp hardware, but drawn AS-IS here each dot
@@ -4029,6 +4058,19 @@ function draw() {
     ctx2d.strokeStyle = '#443c52';
     ctx2d.stroke();
   }
+
+  // Car-center reference reticle, real (0,0) in car-relative ft (the exact
+  // origin every fixture's dimX/dimY/dimAngleDeg is measured from) -- for
+  // manually checking angles against the screen with a protractor.
+  ctx2d.beginPath();
+  ctx2d.moveTo(CAR_X - 11, CAR_Y);
+  ctx2d.lineTo(CAR_X + 11, CAR_Y);
+  ctx2d.moveTo(CAR_X, CAR_Y - 11);
+  ctx2d.lineTo(CAR_X, CAR_Y + 11);
+  ctx2d.strokeStyle = '#000000';
+  ctx2d.lineWidth = 1;
+  ctx2d.stroke();
+
   ctx2d.restore(); // closes the zoom transform opened at the top of draw()
 }
 
@@ -4737,14 +4779,14 @@ initModal( {
   });
 }
 
-// The CI deploy workflow replaces soren55.lights @ 249da74 - 2026-08-17 03:42 UTC with the real
+// The CI deploy workflow replaces soren55.lights @ df3045b - 2026-08-17 05:54 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  const isLocal = el.textContent === 'soren55.lights @ 249da74 - 2026-08-17 03:42 UTC';
+  const isLocal = el.textContent === 'soren55.lights @ df3045b - 2026-08-17 05:54 UTC';
   if (isLocal) el.textContent = 'local build (not CI-deployed)';
   // Page title, so a bookmark dragged from this tab defaults to a name
   // that says which branch it's actually pointed at -- same BUILD_INFO
