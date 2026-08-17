@@ -410,10 +410,20 @@ class FlameShow : public LightShow {
             chinaSwapBassOnFront_ = !chinaSwapBassOnFront_;
             chinaSwapTimer_.set( 2000 + random( 5000 ) );
          }
+         // BUGFIX: FLOOD_LO_INDEX/FLOOD_HI_INDEX aren't equally bright colors
+         // in the fire palette (index 40 caps around RGB(193,0,0), index 230
+         // around RGB(255,229,0) -- roughly 3.6x apart in perceived
+         // brightness), so a genuine 100% hit on both bands read as bass way
+         // dimmer than treble. maximizeBrightness() scales each color's own
+         // max channel up to 255 BEFORE the hit-percent dimmer is applied, so
+         // a full hit reaches true full intensity on both bands regardless
+         // of which palette hue each one happens to be.
          CRGB bassClr = floodPaletteColor( FLOOD_LO_INDEX );
+         bassClr.maximizeBrightness();
          bassClr.nscale8( (uint8_t)( bassHitPercent / 100.0f * 255.0f + 0.5f ) );
          LedUtil::gammaCorrect( bassClr );
          CRGB trebleClr = floodPaletteColor( FLOOD_HI_INDEX );
+         trebleClr.maximizeBrightness();
          trebleClr.nscale8( (uint8_t)( trebleHitPercent / 100.0f * 255.0f + 0.5f ) );
          LedUtil::gammaCorrect( trebleClr );
          for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) carpet->megabarLeds[ i ] = ( i % 2 == 0 ) ? bassClr : trebleClr;

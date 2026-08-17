@@ -221,20 +221,20 @@ class EqualizerShow : public LightShow {
    // which color source a megabar renders while lit, set at PICK time (per
    // request, "always use the right color for its freq band, like china") --
    // 0=bass (activeColor, respects the war's current turn), 1=treble
-   // (Tcolor, fixed -- doesn't participate in turn-trading), 2=mid (green,
-   // fixed). See PW_BASS_PICK/PW_TREBLE_PICK/PW_MID_PICK below.
-   enum PwColorSrc { PwSrcBass = 0, PwSrcTreble = 1, PwSrcMid = 2 };
+   // (Tcolor, fixed -- doesn't participate in turn-trading). See
+   // PW_BASS_PICK/PW_TREBLE_PICK below.
+   enum PwColorSrc { PwSrcBass = 0, PwSrcTreble = 1 };
    uint8_t pwMegabarColorSrc_[ NUM_MEGABAR_LEDS ] = { PwSrcBass };
    // per request: the war/territory mechanic itself stays bass-only, but the
-   // megabar flash pool now also includes independently-triggered treble
-   // and midrange pickers -- treble count is always ceil(bass count/2),
-   // mid is a fixed extra one. Each pool re-picks on its OWN band's real
-   // hit edge (see AudioBoard::NewBandHit() below), independent of the others.
+   // megabar flash pool also includes an independently-triggered treble
+   // picker -- treble count is always ceil(bass count/2). Each pool
+   // re-picks on its OWN band's real hit edge (see AudioBoard::NewBandHit()
+   // below), independent of the other. Midrange reactivity removed per
+   // request -- no mid pool anywhere in this show anymore.
    static const int PW_BASS_PICK = 2;
    static const int PW_TREBLE_PICK = 1; // ceil(PW_BASS_PICK/2)
-   static const int PW_MID_PICK = 1;
-   static const int PW_MAX_PICK = PW_BASS_PICK + PW_TREBLE_PICK + PW_MID_PICK; // shared anti-repeat memory
-   int pwLastPicked_[ PW_MAX_PICK ] = { -1, -1, -1, -1 };
+   static const int PW_MAX_PICK = PW_BASS_PICK + PW_TREBLE_PICK; // shared anti-repeat memory
+   int pwLastPicked_[ PW_MAX_PICK ] = { -1, -1, -1 };
    bool pwTurnIsB_ = true;  // whose turn it currently is
    int pwTurnHitCount_ = 0; // bass hits so far this turn, vs cycleBeats_
 
@@ -1029,7 +1029,6 @@ class EqualizerShow : public LightShow {
       if ( !silent ) newStdHueTimeS_ += dtSec;
       CRGB Bcolor, Tcolor;
       newStdColors( Bcolor, Tcolor );
-      static const CRGB Mcolor = CRGB::Green; // fixed, per request -- midrange flood pool's own color
       uint8_t bassHit = AudioBoard::getBandHitPercent( BandBass );
 
       if ( silent ) {
@@ -1039,16 +1038,13 @@ class EqualizerShow : public LightShow {
 
       // Same NewHit()-based edge detection as new_standard above (see its
       // own comment) -- fixes the same "megabar misses a hit chinas still
-      // show" class of bug here too. Per request, this cycle's treble/mid
-      // triggers are sourced from specific bins rather than the curated
-      // AudioBand groupings: treble is just the top 2 bins (FreqBin5/6 --
+      // show" class of bug here too. Per request, this cycle's treble
+      // trigger is sourced from specific bins rather than the curated
+      // AudioBand grouping: treble is just the top 2 bins (FreqBin5/6 --
       // 6250/16000Hz), NOT AudioBand's own BandTreble (which also includes
-      // FreqBin4/2500Hz); midrange is FreqBin2/3/4 (400/1000/2500Hz) --
-      // AudioBand's own BandMid (FreqBin2/3 only) plus the 2500Hz bin taken
-      // out of treble above.
+      // FreqBin4/2500Hz). Midrange reactivity removed per request.
       bool bassEdge = AudioBoard::NewBandHit( BandBass );
       bool trebleEdge = AudioBoard::NewBinHit( FreqBin5 ) || AudioBoard::NewBinHit( FreqBin6 );
-      bool midEdge = AudioBoard::NewBinHit( FreqBin2 ) || AudioBoard::NewBinHit( FreqBin3 ) || AudioBoard::NewBinHit( FreqBin4 );
 
       if ( bassEdge ) {
          if ( ++pwTurnHitCount_ >= cycleBeats_ ) {
@@ -1083,21 +1079,21 @@ class EqualizerShow : public LightShow {
       pwBassFrac_ = constrain( pwBassFrac_, PW_MIN_FRAC, PW_MAX_FRAC );
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) { carpet->ropeLeds[ i ] = pwColorAt( i, Bcolor, Tcolor ); carpet->ropeLeds[ i ].w = 0; }
 
-      // MEGABARS: 3 independent pools, each picking its own currently-dark
+      // MEGABARS: 2 independent pools, each picking its own currently-dark
       // megabars on its OWN band's real hit edge, then fading -- bass
       // (PW_BASS_PICK, always Bcolor) + treble (PW_TREBLE_PICK =
-      // ceil(bass/2), always Tcolor) + mid (PW_MID_PICK, always Mcolor/
-      // green), per request. BUGFIX ("bass hits respond using treble
-      // color"): the bass pool used to render with activeColor (whichever
-      // color currently has the WAR's turn -- Bcolor or Tcolor, alternating)
-      // instead of a fixed Bcolor, so during T's turn a genuine bass hit
-      // would render identically to a treble hit, indistinguishable from
-      // each other. activeColor stays turn-dependent for the ROPE/CHINA
-      // (that's the actual "war" visual, unchanged) -- only the megabar
-      // flash pool's bass color is now fixed, same as treble/mid always
-      // were, so each pool's color always identifies which band triggered
-      // it, like china's own bass/treble split does.
-      // wasLastPicked avoidance is shared across all 3 pools (one combined
+      // ceil(bass/2), always Tcolor), per request (midrange pool removed).
+      // BUGFIX ("bass hits respond using treble color"): the bass pool used
+      // to render with activeColor (whichever color currently has the
+      // WAR's turn -- Bcolor or Tcolor, alternating) instead of a fixed
+      // Bcolor, so during T's turn a genuine bass hit would render
+      // identically to a treble hit, indistinguishable from each other.
+      // activeColor stays turn-dependent for the ROPE/CHINA (that's the
+      // actual "war" visual, unchanged) -- only the megabar flash pool's
+      // bass color is now fixed, same as treble always was, so each pool's
+      // color always identifies which band triggered it, like china's own
+      // bass/treble split does.
+      // wasLastPicked avoidance is shared across both pools (one combined
       // memory, PW_MAX_PICK slots) so back-to-back picks from DIFFERENT
       // bands still avoid immediately repeating a spot.
       auto pwPickAndLight = [&]( int numToPick, uint8_t colorSrc ) {
@@ -1125,10 +1121,9 @@ class EqualizerShow : public LightShow {
       };
       if ( bassEdge ) pwPickAndLight( PW_BASS_PICK, PwSrcBass );
       if ( trebleEdge ) pwPickAndLight( PW_TREBLE_PICK, PwSrcTreble );
-      if ( midEdge ) pwPickAndLight( PW_MID_PICK, PwSrcMid );
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
          pwMegabarHeat_[ m ] = max( 0.0f, pwMegabarHeat_[ m ] - dtSec / 0.4f );
-         CRGB base = ( pwMegabarColorSrc_[ m ] == PwSrcBass ) ? Bcolor : ( pwMegabarColorSrc_[ m ] == PwSrcTreble ) ? Tcolor : Mcolor;
+         CRGB base = ( pwMegabarColorSrc_[ m ] == PwSrcBass ) ? Bcolor : Tcolor;
          base.nscale8( (uint8_t)( pwMegabarHeat_[ m ] * 255.0f + 0.5f ) );
          carpet->megabarLeds[ m ] = base;
       }

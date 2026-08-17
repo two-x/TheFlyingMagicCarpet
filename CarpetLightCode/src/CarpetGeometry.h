@@ -153,7 +153,18 @@ class CarpetGeometry {
       uint8_t dmxAddress;  // megabar: 1+3*id; china: 37+6*id -- see README.md
 
       float dimX, dimY;         // ground-spot position, car-center-relative, ft -- what light shows use
-      float dimAngleDeg;        // derived: compass angle of the ground spot (atan2 of dimX,dimY)
+      // Both derived from dimX/dimY (hardcoded above), same simple 2-point
+      // polar conversion for every flood, megabar and china alike:
+      //   dimAngleDeg = angle of the straight segment from car center to
+      //                 this flood's own ground spot (atan2 of dimX,dimY)
+      //   dimDistFt   = length of that same segment
+      // This is what makes getMegabarByAngle()/getChinaByAngle() (and every
+      // real light show that uses them) land exactly on the hardcoded spot
+      // table above, whatever it currently says -- no separate "nominal"
+      // angle is ever consulted. Fixture names (Megabar30deg etc.) stay as
+      // plain nomenclature only; they are NOT a promise that a fixture's
+      // real dimAngleDeg equals its own name.
+      float dimAngleDeg;        // derived: compass angle of the ground spot
       float dimDistFt;          // derived: distance of the ground spot from car center
 
       float fixtureDimX, fixtureDimY, fixtureDimZ; // fixture mount position -- visualizer-only, see file header
@@ -416,39 +427,85 @@ class CarpetGeometry {
       static const float halfW = CAR_WIDTH_FT / 2.0f, halfH = CAR_LENGTH_FT / 2.0f; // 6, 8
       static const float STD_INSET_FT = 2.5f;
       static const float FRONT_INSET_FT = 2.0f, BACK_INSET_FT = 1.5f;
-      static const float FRONT_NEAR_GAP_FT = 0.3f;
-      static const float CORNER_PULL_FT = 1.0f;
+      // TEMPORARY (per request, "try this"): 0/90/180/270deg (indices 0/3/
+      // 6/9) unchanged. The other 8 (30/60/120/150/210/240/300/330deg)
+      // recomputed from a new algorithm, precomputed offline (no live trig
+      // added to the FW) -- the fixture stays at its real, hand-tuned mount
+      // position (nearX/centerX+sideEdgeY, same values as before); the
+      // ground spot is that same fixture position PLUS 8ft "as the crow
+      // flies" continuing outward in the fixture's own nominal compass
+      // direction (0deg=car-forward, clockwise -- e.g. the 30deg fixture's
+      // spot is 8ft further out along the 30deg ray, not along whatever
+      // angle its real (slightly-off-30) position happens to sit at).
+      // Since the real fixture isn't exactly ON its own nominal-angle ray
+      // from center, the resulting spot's angle-from-center lands CLOSE to
+      // but not exactly on the nominal value (e.g. 30deg fixture's spot is
+      // at 28.68deg from center) -- same "close, hand-tuned, not a clean
+      // grid" character the original table always had.
+      // Real, hand-tuned fixture MOUNT positions -- UNCHANGED from the
+      // original table (mirror-corrected only). NOT moved by the spot
+      // recalculation below.
       const float sideEdgeY = halfW / tanf( 60.0f * PI / 180.0f ); // ~3.46ft
       const float centerX = halfW - STD_INSET_FT;                  // 3.5ft
-      const float nearX = centerX + FRONT_NEAR_GAP_FT - CORNER_PULL_FT; // 2.8ft
-      const float mbXY[ NUM_MEGABAR_LEDS ][ 2 ] = {
-         {         0.0f,  ( halfH - FRONT_INSET_FT ) }, // 0 front-facing (2 lamps)
-         {      -nearX,   ( halfH - STD_INSET_FT ) },   // 1
-         {    -centerX,    sideEdgeY },                  // 2
-         {    -centerX,    0.0f },                        // 3
-         {    -centerX,   -sideEdgeY },                  // 4
-         {      -nearX,  -( halfH - STD_INSET_FT ) },   // 5
-         {         0.0f, -( halfH - BACK_INSET_FT ) }, // 6 back-facing
-         {       nearX,  -( halfH - STD_INSET_FT ) },   // 7
-         {     centerX,   -sideEdgeY },                  // 8
-         {     centerX,    0.0f },                        // 9
-         {     centerX,    sideEdgeY },                  // 10
-         {       nearX,   ( halfH - STD_INSET_FT ) },   // 11
+      const float nearX = centerX + 0.3f - 1.0f;                   // 2.8ft (FRONT_NEAR_GAP_FT - CORNER_PULL_FT)
+      const float mbFixtureXY[ NUM_MEGABAR_LEDS ][ 2 ] = {
+         {         0.0f,  ( halfH - FRONT_INSET_FT ) }, // 0
+         {       nearX,   ( halfH - STD_INSET_FT ) },   // 1 (30deg)
+         {     centerX,    sideEdgeY },                  // 2 (60deg)
+         {     centerX,    0.0f },                        // 3 (90deg)
+         {     centerX,   -sideEdgeY },                  // 4 (120deg)
+         {       nearX,  -( halfH - STD_INSET_FT ) },   // 5 (150deg)
+         {         0.0f, -( halfH - BACK_INSET_FT ) }, // 6
+         {      -nearX,  -( halfH - STD_INSET_FT ) },   // 7 (210deg)
+         {    -centerX,   -sideEdgeY },                  // 8 (240deg)
+         {    -centerX,    0.0f },                        // 9 (270deg)
+         {    -centerX,    sideEdgeY },                  // 10 (300deg)
+         {      -nearX,   ( halfH - STD_INSET_FT ) },   // 11 (330deg)
       };
       // Z heights from the visualizer's own FIXTURE_HEIGHTS_FT (megabarFront:
       // 1.0, megabarDefault: 1.5, china: 2.0) -- the only real measured mount
       // heights that exist anywhere in this codebase so far.
       static const float MEGABAR_FRONT_Z_FT = 1.0f, MEGABAR_DEFAULT_Z_FT = 1.5f;
+      // Ground spot -- dimX/dimY -- fully independent hardcoded values, same
+      // as fixtureDimX/Y above, NOT derived from the fixture at build or run
+      // time (per request: every flood's fixture and spot are both
+      // independent hardcoded locations, china included). 0/90/180/270deg
+      // (indices 0/3/6/9) equal their fixture position, unchanged. All 8
+      // others were precomputed OFFLINE (not in this file): fixture position
+      // plus 8ft "as the crow flies", continuing outward in a throw
+      // direction rotated from that fixture's own nominal compass angle --
+      // 60/120/240/300deg rotated 5deg TOWARD their nearest orthogonal
+      // neighbor (90/270deg, confirmed good, measured); 30/150/210/330deg
+      // now at their plain nominal throw direction (0deg offset) -- 3deg,
+      // then 1.5deg, then 1.0deg, then 0.5deg AWAY from 0/180deg were all
+      // stepped down in turn as each measured too much, landing back at
+      // nominal. Both are visual-equalization trial amounts (per request),
+      // meant to be measured and recalibrated, not precisely derived.
+      const float mbSpotXY[ NUM_MEGABAR_LEDS ][ 2 ] = {
+         {         0.0f,    6.0f },     // 0
+         {         6.8000f,  12.4282f }, // 1 (30deg, throw dir 30.0deg, nominal)
+         {        10.7505f,   6.8450f }, // 2 (60deg, throw dir 65deg)
+         {         3.5f,     0.0f },     // 3 (90deg)
+         {        10.7505f,  -6.8450f }, // 4 (120deg, throw dir 115deg)
+         {         6.8000f, -12.4282f }, // 5 (150deg, throw dir 150.0deg, nominal)
+         {         0.0f,   -6.5f },     // 6
+         {        -6.8000f, -12.4282f }, // 7 (210deg, throw dir 210.0deg, nominal)
+         {       -10.7505f,  -6.8450f }, // 8 (240deg, throw dir 245deg)
+         {        -3.5f,     0.0f },     // 9
+         {       -10.7505f,   6.8450f }, // 10 (300deg, throw dir 295deg)
+         {        -6.8000f,  12.4282f }, // 11 (330deg, throw dir 330.0deg, nominal)
+      };
       for ( uint8_t m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
          FloodGeometry & f = floods_[ globalFloodIndex_( FixtureMegabar, m ) ];
          f.id = m; f.type = FixtureMegabar;
          f.dmxAddress = (uint8_t)( 1 + 3 * m ); // see README.md, "Megabars"
-         f.dimX = mbXY[ m ][ 0 ]; f.dimY = mbXY[ m ][ 1 ];
+         f.fixtureDimX = mbFixtureXY[ m ][ 0 ]; f.fixtureDimY = mbFixtureXY[ m ][ 1 ];
+         f.fixtureDimZ = ( m == 0 ) ? MEGABAR_FRONT_Z_FT : MEGABAR_DEFAULT_Z_FT; // m0 = headlight, the front-facing pair
+         f.dimX = mbSpotXY[ m ][ 0 ]; f.dimY = mbSpotXY[ m ][ 1 ];
+         // angle/dist of the straight car-center-to-spot segment -- see
+         // dimAngleDeg/dimDistFt's own comment on the FloodGeometry struct.
          f.dimAngleDeg = angleFromForward_( f.dimX, f.dimY );
          f.dimDistFt = sqrtf( f.dimX * f.dimX + f.dimY * f.dimY );
-         // no independently-known mount offset for megabars -- fixture position == ground spot
-         f.fixtureDimX = f.dimX; f.fixtureDimY = f.dimY;
-         f.fixtureDimZ = ( m == 0 ) ? MEGABAR_FRONT_Z_FT : MEGABAR_DEFAULT_Z_FT; // m0 = headlight, the front-facing pair
       }
 
       // China: 2 fixtures per corner (front-right/front-left/back-left/
@@ -507,6 +564,9 @@ class CarpetGeometry {
          f.id = c; f.type = FixtureChina;
          f.dmxAddress = (uint8_t)( 37 + 6 * c ); // see README.md, "China lights"
          f.dimX = chDimXY[ c ][ 0 ]; f.dimY = chDimXY[ c ][ 1 ];
+         // angle/dist of the straight car-center-to-spot segment -- same
+         // derivation as megabar's above, see dimAngleDeg/dimDistFt's own
+         // comment on the FloodGeometry struct.
          f.dimAngleDeg = angleFromForward_( f.dimX, f.dimY );
          f.dimDistFt = sqrtf( f.dimX * f.dimX + f.dimY * f.dimY );
          f.fixtureDimX = chMountXY[ c ][ 0 ]; f.fixtureDimY = chMountXY[ c ][ 1 ];
