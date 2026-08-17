@@ -1,45 +1,56 @@
 /* SpeedStripesShow.h
  *
  *    Speed-reactive show driven by CANTroller2's vehicle speed telemetry
- *    (see SpeedLink.h). The two long side rope strips are the only fixtures
- *    that physically run front-to-back along the car's 16ft length (see
- *    README.md, "Perimeter rope lights"); each is divided into 4 alternating
- *    lit/dark bands of 88 LEDs (a quarter of the car's length, 4ft) that
- *    scroll from front toward back at a rate proportional to live speed.
+ *    (see SpeedLink.h). The two long side rope strips physically run
+ *    front-to-back along the car's 16ft length (see README.md, "Perimeter
+ *    rope lights"); each is divided into 4 alternating lit/dark bands,
+ *    each STRIPE_WIDTH_FT_ (4ft, a quarter of the car's length) wide, that
+ *    scroll from front toward back at real vehicle speed.
+ *
+ *    BUGFIX (the actual root cause the user flagged as making the default
+ *    variation "completely wrong," confirmed by comparison against the
+ *    zebra variation, which was already correct): this used to keep its
+ *    own separate internal bookkeeping in LED/pixel units, scrolling at a
+ *    hand-invented `LEDS_PER_MPH_PER_SEC = 4.0f` rate that had nothing to
+ *    do with real vehicle speed -- roughly 8x slower than real, since the
+ *    real conversion (SpeedLink::mphToFtPerSec(), 1.46667 ft/s per mph) at
+ *    this show's 22px/ft side-strand density works out to ~32 LEDs/mph/s,
+ *    not 4. Fixed by unifying onto the SAME real feet-based scroll zebra
+ *    already used (SpeedLink::mphToFtPerSec()) -- position/width/period
+ *    are now all real feet throughout, matching every fixture's own real
+ *    CarpetGeometry dimY, with LightSetters (see its own file header)
+ *    doing every position->pixel/fixture resolution. No show-local pixel-
+ *    unit bookkeeping remains anywhere in this file.
  *
  *    Every other fixture that has any meaningful along-the-length position
  *    joins in too, sampling the exact same scrolling pattern at its own
- *    physical position, so a given stripe's color matches everywhere it's
- *    visible at once -- underneath (china), out to the sides (megabars), and
- *    on top (rope). The pattern also extends conceptually beyond the car's
- *    own front/back edges, so the front/rear megabars and china preview a
- *    stripe approaching before it reaches the carpet, and show it receding
- *    after it leaves:
+ *    real physical position (CarpetGeometry dimY), so a given stripe's
+ *    color matches everywhere it's visible at once -- underneath (china),
+ *    out to the sides (megabars), and on top (rope). The pattern also
+ *    extends conceptually beyond the car's own front/back edges, so the
+ *    front/rear megabars and china preview a stripe approaching before it
+ *    reaches the carpet, and show it receding after it leaves:
  *
- *      - Front 3 megabars (idx 11, 0, 1 -- the headlight and its neighbors)
- *        show the next stripe, sampled one stripe-width (4ft) ahead of the
- *        front corner -- a preview, well before it arrives.
- *      - Front 2 china aimed along the front edge (idx 1, 2) show that same
- *        stripe, sampled right at a 1ft-from-the-edge point -- picks it up
- *        just as it's about to cross onto the carpet.
- *      - Rear 3 megabars (idx 5, 6, 7) and rear 2 china aimed along the back
- *        edge (idx 5, 6) mirror the above symmetrically for the stripe
- *        exiting the back.
- *      - The 4 china aimed along a side edge (idx 0/7 right, 3/4 left) sample
- *        their documented positions directly: 1/3 and 2/3 of the way back
- *        from the front.
- *      - The remaining 6 side megabars (idx 2,3,4 left; 8,9,10 right) sample
- *        that same 1/3, 1/2, 2/3 partition, so the ones nearest a side china
- *        line up with it exactly.
+ *      - Front 3 megabars (the headlight and its neighbors) show the next
+ *        stripe, sampled one stripe-width (4ft) ahead of the front
+ *        megabar's own real Y -- a preview, well before it arrives.
+ *      - Front china aimed along the front edge show that same stripe,
+ *        sampled 1ft ahead of their own real Y -- picks it up just as
+ *        it's about to cross onto the carpet.
+ *      - Rear megabars/china mirror the above symmetrically for the
+ *        stripe exiting the back.
+ *      - Every side china and side megabar samples its OWN independent
+ *        real dimY directly -- no shared/approximated position, no
+ *        grouping beyond the explicit front/rear preview trios above.
  *
- *    Positions are all expressed in the same coordinate as renderSide()'s
- *    localOffset (0 = back corner, SIZEOF_LARGE_NEO-1 = front corner) and
- *    fed through one continuous, periodic sampling function -- valid at any
- *    real value, including the "ahead of the front corner" / "behind the
- *    back corner" positions the front/rear fixtures use, no special-casing
- *    needed. Stripe edges are a smoothed square wave rather than a hard cut
- *    -- FADE_CONTRAST in sampleWave() controls how soft that transition
- *    looks; lower is softer/more analog, higher is closer to a hard edge.
+ *    Position is real feet throughout (car-center-relative, Y+=front,
+ *    same convention as CarpetGeometry) fed through one continuous,
+ *    periodic sampling function -- valid at any real value, including the
+ *    "ahead of the front edge" / "behind the back edge" positions the
+ *    front/rear fixtures use, no special-casing needed. Stripe edges are
+ *    a smoothed square wave rather than a hard cut -- FADE_CONTRAST in
+ *    sampleWave() controls how soft that transition looks; lower is
+ *    softer/more analog, higher is closer to a hard edge.
  *
  *    Color: each stripe (one lit band, one full period of the wave) gets its
  *    own 2-color gradient -- one color at its leading edge, one at its
@@ -54,9 +65,9 @@
  *
  *    Stopped mode: whenever speed is 0, or no speed packet has arrived in
  *    over 4 seconds (SpeedLink gone stale), scrolling simply freezes --
- *    scrollOffset_ stops advancing, so every stripe (rope/megabar/china
- *    alike, since they all derive from the same frozen scrollOffset_) just
- *    holds in place exactly as it was. After a further 10 continuous
+ *    scrollOffsetFt_ stops advancing, so every stripe (rope/megabar/china
+ *    alike, since they all derive from the same frozen scrollOffsetFt_)
+ *    just holds in place exactly as it was. After a further 10 continuous
  *    seconds stopped, each stripe's own hue pair starts slowly, randomly
  *    meandering (meanderHue_/meanderRateWalk_ -- same RandomWalk-based
  *    technique as LighthouseShow's beam hue and FlameShow's shifting hues,
@@ -73,6 +84,8 @@
 #include "LightShow.h"
 #include "SpeedLink.h"
 #include "AudioBoard.h"
+#include "CarpetGeometry.h"
+#include "LightSetters.h"
 #include <math.h>
 
 class SpeedStripesShow : public LightShow {
@@ -81,15 +94,16 @@ class SpeedStripesShow : public LightShow {
    static const uint8_t numVariations_ = 2;
    uint8_t variation_;
 
-   static const int stripeWidth_ = SIZEOF_LARGE_NEO / 4; // 88 LEDs = 4ft, a quarter of the car's 16ft length
-   // sampleWave()'s period is always stripeWidth_*2 at every call site in
-   // this file -- a true compile-time constant, not a runtime parameter --
-   // so it's fixed-pointed here once (8 fractional bits = 1/256 LED
-   // precision) rather than passed in and handled with float division.
+   static constexpr float STRIPE_WIDTH_FT_ = CarpetGeometry::CAR_LENGTH_FT / 4.0f; // 4.0ft, a quarter of the car's 16ft length -- the real physical stripe width
+   // sampleWave()'s period is always STRIPE_WIDTH_FT_*2 at every call site
+   // in this file -- a true compile-time constant, not a runtime
+   // parameter -- so it's fixed-pointed here once (8 fractional bits =
+   // 1/256 ft precision) rather than passed in and handled with float
+   // division.
    static const int FIXED_SHIFT_ = 8;
-   static const int32_t PERIOD_FIXED_ = ( (int32_t)stripeWidth_ * 2 ) << FIXED_SHIFT_;
-   float scrollOffset_ = 0.0f; // LEDs, grows over time while moving; frozen while stopped
-   Timer frameTimer_;          // tracks dt between update() calls
+   static const int32_t PERIOD_FIXED_ = (int32_t)( STRIPE_WIDTH_FT_ * 2.0f * (float)( 1 << FIXED_SHIFT_ ) + 0.5f );
+   float scrollOffsetFt_ = 0.0f; // real feet, grows over time while moving; frozen while stopped
+   Timer frameTimer_;            // tracks dt between update() calls
 
    // random walk toward a freshly-randomized target every ~0.8-1.2s, rather
    // than jumping -- same technique as LighthouseShow's beam hue rate,
@@ -134,13 +148,12 @@ class SpeedStripesShow : public LightShow {
       hashed 2-color gradient wave), so it gets its own small state instead
       of contorting the default variation's machinery to fit both.
 
-      Per-fixture along-length position uses this show's own existing
-      feet/LED conventions (CAR_LENGTH_FT etc. below) -- not the true
-      ground-spot optics the visualizer's zebra used (wash centerDist/aim
-      angle projections, which don't exist anywhere in firmware). Same
-      qualitative behavior (front fixtures preview a stripe out, side
-      fixtures sample the 1/3-1/2-2/3 partition, per README's china
-      layout), simplified to fit this file's existing geometry. */
+      Per-fixture along-length position is each fixture's own INDEPENDENT
+      real ground-spot dimY, from CarpetGeometry (mandate: no more
+      hand-tuned fraction-of-half-length approximation, and no sharing of
+      one sampled value between 2 different real fixtures -- see
+      updateZebra() and the default variation below, both converted the
+      same way). */
    static const uint8_t ZEBRA_HUE_STEP = 11; // hue units (0-255) per stripe -- ~23 stripes (~207ft) per full rainbow cycle
    static constexpr float ZEBRA_STRIPE_WIDTH_FT = 6.0f;
    static constexpr float ZEBRA_FADE_FT = 3.0f;          // stripe-to-stripe and black-overlay border cross-fade width
@@ -181,7 +194,7 @@ class SpeedStripesShow : public LightShow {
       float t = constrain( speedMph, 0.0f, 25.0f ) / 25.0f;
       return 1.0f - 0.4f * t;
    }
-   static CRGB zebraStripeColor( int32_t k, float satFraction ) {
+   static CHSV zebraStripeColor( int32_t k, float satFraction ) {
       int32_t hue = ( ( k * (int32_t)ZEBRA_HUE_STEP ) % 256 + 256 ) % 256;
       return CHSV( (uint8_t)hue, (uint8_t)( satFraction * 255.0f + 0.5f ), 255 );
    }
@@ -189,7 +202,9 @@ class SpeedStripesShow : public LightShow {
    // centered on each one -- same shape as the default variation's stripe
    // boundaries, just linear instead of a smoothed square wave (zebra's
    // hue step is a hard integer jump, not a 2-color gradient to ease
-   // through).
+   // through). Stays HSV except inside the fade zone, where 2 different
+   // hues genuinely need to cross-fade -- same documented RGB-blend
+   // exception as sampleWave() above (see its comment for why).
    CRGB zebraHueColorAt( float pos, float satFraction ) {
       float contPos = pos / ZEBRA_STRIPE_WIDTH_FT;
       int32_t k = (int32_t)floorf( contPos );
@@ -197,12 +212,15 @@ class SpeedStripesShow : public LightShow {
       float distToBoundaryFt = min( frac, 1.0f - frac ) * ZEBRA_STRIPE_WIDTH_FT;
       float halfFade = ZEBRA_FADE_FT / 2.0f;
       if ( distToBoundaryFt >= halfFade ) return zebraStripeColor( k, satFraction );
+      CRGB a, b; float f;
       if ( frac < 0.5f ) {
-         float f = 0.5f + 0.5f * ( distToBoundaryFt / halfFade );
-         return blend( zebraStripeColor( k - 1, satFraction ), zebraStripeColor( k, satFraction ), (uint8_t)( f * 255.0f + 0.5f ) );
+         f = 0.5f + 0.5f * ( distToBoundaryFt / halfFade );
+         a = zebraStripeColor( k - 1, satFraction ); b = zebraStripeColor( k, satFraction );
+      } else {
+         f = 0.5f * ( 1.0f - distToBoundaryFt / halfFade );
+         a = zebraStripeColor( k, satFraction ); b = zebraStripeColor( k + 1, satFraction );
       }
-      float f = 0.5f * ( 1.0f - distToBoundaryFt / halfFade );
-      return blend( zebraStripeColor( k, satFraction ), zebraStripeColor( k + 1, satFraction ), (uint8_t)( f * 255.0f + 0.5f ) );
+      return blend( a, b, (uint8_t)( f * 255.0f + 0.5f ) );
    }
    // BUGFIX (ported from the visualizer prototype): this used to compute
    // the black/colored cell purely from the CURRENT pot value at whatever
@@ -261,7 +279,11 @@ class SpeedStripesShow : public LightShow {
       CRGB hueColor = zebraHueColorAt( pos, satFraction );
       float blackFrac = zebraBlackFraction( pos );
       if ( blackFrac <= 0.0f ) return hueColor;
-      return blend( hueColor, CRGB::Black, (uint8_t)( blackFrac * 255.0f + 0.5f ) );
+      // blending toward pure black is just a brightness scale -- no hue
+      // ambiguity (black has no hue), so this is an exact equivalent of
+      // the old blend(hueColor,Black,...) call, not an approximation.
+      hueColor.nscale8( (uint8_t)( 255.0f * ( 1.0f - blackFrac ) + 0.5f ) );
+      return hueColor;
    }
    // China-only (megabars are excluded per request -- always global max, see
    // updateZebra()) sound-reactive brightness: full global max after 10s+
@@ -274,15 +296,18 @@ class SpeedStripesShow : public LightShow {
       float bassFrac = AudioBoard::getBandHitPercent( BandBass ) / 100.0f;
       return max( ZEBRA_CHINA_REST_FRACTION, bassFrac );
    }
-   void renderZebraSide( int backCornerIdx, int frontCornerIdx, float satFraction ) {
-      static const float halfLengthFt = 8.0f;
-      static const float ledsPerFootLength = SIZEOF_LARGE_NEO / 16.0f;
-      int direction = ( frontCornerIdx > backCornerIdx ) ? 1 : -1;
-      for ( int localOffset = 0; localOffset < SIZEOF_LARGE_NEO; ++localOffset ) {
-         int idx = backCornerIdx + direction * localOffset;
-         float posFt = zebraPosFt_ + ( (float)localOffset / ledsPerFootLength - halfLengthFt );
-         carpet->ropeLeds[ idx ] = zebraColorAt( posFt, satFraction );
-         carpet->ropeLeds[ idx ].w = 0;
+   // Sweeps every real neopixel on one side by its own real Y (same
+   // CarpetGeometry/LightSetters pattern as renderSide() above -- see its
+   // comment) -- no more show-local corner/direction/localOffset math.
+   void renderZebraSide( CarpetGeometry::CarSide side, float satFraction ) {
+      uint16_t count = CarpetGeometry::getSidePixelCount( side );
+      for ( uint16_t local = 0; local < count; ++local ) {
+         int32_t neoId = CarpetGeometry::getNeoByYPixelId( side, local );
+         uint16_t raw = CarpetGeometry::neoIdToRawIndex( neoId );
+         float yFt = CarpetGeometry::getNeoGeom( raw ).yPercent / 100.0f * CarpetGeometry::CAR_LENGTH_FT;
+         CRGB color = zebraColorAt( zebraPosFt_ + yFt, satFraction );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, color, LightSetters::NeoByCircumferenceID{ neoId } );
+         LightSetters::setWhite( carpet, LightSetters::TargetNeo, 0, LightSetters::NeoByCircumferenceID{ neoId } );
       }
    }
    void updateZebra( uint32_t time, float dtSec, bool fresh, float speedMph ) {
@@ -296,50 +321,59 @@ class SpeedStripesShow : public LightShow {
       // variation, which turns them off) they just take on the nearest
       // corner's own zebra color, matching whichever stripe is currently
       // at that end of the car.
-      static const float halfLengthFt = 8.0f;
+      static const float halfLengthFt = CarpetGeometry::CAR_LENGTH_FT / 2.0f; // true car edge -- the rope's own physical corner, not a flood fixture
       CRGB frontEdgeClr = zebraColorAt( zebraPosFt_ + halfLengthFt, satFraction );
       CRGB backEdgeClr  = zebraColorAt( zebraPosFt_ - halfLengthFt, satFraction );
-      for ( int i = 0; i < SIZEOF_SMALL_NEO; ++i ) { carpet->ropeLeds[ i ] = frontEdgeClr; carpet->ropeLeds[ i ].w = 0; }
-      for ( int i = SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO; i < SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO; ++i ) {
-         carpet->ropeLeds[ i ] = backEdgeClr; carpet->ropeLeds[ i ].w = 0;
-      }
-      renderZebraSide( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO - 1, SIZEOF_SMALL_NEO, satFraction );
-      renderZebraSide( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO, NUM_NEO_LEDS_ACTUAL - 1, satFraction );
+      LightSetters::setColor( carpet, LightSetters::TargetNeo, frontEdgeClr,
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideFront, 0 },
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideFront, (int32_t)CarpetGeometry::getSidePixelCount( CarpetGeometry::CarSideFront ) - 1 } );
+      LightSetters::setColor( carpet, LightSetters::TargetNeo, backEdgeClr,
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideBack, 0 },
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideBack, (int32_t)CarpetGeometry::getSidePixelCount( CarpetGeometry::CarSideBack ) - 1 } );
+      renderZebraSide( CarpetGeometry::CarSideRight, satFraction );
+      renderZebraSide( CarpetGeometry::CarSideLeft, satFraction );
 
       // Megabars: always global max, excluded from sound reactivity
       // entirely, per request -- china alone carries zebra's audio
-      // response now.
-      CRGB frontLeadClr = zebraColorAt( zebraPosFt_ + halfLengthFt + ZEBRA_STRIPE_WIDTH_FT, satFraction );
-      carpet->megabarLeds[ 11 ] = frontLeadClr;
-      carpet->megabarLeds[ 0 ]  = frontLeadClr; // headlight -- brightness still governed separately, see MagicCarpet
-      carpet->megabarLeds[ 1 ]  = frontLeadClr;
-      CRGB rearLeadClr = zebraColorAt( zebraPosFt_ - halfLengthFt - ZEBRA_STRIPE_WIDTH_FT, satFraction );
-      carpet->megabarLeds[ 5 ] = rearLeadClr;
-      carpet->megabarLeds[ 6 ] = rearLeadClr;
-      carpet->megabarLeds[ 7 ] = rearLeadClr;
-      CRGB clr13 = zebraColorAt( zebraPosFt_ + halfLengthFt * ( 1.0f / 3.0f ), satFraction );
-      CRGB clr12 = zebraColorAt( zebraPosFt_, satFraction );
-      CRGB clr23 = zebraColorAt( zebraPosFt_ - halfLengthFt * ( 1.0f / 3.0f ), satFraction );
-      carpet->megabarLeds[ 2 ]  = clr13;
-      carpet->megabarLeds[ 3 ]  = clr12;
-      carpet->megabarLeds[ 4 ]  = clr23;
-      carpet->megabarLeds[ 10 ] = clr13;
-      carpet->megabarLeds[ 9 ]  = clr12;
-      carpet->megabarLeds[ 8 ]  = clr23;
+      // response now. zebraPosFt_ is already a car-center-relative,
+      // Y+=front feet coordinate -- each fixture's own real
+      // CarpetGeometry dimY is directly addable to it.
+      float frontMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar0deg ).dimY;
+      CRGB frontLeadClr = zebraColorAt( zebraPosFt_ + frontMegabarY + ZEBRA_STRIPE_WIDTH_FT, satFraction );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar330deg ).dimY } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ frontMegabarY } ); // headlight -- brightness still governed separately, see MagicCarpet
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar30deg ).dimY } );
+      float rearMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar180deg ).dimY;
+      CRGB rearLeadClr = zebraColorAt( zebraPosFt_ + rearMegabarY - ZEBRA_STRIPE_WIDTH_FT, satFraction );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar150deg ).dimY } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ rearMegabarY } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar210deg ).dimY } );
+      // Every fixture below samples its OWN independent real dimY -- no
+      // sharing between fixtures, china or megabar alike (2 fixtures at
+      // the same real Y, e.g. the front-left/front-right pair, legitimately
+      // get the same color because their real geometry actually is
+      // symmetric, not because the code reuses one value for both).
+      auto zebraAt = [&]( float dimY ) { return zebraColorAt( zebraPosFt_ + dimY, satFraction ); };
+      auto setMegabarZebra = [&]( CarpetGeometry::MegabarName m ) {
+         float y = CarpetGeometry::getMegabar( m ).dimY;
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, zebraAt( y ), LightSetters::ByYFt{ y } );
+      };
+      setMegabarZebra( CarpetGeometry::Megabar60deg );
+      setMegabarZebra( CarpetGeometry::Megabar90deg );
+      setMegabarZebra( CarpetGeometry::Megabar120deg );
+      setMegabarZebra( CarpetGeometry::Megabar300deg );
+      setMegabarZebra( CarpetGeometry::Megabar270deg );
+      setMegabarZebra( CarpetGeometry::Megabar240deg );
 
-      // China: same positions as megabars' front/rear/side groups, per
-      // README's china layout ([1,2] front edge, [5,6] back edge, [0]/[3]
-      // 1/3 back, [7]/[4] 2/3 back) -- sound-reactive brightness on top.
+      // China: sound-reactive brightness on top, same positions-from-real-
+      // geometry approach, per README's china layout.
       float chinaBrightness = zebraChinaBrightnessFraction();
-      CRGB frontEdgeChina = zebraColorAt( zebraPosFt_ + halfLengthFt, satFraction );
-      CRGB rearEdgeChina  = zebraColorAt( zebraPosFt_ - halfLengthFt, satFraction );
-      CRGB china13 = clr13, china23 = clr23;
-      CRGB * chinaSrc[ NUM_CHINA_LEDS ] = { &china13, &frontEdgeChina, &frontEdgeChina, &china13, &china23, &rearEdgeChina, &rearEdgeChina, &china23 };
-      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
-         CRGB clr = *chinaSrc[ c ];
-         clr.nscale8( (uint8_t)( chinaBrightness * 255.0f + 0.5f ) );
-         carpet->chinaLeds[ c ] = clr;
-         carpet->chinaLeds[ c ].w = 0;
+      uint8_t brightnessScale = (uint8_t)( chinaBrightness * 255.0f + 0.5f );
+      for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
+         float y = CarpetGeometry::getChina( c ).dimY;
+         CRGB clr = zebraAt( y );
+         clr.nscale8( brightnessScale );
+         LightSetters::setColor( carpet, LightSetters::TargetChina, clr, LightSetters::ByYFt{ y } );
       }
    }
 
@@ -352,13 +386,14 @@ class SpeedStripesShow : public LightShow {
       return 0.925f + 0.075f * cosf( 2.0f * PI * phase );
    }
 
-   static CRGB desaturate( CRGB clr, float satFraction ) {
-      uint8_t maxC = max( clr.r, max( clr.g, clr.b ) );
-      if ( maxC == 0 ) return clr;
-      uint8_t minFloor = (uint8_t)( maxC * ( 1.0f - satFraction ) + 0.5f );
-      if ( clr.r < minFloor ) clr.r = minFloor;
-      if ( clr.g < minFloor ) clr.g = minFloor;
-      if ( clr.b < minFloor ) clr.b = minFloor;
+   // HSV-native (mandate: stay in HSV wherever a show doesn't have a real
+   // reason not to) -- "desaturate toward white by satFraction" is just
+   // scaling the S channel down, no RGB channel-floor math needed. Same
+   // qualitative effect as the old RGB-floor version (both wash the color
+   // toward white as satFraction drops toward 0); the exact curve isn't
+   // bit-identical, but neither was tuned against a specific target curve.
+   static CHSV desaturateHSV( CHSV clr, float satFraction ) {
+      clr.sat = (uint8_t)( (float)clr.sat * satFraction + 0.5f );
       return clr;
    }
 
@@ -394,6 +429,10 @@ class SpeedStripesShow : public LightShow {
    // fully-saturated CHSV(_,255,255) colors, which can never itself
    // produce black -- no separate brightness modulation is needed for
    // stripe boundaries to read as smoothed rather than hard-cut.
+   // pos is real feet, car-center-relative, Y+=front (same convention as
+   // CarpetGeometry) -- NOT LED/pixel units; the fixed-point math below is
+   // purely an internal optimization (avoids float modulo), agnostic to
+   // what unit pos is expressed in.
    CRGB sampleWave( float pos, float satFraction, float meanderOffset ) {
       int32_t posFixed = (int32_t)( pos * (float)( 1 << FIXED_SHIFT_ ) + ( pos >= 0.0f ? 0.5f : -0.5f ) );
       int32_t wrappedFixed = posFixed % PERIOD_FIXED_;
@@ -413,24 +452,35 @@ class SpeedStripesShow : public LightShow {
       uint8_t leadHue = (uint8_t)( ( h & 0xFF ) + (uint8_t)meanderOffset );
       uint8_t trailHue = (uint8_t)( ( ( h >> 8 ) & 0xFF ) + (uint8_t)meanderOffset );
 
-      CRGB leadClr = desaturate( CHSV( leadHue, 255, 255 ), satFraction );
-      CRGB trailClr = desaturate( CHSV( trailHue, 255, 255 ), satFraction );
+      CHSV leadHsv = desaturateHSV( CHSV( leadHue, 255, 255 ), satFraction );
+      CHSV trailHsv = desaturateHSV( CHSV( trailHue, 255, 255 ), satFraction );
+      // Stays HSV up to here -- converts to CRGB only for this one blend,
+      // which is a deliberate, documented exception (see class comment):
+      // FastLED's blend() interpolates RGB channels, not hue; a true HSV
+      // blend would rotate around the hue wheel instead (shorter-path
+      // hue rotation, not a straight RGB crossfade), which is a real,
+      // different visual result -- confirmed with the user to keep the
+      // existing RGB-domain crossfade rather than change this show's
+      // already-tuned stripe-boundary look.
+      CRGB leadClr = leadHsv, trailClr = trailHsv;
       return blend( trailClr, leadClr, phase8 );
    }
 
-   // localOffset for a fixture's along-the-length position, given as a
-   // fraction measured "back from the front" (matching the README's china
-   // wording) -- 0 = at the front corner, 1 = at the back corner.
-   float localOffsetForFracBackFromFront( float frac ) {
-      return ( SIZEOF_LARGE_NEO - 1 ) * ( 1.0f - frac );
-   }
-
-   void renderSide( int backCornerIdx, int frontCornerIdx, float satFraction, float meanderOffset ) {
-      int direction = ( frontCornerIdx > backCornerIdx ) ? 1 : -1;
-      for ( int localOffset = 0; localOffset < SIZEOF_LARGE_NEO; ++localOffset ) {
-         int idx = backCornerIdx + direction * localOffset;
-         carpet->ropeLeds[ idx ] = sampleWave( (float)localOffset + scrollOffset_, satFraction, meanderOffset );
-         carpet->ropeLeds[ idx ].w = 0;
+   // Sweeps every real neopixel on one side, sampling the wave at ITS OWN
+   // real Y (CarpetGeometry, via LightSetters' side-local PixelId lookup
+   // -- O(1)/pixel, same "already know the exact index, address it
+   // directly" pattern as LighthouseShow's rope loop) -- no more show-
+   // local "backCorner/frontCorner/direction/localOffset" bookkeeping
+   // duplicating what CarpetGeometry's NeoGeom already knows for real.
+   void renderSide( CarpetGeometry::CarSide side, float satFraction, float meanderOffset ) {
+      uint16_t count = CarpetGeometry::getSidePixelCount( side );
+      for ( uint16_t local = 0; local < count; ++local ) {
+         int32_t neoId = CarpetGeometry::getNeoByYPixelId( side, local );
+         uint16_t raw = CarpetGeometry::neoIdToRawIndex( neoId );
+         float yFt = CarpetGeometry::getNeoGeom( raw ).yPercent / 100.0f * CarpetGeometry::CAR_LENGTH_FT;
+         CRGB color = sampleWave( yFt + scrollOffsetFt_, satFraction, meanderOffset );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, color, LightSetters::NeoByCircumferenceID{ neoId } );
+         LightSetters::setWhite( carpet, LightSetters::TargetNeo, 0, LightSetters::NeoByCircumferenceID{ neoId } );
       }
    }
 
@@ -450,7 +500,7 @@ class SpeedStripesShow : public LightShow {
       carpet->clearRope();
       carpet->clearMegabars();
       carpet->clearChinas();
-      scrollOffset_ = 0.0f;
+      scrollOffsetFt_ = 0.0f;
       frameTimer_.reset();
       wasStopped_ = false;
       meanderHue_ = 0.0f;
@@ -503,75 +553,94 @@ class SpeedStripesShow : public LightShow {
             while ( meanderHue_ >= 256.0f ) meanderHue_ -= 256.0f;
          }
          meanderOffset = meanderHue_;
-         // scrollOffset_ deliberately NOT advanced -- every stripe just holds
-         // exactly where it was the moment we stopped
+         // scrollOffsetFt_ deliberately NOT advanced -- every stripe just
+         // holds exactly where it was the moment we stopped
       } else {
          wasStopped_ = false;
          meanderHue_ = 0.0f; // next stop starts fresh, not mid-drift
 
-         static const float LEDS_PER_MPH_PER_SEC = 4.0f;
-         scrollOffset_ += speedMph * LEDS_PER_MPH_PER_SEC * dtSec;
-         float period = stripeWidth_ * 2.0f;
-         while ( scrollOffset_ >= period ) scrollOffset_ -= period; // keep it bounded; sampleWave() is periodic anyway
+         // Real feet/sec, same conversion zebra already used -- see class
+         // comment's BUGFIX note (this used to be a hand-invented,
+         // ~8x-too-slow LED-based rate with no real relationship to speed).
+         scrollOffsetFt_ += SpeedLink::mphToFtPerSec( speedMph ) * dtSec;
+         float periodFt = STRIPE_WIDTH_FT_ * 2.0f;
+         while ( scrollOffsetFt_ >= periodFt ) scrollOffsetFt_ -= periodFt; // keep it bounded; sampleWave() is periodic anyway
       }
 
-      // front/back rope edges stay off -- they run side to side, not front to back
-      for ( int i = 0; i < SIZEOF_SMALL_NEO; ++i ) carpet->ropeLeds[ i ] = CRGB::Black;
-      for ( int i = SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO; i < SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO; ++i ) {
-         carpet->ropeLeds[ i ] = CRGB::Black;
-      }
+      // front/back rope edges stay off -- they run side to side, not front
+      // to back. Range-set spans the whole side (0..count-1 in that
+      // side's own local pixel numbering).
+      LightSetters::setColor( carpet, LightSetters::TargetNeo, CHSV( 0, 0, 0 ),
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideFront, 0 },
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideFront, (int32_t)CarpetGeometry::getSidePixelCount( CarpetGeometry::CarSideFront ) - 1 } );
+      LightSetters::setColor( carpet, LightSetters::TargetNeo, CHSV( 0, 0, 0 ),
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideBack, 0 },
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideBack, (int32_t)CarpetGeometry::getSidePixelCount( CarpetGeometry::CarSideBack ) - 1 } );
 
-      // right side: back corner near SIZEOF_SMALL_NEO+SIZEOF_LARGE_NEO, front corner near SIZEOF_SMALL_NEO
-      renderSide( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO - 1, SIZEOF_SMALL_NEO, satFraction, meanderOffset );
-      // left side: back corner near SIZEOF_SMALL_NEO*2+SIZEOF_LARGE_NEO, front corner at the far end of the array
-      renderSide( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO, NUM_NEO_LEDS_ACTUAL - 1, satFraction, meanderOffset );
+      renderSide( CarpetGeometry::CarSideRight, satFraction, meanderOffset );
+      renderSide( CarpetGeometry::CarSideLeft, satFraction, meanderOffset );
 
       carpet->clearMegabars();
       carpet->clearChinas();
 
-      static const float CAR_LENGTH_FT = 16.0f; // front-to-back, measured
-      static const float LEDS_PER_FOOT = SIZEOF_LARGE_NEO / CAR_LENGTH_FT; // 22
       static const float EDGE_APPROACH_FT = 1.0f; // china "about 1ft from edge" pickup point
 
-      // front: megabars preview a stripe-width (4ft) out; china pick it up right at the 1ft mark
-      CRGB frontLeadClr = sampleWave( ( SIZEOF_LARGE_NEO - 1 ) + stripeWidth_ + scrollOffset_, satFraction, meanderOffset );
-      carpet->megabarLeds[ 11 ] = frontLeadClr;
-      carpet->megabarLeds[ 0 ]  = frontLeadClr; // headlight -- brightness still governed separately, see MagicCarpet
-      carpet->megabarLeds[ 1 ]  = frontLeadClr;
-      CRGB frontEdgeClr = sampleWave( ( SIZEOF_LARGE_NEO - 1 ) + LEDS_PER_FOOT * EDGE_APPROACH_FT + scrollOffset_, satFraction, meanderOffset );
-      carpet->chinaLeds[ 1 ] = frontEdgeClr; carpet->chinaLeds[ 1 ].w = 0;
-      carpet->chinaLeds[ 2 ] = frontEdgeClr; carpet->chinaLeds[ 2 ].w = 0;
+      // front: megabars preview a stripe-width (4ft) out from their own real
+      // ground-spot Y; china pick it up right at the 1ft-from-edge mark from
+      // theirs -- base position is each fixture's own real CarpetGeometry
+      // dimY. Written via LightSetters::ByYFt -- this show's "coordinate"
+      // is fundamentally real feet, per the same reasoning LighthouseShow
+      // uses ByAngleDeg throughout (even where the fixture is already
+      // known): the setter call documents WHY this fixture is being
+      // addressed, not just which raw index it happens to be.
+      float frontMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar0deg ).dimY;
+      CRGB frontLeadClr = sampleWave( frontMegabarY + STRIPE_WIDTH_FT_ + scrollOffsetFt_, satFraction, meanderOffset );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar330deg ).dimY } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ frontMegabarY } ); // headlight -- brightness still governed separately, see MagicCarpet
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar30deg ).dimY } );
+      float frontChinaY = CarpetGeometry::getChina( CarpetGeometry::ChinaFrontRightFront ).dimY;
+      CRGB frontEdgeClr = sampleWave( frontChinaY + EDGE_APPROACH_FT + scrollOffsetFt_, satFraction, meanderOffset );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByYFt{ frontChinaY } );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByYFt{ CarpetGeometry::getChina( CarpetGeometry::ChinaFrontLeftFront ).dimY } );
 
       // rear: mirror of the above, behind the back corner
-      CRGB rearLeadClr = sampleWave( -(float)stripeWidth_ + scrollOffset_, satFraction, meanderOffset );
-      carpet->megabarLeds[ 5 ] = rearLeadClr;
-      carpet->megabarLeds[ 6 ] = rearLeadClr;
-      carpet->megabarLeds[ 7 ] = rearLeadClr;
-      CRGB rearEdgeClr = sampleWave( -LEDS_PER_FOOT * EDGE_APPROACH_FT + scrollOffset_, satFraction, meanderOffset );
-      carpet->chinaLeds[ 5 ] = rearEdgeClr; carpet->chinaLeds[ 5 ].w = 0;
-      carpet->chinaLeds[ 6 ] = rearEdgeClr; carpet->chinaLeds[ 6 ].w = 0;
+      float rearMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar180deg ).dimY;
+      CRGB rearLeadClr = sampleWave( rearMegabarY - STRIPE_WIDTH_FT_ + scrollOffsetFt_, satFraction, meanderOffset );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar150deg ).dimY } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ rearMegabarY } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar210deg ).dimY } );
+      float rearChinaY = CarpetGeometry::getChina( CarpetGeometry::ChinaBackLeftBack ).dimY;
+      CRGB rearEdgeClr = sampleWave( rearChinaY - EDGE_APPROACH_FT + scrollOffsetFt_, satFraction, meanderOffset );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByYFt{ rearChinaY } );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByYFt{ CarpetGeometry::getChina( CarpetGeometry::ChinaBackRightBack ).dimY } );
 
-      // side positions, shared by the side china and the remaining side megabars
-      float pos13 = localOffsetForFracBackFromFront( 1.0f / 3.0f ) + scrollOffset_;
-      float pos12 = localOffsetForFracBackFromFront( 0.5f ) + scrollOffset_;
-      float pos23 = localOffsetForFracBackFromFront( 2.0f / 3.0f ) + scrollOffset_;
-      CRGB clr13 = sampleWave( pos13, satFraction, meanderOffset );
-      CRGB clr12 = sampleWave( pos12, satFraction, meanderOffset );
-      CRGB clr23 = sampleWave( pos23, satFraction, meanderOffset );
+      // side positions: every fixture samples its OWN independent real
+      // dimY -- no sharing between china and megabar (an earlier version
+      // of this code had china and its geometrically-nearest side megabar
+      // share one sampled value; that was never something asked for --
+      // it was a holdover from the old pre-geometry code, which happened
+      // to reuse one hand-tuned fraction constant for both simply because
+      // that's what the old approximation had on hand).
+      auto sideColorAt = [&]( float dimY ) { return sampleWave( dimY + scrollOffsetFt_, satFraction, meanderOffset ); };
+      auto setChinaBySide = [&]( CarpetGeometry::ChinaName c ) {
+         float y = CarpetGeometry::getChina( c ).dimY;
+         LightSetters::setColor( carpet, LightSetters::TargetChina, sideColorAt( y ), LightSetters::ByYFt{ y } );
+      };
+      auto setMegabarBySide = [&]( CarpetGeometry::MegabarName m ) {
+         float y = CarpetGeometry::getMegabar( m ).dimY;
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, sideColorAt( y ), LightSetters::ByYFt{ y } );
+      };
+      setChinaBySide( CarpetGeometry::ChinaFrontRightSide );
+      setChinaBySide( CarpetGeometry::ChinaBackRightSide );
+      setChinaBySide( CarpetGeometry::ChinaFrontLeftSide );
+      setChinaBySide( CarpetGeometry::ChinaBackLeftSide );
 
-      // side china: front one on each side at 1/3 back from front, rear one at 2/3
-      carpet->chinaLeds[ 0 ] = clr13; carpet->chinaLeds[ 0 ].w = 0; // front-right, right edge
-      carpet->chinaLeds[ 7 ] = clr23; carpet->chinaLeds[ 7 ].w = 0; // back-right, right edge
-      carpet->chinaLeds[ 3 ] = clr13; carpet->chinaLeds[ 3 ].w = 0; // front-left, left edge
-      carpet->chinaLeds[ 4 ] = clr23; carpet->chinaLeds[ 4 ].w = 0; // back-left, left edge
-
-      // remaining 3 megabars per side, same 1/3, 1/2, 2/3 partition
-      carpet->megabarLeds[ 2 ]  = clr13; // 60 deg, left, nearer front
-      carpet->megabarLeds[ 3 ]  = clr12; // 90 deg, dead left
-      carpet->megabarLeds[ 4 ]  = clr23; // 120 deg, left, nearer back
-      carpet->megabarLeds[ 10 ] = clr13; // 300 deg, right, nearer front
-      carpet->megabarLeds[ 9 ]  = clr12; // 270 deg, dead right
-      carpet->megabarLeds[ 8 ]  = clr23; // 240 deg, right, nearer back
+      setMegabarBySide( CarpetGeometry::Megabar60deg );
+      setMegabarBySide( CarpetGeometry::Megabar90deg );
+      setMegabarBySide( CarpetGeometry::Megabar120deg );
+      setMegabarBySide( CarpetGeometry::Megabar300deg );
+      setMegabarBySide( CarpetGeometry::Megabar270deg );
+      setMegabarBySide( CarpetGeometry::Megabar240deg );
    }
 };
 

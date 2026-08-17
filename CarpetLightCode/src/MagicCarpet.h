@@ -71,10 +71,16 @@
 #define SIZEOF_NEO_STRIP ( NUM_NEO_LEDS_PER_STRIP * sizeof( CRGB ) )
 #define SIZEOF_NEO_LEDS ( NUM_NEO_LEDS_ACTUAL * sizeof( CRGBW ) )
 #define SIZEOF_NEO_SHOW_LEDS ( NUM_NEOPIXEL_STRIPS * SIZEOF_NEO_STRIP )
-#define NEO0_OFFSET 0 // small
-#define NEO1_OFFSET SIZEOF_SMALL_NEO // large
-#define NEO2_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO ) // large
-#define NEO3_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO * 2 ) // small
+// BUGFIX: NEO3_OFFSET's formula didn't match this file's own real hardware-
+// output code (show(), below, which literally uses (SIZEOF_SMALL_NEO*2)+
+// SIZEOF_LARGE_NEO for the left strand's offset) -- these 4 defines were
+// never actually referenced by show() itself (it uses the raw expressions
+// directly), so nothing exercised NEO3_OFFSET until CarpetGeometry.h's
+// strand table started using it, which is what surfaced this.
+#define NEO0_OFFSET 0 // small (front)
+#define NEO1_OFFSET SIZEOF_SMALL_NEO // large (right)
+#define NEO2_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO ) // small (back)
+#define NEO3_OFFSET ( ( SIZEOF_SMALL_NEO * 2 ) + SIZEOF_LARGE_NEO ) // large (left)
 #define NEO_PORT_BANK ( WS2811_PORTD )
 // Real, current pin assignments for all 4 physical rope strands. These are
 // the actual source of truth: change one here to match new real wiring and

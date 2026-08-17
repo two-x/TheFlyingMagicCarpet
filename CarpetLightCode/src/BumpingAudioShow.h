@@ -41,25 +41,16 @@ const CRGB bottomC[] {
  CRGB( 248, 247, 5 ),
 };
 
-// Front/rear vs left/right megabar grouping for new_standard's cycle 2 --
-// derived from LighthouseShow.h's own megabar angle convention
-// (wrap360(-m*30), front=0/right=90/back=180/left=270 -- the only per-
-// megabar geometric convention firmware actually has, positional (x,y)
-// tables being a visualizer-only rendering concept), classifying each of
-// the 12 evenly-30-deg-spaced megabars into whichever pair of opposite
-// edges its angle sits closest to.
-static const int NEWSTD_FRONT_REAR_MEGABARS[6] = { 0, 1, 5, 6, 7, 11 };
-static const int NEWSTD_LEFT_RIGHT_MEGABARS[6] = { 2, 3, 4, 8, 9, 10 };
-// China grouping, per README's china layout / SpeedStripesShow.h's own
-// comment: [1,2] aimed along the front edge, [5,6] along the back edge,
-// [0,3,4,7] aimed along a side edge.
-static const int NEWSTD_CHINA_FRONTBACK[4] = { 1, 2, 5, 6 };
-static const int NEWSTD_CHINA_SIDES[4] = { 0, 3, 4, 7 };
-// sub_standard megabar cycle option 3: each megabar paired with its exact
-// opposite (180deg away -- +6 positions around the 12-megabar, 30deg-spaced
-// ring, same angle convention as LighthouseShow.h/NEWSTD_FRONT_REAR_MEGABARS
-// above), forming 6 pairs.
-static const int SUBSTD_MEGABAR_PAIRS[6][2] = { { 0, 6 }, { 1, 7 }, { 2, 8 }, { 3, 9 }, { 4, 10 }, { 5, 11 } };
+// BUGFIX (mandate): the front/rear-vs-left/right megabar grouping and
+// front/back-vs-side china grouping used to be hardcoded literal index
+// arrays, hand-derived once from LighthouseShow.h's angle convention and
+// never revisited -- exactly the "someone worked out the geometry by hand
+// and hardcoded the result" pattern this session's mandate exists to
+// catch (values confirmed correct against real CarpetGeometry angles
+// before removal, so this wasn't an active bug, just a real duplication
+// risk). Replaced with EqualizerShow::classifyNewStdFromGeometry() below,
+// computed live from CarpetGeometry, same pattern as this file's own
+// pre-existing classifyVuFloodsFromGeometry().
 
 class EqualizerShow : public LightShow {
  private:
@@ -117,17 +108,42 @@ class EqualizerShow : public LightShow {
    // ported back, updateVuMeter() clears megabar/china every call and never
    // refills them except during silence's swap-flash idle pattern -- floods
    // stay completely black through any amount of real, actual sound. Real
-   // front/back role from CarpetGeometry (yFt>0 = front), not the JS
+   // front/back role from CarpetGeometry (dimY>0 = front), not the JS
    // mirror's visualizer-only canvas-pixel CAR_Y comparison.
    enum VuFbRole { VuRoleFront = 0, VuRoleBack = 1 };
    uint8_t vuMegabarRole_[ NUM_MEGABAR_LEDS ];
    uint8_t vuChinaRole_[ NUM_CHINA_LEDS ];
    void classifyVuFloodsFromGeometry() {
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
-         vuMegabarRole_[ m ] = ( CarpetGeometry::getMegabarPosition( m ).yFt > 0.0f ) ? VuRoleFront : VuRoleBack;
+         vuMegabarRole_[ m ] = ( CarpetGeometry::getMegabar( m ).dimY > 0.0f ) ? VuRoleFront : VuRoleBack;
       }
       for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
-         vuChinaRole_[ c ] = ( CarpetGeometry::getChinaPosition( c ).yFt > 0.0f ) ? VuRoleFront : VuRoleBack;
+         vuChinaRole_[ c ] = ( CarpetGeometry::getChina( c ).dimY > 0.0f ) ? VuRoleFront : VuRoleBack;
+      }
+   }
+
+   // new_standard/sub_standard's own front/back-vs-side china grouping --
+   // computed live from real CarpetGeometry angles, same pattern as
+   // classifyVuFloodsFromGeometry() above (see this file's top-of-file
+   // BUGFIX comment for what this replaced). China (unlike megabars) isn't
+   // evenly 30deg-spaced, so there's no clean "step by angle" loop for it
+   // the way megabars get below -- classified once per fixture instead.
+   // Megabar patterns (front/rear-vs-left/right, cardinal-vs-corner,
+   // opposite-pairs) are now computed directly inline, stepping by real
+   // 30deg multiples, at each use site below -- no cached per-index
+   // classification needed there, per explicit request ("handled within
+   // the lightshow").
+   static float angDist_( float a, float b ) {
+      float d = fabsf( a - b );
+      return ( d > 180.0f ) ? 360.0f - d : d;
+   }
+   bool chinaIsFrontBack_[ NUM_CHINA_LEDS ];
+   void classifyNewStdFromGeometry() {
+      for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
+         float a = CarpetGeometry::getChina( c ).dimAngleDeg;
+         float dFrontBack = min( angDist_( a, 0.0f ), angDist_( a, 180.0f ) );
+         float dSide = min( angDist_( a, 90.0f ), angDist_( a, 270.0f ) );
+         chinaIsFrontBack_[ c ] = ( dFrontBack <= dSide );
       }
    }
 
@@ -299,6 +315,7 @@ class EqualizerShow : public LightShow {
       potTakenOver_ = false;
       eqFrameTimer_.reset();
       classifyVuFloodsFromGeometry();
+      classifyNewStdFromGeometry();
 
       newStdHueTimeS_ = 0.0f; newStdSatTimeS_ = 0.0f;
       chinaCycler_.reset( 3 );
@@ -492,41 +509,20 @@ class EqualizerShow : public LightShow {
       // in AudioBoard, tunable via the Audio config screen's decay-rate
       // subsetting) instead of this show's own ad-hoc lastlow tracking --
       // per request, all EqualizerShow variations use hit instead of level.
-      CRGB dmxclr;
+      // Cardinal megabars (0/90/180/270deg) get treble; the other 8
+      // (every other 30deg step) get bass -- stepped by real angle, not
+      // DMX-order index, so the geometric intent (cardinal vs. non-
+      // cardinal) stays obvious/robust in code, same reasoning as
+      // NightriderShow's own 30deg-stepped flood loop.
       uint8_t lastlow = (uint8_t)( (uint16_t)AudioBoard::getBandHitPercent( BandBass ) * 255 / 100 );
-      dmxclr = blend( CRGB::Black, clr2, lastlow );
-      carpet->megabarLeds[1] = dmxclr;
-      carpet->megabarLeds[2] = dmxclr;
-      carpet->megabarLeds[4] = dmxclr;
-      carpet->megabarLeds[5] = dmxclr;
-      carpet->megabarLeds[7] = dmxclr;
-      carpet->megabarLeds[8] = dmxclr;
-      carpet->megabarLeds[10] = dmxclr;
-      carpet->megabarLeds[11] = dmxclr;
-
-
+      CRGB bassClr = blend( CRGB::Black, clr2, lastlow );
       int highval = (int)( (uint16_t)AudioBoard::getBandHitPercent( BandTreble ) * 255 / 100 );
-      // Serial.print("highval: ");
-      // Serial.println(highval);
-      /*static int lasthigh = highval;
-      Serial.print("lasthigh: ");
-      Serial.println(highval);
-      Serial.flush();
-      if (highval > 100 && highval > lasthigh) {
-       lasthigh = highval;
-      } else {
-       lasthigh = lasthigh > 15 ? lasthigh - 15 : 0;
+      CRGB trebleClr = blend( CRGB::Black, clr1, highval );
+      for ( int step = 0; step < 12; ++step ) {
+         float angle = (float)step * 30.0f;
+         bool isCardinal = ( step % 3 == 0 );
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, isCardinal ? trebleClr : bassClr, LightSetters::ByAngleDeg{ angle } );
       }
-      Serial.print("lasthigh: ");
-      Serial.println(lasthigh);
-      Serial.flush();*/
-      // dmxclr = blend( dmxclr, clr1, highval );
-      dmxclr = blend( CRGB::Black, clr1, highval );
-
-      carpet->megabarLeds[0] = dmxclr;
-      carpet->megabarLeds[3] = dmxclr;
-      carpet->megabarLeds[6] = dmxclr;
-      carpet->megabarLeds[9] = dmxclr;
 
 
 
@@ -886,8 +882,7 @@ class EqualizerShow : public LightShow {
       bassChina.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
       trebleChina.nscale8( (uint8_t)( (uint16_t)trebleHit * 255 / 100 ) );
       if ( chinaCycler_.option == 0 ) {
-         for ( int i = 0; i < 4; ++i ) carpet->chinaLeds[ NEWSTD_CHINA_FRONTBACK[ i ] ] = bassChina;
-         for ( int i = 0; i < 4; ++i ) carpet->chinaLeds[ NEWSTD_CHINA_SIDES[ i ] ] = trebleChina;
+         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) carpet->chinaLeds[ c ] = chinaIsFrontBack_[ c ] ? bassChina : trebleChina;
       } else if ( chinaCycler_.option == 1 ) {
          for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) carpet->chinaLeds[ c ] = bassChina;
       } else {
@@ -923,15 +918,28 @@ class EqualizerShow : public LightShow {
       bassMb.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
       trebleMb.nscale8( (uint8_t)( (uint16_t)trebleHit * 255 / 100 ) );
       if ( megabarCycler_.option == 0 ) {
-         for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
-            bool isMod3 = ( m % 3 == 0 );
-            carpet->megabarLeds[ m ] = ( isMod3 == newStdCycle1TrebleIsMod3_ ) ? trebleMb : bassMb;
+         // cardinal (0/90/180/270deg) vs corner megabars -- stepped by real
+         // angle (every 30deg), not DMX-order index, per explicit request.
+         for ( int step = 0; step < 12; ++step ) {
+            float angle = (float)step * 30.0f;
+            bool isMod3 = ( step % 3 == 0 );
+            CRGB clr = ( isMod3 == newStdCycle1TrebleIsMod3_ ) ? trebleMb : bassMb;
+            LightSetters::setColor( carpet, LightSetters::TargetMegabar, clr, LightSetters::ByAngleDeg{ angle } );
          }
       } else if ( megabarCycler_.option == 1 ) {
+         // front/rear vs left/right -- stepped by real angle; classified
+         // inline (nearest to the front-back axis vs the left-right axis)
+         // rather than a precomputed per-index table.
          int swapNum = (int)( megabarOptionTimer_.elapsed() / 2000 ); // every 2s
          bool frontRearIsBass = ( swapNum % 2 == 0 ) ? newStdCycle2FrontRearIsBass_ : !newStdCycle2FrontRearIsBass_;
-         for ( int i = 0; i < 6; ++i ) carpet->megabarLeds[ NEWSTD_FRONT_REAR_MEGABARS[ i ] ] = frontRearIsBass ? bassMb : trebleMb;
-         for ( int i = 0; i < 6; ++i ) carpet->megabarLeds[ NEWSTD_LEFT_RIGHT_MEGABARS[ i ] ] = frontRearIsBass ? trebleMb : bassMb;
+         for ( int step = 0; step < 12; ++step ) {
+            float angle = (float)step * 30.0f;
+            float dFrontRear = min( angDist_( angle, 0.0f ), angDist_( angle, 180.0f ) );
+            float dLeftRight = min( angDist_( angle, 90.0f ), angDist_( angle, 270.0f ) );
+            bool isFrontRear = ( dFrontRear <= dLeftRight );
+            bool wantsBass = isFrontRear ? frontRearIsBass : !frontRearIsBass;
+            LightSetters::setColor( carpet, LightSetters::TargetMegabar, wantsBass ? bassMb : trebleMb, LightSetters::ByAngleDeg{ angle } );
+         }
       } else if ( megabarCycler_.option == 2 ) {
          // Few-random-floods phase. On each qualifying BASS edge, a fresh
          // 2-4 (re-rolled every hit, per request) currently-black megabars
@@ -981,20 +989,24 @@ class EqualizerShow : public LightShow {
          }
       } else {
          // sub_standard-only option 3: 12 megabars paired into 6
-         // opposite-pairs (SUBSTD_MEGABAR_PAIRS); at the start of EVERY bass
-         // hit (not just on megabarCycler_'s own much-slower option-change
-         // cadence), 3 pairs are freshly randomized to treble, the other 3
-         // to bass -- a per-hit reshuffle, per request.
+         // opposite-pairs, each pair stepped by real angle (p*30deg and
+         // its real 180deg-opposite, p*30+180 -- the setter's own
+         // nearest-match resolves that directly, no precomputed opposite
+         // table needed); at the start of EVERY bass hit (not just on
+         // megabarCycler_'s own much-slower option-change cadence), 3
+         // pairs are freshly randomized to treble, the other 3 to bass --
+         // a per-hit reshuffle, per request.
          if ( bassEdge ) {
             int idxs[ 6 ] = { 0, 1, 2, 3, 4, 5 };
             for ( int i = 5; i > 0; --i ) { int j = random( i + 1 ); int t = idxs[ i ]; idxs[ i ] = idxs[ j ]; idxs[ j ] = t; }
             for ( int p = 0; p < 6; ++p ) subPairIsBass_[ p ] = false;
             for ( int i = 0; i < 3; ++i ) subPairIsBass_[ idxs[ i ] ] = true; // 3 random pairs -> bass, other 3 -> treble
          }
-         for ( int p = 0; p < 6; ++p ) {
+         for ( uint8_t p = 0; p < 6; ++p ) {
+            float angle = (float)p * 30.0f;
             CRGB clr = subPairIsBass_[ p ] ? bassMb : trebleMb;
-            carpet->megabarLeds[ SUBSTD_MEGABAR_PAIRS[ p ][ 0 ] ] = clr;
-            carpet->megabarLeds[ SUBSTD_MEGABAR_PAIRS[ p ][ 1 ] ] = clr;
+            LightSetters::setColor( carpet, LightSetters::TargetMegabar, clr, LightSetters::ByAngleDeg{ angle } );
+            LightSetters::setColor( carpet, LightSetters::TargetMegabar, clr, LightSetters::ByAngleDeg{ angle + 180.0f } );
          }
       }
       if ( time - newStdMegabarFadeStartMs_ < NEWSTD_FADE_MS ) {

@@ -31,20 +31,63 @@ int web_getNumMegabarLeds() { return NUM_MEGABAR_LEDS; }
 EMSCRIPTEN_KEEPALIVE
 int web_getNumChinaLeds() { return NUM_CHINA_LEDS; }
 
-// Real fixture ground-spot positions, straight from CarpetGeometry.h --
+// Real fixture GROUND-SPOT positions, straight from CarpetGeometry.h --
 // the visualizer reads these instead of maintaining its own position
-// tables, per the zero-duplication mandate (a previous, JS-only china
-// nudge for rendering legibility had silently diverged from the real
-// geometry here -- fixed by making CarpetGeometry.h the one real source
-// and having the visualizer simply extract it, no nudging of its own).
+// tables, per the zero-duplication mandate. This is dimX/dimY -- what a
+// real light show sees (china pairs are co-located here, matching real
+// show behavior; see CarpetGeometry.h's file header for why).
 EMSCRIPTEN_KEEPALIVE
-float web_getMegabarXFt( int idx ) { return CarpetGeometry::getMegabarPosition( (uint8_t)idx ).xFt; }
+float web_getMegabarXFt( int idx ) { return CarpetGeometry::getMegabar( (uint8_t)idx ).dimX; }
 EMSCRIPTEN_KEEPALIVE
-float web_getMegabarYFt( int idx ) { return CarpetGeometry::getMegabarPosition( (uint8_t)idx ).yFt; }
+float web_getMegabarYFt( int idx ) { return CarpetGeometry::getMegabar( (uint8_t)idx ).dimY; }
 EMSCRIPTEN_KEEPALIVE
-float web_getChinaXFt( int idx ) { return CarpetGeometry::getChinaPosition( (uint8_t)idx ).xFt; }
+float web_getChinaXFt( int idx ) { return CarpetGeometry::getChina( (uint8_t)idx ).dimX; }
 EMSCRIPTEN_KEEPALIVE
-float web_getChinaYFt( int idx ) { return CarpetGeometry::getChinaPosition( (uint8_t)idx ).yFt; }
+float web_getChinaYFt( int idx ) { return CarpetGeometry::getChina( (uint8_t)idx ).dimY; }
+// Real fixture MOUNT position (fixtureDimX/Y/Z) -- visualizer-only (no
+// real light show reads this); china pairs are genuinely offset here
+// (2 physical fixtures sharing one corner bracket, aimed ~90deg apart),
+// unlike their co-located ground spot above. Z is feet off the ground,
+// for the visualizer's 3D-model rendering (light cone height).
+EMSCRIPTEN_KEEPALIVE
+float web_getMegabarFixtureXFt( int idx ) { return CarpetGeometry::getMegabar( (uint8_t)idx ).fixtureDimX; }
+EMSCRIPTEN_KEEPALIVE
+float web_getMegabarFixtureYFt( int idx ) { return CarpetGeometry::getMegabar( (uint8_t)idx ).fixtureDimY; }
+EMSCRIPTEN_KEEPALIVE
+float web_getChinaFixtureXFt( int idx ) { return CarpetGeometry::getChina( (uint8_t)idx ).fixtureDimX; }
+EMSCRIPTEN_KEEPALIVE
+float web_getChinaFixtureYFt( int idx ) { return CarpetGeometry::getChina( (uint8_t)idx ).fixtureDimY; }
+EMSCRIPTEN_KEEPALIVE
+float web_getMegabarZFt( int idx ) { return CarpetGeometry::getMegabar( (uint8_t)idx ).fixtureDimZ; }
+EMSCRIPTEN_KEEPALIVE
+float web_getChinaZFt( int idx ) { return CarpetGeometry::getChina( (uint8_t)idx ).fixtureDimZ; }
+// Real DMX addresses, straight from CarpetGeometry.h -- see README.md.
+EMSCRIPTEN_KEEPALIVE
+int web_getMegabarDmxAddress( int idx ) { return CarpetGeometry::getMegabar( (uint8_t)idx ).dmxAddress; }
+EMSCRIPTEN_KEEPALIVE
+int web_getChinaDmxAddress( int idx ) { return CarpetGeometry::getChina( (uint8_t)idx ).dmxAddress; }
+// Angle-based getters -- exposed for direct verification/debugging.
+EMSCRIPTEN_KEEPALIVE
+int web_getMegabarByAngle( float deg ) { return CarpetGeometry::getMegabarByAngle( deg ); }
+EMSCRIPTEN_KEEPALIVE
+int web_getChinaByAngle( float deg ) { return CarpetGeometry::getChinaByAngle( deg ); }
+// Neo CarSide-based getters -- exposed for direct verification/debugging.
+EMSCRIPTEN_KEEPALIVE
+int web_getNeoByYPixel( int side, float yPixel ) { return CarpetGeometry::getNeoByYPixel( (CarpetGeometry::CarSide)side, yPixel ); }
+EMSCRIPTEN_KEEPALIVE
+int web_getNeoByXPixel( int side, float xPixel ) { return CarpetGeometry::getNeoByXPixel( (CarpetGeometry::CarSide)side, xPixel ); }
+EMSCRIPTEN_KEEPALIVE
+float web_getMaxYPixel( int side ) { return CarpetGeometry::getMaxYPixel( (CarpetGeometry::CarSide)side ); }
+EMSCRIPTEN_KEEPALIVE
+float web_getMaxXPixel( int side ) { return CarpetGeometry::getMaxXPixel( (CarpetGeometry::CarSide)side ); }
+// Real vehicle dimensions -- the visualizer's canvas layout reads these
+// instead of keeping its own hardcoded CAR_W_FT/CAR_H_FT/FRINGE_LENGTH_FT.
+EMSCRIPTEN_KEEPALIVE
+float web_getCarWidthFt() { return CarpetGeometry::CAR_WIDTH_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getCarLengthFt() { return CarpetGeometry::CAR_LENGTH_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getFringeLengthFt() { return CarpetGeometry::FRINGE_LENGTH_FT; }
 EMSCRIPTEN_KEEPALIVE
 int web_sizeofRopeLed() { return sizeof( carpet->ropeLeds[ 0 ] ); }
 EMSCRIPTEN_KEEPALIVE

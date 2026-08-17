@@ -80,6 +80,7 @@
 
 #include "LightShow.h"
 #include "CarpetGeometry.h"
+#include "LightSetters.h"
 #include "AudioBoard.h"
 #include <math.h>
 
@@ -194,14 +195,17 @@ class LighthouseShow : public LightShow {
    // their falloffs overlapped, which reads as a muddy blend rather than
    // either beam's real color. Now picks the single brighter beam
    // entirely -- its own hue, at its own computed brightness -- with no
-   // blending of any kind between the two.
-   static CRGB winnerColorAt( float pointAngle, float angle1, uint8_t hue1, float angle2, uint8_t hue2, uint8_t satByte ) {
+   // blending of any kind between the two. Returns CHSV, not CRGB -- stays
+   // in HSV space until the actual write (see LightSetters.h); RGB
+   // conversion happens exactly once, at that point, via FastLED's
+   // integer-only hsv2rgb_rainbow().
+   static CHSV winnerColorAt( float pointAngle, float angle1, uint8_t hue1, float angle2, uint8_t hue2, uint8_t satByte ) {
       uint8_t b1 = beamBrightnessAt( pointAngle, angle1 );
       uint8_t b2 = beamBrightnessAt( pointAngle, angle2 );
       uint8_t winBright = max( b1, b2 );
-      if ( winBright == 0 ) return CRGB::Black;
+      if ( winBright == 0 ) return CHSV( 0, 0, 0 );
       uint8_t winHue = ( b1 >= b2 ) ? hue1 : hue2;
-      return (CRGB)CHSV( winHue, satByte, winBright );
+      return CHSV( winHue, satByte, winBright );
    }
 
    // Edge-triggered "new hit" detector for VarChinaReact -- deliberately
@@ -255,11 +259,11 @@ class LighthouseShow : public LightShow {
                bright = (uint8_t)( (float)FLASH_BRIGHTNESS * ( 1.0f - elapsedMs / decayMs ) + 0.5f );
             }
          }
-         CRGB clr = CRGB( bright, bright, bright );
+         CHSV clr = CHSV( 0, 0, bright ); // grayscale -- sat=0 means hue is irrelevant
          for ( int k = 0; k < 2; ++k ) {
-            int c = chinaPairs_[ p ][ k ];
-            carpet->chinaLeds[ c ] = clr;
-            carpet->chinaLeds[ c ].w = 0;
+            uint8_t c = (uint8_t)chinaPairs_[ p ][ k ];
+            LightSetters::setColor( carpet, LightSetters::TargetChina, clr, LightSetters::ByID{ c } );
+            LightSetters::setWhite( carpet, LightSetters::TargetChina, 0, LightSetters::ByID{ c } );
          }
       }
    }
@@ -353,20 +357,30 @@ class LighthouseShow : public LightShow {
 
       // --- rope: evaluated at each LED's own real angle, from
       // CarpetGeometry's shared, precomputed-once neopixel table (no more
-      // per-show angle cache/derivation).
-      for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-         float a = CarpetGeometry::getNeoGeom( i ).angleFromForwardDeg;
-         carpet->ropeLeds[ i ] = winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte );
-         carpet->ropeLeds[ i ].w = 0;
+      // per-show angle cache/derivation). Writes via LightSetters using
+      // NeoByCircumferenceID, not NeoByAngleDeg -- this loop already knows
+      // exactly which NeoID it's writing (no search needed), so ID
+      // addressing goes through the setter abstraction at O(1)/pixel;
+      // NeoByAngleDeg would instead be an O(1016) nearest-match search
+      // PER pixel here (~1M comparisons/frame on a no-FPU MCU) for a
+      // result already known for free. The color COMPUTATION itself is
+      // 100% angle-based (winnerColorAt only ever sees real angles) --
+      // only this array-addressing step is by ID. Confirmed with the user.
+      for ( uint16_t raw = 0; raw < NUM_NEO_LEDS_ACTUAL; ++raw ) {
+         float a = CarpetGeometry::getNeoGeom( raw ).angleFromForwardDeg;
+         CHSV color = winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte );
+         int32_t neoId = CarpetGeometry::rawIndexToNeoId( raw );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, color, LightSetters::NeoByCircumferenceID{ neoId } );
+         LightSetters::setWhite( carpet, LightSetters::TargetNeo, 0, LightSetters::NeoByCircumferenceID{ neoId } );
       }
 
       // --- megabars: SAME falloff function as the rope, evaluated at each
       // megabar's own real position angle (CarpetGeometry) -- no more
       // separate discrete nearest-neighbor snap (that was the actual cause
       // of "neopixel segment widths don't match the floods").
-      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
-         float a = CarpetGeometry::getMegabarPosition( m ).positionAngleDeg; // same field china uses below -- for megabars this numerically equals beamAngleDeg, but positionAngleDeg is the semantically correct one to ask for here
-         carpet->megabarLeds[ m ] = winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte );
+      for ( uint8_t m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
+         float a = CarpetGeometry::getMegabar( m ).dimAngleDeg; // ground-spot angle -- the only geometry a real show should ever consult
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte ), LightSetters::ByAngleDeg{ a } );
       }
 
       // --- china: variation-dependent (see class comment) ---
@@ -379,14 +393,13 @@ class LighthouseShow : public LightShow {
       if ( variation_ == VarChinaReact ) {
          updateChinaReact( time );
       } else if ( variation_ == VarNoStrobe ) {
-         for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
-            // positionAngleDeg (precomputed once in CarpetGeometry::begin(),
-            // not a live atan2f here) -- POSITION angle, not aim; see
-            // CarpetGeometry.h's china caveat for why those two differ
-            float a = CarpetGeometry::getChinaPosition( c ).positionAngleDeg;
-            CRGB clr = winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte );
-            carpet->chinaLeds[ c ] = clr;
-            carpet->chinaLeds[ c ].w = 0;
+         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
+            // dimAngleDeg (precomputed once in CarpetGeometry::begin(),
+            // not a live atan2f here) -- ground-spot angle, not aim; see
+            // CarpetGeometry.h's file header for why those two differ
+            float a = CarpetGeometry::getChina( c ).dimAngleDeg;
+            LightSetters::setColor( carpet, LightSetters::TargetChina, winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte ), LightSetters::ByAngleDeg{ a } );
+            LightSetters::setWhite( carpet, LightSetters::TargetChina, 0, LightSetters::ByAngleDeg{ a } );
          }
       } else { // VarDefault -- china off except the strobe below
          carpet->clearChinas();
@@ -426,7 +439,8 @@ class LighthouseShow : public LightShow {
       bool lit = false;
       for ( int p = 0; p < 3; ++p ) if ( elapsed >= pulseStart[ p ] && elapsed < pulseStart[ p ] + onMs ) { lit = true; break; }
       if ( !lit ) return;
-      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) { carpet->chinaLeds[ c ] = CRGB::White; carpet->chinaLeds[ c ].w = 255; }
+      LightSetters::setColor( carpet, LightSetters::TargetChina, CHSV( 0, 0, 255 ), LightSetters::ByAngleDeg{ 0.0f }, LightSetters::ByAngleDeg{ 359.999f } ); // full range -- every china
+      LightSetters::setWhite( carpet, LightSetters::TargetChina, 255, LightSetters::ByAngleDeg{ 0.0f }, LightSetters::ByAngleDeg{ 359.999f } );
    }
 };
 

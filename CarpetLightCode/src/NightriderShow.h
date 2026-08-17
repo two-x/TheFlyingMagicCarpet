@@ -9,6 +9,8 @@
  */
 
 #include "LightShow.h"
+#include "CarpetGeometry.h"
+#include "LightSetters.h"
 #include <math.h>
 
 /*
@@ -290,7 +292,17 @@ class NightriderShow : public LightShow {
       group1Clr.nscale8( (uint8_t)( group1Frac * 255.0f + 0.5f ) );
       group2Clr.nscale8( (uint8_t)( group2Frac * 255.0f + 0.5f ) );
 
-      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) carpet->megabarLeds[ m ] = ( m % 2 == 0 ) ? group1Clr : group2Clr;
+      // Stepped by real angle (every next 30deg around the ring), not by
+      // raw DMX-order index parity -- per request, so this pattern's
+      // intent ("alternate every OTHER megabar around the car") stays
+      // obvious/robust if ever asked to change (e.g. "alternate every
+      // 60deg instead"), rather than depending on knowing DMX order
+      // happens to match angle order today.
+      for ( int step = 0; step < 12; ++step ) {
+         float angle = (float)step * 30.0f;
+         CRGB clr = ( step % 2 == 0 ) ? group1Clr : group2Clr;
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, clr, LightSetters::ByAngleDeg{ angle } );
+      }
 
       // china: same group coloring as megabars, plus (VarAutoWithSound
       // only) a white-channel overlay on bass hits -- per request, this

@@ -133,7 +133,7 @@ class FlameShow : public LightShow {
 
    void classifyChinaFromGeometry() {
       for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
-         chinaRole_[ c ] = ( CarpetGeometry::getChinaPosition( c ).yFt > 0.0f ) ? RoleFront : RoleRear;
+         chinaRole_[ c ] = ( CarpetGeometry::getChina( c ).dimY > 0.0f ) ? RoleFront : RoleRear;
       }
    }
 
