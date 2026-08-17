@@ -87,19 +87,27 @@ struct State {
 
 static State state;
 
+// the real compile-time show/variation defaults -- factored out of load()'s
+// reset-to-defaults branch so it can also be called standalone (see
+// resetShowVariationToDefaults() below) without duplicating these values
+// anywhere else, including JS.
+inline void resetShowVariationToDefaults() {
+   state.currShow = 0;
+   for ( uint8_t i = 0; i < MAX_SHOWS; ++i ) state.variation[ i ] = 0;
+   // Equalizer (show index 2 -- see CarpetLightLogic.cpp's ShowMode enum;
+   // can't reference it by name here, that enum's defined after this
+   // header gets included) defaults to new_standard (EqualizerShow's
+   // VarNewStandard, also index 2) instead of Chase, per request.
+   state.variation[ 2 ] = 2;
+}
+
 // call once at boot, before reading any loaded*() value
 inline void load() {
    memcpy( &state, flash.readAddress( 0 ), sizeof( State ) );
    if ( state.magic != MAGIC ) {
       // first boot ever, or the layout changed since the last save -- reset to defaults
       state.magic = MAGIC;
-      state.currShow = 0;
-      for ( uint8_t i = 0; i < MAX_SHOWS; ++i ) state.variation[ i ] = 0;
-      // Equalizer (show index 2 -- see CarpetLightLogic.cpp's ShowMode enum;
-      // can't reference it by name here, that enum's defined after this
-      // header gets included) defaults to new_standard (EqualizerShow's
-      // VarNewStandard, also index 2) instead of Chase, per request.
-      state.variation[ 2 ] = 2;
+      resetShowVariationToDefaults();
       state.globalBrightnessPercent = 100;
       state.headlightBrightnessPercent = 50;
       state.chinaBrightnessPercent = 100;

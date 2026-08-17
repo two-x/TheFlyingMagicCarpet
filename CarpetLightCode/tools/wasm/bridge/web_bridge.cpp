@@ -31,6 +31,25 @@ int web_getNumMegabarLeds() { return NUM_MEGABAR_LEDS; }
 EMSCRIPTEN_KEEPALIVE
 int web_getNumChinaLeds() { return NUM_CHINA_LEDS; }
 
+// Real, post-convertNeoArray() bus-write buffers -- the exact bytes show()
+// hands to FastLED/Ws281xDma each frame (WS281x wire-protocol RGBW->RGB
+// repacking, see LedUtil::convertNeoArray()'s comment and MagicCarpet.h's
+// ropeShowLeds declaration comment). Raw wire-order data, not directly
+// renderable per-fixture -- exposed for inspection/diffing, not rendering.
+// DMX needs no equivalent export: megabarLeds/chinaLeds (already exposed
+// above) ARE the literal DMX bus buffer, dmx_send() sends their raw memory
+// directly with no conversion step.
+EMSCRIPTEN_KEEPALIVE
+uint8_t * web_getRopeShowLedsPtr() { return (uint8_t *)carpet->ropeShowLeds; }
+EMSCRIPTEN_KEEPALIVE
+uint8_t * web_getRightShowLedsPtr() { return (uint8_t *)carpet->rightShowLeds; }
+EMSCRIPTEN_KEEPALIVE
+uint8_t * web_getLeftShowLedsPtr() { return (uint8_t *)carpet->leftShowLeds; }
+EMSCRIPTEN_KEEPALIVE
+int web_getNumRopeShowLeds() { return NUM_NEO_SHOW_LEDS; }
+EMSCRIPTEN_KEEPALIVE
+int web_getNumSideShowLeds() { return NUM_NEO_LEDS_PER_STRIP; }
+
 // Real fixture GROUND-SPOT positions, straight from CarpetGeometry.h --
 // the visualizer reads these instead of maintaining its own position
 // tables, per the zero-duplication mandate. This is dimX/dimY -- what a
@@ -175,7 +194,6 @@ void web_injectPotPercent( float pct ) {
    int raw = (int)( pct / 100.0f * (float)MAX_VOLTAGE + 0.5f );
    halSetAnalogPinState( POT_ANALOG_PIN, raw );
 }
-
 // Vehicle speed -- SpeedLink's own direct-injection equivalents of a real
 // I2C speed packet (see SpeedLink.h's injectSpeedHundredthsMph()/
 // injectRunmode(), already written for exactly this, just never wired to
@@ -210,6 +228,30 @@ const char * web_getSettingName() { return settingName( appMode, configSubsettin
 // already skipping real hardware's multi-press menu navigation. The value
 // landed on is 100% real committed state either way -- makeShow()/start()
 // are the exact same calls the real short-press handler makes.
+// Visualizer-only: forces the LIVE show/variation state back to the real
+// compile-time defaults (Nvm::resetShowVariationToDefaults() -- the exact
+// same values/branch real hardware's "first boot ever" flash-reset uses,
+// no separate JS-side copy of the default show/variation index), WITHOUT
+// touching persisted storage -- unlike web_setCurrentShow()/
+// web_setCurrentVariation(), this deliberately does not call Nvm::save*(),
+// so it can't clobber a real saved selection, it only affects what this
+// page load starts out rendering. Mirrors setup()'s own hydrate-from-Nvm
+// sequence (lines above in this same translation unit) so the resulting
+// currMode/currVariation/currLightShow are indistinguishable from a real
+// fresh boot. Called once by the visualizer right after web_setup(),
+// before enumerateShowsFromWasm() captures the show/variation it'll
+// restore back to.
+EMSCRIPTEN_KEEPALIVE
+void web_resetToDefaultShow() {
+   Nvm::resetShowVariationToDefaults();
+   currMode = (ShowMode)Nvm::loadedShow();
+   for ( uint8_t i = 0; i < numModes; ++i ) currVariation[ i ] = Nvm::loadedVariation( i );
+   prevMode = currMode;
+   delete currLightShow;
+   currLightShow = makeShow( currMode, currVariation[ currMode ] );
+   currLightShow->start();
+}
+
 EMSCRIPTEN_KEEPALIVE
 int web_getNumShows() { return (int)numModes; }
 EMSCRIPTEN_KEEPALIVE

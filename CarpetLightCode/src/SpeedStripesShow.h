@@ -340,14 +340,24 @@ class SpeedStripesShow : public LightShow {
       // CarpetGeometry dimY is directly addable to it.
       float frontMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar0deg ).dimY;
       CRGB frontLeadClr = zebraColorAt( zebraPosFt_ + frontMegabarY + ZEBRA_STRIPE_WIDTH_FT, satFraction );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar330deg ).dimY } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ frontMegabarY } ); // headlight -- brightness still governed separately, see MagicCarpet
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar30deg ).dimY } );
+      // BUGFIX: these were ByYFt (nearest-Y search) on a fixture whose ID
+      // was already known -- real megabar Y values are NOT unique (every
+      // left/right mirror pair shares Y, e.g. Megabar30deg/Megabar330deg
+      // both sit at the same Y), so a self-referential ByYFt search
+      // silently redirected the higher-id member of every tied pair onto
+      // its lower-id twin, leaving it permanently dark ("half the
+      // megabars/chinas never light up"). ByID is unambiguous by
+      // construction -- use it whenever the fixture is already known,
+      // reserve ByYFt/ByAngleDeg for genuine "find whichever fixture is
+      // nearest X" searches. Same fix applied everywhere in this file.
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar330deg } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar0deg } ); // headlight -- brightness still governed separately, see MagicCarpet
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar30deg } );
       float rearMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar180deg ).dimY;
       CRGB rearLeadClr = zebraColorAt( zebraPosFt_ + rearMegabarY - ZEBRA_STRIPE_WIDTH_FT, satFraction );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar150deg ).dimY } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ rearMegabarY } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar210deg ).dimY } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar150deg } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar180deg } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar210deg } );
       // Every fixture below samples its OWN independent real dimY -- no
       // sharing between fixtures, china or megabar alike (2 fixtures at
       // the same real Y, e.g. the front-left/front-right pair, legitimately
@@ -356,7 +366,7 @@ class SpeedStripesShow : public LightShow {
       auto zebraAt = [&]( float dimY ) { return zebraColorAt( zebraPosFt_ + dimY, satFraction ); };
       auto setMegabarZebra = [&]( CarpetGeometry::MegabarName m ) {
          float y = CarpetGeometry::getMegabar( m ).dimY;
-         LightSetters::setColor( carpet, LightSetters::TargetMegabar, zebraAt( y ), LightSetters::ByYFt{ y } );
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, zebraAt( y ), LightSetters::ByID{ (uint8_t)m } );
       };
       setMegabarZebra( CarpetGeometry::Megabar60deg );
       setMegabarZebra( CarpetGeometry::Megabar90deg );
@@ -373,7 +383,7 @@ class SpeedStripesShow : public LightShow {
          float y = CarpetGeometry::getChina( c ).dimY;
          CRGB clr = zebraAt( y );
          clr.nscale8( brightnessScale );
-         LightSetters::setColor( carpet, LightSetters::TargetChina, clr, LightSetters::ByYFt{ y } );
+         LightSetters::setColor( carpet, LightSetters::TargetChina, clr, LightSetters::ByID{ c } );
       }
    }
 
@@ -588,31 +598,36 @@ class SpeedStripesShow : public LightShow {
       // front: megabars preview a stripe-width (4ft) out from their own real
       // ground-spot Y; china pick it up right at the 1ft-from-edge mark from
       // theirs -- base position is each fixture's own real CarpetGeometry
-      // dimY. Written via LightSetters::ByYFt -- this show's "coordinate"
-      // is fundamentally real feet, per the same reasoning LighthouseShow
-      // uses ByAngleDeg throughout (even where the fixture is already
-      // known): the setter call documents WHY this fixture is being
-      // addressed, not just which raw index it happens to be.
+      // dimY. Written via LightSetters::ByID -- BUGFIX: this used to be
+      // ByYFt (nearest-Y search) even though the fixture was already known;
+      // real megabar/china Y values are NOT unique across left/right mirror
+      // pairs (e.g. Megabar30deg/Megabar330deg share Y), so a self-
+      // referential ByYFt search silently redirected the higher-id member
+      // of every tied pair onto its lower-id twin, leaving it permanently
+      // dark ("half the megabars/chinas never light up"). ByID is
+      // unambiguous by construction -- reserve ByYFt/ByAngleDeg for
+      // genuine "find whichever fixture is nearest X" searches, not for
+      // addressing a fixture whose identity is already known.
       float frontMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar0deg ).dimY;
       CRGB frontLeadClr = sampleWave( frontMegabarY + STRIPE_WIDTH_FT_ + scrollOffsetFt_, satFraction, meanderOffset );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar330deg ).dimY } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ frontMegabarY } ); // headlight -- brightness still governed separately, see MagicCarpet
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar30deg ).dimY } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar330deg } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar0deg } ); // headlight -- brightness still governed separately, see MagicCarpet
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar30deg } );
       float frontChinaY = CarpetGeometry::getChina( CarpetGeometry::ChinaFrontRightFront ).dimY;
       CRGB frontEdgeClr = sampleWave( frontChinaY + EDGE_APPROACH_FT + scrollOffsetFt_, satFraction, meanderOffset );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByYFt{ frontChinaY } );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByYFt{ CarpetGeometry::getChina( CarpetGeometry::ChinaFrontLeftFront ).dimY } );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaFrontRightFront } );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaFrontLeftFront } );
 
       // rear: mirror of the above, behind the back corner
       float rearMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar180deg ).dimY;
       CRGB rearLeadClr = sampleWave( rearMegabarY - STRIPE_WIDTH_FT_ + scrollOffsetFt_, satFraction, meanderOffset );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar150deg ).dimY } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ rearMegabarY } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByYFt{ CarpetGeometry::getMegabar( CarpetGeometry::Megabar210deg ).dimY } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar150deg } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar180deg } );
+      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar210deg } );
       float rearChinaY = CarpetGeometry::getChina( CarpetGeometry::ChinaBackLeftBack ).dimY;
       CRGB rearEdgeClr = sampleWave( rearChinaY - EDGE_APPROACH_FT + scrollOffsetFt_, satFraction, meanderOffset );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByYFt{ rearChinaY } );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByYFt{ CarpetGeometry::getChina( CarpetGeometry::ChinaBackRightBack ).dimY } );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaBackLeftBack } );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaBackRightBack } );
 
       // side positions: every fixture samples its OWN independent real
       // dimY -- no sharing between china and megabar (an earlier version
@@ -624,11 +639,11 @@ class SpeedStripesShow : public LightShow {
       auto sideColorAt = [&]( float dimY ) { return sampleWave( dimY + scrollOffsetFt_, satFraction, meanderOffset ); };
       auto setChinaBySide = [&]( CarpetGeometry::ChinaName c ) {
          float y = CarpetGeometry::getChina( c ).dimY;
-         LightSetters::setColor( carpet, LightSetters::TargetChina, sideColorAt( y ), LightSetters::ByYFt{ y } );
+         LightSetters::setColor( carpet, LightSetters::TargetChina, sideColorAt( y ), LightSetters::ByID{ (uint8_t)c } );
       };
       auto setMegabarBySide = [&]( CarpetGeometry::MegabarName m ) {
          float y = CarpetGeometry::getMegabar( m ).dimY;
-         LightSetters::setColor( carpet, LightSetters::TargetMegabar, sideColorAt( y ), LightSetters::ByYFt{ y } );
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, sideColorAt( y ), LightSetters::ByID{ (uint8_t)m } );
       };
       setChinaBySide( CarpetGeometry::ChinaFrontRightSide );
       setChinaBySide( CarpetGeometry::ChinaBackRightSide );

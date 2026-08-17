@@ -142,17 +142,6 @@ static_assert( NEO_PIN0 == 25 && NEO_PIN_BACK == 26,
 class MagicCarpet {
  private:
 
-   /* FastLED doesn't support rgbw leds. We work around this by offsetting the color
-    * values to accomodate the white value. See CRGBW.h for more details.
-    */
-   CRGB ropeShowLeds[ NUM_NEO_SHOW_LEDS ]; // front+back only now, see NUM_NEOPIXEL_STRIPS's own comment
-   // right/left's own converted buffers -- driven via Ws281xDma::show(),
-   // not FastLED, so they're not part of ropeShowLeds above.
-#ifndef __EMSCRIPTEN__
-   CRGB rightShowLeds[ NUM_NEO_LEDS_PER_STRIP ];
-   CRGB leftShowLeds[ NUM_NEO_LEDS_PER_STRIP ];
-#endif
-
    // see README.md, "Brightness system"
    float globalBrightness_ = 100.0f;   // 0-100
    float headlightBrightness_ = 50.0f; // 50-100, per-fixture (see README -- default
@@ -190,6 +179,26 @@ class MagicCarpet {
 
    // neopixel leds
    CRGBW ropeLeds[ NUM_NEO_LEDS_ACTUAL ];
+
+   /* FastLED doesn't support rgbw leds. We work around this by offsetting the color
+    * values to accomodate the white value. See CRGBW.h for more details.
+    *
+    * These are the real, post-convertNeoArray() bus-write buffers -- the
+    * exact bytes show() hands to FastLED/Ws281xDma each frame (RGBW source
+    * pixels repacked 3-into-4 as fake RGB triplets for the WS281x wire
+    * protocol -- see LedUtil::convertNeoArray()'s own comment). They're
+    * populated for real under __EMSCRIPTEN__ too (unconditionally, unlike
+    * the hardware calls below), so the visualizer can read the true
+    * bus-write bytes rather than only the pre-conversion ropeLeds[] --
+    * NOTE this is raw wire-order data, not directly renderable per-fixture
+    * without inverting the repacking (deliberately not attempted yet, see
+    * the migration plan's "phase 6").
+    */
+   CRGB ropeShowLeds[ NUM_NEO_SHOW_LEDS ]; // front+back only now, see NUM_NEOPIXEL_STRIPS's own comment
+   // right/left's own converted buffers -- driven via Ws281xDma::show() on
+   // real hardware, not FastLED, so they're not part of ropeShowLeds above.
+   CRGB rightShowLeds[ NUM_NEO_LEDS_PER_STRIP ];
+   CRGB leftShowLeds[ NUM_NEO_LEDS_PER_STRIP ];
 
    // controls
    LedControl::Potentiometer * pot;
@@ -273,14 +282,14 @@ class MagicCarpet {
       LedUtil::convertNeoArray( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO,
                                 ropeShowLeds + NUM_NEO_LEDS_PER_STRIP,
                                 SIZEOF_SMALL_NEO );
-#ifndef __EMSCRIPTEN__
+      // real conversion runs on both targets now -- only the actual hardware
+      // write below (Ws281xDma::show()) is WASM-excluded.
       LedUtil::convertNeoArray( ropeLeds + SIZEOF_SMALL_NEO,
                                 rightShowLeds,
                                 SIZEOF_LARGE_NEO );
       LedUtil::convertNeoArray( ropeLeds + (SIZEOF_SMALL_NEO * 2) + SIZEOF_LARGE_NEO,
                                 leftShowLeds,
                                 SIZEOF_LARGE_NEO );
-#endif
 
       // make sure to reverse the values so the user has a consistent view
       LedUtil::reverse( ropeLeds, SIZEOF_SMALL_NEO );
@@ -294,9 +303,16 @@ class MagicCarpet {
       FastLED.show(); // front+back only now, see NUM_NEOPIXEL_STRIPS's own comment
       Ws281xDma::show( ( uint8_t * ) rightShowLeds, ( uint8_t * ) leftShowLeds );
 #endif
-      // WASM: see the migration plan's output-path design (phase 5) -- for
-      // now (phase 4) the visualizer reads ropeLeds[]/megabarLeds[]/
-      // chinaLeds[] directly rather than through this hardware-output path.
+      // WASM: no real bus write (no hardware) -- but ropeShowLeds/
+      // rightShowLeds/leftShowLeds above are now real, populated bus-write
+      // buffers regardless of target, and megabarLeds/chinaLeds ARE the
+      // literal DMX bus buffer already (dmx_send() sends their raw memory
+      // directly, no conversion step -- see CRGBWUA's own comment), so all 5
+      // real output buffers are available to read post-show() on any
+      // target. Rendering from ropeShowLeds/right/leftShowLeds still isn't
+      // attempted (wire-order data, not directly per-fixture -- see their
+      // declaration comment); the visualizer keeps rendering from
+      // ropeLeds[]/megabarLeds[]/chinaLeds[] directly.
    }
 
    void clearMegabars() {

@@ -413,8 +413,23 @@ struct CRGBWUA : CRGBW {
  */
 namespace LedUtil {
 
+// BUGFIX: the old formula ((leds*4)/3 + (leds%3!=0)) undercounts whenever
+// leds isn't a multiple of 3. convertNeoArray() below groups every 3 source
+// RGBW pixels into 4 output RGB slots UNCONDITIONALLY, including a trailing
+// partial group (1 or 2 leftover source pixels still consume a full 4-slot
+// output group, since convertNeo() always reads/writes a fixed-size
+// group) -- so the true required size is ceil(leds/3)*4 groups, not
+// leds*4/3 rounded up by only +1. For leds=352 (SIZEOF_LARGE_NEO, the
+// right/left neo strands' real LED count, 352%3==1): old formula gave 470,
+// true requirement is 472 -- a real 2-element (8-byte CRGB) buffer overflow
+// past the end of rightShowLeds/leftShowLeds every single convertNeoArray()
+// call, on REAL HARDWARE (this path has always run there, #ifndef
+// __EMSCRIPTEN__), not something newly introduced. Confirmed via a real
+// symptom once this array was also exercised under WASM: the overflow
+// corrupted the adjacent MagicCarpet member (Potentiometer::pin_ silently
+// became 0), reproducibly, every boot.
 constexpr uint16_t resizeCRGBW( uint16_t leds ) {
-   return ( ( leds * 4 ) / 3 ) + ( ( leds % 3 ) != 0 );
+   return ( ( leds + 2 ) / 3 ) * 4;
 }
 
 template< class T >

@@ -1947,24 +1947,6 @@ const CHINA_WASH = washFootprint(CHINA_TILT_DEG, FIXTURE_HEIGHTS_FT.china);
 // steeper angle than a megabar.
 CHINA_WASH.peakScale = 0.55;
 
-// China aim azimuths -- exact per-fixture formulas (0deg = straight
-// forward, increasing clockwise, matching megabarAngle's own convention).
-// rotationFactor ("X") is the angular sweep outward from the relevant edge
-// of the carpet that each light is aimed -- a real physical adjustment on
-// all 8 lamps at once, kept as one named constant rather than baked into
-// each angle, so retuning it later is a one-line change.
-const rotationFactor = 15; // "X", degrees
-const CHINA_AIM_DEG = [
-  180 - rotationFactor, // 0
-  270 + rotationFactor, // 1
-  90 - rotationFactor,  // 2
-  180 + rotationFactor, // 3
-  360 - rotationFactor, // 4
-  90 + rotationFactor,  // 5
-  270 - rotationFactor, // 6
-  0 + rotationFactor,   // 7
-];
-
 // China brightness: 25% brighter than before in the air, and its ground
 // spot 25% brighter than a megabar's (not than china's own old ground
 // value) -- two different baselines, per request.
@@ -2159,37 +2141,73 @@ function edgeInsetPoint(deg, insetFt) {
   }
   return { x: CAR_X + x, y: CAR_Y + y };
 }
-// Megabar/china ground-spot positions are read from the REAL firmware
-// (CarpetGeometry.h's dimX/dimY, via web_getMegabarXFt/YFt and
-// web_getChinaXFt/YFt) once WASM is ready -- see
-// syncFixturePositionsFromWasm() below. Never hand-tuned here again: a
-// previous version of this file kept its own independent china position
-// table that had silently diverged from the real geometry. Per
-// CarpetGeometry.h's own file-header comment, china GROUND SPOTS (what
-// these positions represent, and what every real light show actually
-// reads) are modeled as CO-LOCATED within each pair -- the 2 physical
-// fixtures' real mount-position separation exists too, but lives in
-// CarpetGeometry.h's individually hand-entered fixtureDimX/Y instead
-// (visualizer-only, exposed via web_get{Megabar,China}FixtureXFt/YFt, not
-// currently consumed here -- available for a future distinct-fixture-icon
-// rendering pass). These start as safe car-center placeholders so nothing
-// referencing them crashes before WASM loads.
+// Megabar/china GROUND-SPOT positions (where the light actually lands --
+// what drawGroundEllipse/drawWash render, and what every real light show
+// itself reads) come from CarpetGeometry.h's dimX/dimY, via
+// web_getMegabarXFt/YFt and web_getChinaXFt/YFt. BUGFIX (confirmed against
+// README.md's own china table, not a cosmetic choice): china ground spots
+// within a pair are NOT co-located -- the 2 fixtures at a corner aim along
+// different edges (one front/back, one side), so their real ground spots
+// are genuinely distinct points, well separated in angle. CHINA_POS below
+// reflects that real, distinct-per-fixture geometry.
+//
+// Megabar/china FIXTURE MOUNT positions (where the physical lamp housing
+// sits -- what the small dot markers below render) are a SEPARATE,
+// smaller-scale concept, from CarpetGeometry.h's fixtureDimX/Y, via
+// web_get{Megabar,China}FixtureXFt/YFt. For megabars these equal the
+// ground spot (no known independent mount offset); for china they're only
+// ~0.26ft apart (2 fixtures sharing one corner bracket), a much smaller
+// separation than the several-foot ground-spot one above -- BUGFIX: the
+// fixture-icon dots used to read CHINA_POS (ground spot) directly, so once
+// the ground-spot fix above landed, the dots jumped out to the real,
+// now-correct-but-far-apart ground-spot locations instead of staying near
+// the corner where the physical fixtures actually are.
+//
+// These start as safe car-center placeholders so nothing referencing them
+// crashes before WASM loads; see syncFixturePositionsFromWasm() below.
 let MEGABAR_POS_FT = new Array(NUM_MEGABAR).fill(0).map(() => ({ x: CAR_X, y: CAR_Y }));
 let CHINA_POS = new Array(NUM_CHINA).fill(0).map(() => ({ x: CAR_X, y: CAR_Y }));
+let MEGABAR_FIXTURE_POS = new Array(NUM_MEGABAR).fill(0).map(() => ({ x: CAR_X, y: CAR_Y }));
+let CHINA_FIXTURE_POS = new Array(NUM_CHINA).fill(0).map(() => ({ x: CAR_X, y: CAR_Y }));
+// Beam-cone aim angle -- per explicit request, computed ONCE at launch
+// from each fixture's own real mount position vs. its own real ground-spot
+// position (the direction FROM the fixture TO where its light lands), NOT
+// a hardcoded per-fixture formula. Megabars are a degenerate case (mount
+// position == ground spot, a zero-length vector with no defined
+// direction), so their aim instead uses the ground spot's own position
+// angle (radially outward from car center) -- physically the same "aimed
+// straight out from where it's mounted" assumption a formula-based
+// approach would also make, just derived from real data instead of
+// assumed. Placeholder values (the OLD hardcoded formulas) until WASM
+// loads, same pattern as the position arrays above.
+function wrap360Global(d) { return ((d % 360) + 360) % 360; }
+let MEGABAR_AIM_DEG = new Array(NUM_MEGABAR).fill(0).map((_, m) => wrap360Global(-m * 30)); // placeholder, matches the real formula exactly (see MEGABAR_AIM_DEG's own comment) so this one never even needs correcting post-sync
+let CHINA_AIM_DEG = new Array(NUM_CHINA).fill(0); // placeholder only -- real values arrive from syncFixturePositionsFromWasm(), nothing meaningful renders off these before WASM loads anyway
 function megabarPos(m) { return MEGABAR_POS_FT[m]; }
+function megabarAngle(m) { return MEGABAR_AIM_DEG[m]; }
 function syncFixturePositionsFromWasm(M) {
   // CarpetGeometry.h's convention is Y+ = front; this file's own canvas
   // convention draws front toward smaller pixel Y (car nose at the top),
   // hence the sign flip on Y only -- X needs no flip (right+ matches both).
+  const toPx = (xFt, yFt) => ({ x: CAR_X + xFt * PX_PER_FT, y: CAR_Y - yFt * PX_PER_FT });
+  const aimDeg = (fromXFt, fromYFt, toXFt, toYFt) => wrap360Global( Math.atan2( toXFt - fromXFt, toYFt - fromYFt ) * 180 / Math.PI );
   for (let m = 0; m < NUM_MEGABAR; m++) {
     const xFt = M.ccall('web_getMegabarXFt', 'number', ['number'], [m]);
     const yFt = M.ccall('web_getMegabarYFt', 'number', ['number'], [m]);
-    MEGABAR_POS_FT[m] = { x: CAR_X + xFt * PX_PER_FT, y: CAR_Y - yFt * PX_PER_FT };
+    MEGABAR_POS_FT[m] = toPx(xFt, yFt);
+    const fxFt = M.ccall('web_getMegabarFixtureXFt', 'number', ['number'], [m]);
+    const fyFt = M.ccall('web_getMegabarFixtureYFt', 'number', ['number'], [m]);
+    MEGABAR_FIXTURE_POS[m] = toPx(fxFt, fyFt);
+    MEGABAR_AIM_DEG[m] = wrap360Global( Math.atan2( xFt, yFt ) * 180 / Math.PI ); // radially outward -- mount==ground spot, no fixture-vs-groundspot vector to use
   }
   for (let c = 0; c < NUM_CHINA; c++) {
     const xFt = M.ccall('web_getChinaXFt', 'number', ['number'], [c]);
     const yFt = M.ccall('web_getChinaYFt', 'number', ['number'], [c]);
-    CHINA_POS[c] = { x: CAR_X + xFt * PX_PER_FT, y: CAR_Y - yFt * PX_PER_FT };
+    CHINA_POS[c] = toPx(xFt, yFt);
+    const fxFt = M.ccall('web_getChinaFixtureXFt', 'number', ['number'], [c]);
+    const fyFt = M.ccall('web_getChinaFixtureYFt', 'number', ['number'], [c]);
+    CHINA_FIXTURE_POS[c] = toPx(fxFt, fyFt);
+    CHINA_AIM_DEG[c] = aimDeg(fxFt, fyFt, xFt, yFt); // real aim: direction from the physical fixture to where its light actually lands
   }
 }
 
@@ -2207,10 +2225,11 @@ const CarpetGeometry = (() => {
   const toFt = (pxPoint) => ({ xFt: (pxPoint.x - CAR_X) / PX_PER_FT, yFt: -(pxPoint.y - CAR_Y) / PX_PER_FT });
   const wrap360 = (d) => ((d % 360) + 360) % 360;
   // POSITION angle (atan2 of xFt,yFt) -- a DIFFERENT thing from beamAngleDeg
-  // for china (whose beamAngleDeg is aim direction, not position); for
-  // megabars the two happen to be numerically equal. Precomputed here, same
-  // as CarpetGeometry.h's own positionAngleDeg field, so callers who want
-  // "where a rotating beam sweeps past" never need their own live atan2.
+  // (aim direction); for megabars the two happen to be numerically equal
+  // (see MEGABAR_AIM_DEG's own comment -- no known fixture-vs-groundspot
+  // offset for megabars). Precomputed here, same as CarpetGeometry.h's own
+  // positionAngleDeg field, so callers who want "where a rotating beam
+  // sweeps past" never need their own live atan2.
   const positionAngleDeg = (xFt, yFt) => wrap360(Math.atan2(xFt, yFt) * 180 / Math.PI);
   // BUGFIX: megabar/china used to be precomputed ONCE here, in this IIFE,
   // which runs synchronously at page-parse time -- before WASM (and
@@ -2218,21 +2237,19 @@ const CarpetGeometry = (() => {
   // the car-center placeholders MEGABAR_POS_FT/CHINA_POS start with and
   // never refreshed, even after the real geometry arrived. Computed live
   // from megabarPos()/CHINA_POS[] on every call instead, so this always
-  // reflects whatever those currently hold.
-  const CHINA_ROTATION_FACTOR = 15; // matches CarpetGeometry.h's own rotationFactor
-  const chinaAimFromForward = [
-    wrap360((180 - CHINA_ROTATION_FACTOR) + 180), wrap360((270 + CHINA_ROTATION_FACTOR) + 180),
-    wrap360((90 - CHINA_ROTATION_FACTOR) + 180),  wrap360((180 + CHINA_ROTATION_FACTOR) + 180),
-    wrap360((360 - CHINA_ROTATION_FACTOR) + 180), wrap360((90 + CHINA_ROTATION_FACTOR) + 180),
-    wrap360((270 - CHINA_ROTATION_FACTOR) + 180), wrap360((0 + CHINA_ROTATION_FACTOR) + 180),
-  ];
+  // reflects whatever those currently hold. beamAngleDeg reads the real,
+  // launch-computed MEGABAR_AIM_DEG/CHINA_AIM_DEG (see their own comment
+  // above) -- no separate hardcoded formula duplicated here anymore (a
+  // previous version of this IIFE kept its own independent copy of the
+  // china rotation-factor formula, which had drifted out of sync with the
+  // real geometry after this session's ground-spot fix).
   function megabarGeom(m) {
     const { xFt, yFt } = toFt(megabarPos(m));
     return { id: m, type: 'megabar', xFt, yFt, beamAngleDeg: megabarAngle(m), positionAngleDeg: positionAngleDeg(xFt, yFt), distanceFt: Math.sqrt(xFt * xFt + yFt * yFt) };
   }
   function chinaGeom(c) {
     const { xFt, yFt } = toFt(CHINA_POS[c]);
-    return { id: c, type: 'china', xFt, yFt, beamAngleDeg: chinaAimFromForward[c], positionAngleDeg: positionAngleDeg(xFt, yFt), distanceFt: Math.sqrt(xFt * xFt + yFt * yFt) };
+    return { id: c, type: 'china', xFt, yFt, beamAngleDeg: CHINA_AIM_DEG[c], positionAngleDeg: positionAngleDeg(xFt, yFt), distanceFt: Math.sqrt(xFt * xFt + yFt * yFt) };
   }
 
   // Per-neopixel geometry -- same sharp-cornered percent-of-dimension
@@ -2300,6 +2317,12 @@ function spotRadiiFt(wash) {
 let wasmModule = null, wasmReady = false, wasmAdcBinsPtr = 0;
 CarpetFirmware().then((M) => {
   M.ccall('web_setup', null, [], []);
+  // Every visualizer page load starts from the real FW compile-time show/
+  // variation defaults, not whatever was left in localStorage from earlier
+  // dev testing -- see web_resetToDefaultShow()'s own comment. Must run
+  // before enumerateShowsFromWasm() below, which captures "the show/
+  // variation to end on" from the live state as its starting point.
+  M.ccall('web_resetToDefaultShow', null, [], []);
   wasmAdcBinsPtr = M.ccall('web_getAdcBinsBufferPtr', 'number', [], []);
   wasmModule = M;
   wasmReady = true;
@@ -2363,6 +2386,39 @@ function readLedsFromWasm() {
   copyRgb(ropeLeds, wasmLedPtrs.rope, wasmLedPtrs.ropeStride);
   copyRgb(megabarLeds, wasmLedPtrs.megabar, wasmLedPtrs.megabarStride);
   copyRgb(chinaLeds, wasmLedPtrs.china, wasmLedPtrs.chinaStride);
+  readBusWriteBuffersFromWasm();
+}
+
+/* =====================================================================
+   BUS-WRITE BUFFER READBACK -- the actual bytes MagicCarpet::show() hands
+   to FastLED/Ws281xDma each frame (post-LedUtil::convertNeoArray() WS281x
+   wire-protocol repacking), captured on every real show() call, same as
+   the logical arrays above. DMX needs no separate buffer here: megabarLeds/
+   chinaLeds (already read above) ARE the literal DMX bus bytes -- dmx_send()
+   sends their raw memory directly, no conversion step. This is raw
+   wire-order data (not directly per-fixture -- see MagicCarpet.h's
+   ropeShowLeds declaration comment), so it's not rendered on the canvas;
+   it exists purely so the real bus-write bytes are available to inspect/
+   diff (e.g. from the browser console), closing the mandate gap where
+   this data previously didn't exist at all under WASM.
+   ===================================================================== */
+let wasmBusWritePtrs = null;
+let busWriteBuffers = { rope: null, right: null, left: null };
+function readBusWriteBuffersFromWasm() {
+  if (!wasmBusWritePtrs) {
+    wasmBusWritePtrs = {
+      rope: wasmModule.ccall('web_getRopeShowLedsPtr', 'number', [], []),
+      right: wasmModule.ccall('web_getRightShowLedsPtr', 'number', [], []),
+      left: wasmModule.ccall('web_getLeftShowLedsPtr', 'number', [], []),
+      numRope: wasmModule.ccall('web_getNumRopeShowLeds', 'number', [], []) * 3,
+      numSide: wasmModule.ccall('web_getNumSideShowLeds', 'number', [], []) * 3,
+    };
+  }
+  const heap = wasmModule.HEAPU8;
+  const p = wasmBusWritePtrs;
+  busWriteBuffers.rope = heap.slice(p.rope, p.rope + p.numRope);
+  busWriteBuffers.right = heap.slice(p.right, p.right + p.numSide);
+  busWriteBuffers.left = heap.slice(p.left, p.left + p.numSide);
 }
 
 /* =====================================================================
@@ -2395,7 +2451,7 @@ const PREDICT_OFF = 0, PREDICT_EXP = 1, PREDICT_GUN = 2, PREDICT_DRUM = 3;
 // real web_getCurrentVariationName() strings, in real index order.
 let WASM_INDEX_TO_SHOW = [];
 let SHOW_TO_WASM_INDEX = {};
-let SHOW_ORDER = []; // display order: real compile-time default first, then wrapping through the rest in real index order (matches encoder-right cycling)
+let SHOW_ORDER = []; // display order: real ShowMode enum declaration order, always (dropdown order must match the enum, per request)
 let VARIATIONS = {};
 
 // Enumerates every real show and every real variation of each, straight
@@ -2443,8 +2499,7 @@ function enumerateShowsFromWasm(M) {
   WASM_INDEX_TO_SHOW = indexToShow;
   SHOW_TO_WASM_INDEX = toWasmIndex;
   VARIATIONS = variations;
-  SHOW_ORDER = [];
-  for (let i = 0; i < numShows; i++) SHOW_ORDER.push(indexToShow[(origShowIdx + i) % numShows]);
+  SHOW_ORDER = indexToShow.slice(); // real ShowMode enum declaration order, always -- not rotated to start from whatever's currently selected
 
   // rebuild the dropdown's light-show options, in SHOW_ORDER
   const group = document.getElementById('lightShowOptGroup');
@@ -3836,7 +3891,13 @@ function draw() {
     drawGroundEllipse(megabarPos(m), megabarAngle(m), wash, color, mult);
   }
   for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
-    drawGroundEllipse(CHINA_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH_FOR[cIdx], chinaLeds[cIdx], CHINA_GROUND_MULT);
+    // BUGFIX: origin here must be the FIXTURE (where the beam starts),
+    // not the ground spot (CHINA_POS, where it lands) -- drawGroundEllipse
+    // itself already projects further out from origin by wash.centerDist
+    // to find the visible spot's center, so passing the (now correctly
+    // distinct, several-feet-out) ground spot as origin double-counted
+    // that throw distance once CHINA_POS stopped being fixture-adjacent.
+    drawGroundEllipse(CHINA_FIXTURE_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH_FOR[cIdx], chinaLeds[cIdx], CHINA_GROUND_MULT);
   }
   for (let m = 0; m < NUM_MEGABAR; m++) {
     const wash = m === HEADLIGHT_INDEX ? MEGABAR_FRONT_WASH : MEGABAR_WASH;
@@ -3845,7 +3906,7 @@ function draw() {
     drawWash(megabarPos(m), megabarAngle(m), wash, color, mult);
   }
   for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
-    drawWash(CHINA_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH_FOR[cIdx], chinaLeds[cIdx], CHINA_AIR_MULT);
+    drawWash(CHINA_FIXTURE_POS[cIdx], CHINA_AIM_DEG[cIdx], CHINA_WASH_FOR[cIdx], chinaLeds[cIdx], CHINA_AIR_MULT); // same fixture-as-origin fix as drawGroundEllipse above
   }
   ctx2d.restore();
 
@@ -3951,7 +4012,11 @@ function draw() {
   // factor, so the ratio -- and therefore the hue -- always matches the
   // beam exactly, brightened only as far as headroom actually allows.
   for (let cIdx = 0; cIdx < NUM_CHINA; cIdx++) {
-    const p = CHINA_POS[cIdx];
+    // BUGFIX: this marker represents the physical FIXTURE, not the ground
+    // spot -- must read CHINA_FIXTURE_POS, not CHINA_POS (see the file
+    // header comment on these arrays for why they're no longer the same
+    // point).
+    const p = CHINA_FIXTURE_POS[cIdx];
     const c = boostPreserveHue(chinaLeds[cIdx], 3);
     const brightness = Ctl.showFixtureDots ? (c.r + c.g + c.b) : 0; // off by default, see the megabar loop's comment above
     ctx2d.beginPath();

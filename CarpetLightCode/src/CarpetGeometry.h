@@ -472,8 +472,6 @@ class CarpetGeometry {
       // separate, much smaller-scale concept (the ~0.26ft physical mount
       // offset between 2 fixtures sharing one corner bracket) -- unrelated
       // to this several-foot, aim-driven ground-spot separation.
-      static const float CORNER_INSET_FT = 1.25f;
-      static const float cx = halfW - CORNER_INSET_FT, cy = halfH - CORNER_INSET_FT; // 4.75, 6.75 -- fixture-mount corner reference only, see chMountXY below
       static const float CHINA_Z_FT = 2.0f;
       // "~1/3 of the way along its assigned edge" -- edge full length, not
       // half (a front/back-aimed spot moves along the CAR_WIDTH_FT-long
