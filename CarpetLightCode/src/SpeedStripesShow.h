@@ -88,9 +88,13 @@
 #include "LightSetters.h"
 #include <math.h>
 
+// X-macro list: single source of truth for both the enum below and
+// variationName() -- see LightShow.h's own comment on the pattern.
+#define SPEEDSTRIPES_VARIATIONS(X) X(VarDefault) X(VarZebra)
+
 class SpeedStripesShow : public LightShow {
  private:
-   enum Variation { VarDefault = 0, VarZebra = 1 };
+   enum Variation { SPEEDSTRIPES_VARIATIONS(LIGHTSHOW_ENUM_ENTRY) };
    static const uint8_t numVariations_ = 2;
    uint8_t variation_;
 
@@ -503,8 +507,10 @@ class SpeedStripesShow : public LightShow {
    }
    uint8_t numVariations() { return numVariations_; }
    const char * variationName() {
-      return variation_ == VarZebra ? "zebra" : "default";
+      switch ( variation_ ) { SPEEDSTRIPES_VARIATIONS(LIGHTSHOW_VARIATION_NAME_CASE) }
+      return "?";
    }
+   #undef SPEEDSTRIPES_VARIATIONS // X-macro's job is done, keep the namespace clean
 
    void start() {
       carpet->clearRope();

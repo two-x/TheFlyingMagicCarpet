@@ -24,7 +24,13 @@ MagicCarpet * carpet;
 
 LightShow * currLightShow;
 
-enum ShowMode { ShowNightrider = 0, ShowFlame = 1, ShowEqualizer = 2, ShowSpeedStripes = 3, ShowLighthouse = 4 };
+// X-macro list: single source of truth for both the enum below and
+// showName() -- see LightShow.h's own comment on the pattern (this show-
+// name case keeps real PascalCase, via stripEnumPrefix_()/
+// LIGHTSHOW_SHOW_NAME_CASE, not humanizeEnumName_()'s lowercase-with-
+// spaces -- "Nightrider" not "nightrider").
+#define SHOW_MODES(X) X(ShowNightrider) X(ShowFlame) X(ShowEqualizer) X(ShowSpeedStripes) X(ShowLighthouse)
+enum ShowMode { SHOW_MODES(LIGHTSHOW_ENUM_ENTRY) };
 static const uint8_t numModes = 5;
 static ShowMode currMode = ShowNightrider;
 static ShowMode prevMode = currMode;
@@ -414,15 +420,10 @@ LightShow * makeShow( ShowMode mode, uint8_t variation ) {
 }
 
 const char * showName( ShowMode mode ) {
-   switch ( mode ) {
-      case ShowNightrider:   return "Nightrider";
-      case ShowFlame:        return "Flame";
-      case ShowEqualizer:    return "Equalizer";
-      case ShowSpeedStripes: return "SpeedStripes";
-      case ShowLighthouse:   return "Lighthouse";
-      default:               return "?";
-   }
+   switch ( mode ) { SHOW_MODES(LIGHTSHOW_SHOW_NAME_CASE) }
+   return "?";
 }
+#undef SHOW_MODES // X-macro's job is done, keep the namespace clean
 
 // vertically compact: one banner line, one line with every config setting's
 // current value, instead of a line per value

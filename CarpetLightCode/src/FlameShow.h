@@ -26,9 +26,13 @@ static const CRGBPalette256 waterflames(
       CRGB::Aqua,
       CRGB::White );
   
+// X-macro list: single source of truth for both the enum below and
+// variationName() -- see LightShow.h's own comment on the pattern.
+#define FLAME_VARIATIONS(X) X(VarWaterflames) X(VarFlames) X(VarShiftingHues) X(VarHueToWhite)
+
 class FlameShow : public LightShow {
  private:
-   enum Variation { VarWaterflames = 0, VarFlames = 1, VarShiftingHues = 2, VarHueToWhite = 3 };
+   enum Variation { FLAME_VARIATIONS(LIGHTSHOW_ENUM_ENTRY) };
 
    // TODO: tune this
    static const uint8_t baseCoolingRate = 10;
@@ -153,11 +157,10 @@ class FlameShow : public LightShow {
    uint8_t numVariations() { return numModes_; }
 
    const char * variationName() {
-      if ( mode_ == VarWaterflames ) return "waterflames";
-      if ( mode_ == VarFlames ) return "flames";
-      if ( mode_ == VarShiftingHues ) return "shifting hues";
-      return "hue to white";
+      switch ( mode_ ) { FLAME_VARIATIONS(LIGHTSHOW_VARIATION_NAME_CASE) }
+      return "?";
    }
+   #undef FLAME_VARIATIONS // X-macro's job is done, keep the namespace clean
 
    // mode_==0/1 use the fixed 256-entry palettes above. mode_==2/3 use
    // shiftingPalette_ (full saturation, fixed -- "as it is now"), rebuilt

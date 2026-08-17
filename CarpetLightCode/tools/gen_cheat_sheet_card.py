@@ -60,7 +60,7 @@ CELLS = [
         "  Pot: flood Hz",
         "  china flash on bass",
     ]),
-    ("2 FlameSparkle (4 var)", [
+    ("2 Flame (4 var)", [
         "▸ waterflames",
         "▸ flames",
         "▸ shifting hues",

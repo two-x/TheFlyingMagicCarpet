@@ -84,9 +84,13 @@
 #include "AudioBoard.h"
 #include <math.h>
 
+// X-macro list: single source of truth for both the enum below and
+// variationName() -- see LightShow.h's own comment on the pattern.
+#define LIGHTHOUSE_VARIATIONS(X) X(VarDefault) X(VarNoStrobe) X(VarChinaReact)
+
 class LighthouseShow : public LightShow {
  private:
-   enum Variation { VarDefault = 0, VarNoStrobe = 1, VarChinaReact = 2 };
+   enum Variation { LIGHTHOUSE_VARIATIONS(LIGHTSHOW_ENUM_ENTRY) };
    static const uint8_t numVariations_ = 3;
    uint8_t variation_;
 
@@ -275,10 +279,10 @@ class LighthouseShow : public LightShow {
    uint8_t variation() { return variation_; }
    uint8_t numVariations() { return numVariations_; }
    const char * variationName() {
-      if ( variation_ == VarDefault ) return "default";
-      if ( variation_ == VarNoStrobe ) return "no strobe";
-      return "china react";
+      switch ( variation_ ) { LIGHTHOUSE_VARIATIONS(LIGHTSHOW_VARIATION_NAME_CASE) }
+      return "?";
    }
+   #undef LIGHTHOUSE_VARIATIONS // X-macro's job is done, keep the namespace clean
 
    void start() {
       carpet->clearRope();

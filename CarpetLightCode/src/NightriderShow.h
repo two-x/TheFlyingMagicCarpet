@@ -35,9 +35,13 @@ const CRGB bottomC[] {
 };
 */
 
+// X-macro list: single source of truth for both the enum below and
+// variationName() -- see LightShow.h's own comment on the pattern.
+#define NIGHTRIDER_VARIATIONS(X) X(VarManualHue) X(VarAutoHueCycle) X(VarAutoWithSound)
+
 class NightriderShow : public LightShow {
  private:
-   enum Variation { VarManualHue = 0, VarAutoHueCycle = 1, VarAutoWithSound = 2 };
+   enum Variation { NIGHTRIDER_VARIATIONS(LIGHTSHOW_ENUM_ENTRY) };
    static const uint8_t numVariations_ = 3;
    uint8_t variation_;
 
@@ -91,10 +95,10 @@ class NightriderShow : public LightShow {
    uint8_t numVariations() { return numVariations_; }
 
    const char * variationName() {
-      if ( variation_ == VarManualHue ) return "manual hue";
-      if ( variation_ == VarAutoHueCycle ) return "auto hue cycle";
-      return "auto with sound";
+      switch ( variation_ ) { NIGHTRIDER_VARIATIONS(LIGHTSHOW_VARIATION_NAME_CASE) }
+      return "?";
    }
+   #undef NIGHTRIDER_VARIATIONS // X-macro's job is done, keep the namespace clean
 
    void start() {
       for ( int i = NEO3_OFFSET; i < NUM_NEO_LEDS_ACTUAL; ++i ) {

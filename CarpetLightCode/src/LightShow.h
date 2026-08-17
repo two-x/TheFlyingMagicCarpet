@@ -27,6 +27,43 @@
 #include "CRGBW.h"
 #include "MagicCarpet.h"
 #include "AudioBoard.h"
+#include <string.h>
+
+// ---- Enum-name derivation (X-macro pattern) -------------------------
+// Lets a show define its own Variation enum (or CarpetLightLogic.cpp
+// define ShowMode) AND its display-name function from ONE list, so the
+// two can never drift apart -- no display string is ever hand-typed a
+// second time anywhere; it's derived from the enum identifier's own
+// stringized text at compile time.
+//
+// Usage, in a show's class body:
+//   #define MYSHOW_VARIATIONS(X) X(VarFoo) X(VarBarBaz)
+//   enum Variation { MYSHOW_VARIATIONS(LIGHTSHOW_ENUM_ENTRY) };
+//   const char * variationName() {
+//      switch (variation_) { MYSHOW_VARIATIONS(LIGHTSHOW_VARIATION_NAME_CASE) }
+//      return "?";
+//   }
+//   #undef MYSHOW_VARIATIONS  // X-macro's job is done, keep the namespace clean
+//
+// stripEnumPrefix_() strips a known prefix, nothing else -- no case
+// change, no spacing -- e.g. "VarManualHue" -> "ManualHue",
+// "ShowNightrider" -> "Nightrider". Deliberately NOT "humanized": the
+// point is that this string is byte-for-byte what you'd grep the FW
+// source for (once you know the "Var"/"Show" prefix convention), not a
+// friendlier-looking rewrite of it.
+//
+// A show whose real display names don't fit this rule (an established
+// separate convention) is free to skip this entirely and write
+// variationName() by hand instead -- see BumpingAudioShow.h's own
+// comment for why it does.
+#define LIGHTSHOW_ENUM_ENTRY(name) name,
+#define LIGHTSHOW_VARIATION_NAME_CASE(name) case name: return stripEnumPrefix_( #name, "Var" );
+#define LIGHTSHOW_SHOW_NAME_CASE(name) case name: return stripEnumPrefix_( #name, "Show" );
+
+inline const char * stripEnumPrefix_( const char * rawName, const char * prefix ) {
+   size_t prefixLen = strlen( prefix );
+   return ( strncmp( rawName, prefix, prefixLen ) == 0 ) ? rawName + prefixLen : rawName;
+}
 
 /*
 DEFINE_GRADIENT_PALETTE( topColors_t ) {

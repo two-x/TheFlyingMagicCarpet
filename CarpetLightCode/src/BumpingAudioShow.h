@@ -54,6 +54,18 @@ const CRGB bottomC[] {
 
 class EqualizerShow : public LightShow {
  private:
+   // NOT using the LightShow.h X-macro/humanizeEnumName_() pattern the
+   // other 4 shows use -- 4 of these 5 real display names genuinely don't
+   // fit that mechanical "strip Var, lowercase, space before each cap"
+   // rule: "VU meter" keeps VU as a real uppercase acronym (not "vu
+   // meter"), and new_standard/pixel_war/sub_standard use an underscore
+   // convention that matches how they're referred to throughout this
+   // file's own code/comments (not "new standard" etc). Forcing the
+   // mechanical rule here would silently change established display names
+   // that are also used as jargon elsewhere in this file. variationName()
+   // below stays a plain hand-written switch instead -- still real FW
+   // code the visualizer reads via getCurrentVariationName(), just not
+   // mechanically re-derivable from the enum text for this one show.
    enum Variation { VarChase = 0, VarVuMeter = 1, VarNewStandard = 2, VarPixelWar = 3, VarSubStandard = 4 };
    static const uint8_t numVariations_ = 5;
    uint8_t variation_;
