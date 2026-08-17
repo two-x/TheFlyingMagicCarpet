@@ -950,7 +950,7 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ df3045b - 2026-08-17 05:54 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ 02e8c81 - 2026-08-17 14:50 UTC</span>
 </header>
 
 <div class="help-overlay" id="helpOverlay" hidden>
@@ -1162,7 +1162,7 @@ Directions (front/back/left/right) are relative to the carpet's own direction of
 
 ## Browser visualizer
 
-A self-contained single-file HTML/JS/Canvas simulator, built so a remote developer can debug firmware, add shows, and tune existing ones from `src/*.h` alone — no physical car needed. **Not an independent creative sandbox**: its light-show logic is a faithful JS port of `src/*.h` (`AudioBoard.h`'s math, `NightriderShow`/`FlameShow`/`EqualizerShow`/`SpeedStripesShow`/`LighthouseShow`, config-mode navigation) and must stay that way — new show *behavior* belongs in firmware first, with the visualizer just running the same logic so the screen always matches the real carpet. Legitimate divergence is limited to simulating things *external* to firmware — audio input (mic/tab/file/synthetic tone standing in for the real MSGEQ7 chip), the vehicle speed SpeedLink would deliver, and the pot/encoder/button inputs themselves — never the show logic that consumes them. Renders a schematic top-down view with every fixture (rope, megabars, china) responding as on real hardware.
+A self-contained single-file HTML/JS/Canvas simulator, built so a remote developer can debug firmware, add shows, and tune existing ones from `src/*.h` alone — no physical car needed. **Not an independent creative sandbox**: its light-show logic is not a JS port of anything — the real firmware (`src/*.h`, every real show, `CarpetGeometry.h`, `AudioBoard.h`'s math, config-mode navigation, all of it) is compiled to WebAssembly and run directly in-browser, unmodified, and the visualizer reads its real LED output back out of WASM memory to draw. There is nothing to "keep in sync": a bug in real firmware shows up here because it's the same compiled code, not a copy of it. Legitimate JS-only content is limited to simulating things *external* to firmware — audio input (mic/tab/file/synthetic tone standing in for the real MSGEQ7 chip), the vehicle speed SpeedLink would deliver, and the pot/encoder/button inputs themselves — plus a separate, structurally unreachable "Interface" role (`interface-mode.js`) for a future low-bandwidth radio-link mode that can't stream real LED bytes and so deliberately re-implements rendering; that mode is dormant until Project B's radio link exists. Renders a schematic top-down view with every fixture (rope, megabars, china) responding as on real hardware.
 
 ### Access it live
 
@@ -4779,14 +4779,14 @@ initModal( {
   });
 }
 
-// The CI deploy workflow replaces master @ df3045b - 2026-08-17 05:54 UTC with the real
+// The CI deploy workflow replaces master @ 02e8c81 - 2026-08-17 14:50 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  const isLocal = el.textContent === 'master @ df3045b - 2026-08-17 05:54 UTC';
+  const isLocal = el.textContent === 'master @ 02e8c81 - 2026-08-17 14:50 UTC';
   if (isLocal) el.textContent = 'local build (not CI-deployed)';
   // Page title, so a bookmark dragged from this tab defaults to a name
   // that says which branch it's actually pointed at -- same BUILD_INFO
