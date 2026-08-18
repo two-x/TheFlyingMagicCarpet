@@ -110,6 +110,10 @@ float web_getFringeLengthZFt() { return CarpetGeometry::FRINGE_LENGTH_Z_FT; }
 EMSCRIPTEN_KEEPALIVE
 float web_getSurfaceBaseHeightFt() { return CarpetGeometry::SURFACE_BASE_HEIGHT_FT; }
 EMSCRIPTEN_KEEPALIVE
+float web_getSurfaceThicknessFt() { return CarpetGeometry::SURFACE_THICKNESS_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getCarpetThicknessFt() { return CarpetGeometry::CARPET_THICKNESS_FT; }
+EMSCRIPTEN_KEEPALIVE
 float web_getSideUndulationAmplitudeFt() { return CarpetGeometry::SIDE_UNDULATION_AMPLITUDE_FT; }
 EMSCRIPTEN_KEEPALIVE
 float web_getSideUndulationWavelengthFt() { return CarpetGeometry::SIDE_UNDULATION_WAVELENGTH_FT; }
@@ -122,6 +126,37 @@ EMSCRIPTEN_KEEPALIVE
 float web_getTableCenterYFt() { return CarpetGeometry::TABLE_CENTER_Y_FT; }
 EMSCRIPTEN_KEEPALIVE
 float web_getTableDiameterFt() { return CarpetGeometry::TABLE_DIAMETER_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTableHeightAboveSurfaceFt() { return CarpetGeometry::TABLE_HEIGHT_ABOVE_SURFACE_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTableclothTasselHeightFt() { return CarpetGeometry::TABLECLOTH_TASSEL_HEIGHT_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTableclothFringeDropFt() { return CarpetGeometry::TABLECLOTH_FRINGE_DROP_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTableclothFringeThicknessFt() { return CarpetGeometry::TABLECLOTH_FRINGE_THICKNESS_FT; }
+// Corner tassels + fringe strand spec -- real dimensions, visualizer
+// decides how densely/simplified to actually render them (see its own
+// comments), but the real facts live here, one source of truth.
+EMSCRIPTEN_KEEPALIVE
+float web_getTasselSphereDiameterFt() { return CarpetGeometry::TASSEL_SPHERE_DIAMETER_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTasselSphereBelowSurfaceFt() { return CarpetGeometry::TASSEL_SPHERE_BELOW_SURFACE_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTasselCylinderDiameterFt() { return CarpetGeometry::TASSEL_CYLINDER_DIAMETER_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTasselCylinderHeightFt() { return CarpetGeometry::TASSEL_CYLINDER_HEIGHT_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTasselConeTopDiameterFt() { return CarpetGeometry::TASSEL_CONE_TOP_DIAMETER_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTasselConeBottomDiameterFt() { return CarpetGeometry::TASSEL_CONE_BOTTOM_DIAMETER_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTasselConeBottomAboveGroundFt() { return CarpetGeometry::TASSEL_CONE_BOTTOM_ABOVE_GROUND_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getFringeStrandsPerIn() { return CarpetGeometry::FRINGE_STRANDS_PER_IN; }
+EMSCRIPTEN_KEEPALIVE
+float web_getFringeStrandDiameterFt() { return CarpetGeometry::FRINGE_STRAND_DIAMETER_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getMegabarFrontPairSpacingFt() { return CarpetGeometry::MEGABAR_FRONT_PAIR_SPACING_FT; }
 // Vehicle undercarriage (chassis) + wheels -- not consumed by anything yet
 // (no 3D mode exists), exported now so a future 3D pass reads real FW
 // dimensions instead of re-guessing/hardcoding them independently.

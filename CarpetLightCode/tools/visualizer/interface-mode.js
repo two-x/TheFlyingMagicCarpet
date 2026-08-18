@@ -279,7 +279,7 @@ const SIZEOF_LARGE_NEO_CORNER = 33;
 const VU_HALFLEN = SIZEOF_LARGE_NEO / 2 - SIZEOF_LARGE_NEO_CORNER; // 143, true corner to center
 const VU_MAX_REACH = VU_HALFLEN * 1.15; // 100%-level reach: 15% past center, so maxed meters cross there
 const VU_FRONT_RIGHT = RIGHT + SIZEOF_LARGE_NEO_CORNER;
-const VU_BACK_RIGHT = BACK - SIZEOF_LARGE_NEO_CORNER;
+const VU_BACK_RIGHT = REAR - SIZEOF_LARGE_NEO_CORNER; // BUGFIX: referenced the global's OLD name (BACK) -- renamed to REAR in carpet-visualizer.html earlier this session, left stale here since this file wasn't part of that sweep
 const VU_BACK_LEFT = LEFT + SIZEOF_LARGE_NEO_CORNER;
 const VU_FRONT_LEFT = NUM_NEO - SIZEOF_LARGE_NEO_CORNER;
 
@@ -309,7 +309,7 @@ function showEqualizer(nowMs, dtMs) {
     const trebleColorPct = Math.min(100, trebleHitPct * 1.6);
     const bassClr = scale255(c2, Math.round(bassHitPct/100*255));
     const trebleClr = scale255(c1, Math.round(trebleColorPct/100*255));
-    for (let i = BACK; i < LEFT; i++) ropeLeds[i] = bassClr;   // back edge: always bass base, full width
+    for (let i = REAR; i < LEFT; i++) ropeLeds[i] = bassClr;   // rear edge: always bass base, full width
     for (let i = 0; i < RIGHT; i++) ropeLeds[i] = trebleClr;   // front edge: always treble base, full width
     // refBack/refFront: the meter's own corner-to-center reference points
     // (VU_HALFLEN/VU_MAX_REACH are calibrated from these, NOT the physical
@@ -333,7 +333,7 @@ function showEqualizer(nowMs, dtMs) {
         else ropeLeds[i] = {r:0,g:0,b:0};
       }
     }
-    vuSide(VU_BACK_RIGHT, VU_FRONT_RIGHT, BACK - 1, RIGHT, -1);      // right strand: true back corner -> true front corner
+    vuSide(VU_BACK_RIGHT, VU_FRONT_RIGHT, REAR - 1, RIGHT, -1);      // right strand: true back corner -> true front corner
     vuSide(VU_BACK_LEFT, VU_FRONT_LEFT, LEFT, NUM_NEO - 1, 1);       // left strand: true back corner -> true front corner
     // Floods (megabar + china) reproduce the same meter, split by their own
     // physical front/back position -- not in the real firmware yet (which
@@ -824,8 +824,8 @@ const SS_CHINA_SPOT_FT = Array.from({ length: NUM_CHINA }, (_, c) =>
 const SS_CAR_HALF_W_FT = CAR_W_FT / 2, SS_CAR_HALF_H_FT = CAR_H_FT / 2;
 function ssLedCarFt(i) {
   if (i < RIGHT) { const u = i / SIZEOF_SMALL_NEO; return { x: -SS_CAR_HALF_W_FT + u * CAR_W_FT, y: SS_CAR_HALF_H_FT }; }
-  if (i < BACK) { const u = (i - RIGHT) / SIZEOF_LARGE_NEO; return { x: SS_CAR_HALF_W_FT, y: SS_CAR_HALF_H_FT - u * CAR_H_FT }; }
-  if (i < LEFT) { const u = (i - BACK) / SIZEOF_SMALL_NEO; return { x: SS_CAR_HALF_W_FT - u * CAR_W_FT, y: -SS_CAR_HALF_H_FT }; }
+  if (i < REAR) { const u = (i - RIGHT) / SIZEOF_LARGE_NEO; return { x: SS_CAR_HALF_W_FT, y: SS_CAR_HALF_H_FT - u * CAR_H_FT }; }
+  if (i < LEFT) { const u = (i - REAR) / SIZEOF_SMALL_NEO; return { x: SS_CAR_HALF_W_FT - u * CAR_W_FT, y: -SS_CAR_HALF_H_FT }; }
   const u = (i - LEFT) / SIZEOF_LARGE_NEO; return { x: -SS_CAR_HALF_W_FT, y: -SS_CAR_HALF_H_FT + u * CAR_H_FT };
 }
 const SS_LED_Y_FT = Array.from({ length: NUM_NEO }, (_, i) => ssLedCarFt(i).y);

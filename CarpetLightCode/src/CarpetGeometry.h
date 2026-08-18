@@ -116,8 +116,27 @@ class CarpetGeometry {
    // Real measured fringe/tassel trim length, hanging down off the car's
    // edge -- a Z-axis (vertical) dimension, hence the _Z_ in the name.
    static constexpr float FRINGE_LENGTH_Z_FT = 1.0f;
-   // Real measured carpet deck surface height off the ground.
-   static constexpr float SURFACE_BASE_HEIGHT_FT = 2.5f;
+   // Real measured carpet deck surface height off the ground -- was 2.5ft,
+   // corrected down 3in in one pass then another 3in in a follow-up (6in
+   // total, "lower everything toward the ground by 3in" applied twice).
+   // Everything else that positions relative to the deck (table, chassis
+   // top, tassel attachment, etc.) references this constant rather than
+   // an independent copy, so the correction propagates automatically --
+   // EXCEPT whatever is deliberately anchored to true ground instead
+   // (TASSEL_CONE_BOTTOM_ABOVE_GROUND_FT, CHASSIS_BOTTOM_HEIGHT_FT, wheel
+   // height), which stays put by construction since those don't reference
+   // this constant at all.
+   static constexpr float SURFACE_BASE_HEIGHT_FT = 2.5f - 3.0f / 12.0f - 3.0f / 12.0f;
+   // Real measured deck panel thickness -- the visible "edge" between the
+   // deck's top (SURFACE_BASE_HEIGHT_FT) and bottom (CHASSIS_TOP_HEIGHT_FT
+   // below, which is defined to equal this same underside) faces.
+   static constexpr float SURFACE_THICKNESS_FT = 0.5f / 12.0f;
+   // Real measured thickness of the carpet/rug fabric itself, a SEPARATE
+   // physical layer sitting ON TOP of the rigid deck panel above
+   // (SURFACE_BASE_HEIGHT_FT is the deck panel's own top face -- the
+   // carpet's own top surface is SURFACE_BASE_HEIGHT_FT +
+   // CARPET_THICKNESS_FT, not the same surface).
+   static constexpr float CARPET_THICKNESS_FT = 0.5f / 12.0f;
    // Real measured property: the rope along the LEFT/RIGHT side strands
    // physically undulates up and down (peak-to-peak 3.5in) as you move
    // front-to-rear -- the front/rear strands do NOT undulate (flat, always
@@ -125,7 +144,16 @@ class CarpetGeometry {
    // across the car's own length (not independently measured).
    static constexpr float SIDE_UNDULATION_PEAK_TO_PEAK_FT = 3.5f / 12.0f;
    static constexpr float SIDE_UNDULATION_AMPLITUDE_FT = SIDE_UNDULATION_PEAK_TO_PEAK_FT / 2.0f;
-   static constexpr float SIDE_UNDULATION_WAVELENGTH_FT = CAR_LENGTH_FT / 2.0f;
+   // CORRECTED per follow-up request: front/rear edges must be minima
+   // AND there must be 2 more minima in between (4 minima total: both
+   // edges + 2 interior), with 3 maxima total (center plus one on each
+   // side) -- 7 extrema alternating min/max/min/max/min/max/min across
+   // the car's length, which needs k*halfL = 3*PI (not PI), i.e. exactly
+   // 3 full wavelengths span the car's length (not 1) -- paired with
+   // getSurfaceHeightAt()'s own cosf() (not sinf()) below, so Y=0 is a
+   // peak, Y=+-halfL are the outermost troughs, and Y=+-CAR_LENGTH_FT/6
+   // are the 2 additional interior troughs.
+   static constexpr float SIDE_UNDULATION_WAVELENGTH_FT = CAR_LENGTH_FT / 3.0f;
 
    // Round decoration table + tablecloth on the deck -- NOT a light
    // fixture (no dimZ/mount concept, visualizer-rendering-only, same
@@ -137,6 +165,56 @@ class CarpetGeometry {
    static constexpr float TABLE_CENTER_X_FT = 0.0f;
    static constexpr float TABLE_CENTER_Y_FT = 2.5f;
    static constexpr float TABLE_DIAMETER_FT = 3.0f;
+   // Table top height above the LOCAL real deck surface at the table's own
+   // position (i.e. add to getSurfaceHeightAt(..., TABLE_CENTER_Y_FT), not
+   // to SURFACE_BASE_HEIGHT_FT directly -- undulation, where it occurs,
+   // already reduces this). The table itself is rigid/level (parallel to
+   // the true ground), not something that warps with the deck.
+   static constexpr float TABLE_HEIGHT_ABOVE_SURFACE_FT = 7.0f / 12.0f; // was 10.5in, shortened by 1/3 per request
+   // Small dark-red tassels hanging from each of the top tablecloth's 4
+   // corners (short enough that none reach the carpet surface below --
+   // real headroom is TABLE_HEIGHT_ABOVE_SURFACE_FT, comfortably more
+   // than this). Real perimeter fringe around the top tablecloth's own
+   // square edge -- hangs straight down (per explicit request, does NOT
+   // enlarge the cloth's own footprint), same reduced-representative-
+   // count rendering approach as the main perimeter fringe.
+   static constexpr float TABLECLOTH_TASSEL_HEIGHT_FT = 2.0f / 12.0f;
+   static constexpr float TABLECLOTH_FRINGE_DROP_FT = 2.0f / 12.0f;
+   static constexpr float TABLECLOTH_FRINGE_THICKNESS_FT = 0.125f / 12.0f;
+
+   // Corner tassels: real per-part dimensions (see CarpetGeometry.h
+   // consumers for the assembly order -- sphere, then a wrapping cylinder,
+   // then a flaring cone, top to bottom). Centered at each true deck
+   // corner (X,Y); Z anchors given per-part below since they chain
+   // (sphere anchored off the local deck surface, cone anchored off the
+   // true ground -- 2 independent real reference heights, not one).
+   static constexpr float TASSEL_SPHERE_DIAMETER_FT = 5.0f / 12.0f; // was 4in, grown 25% per request (applies to corner AND side tassels, both scaled from this same real spec)
+   static constexpr float TASSEL_SPHERE_BELOW_SURFACE_FT = 2.0f / 12.0f; // sphere center, below the LOCAL real deck surface at that corner -- was 1in, whole assembly lowered 1in per request (paired with TASSEL_CONE_BOTTOM_ABOVE_GROUND_FT below)
+   static constexpr float TASSEL_CYLINDER_DIAMETER_FT = 3.5f / 12.0f;
+   static constexpr float TASSEL_CYLINDER_HEIGHT_FT = 0.5f / 12.0f; // was 1.5in, shortened 1in so the corner tassel's total height is 1in shorter overall, per request
+   static constexpr float TASSEL_CONE_TOP_DIAMETER_FT = 3.0f / 12.0f;
+   static constexpr float TASSEL_CONE_BOTTOM_DIAMETER_FT = 8.0f / 12.0f;
+   static constexpr float TASSEL_CONE_BOTTOM_ABOVE_GROUND_FT = 3.0f / 12.0f; // absolute height above true ground -- not relative to the sphere/cylinder above it -- was 4in, whole assembly lowered 1in per request
+
+   // Perimeter fringe: real strand spec (visualizer renders a reduced
+   // representative count for performance/legibility, not this literal
+   // density -- see the visualizer's own comment on that simplification;
+   // the real facts belong here regardless of how they get rendered).
+   static constexpr float FRINGE_STRANDS_PER_IN = 5.0f;
+   static constexpr float FRINGE_STRAND_DIAMETER_FT = 0.1875f / 12.0f; // was ~1/8in (0.15in), increased to 3/16in per request
+
+   // Megabar0 ("the front-facing pair," see MegabarName/buildFloods_'s own
+   // comments) is really 2 physical fixture housings mounted directly next
+   // to each other, both driven by the same logical LED/DMX slot and both
+   // aimed at the SAME real ground spot -- per explicit request, a
+   // visualizer-3D-rendering-only fact (which real light show cares how
+   // many physical housings share one logical channel), so it lives here
+   // alongside the other Visualizer-3D-rendering-only mount facts rather
+   // than changing NUM_MEGABAR_LEDS/the fixture table's own shape.
+   // Estimated ("mounted directly next to each other," not independently
+   // measured) -- flagged the same way SIDE_TASSEL_ROPE_LENGTH_FT's own
+   // assumed value is.
+   static constexpr float MEGABAR_FRONT_PAIR_SPACING_FT = 8.0f / 12.0f;
 
    // Vehicle undercarriage (chassis) -- NOT rendered anywhere yet (the
    // visualizer is 2D top-down only, no 3D mode exists), included so a
@@ -152,22 +230,26 @@ class CarpetGeometry {
    static constexpr float CHASSIS_CENTER_X_FT = 0.0f; // centered left-right on car center
    static constexpr float CHASSIS_CENTER_Y_FT = 0.0f; // centered front-rear on car center
    static constexpr float CHASSIS_BOTTOM_HEIGHT_FT = 4.0f / 12.0f;    // 4in ground clearance
-   static constexpr float CHASSIS_TOP_HEIGHT_FT = SURFACE_BASE_HEIGHT_FT; // meets the underside of the deck
+   // Meets the underside of the deck panel -- the panel's own underside
+   // undulates along with its top (same amplitude, see
+   // SIDE_UNDULATION_AMPLITUDE_FT) and sits SURFACE_THICKNESS_FT below the
+   // top, so a flat chassis top must be set to the LOWEST point that
+   // underside ever reaches (not SURFACE_BASE_HEIGHT_FT itself), or the
+   // chassis visibly pokes through the deck wherever undulation dips low.
+   static constexpr float CHASSIS_TOP_HEIGHT_FT = SURFACE_BASE_HEIGHT_FT - SIDE_UNDULATION_AMPLITUDE_FT - SURFACE_THICKNESS_FT;
 
    // Wheels: one at each of the 4 extreme corners of the chassis footprint
    // above (X=+-CHASSIS_WIDTH_FT/2, Y=+-CHASSIS_LENGTH_FT/2), resting on
    // the ground (center height = WHEEL_DIAMETER_FT/2). Diameter is the
    // wheel's own rolling-direction/height extent (Y-Z plane); width is its
    // axle-direction extent (X, side-to-side thickness).
-   static constexpr float WHEEL_DIAMETER_FT = 18.0f / 12.0f;
-   static constexpr float WHEEL_WIDTH_FT = 9.0f / 12.0f;
-   // Fender cutout carved out of the chassis prism around each wheel, so a
-   // future 3D pass doesn't draw the solid chassis block straight through
-   // the tires -- a simple clearance radius past the wheel's own
-   // footprint, "generous" per request rather than independently
-   // measured/spec'd; a real 3D pass is free to shape the actual cutout
-   // however it wants; this just says how much room to leave.
-   static constexpr float FENDER_CLEARANCE_FT = 0.5f;
+   static constexpr float WHEEL_DIAMETER_FT = 16.5f / 12.0f;
+   static constexpr float WHEEL_WIDTH_FT = 8.5f / 12.0f;
+   // Fender cutout carved out of the chassis prism around each wheel --
+   // gap between the wheel's own footprint and the chassis body panel, on
+   // whichever sides actually face solid chassis material. Was a
+   // "generous" 6in placeholder; now a precise 4in per request.
+   static constexpr float FENDER_CLEARANCE_FT = 4.0f / 12.0f;
 
    // Surface height (feet above the ground) at a given front-rear position
    // (yFt) on the given side of the car. Only CarSideLeft/CarSideRight
@@ -177,7 +259,7 @@ class CarpetGeometry {
    static float getSurfaceHeightAt( CarSide side, float yFt ) {
       if ( side != CarSideLeft && side != CarSideRight ) return SURFACE_BASE_HEIGHT_FT;
       return SURFACE_BASE_HEIGHT_FT + SIDE_UNDULATION_AMPLITUDE_FT *
-             sinf( 2.0f * PI * yFt / SIDE_UNDULATION_WAVELENGTH_FT );
+             cosf( 2.0f * PI * yFt / SIDE_UNDULATION_WAVELENGTH_FT );
    }
 
    /* ---- Centralized per-fixture geometry record -- one entry per
@@ -567,7 +649,15 @@ class CarpetGeometry {
       // Z heights from the visualizer's own FIXTURE_HEIGHTS_FT (megabarFront:
       // 1.0, megabarDefault: 1.5, china: 2.0) -- the only real measured mount
       // heights that exist anywhere in this codebase so far.
-      static const float MEGABAR_FRONT_Z_FT = 1.0f, MEGABAR_DEFAULT_Z_FT = 1.5f;
+      // Corrected per request, in 2 rounds: front-facing pair (megabar0,
+      // both physical fixtures) raised 2in then lowered 3in (net -1in from
+      // the original 1.0ft); all others dropped 4in then raised 1in (net
+      // -3in from the original 1.5ft) -- kept as 2 separate constants since
+      // they're 2 independently-measured real facts, not one shared value.
+      // "Lower everything by 3in" (per request, applies to fixture mount
+      // heights too -- not in that request's exceptions list) -- another
+      // 3in off both, on top of the earlier corrections.
+      static const float MEGABAR_FRONT_Z_FT = 1.0f + 2.0f / 12.0f - 3.0f / 12.0f - 3.0f / 12.0f, MEGABAR_DEFAULT_Z_FT = 1.5f - 4.0f / 12.0f + 1.0f / 12.0f - 3.0f / 12.0f;
       // Ground spot -- dimX/dimY -- fully independent hardcoded values, same
       // as fixtureDimX/Y above, NOT derived from the fixture at build or run
       // time (per request: every flood's fixture and spot are both
@@ -583,17 +673,27 @@ class CarpetGeometry {
       // stepped down in turn as each measured too much, landing back at
       // nominal. Both are visual-equalization trial amounts (per request),
       // meant to be measured and recalibrated, not precisely derived.
+      // 0/3/6/9 (front/right/rear/left, the 4 cardinal fixtures) CORRECTED
+      // per request: previously equal to their own fixture position (a
+      // zero-length aim, valid enough for a flat top-down 2D render but
+      // degenerate in 3D -- with fixtureDimZ above the deck and dimZ=0 at
+      // true ground, a zero horizontal offset makes the fixture-to-spot
+      // vector point straight down instead of outward). Given the same
+      // real 8ft "as the crow flies" throw distance every other megabar's
+      // spot already uses (see comment above this table), continuing
+      // straight out along each fixture's own existing direction (front/
+      // rear along Y, right/left along X).
       const float mbSpotXY[ NUM_MEGABAR_LEDS ][ 2 ] = {
-         {         0.0f,    6.0f },     // 0
+         {         0.0f,   14.0f },     // 0 (was 6.0, co-located with its own fixture -- now 8ft further out)
          {         6.8000f,  12.4282f }, // 1 (30deg, throw dir 30.0deg, nominal)
          {        10.7505f,   6.8450f }, // 2 (60deg, throw dir 65deg)
-         {         3.5f,     0.0f },     // 3 (90deg)
+         {        11.5f,     0.0f },     // 3 (was 3.5, co-located with its own fixture -- now 8ft further out)
          {        10.7505f,  -6.8450f }, // 4 (120deg, throw dir 115deg)
          {         6.8000f, -12.4282f }, // 5 (150deg, throw dir 150.0deg, nominal)
-         {         0.0f,   -6.5f },     // 6
+         {         0.0f,  -14.5f },     // 6 (was -6.5, co-located with its own fixture -- now 8ft further out)
          {        -6.8000f, -12.4282f }, // 7 (210deg, throw dir 210.0deg, nominal)
          {       -10.7505f,  -6.8450f }, // 8 (240deg, throw dir 245deg)
-         {        -3.5f,     0.0f },     // 9
+         {       -11.5f,     0.0f },     // 9 (was -3.5, co-located with its own fixture -- now 8ft further out)
          {       -10.7505f,   6.8450f }, // 10 (300deg, throw dir 295deg)
          {        -6.8000f,  12.4282f }, // 11 (330deg, throw dir 330.0deg, nominal)
       };
@@ -631,7 +731,7 @@ class CarpetGeometry {
       // separate, much smaller-scale concept (the ~0.26ft physical mount
       // offset between 2 fixtures sharing one corner bracket) -- unrelated
       // to this several-foot, aim-driven ground-spot separation.
-      static const float CHINA_Z_FT = 2.0f;
+      static const float CHINA_Z_FT = 2.0f - 3.0f / 12.0f - 3.0f / 12.0f; // was 2.0ft, lowered 3in then another 3in per request (same correction as SURFACE_BASE_HEIGHT_FT above)
       // "~1/3 of the way along its assigned edge" -- edge full length, not
       // half (a front/rear-aimed spot moves along the CAR_WIDTH_FT-long
       // front/rear edge; a side-aimed spot moves along the
@@ -651,15 +751,30 @@ class CarpetGeometry {
       // Each fixture's own real mount position, hand-entered individually
       // (no shared formula/offset applied at build time -- these ARE the
       // measured/estimated values, not derived from cx/cy at runtime).
+      //
+      // The 4 SIDE-aimed china (indices 0/3/4/7 -- ChinaRightFront/
+      // ChinaLeftFront/ChinaLeftRear/ChinaRightRear) CORRECTED per
+      // request: at the original hand-entered spacing, their real 8in-
+      // diameter cylindrical fixture housing overlapped their corner-
+      // mate's (the front/rear-aimed china sharing the same corner
+      // bracket, ~0.37ft center-to-center vs. 0.667ft combined diameter).
+      // Shoved toward the X axis (Y moved toward 0, X unchanged) just
+      // enough for the 2 housings to clear with a 1/8in gap. dy is the
+      // real fixed X separation (0.262ft between every such pair) and the
+      // required center-to-center distance (8in housing + 1/8in
+      // clearance = 8.125in) via the right triangle the 2 fixtures form.
+      static const float CHINA_CORNER_PAIR_DX_FT = 0.262f;
+      static const float CHINA_HOUSING_CLEAR_DIST_FT = 8.125f / 12.0f;
+      static const float CHINA_SIDE_MOUNT_DY_FT = sqrtf( CHINA_HOUSING_CLEAR_DIST_FT * CHINA_HOUSING_CLEAR_DIST_FT - CHINA_CORNER_PAIR_DX_FT * CHINA_CORNER_PAIR_DX_FT );
       const float chMountXY[ NUM_CHINA_LEDS ][ 2 ] = {
-         {  5.012f,  6.750f },   // 0 front-right, aimed side
-         {  4.750f,  7.012f },   // 1 front-right, aimed front
-         { -4.750f,  7.012f },   // 2 front-left, aimed front
-         { -5.012f,  6.750f },   // 3 front-left, aimed side
-         { -5.012f, -6.750f },   // 4 rear-left, aimed side
-         { -4.750f, -7.012f },   // 5 rear-left, aimed rear
-         {  4.750f, -7.012f },   // 6 rear-right, aimed rear
-         {  5.012f, -6.750f },   // 7 rear-right, aimed side
+         {  5.012f,  7.012f - CHINA_SIDE_MOUNT_DY_FT },   // 0 front-right, aimed side (was 6.750)
+         {  4.750f,  7.012f },                             // 1 front-right, aimed front
+         { -4.750f,  7.012f },                             // 2 front-left, aimed front
+         { -5.012f,  7.012f - CHINA_SIDE_MOUNT_DY_FT },   // 3 front-left, aimed side (was 6.750)
+         { -5.012f, -7.012f + CHINA_SIDE_MOUNT_DY_FT },   // 4 rear-left, aimed side (was -6.750)
+         { -4.750f, -7.012f },                             // 5 rear-left, aimed rear
+         {  4.750f, -7.012f },                             // 6 rear-right, aimed rear
+         {  5.012f, -7.012f + CHINA_SIDE_MOUNT_DY_FT },   // 7 rear-right, aimed side (was -6.750)
       };
       for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
          FloodGeometry & f = floods_[ globalFloodIndex_( FixtureChina, c ) ];
