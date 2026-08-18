@@ -5,8 +5,8 @@
  * carpet and doesn't rely on the sound.
  *
  * Variation 1: a dual VU meter along the two side rope runs -- bass grows from
- * the back corner toward the front (red), treble grows from the front corner
- * toward the back (blue), reusing this show's own red=bass/blue=treble
+ * the rear corner toward the front (red), treble grows from the front corner
+ * toward the rear (blue), reusing this show's own red=bass/blue=treble
  * convention from variation 0's megabar tinting. Each meter's 100%-level reach
  * is 15% of the true-corner-to-center half-length past center (RIGHT/LEFT are
  * already the exact side midpoints -- see MagicCarpet.h's positional
@@ -19,6 +19,7 @@
 
 #include "LightShow.h"
 #include "CarpetGeometry.h"
+#include "LightSetters.h"
 #include <math.h>
 
 const CRGB topC[] {
@@ -42,7 +43,7 @@ const CRGB bottomC[] {
 };
 
 // BUGFIX (mandate): the front/rear-vs-left/right megabar grouping and
-// front/back-vs-side china grouping used to be hardcoded literal index
+// front/rear-vs-side china grouping used to be hardcoded literal index
 // arrays, hand-derived once from LighthouseShow.h's angle convention and
 // never revisited -- exactly the "someone worked out the geometry by hand
 // and hardcoded the result" pattern this session's mandate exists to
@@ -120,21 +121,21 @@ class EqualizerShow : public LightShow {
    // ported back, updateVuMeter() clears megabar/china every call and never
    // refills them except during silence's swap-flash idle pattern -- floods
    // stay completely black through any amount of real, actual sound. Real
-   // front/back role from CarpetGeometry (dimY>0 = front), not the JS
+   // front/rear role from CarpetGeometry (dimY>0 = front), not the JS
    // mirror's visualizer-only canvas-pixel CAR_Y comparison.
-   enum VuFbRole { VuRoleFront = 0, VuRoleBack = 1 };
+   enum VuFbRole { VuRoleFront = 0, VuRoleRear = 1 };
    uint8_t vuMegabarRole_[ NUM_MEGABAR_LEDS ];
    uint8_t vuChinaRole_[ NUM_CHINA_LEDS ];
    void classifyVuFloodsFromGeometry() {
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
-         vuMegabarRole_[ m ] = ( CarpetGeometry::getMegabar( m ).dimY > 0.0f ) ? VuRoleFront : VuRoleBack;
+         vuMegabarRole_[ m ] = ( CarpetGeometry::getMegabar( m ).dimY > 0.0f ) ? VuRoleFront : VuRoleRear;
       }
       for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
-         vuChinaRole_[ c ] = ( CarpetGeometry::getChina( c ).dimY > 0.0f ) ? VuRoleFront : VuRoleBack;
+         vuChinaRole_[ c ] = ( CarpetGeometry::getChina( c ).dimY > 0.0f ) ? VuRoleFront : VuRoleRear;
       }
    }
 
-   // new_standard/sub_standard's own front/back-vs-side china grouping --
+   // new_standard/sub_standard's own front/rear-vs-side china grouping --
    // computed live from real CarpetGeometry angles, same pattern as
    // classifyVuFloodsFromGeometry() above (see this file's top-of-file
    // BUGFIX comment for what this replaced). China (unlike megabars) isn't
@@ -149,13 +150,13 @@ class EqualizerShow : public LightShow {
       float d = fabsf( a - b );
       return ( d > 180.0f ) ? 360.0f - d : d;
    }
-   bool chinaIsFrontBack_[ NUM_CHINA_LEDS ];
+   bool chinaIsFrontRear_[ NUM_CHINA_LEDS ];
    void classifyNewStdFromGeometry() {
       for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
          float a = CarpetGeometry::getChina( c ).dimAngleDeg;
-         float dFrontBack = min( angDist_( a, 0.0f ), angDist_( a, 180.0f ) );
+         float dFrontRear = min( angDist_( a, 0.0f ), angDist_( a, 180.0f ) );
          float dSide = min( angDist_( a, 90.0f ), angDist_( a, 270.0f ) );
-         chinaIsFrontBack_[ c ] = ( dFrontBack <= dSide );
+         chinaIsFrontRear_[ c ] = ( dFrontRear <= dSide );
       }
    }
 
@@ -321,7 +322,7 @@ class EqualizerShow : public LightShow {
 
    void start() {
       for ( int i = NEO3_OFFSET; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-         carpet->ropeLeds[ i ] = CRGB::Black;
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, CRGB::Black, LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
       potEntryPercent_ = carpet->pot->readPercent();
       potTakenOver_ = false;
@@ -459,61 +460,64 @@ class EqualizerShow : public LightShow {
       for ( int i = FRONT; i < FRONT_RIGHT; ++i ) {
          int i_adj = i - FRONT;
         int val = scaleTo255( abs(littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
          // carpet->ropeLeds[i] = CRGB::Red;
       }
       for ( int i = FRONT_RIGHT; i < RIGHT; ++i ) {
          int i_adj = i - FRONT_RIGHT;
          int val = scaleTo255( abs( bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
          // carpet->ropeLeds[i] = CRGB::Green;
       }
-      for ( int i = RIGHT; i < BACK_RIGHT; ++i ) {
+      for ( int i = RIGHT; i < REAR_RIGHT; ++i ) {
          int i_adj = i - RIGHT;
          int val = scaleTo255( abs(bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
          // carpet->ropeLeds[i] = CRGB::Blue;
       }
-      for ( int i = BACK_RIGHT; i < BACK; ++i ) {
-         int i_adj = i - BACK_RIGHT;
+      for ( int i = REAR_RIGHT; i < REAR; ++i ) {
+         int i_adj = i - REAR_RIGHT;
         int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
          // carpet->ropeLeds[i] = CRGB::Yellow;
       }
-      for ( int i = BACK; i < BACK_LEFT; ++i ) {
-         int i_adj = i - BACK;
+      for ( int i = REAR; i < REAR_LEFT; ++i ) {
+         int i_adj = i - REAR;
         int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
          // carpet->ropeLeds[i] = CRGB::Orange;
       }
-      for ( int i = BACK_LEFT; i < LEFT; ++i ) {
-         int i_adj = i - BACK_LEFT;
+      for ( int i = REAR_LEFT; i < LEFT; ++i ) {
+         int i_adj = i - REAR_LEFT;
          int val = scaleTo255( abs( bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
          // carpet->ropeLeds[i] = CRGB::Purple;
       }
       for ( int i = LEFT; i < FRONT_LEFT; ++i ) {
          int i_adj = i - LEFT;
          int val = scaleTo255( abs(bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
          // carpet->ropeLeds[i] = CRGB::Pink;
       }
       for ( int i = FRONT_LEFT; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          int i_adj = i - FRONT_LEFT;
         int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
          // carpet->ropeLeds[i] = CRGB::Grey;
       }
       for ( int i = 0; i < FRONT; ++i ) {
          int i_adj = i + SIZEOF_LARGE_NEO_CORNER;
         int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
          // carpet->ropeLeds[i] = CRGB::Grey;
       }
 
 
+      // Reversing already-written pixels in place, not writing a NEW color
+      // by position -- outside what LightSetters' position-addressed
+      // setters model, so this stays direct raw-array access on purpose.
       LedUtil::reverse( carpet->ropeLeds + FRONT, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
-       LedUtil::reverse( carpet->ropeLeds + BACK, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
+       LedUtil::reverse( carpet->ropeLeds + REAR, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
       LedUtil::reverse( carpet->ropeLeds + RIGHT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
       LedUtil::reverse( carpet->ropeLeds + LEFT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
 
@@ -603,10 +607,10 @@ class EqualizerShow : public LightShow {
 
  private:
    // variation 1: dual VU meter. Bass (AudioBoard::getLow()) is based across
-   // the WHOLE back of the car -- the back edge rope is always part of it,
-   // not just the two back corners -- and grows forward from there along
+   // the WHOLE rear of the car -- the rear edge rope is always part of it,
+   // not just the two rear corners -- and grows forward from there along
    // both sides, red. Treble (getHigh()) mirrors this from the whole front
-   // edge, growing backward along both sides, blue -- same red=bass/blue=
+   // edge, growing rearward along both sides, blue -- same red=bass/blue=
    // treble convention as variation 0's megabar tinting above. Both meters
    // use the same attack/decay peak-hold ballistics as variation 0's lowval/
    // lastlow (jump up fast past a threshold, fall back 15/frame otherwise),
@@ -615,8 +619,8 @@ class EqualizerShow : public LightShow {
    // signal shows a dim meter, not just a short one.
    //
    // RIGHT/LEFT are already the exact midpoints of each side run (see
-   // MagicCarpet.h's positional constants), and FRONT_RIGHT/BACK_RIGHT (resp.
-   // FRONT_LEFT/BACK_LEFT) the true corners -- so halfLen_ below is exactly
+   // MagicCarpet.h's positional constants), and FRONT_RIGHT/REAR_RIGHT (resp.
+   // FRONT_LEFT/REAR_LEFT) the true corners -- so halfLen_ below is exactly
    // the true-corner-to-center distance, reusing the same geometry as
    // variation 0's "big" segments (SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER).
    // Each meter's 100%-level reach is halfLen_ plus 15% of halfLen_, so maxed
@@ -645,16 +649,16 @@ class EqualizerShow : public LightShow {
       carpet->clearMegabars();
       carpet->clearChinas();
 
-      // back edge: always part of the bass meter's base, full width
+      // rear edge: always part of the bass meter's base, full width
       for ( int i = SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO; i < SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO; ++i ) {
-         carpet->ropeLeds[ i ] = bassClr;
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, bassClr, LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
       // front edge: always part of the treble meter's base, full width
       for ( int i = 0; i < SIZEOF_SMALL_NEO; ++i ) {
-         carpet->ropeLeds[ i ] = trebleClr;
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, trebleClr, LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
 
-      // right side: FRONT_RIGHT/BACK_RIGHT are the reference corner-to-
+      // right side: FRONT_RIGHT/REAR_RIGHT are the reference corner-to-
       // center points bassLitCount/trebleLitCount are calibrated against
       // (see halfLen_/maxReach_ above) -- kept fixed. The loop itself,
       // however, covers the side channel's ENTIRE physical strand (true
@@ -662,29 +666,29 @@ class EqualizerShow : public LightShow {
       // SIZEOF_LARGE_NEO-1), not just the span between the reference
       // points.
       //
-      // BUGFIX: this loop used to run FRONT_RIGHT..BACK_RIGHT only (the
+      // BUGFIX: this loop used to run FRONT_RIGHT..REAR_RIGHT only (the
       // reference points themselves), leaving the ~33-LED zone on EACH side
       // of that span (between the true physical corner and its inset
       // reference point) completely dark regardless of level -- neither
-      // this loop nor the front/back base-edge fill above ever touched it.
+      // this loop nor the front/rear base-edge fill above ever touched it.
       // Widening the loop to the true strand bounds fixes this using this
       // side's OWN distance-from-reference math (which, past a reference
       // point, is always "closer than any possible LitCount," i.e. reads as
       // an unconditional, level-proportional continuation of that meter --
       // physically correct, and entirely local to this side's own strand,
-      // never reaching into the front/back channels' own logic the way an
+      // never reaching into the front/rear channels' own logic the way an
       // earlier version of this fix mistakenly did).
       for ( int i = SIZEOF_SMALL_NEO; i < SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO; ++i ) {
          float distFromFront = i - FRONT_RIGHT;
-         float distFromBack = BACK_RIGHT - i;
-         carpet->ropeLeds[ i ] = vuMeterColor( distFromBack < bassLitCount, distFromFront < trebleLitCount, bassClr, trebleClr );
+         float distFromRear = REAR_RIGHT - i;
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, vuMeterColor( distFromRear < bassLitCount, distFromFront < trebleLitCount, bassClr, trebleClr ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
-      // left side: same widening, BACK_LEFT/FRONT_LEFT stay the fixed
+      // left side: same widening, REAR_LEFT/FRONT_LEFT stay the fixed
       // reference points, loop covers the full physical strand.
       for ( int i = SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-         float distFromBack = i - BACK_LEFT;
+         float distFromRear = i - REAR_LEFT;
          float distFromFront = FRONT_LEFT - i;
-         carpet->ropeLeds[ i ] = vuMeterColor( distFromBack < bassLitCount, distFromFront < trebleLitCount, bassClr, trebleClr );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, vuMeterColor( distFromRear < bassLitCount, distFromFront < trebleLitCount, bassClr, trebleClr ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
 
       // Floods (megabar/china) -- see the class member comment above
@@ -693,10 +697,12 @@ class EqualizerShow : public LightShow {
       // long as any real sound is present, only ever lighting during
       // silence's swap-flash idle pattern.
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
-         carpet->megabarLeds[ m ] = ( vuMegabarRole_[ m ] == VuRoleFront ) ? trebleClr : bassClr;
+         CRGB clr = ( vuMegabarRole_[ m ] == VuRoleFront ) ? trebleClr : bassClr;
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, clr, LightSetters::ByID{ (uint8_t)m } );
       }
       for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
-         carpet->chinaLeds[ c ] = ( vuChinaRole_[ c ] == VuRoleFront ) ? trebleClr : bassClr;
+         CRGB clr = ( vuChinaRole_[ c ] == VuRoleFront ) ? trebleClr : bassClr;
+         LightSetters::setColor( carpet, LightSetters::TargetChina, clr, LightSetters::ByID{ (uint8_t)c } );
       }
    }
 
@@ -775,8 +781,13 @@ class EqualizerShow : public LightShow {
          newStdFloodBrightness_[ i ] += ( target - newStdFloodBrightness_[ i ] ) * min( 1.0f, dtSec / 0.2f );
          CRGB color = newStdFloodIsB_[ i ] ? colorB : colorT;
          color.nscale8( (uint8_t)( newStdFloodBrightness_[ i ] * 255.0f + 0.5f ) );
-         if ( i < NUM_MEGABAR_LEDS ) { carpet->megabarLeds[ i ] = color; }
-         else { carpet->chinaLeds[ i - NUM_MEGABAR_LEDS ] = color; carpet->chinaLeds[ i - NUM_MEGABAR_LEDS ].w = 0; }
+         if ( i < NUM_MEGABAR_LEDS ) {
+            LightSetters::setColor( carpet, LightSetters::TargetMegabar, color, LightSetters::ByID{ (uint8_t)i } );
+         } else {
+            uint8_t chinaId = (uint8_t)( i - NUM_MEGABAR_LEDS );
+            LightSetters::setColor( carpet, LightSetters::TargetChina, color, LightSetters::ByID{ chinaId } );
+            LightSetters::setWhite( carpet, LightSetters::TargetChina, 0, LightSetters::ByID{ chinaId } );
+         }
       }
    }
 
@@ -848,8 +859,9 @@ class EqualizerShow : public LightShow {
             if ( d < nearest ) nearest = d;
          }
          uint8_t amt = (uint8_t)max( 0.0f, 255.0f - nearest * 4.0f );
-         carpet->ropeLeds[ i ] = blend( CRGB::Black, Bcolor, amt );
-         carpet->ropeLeds[ i ].w = 0;
+         int32_t neoId = CarpetGeometry::rawIndexToNeoId( i );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( CRGB::Black, Bcolor, amt ), LightSetters::NeoByCircumferenceID{ neoId } );
+         LightSetters::setWhite( carpet, LightSetters::TargetNeo, 0, LightSetters::NeoByCircumferenceID{ neoId } );
       }
 
       if ( silent ) {
@@ -894,17 +906,20 @@ class EqualizerShow : public LightShow {
       bassChina.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
       trebleChina.nscale8( (uint8_t)( (uint16_t)trebleHit * 255 / 100 ) );
       if ( chinaCycler_.option == 0 ) {
-         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) carpet->chinaLeds[ c ] = chinaIsFrontBack_[ c ] ? bassChina : trebleChina;
+         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, chinaIsFrontRear_[ c ] ? bassChina : trebleChina, LightSetters::ByID{ c } );
       } else if ( chinaCycler_.option == 1 ) {
-         for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) carpet->chinaLeds[ c ] = bassChina;
+         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, bassChina, LightSetters::ByID{ c } );
       } else {
-         for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) carpet->chinaLeds[ c ] = trebleChina;
+         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, trebleChina, LightSetters::ByID{ c } );
       }
       if ( time - newStdChinaFadeStartMs_ < NEWSTD_FADE_MS ) {
          uint8_t fadeF = (uint8_t)( 255.0f * (float)( time - newStdChinaFadeStartMs_ ) / (float)NEWSTD_FADE_MS );
-         for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) carpet->chinaLeds[ c ] = blend( newStdChinaFadeFrom_[ c ], carpet->chinaLeds[ c ], fadeF );
+         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, blend( newStdChinaFadeFrom_[ c ], carpet->chinaLeds[ c ], fadeF ), LightSetters::ByID{ c } );
       }
-      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) { newStdLastChinaColor_[ c ] = carpet->chinaLeds[ c ]; carpet->chinaLeds[ c ].w = 0; }
+      for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
+         newStdLastChinaColor_[ c ] = carpet->chinaLeds[ c ];
+         LightSetters::setWhite( carpet, LightSetters::TargetChina, 0, LightSetters::ByID{ c } );
+      }
 
       // MEGABARS: 3 options (new_standard) or 4 (sub_standard), option
       // chosen at random by megabarCycler_ above. Each option's own random
@@ -940,7 +955,7 @@ class EqualizerShow : public LightShow {
          }
       } else if ( megabarCycler_.option == 1 ) {
          // front/rear vs left/right -- stepped by real angle; classified
-         // inline (nearest to the front-back axis vs the left-right axis)
+         // inline (nearest to the front-rear axis vs the left-right axis)
          // rather than a precomputed per-index table.
          int swapNum = (int)( megabarOptionTimer_.elapsed() / 2000 ); // every 2s
          bool frontRearIsBass = ( swapNum % 2 == 0 ) ? newStdCycle2FrontRearIsBass_ : !newStdCycle2FrontRearIsBass_;
@@ -997,7 +1012,7 @@ class EqualizerShow : public LightShow {
             newStdMegabarHeat_[ m ] = max( 0.0f, newStdMegabarHeat_[ m ] - dtSec / 0.4f );
             CRGB base = newStdMegabarIsBass_[ m ] ? Bcolor : Tcolor;
             base.nscale8( (uint8_t)( newStdMegabarHeat_[ m ] * 255.0f + 0.5f ) );
-            carpet->megabarLeds[ m ] = base;
+            LightSetters::setColor( carpet, LightSetters::TargetMegabar, base, LightSetters::ByID{ (uint8_t)m } );
          }
       } else {
          // sub_standard-only option 3: 12 megabars paired into 6
@@ -1023,7 +1038,7 @@ class EqualizerShow : public LightShow {
       }
       if ( time - newStdMegabarFadeStartMs_ < NEWSTD_FADE_MS ) {
          uint8_t fadeF = (uint8_t)( 255.0f * (float)( time - newStdMegabarFadeStartMs_ ) / (float)NEWSTD_FADE_MS );
-         for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) carpet->megabarLeds[ m ] = blend( newStdMegabarFadeFrom_[ m ], carpet->megabarLeds[ m ], fadeF );
+         for ( uint8_t m = 0; m < NUM_MEGABAR_LEDS; ++m ) LightSetters::setColor( carpet, LightSetters::TargetMegabar, blend( newStdMegabarFadeFrom_[ m ], carpet->megabarLeds[ m ], fadeF ), LightSetters::ByID{ m } );
       }
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdLastMegabarColor_[ m ] = carpet->megabarLeds[ m ];
    }
@@ -1089,7 +1104,11 @@ class EqualizerShow : public LightShow {
          }
       }
       pwBassFrac_ = constrain( pwBassFrac_, PW_MIN_FRAC, PW_MAX_FRAC );
-      for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) { carpet->ropeLeds[ i ] = pwColorAt( i, Bcolor, Tcolor ); carpet->ropeLeds[ i ].w = 0; }
+      for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
+         int32_t neoId = CarpetGeometry::rawIndexToNeoId( i );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, pwColorAt( i, Bcolor, Tcolor ), LightSetters::NeoByCircumferenceID{ neoId } );
+         LightSetters::setWhite( carpet, LightSetters::TargetNeo, 0, LightSetters::NeoByCircumferenceID{ neoId } );
+      }
 
       // MEGABARS: 2 independent pools, each picking its own currently-dark
       // megabars on its OWN band's real hit edge, then fading -- bass
@@ -1137,7 +1156,7 @@ class EqualizerShow : public LightShow {
          pwMegabarHeat_[ m ] = max( 0.0f, pwMegabarHeat_[ m ] - dtSec / 0.4f );
          CRGB base = ( pwMegabarColorSrc_[ m ] == PwSrcBass ) ? Bcolor : Tcolor;
          base.nscale8( (uint8_t)( pwMegabarHeat_[ m ] * 255.0f + 0.5f ) );
-         carpet->megabarLeds[ m ] = base;
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, base, LightSetters::ByID{ (uint8_t)m } );
       }
 
       // CHINA: all 8 flash together in the ACTIVE color, brightness
@@ -1145,7 +1164,10 @@ class EqualizerShow : public LightShow {
       // pair-split, since there's no treble input left to split against.
       CRGB chinaLit = activeColor;
       chinaLit.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
-      for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) { carpet->chinaLeds[ c ] = chinaLit; carpet->chinaLeds[ c ].w = 0; }
+      for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
+         LightSetters::setColor( carpet, LightSetters::TargetChina, chinaLit, LightSetters::ByID{ c } );
+         LightSetters::setWhite( carpet, LightSetters::TargetChina, 0, LightSetters::ByID{ c } );
+      }
    }
 
    static CRGB vuMeterColor( bool bassLit, bool trebleLit, const CRGB & bassClr, const CRGB & trebleClr ) {
@@ -1159,7 +1181,7 @@ class EqualizerShow : public LightShow {
    // lastlow/vuLastBass peak-hold above: bassRaw > 80 and rising), flash all
    // 8 china and the 8 megabars nearest the 4 corners (idx 1,2,4,5,7,8,10,11
    // -- the ones NOT aligned with an edge midpoint, i.e. every megabar except
-   // the headlight[0]/left[3]/back[6]/right[9]) full white for 3 pulses,
+   // the headlight[0]/left[3]/rear[6]/right[9]) full white for 3 pulses,
    // 30ms on each, 20ms gaps between.
    //
    // Hit suppression: once a hit strobes, its level becomes suppressionPeak_.
@@ -1207,10 +1229,11 @@ class EqualizerShow : public LightShow {
       }
 
       static const int cornerMegabars[ 8 ] = { 1, 2, 4, 5, 7, 8, 10, 11 };
-      for ( int i = 0; i < 8; ++i ) carpet->megabarLeds[ cornerMegabars[ i ] ] = lit ? CRGB::White : CRGB::Black;
-      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
-         carpet->chinaLeds[ i ] = lit ? CRGB::White : CRGB::Black;
-         carpet->chinaLeds[ i ].w = lit ? 255 : 0;
+      CRGB strobeClr = lit ? CRGB::White : CRGB::Black;
+      for ( int i = 0; i < 8; ++i ) LightSetters::setColor( carpet, LightSetters::TargetMegabar, strobeClr, LightSetters::ByID{ (uint8_t)cornerMegabars[ i ] } );
+      for ( uint8_t i = 0; i < NUM_CHINA_LEDS; ++i ) {
+         LightSetters::setColor( carpet, LightSetters::TargetChina, strobeClr, LightSetters::ByID{ i } );
+         LightSetters::setWhite( carpet, LightSetters::TargetChina, lit ? (uint8_t)255 : (uint8_t)0, LightSetters::ByID{ i } );
       }
    }
 };

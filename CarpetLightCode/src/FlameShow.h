@@ -11,6 +11,7 @@
 #include "LightShow.h"
 #include "AudioBoard.h"
 #include "CarpetGeometry.h"
+#include "LightSetters.h"
 
 // TODO: build a better flame palette. maybe use presets? or pass in a palette?
 static const CRGBPalette256 flames(
@@ -188,7 +189,7 @@ class FlameShow : public LightShow {
 
    void start() {
       CRGB clr = ColorFromPalette( flames, 0 );
-      LedUtil::fill( carpet->ropeLeds, clr, NUM_NEO_LEDS_ACTUAL );
+      LightSetters::setColor( carpet, LightSetters::TargetNeo, clr, LightSetters::NeoByCircumferenceID{ 0 }, LightSetters::NeoByCircumferenceID{ (int32_t)NUM_NEO_LEDS_ACTUAL - 1 } );
       energyTakeover_.reset( carpet );
 
       // seed saturation's start explicitly (same reasoning as
@@ -374,7 +375,7 @@ class FlameShow : public LightShow {
 
          // assign color
          for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-            carpet->ropeLeds[ i ] = paletteColor( currTemperature[ i ] );
+            LightSetters::setColor( carpet, LightSetters::TargetNeo, paletteColor( currTemperature[ i ] ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
          }
 
          // store prev color for next round
@@ -429,10 +430,12 @@ class FlameShow : public LightShow {
          trebleClr.maximizeBrightness();
          trebleClr.nscale8( (uint8_t)( trebleHitPercent / 100.0f * 255.0f + 0.5f ) );
          LedUtil::gammaCorrect( trebleClr );
-         for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) carpet->megabarLeds[ i ] = ( i % 2 == 0 ) ? bassClr : trebleClr;
+         for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
+            LightSetters::setColor( carpet, LightSetters::TargetMegabar, ( i % 2 == 0 ) ? bassClr : trebleClr, LightSetters::ByID{ (uint8_t)i } );
+         }
          for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
             bool showsBass = ( ( chinaRole_[ c ] == RoleFront ) == chinaSwapBassOnFront_ );
-            carpet->chinaLeds[ c ] = showsBass ? bassClr : trebleClr;
+            LightSetters::setColor( carpet, LightSetters::TargetChina, showsBass ? bassClr : trebleClr, LightSetters::ByID{ (uint8_t)c } );
          }
       } else {
          // Idle sparkle: each fixture sits at one of the palette's two
@@ -448,14 +451,14 @@ class FlameShow : public LightShow {
             CRGB sparkClr = floodPaletteColor( megabarHeat[ i ] );
             CRGB clr = blend( base, sparkClr, megabarHeat[ i ] );
             LedUtil::gammaCorrect( clr );
-            carpet->megabarLeds[ i ] = clr;
+            LightSetters::setColor( carpet, LightSetters::TargetMegabar, clr, LightSetters::ByID{ (uint8_t)i } );
          }
          for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
             CRGB base = chinaColorPick_[ c ] ? loColor : hiColor;
             CRGB sparkClr = floodPaletteColor( chinaHeat[ c ] );
             CRGB clr = blend( base, sparkClr, chinaHeat[ c ] );
             LedUtil::gammaCorrect( clr );
-            carpet->chinaLeds[ c ] = clr;
+            LightSetters::setColor( carpet, LightSetters::TargetChina, clr, LightSetters::ByID{ (uint8_t)c } );
          }
       }
    }

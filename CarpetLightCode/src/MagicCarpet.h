@@ -52,7 +52,7 @@
 // moved off the PORTD bank onto their own dedicated USART DMA channels
 // (see Ws281xDma.h) -- driving them there instead of bit-banging frees up
 // real loop time and was the actual point of the physical rewiring. The
-// PORTD bank now only carries the 2 SHORT strips (front/back), so
+// PORTD bank now only carries the 2 SHORT strips (front/rear), so
 // NUM_NEOPIXEL_STRIPS drops from 8 (of which only 4 were ever real, and
 // only 4 of THOSE ever actually had data written to them -- see show()'s
 // old commented-out slots 2/3) down to the 2 lanes it actually needs.
@@ -79,14 +79,14 @@
 // strand table started using it, which is what surfaced this.
 #define NEO0_OFFSET 0 // small (front)
 #define NEO1_OFFSET SIZEOF_SMALL_NEO // large (right)
-#define NEO2_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO ) // small (back)
+#define NEO2_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO ) // small (rear)
 #define NEO3_OFFSET ( ( SIZEOF_SMALL_NEO * 2 ) + SIZEOF_LARGE_NEO ) // large (left)
 #define NEO_PORT_BANK ( WS2811_PORTD )
 // Real, current pin assignments for all 4 physical rope strands. These are
 // the actual source of truth: change one here to match new real wiring and
 // the corresponding setup below either derives its hardware config from it
 // directly (right/left, USART-based) or is checked against it with a
-// static_assert that fails the BUILD if it no longer matches (front/back,
+// static_assert that fails the BUILD if it no longer matches (front/rear,
 // PORTD-based -- FastLED's own WS2811_PORTD driver hardcodes its lane-to-
 // pin order internally with no parameter to reconfigure it, confirmed
 // straight from FastLED's platform source, so a define/reality mismatch
@@ -94,20 +94,20 @@
 //
 // strand#0 FRONT (156px, short) -- PORTD bank lane 0, plain bit-banged via FastLED (not USART/DMA)
 #define NEO_PIN0 25
-// strand#1 BACK (156px, short) -- PORTD bank lane 1, plain bit-banged via FastLED (not USART/DMA).
+// strand#1 REAR (156px, short) -- PORTD bank lane 1, plain bit-banged via FastLED (not USART/DMA).
 // Moved here from the old right-strip pin (26), now freed by right's move to USART3 below.
-#define NEO_PIN_BACK 26
-// strand#2 RIGHT (352px, long) -- USART3/TXD3, DMA-driven (see Ws281xDma.h). Moved here from the old back-strip pin (14).
+#define NEO_PIN_REAR 26
+// strand#2 RIGHT (352px, long) -- USART3/TXD3, DMA-driven (see Ws281xDma.h). Moved here from the old rear-strip pin (14).
 #define NEO_PIN_RIGHT 14
 // strand#3 LEFT (352px, long) -- USART1/TXD1, DMA-driven (see Ws281xDma.h). Moved here from its original pin (15).
 #define NEO_PIN_LEFT 16
 // FastLED's WS2811_PORTD driver's own hardcoded 2-lane pin order (see
 // clockless_block_arm_sam.h's InlineBlockClocklessController::init() --
 // LANES=2 always drives pins 25 then 26, unconditionally). If NEO_PIN0/
-// NEO_PIN_BACK above are ever edited to anything else, this makes the
+// NEO_PIN_REAR above are ever edited to anything else, this makes the
 // build fail loudly instead of silently driving the wrong physical pins.
-static_assert( NEO_PIN0 == 25 && NEO_PIN_BACK == 26,
-   "NEO_PIN0/NEO_PIN_BACK must stay 25/26 -- FastLED's WS2811_PORTD 2-lane order is hardcoded in the library, not read from these defines" );
+static_assert( NEO_PIN0 == 25 && NEO_PIN_REAR == 26,
+   "NEO_PIN0/NEO_PIN_REAR must stay 25/26 -- FastLED's WS2811_PORTD 2-lane order is hardcoded in the library, not read from these defines" );
 
 /* Positional Constants
  *
@@ -120,18 +120,18 @@ static_assert( NEO_PIN0 == 25 && NEO_PIN_BACK == 26,
 #define FRONT (SIZEOF_SMALL_NEO_HALF)
 #define FRONT_RIGHT (SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO_CORNER)
 #define RIGHT (SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO_HALF)
-#define BACK_RIGHT (SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO - SIZEOF_LARGE_NEO_CORNER)
-#define BACK (SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO + SIZEOF_SMALL_NEO_HALF)
-#define BACK_LEFT ((SIZEOF_SMALL_NEO * 2) + SIZEOF_LARGE_NEO + SIZEOF_LARGE_NEO_CORNER)
+#define REAR_RIGHT (SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO - SIZEOF_LARGE_NEO_CORNER)
+#define REAR (SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO + SIZEOF_SMALL_NEO_HALF)
+#define REAR_LEFT ((SIZEOF_SMALL_NEO * 2) + SIZEOF_LARGE_NEO + SIZEOF_LARGE_NEO_CORNER)
 #define LEFT ((SIZEOF_SMALL_NEO * 2) + SIZEOF_LARGE_NEO + SIZEOF_LARGE_NEO_HALF)
 #define FRONT_LEFT ((SIZEOF_SMALL_NEO * 2) + (SIZEOF_LARGE_NEO * 2) - SIZEOF_LARGE_NEO_CORNER)
 
 #define TWELVE FRONT
 #define ONE_THIRTY FRONT_RIGHT
 #define THREE RIGHT
-#define FOUR_THIRTY BACK_RIGHT
-#define SIX BACK
-#define SEVEN_THIRTY BACK_LEFT
+#define FOUR_THIRTY REAR_RIGHT
+#define SIX REAR
+#define SEVEN_THIRTY REAR_LEFT
 #define NINE LEFT
 #define TEN_THIRTY FRONT_LEFT
 
@@ -194,7 +194,7 @@ class MagicCarpet {
     * without inverting the repacking (deliberately not attempted yet, see
     * the migration plan's "phase 6").
     */
-   CRGB ropeShowLeds[ NUM_NEO_SHOW_LEDS ]; // front+back only now, see NUM_NEOPIXEL_STRIPS's own comment
+   CRGB ropeShowLeds[ NUM_NEO_SHOW_LEDS ]; // front+rear only now, see NUM_NEOPIXEL_STRIPS's own comment
    // right/left's own converted buffers -- driven via Ws281xDma::show() on
    // real hardware, not FastLED, so they're not part of ropeShowLeds above.
    CRGB rightShowLeds[ NUM_NEO_LEDS_PER_STRIP ];
@@ -245,7 +245,7 @@ class MagicCarpet {
       // add dmx leds
       dmx_init( TOTAL_DMX_SIZE );
 
-      // front+back only now -- right/left moved to Ws281xDma (USART DMA),
+      // front+rear only now -- right/left moved to Ws281xDma (USART DMA),
       // see NUM_NEOPIXEL_STRIPS's own comment.
       FastLED.addLeds<NEO_PORT_BANK,NUM_NEOPIXEL_STRIPS>( ropeShowLeds,
                                                           NUM_NEO_LEDS_PER_STRIP );
@@ -272,8 +272,8 @@ class MagicCarpet {
       // LedUtil::reverse( ropeLeds + NEO2_OFFSET, SIZEOF_LARGE_NEO );
       LedUtil::reverse( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO, SIZEOF_SMALL_NEO );
 
-      // front -> PORTD lane 0 (p25), back -> PORTD lane 1 (p26, its new pin
-      // -- see NEO_PIN_BACK's comment). right/left convert into their own
+      // front -> PORTD lane 0 (p25), rear -> PORTD lane 1 (p26, its new pin
+      // -- see NEO_PIN_REAR's comment). right/left convert into their own
       // dedicated buffers below instead -- they're driven via Ws281xDma
       // (USART DMA), not this FastLED/PORTD path, since their move off
       // PORTD is the entire point of the physical rewiring.
@@ -300,7 +300,7 @@ class MagicCarpet {
       // both arrays as a single big array, since they're contiguous in memory.
       dmx_send( ( uint8_t * ) megabarLeds );
 
-      FastLED.show(); // front+back only now, see NUM_NEOPIXEL_STRIPS's own comment
+      FastLED.show(); // front+rear only now, see NUM_NEOPIXEL_STRIPS's own comment
       Ws281xDma::show( ( uint8_t * ) rightShowLeds, ( uint8_t * ) leftShowLeds );
 #endif
       // WASM: no real bus write (no hardware) -- but ropeShowLeds/
@@ -418,26 +418,26 @@ class MagicCarpet {
       }
    }
 
-   // lights a 10-LED window on one side strip, sliding from backCornerIdx
+   // lights a 10-LED window on one side strip, sliding from rearCornerIdx
    // (0%) to frontCornerIdx (100%) as percent varies, always 10 LEDs wide.
    // each lit LED's color reflects its OWN position along the whole side
-   // (red at the back corner, green at the front corner), not the window's
+   // (red at the rear corner, green at the front corner), not the window's
    // position, so the lit window's hue shifts as it slides. segmentLen is
    // derived from the two corner indices passed in, not hardcoded to the
    // full 352-LED channel -- callers are expected to pass the true-corner
-   // constants (FRONT_RIGHT/BACK_RIGHT, BACK_LEFT/FRONT_LEFT), which land 33
+   // constants (FRONT_RIGHT/REAR_RIGHT, REAR_LEFT/FRONT_LEFT), which land 33
    // LEDs in from each end of the physical channel (SIZEOF_LARGE_NEO_CORNER),
-   // so the window doesn't wrap into the front/back edge LEDs at either end.
-   void renderSideIndicator( int backCornerIdx, int frontCornerIdx, float percent, CRGB color ) {
-      const int segmentLen = abs( frontCornerIdx - backCornerIdx ) + 1;
+   // so the window doesn't wrap into the front/rear edge LEDs at either end.
+   void renderSideIndicator( int rearCornerIdx, int frontCornerIdx, float percent, CRGB color ) {
+      const int segmentLen = abs( frontCornerIdx - rearCornerIdx ) + 1;
       static const int windowWidth = 10;
-      int direction = ( frontCornerIdx > backCornerIdx ) ? 1 : -1;
+      int direction = ( frontCornerIdx > rearCornerIdx ) ? 1 : -1;
       float t = constrain( percent, 0.0f, 100.0f ) / 100.0f;
       int maxOffset = segmentLen - windowWidth;
       int windowOffset = (int)( t * maxOffset + 0.5f );
       for ( int k = 0; k < windowWidth; ++k ) {
          int localOffset = windowOffset + k;
-         int idx = backCornerIdx + direction * localOffset;
+         int idx = rearCornerIdx + direction * localOffset;
          ropeLeds[ idx ] = color;
          ropeLeds[ idx ].w = 0;
       }
@@ -454,8 +454,8 @@ class MagicCarpet {
    // nudge them apart symmetrically (clamped to the strip's own ends)
    // whenever they'd overlap, so both stay fully visible side by side
    // instead of one hiding the other.
-   void renderSideIndicatorPair( int backCornerIdx, int frontCornerIdx, float noiseFloorPercent, float peakThresholdPercent ) {
-      const int segmentLen = abs( frontCornerIdx - backCornerIdx ) + 1;
+   void renderSideIndicatorPair( int rearCornerIdx, int frontCornerIdx, float noiseFloorPercent, float peakThresholdPercent ) {
+      const int segmentLen = abs( frontCornerIdx - rearCornerIdx ) + 1;
       static const int windowWidth = 10;
       const int maxOffset = segmentLen - windowWidth;
       int noiseOffset = (int)( constrain( noiseFloorPercent, 0.0f, 100.0f ) / 100.0f * maxOffset + 0.5f );
@@ -471,14 +471,14 @@ class MagicCarpet {
             else if ( peakOffset == maxOffset ) noiseOffset = max( 0, maxOffset - windowWidth );
          }
       }
-      int direction = ( frontCornerIdx > backCornerIdx ) ? 1 : -1;
+      int direction = ( frontCornerIdx > rearCornerIdx ) ? 1 : -1;
       for ( int k = 0; k < windowWidth; ++k ) {
-         ropeLeds[ backCornerIdx + direction * ( noiseOffset + k ) ] = CRGB::Blue;
-         ropeLeds[ backCornerIdx + direction * ( noiseOffset + k ) ].w = 0;
+         ropeLeds[ rearCornerIdx + direction * ( noiseOffset + k ) ] = CRGB::Blue;
+         ropeLeds[ rearCornerIdx + direction * ( noiseOffset + k ) ].w = 0;
       }
       for ( int k = 0; k < windowWidth; ++k ) {
-         ropeLeds[ backCornerIdx + direction * ( peakOffset + k ) ] = CRGB::Red;
-         ropeLeds[ backCornerIdx + direction * ( peakOffset + k ) ].w = 0;
+         ropeLeds[ rearCornerIdx + direction * ( peakOffset + k ) ] = CRGB::Red;
+         ropeLeds[ rearCornerIdx + direction * ( peakOffset + k ) ].w = 0;
       }
    }
 
@@ -500,9 +500,9 @@ class MagicCarpet {
    //    BOTH values are shown at once, so you can see where the other one
    //    sits while dialing in this one -- noise floor as a blue 10-LED
    //    window, peak threshold as a red 10-LED window, each at its own
-   //    percent position (0=back corner, 100=front corner, see
+   //    percent position (0=rear corner, 100=front corner, see
    //    renderSideIndicator()).
-   //  - true (auto-gain): a single white 10-LED window snapped to the back
+   //  - true (auto-gain): a single white 10-LED window snapped to the rear
    //    corner (AGCoff), middle (AGCband), or front corner (AGCfull) --
    //    a 3-position indicator, one snap point per AGCMode.
    //
@@ -599,14 +599,14 @@ class MagicCarpet {
 
       // side strips, true corner to true corner (see renderSideIndicator's
       // comment) -- this stops 33 LEDs short of each end of the 352-LED
-      // channel, so it doesn't wrap into the front/back edges near the corners
+      // channel, so it doesn't wrap into the front/rear edges near the corners
       if ( isAutoGainSubsetting ) {
          float snapPercent = (float)agcModeToShow / (float)( NumAGCModes - 1 ) * 100.0f; // 0%=AGCoff, 50%=AGCband, 100%=AGCfull
-         renderSideIndicator( BACK_RIGHT, FRONT_RIGHT, snapPercent, CRGB::White );
-         renderSideIndicator( BACK_LEFT, FRONT_LEFT, snapPercent, CRGB::White );
+         renderSideIndicator( REAR_RIGHT, FRONT_RIGHT, snapPercent, CRGB::White );
+         renderSideIndicator( REAR_LEFT, FRONT_LEFT, snapPercent, CRGB::White );
       } else {
-         renderSideIndicatorPair( BACK_RIGHT, FRONT_RIGHT, noiseFloorPercentToShow, peakThresholdPercentToShow );
-         renderSideIndicatorPair( BACK_LEFT, FRONT_LEFT, noiseFloorPercentToShow, peakThresholdPercentToShow );
+         renderSideIndicatorPair( REAR_RIGHT, FRONT_RIGHT, noiseFloorPercentToShow, peakThresholdPercentToShow );
+         renderSideIndicatorPair( REAR_LEFT, FRONT_LEFT, noiseFloorPercentToShow, peakThresholdPercentToShow );
       }
 
       LedUtil::fill( megabarLeds, CRGB( 0, 0, fullSpectrumLevel ), NUM_MEGABAR_LEDS );
@@ -798,9 +798,9 @@ class MagicCarpet {
    }
 
    // power-saving A/B test: left half of the rig (rope's left side + left
-   // half of both front/back edges, china[2..5]) shows the given HSV color
+   // half of both front/rear edges, china[2..5]) shows the given HSV color
    // rendered straight to RGB (w=0); the right half (rope's right side +
-   // right half of both front/back edges, china[0,1,6,7]) shows the same
+   // right half of both front/rear edges, china[0,1,6,7]) shows the same
    // color translated to RGBW by moving the shared min(r,g,b) out of the
    // color channels and into the white channel -- same hue/brightness, less
    // color-LED power. Megabars are off; unlike the other config previews
@@ -818,20 +818,20 @@ class MagicCarpet {
       savingClr.b = straightClr.b - minCh;
       savingClr.w = minCh;
 
-      // BUGFIX: this had the same front/back-edge-direction bug LighthouseShow's
-      // ropeAngleDeg() had (see its README entry) -- i < FRONT / i >= BACK
+      // BUGFIX: this had the same front/rear-edge-direction bug LighthouseShow's
+      // ropeAngleDeg() had (see its README entry) -- i < FRONT / i >= REAR
       // used to be swapped, so this was reporting the true right half as
       // "left" and vice versa, and the ~30 LEDs of the right-side strip's
       // corner-wrap portion nearest the front edge visibly mismatched the
       // (mislabeled) front-edge LEDs right next to them. Now: right half is
-      // the single contiguous span [FRONT,BACK) -- front edge's higher-
-      // index/right portion, all of the right side, back edge's lower-
+      // the single contiguous span [FRONT,REAR) -- front edge's higher-
+      // index/right portion, all of the right side, rear edge's lower-
       // index/right portion (matching the now-corrected direction: front
-      // edge runs left-to-right as index increases, back edge right-to-left)
+      // edge runs left-to-right as index increases, rear edge right-to-left)
       // -- and left half is everything outside that span, forming a
       // sideways U to the carpet's left-to-right center line.
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-         bool leftHalf = ( i < FRONT ) || ( i >= BACK );
+         bool leftHalf = ( i < FRONT ) || ( i >= REAR );
          if ( leftHalf ) {
             ropeLeds[ i ] = straightClr;
             ropeLeds[ i ].w = 0;
@@ -840,8 +840,8 @@ class MagicCarpet {
          }
       }
 
-      // china[2,3] = front-left, china[4,5] = back-left; china[0,1] =
-      // front-right, china[6,7] = back-right -- see README.md, "China lights"
+      // china[2,3] = front-left, china[4,5] = rear-left; china[0,1] =
+      // front-right, china[6,7] = rear-right -- see README.md, "China lights"
       for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {
          bool leftHalf = ( i >= 2 && i < 6 );
          if ( leftHalf ) {

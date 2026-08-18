@@ -3,7 +3,7 @@
 Reference docs for the carpet's lighting hardware — perimeter rope, megabar floods, china floods. Hand-drawn source diagrams: "carpet information dumpster" doc, Lights section:
 https://docs.google.com/document/d/1VsAMAy2v4jEO3QGt3vowFyfUuK1FoZYbwQ3TZ1XJbTA
 
-Directions (front/back/left/right) are relative to the carpet's own direction of travel, not compass or diagram orientation.
+Directions (front/rear/left/right) are relative to the carpet's own direction of travel, not compass or diagram orientation.
 
 **See also:** this file covers firmware/hardware. For the *visualizer tool itself* (architecture, controls, dev workflow), see its in-app "Visualizer help" popup (Settings menu). This file is also viewable inside the visualizer via Settings → "FW readme", kept word-for-word in sync with this one. For Claude Code standing prompts that keep both in sync automatically (plus auto-generated commit messages), see [`claude_dev_prompts.md`](claude_dev_prompts.md).
 
@@ -95,20 +95,20 @@ Only **4 continuous physical strips** exist. `NEO0_OFFSET`..`NEO3_OFFSET` (readi
 
 `NUM_NEOPIXEL_STRIPS` stays at **8** in code despite only 4 strips being wired — don't "fix" this to 4. `MagicCarpet::show()`'s 4 active `convertNeoArray()` calls write into the `ropeShowLeds` FastLED output buffer at strip-slots **0, 1, 4, and 5** (not 0-3), so the buffer must stay sized for 6 slots or those slot-4/5 writes run off the end. Also **not confirmed**: which physical pins (of `NEO_PIN0`-`NEO_PIN7`) the 2 "extra" strips are wired to — don't assume "the first 4 pins."
 
-Each real strip runs straight through the corner(s) it passes — wiring does **not** break at a corner. Splits instead land 30 LEDs in from each true corner, along the front/back edges:
+Each real strip runs straight through the corner(s) it passes — wiring does **not** break at a corner. Splits instead land 30 LEDs in from each true corner, along the front/rear edges:
 
 | Channel | Length | Runs along | Local index 0 | Local index max |
 | --- | --- | --- | --- | --- |
 | CH1 | 156 LEDs | Front edge | near front-right | 155, near front-left |
-| CH2 | 352 LEDs | Right side | near front-right | 351, near back-right |
-| CH3 | 156 LEDs | Back edge | near back-left | 155, near back-right |
-| CH4 | 352 LEDs | Left side | near back-left | 351, near front-left |
+| CH2 | 352 LEDs | Right side | near front-right | 351, near rear-right |
+| CH3 | 156 LEDs | Rear edge | near rear-left | 155, near rear-right |
+| CH4 | 352 LEDs | Left side | near rear-left | 351, near front-left |
 
-(30 + 156 + 30 = 216 front/back width; 30 + 292 + 30 = 352 side height.)
+(30 + 156 + 30 = 216 front/rear width; 30 + 292 + 30 = 352 side height.)
 
-`ropeLeds[]` is logically one loop that starts/wraps at FRONT (see the `FRONT`/`RIGHT`/`BACK`/`LEFT`/etc. positional constants in `MagicCarpet.h`). `show()` reverses some sub-ranges before pushing to hardware, to reconcile logical vs. physical wire order. The `ropeLeds[]` global-index ↔ per-channel local-index mapping above hasn't been independently verified — trust the code constants over this doc's channel-local numbers if they ever conflict.
+`ropeLeds[]` is logically one loop that starts/wraps at FRONT (see the `FRONT`/`RIGHT`/`REAR`/`LEFT`/etc. positional constants in `MagicCarpet.h`). `show()` reverses some sub-ranges before pushing to hardware, to reconcile logical vs. physical wire order. The `ropeLeds[]` global-index ↔ per-channel local-index mapping above hasn't been independently verified — trust the code constants over this doc's channel-local numbers if they ever conflict.
 
-**Bus timing** (`NEO_PORT_BANK = WS2811_PORTD`, `FastLED.addLeds<NEO_PORT_BANK,NUM_NEOPIXEL_STRIPS>()`): checked against FastLED's own source (`chipsets.h`/`FastLED.h`), not assumed. `WS2811_PORTD` resolves to an `InlineBlockClocklessController` at `NS(320),NS(320),NS(640)` — FastLED's standard **800kHz** WS281x profile (vs. a slower 400kHz WS2811 mode this isn't using), the fastest bit rate the protocol spec allows. More importantly, `PORTD` is genuinely **parallel**: one Port D byte-write toggles up to 8 pins per bit-time, so all wired strips clock out simultaneously — already the fastest multi-strip approach FastLED offers on a non-DMA MCU like the SAM3X8E, far better than looping single-strip `addLeds()` calls. Per-frame cost is still real: every lane clocks the *longest* wired channel's pixel count (`NUM_NEO_LEDS_PER_STRIP`, ≈470 RGBW-inflated slots from the 352-LED side channels), so `show()` blocks ~470 × 24 bits × ~1.28ns/bit ≈ 14ms with interrupts disabled, every frame — inherent to WS281x at this LED count, not reducible via FastLED config. Side effect: the two shorter 156-LED front/back channels get silently padded to that same ~470-slot length each frame — wasted bus time, fixable only by rewiring which run lands in which lane.
+**Bus timing** (`NEO_PORT_BANK = WS2811_PORTD`, `FastLED.addLeds<NEO_PORT_BANK,NUM_NEOPIXEL_STRIPS>()`): checked against FastLED's own source (`chipsets.h`/`FastLED.h`), not assumed. `WS2811_PORTD` resolves to an `InlineBlockClocklessController` at `NS(320),NS(320),NS(640)` — FastLED's standard **800kHz** WS281x profile (vs. a slower 400kHz WS2811 mode this isn't using), the fastest bit rate the protocol spec allows. More importantly, `PORTD` is genuinely **parallel**: one Port D byte-write toggles up to 8 pins per bit-time, so all wired strips clock out simultaneously — already the fastest multi-strip approach FastLED offers on a non-DMA MCU like the SAM3X8E, far better than looping single-strip `addLeds()` calls. Per-frame cost is still real: every lane clocks the *longest* wired channel's pixel count (`NUM_NEO_LEDS_PER_STRIP`, ≈470 RGBW-inflated slots from the 352-LED side channels), so `show()` blocks ~470 × 24 bits × ~1.28ns/bit ≈ 14ms with interrupts disabled, every frame — inherent to WS281x at this LED count, not reducible via FastLED config. Side effect: the two shorter 156-LED front/rear channels get silently padded to that same ~470-slot length each frame — wasted bus time, fixable only by rewiring which run lands in which lane.
 
 **DMA alternative** (`Ws281xDma.h` — written, compiles, not wired into `MagicCarpet::show()` yet, pending a pin conflict with the DMX RS-485 output on USART0): 3 of the SAM3X8E's 4 USARTs run in "SPI Master" synchronous mode (`US_MR_USART_MODE_SPI_MASTER`, continuous bit-shifting) plus the chip's one true SPI peripheral, each with its own PDC (DMA) channel and dedicated pin — 4 genuinely parallel, hardware-DMA-fed outputs instead of one CPU-bit-banged bank. Each WS281x bit encodes as 3 output bits at a 2.4MHz shift rate (exact 84MHz/35 divide), giving standard 1250ns timing. Once a channel's buffer loads, the CPU is free — no interrupts-disabled busy-wait — and each channel clocks only its own real LED count, no cross-lane padding. Confirmed (via FastLED's source) it never uses DMA on this chip for any Due driver — genuinely new capability, not a library flag.
 
@@ -126,14 +126,14 @@ Mounted in a ring, roughly horizontal (aimed slightly downward but mostly level)
 | `[3]` | 10 | 90° — straight out the **left** side |
 | `[4]` | 13 | 120° |
 | `[5]` | 16 | 150° |
-| `[6]` | 19 | 180° — straight out the **back** |
+| `[6]` | 19 | 180° — straight out the **rear** |
 | `[7]` | 22 | 210° |
 | `[8]` | 25 | 240° |
 | `[9]` | 28 | 270° — straight out the **right** side |
 | `[10]` | 31 | 300° |
-| `[11]` | 34 | 330° — back toward front |
+| `[11]` | 34 | 330° — rear toward front |
 
-Address 01 is the only doubled-up fixture (two physical units, same DMX address); every other address is a single unit. Going in increasing address order, the ring sweeps front → left → back → right → back to front.
+Address 01 is the only doubled-up fixture (two physical units, same DMX address); every other address is a single unit. Going in increasing address order, the ring sweeps front → left → rear → right → back to front.
 
 In code, `megabarLeds[HEADLIGHT_INDEX]` (index `[0]`, addr 01) is called the **headlight** and gets its own brightness control, separate from the rest — see "Brightness system" below.
 
@@ -147,14 +147,14 @@ At each corner, the 2 fixtures split duty, one per adjoining edge. Each bright s
 
 | Index | Addr | Corner | Aimed along | Bright spot |
 | --- | --- | --- | --- | --- |
-| `[0]` | 37 | Front-right | Right edge | ~1/3 back from front |
+| `[0]` | 37 | Front-right | Right edge | ~1/3 rear from front |
 | `[1]` | 43 | Front-right | Front edge | ~1/3 in from right |
 | `[2]` | 49 | Front-left | Front edge | ~1/3 in from left |
-| `[3]` | 55 | Front-left | Left edge | ~1/3 back from front |
-| `[4]` | 61 | Back-left | Left edge | ~1/3 forward from back |
-| `[5]` | 67 | Back-left | Back edge | ~1/3 in from left |
-| `[6]` | 73 | Back-right | Back edge | ~1/3 in from right |
-| `[7]` | 79 | Back-right | Right edge | ~1/3 forward from back |
+| `[3]` | 55 | Front-left | Left edge | ~1/3 rear from front |
+| `[4]` | 61 | Rear-left | Left edge | ~1/3 forward from rear |
+| `[5]` | 67 | Rear-left | Rear edge | ~1/3 in from left |
+| `[6]` | 73 | Rear-right | Rear edge | ~1/3 in from right |
+| `[7]` | 79 | Rear-right | Right edge | ~1/3 forward from rear |
 
 ## Brightness system
 
@@ -262,7 +262,7 @@ Since a live line ends in `\r` with no `\n`, the next one-shot line would only p
 
 - **China (floodlights)**: a simple per-bin confirmation view — one of the 7 raw bins (`AudioBoard::Frequencies_Mono[i]`, scaled 0-1023 → 0-255) drives one china fixture each in blue, confirming each bin reaches a floodlight. 7 of 8 fixtures used, one per bin; the 8th stays off. Brightness tracks the bin's level directly, except it flashes solid white for 40ms the instant that bin crosses the live peak threshold (`AudioBoard::getPeakThresholdRaw()`, same value `EqualizerShow`'s bass strobe uses) — edge-triggered, one flash per crossing.
 - **Front strip** (156 LEDs) splits into 3 equal 52-LED segments: treble, mid, bass (`AudioBoard::getBandNormalPercent(BandTreble/BandMid/BandBass)`, silence-gated, never AGC-boosted). Each shows a dim (50%) reference gradient — green → yellow/orange → red — with a bright white fill up to the current level; fully solid white at max. On 2a, each segment also gets a blue pixel at the live noise-floor position and a red pixel at the live peak-threshold position.
-- **Each side strip, true corner to true corner** (286 LEDs — the 352-LED channel minus 33 at each end, so it doesn't wrap into front/back edges; `renderSideIndicator()`) shows flat-colored 10-LED windows. On 2a, both noise floor (blue) and peak threshold (red) show at once regardless of pot target (back corner = 0%, front = 100%). On 2e, a single white window snaps to one of 3 positions (back = AGCoff, middle = AGCband, front = AGCfull), reflecting the live AGC mode. Left/right mirror.
+- **Each side strip, true corner to true corner** (286 LEDs — the 352-LED channel minus 33 at each end, so it doesn't wrap into front/rear edges; `renderSideIndicator()`) shows flat-colored 10-LED windows. On 2a, both noise floor (blue) and peak threshold (red) show at once regardless of pot target (rear corner = 0%, front = 100%). On 2e, a single white window snaps to one of 3 positions (rear = AGCoff, middle = AGCband, front = AGCfull), reflecting the live AGC mode. Left/right mirror.
 - **All 12 megabars** glow blue, brightness proportional to `AudioBoard::getFullSpectrum()` (silence-gated, AGC-boosted per current mode) — a live "how loud right now" readout regardless of subsetting. While on 2e, reflects the *live* (uncommitted) AGC mode via `getFullSpectrum(bool)`'s override parameter, sidestepping any need to revert on cancel.
 
 Noise floor and peak threshold's live values *are* temporarily applied to `AudioBoard` while adjusting (so VU/glow/flash react live), reverted to last-committed (`revertAudioLivePreview()`) on leaving that subsetting any way but committing. Each is live-clamped against the other's current value so neither can cross. AGC mode needs none of this, per its override-parameter approach.
@@ -290,21 +290,21 @@ Noise floor and peak threshold's live values *are* temporarily applied to `Audio
 
 **PowerTest screen** (`MagicCarpet::showPowerTest()`): an A/B test comparing straight HSV→RGB rendering of a live-editable color against its RGBW power-saving translation, to gauge savings and whether it still reads as "the same color." Megabars off. Driven entirely by the **encoder**, not the pot — rotation edits whichever of hue/saturation/brightness the current subsetting (3a/3b/3c) selects, steps of 4/detent; hue wraps, saturation/brightness clamp at 0/255. All 3 fields edit as one composite color: cycling 3a→3b→3c via short-press keeps the other two, double-press commits and persists all 3 at once (`Nvm::saveTestHue/Sat/Brightness`). Deliberately ignores the committed brightness ceiling — hue/sat/brightness here are already a full manual color spec, so the two renderings compare at face value.
 
-The rig splits into a left/right half, a sideways U (rope's left side + left half of both front/back edges) down to the carpet's center line:
+The rig splits into a left/right half, a sideways U (rope's left side + left half of both front/rear edges) down to the carpet's center line:
 
-- **Left half** — rope's left side, left half of both front/back edges, china `[2..5]` (front-left/back-left pairs) — renders straight: `CHSV(hue,sat,val)` → RGB, white channel off.
-- **Right half** — rope's right side, right half of both front/back edges, china `[0,1,6,7]` (front-right/back-right pairs) — renders the **power-saving translation**: take `min(r,g,b)`, subtract from each of r/g/b (smallest channel bottoms at 0), add that amount to white instead. Same apparent hue/brightness, less from the color LEDs.
+- **Left half** — rope's left side, left half of both front/rear edges, china `[2..5]` (front-left/rear-left pairs) — renders straight: `CHSV(hue,sat,val)` → RGB, white channel off.
+- **Right half** — rope's right side, right half of both front/rear edges, china `[0,1,6,7]` (front-right/rear-right pairs) — renders the **power-saving translation**: take `min(r,g,b)`, subtract from each of r/g/b (smallest channel bottoms at 0), add that amount to white instead. Same apparent hue/brightness, less from the color LEDs.
 
-**Bugfix**: the rope's left/right split had the same front/back-direction bug as `LighthouseShow`'s `ropeAngleDeg()` (below) — front/back halves were swapped, most visible where the front edge meets the right-side strip's corner-wrap. Fixed the same way: `i < FRONT` + `i >= BACK` now form the left half in one simplified check, `[FRONT,BACK)` the right half.
+**Bugfix**: the rope's left/right split had the same front/rear-direction bug as `LighthouseShow`'s `ropeAngleDeg()` (below) — front/rear halves were swapped, most visible where the front edge meets the right-side strip's corner-wrap. Fixed the same way: `i < FRONT` + `i >= REAR` now form the left half in one simplified check, `[FRONT,REAR)` the right half.
 
 ## Lighthouse show
 
 Two independent rotating "lighthouse" beams. Each beam is a **single randomly-drifting angle** lighting up **both its own angle and that angle+180° at once**, same color — so 2 beams produce 4 lit clusters total, on megabars and rope. (Resolves an apparent spec contradiction: "180° opposite" describes each beam's own two sides, always locked together; "independent rotation" describes beam 1 vs. beam 2, drifting separately.)
 
 - **Falloff shape** (shared by megabars/rope): each cluster lights a solid segment out to `SEGMENT_HALF_WIDTH_DEG` (15°, 30° wide), then eases to black over the next `FADE_WIDTH_DEG` (7.5°) via `smoothstep8()` (integer, flat-tangent ease, not linear) — the two "first pure black" points flanking a cluster sit 45° apart. Fully black beyond that. `clusterBrightness()` computes this once per (fixture, cluster); rope and megabars use **independent** constants (`ROPE_...`/`MEGABAR_...`, currently equal, meant to be retuned separately on real hardware).
-- **Megabars**: each of 12 fixed positions (30° apart) samples that falloff at its angular distance from each cluster's current (continuous, unquantized) angle — sampling a smooth field at 12 sparse points fakes a continuous sweep, replacing the old discrete "nearest full-bright, neighbors fixed-half" snap. **Bugfix**: megabar angle used to be `m*30°` directly, assuming the rope's `angleDeg()` direction (front=0°,right=90°,back=180°,left=270°) — but megabar wiring sweeps the *opposite* way (front→left→back→right), a mirror image, not an offset. Fixed via `wrap360(-m*30)` to agree with the rope's convention.
+- **Megabars**: each of 12 fixed positions (30° apart) samples that falloff at its angular distance from each cluster's current (continuous, unquantized) angle — sampling a smooth field at 12 sparse points fakes a continuous sweep, replacing the old discrete "nearest full-bright, neighbors fixed-half" snap. **Bugfix**: megabar angle used to be `m*30°` directly, assuming the rope's `angleDeg()` direction (front=0°,right=90°,rear=180°,left=270°) — but megabar wiring sweeps the *opposite* way (front→left→rear→right), a mirror image, not an offset. Fixed via `wrap360(-m*30)` to agree with the rope's convention.
 - **Rotation**: each beam's angular velocity is its own independent random walk (`LighthouseShow::RandomWalk`) — ramps toward a fresh random target (±10°/s step) roughly every second, drifting through zero and reversing over time. Beam 1 starts +72°/s (5s/rotation); beam 2 starts -180°/s (2s/rotation). The walk wanders within a fixed ±360°/s ceiling; the **shared global energy setting** attenuates the raw output afterward instead of narrowing that range (0% = stopped, 100% = unchanged).
-- **Rope angle geometry bugfix**: `ropeAngleDeg()`'s front/back edges ran the wrong direction, creating a ~12ft discontinuity at every segment seam — visible as the beam jumping at the front/right seam. Only this show exposed it (the one deriving a continuous 0-360° angle for a smoothly-rotating beam). Fixed by reversing front/back edge direction so all 4 seams line up continuously.
+- **Rope angle geometry bugfix**: `ropeAngleDeg()`'s front/rear edges ran the wrong direction, creating a ~12ft discontinuity at every segment seam — visible as the beam jumping at the front/right seam. Only this show exposed it (the one deriving a continuous 0-360° angle for a smoothly-rotating beam). Fixed by reversing front/rear edge direction so all 4 seams line up continuously.
 - **Color**: beam 1's hue always increases (never reverses) at a random-walking rate, 0 (frozen) to 1 full cycle/20s. Saturation random-walks 75-100% (widened from 87-100%, starting at 90%), shared mechanism for both beams. Beam 2 uses beam 1's saturation exactly plus the complementary hue (+128) — independent rotation only, no independent color.
 - **Rope**: same falloff as megabars, evaluated at each of ~1016 cached LED angular positions instead of 12 fixed ones.
 - **Overlap**: where cluster falloffs overlap, hue is additive (summed, wrapped); brightness stays at the max of contributors, not summed — applied identically on rope and megabars now (previously handled differently).
@@ -328,11 +328,11 @@ The rope runs a classic Fire2012-style heat simulation (cool → disperse → sp
 2 variations, cycled by encoder rotation. Both react to `AudioBoard`'s shared **hit** value (`getBandHitPercent(Band)`/`getBandHitNonzero(Band)`, see "Audio processing" below) instead of each rolling its own peak-hold logic — decay behavior is uniform and tunable from Audio config subsetting 2b.
 
 - **Variation 0** (default): the original bouncing-chase pattern (unrelated to audio) on the rope, megabars tinted by bass (red, low band's hit) and treble (blue, high band's hit).
-- **Variation 1**: a dual VU meter across the whole front/back rather than one corner. Bass is based on the *entire back edge* (always lit) and grows forward along both sides as it rises (red); treble is based on the entire front edge and grows backward (blue) — same red=bass/blue=treble convention, both driven by hit. `RIGHT`/`LEFT` are the exact midpoints of each side run, so each meter's 100%-reach is 15% of the true-corner-to-center half-length past that midpoint — maxed bass/treble simultaneously cross near the car's middle, blending 50/50 where they overlap. Brightness scales with level, not just reach — a quiet meter is dim, not just short. Megabars/china off.
-  - **Bugfix**: `FRONT_RIGHT`/`BACK_RIGHT`/`BACK_LEFT`/`FRONT_LEFT` are inset `SIZEOF_LARGE_NEO_CORNER` (33) LEDs in from each side's true physical corner — the per-side loop used to run only between those inset points, leaving the ~33-LED zone at each true corner permanently dark. Fixed by widening each side's loop to its full physical strand while keeping the reference points (and meter calibration) unchanged; past a reference point the same distance math correctly reads as "always lit, proportional to level." Deliberately does **not** reach into the front/back channels' own logic (an earlier draft did, incorrectly — each side stays self-contained).
+- **Variation 1**: a dual VU meter across the whole front/rear rather than one corner. Bass is based on the *entire rear edge* (always lit) and grows forward along both sides as it rises (red); treble is based on the entire front edge and grows rearward (blue) — same red=bass/blue=treble convention, both driven by hit. `RIGHT`/`LEFT` are the exact midpoints of each side run, so each meter's 100%-reach is 15% of the true-corner-to-center half-length past that midpoint — maxed bass/treble simultaneously cross near the car's middle, blending 50/50 where they overlap. Brightness scales with level, not just reach — a quiet meter is dim, not just short. Megabars/china off.
+  - **Bugfix**: `FRONT_RIGHT`/`REAR_RIGHT`/`REAR_LEFT`/`FRONT_LEFT` are inset `SIZEOF_LARGE_NEO_CORNER` (33) LEDs in from each side's true physical corner — the per-side loop used to run only between those inset points, leaving the ~33-LED zone at each true corner permanently dark. Fixed by widening each side's loop to its full physical strand while keeping the reference points (and meter calibration) unchanged; past a reference point the same distance math correctly reads as "always lit, proportional to level." Deliberately does **not** reach into the front/rear channels' own logic (an earlier draft did, incorrectly — each side stays self-contained).
 - **Pot** (either variation): live-adjusts the shared peak threshold (`PkThresh`, 0-100% full pot, prints `PkThresh:<percent>%` 1s after settling) — soft takeover. Deliberately *not* part of the global energy group (a threshold isn't "energy"); unlike that group it *is* tied to a persisted value — leaving the show reverts it to whatever's saved, so casual tweaking never silently overwrites the committed setting.
 
-**Triple-strobe** (either variation): toggled by double press while Equalizer is active — nonvolatile. When enabled, a qualifying bass hit (`AudioBoard::getBandHitNonzero(BandBass)`) flashes all 8 china and the 8 corner-adjacent megabars (all except headlight/left/back/right cardinals, index `0`/`3`/`6`/`9`) full white for 3 pulses, 30ms on/20ms gap.
+**Triple-strobe** (either variation): toggled by double press while Equalizer is active — nonvolatile. When enabled, a qualifying bass hit (`AudioBoard::getBandHitNonzero(BandBass)`) flashes all 8 china and the 8 corner-adjacent megabars (all except headlight/left/rear/right cardinals, index `0`/`3`/`6`/`9`) full white for 3 pulses, 30ms on/20ms gap.
 
 Hit suppression prevents machine-gunning during a sustained loud passage: the triggering hit's level is remembered, and any further hit not exceeding it is suppressed within 3s of the last qualifying hit. A 3+s gap with no qualifying hits clears the memory, so the next hit always strobes fresh.
 
@@ -392,22 +392,22 @@ Only runs while `ModeShow` is active — config screens read the pot live via `P
 
 **The raw ADC reading never leaves `Potentiometer`** — `readPercent()`/`readLivePercent()` are the only public accessors, both already 0-100%; `MAX_VOLTAGE` and `analogRead()` stay internal. Every consumer (soft-takeover checks across `CarpetLightLogic.cpp`/`LightShow.h`/`BumpingAudioShow.h`/`NightriderShow.h`) works in percent, never raw counts.
 
-**`SpeedStripesShow`**: the two long side rope strips are the only fixtures running front-to-back along the car's 16ft length (front/back edges don't, stay off). Each side strip (352 LEDs) divides into 4 bands of 88 LEDs (4ft each) alternating lit/dark with a smoothed transition. The pattern scrolls front-to-back at a rate proportional to live speed (`LEDS_PER_MPH_PER_SEC`), giving a sense of motion.
+**`SpeedStripesShow`**: the two long side rope strips are the only fixtures running front-to-rear along the car's 16ft length (front/rear edges don't, stay off). Each side strip (352 LEDs) divides into 4 bands of 88 LEDs (4ft each) alternating lit/dark with a smoothed transition. The pattern scrolls front-to-rear at a rate proportional to live speed (`LEDS_PER_MPH_PER_SEC`), giving a sense of motion.
 
 **Color**: each stripe (one lit band) gets its own 2-color gradient, leading to trailing edge, rather than one shared hue. Which pair a stripe shows is deterministic from its period-cycle (`floor(pos/period)` through a Knuth multiplicative hash), so a physical stripe keeps a stable identity while scrolling without per-instance state. The same slow desaturation cycle as `EqualizerShow` (100%→85%→100% over 30s) breathes on top.
 
 **Performance note**: the SAM3X8E's Cortex-M3 has **no hardware FPU**, so `sinf()`/`tanhf()`/`atan2f()`/`cosf()` are expensive — and this show's `update()` runs unconditionally every loop, even behind a config screen. An earlier version called `atan2f()` per rope LED per frame (1016×, for a since-removed spin mode) and recomputed desaturation `cosf()` per LED — felt as general UI choppiness. The current version avoids float trig in the hot path entirely: `currentSatFraction()` computed once per `update()` and passed down, color hash is integer multiply/xor, brightness envelope uses table-based `sin8()` plus an integer contrast boost.
 
-Every other fixture with a meaningful along-length position samples the same scrolling pattern at its own physical position, so a stripe's color matches everywhere it's visible (china, megabars, rope). The sampling function is periodic and defined beyond the car's own corners, so forward/backward-pointed fixtures preview an approaching stripe or show it receding with no special-casing:
+Every other fixture with a meaningful along-length position samples the same scrolling pattern at its own physical position, so a stripe's color matches everywhere it's visible (china, megabars, rope). The sampling function is periodic and defined beyond the car's own corners, so forward/rearward-pointed fixtures preview an approaching stripe or show it receding with no special-casing:
 
 | Fixture(s) | Position sampled |
 | --- | --- |
 | Megabars `[11,0,1]` (front 3, incl. headlight) | 4ft ahead of the front corner — a preview, well before the stripe arrives |
 | China `[1,2]` (aimed along the front edge) | 1ft ahead of the front corner — picks the same stripe up just as it's about to cross onto the carpet |
-| Megabars `[5,6,7]` (rear 3) | 4ft behind the back corner — mirrors the front, for the stripe that just left |
-| China `[5,6]` (aimed along the back edge) | 1ft behind the back corner — mirrors the front |
-| China `[0]`/`[3]` (front-right/front-left, aimed along a side edge) | 1/3 of the way back from the front |
-| China `[7]`/`[4]` (back-right/back-left, aimed along a side edge) | 2/3 of the way back from the front |
+| Megabars `[5,6,7]` (rear 3) | 4ft behind the rear corner — mirrors the front, for the stripe that just left |
+| China `[5,6]` (aimed along the rear edge) | 1ft behind the rear corner — mirrors the front |
+| China `[0]`/`[3]` (front-right/front-left, aimed along a side edge) | 1/3 of the way rear from the front |
+| China `[7]`/`[4]` (rear-right/rear-left, aimed along a side edge) | 2/3 of the way rear from the front |
 | Megabars `[2,10]` / `[3,9]` / `[4,8]` (remaining 3 per side) | Same 1/3, 1/2, 2/3 partition by angle — `[2]`/`[10]` line up with the 1/3 china, `[4]`/`[8]` with the 2/3 china |
 
 All of the above (16ft/12ft carpet dimensions, 4ft/1ft preview distances, fade steepness) are hardcoded per user-measured values in `SpeedStripesShow.h` — adjust there if dimensions change.
@@ -428,8 +428,8 @@ Two spots deliberately still use raw `millis()` math, since `Timer` only models 
 Light shows should eventually be defined in terms of human-meaningful physical zones/effects rather than raw array indices:
 
 - **A "side" preset**: a run of megabars + china pair(s) washing that edge (e.g. "left side floods" = megabars `[3,4,5]` (addr 10,13,16) + china `[3,4]` (addr 55,61)).
-- **A "sweep"**: driven by front-to-back distance along the perimeter, applied symmetrically to both sides.
+- **A "sweep"**: driven by front-to-rear distance along the perimeter, applied symmetrically to both sides.
 - **A "lighthouse" effect**: one rotating angle picking both the nearest megabar and a same-angle window of perimeter LEDs.
-- **A rope-index/strand abstraction layer**: which physical strand (front/right/back/left) a `ropeLeds[]` index belongs to, and its position along that strand, currently has to be re-derived by hand at every call site from raw `FRONT`/`RIGHT`/`BACK`/`LEFT`/`SIZEOF_*` constants (in firmware and visualizer independently) — every site is a fresh chance to get a strand boundary wrong or reach across it into a neighbor's logic (happened at least once — the Equalizer VU-meter bugfix above). Real functions (`stripFor(i)`, `posInStrip(i)`, plus megabar X/Y helpers, which have no position model in firmware today, only the visualizer) would make this impossible to get wrong by construction. Flagged, not yet built.
+- **A rope-index/strand abstraction layer**: which physical strand (front/right/rear/left) a `ropeLeds[]` index belongs to, and its position along that strand, currently has to be re-derived by hand at every call site from raw `FRONT`/`RIGHT`/`REAR`/`LEFT`/`SIZEOF_*` constants (in firmware and visualizer independently) — every site is a fresh chance to get a strand boundary wrong or reach across it into a neighbor's logic (happened at least once — the Equalizer VU-meter bugfix above). Real functions (`stripFor(i)`, `posInStrip(i)`, plus megabar X/Y helpers, which have no position model in firmware today, only the visualizer) would make this impossible to get wrong by construction. Flagged, not yet built.
 
 None of that abstraction exists in code yet — this doc records the raw hardware facts it would need to be built on.

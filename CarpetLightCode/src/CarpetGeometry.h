@@ -12,7 +12,7 @@
  *    center, X+ = right, Y+ = FRONT (forward direction of travel), all
  *    distances in feet unless a name says otherwise (e.g. *Percent).
  *    Angles are compass-style, clockwise from forward: 0=front, 90=right,
- *    180=back, 270=left -- same convention LighthouseShow.h/
+ *    180=rear, 270=left -- same convention LighthouseShow.h/
  *    SpeedStripesShow.h already use.
  *
  *    Fixture (x,y) positions below are ported from the visualizer
@@ -31,7 +31,7 @@
  *        algorithm should ever consult (dimAngleDeg/dimDistFt are derived
  *        from it once, here). China fixtures are mounted in pairs that
  *        share one corner bracket but aim along DIFFERENT edges (one
- *        front/back, one side) -- their ground spots are two genuinely
+ *        front/rear, one side) -- their ground spots are two genuinely
  *        DISTINCT points, well separated in angle (~14deg vs ~66deg for
  *        the front-right pair, confirmed empirically -- nowhere close to
  *        co-located, and also nowhere close to a naive 45deg-apart
@@ -79,69 +79,105 @@ class CarpetGeometry {
    // light show's "which side of the car" query is a geometric concept
    // that must stay decoupled from however the perimeter happens to be
    // wired -- that coupling is assumed in exactly one place, strandForSide_().
-   enum Strand { StrandFront = 0, StrandRight = 1, StrandBack = 2, StrandLeft = 3 };
+   enum Strand { StrandFront = 0, StrandRight = 1, StrandRear = 2, StrandLeft = 3 };
    // CarSide = which of the 4 sides of the CAR -- the geometric concept
    // every neo position getter/setter below actually takes. Distinct from
    // Strand (hardware wiring, see above) and from the (unrelated,
    // pre-existing) binary Side enum below (which classifies a pixel as
    // simply left-half/right-half of the car, regardless of which of the 4
    // sides or strands it's on).
-   enum CarSide { CarSideFront = 0, CarSideRight = 1, CarSideBack = 2, CarSideLeft = 3 };
+   enum CarSide { CarSideFront = 0, CarSideRight = 1, CarSideRear = 2, CarSideLeft = 3 };
    enum Side { SideRight = 0, SideLeft = 1 };
 
    // Named indices, in DMX address order (see README.md, "Megabars"/"China
    // lights") -- callers should prefer these over raw integer indices
    // wherever the specific fixture matters, e.g. CarpetGeometry::getChina(
-   // CarpetGeometry::ChinaFrontRightFront) rather than getChina(1).
+   // CarpetGeometry::ChinaFrontRight) rather than getChina(1).
    enum MegabarName {
       Megabar0deg = 0, Megabar30deg, Megabar60deg, Megabar90deg, Megabar120deg, Megabar150deg,
       Megabar180deg, Megabar210deg, Megabar240deg, Megabar270deg, Megabar300deg, Megabar330deg,
       NumMegabars
    };
    enum ChinaName {
-      ChinaFrontRightSide = 0,  // addr 37 -- front-right corner, aimed along the right (side) edge
-      ChinaFrontRightFront,     // addr 43 -- front-right corner, aimed along the front edge
-      ChinaFrontLeftFront,      // addr 49 -- front-left corner, aimed along the front edge
-      ChinaFrontLeftSide,       // addr 55 -- front-left corner, aimed along the left (side) edge
-      ChinaBackLeftSide,        // addr 61 -- back-left corner, aimed along the left (side) edge
-      ChinaBackLeftBack,        // addr 67 -- back-left corner, aimed along the back edge
-      ChinaBackRightBack,       // addr 73 -- back-right corner, aimed along the back edge
-      ChinaBackRightSide,       // addr 79 -- back-right corner, aimed along the right (side) edge
+      ChinaRightFront = 0,  // addr 37 -- front-right corner, aimed along the right (side) edge
+      ChinaFrontRight,      // addr 43 -- front-right corner, aimed along the front edge
+      ChinaFrontLeft,       // addr 49 -- front-left corner, aimed along the front edge
+      ChinaLeftFront,       // addr 55 -- front-left corner, aimed along the left (side) edge
+      ChinaLeftRear,        // addr 61 -- rear-left corner, aimed along the left (side) edge
+      ChinaRearLeft,        // addr 67 -- rear-left corner, aimed along the rear edge
+      ChinaRearRight,       // addr 73 -- rear-right corner, aimed along the rear edge
+      ChinaRightRear,       // addr 79 -- rear-right corner, aimed along the right (side) edge
       NumChinas
    };
 
    /* ---- Vehicle 3D model ---- */
    static constexpr float CAR_WIDTH_FT = 12.0f;  // left-right
-   static constexpr float CAR_LENGTH_FT = 16.0f; // front-back
-   // PLACEHOLDER -- not yet measured on the real car; a plausible fringe/
-   // tassel trim length (6in) so callers have a real number to work with
-   // rather than 0. Replace once measured.
-   static constexpr float FRINGE_LENGTH_FT = 0.5f;
-   // PLACEHOLDER -- the carpet surface isn't perfectly flat (real fabric
-   // over a frame sags/domes slightly); these define a simple sine
-   // undulation on top of a flat base until real measured contour data is
-   // available. Amplitude is deliberately small (1.2in) so it's a subtle
-   // ripple, not a dominant shape; wavelength set to 1 full cycle across
-   // the car's own length.
-   static constexpr float SURFACE_BASE_HEIGHT_FT = 0.0f;
-   static constexpr float SURFACE_UNDULATION_AMPLITUDE_FT = 0.1f;
-   static constexpr float SURFACE_UNDULATION_WAVELENGTH_FT = CAR_LENGTH_FT;
+   static constexpr float CAR_LENGTH_FT = 16.0f; // front-rear
+   // Real measured fringe/tassel trim length, hanging down off the car's
+   // edge -- a Z-axis (vertical) dimension, hence the _Z_ in the name.
+   static constexpr float FRINGE_LENGTH_Z_FT = 1.0f;
+   // Real measured carpet deck surface height off the ground.
+   static constexpr float SURFACE_BASE_HEIGHT_FT = 2.5f;
+   // Real measured property: the rope along the LEFT/RIGHT side strands
+   // physically undulates up and down (peak-to-peak 3.5in) as you move
+   // front-to-rear -- the front/rear strands do NOT undulate (flat, always
+   // exactly SURFACE_BASE_HEIGHT_FT). Wavelength set to 1 full cycle
+   // across the car's own length (not independently measured).
+   static constexpr float SIDE_UNDULATION_PEAK_TO_PEAK_FT = 3.5f / 12.0f;
+   static constexpr float SIDE_UNDULATION_AMPLITUDE_FT = SIDE_UNDULATION_PEAK_TO_PEAK_FT / 2.0f;
+   static constexpr float SIDE_UNDULATION_WAVELENGTH_FT = CAR_LENGTH_FT / 2.0f;
 
-   // Surface height (feet above SURFACE_BASE_HEIGHT_FT) at a car-relative
-   // (x,y) point, feet -- a simple 2D sine ripple running front-to-back.
-   // Cheap enough to call per-frame/per-LED if ever needed, but still only
-   // ever needs this one central definition.
-   static float getSurfaceHeightAt( float xFt, float yFt ) {
-      (void)xFt; // undulation currently runs only along Y (front-back); reserved for a future X-dependent term
-      return SURFACE_BASE_HEIGHT_FT + SURFACE_UNDULATION_AMPLITUDE_FT *
-             sinf( 2.0f * PI * yFt / SURFACE_UNDULATION_WAVELENGTH_FT );
-   }
-   // Same, from polar (distance, angle-from-forward) instead of (x,y).
-   static float getSurfaceHeightAtPolar( float distFt, float angleFromForwardDeg ) {
-      float rad = angleFromForwardDeg * PI / 180.0f;
-      float xFt = distFt * sinf( rad );
-      float yFt = distFt * cosf( rad );
-      return getSurfaceHeightAt( xFt, yFt );
+   // Round decoration table + tablecloth on the deck -- NOT a light
+   // fixture (no dimZ/mount concept, visualizer-rendering-only, same
+   // category as beamYawDeg/beamPitchDeg in the file header's own note).
+   // Moved here from the visualizer's own hardcoded literals so it has
+   // exactly one source of truth like every other real-world measurement
+   // in this file. Centered left-right (X=0), offset forward of car
+   // center (Y+).
+   static constexpr float TABLE_CENTER_X_FT = 0.0f;
+   static constexpr float TABLE_CENTER_Y_FT = 2.5f;
+   static constexpr float TABLE_DIAMETER_FT = 3.0f;
+
+   // Vehicle undercarriage (chassis) -- NOT rendered anywhere yet (the
+   // visualizer is 2D top-down only, no 3D mode exists), included so a
+   // future 3D pass has real dimensions to build from instead of guessing.
+   // Visualizer-rendering-only, same "no real light show reads this"
+   // category as the table/fringe geometry above. A plain 4x8ft
+   // rectangular prism, centered on car center (matches the car's own X=0
+   // convention), running from the ground up to the bottom of the deck
+   // surface -- rendered (per request) as a dull dark grey block, no color
+   // constant here since that's a rendering choice, not a dimension.
+   static constexpr float CHASSIS_WIDTH_FT = 4.0f;    // X extent
+   static constexpr float CHASSIS_LENGTH_FT = 8.0f;   // Y extent
+   static constexpr float CHASSIS_CENTER_X_FT = 0.0f; // centered left-right on car center
+   static constexpr float CHASSIS_CENTER_Y_FT = 0.0f; // centered front-rear on car center
+   static constexpr float CHASSIS_BOTTOM_HEIGHT_FT = 4.0f / 12.0f;    // 4in ground clearance
+   static constexpr float CHASSIS_TOP_HEIGHT_FT = SURFACE_BASE_HEIGHT_FT; // meets the underside of the deck
+
+   // Wheels: one at each of the 4 extreme corners of the chassis footprint
+   // above (X=+-CHASSIS_WIDTH_FT/2, Y=+-CHASSIS_LENGTH_FT/2), resting on
+   // the ground (center height = WHEEL_DIAMETER_FT/2). Diameter is the
+   // wheel's own rolling-direction/height extent (Y-Z plane); width is its
+   // axle-direction extent (X, side-to-side thickness).
+   static constexpr float WHEEL_DIAMETER_FT = 18.0f / 12.0f;
+   static constexpr float WHEEL_WIDTH_FT = 9.0f / 12.0f;
+   // Fender cutout carved out of the chassis prism around each wheel, so a
+   // future 3D pass doesn't draw the solid chassis block straight through
+   // the tires -- a simple clearance radius past the wheel's own
+   // footprint, "generous" per request rather than independently
+   // measured/spec'd; a real 3D pass is free to shape the actual cutout
+   // however it wants; this just says how much room to leave.
+   static constexpr float FENDER_CLEARANCE_FT = 0.5f;
+
+   // Surface height (feet above the ground) at a given front-rear position
+   // (yFt) on the given side of the car. Only CarSideLeft/CarSideRight
+   // undulate (a real physical property of the rope mount along those 2
+   // strands); CarSideFront/CarSideRear are flat, always exactly
+   // SURFACE_BASE_HEIGHT_FT, regardless of yFt.
+   static float getSurfaceHeightAt( CarSide side, float yFt ) {
+      if ( side != CarSideLeft && side != CarSideRight ) return SURFACE_BASE_HEIGHT_FT;
+      return SURFACE_BASE_HEIGHT_FT + SIDE_UNDULATION_AMPLITUDE_FT *
+             sinf( 2.0f * PI * yFt / SIDE_UNDULATION_WAVELENGTH_FT );
    }
 
    /* ---- Centralized per-fixture geometry record -- one entry per
@@ -172,8 +208,8 @@ class CarpetGeometry {
 
    /* ---- Per-neopixel abstracted perimeter geometry ------------
       Index 0 = front-left corner (matches the real wiring direction:
-      front strand runs left->right, right side front->back, back strand
-      right->left, left side back->front -- see README.md "Perimeter rope
+      front strand runs left->right, right side front->rear, rear strand
+      right->left, left side rear->front -- see README.md "Perimeter rope
       lights"). X/Y are percent of car width/length (-50..+50, 0=center) --
       distanceFt/angleFromForwardDeg are derived from those once, here,
       not left for every caller to recompute. */
@@ -186,7 +222,7 @@ class CarpetGeometry {
    };
 
    static uint16_t getNumPixelsOnStrand( Strand s ) {
-      return ( s == StrandFront || s == StrandBack ) ? SIZEOF_SMALL_NEO : SIZEOF_LARGE_NEO;
+      return ( s == StrandFront || s == StrandRear ) ? SIZEOF_SMALL_NEO : SIZEOF_LARGE_NEO;
    }
    static uint16_t getNumPixelsTotal() { return NUM_NEO_LEDS_ACTUAL; }
 
@@ -202,7 +238,7 @@ class CarpetGeometry {
    // feet; Pixel is the SAME cartesian position rescaled to that side's
    // real pixel density (e.g. getMaxYFt(CarSideLeft)==8.0f,
    // getMaxYPixel(CarSideLeft)==176.0f -- 22px/ft * 8ft). side must still
-   // be supplied (CarSideFront/Back for the X pair, CarSideLeft/Right for
+   // be supplied (CarSideFront/Rear for the X pair, CarSideLeft/Right for
    // the Y pair) since Pixel needs it for density and Ft takes it for
    // signature symmetry with Pixel, even though the Ft value itself is
    // the same for either valid side of a given axis.
@@ -235,19 +271,59 @@ class CarpetGeometry {
    // the lower id.
    static MegabarName getMegabarByAngle( float angleDeg ) { return (MegabarName)nearestByAngle_( FixtureMegabar, NumMegabars, angleDeg ); }
    static ChinaName   getChinaByAngle( float angleDeg )   { return (ChinaName)nearestByAngle_( FixtureChina, NumChinas, angleDeg ); }
-   static MegabarName getMegabarByX( float xFt ) { return (MegabarName)nearestByX_( FixtureMegabar, NumMegabars, xFt ); }
-   static ChinaName   getChinaByX( float xFt )   { return (ChinaName)nearestByX_( FixtureChina, NumChinas, xFt ); }
-   static MegabarName getMegabarByY( float yFt ) { return (MegabarName)nearestByY_( FixtureMegabar, NumMegabars, yFt ); }
-   static ChinaName   getChinaByY( float yFt )   { return (ChinaName)nearestByY_( FixtureChina, NumChinas, yFt ); }
-   // GETTER only, no corresponding setter (see LightSetters.h) -- distance
-   // from center is a legitimate thing to ASK ("what's the nearest fixture
-   // to this radius"), but ambiguous to WRITE to: many fixtures share the
-   // same real distance by symmetry (e.g. all 4 side-china pairs), so
-   // there's no single obviously-correct fixture for a show to silently
-   // set. The tie-break below (lowest id) is deterministic but arbitrary --
-   // fine for a caller that inspects the result, not fine to write blind.
-   static MegabarName getMegabarByDist( float distFt ) { return (MegabarName)nearestByDist_( FixtureMegabar, NumMegabars, distFt ); }
-   static ChinaName   getChinaByDist( float distFt )   { return (ChinaName)nearestByDist_( FixtureChina, NumChinas, distFt ); }
+   // BUGFIX: ByX/ByY used to silently return a single "winner" even when
+   // the query was a genuine tie -- fixtures repeat X across the front/
+   // rear mirror line and repeat Y across the left/right mirror line (e.g.
+   // Megabar30deg and Megabar150deg share the same dimX; Megabar30deg and
+   // Megabar330deg share the same dimY), so "nearest fixture to X=6.8ft"
+   // has a real 2-way tie between fixtures on opposite sides of the car --
+   // whichever the loop happened to see first silently won, which is
+   // wrong for a caller that can't tell it happened.
+   //
+   // No caller-supplied side/half argument is used to route around this --
+   // deliberately, per explicit request: a side argument only papers over
+   // ambiguity for QUERIES that fall inside the mirrored zone; it would
+   // incorrectly reject (or misroute) a query that isn't actually
+   // ambiguous just because it happens to land nearest a fixture "on the
+   // wrong side" of whatever half the caller guessed. Instead the tie
+   // check is performed directly on the real query result: every fixture
+   // of the type is scanned (nearestXyChecked_ below), tracking both the
+   // single closest match AND whether a second fixture ties it (within a
+   // small float epsilon -- these coordinates are compile-time literals,
+   // so a real tie compares bit-exact in practice, but non-literal/derived
+   // values could exist in the future). A genuine tie returns the
+   // out-of-range sentinel (MegabarName)NumMegabars / (ChinaName)NumChinas
+   // (one past the last real index -- mirrors getNeoBy{X,Y}Ft's own
+   // INT32_MIN sentinel below); anything with a single unique nearest
+   // fixture returns it correctly, tie-prone dimension or not. Callers
+   // that pass the result through directly to an array index must check
+   // for the sentinel first; LightSetters (which builds its setters on
+   // top of these) already does.
+   //
+   // Efficiency: a full linear scan (12 megabars / 8 china) on every call
+   // is trivial on this MCU and happens at most once per setColor/setWhite
+   // call, never per-pixel -- no lookup table is needed. If some future
+   // caller pattern made this a real hot path, a tie-lookup table could be
+   // precomputed once in begin() instead; not done here since nothing
+   // currently justifies the added complexity.
+   static MegabarName getMegabarByX( float xFt ) { uint8_t id = nearestXChecked_( FixtureMegabar, NumMegabars, xFt ); return (id == TIE_SENTINEL_) ? (MegabarName)NumMegabars : (MegabarName)id; }
+   static ChinaName   getChinaByX( float xFt )   { uint8_t id = nearestXChecked_( FixtureChina, NumChinas, xFt );     return (id == TIE_SENTINEL_) ? (ChinaName)NumChinas     : (ChinaName)id; }
+   static MegabarName getMegabarByY( float yFt ) { uint8_t id = nearestYChecked_( FixtureMegabar, NumMegabars, yFt ); return (id == TIE_SENTINEL_) ? (MegabarName)NumMegabars : (MegabarName)id; }
+   static ChinaName   getChinaByY( float yFt )   { uint8_t id = nearestYChecked_( FixtureChina, NumChinas, yFt );     return (id == TIE_SENTINEL_) ? (ChinaName)NumChinas     : (ChinaName)id; }
+   // getMegabarByDist/getChinaByDist -- COMMENTED OUT, per explicit request
+   // (confirmed unused by any real light show, ARM/WASM build clean without
+   // them): distance-from-center is ambiguous even as a plain GETTER, not
+   // just as a would-be setter target -- many fixtures share the exact
+   // same real distance by symmetry (e.g. every side-china pair, or all 4
+   // of the "12.74ft" megabars), so "nearest fixture to this radius" always
+   // has a real tie, arbitrarily broken to the lowest id below. If a future
+   // light show genuinely needs "which fixtures are near this distance,"
+   // it should loop getMegabar(i)/getChina(i) itself and compare dimDistFt
+   // directly (it can trivially collect ALL ties that way, which a single
+   // nearest-match getter can never do) rather than reintroduce a getter
+   // that silently drops every fixture but one.
+   // static MegabarName getMegabarByDist( float distFt ) { return (MegabarName)nearestByDist_( FixtureMegabar, NumMegabars, distFt ); }
+   // static ChinaName   getChinaByDist( float distFt )   { return (ChinaName)nearestByDist_( FixtureChina, NumChinas, distFt ); }
    // Direct lookup by ID/enum -- included for naming symmetry with the
    // By{Angle,X,Y} family above; identical to getMegabar()/getChina(),
    // just named to match.
@@ -286,7 +362,7 @@ class CarpetGeometry {
    // flood By{Angle,X,Y} getters above, returning a NeoID. Take a CarSide
    // (which of the 4 sides of the CAR), never a Strand (which wire it's
    // on) -- see CarSide's own comment above. X only varies meaningfully on
-   // the Front/Back side and Y only on the Left/Right side (a side's "off
+   // the Front/Rear side and Y only on the Left/Right side (a side's "off
    // axis" coordinate barely moves along its own length), so only those
    // pairings are provided -- see LightSetters.h, which is where the
    // actual (Side,X)/(Side,Y) ambiguity this resolves is explained in
@@ -299,8 +375,27 @@ class CarpetGeometry {
    // the NeoID is exactly known), for callers that already have a raw
    // pixel-index (e.g. a scrolling animation's own array offset).
    static int32_t getNeoByAngleDeg( float angleDeg ) { return rawIndexToNeoId( (uint16_t)nearestNeoGlobalByAngle_( angleDeg ) ); }
-   static int32_t getNeoByXFt( CarSide side, float xFt ) { return nearestNeoOnStrand_( strandForSide_( side ), xFt, /*useX*/true ); }
-   static int32_t getNeoByYFt( CarSide side, float yFt ) { return nearestNeoOnStrand_( strandForSide_( side ), yFt, /*useX*/false ); }
+   // Unlike the flood ByX/ByY getters above, side here isn't optional --
+   // it selects which physical STRAND to search at all (X is genuinely
+   // meaningless as a search key on the left/right strands, whose X is
+   // pinned constant the whole way; same for Y on front/rear), so there's
+   // no way to answer "nearest by X" without first knowing which strand.
+   // An invalid axis/side pairing (e.g. getNeoByYFt(CarSideFront,...) --
+   // Front doesn't disambiguate Y at all) is a programming error, not a
+   // legitimate query -- returns the out-of-range sentinel INT32_MIN
+   // (never a valid NeoID; mirrors the flood getters' own NumMegabars/
+   // NumChinas sentinel above) rather than silently searching whichever
+   // strand Front happens to map to. Callers that pass the result through
+   // directly to an array index must check for it first; LightSetters
+   // (which builds its setters on top of these) already does.
+   static int32_t getNeoByXFt( CarSide side, float xFt ) {
+      if ( side != CarSideFront && side != CarSideRear ) return INT32_MIN; // invalid side/axis pairing
+      return nearestNeoOnStrand_( strandForSide_( side ), xFt, /*useX*/true );
+   }
+   static int32_t getNeoByYFt( CarSide side, float yFt ) {
+      if ( side != CarSideLeft && side != CarSideRight ) return INT32_MIN; // invalid side/axis pairing
+      return nearestNeoOnStrand_( strandForSide_( side ), yFt, /*useX*/false );
+   }
    static int32_t getNeoByXPixel( CarSide side, float xPixel ) { return getNeoByXFt( side, xPixel / pixelsPerFootForSide_( side ) ); }
    static int32_t getNeoByYPixel( CarSide side, float yPixel ) { return getNeoByYFt( side, yPixel / pixelsPerFootForSide_( side ) ); }
    static int32_t getNeoByCircumferenceID( int32_t neoId ) { return neoIdWrap( neoId ); } // trivial -- included for naming symmetry, see getMegabarByID/getChinaByID
@@ -319,11 +414,11 @@ class CarpetGeometry {
    // buildStrandInfo_) is internal wiring-order plumbing.
    static Strand strandForSide_( CarSide side ) { return (Strand)side; }
    // Real pixel density (LEDs/foot) of the strand behind a given side --
-   // Front/Back share one density (SIZEOF_SMALL_NEO over CAR_WIDTH_FT),
+   // Front/Rear share one density (SIZEOF_SMALL_NEO over CAR_WIDTH_FT),
    // Left/Right share the other (SIZEOF_LARGE_NEO over CAR_LENGTH_FT).
    static float pixelsPerFootForSide_( CarSide side ) {
       Strand s = strandForSide_( side );
-      float axisLenFt = ( s == StrandFront || s == StrandBack ) ? CAR_WIDTH_FT : CAR_LENGTH_FT;
+      float axisLenFt = ( s == StrandFront || s == StrandRear ) ? CAR_WIDTH_FT : CAR_LENGTH_FT;
       return (float)getNumPixelsOnStrand( s ) / axisLenFt;
    }
 
@@ -349,7 +444,7 @@ class CarpetGeometry {
       while ( deg >= 360.0f ) deg -= 360.0f;
       return deg;
    }
-   // compass angle (0=front,90=right,180=back,270=left) of a car-relative (x,y) point
+   // compass angle (0=front,90=right,180=rear,270=left) of a car-relative (x,y) point
    static float angleFromForward_( float xFt, float yFt ) {
       return wrap360_( atan2f( xFt, yFt ) * 180.0f / PI );
    }
@@ -367,30 +462,37 @@ class CarpetGeometry {
       }
       return best;
    }
-   static uint8_t nearestByX_( FixtureType type, uint8_t count, float queryXFt ) {
-      uint8_t best = 0; float bestDelta = 1e9f;
+   // Tie-checked nearest search -- see getMegabarByX/getChinaByX's own
+   // comment for why this exists (a caller-supplied side can't correctly
+   // resolve flood X/Y ambiguity, since the ambiguity is a property of the
+   // QUERY, not of a hardcoded half of the car). TIE_SENTINEL_ (an
+   // impossible fixture index -- both real counts are well under 255)
+   // means "2+ fixtures are equally close," anything else is the single
+   // real winner. TIE_EPSILON_FT_ guards against float-noise ties; every
+   // real coordinate here is a compile-time literal, so a genuine tie
+   // compares bit-exact in practice and this rarely even matters.
+   static const uint8_t TIE_SENTINEL_ = 255;
+   static constexpr float TIE_EPSILON_FT_ = 1e-4f;
+   static uint8_t nearestXChecked_( FixtureType type, uint8_t count, float queryXFt ) {
+      uint8_t best = 0; float bestDelta = 1e9f; uint8_t tieCount = 0;
       for ( uint8_t i = 0; i < count; ++i ) {
          float d = fabsf( getFlood( type, i ).dimX - queryXFt );
-         if ( d < bestDelta ) { bestDelta = d; best = i; }
+         if ( d < bestDelta - TIE_EPSILON_FT_ ) { bestDelta = d; best = i; tieCount = 1; }
+         else if ( fabsf( d - bestDelta ) <= TIE_EPSILON_FT_ ) { ++tieCount; }
       }
-      return best;
+      return ( tieCount > 1 ) ? TIE_SENTINEL_ : best;
    }
-   static uint8_t nearestByY_( FixtureType type, uint8_t count, float queryYFt ) {
-      uint8_t best = 0; float bestDelta = 1e9f;
+   static uint8_t nearestYChecked_( FixtureType type, uint8_t count, float queryYFt ) {
+      uint8_t best = 0; float bestDelta = 1e9f; uint8_t tieCount = 0;
       for ( uint8_t i = 0; i < count; ++i ) {
          float d = fabsf( getFlood( type, i ).dimY - queryYFt );
-         if ( d < bestDelta ) { bestDelta = d; best = i; }
+         if ( d < bestDelta - TIE_EPSILON_FT_ ) { bestDelta = d; best = i; tieCount = 1; }
+         else if ( fabsf( d - bestDelta ) <= TIE_EPSILON_FT_ ) { ++tieCount; }
       }
-      return best;
+      return ( tieCount > 1 ) ? TIE_SENTINEL_ : best;
    }
-   static uint8_t nearestByDist_( FixtureType type, uint8_t count, float queryFt ) {
-      uint8_t best = 0; float bestDelta = 1e9f;
-      for ( uint8_t i = 0; i < count; ++i ) {
-         float d = fabsf( getFlood( type, i ).dimDistFt - queryFt );
-         if ( d < bestDelta ) { bestDelta = d; best = i; }
-      }
-      return best;
-   }
+   // nearestByDist_ -- COMMENTED OUT along with getMegabarByDist/
+   // getChinaByDist above (see that comment); no longer called anywhere.
 
    // nearest neopixel (raw array index, any strand) to a compass angle
    static uint16_t nearestNeoGlobalByAngle_( float queryDeg ) {
@@ -421,12 +523,12 @@ class CarpetGeometry {
 
    // Megabar (x,y), ft, Y+=front -- ported from the visualizer's
    // MEGABAR_POS_FT (see its own long comment there for how these 12
-   // positions were hand-tuned); that table uses Y+=BACK, so signs are
+   // positions were hand-tuned); that table uses Y+=REAR, so signs are
    // flipped here to match this file's Y+=front convention.
    static void buildFloods_() {
       static const float halfW = CAR_WIDTH_FT / 2.0f, halfH = CAR_LENGTH_FT / 2.0f; // 6, 8
       static const float STD_INSET_FT = 2.5f;
-      static const float FRONT_INSET_FT = 2.0f, BACK_INSET_FT = 1.5f;
+      static const float FRONT_INSET_FT = 2.0f, REAR_INSET_FT = 1.5f;
       // TEMPORARY (per request, "try this"): 0/90/180/270deg (indices 0/3/
       // 6/9) unchanged. The other 8 (30/60/120/150/210/240/300/330deg)
       // recomputed from a new algorithm, precomputed offline (no live trig
@@ -455,7 +557,7 @@ class CarpetGeometry {
          {     centerX,    0.0f },                        // 3 (90deg)
          {     centerX,   -sideEdgeY },                  // 4 (120deg)
          {       nearX,  -( halfH - STD_INSET_FT ) },   // 5 (150deg)
-         {         0.0f, -( halfH - BACK_INSET_FT ) }, // 6
+         {         0.0f, -( halfH - REAR_INSET_FT ) }, // 6
          {      -nearX,  -( halfH - STD_INSET_FT ) },   // 7 (210deg)
          {    -centerX,   -sideEdgeY },                  // 8 (240deg)
          {    -centerX,    0.0f },                        // 9 (270deg)
@@ -508,8 +610,8 @@ class CarpetGeometry {
          f.dimDistFt = sqrtf( f.dimX * f.dimX + f.dimY * f.dimY );
       }
 
-      // China: 2 fixtures per corner (front-right/front-left/back-left/
-      // back-right), one aimed along the near front/back edge, one aimed
+      // China: 2 fixtures per corner (front-right/front-left/rear-left/
+      // rear-right), one aimed along the near front/rear edge, one aimed
       // along the near side edge. BUGFIX (a real error, not a measurement
       // question -- confirmed against README.md's own china table, which
       // this session had stopped cross-checking against): ground spots
@@ -517,7 +619,7 @@ class CarpetGeometry {
       // NOT -- each china's real bright spot is "~1/3 of the way along
       // its assigned edge, measured from its own corner toward the far
       // corner" (README.md, "China lights"), and the 2 fixtures in a pair
-      // are aimed along DIFFERENT edges (one front/back, one side), so
+      // are aimed along DIFFERENT edges (one front/rear, one side), so
       // their real ground spots are two genuinely different points, well
       // separated in angle (confirmed empirically: front-right's front-
       // aimed fixture sits ~14deg from center, its side-aimed corner-
@@ -531,20 +633,20 @@ class CarpetGeometry {
       // to this several-foot, aim-driven ground-spot separation.
       static const float CHINA_Z_FT = 2.0f;
       // "~1/3 of the way along its assigned edge" -- edge full length, not
-      // half (a front/back-aimed spot moves along the CAR_WIDTH_FT-long
-      // front/back edge; a side-aimed spot moves along the
+      // half (a front/rear-aimed spot moves along the CAR_WIDTH_FT-long
+      // front/rear edge; a side-aimed spot moves along the
       // CAR_LENGTH_FT-long side edge), measured from the TRUE car corner.
-      static const float WIDTH_EDGE_OFFSET_FT = CAR_WIDTH_FT / 3.0f;   // ~4.0ft, front/back-aimed spots move this far in X
+      static const float WIDTH_EDGE_OFFSET_FT = CAR_WIDTH_FT / 3.0f;   // ~4.0ft, front/rear-aimed spots move this far in X
       static const float LENGTH_EDGE_OFFSET_FT = CAR_LENGTH_FT / 3.0f; // ~5.33ft, side-aimed spots move this far in Y
       const float chDimXY[ NUM_CHINA_LEDS ][ 2 ] = {
-         {  halfW,                    halfH - LENGTH_EDGE_OFFSET_FT }, // 0 front-right, aimed right/side edge -- ~1/3 back from front
+         {  halfW,                    halfH - LENGTH_EDGE_OFFSET_FT }, // 0 front-right, aimed right/side edge -- ~1/3 rear from front
          {  halfW - WIDTH_EDGE_OFFSET_FT,  halfH },                     // 1 front-right, aimed front edge     -- ~1/3 in from right
          { -halfW + WIDTH_EDGE_OFFSET_FT,  halfH },                     // 2 front-left, aimed front edge      -- ~1/3 in from left
-         { -halfW,                    halfH - LENGTH_EDGE_OFFSET_FT }, // 3 front-left, aimed left/side edge  -- ~1/3 back from front
-         { -halfW,                   -halfH + LENGTH_EDGE_OFFSET_FT }, // 4 back-left, aimed left/side edge   -- ~1/3 forward from back
-         { -halfW + WIDTH_EDGE_OFFSET_FT, -halfH },                     // 5 back-left, aimed back edge        -- ~1/3 in from left
-         {  halfW - WIDTH_EDGE_OFFSET_FT, -halfH },                     // 6 back-right, aimed back edge       -- ~1/3 in from right
-         {  halfW,                   -halfH + LENGTH_EDGE_OFFSET_FT }, // 7 back-right, aimed right/side edge -- ~1/3 forward from back
+         { -halfW,                    halfH - LENGTH_EDGE_OFFSET_FT }, // 3 front-left, aimed left/side edge  -- ~1/3 rear from front
+         { -halfW,                   -halfH + LENGTH_EDGE_OFFSET_FT }, // 4 rear-left, aimed left/side edge   -- ~1/3 forward from rear
+         { -halfW + WIDTH_EDGE_OFFSET_FT, -halfH },                     // 5 rear-left, aimed rear edge        -- ~1/3 in from left
+         {  halfW - WIDTH_EDGE_OFFSET_FT, -halfH },                     // 6 rear-right, aimed rear edge       -- ~1/3 in from right
+         {  halfW,                   -halfH + LENGTH_EDGE_OFFSET_FT }, // 7 rear-right, aimed right/side edge -- ~1/3 forward from rear
       };
       // Each fixture's own real mount position, hand-entered individually
       // (no shared formula/offset applied at build time -- these ARE the
@@ -554,10 +656,10 @@ class CarpetGeometry {
          {  4.750f,  7.012f },   // 1 front-right, aimed front
          { -4.750f,  7.012f },   // 2 front-left, aimed front
          { -5.012f,  6.750f },   // 3 front-left, aimed side
-         { -5.012f, -6.750f },   // 4 back-left, aimed side
-         { -4.750f, -7.012f },   // 5 back-left, aimed back
-         {  4.750f, -7.012f },   // 6 back-right, aimed back
-         {  5.012f, -6.750f },   // 7 back-right, aimed side
+         { -5.012f, -6.750f },   // 4 rear-left, aimed side
+         { -4.750f, -7.012f },   // 5 rear-left, aimed rear
+         {  4.750f, -7.012f },   // 6 rear-right, aimed rear
+         {  5.012f, -6.750f },   // 7 rear-right, aimed side
       };
       for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
          FloodGeometry & f = floods_[ globalFloodIndex_( FixtureChina, c ) ];
@@ -575,10 +677,10 @@ class CarpetGeometry {
    }
 
    // Front strand: Y=+50%, X sweeps -50%(left)..+50%(right) as index rises.
-   // Right strand: X=+50%, Y sweeps +50%(front)..-50%(back).
-   // Back strand:  Y=-50%, X sweeps +50%(right)..-50%(left).
-   // Left strand:  X=-50%, Y sweeps -50%(back)..+50%(front).
-   // (front L->R, right F->B, back R->L, left B->F -- matches the real
+   // Right strand: X=+50%, Y sweeps +50%(front)..-50%(rear).
+   // Rear strand:  Y=-50%, X sweeps +50%(right)..-50%(left).
+   // Left strand:  X=-50%, Y sweeps -50%(rear)..+50%(front).
+   // (front L->R, right F->R, rear R->L, left R->F -- matches the real
    // wiring direction, see README.md "Perimeter rope lights".)
    static void buildNeoGeom_() {
       uint16_t i = 0;
@@ -590,9 +692,9 @@ class CarpetGeometry {
          float u = (float)k / (float)( SIZEOF_LARGE_NEO - 1 );
          setNeoGeom_( i, StrandRight, 50.0f, 50.0f - 100.0f * u );
       }
-      for ( uint16_t k = 0; k < SIZEOF_SMALL_NEO; ++k, ++i ) { // back
+      for ( uint16_t k = 0; k < SIZEOF_SMALL_NEO; ++k, ++i ) { // rear
          float u = (float)k / (float)( SIZEOF_SMALL_NEO - 1 );
-         setNeoGeom_( i, StrandBack, 50.0f - 100.0f * u, -50.0f );
+         setNeoGeom_( i, StrandRear, 50.0f - 100.0f * u, -50.0f );
       }
       for ( uint16_t k = 0; k < SIZEOF_LARGE_NEO; ++k, ++i ) { // left
          float u = (float)k / (float)( SIZEOF_LARGE_NEO - 1 );
@@ -615,7 +717,7 @@ class CarpetGeometry {
    static void buildStrandInfo_() {
       strandInfo_[ StrandFront ] = { StrandFront, neoIdWrap( (int32_t)NEO0_OFFSET - (int32_t)FRONT ), getNumPixelsOnStrand( StrandFront ) };
       strandInfo_[ StrandRight ] = { StrandRight, neoIdWrap( (int32_t)NEO1_OFFSET - (int32_t)FRONT ), getNumPixelsOnStrand( StrandRight ) };
-      strandInfo_[ StrandBack ]  = { StrandBack,  neoIdWrap( (int32_t)NEO2_OFFSET - (int32_t)FRONT ), getNumPixelsOnStrand( StrandBack ) };
+      strandInfo_[ StrandRear ]  = { StrandRear,  neoIdWrap( (int32_t)NEO2_OFFSET - (int32_t)FRONT ), getNumPixelsOnStrand( StrandRear ) };
       strandInfo_[ StrandLeft ]  = { StrandLeft,  neoIdWrap( (int32_t)NEO3_OFFSET - (int32_t)FRONT ), getNumPixelsOnStrand( StrandLeft ) };
    }
 };

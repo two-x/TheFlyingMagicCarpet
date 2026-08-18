@@ -100,13 +100,49 @@ float web_getMaxYPixel( int side ) { return CarpetGeometry::getMaxYPixel( (Carpe
 EMSCRIPTEN_KEEPALIVE
 float web_getMaxXPixel( int side ) { return CarpetGeometry::getMaxXPixel( (CarpetGeometry::CarSide)side ); }
 // Real vehicle dimensions -- the visualizer's canvas layout reads these
-// instead of keeping its own hardcoded CAR_W_FT/CAR_H_FT/FRINGE_LENGTH_FT.
+// instead of keeping its own hardcoded CAR_W_FT/CAR_H_FT/FRINGE_LENGTH_Z_FT.
 EMSCRIPTEN_KEEPALIVE
 float web_getCarWidthFt() { return CarpetGeometry::CAR_WIDTH_FT; }
 EMSCRIPTEN_KEEPALIVE
 float web_getCarLengthFt() { return CarpetGeometry::CAR_LENGTH_FT; }
 EMSCRIPTEN_KEEPALIVE
-float web_getFringeLengthFt() { return CarpetGeometry::FRINGE_LENGTH_FT; }
+float web_getFringeLengthZFt() { return CarpetGeometry::FRINGE_LENGTH_Z_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getSurfaceBaseHeightFt() { return CarpetGeometry::SURFACE_BASE_HEIGHT_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getSideUndulationAmplitudeFt() { return CarpetGeometry::SIDE_UNDULATION_AMPLITUDE_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getSideUndulationWavelengthFt() { return CarpetGeometry::SIDE_UNDULATION_WAVELENGTH_FT; }
+// Round decoration table -- visualizer-only geometry, moved into
+// CarpetGeometry.h so it has one real source of truth instead of its own
+// hardcoded pixel-space literals.
+EMSCRIPTEN_KEEPALIVE
+float web_getTableCenterXFt() { return CarpetGeometry::TABLE_CENTER_X_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTableCenterYFt() { return CarpetGeometry::TABLE_CENTER_Y_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getTableDiameterFt() { return CarpetGeometry::TABLE_DIAMETER_FT; }
+// Vehicle undercarriage (chassis) + wheels -- not consumed by anything yet
+// (no 3D mode exists), exported now so a future 3D pass reads real FW
+// dimensions instead of re-guessing/hardcoding them independently.
+EMSCRIPTEN_KEEPALIVE
+float web_getChassisWidthFt() { return CarpetGeometry::CHASSIS_WIDTH_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getChassisLengthFt() { return CarpetGeometry::CHASSIS_LENGTH_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getChassisCenterXFt() { return CarpetGeometry::CHASSIS_CENTER_X_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getChassisCenterYFt() { return CarpetGeometry::CHASSIS_CENTER_Y_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getChassisBottomHeightFt() { return CarpetGeometry::CHASSIS_BOTTOM_HEIGHT_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getChassisTopHeightFt() { return CarpetGeometry::CHASSIS_TOP_HEIGHT_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getWheelDiameterFt() { return CarpetGeometry::WHEEL_DIAMETER_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getWheelWidthFt() { return CarpetGeometry::WHEEL_WIDTH_FT; }
+EMSCRIPTEN_KEEPALIVE
+float web_getFenderClearanceFt() { return CarpetGeometry::FENDER_CLEARANCE_FT; }
 EMSCRIPTEN_KEEPALIVE
 int web_sizeofRopeLed() { return sizeof( carpet->ropeLeds[ 0 ] ); }
 EMSCRIPTEN_KEEPALIVE

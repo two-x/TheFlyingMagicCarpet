@@ -50,12 +50,12 @@
  *    functions.
  *
  *    Neo axes deliberately do NOT include (Left/RightSide, X) or
- *    (Front/BackSide, Y) -- those pairings are genuinely ambiguous, not
+ *    (Front/RearSide, Y) -- those pairings are genuinely ambiguous, not
  *    just unsupported: a strand's own "off axis" coordinate barely moves
  *    along its length (e.g. every pixel on the front strand has nearly
  *    the same Y, since Y only varies meaningfully going around the sides),
  *    so "nearest by Y among front-strand-only pixels" is a near-total tie
- *    across all of them. Only (Front/BackSide, X) and (Left/RightSide, Y)
+ *    across all of them. Only (Front/RearSide, X) and (Left/RightSide, Y)
  *    are provided, each in both feet and strand-local pixel-index units
  *    (pixel units let a show that already thinks in LED-index space, e.g.
  *    a scrolling animation, skip the feet round-trip entirely).
@@ -75,9 +75,18 @@ class LightSetters {
    // is ambiguous as a WRITE target (many fixtures share the same real
    // distance by symmetry, e.g. all 4 side-china pairs), so there's no
    // single obviously-correct fixture to pick. getMegabarByDist/
-   // getChinaByDist (CarpetGeometry.h) still exist as GETTERS -- fine to
-   // inspect/read an arbitrary-but-deterministic tie-break, just not fine
-   // to silently write to it.
+   // getChinaByDist (CarpetGeometry.h) are commented out entirely now
+   // (see their own comment there) -- they're ambiguous even as a plain
+   // getter, not just as a would-be setter target here, so there was
+   // nothing safe left to expose.
+   //
+   // ByXFt/ByYFt below have NO side/CarSide field -- unlike the neo tags
+   // further down, flood X/Y ambiguity is a property of the query VALUE,
+   // not of a fixed half of the car (see CarpetGeometry::getMegabarByX's
+   // own comment), so CarpetGeometry itself detects genuine ties and
+   // returns its out-of-range sentinel; forEachFloodLinear_ below checks
+   // for that sentinel and silently sets nothing rather than writing to a
+   // wrong/undefined fixture.
    struct ByAngleDeg { float deg; };
    struct ByXFt      { float ft; };
    struct ByYFt      { float ft; };
@@ -88,15 +97,15 @@ class LightSetters {
    // never the underlying Strand (which wire it's on); that hardware
    // concept stays fully internal to CarpetGeometry, see its own comment.
    struct NeoByAngleDeg        { float deg; };
-   struct NeoByXFt             { CarpetGeometry::CarSide side; float ft; };    // side should be CarSideFront/CarSideBack
+   struct NeoByXFt             { CarpetGeometry::CarSide side; float ft; };    // side should be CarSideFront/CarSideRear
    struct NeoByYFt             { CarpetGeometry::CarSide side; float ft; };    // side should be CarSideLeft/CarSideRight
-   struct NeoByXPixel          { CarpetGeometry::CarSide side; float pixel; }; // cartesian, car-center-relative -- side should be CarSideFront/CarSideBack
+   struct NeoByXPixel          { CarpetGeometry::CarSide side; float pixel; }; // cartesian, car-center-relative -- side should be CarSideFront/CarSideRear
    struct NeoByYPixel          { CarpetGeometry::CarSide side; float pixel; }; // cartesian, car-center-relative -- side should be CarSideLeft/CarSideRight
    struct NeoByCircumferenceID { int32_t id; };
    // Wire-order/local-index position, NOT cartesian -- "Id" inserted in
    // the name per explicit request, kept fully separate from the
    // cartesian NeoBy{X,Y}Pixel above. side should be CarSideFront/
-   // CarSideBack for X, CarSideLeft/CarSideRight for Y (same restriction,
+   // CarSideRear for X, CarSideLeft/CarSideRight for Y (same restriction,
    // even though the lookup itself is axis-agnostic -- it's really just
    // "the Nth pixel wired on this side").
    struct NeoByXPixelId        { CarpetGeometry::CarSide side; int32_t localIndex; };
@@ -282,6 +291,7 @@ class LightSetters {
          uint8_t id;
          if ( dim == DimX_ ) id = ( type == CarpetGeometry::FixtureChina ) ? (uint8_t)CarpetGeometry::getChinaByX( startVal ) : (uint8_t)CarpetGeometry::getMegabarByX( startVal );
          else id = ( type == CarpetGeometry::FixtureChina ) ? (uint8_t)CarpetGeometry::getChinaByY( startVal ) : (uint8_t)CarpetGeometry::getMegabarByY( startVal );
+         if ( id >= count ) return; // CarpetGeometry returned its out-of-range tie sentinel -- no single unambiguous fixture to write to
          fn( type, id );
          return;
       }
@@ -310,12 +320,21 @@ class LightSetters {
    // separate pixel-space branch needed.
    template < typename Fn >
    static void forEachNeoOnSide_( CarpetGeometry::CarSide side, float startVal, float endVal, bool useX, bool pixelUnits, Fn fn ) {
+      // Range mode below bypasses CarpetGeometry::getNeoBy{X,Y}Ft entirely
+      // (it iterates the whole strand directly), so the same axis/side
+      // validity those getters check internally is checked once here up
+      // front, covering both the single-match and range branches -- see
+      // their own comment for why an invalid pairing (e.g. side=Front for
+      // a Y query) can't be resolved by silently picking a strand anyway.
+      bool sideValid = useX ? ( side == CarpetGeometry::CarSideFront || side == CarpetGeometry::CarSideRear )
+                            : ( side == CarpetGeometry::CarSideLeft  || side == CarpetGeometry::CarSideRight );
+      if ( !sideValid ) return;
       float ppf = pixelUnits ? CarpetGeometry::pixelsPerFootForSide_( side ) : 1.0f;
       float startFt = pixelUnits ? startVal / ppf : startVal;
       float endFt = pixelUnits ? endVal / ppf : endVal; // NAN / ppf is still NAN
       if ( isnan( endFt ) ) {
          int32_t neoId = useX ? CarpetGeometry::getNeoByXFt( side, startFt ) : CarpetGeometry::getNeoByYFt( side, startFt );
-         fn( neoId );
+         fn( neoId ); // side already validated above -- can't be the INT32_MIN sentinel
          return;
       }
       const CarpetGeometry::NeoStrandInfo & info = CarpetGeometry::getStrandInfo( CarpetGeometry::strandForSide_( side ) );

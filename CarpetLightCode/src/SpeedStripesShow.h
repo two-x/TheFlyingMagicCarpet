@@ -2,10 +2,10 @@
  *
  *    Speed-reactive show driven by CANTroller2's vehicle speed telemetry
  *    (see SpeedLink.h). The two long side rope strips physically run
- *    front-to-back along the car's 16ft length (see README.md, "Perimeter
+ *    front-to-rear along the car's 16ft length (see README.md, "Perimeter
  *    rope lights"); each is divided into 4 alternating lit/dark bands,
  *    each STRIPE_WIDTH_FT_ (4ft, a quarter of the car's length) wide, that
- *    scroll from front toward back at real vehicle speed.
+ *    scroll from front toward rear at real vehicle speed.
  *
  *    BUGFIX (the actual root cause the user flagged as making the default
  *    variation "completely wrong," confirmed by comparison against the
@@ -27,7 +27,7 @@
  *    real physical position (CarpetGeometry dimY), so a given stripe's
  *    color matches everywhere it's visible at once -- underneath (china),
  *    out to the sides (megabars), and on top (rope). The pattern also
- *    extends conceptually beyond the car's own front/back edges, so the
+ *    extends conceptually beyond the car's own front/rear edges, so the
  *    front/rear megabars and china preview a stripe approaching before it
  *    reaches the carpet, and show it receding after it leaves:
  *
@@ -38,7 +38,7 @@
  *        sampled 1ft ahead of their own real Y -- picks it up just as
  *        it's about to cross onto the carpet.
  *      - Rear megabars/china mirror the above symmetrically for the
- *        stripe exiting the back.
+ *        stripe exiting the rear.
  *      - Every side china and side megabar samples its OWN independent
  *        real dimY directly -- no shared/approximated position, no
  *        grouping beyond the explicit front/rear preview trios above.
@@ -46,7 +46,7 @@
  *    Position is real feet throughout (car-center-relative, Y+=front,
  *    same convention as CarpetGeometry) fed through one continuous,
  *    periodic sampling function -- valid at any real value, including the
- *    "ahead of the front edge" / "behind the back edge" positions the
+ *    "ahead of the front edge" / "behind the rear edge" positions the
  *    front/rear fixtures use, no special-casing needed. Stripe edges are
  *    a smoothed square wave rather than a hard cut -- FADE_CONTRAST in
  *    sampleWave() controls how soft that transition looks; lower is
@@ -320,20 +320,20 @@ class SpeedStripesShow : public LightShow {
 
       carpet->clearRope(); carpet->clearMegabars(); carpet->clearChinas();
 
-      // front/back small rope edges run side-to-side, not front-to-back --
+      // front/rear small rope edges run side-to-side, not front-to-rear --
       // no along-length position of their own, so (unlike the default
       // variation, which turns them off) they just take on the nearest
       // corner's own zebra color, matching whichever stripe is currently
       // at that end of the car.
       static const float halfLengthFt = CarpetGeometry::CAR_LENGTH_FT / 2.0f; // true car edge -- the rope's own physical corner, not a flood fixture
       CRGB frontEdgeClr = zebraColorAt( zebraPosFt_ + halfLengthFt, satFraction );
-      CRGB backEdgeClr  = zebraColorAt( zebraPosFt_ - halfLengthFt, satFraction );
+      CRGB rearEdgeClr  = zebraColorAt( zebraPosFt_ - halfLengthFt, satFraction );
       LightSetters::setColor( carpet, LightSetters::TargetNeo, frontEdgeClr,
          LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideFront, 0 },
          LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideFront, (int32_t)CarpetGeometry::getSidePixelCount( CarpetGeometry::CarSideFront ) - 1 } );
-      LightSetters::setColor( carpet, LightSetters::TargetNeo, backEdgeClr,
-         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideBack, 0 },
-         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideBack, (int32_t)CarpetGeometry::getSidePixelCount( CarpetGeometry::CarSideBack ) - 1 } );
+      LightSetters::setColor( carpet, LightSetters::TargetNeo, rearEdgeClr,
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideRear, 0 },
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideRear, (int32_t)CarpetGeometry::getSidePixelCount( CarpetGeometry::CarSideRear ) - 1 } );
       renderZebraSide( CarpetGeometry::CarSideRight, satFraction );
       renderZebraSide( CarpetGeometry::CarSideLeft, satFraction );
 
@@ -484,7 +484,7 @@ class SpeedStripesShow : public LightShow {
    // real Y (CarpetGeometry, via LightSetters' side-local PixelId lookup
    // -- O(1)/pixel, same "already know the exact index, address it
    // directly" pattern as LighthouseShow's rope loop) -- no more show-
-   // local "backCorner/frontCorner/direction/localOffset" bookkeeping
+   // local "rearCorner/frontCorner/direction/localOffset" bookkeeping
    // duplicating what CarpetGeometry's NeoGeom already knows for real.
    void renderSide( CarpetGeometry::CarSide side, float satFraction, float meanderOffset ) {
       uint16_t count = CarpetGeometry::getSidePixelCount( side );
@@ -583,15 +583,15 @@ class SpeedStripesShow : public LightShow {
          while ( scrollOffsetFt_ >= periodFt ) scrollOffsetFt_ -= periodFt; // keep it bounded; sampleWave() is periodic anyway
       }
 
-      // front/back rope edges stay off -- they run side to side, not front
-      // to back. Range-set spans the whole side (0..count-1 in that
+      // front/rear rope edges stay off -- they run side to side, not front
+      // to rear. Range-set spans the whole side (0..count-1 in that
       // side's own local pixel numbering).
       LightSetters::setColor( carpet, LightSetters::TargetNeo, CHSV( 0, 0, 0 ),
          LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideFront, 0 },
          LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideFront, (int32_t)CarpetGeometry::getSidePixelCount( CarpetGeometry::CarSideFront ) - 1 } );
       LightSetters::setColor( carpet, LightSetters::TargetNeo, CHSV( 0, 0, 0 ),
-         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideBack, 0 },
-         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideBack, (int32_t)CarpetGeometry::getSidePixelCount( CarpetGeometry::CarSideBack ) - 1 } );
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideRear, 0 },
+         LightSetters::NeoByXPixelId{ CarpetGeometry::CarSideRear, (int32_t)CarpetGeometry::getSidePixelCount( CarpetGeometry::CarSideRear ) - 1 } );
 
       renderSide( CarpetGeometry::CarSideRight, satFraction, meanderOffset );
       renderSide( CarpetGeometry::CarSideLeft, satFraction, meanderOffset );
@@ -614,26 +614,35 @@ class SpeedStripesShow : public LightShow {
       // unambiguous by construction -- reserve ByYFt/ByAngleDeg for
       // genuine "find whichever fixture is nearest X" searches, not for
       // addressing a fixture whose identity is already known.
+      //
+      // This is also the reason this entire show is unaffected by
+      // CarpetGeometry::getMegabarByY/getChinaByY's own tie ambiguity
+      // (see their comment there): this file NEVER calls those reverse
+      // (value -> fixture) searches at all, for any of its Y-based
+      // positioning -- every read below is the forward direction (known
+      // fixture ID -> that fixture's own real dimY), and every write is
+      // ByID. A getter that can return "ambiguous, no unique answer" is
+      // only a problem for code that actually calls it.
       float frontMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar0deg ).dimY;
       CRGB frontLeadClr = sampleWave( frontMegabarY + STRIPE_WIDTH_FT_ + scrollOffsetFt_, satFraction, meanderOffset );
       LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar330deg } );
       LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar0deg } ); // headlight -- brightness still governed separately, see MagicCarpet
       LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar30deg } );
-      float frontChinaY = CarpetGeometry::getChina( CarpetGeometry::ChinaFrontRightFront ).dimY;
+      float frontChinaY = CarpetGeometry::getChina( CarpetGeometry::ChinaFrontRight ).dimY;
       CRGB frontEdgeClr = sampleWave( frontChinaY + EDGE_APPROACH_FT + scrollOffsetFt_, satFraction, meanderOffset );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaFrontRightFront } );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaFrontLeftFront } );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaFrontRight } );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaFrontLeft } );
 
-      // rear: mirror of the above, behind the back corner
+      // rear: mirror of the above, behind the rear corner
       float rearMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar180deg ).dimY;
       CRGB rearLeadClr = sampleWave( rearMegabarY - STRIPE_WIDTH_FT_ + scrollOffsetFt_, satFraction, meanderOffset );
       LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar150deg } );
       LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar180deg } );
       LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar210deg } );
-      float rearChinaY = CarpetGeometry::getChina( CarpetGeometry::ChinaBackLeftBack ).dimY;
+      float rearChinaY = CarpetGeometry::getChina( CarpetGeometry::ChinaRearLeft ).dimY;
       CRGB rearEdgeClr = sampleWave( rearChinaY - EDGE_APPROACH_FT + scrollOffsetFt_, satFraction, meanderOffset );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaBackLeftBack } );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaBackRightBack } );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaRearLeft } );
+      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaRearRight } );
 
       // side positions: every fixture samples its OWN independent real
       // dimY -- no sharing between china and megabar (an earlier version
@@ -651,10 +660,10 @@ class SpeedStripesShow : public LightShow {
          float y = CarpetGeometry::getMegabar( m ).dimY;
          LightSetters::setColor( carpet, LightSetters::TargetMegabar, sideColorAt( y ), LightSetters::ByID{ (uint8_t)m } );
       };
-      setChinaBySide( CarpetGeometry::ChinaFrontRightSide );
-      setChinaBySide( CarpetGeometry::ChinaBackRightSide );
-      setChinaBySide( CarpetGeometry::ChinaFrontLeftSide );
-      setChinaBySide( CarpetGeometry::ChinaBackLeftSide );
+      setChinaBySide( CarpetGeometry::ChinaRightFront );
+      setChinaBySide( CarpetGeometry::ChinaRightRear );
+      setChinaBySide( CarpetGeometry::ChinaLeftFront );
+      setChinaBySide( CarpetGeometry::ChinaLeftRear );
 
       setMegabarBySide( CarpetGeometry::Megabar60deg );
       setMegabarBySide( CarpetGeometry::Megabar90deg );

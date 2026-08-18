@@ -102,7 +102,7 @@ class NightriderShow : public LightShow {
 
    void start() {
       for ( int i = NEO3_OFFSET; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-         carpet->ropeLeds[ i ] = CRGB::Black;
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, CRGB::Black, LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
       energyTakeover_.reset( carpet );
       floodPhaseRad_ = 0.0f;
@@ -218,52 +218,55 @@ class NightriderShow : public LightShow {
       for ( int i = FRONT; i < FRONT_RIGHT; ++i ) {
          int i_adj = i - FRONT;
          int val = scaleTo255( abs(littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
       for ( int i = FRONT_RIGHT; i < RIGHT; ++i ) {
          int i_adj = i - FRONT_RIGHT;
          int val = scaleTo255( abs( bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
-      for ( int i = RIGHT; i < BACK_RIGHT; ++i ) {
+      for ( int i = RIGHT; i < REAR_RIGHT; ++i ) {
          int i_adj = i - RIGHT;
          int val = scaleTo255( abs(bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
-      for ( int i = BACK_RIGHT; i < BACK; ++i ) {
-         int i_adj = i - BACK_RIGHT;
+      for ( int i = REAR_RIGHT; i < REAR; ++i ) {
+         int i_adj = i - REAR_RIGHT;
          int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
-      for ( int i = BACK; i < BACK_LEFT; ++i ) {
-         int i_adj = i - BACK;
+      for ( int i = REAR; i < REAR_LEFT; ++i ) {
+         int i_adj = i - REAR;
          int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
-      for ( int i = BACK_LEFT; i < LEFT; ++i ) {
-         int i_adj = i - BACK_LEFT;
+      for ( int i = REAR_LEFT; i < LEFT; ++i ) {
+         int i_adj = i - REAR_LEFT;
          int val = scaleTo255( abs( bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
       for ( int i = LEFT; i < FRONT_LEFT; ++i ) {
          int i_adj = i - LEFT;
          int val = scaleTo255( abs(bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
       for ( int i = FRONT_LEFT; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          int i_adj = i - FRONT_LEFT;
          int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
       for ( int i = 0; i < FRONT; ++i ) {
          int i_adj = i + SIZEOF_LARGE_NEO_CORNER;
          int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         carpet->ropeLeds[ i ] = blend( clr1, clr2, val );
+         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
       }
       
 
+      // Reversing already-written pixels in place, not writing a NEW color
+      // by position -- outside what LightSetters' position-addressed
+      // setters model, so this stays direct raw-array access on purpose.
       LedUtil::reverse( carpet->ropeLeds + FRONT, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
-      LedUtil::reverse( carpet->ropeLeds + BACK, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
+      LedUtil::reverse( carpet->ropeLeds + REAR, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
       LedUtil::reverse( carpet->ropeLeds + RIGHT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
       LedUtil::reverse( carpet->ropeLeds + LEFT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
 
@@ -319,9 +322,9 @@ class NightriderShow : public LightShow {
          chinaWhite = (uint8_t)( (uint16_t)AudioBoard::getBandHitPercent( BandBass ) * 255 / 100 );
       }
       for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
-         CRGBW & px = carpet->chinaLeds[ c ];
-         px = ( c % 2 == 0 ) ? group1Clr : group2Clr;
-         px.w = chinaWhite;
+         CRGB clr = ( c % 2 == 0 ) ? group1Clr : group2Clr;
+         LightSetters::setColor( carpet, LightSetters::TargetChina, clr, LightSetters::ByID{ (uint8_t)c } );
+         LightSetters::setWhite( carpet, LightSetters::TargetChina, chinaWhite, LightSetters::ByID{ (uint8_t)c } );
       }
 
       /*

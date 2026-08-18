@@ -1,7 +1,7 @@
 /* Ws281xDma.h
  *
  *    Drives the rope's 2 long strips (right/left, 352 LEDs each) via 2
- *    independent DMA (PDC) channels. The 2 short strips (front/back, 156
+ *    independent DMA (PDC) channels. The 2 short strips (front/rear, 156
  *    LEDs each) are NOT handled here -- see MagicCarpet.h, they're still
  *    driven via FastLED's WS2811_PORTD bank, just reduced from 8 lanes to
  *    the 2 it now actually needs.
@@ -55,11 +55,11 @@
  *    other frame).
  *
  *    Wiring: the actual source of truth is MagicCarpet.h's NEO_PIN_RIGHT/
- *    NEO_PIN_LEFT/NEO_PIN0/NEO_PIN_BACK #defines, not this comment -- this
+ *    NEO_PIN_LEFT/NEO_PIN0/NEO_PIN_REAR #defines, not this comment -- this
  *    file derives its real hardware config from whatever pin numbers get
  *    passed into setup() below (see setupUsartChannel()'s own comment).
  *    As of this writing: right=pin14 (TXD3/USART3), left=pin16 (TXD1/
- *    USART1), front=pin25 and back=pin26 (both PORTD bank, unchanged from
+ *    USART1), front=pin25 and rear=pin26 (both PORTD bank, unchanged from
  *    this file's perspective -- see MagicCarpet.h for that side).
  *    DMX stays on Due pin 18 (USART0 / TXD0), untouched.
  *    Neither USART needs its SCK pin connected to anything -- WS281x is
