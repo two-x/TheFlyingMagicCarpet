@@ -373,9 +373,20 @@ class MagicCarpet {
    // pre-existing inconsistency, not something to match here.
    void showSolidRed( float percent ) {
       uint8_t linearBrightness = percentToRaw( percent );
+      // BUGFIX: .w was never cleared here, unlike chinaLeds[i].w below --
+      // currLightShow->update() keeps running "invisibly" underneath this
+      // preview (see its own call site's comment in CarpetLightLogic.cpp),
+      // so leftover .w wasn't a static residual value, it was the ACTIVE
+      // show's own live, per-pixel-varying white channel leaking straight
+      // through into what should be a flat solid-red preview. Folded
+      // through the RGBW->3-into-4 packing scheme (which interleaves W
+      // bytes across neighboring pixels' output slots), a rapidly-changing,
+      // spatially-varying W produces exactly the "random full-saturation
+      // hues, flashing" corruption seen on the real car.
       for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
          ropeLeds[ i ] = CRGB::Black;
          ropeLeds[ i ].r = linearBrightness;
+         ropeLeds[ i ].w = 0;
       }
       LedUtil::fill( megabarLeds, CRGB( linearBrightness, 0, 0 ), NUM_MEGABAR_LEDS );
       for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) {

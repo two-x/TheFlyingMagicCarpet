@@ -71,19 +71,36 @@
 #define __WS281X_DMA_H
 
 #include <Arduino.h>
+#include "CRGBW.h" // for LedUtil::resizeCRGBW() -- see CH_BYTES's own comment
 
 namespace Ws281xDma {
 
 // 84MHz MCK / 35 = 2.4MHz shift rate = 416.667ns/output-bit -> 3
 // output-bits per WS281x bit = 1250ns WS281x bit period (standard WS2812
 // timing). Shared by both channels so they run at the same rate.
-static const uint32_t BAUD_CD = 35;
+//
+// EXPERIMENT, ROUND 2: 36 (slower) confirmed NOT to fix the jittery
+// tail-end corruption -- real hardware test on the car still showed the
+// breakdown point drifting spontaneously frame to frame. Trying the other
+// direction now: 34 (2.4706MHz, 404.8ns/output-bit, 1214.3ns WS281x bit
+// period -- ~2.9% FASTER than nominal, still inside the usual +/-150ns
+// tolerance). If this ALSO doesn't help, the issue is very likely not
+// baud-rate-tunable at all (see PDC/SRAM-bus-contention-during-a-long-
+// transfer as the next real hypothesis, or revert to 35/nominal).
+static const uint32_t BAUD_CD = 34;
 
 // real byte count per channel -- not padded to anything else's length.
-// 470 is LedUtil::resizeCRGBW(352) -- the actual CRGB-slot count
-// LedUtil::convertNeoArray() writes for a 352-LED source run (see
-// MagicCarpet.h) -- x3 for RGB bytes per slot.
-static const uint16_t CH_BYTES = 470 * 3; // 352 LEDs
+// BUGFIX: was hardcoded to `470 * 3`, a STALE value -- LedUtil.h's own
+// resizeCRGBW() bugfix comment documents that 470 was the OLD, undercounting
+// formula's result for 352 LEDs; the real, current value is 472 (confirmed
+// by calling the real function below instead of re-deriving/hardcoding it a
+// second time). The stale literal silently truncated every frame's transfer
+// by 2 CRGB slots (6 real bytes) at the tail of each 352-LED strip -- not
+// large enough to be the primary cause of any large-scale corruption, but a
+// real, confirmed bug regardless, now eliminated by deriving from the same
+// bugfixed source of truth MagicCarpet.h uses instead of hand-copying its
+// result.
+static const uint16_t CH_BYTES = LedUtil::resizeCRGBW( 352 ) * 3; // 352 LEDs
 static uint8_t encodeTable[ 256 ][ 3 ];
 static uint8_t rightEncoded[ CH_BYTES * 3 ];
 static uint8_t leftEncoded[ CH_BYTES * 3 ];
@@ -155,12 +172,26 @@ static void setup( uint32_t rightPin, uint32_t leftPin ) {
    usartForPin( leftPin, leftUsart_, periphId );
 }
 
+// BUGFIX: was encoding src[] bytes in their literal stored order (raw
+// R,G,B). FastLED's own WS2811_PORTD driver -- still handling front/rear
+// -- transmits in GRB order by default (its 2-arg addLeds<CHIPSET,LANES>
+// overload forwards to <CHIPSET,LANES,GRB>, confirmed in FastLED.h), and
+// LedUtil::convertNeo()'s whole 3-RGBW-into-4-fake-RGB packing scheme
+// (CRGBW.h) is only correct when transmitted in THAT order -- each real
+// RGBW chip expects a contiguous G,R,B,W nibble from the shuffled stream.
+// This path bypasses FastLED entirely, so it must apply the same R<->G
+// swap itself per 3-byte slot, or the packing (correct for front/rear)
+// desyncs on the wire: same total byte/pixel count (so positions stay
+// right), but every real LED's channels land shifted -- exactly the
+// "colors off, positions fine" symptom reported on the real car.
 static void encode( const uint8_t * src, uint8_t * dst, uint16_t srcBytes ) {
-   for ( uint16_t i = 0; i < srcBytes; ++i ) {
-      const uint8_t * enc = encodeTable[ src[ i ] ];
-      dst[ i * 3 + 0 ] = enc[ 0 ];
-      dst[ i * 3 + 1 ] = enc[ 1 ];
-      dst[ i * 3 + 2 ] = enc[ 2 ];
+   for ( uint16_t i = 0; i + 2 < srcBytes; i += 3 ) {
+      const uint8_t * enc0 = encodeTable[ src[ i + 1 ] ]; // wire byte 0 <- src G (slot's 2nd byte)
+      const uint8_t * enc1 = encodeTable[ src[ i + 0 ] ]; // wire byte 1 <- src R (slot's 1st byte)
+      const uint8_t * enc2 = encodeTable[ src[ i + 2 ] ]; // wire byte 2 <- src B, unchanged
+      dst[ ( i + 0 ) * 3 + 0 ] = enc0[ 0 ]; dst[ ( i + 0 ) * 3 + 1 ] = enc0[ 1 ]; dst[ ( i + 0 ) * 3 + 2 ] = enc0[ 2 ];
+      dst[ ( i + 1 ) * 3 + 0 ] = enc1[ 0 ]; dst[ ( i + 1 ) * 3 + 1 ] = enc1[ 1 ]; dst[ ( i + 1 ) * 3 + 2 ] = enc1[ 2 ];
+      dst[ ( i + 2 ) * 3 + 0 ] = enc2[ 0 ]; dst[ ( i + 2 ) * 3 + 1 ] = enc2[ 1 ]; dst[ ( i + 2 ) * 3 + 2 ] = enc2[ 2 ];
    }
 }
 
