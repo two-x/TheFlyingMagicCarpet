@@ -165,6 +165,25 @@ class MagicCarpet {
    // a plain delay() goes totally blind to button input for its duration,
    // which for flashRope()'s multi-flash sequences (up to ~460ms) is long
    // enough to drop part of a rapid follow-up double-press.
+   //
+   // BUGFIX: under __EMSCRIPTEN__ this was a genuine, unrecoverable infinite
+   // loop -- HalShim's millis() is frozen for the whole duration of one
+   // web_tick() call (it only advances at the START of the next JS
+   // animation frame) and delay() there is a no-op, so nothing could ever
+   // make waitTimer.expired() become true from inside this synchronous
+   // call. On real hardware delay(1) genuinely lets time pass each
+   // iteration, so this works fine there -- the loop itself is correct,
+   // it's the WASM environment that can't support "block briefly while
+   // real time passes" at all (there's no such thing as a "next frame"
+   // until this call returns). Skip the wait entirely under WASM instead
+   // of hanging -- costs flashRope() its real timing/pacing there (visual
+   // polish only, a long-press threshold-cross cue), not real hardware
+   // behavior, which this #ifdef doesn't touch.
+#ifdef __EMSCRIPTEN__
+   void delayPolling( uint32_t ms ) {
+      encoder->button.update();
+   }
+#else
    void delayPolling( uint32_t ms ) {
       Timer waitTimer( ms );
       do {
@@ -172,6 +191,7 @@ class MagicCarpet {
          delay( 1 );
       } while ( !waitTimer.expired() );
    }
+#endif
 
  public:
 
