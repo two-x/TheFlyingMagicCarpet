@@ -56,7 +56,18 @@ struct CRGBW : CRGB {
    }
 
    // allow assignment from one RGB struct to another
+   //
+   // BUGFIX: was only forwarding to CRGB::operator=(), which copies r/g/b
+   // and leaves .w completely untouched -- so `someLed = CRGB(r,g,b);`
+   // (the single most common assignment idiom in every light show) never
+   // cleared white, meaning .w just kept whatever value it last happened
+   // to hold, forever, until something else explicitly zeroed it. This is
+   // the ROOT of the same leak class already spot-fixed at individual call
+   // sites elsewhere (showSolidRed()'s rope .w, showChinaPreview()'s china
+   // .a/.u) -- assigning a plain RGB color means "no white component",
+   // same as the default constructor already does.
  	 inline CRGBW& operator=( const CRGB& rhs ) __attribute__((always_inline)) {
+      w = 0;
       return (CRGBW&) CRGB::operator=( rhs );
    }
 
@@ -306,7 +317,7 @@ struct CRGBW : CRGB {
 
 } CRGBW_t;
 
-struct CRGBWUA : CRGBW {
+struct CRGBWAU : CRGBW {
    // BUGFIX: DMX (unlike NeoPixel) has no 3-channel packing constraint --
    // dmx_send() sends this struct's raw memory directly, so declaration
    // order here IS the real DMX channel order (channel base+4, base+5).
@@ -325,54 +336,60 @@ struct CRGBWUA : CRGBW {
        uint8_t black;
    };
 
- 	 inline CRGBWUA() __attribute__((always_inline)) : CRGBW() {
+ 	 inline CRGBWAU() __attribute__((always_inline)) : CRGBW() {
       u = 0;
       a = 0;
    }
 
    // allow copy construction
- 	 inline CRGBWUA( const CRGBWUA& rhs ) __attribute__((always_inline)) : CRGBW( rhs ) {
+ 	 inline CRGBWAU( const CRGBWAU& rhs ) __attribute__((always_inline)) : CRGBW( rhs ) {
       u = rhs.u;
       a = rhs.a;
    }
 
    // allow copy construction from CRGBW object
- 	 inline CRGBWUA( const CRGBW& rhs ) __attribute__((always_inline)) : CRGBW( rhs ) {}
+ 	 inline CRGBWAU( const CRGBW& rhs ) __attribute__((always_inline)) : CRGBW( rhs ) {}
 
    // allow copy construction from regular CRGB object
- 	 inline CRGBWUA( const CRGB& rhs ) __attribute__((always_inline)) : CRGBW( rhs ) {}
+ 	 inline CRGBWAU( const CRGB& rhs ) __attribute__((always_inline)) : CRGBW( rhs ) {}
 
    // allow construction from HSV color
- 	 inline CRGBWUA( const CHSV& rhs ) __attribute__((always_inline)) : CRGBW( rhs ) {}
+ 	 inline CRGBWAU( const CHSV& rhs ) __attribute__((always_inline)) : CRGBW( rhs ) {}
 
-    // allow assignment from one RGBWUA struct to another
- 	 inline CRGBWUA& operator=( const CRGBWUA& rhs ) __attribute__((always_inline)) {
+    // allow assignment from one RGBWAU struct to another
+ 	 inline CRGBWAU& operator=( const CRGBWAU& rhs ) __attribute__((always_inline)) {
       u = rhs.u;
       a = rhs.a;
-      return (CRGBWUA&) CRGBW::operator=( rhs );
+      return (CRGBWAU&) CRGBW::operator=( rhs );
    }
 
    // allow assignment from one RGBW struct to another
- 	 inline CRGBWUA& operator=( const CRGBW& rhs ) __attribute__((always_inline)) {
-      return (CRGBWUA&) CRGBW::operator=( rhs );
+ 	 inline CRGBWAU& operator=( const CRGBW& rhs ) __attribute__((always_inline)) {
+      return (CRGBWAU&) CRGBW::operator=( rhs );
    }
 
    // allow assignment from HSV color
- 	 inline CRGBWUA& operator=( const CHSV& rhs ) __attribute__((always_inline)) {
-      return (CRGBWUA&) CRGBW::operator=( rhs );
+ 	 inline CRGBWAU& operator=( const CHSV& rhs ) __attribute__((always_inline)) {
+      return (CRGBWAU&) CRGBW::operator=( rhs );
    }
 
    // allow assignment from one RGB struct to another
- 	 inline CRGBWUA& operator=( const CRGB& rhs ) __attribute__((always_inline)) {
-      return (CRGBWUA&) CRGB::operator=( rhs );
+   //
+   // BUGFIX: same root leak as CRGBW::operator=(const CRGB&) above -- was
+   // only forwarding to CRGB::operator=(), leaving .w/.a/.u untouched.
+ 	 inline CRGBWAU& operator=( const CRGB& rhs ) __attribute__((always_inline)) {
+      w = 0;
+      a = 0;
+      u = 0;
+      return (CRGBWAU&) CRGB::operator=( rhs );
    }
 
    // allow assignment from 32-bit (really 24-bit) 0xRRGGBB color code
- 	 inline CRGBWUA& operator=( const uint32_t colorcode ) __attribute__((always_inline)) {
-          return (CRGBWUA&) CRGB::operator=( colorcode );
+ 	 inline CRGBWAU& operator=( const uint32_t colorcode ) __attribute__((always_inline)) {
+          return (CRGBWAU&) CRGB::operator=( colorcode );
       }
 
-} CRGBWUA_t;
+} CRGBWAU_t;
 
 /* A collection of utility functions for dealing with CRGB/CRGBW values.
  *

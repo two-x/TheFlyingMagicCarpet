@@ -42,7 +42,7 @@
 #define NUM_CHINA_LEDS 8
 #define NUM_DMX_LEDS NUM_MEGABAR_LEDS + NUM_CHINA_LEDS
 #define SIZEOF_MEGABAR_LEDS ( NUM_MEGABAR_LEDS * sizeof( CRGB ) )
-#define SIZEOF_CHINA_LEDS ( NUM_CHINA_LEDS * sizeof( CRGBWUA ) )
+#define SIZEOF_CHINA_LEDS ( NUM_CHINA_LEDS * sizeof( CRGBWAU ) )
 #define TOTAL_DMX_SIZE ( SIZEOF_MEGABAR_LEDS + SIZEOF_CHINA_LEDS )
 
 // Neopixel constants
@@ -180,7 +180,7 @@ class MagicCarpet {
     * single continguous array when passed into dmx_send.
     */
    CRGB megabarLeds[ NUM_MEGABAR_LEDS ];
-   CRGBWUA chinaLeds[ NUM_CHINA_LEDS ];
+   CRGBWAU chinaLeds[ NUM_CHINA_LEDS ];
 
    // neopixel leds
    CRGBW ropeLeds[ NUM_NEO_LEDS_ACTUAL ];
@@ -354,7 +354,7 @@ class MagicCarpet {
       // populated bus-write buffers regardless of target, and
       // megabarLeds/chinaLeds ARE the literal DMX bus buffer already
       // (dmx_send() sends their raw memory directly, no conversion step
-      // -- see CRGBWUA's own comment), so all 6 real output buffers are
+      // -- see CRGBWAU's own comment), so all 6 real output buffers are
       // available to read post-show() on any target. Rendering from
       // ropeShowLeds/rear/right/leftShowLeds still isn't
       // attempted (wire-order data, not directly per-fixture -- see their
@@ -370,7 +370,7 @@ class MagicCarpet {
       memset( chinaLeds, 0, SIZEOF_CHINA_LEDS );
    }
 
-   // china fixtures are 6-channel RGBWUA -- CRGBWUA::u (aliased "black" in
+   // china fixtures are 6-channel RGBWAU -- CRGBWAU::u (aliased "black" in
    // the union, see CRGBW.h) is the UV/blacklight channel. Full on or full
    // off, independent of whatever else china is currently showing.
    void setBlacklight( bool on ) {
@@ -381,6 +381,8 @@ class MagicCarpet {
    void clearRope() {
       memset( ropeLeds, 0, SIZEOF_NEO_LEDS );
       memset( ropeShowLeds, 0, SIZEOF_NEO_SHOW_LEDS );
+      memset( rightShowLeds, 0, NUM_NEO_LEDS_PER_STRIP );
+      memset( leftShowLeds, 0, NUM_NEO_LEDS_PER_STRIP );
    }
 
    // clears all the lights back to full black
@@ -943,7 +945,7 @@ class MagicCarpet {
    void error() {
       while( true ) {
          static CRGB clr = CRGB::Black;
-         static CRGBWUA chinaClr = clr;
+         static CRGBWAU chinaClr = clr;
          chinaClr.a = 255;
          LedUtil::fill( ropeLeds, CRGB::Red, NUM_NEO_LEDS_ACTUAL );
          LedUtil::fill( megabarLeds, CRGB::Yellow, NUM_DMX_LEDS );
