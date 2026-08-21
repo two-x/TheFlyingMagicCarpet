@@ -6,18 +6,19 @@
  *    driven via FastLED's WS2811_PORTD bank, just reduced from 8 lanes to
  *    the 2 it now actually needs.
  *
- *    Why only 2 DMA channels, not 4: the SAM3X8E has exactly 4 usable
- *    synchronous-serial-plus-PDC peripherals reachable from any Due header
- *    pin at all -- USART0/1/3 and SPI0 (checked; USART2 and SSC also exist
- *    on-chip but neither has a single pin broken out anywhere on the Due,
- *    confirmed empirically against framework-arduino-sam's variant.cpp).
- *    USART0 (pin 18) is already committed to the DMX RS-485 output
- *    (ArmDmx.h, DMX_UART) and stays there -- moving it elsewhere wouldn't
- *    free up a channel, it'd just relocate which peripheral is taken.
- *    SPI0's pin (75, "MOSI", ICSP header) was ruled out as impractical to
- *    reach on the current shield. That leaves USART1 + USART3 for the 2
- *    longest (most expensive-to-bit-bang) strips; the 2 short strips stay
- *    on the PORTD bank, now down to just the 2 lanes they need.
+ *    Why only 2 DMA channels here, not more: the SAM3X8E has exactly 4
+ *    usable synchronous-serial-plus-PDC peripherals reachable from any Due
+ *    header pin at all -- USART0/1/3 and SPI0 (checked; USART2 and SSC
+ *    also exist on-chip but neither has a single pin broken out anywhere
+ *    on the Due, confirmed empirically against framework-arduino-sam's
+ *    variant.cpp). USART0 (pin 18) used to be committed to the DMX RS-485
+ *    output; as of the phase-1 reshuffle, DMX is bit-banged on a plain
+ *    GPIO instead (see ArmDmx.h), freeing USART0 for a later phase to move
+ *    front/rear onto. SPI0's pin (75, "MOSI", ICSP header) was ruled out
+ *    as impractical to reach on the current shield. That leaves USART1 +
+ *    USART3 (this file) for the 2 longest (most expensive-to-bit-bang)
+ *    strips; the 2 short strips stay on the PORTD bank for now, see
+ *    MagicCarpet.h.
  *
  *    Technique: each USART is put into "USART in SPI Master mode" (a
  *    genuine hardware feature -- confirmed via component_usart.h's
@@ -32,13 +33,15 @@
  *    uses PDC/DMA for this chip -- this is genuinely new capability, not
  *    something already available via a library flag.
  *
- *    Every WS281x logical bit is encoded as 3 output bits at a 2.4MHz
- *    shift rate (84MHz MCK / 35, an exact integer divide -- see BAUD_CD
- *    below, so there's no rounding drift over a transmission): a "0" bit
- *    becomes 100, a "1" bit becomes 110, giving a 1250ns WS281x bit period
- *    (416.7ns x 3) -- the standard WS2812 datasheet timing, comfortably
- *    inside the usual +/-150ns tolerance for both WS2811 and WS2812
- *    variants. This is the well-known "UART/SPI NeoPixel trick."
+ *    Every WS281x logical bit is encoded as 3 output bits (a "0" bit
+ *    becomes 100, a "1" bit becomes 110) at an MCK-integer-divide shift
+ *    rate, giving a real WS281x bit period around the standard 1250ns
+ *    WS2812 datasheet timing, comfortably inside the usual +/-150ns
+ *    tolerance. This is the well-known "UART/SPI NeoPixel trick." Right
+ *    and left now run at INDEPENDENT rates (see BAUD_CD_RIGHT/BAUD_CD_LEFT
+ *    below) rather than one shared constant -- left's is deliberately
+ *    relaxed ~25% slower as part of isolating whether its own corruption
+ *    is a timing-margin issue distinct from right's.
  *
  *    IMPORTANT -- NOT hardware-verified. Every register name/value below
  *    was checked against the SAM3X8E's own CMSIS headers (real facts, not
@@ -77,17 +80,20 @@ namespace Ws281xDma {
 
 // 84MHz MCK / 35 = 2.4MHz shift rate = 416.667ns/output-bit -> 3
 // output-bits per WS281x bit = 1250ns WS281x bit period (standard WS2812
-// timing). Shared by both channels so they run at the same rate.
+// timing).
 //
-// EXPERIMENT, ROUND 2: 36 (slower) confirmed NOT to fix the jittery
-// tail-end corruption -- real hardware test on the car still showed the
-// breakdown point drifting spontaneously frame to frame. Trying the other
-// direction now: 34 (2.4706MHz, 404.8ns/output-bit, 1214.3ns WS281x bit
-// period -- ~2.9% FASTER than nominal, still inside the usual +/-150ns
-// tolerance). If this ALSO doesn't help, the issue is very likely not
-// baud-rate-tunable at all (see PDC/SRAM-bus-contention-during-a-long-
-// transfer as the next real hypothesis, or revert to 35/nominal).
-static const uint32_t BAUD_CD = 34;
+// Small baud experiments (36 slower, then 34 faster) on a single SHARED
+// rate for both channels didn't resolve right/left's corruption -- see
+// git history. Relaxing LEFT alone by 25% (44) confirmed fixed on the
+// real car (was the jittery tail-end corruption). Per request, RIGHT now
+// gets the SAME relaxed rate too, so all 4 strands run identically
+// relaxed timing.
+// 35 * 1.25 = 43.75 -> 44 (closest achievable integer clock divisor):
+// 84MHz/44 = 1.909MHz shift rate = 523.8ns/output-bit -> 1571.4ns WS281x
+// bit period, ~25.7% longer than nominal (1250ns) -- the closest integer
+// CD to a genuine 25% relaxation.
+static const uint32_t BAUD_CD_RIGHT = 44;
+static const uint32_t BAUD_CD_LEFT = 44;
 
 // real byte count per channel -- not padded to anything else's length.
 // BUGFIX: was hardcoded to `470 * 3`, a STALE value -- LedUtil.h's own
@@ -140,7 +146,7 @@ static bool usartForPin( uint32_t pin, Usart *& usart, uint32_t & periphId ) {
 // the Due's own live pin table (framework-arduino-sam's variant.cpp) --
 // see usartForPin()'s comment for why the USART identity itself is still a
 // small explicit fact rather than also read from that table.
-static void setupUsartChannel( uint32_t pin ) {
+static void setupUsartChannel( uint32_t pin, uint32_t baudCd ) {
    Usart * usart; uint32_t periphId;
    if ( !usartForPin( pin, usart, periphId ) ) {
       while ( true ) {} // wrong pin for a USART TXD -- fail loudly at boot rather than silently drive nothing
@@ -151,7 +157,7 @@ static void setupUsartChannel( uint32_t pin ) {
    usart->US_CR = US_CR_RSTRX | US_CR_RSTTX;
    usart->US_MR = US_MR_USART_MODE_SPI_MASTER | US_MR_USCLKS_MCK | US_MR_CHRL_8_BIT |
                   US_MR_PAR_NO | US_MR_CHMODE_NORMAL;
-   usart->US_BRGR = US_BRGR_CD( BAUD_CD );
+   usart->US_BRGR = US_BRGR_CD( baudCd );
    usart->US_CR = US_CR_TXEN;
 }
 
@@ -165,8 +171,8 @@ static Usart * leftUsart_ = nullptr;
 // this wiring.
 static void setup( uint32_t rightPin, uint32_t leftPin ) {
    buildEncodeTable();
-   setupUsartChannel( rightPin );
-   setupUsartChannel( leftPin );
+   setupUsartChannel( rightPin, BAUD_CD_RIGHT );
+   setupUsartChannel( leftPin, BAUD_CD_LEFT );
    uint32_t periphId; // discarded -- setupUsartChannel() above already used it; just need the Usart* here
    usartForPin( rightPin, rightUsart_, periphId );
    usartForPin( leftPin, leftUsart_, periphId );
