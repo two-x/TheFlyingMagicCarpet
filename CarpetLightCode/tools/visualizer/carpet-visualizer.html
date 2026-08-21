@@ -7076,6 +7076,18 @@ let lastTickError = null;
 // also happens to set the right local value").
 function syncShowStateFromWasm() {
   if (!wasmReady) return;
+  // BUGFIX: this whole block used to run unconditionally, every frame,
+  // even while in a config screen -- where Ctl.currMode is intentionally
+  // a placeholder ('brightness'/'audio'/'powertest'/one of AUDIO_SUB_SCREEN),
+  // not a real show name, since the real firmware's underlying show
+  // doesn't change while a config screen is up. Comparing that placeholder
+  // against WASM's real current show name always mismatched, so this
+  // forced Ctl.appMode back to 'show' every single frame -- fighting
+  // enterConfigMode() right back out again the instant it ran, which is
+  // what made entering config mode look like a freeze (not an infinite
+  // loop -- two pieces of logic fighting over the same state every frame,
+  // neither ever winning). Nothing to resync here until back in 'show'.
+  if (Ctl.appMode !== 'show') { updateInputActionTable(); return; }
   const realIdx = wasmModule.ccall('web_getCurrentShowIndex', 'number', [], []);
   const realShow = WASM_INDEX_TO_SHOW[realIdx];
   if (realShow && realShow !== Ctl.currMode) {
