@@ -1,72 +1,89 @@
 /* Ws281xDma.h
  *
- *    Drives the rope's 2 long strips (right/left, 352 LEDs each) via 2
- *    independent DMA (PDC) channels. The 2 short strips (front/rear, 156
- *    LEDs each) are NOT handled here -- see MagicCarpet.h, they're still
- *    driven via FastLED's WS2811_PORTD bank, just reduced from 8 lanes to
- *    the 2 it now actually needs.
+ *    Drives 3 of the rope's 4 strips via independent DMA (PDC) channels:
+ *    right/left (352 LEDs each) via USART1/USART3 in SPI-master mode, and
+ *    now rear (156 LEDs) via the real SPI0 peripheral on pin 75 (MOSI, the
+ *    ICSP header) -- reachable now that it's been physically soldered in
+ *    (previously ruled out as impractical on the stock shield). Only front
+ *    (156 LEDs) is still bit-banged, via FastLED's ClocklessController on
+ *    pin 25 -- see MagicCarpet.h.
  *
- *    Why only 2 DMA channels here, not more: the SAM3X8E has exactly 4
- *    usable synchronous-serial-plus-PDC peripherals reachable from any Due
- *    header pin at all -- USART0/1/3 and SPI0 (checked; USART2 and SSC
- *    also exist on-chip but neither has a single pin broken out anywhere
- *    on the Due, confirmed empirically against framework-arduino-sam's
- *    variant.cpp). USART0 (pin 18) used to be committed to the DMX RS-485
- *    output; as of the phase-1 reshuffle, DMX is bit-banged on a plain
- *    GPIO instead (see ArmDmx.h), freeing USART0 for a later phase to move
- *    front/rear onto. SPI0's pin (75, "MOSI", ICSP header) was ruled out
- *    as impractical to reach on the current shield. That leaves USART1 +
- *    USART3 (this file) for the 2 longest (most expensive-to-bit-bang)
- *    strips; the 2 short strips stay on the PORTD bank for now, see
- *    MagicCarpet.h.
+ *    Why these specific peripherals: the SAM3X8E has exactly 4 usable
+ *    synchronous-serial-plus-PDC peripherals reachable from any Due header
+ *    pin at all -- USART0/1/3 and SPI0 (checked; USART2 and SSC also exist
+ *    on-chip but neither has a single pin broken out anywhere on the Due,
+ *    confirmed empirically against framework-arduino-sam's variant.cpp).
+ *    USART0 (pin 18) is committed to DMX (see ArmDmx.h, real USART0
+ *    hardware -- bit-banging it was tried and abandoned, see that file's
+ *    own header). That leaves USART1 + USART3 (right/left) + SPI0 (rear,
+ *    this file) -- all 3 of the DMA-capable peripherals this chip actually
+ *    has pins for are now in use. Front is the one strand that structurally
+ *    can't have one (there isn't a 4th), so it stays bit-banged.
  *
- *    Technique: each USART is put into "USART in SPI Master mode" (a
- *    genuine hardware feature -- confirmed via component_usart.h's
+ *    Technique (right/left): each USART is put into "USART in SPI Master
+ *    mode" (a genuine hardware feature -- confirmed via component_usart.h's
  *    US_MR_USART_MODE_SPI_MASTER -- which shifts bits continuously with NO
  *    start/stop framing, unlike normal async UART mode), each with its own
- *    independent PDC (peripheral DMA controller) and its own dedicated
- *    pin, so both channels transmit simultaneously -- the CPU only kicks
- *    each one off and later polls completion, rather than bit-banging the
- *    whole transmission with interrupts disabled the way the old 8-lane
- *    PORTD-only path did for every strip. Confirmed empirically (grepped
- *    FastLED's own platforms/arm/sam/ source) that FastLED itself never
- *    uses PDC/DMA for this chip -- this is genuinely new capability, not
+ *    independent PDC and its own dedicated pin, so both channels transmit
+ *    simultaneously -- the CPU only kicks each one off and later polls
+ *    completion, rather than bit-banging the whole transmission with
+ *    interrupts disabled.
+ *
+ *    Technique (rear): the real SPI0 peripheral, genuinely distinct
+ *    silicon from the USARTs (different register set -- Spi, not Usart --
+ *    but the SAME underlying PDC block layout: every PDC-capable
+ *    peripheral on this chip has its transfer-pointer/counter/control
+ *    registers at a fixed +0x100 byte offset from the peripheral's own
+ *    base address, confirmed against component_pdc.h's generic Pdc struct
+ *    matching USART's own inline US_TPR/US_TCR/US_PTCR field offsets
+ *    exactly -- so the same wait/start pattern below works for both,
+ *    just addressed through a Pdc* for SPI0 instead of Usart*-typed
+ *    fields). SPI0's MOSI (pin 75) is dedicated silicon, unlike USART TXD
+ *    which can be one of several pins -- not pin-configurable the way
+ *    setupUsartChannel() is. SPI_CSR_CSAAT (chip select stays active
+ *    between transfers) is set so bytes shift out back-to-back with no
+ *    artificial CS-toggle gap -- CS/SCK aren't physically connected to
+ *    the LED strip at all (WS281x is single-wire, MOSI only), this bit
+ *    only affects whether the PDC's own byte-to-byte timing stays
+ *    continuous.
+ *
+ *    Confirmed empirically (grepped FastLED's own platforms/arm/sam/
+ *    source) that FastLED itself never uses PDC/DMA for this chip on
+ *    either peripheral type -- this is genuinely new capability, not
  *    something already available via a library flag.
  *
  *    Every WS281x logical bit is encoded as 3 output bits (a "0" bit
  *    becomes 100, a "1" bit becomes 110) at an MCK-integer-divide shift
  *    rate, giving a real WS281x bit period around the standard 1250ns
  *    WS2812 datasheet timing, comfortably inside the usual +/-150ns
- *    tolerance. This is the well-known "UART/SPI NeoPixel trick." Right
- *    and left now run at INDEPENDENT rates (see BAUD_CD_RIGHT/BAUD_CD_LEFT
- *    below) rather than one shared constant -- left's is deliberately
- *    relaxed ~25% slower as part of isolating whether its own corruption
- *    is a timing-margin issue distinct from right's.
+ *    tolerance. This is the well-known "UART/SPI NeoPixel trick," and
+ *    applies identically whether the shift register underneath is a USART
+ *    in SPI mode or real SPI0 -- same encode table, same 3-bits-per-bit
+ *    scheme, only the peripheral setup/PDC-kickoff differs. Right and left
+ *    run at an independently relaxed rate (see BAUD_CD_RIGHT/BAUD_CD_LEFT
+ *    below) that fixed real corruption on the car; rear gets its own rate
+ *    (BAUD_CD_REAR) chosen to closely match its own previously-proven
+ *    ~1600ns bit period from when it was bit-banged via FastLED at 25%-
+ *    relaxed timing (T1=400/T2=400/T3=800ns) -- not copied from right/
+ *    left's rate, which happens to be a different (also relaxed, but not
+ *    identical) period.
  *
  *    IMPORTANT -- NOT hardware-verified. Every register name/value below
  *    was checked against the SAM3X8E's own CMSIS headers (real facts, not
- *    guessed) and against a prior, differently-pinned implementation of
- *    this exact technique (soren54.lights@a45f735) that compiled clean,
- *    but WS281x's timing tolerance is tight enough that actual signal
- *    correctness has to be checked against the real strips -- bring up
- *    ONE channel before trusting both. One specific known unknown: whether
- *    USART-SPI-mode's TXD idles high or at the last bit's level between
- *    frames (matters for the reset gap between frames -- both bit
- *    encodings above conveniently end in a low bit, so if it idles at the
- *    last bit's level, that's already correct; if it idles high instead,
- *    that's the first thing to revisit if the strips glitch/flicker every
- *    other frame).
+ *    guessed), and right/left's USART-SPI-mode path is already confirmed
+ *    working on the real car -- but the SPI0/rear path here is new and
+ *    untested on real hardware. Bring it up and verify against a scope
+ *    before trusting it the way right/left are trusted.
  *
  *    Wiring: the actual source of truth is MagicCarpet.h's NEO_PIN_RIGHT/
  *    NEO_PIN_LEFT/NEO_PIN0/NEO_PIN_REAR #defines, not this comment -- this
  *    file derives its real hardware config from whatever pin numbers get
- *    passed into setup() below (see setupUsartChannel()'s own comment).
- *    As of this writing: right=pin14 (TXD3/USART3), left=pin16 (TXD1/
- *    USART1), front=pin25 and rear=pin26 (both PORTD bank, unchanged from
- *    this file's perspective -- see MagicCarpet.h for that side).
+ *    passed into setup() below. As of this writing: right=pin14 (TXD3/
+ *    USART3), left=pin16 (TXD1/USART1), rear=pin75 (MOSI/SPI0), front=
+ *    pin25 (PORTD bank, unchanged -- see MagicCarpet.h for that side).
  *    DMX stays on Due pin 18 (USART0 / TXD0), untouched.
- *    Neither USART needs its SCK pin connected to anything -- WS281x is
- *    single-wire, and the peripheral's internal shift clock runs
+ *    None of these need their SCK pin connected to anything -- WS281x is
+ *    single-wire, and each peripheral's internal shift clock runs
  *    regardless of whether SCK is physically muxed out.
  */
 
@@ -94,6 +111,14 @@ namespace Ws281xDma {
 // CD to a genuine 25% relaxation.
 static const uint32_t BAUD_CD_RIGHT = 44;
 static const uint32_t BAUD_CD_LEFT = 44;
+// Chosen to closely match rear's own previously-proven ~1600ns WS281x bit
+// period (from its 25%-relaxed FastLED timing, T1=400+T2=400+T3=800ns) --
+// NOT copied from BAUD_CD_RIGHT/LEFT, which happen to target a different
+// (also relaxed) period. Target: 1600ns/3 output-bits = 533.3ns/output-bit
+// -> 1.875MHz shift rate -> 84MHz/1.875MHz = 44.8 -> nearest integer 45.
+// 84MHz/45 = 1.8667MHz shift rate = 535.7ns/output-bit -> 1607.1ns WS281x
+// bit period -- within 0.4% of the proven-good 1600ns.
+static const uint32_t BAUD_CD_REAR = 45;
 
 // real byte count per channel -- not padded to anything else's length.
 // BUGFIX: was hardcoded to `470 * 3`, a STALE value -- LedUtil.h's own
@@ -107,9 +132,16 @@ static const uint32_t BAUD_CD_LEFT = 44;
 // bugfixed source of truth MagicCarpet.h uses instead of hand-copying its
 // result.
 static const uint16_t CH_BYTES = LedUtil::resizeCRGBW( 352 ) * 3; // 352 LEDs
+// rear's own real byte count -- 156 real LEDs, matching MagicCarpet.h's
+// SIZEOF_SMALL_NEO (hardcoded here rather than #included, same pattern
+// CH_BYTES above already uses for the 352 literal -- this file is a
+// standalone, lower-level header). Keep in sync with SIZEOF_SMALL_NEO if
+// that ever changes.
+static const uint16_t CH_BYTES_REAR = LedUtil::resizeCRGBW( 156 ) * 3; // 156 LEDs
 static uint8_t encodeTable[ 256 ][ 3 ];
 static uint8_t rightEncoded[ CH_BYTES * 3 ];
 static uint8_t leftEncoded[ CH_BYTES * 3 ];
+static uint8_t rearEncoded[ CH_BYTES_REAR * 3 ];
 
 static void buildEncodeTable() {
    for ( int v = 0; v < 256; ++v ) {
@@ -161,21 +193,81 @@ static void setupUsartChannel( uint32_t pin, uint32_t baudCd ) {
    usart->US_CR = US_CR_TXEN;
 }
 
+// SPI0's PDC block (transfer pointer/counter/control registers) isn't
+// exposed as named fields on the Spi struct the way USART's are (US_TPR/
+// US_TCR/US_PTCR) -- component_pdc.h's generic Pdc struct documents why:
+// every PDC-capable peripheral on this chip has that block at a fixed
+// +0x100 byte offset from its own base address (confirmed: USART's own
+// inline US_TPR/US_TCR/US_PTCR sit at +0x108/+0x10C/+0x120, exactly
+// Pdc's own +0x8/+0xC/+0x20 offsets plus that same +0x100). This just
+// does that pointer arithmetic explicitly for SPI0.
+static inline Pdc * spiPdc( Spi * spi ) { return (Pdc *)( (uint8_t *)spi + 0x100 ); }
+
+// configures the real SPI0 peripheral as a framing-free continuous shift-
+// out channel on its dedicated MOSI pin (pin 75 -- unlike USART TXD, SPI0's
+// MOSI isn't a choice, it's fixed silicon, so this doesn't take a pin
+// parameter the way setupUsartChannel() does). SPI_CSR_CSAAT keeps chip-
+// select asserted between transfers so the PDC shifts bytes out back-to-
+// back with no gap -- CS itself isn't physically wired to anything, WS281x
+// only reads MOSI.
+static void setupSpi0Channel( uint32_t baudCd ) {
+   const uint32_t pin = 75; // SPI0 MOSI, PA26, peripheral A -- fixed, not configurable
+   const PinDescription & pd = g_APinDescription[ pin ];
+   pmc_enable_periph_clk( ID_SPI0 );
+   PIO_Configure( pd.pPort, pd.ulPinType, pd.ulPin, PIO_DEFAULT );
+   SPI0->SPI_CR = SPI_CR_SPIDIS;
+   SPI0->SPI_CR = SPI_CR_SWRST;
+   SPI0->SPI_MR = SPI_MR_MSTR | SPI_MR_MODFDIS | SPI_MR_PCS( 0 ); // fixed CS0 (PS bit left clear), mode-fault detection off (not multi-master)
+   SPI0->SPI_CSR[ 0 ] = SPI_CSR_CSAAT | SPI_CSR_BITS_8_BIT | SPI_CSR_SCBR( baudCd );
+   SPI0->SPI_CR = SPI_CR_SPIEN;
+   // DIAGNOSTIC: real, confirmed silence on pin 75 during active repeated
+   // show() calls (scoped constant 3.3V, not just an idle-gap catch) --
+   // right/left's PDC (proven working) never needed this, but SPI's
+   // transmit-register interlock is not identical to USART's internally,
+   // and PDC's "load next byte" trigger may need TDR to have been written
+   // at least once before it starts firing on its own. Prime it manually
+   // with one dummy byte so the pipeline is definitely warm before show()
+   // ever relies on PDC's automatic per-byte trigger. If this fixes it,
+   // the theory was right; if not, the bug is elsewhere and this line can
+   // come back out.
+   SPI0->SPI_TDR = 0;
+   while ( !( SPI0->SPI_SR & SPI_SR_TXEMPTY ) );
+}
+
 // resolved once in setup() below, then reused by show() every frame rather
 // than re-deriving from the pin number each time.
 static Usart * rightUsart_ = nullptr;
 static Usart * leftUsart_ = nullptr;
+static Pdc * rearPdc_ = nullptr;
 
 // call once at boot (see MagicCarpet::setup()) -- rightPin/leftPin are
 // MagicCarpet.h's NEO_PIN_RIGHT/NEO_PIN_LEFT, the real source of truth for
-// this wiring.
-static void setup( uint32_t rightPin, uint32_t leftPin ) {
+// this wiring. rearPin exists only as a self-check (must be 75 -- SPI0's
+// MOSI is fixed silicon, not actually configurable by this parameter) so a
+// mismatch here fails loudly rather than silently driving the wrong pin.
+// enableRear: DIAGNOSTIC toggle -- pin 75's real SPI0 signal is confirmed
+// dead (flat 3.3V, scoped during active repeated show() calls, not just an
+// idle-gap catch), so this defaults OFF while isolating whether the bug is
+// in this SPI0 config or the physical connection. When off, setupSpi0Channel()
+// is never called -- pin 75 stays under plain PIO control, free for
+// MagicCarpet.h to bit-bang instead via the SAME proven ClocklessController
+// mechanism that already worked on pin 26, just retargeted to pin 75. All
+// the SPI0 code stays intact below, just unreached -- flip this back to
+// true once the physical connection is confirmed good.
+static const bool enableRear = false;
+static void setup( uint32_t rightPin, uint32_t leftPin, uint32_t rearPin ) {
    buildEncodeTable();
    setupUsartChannel( rightPin, BAUD_CD_RIGHT );
    setupUsartChannel( leftPin, BAUD_CD_LEFT );
    uint32_t periphId; // discarded -- setupUsartChannel() above already used it; just need the Usart* here
    usartForPin( rightPin, rightUsart_, periphId );
    usartForPin( leftPin, leftUsart_, periphId );
+   if ( !enableRear ) return; // see enableRear's own comment
+   if ( rearPin != 75 ) {
+      while ( true ) {} // SPI0's MOSI is fixed at pin 75 -- fail loudly at boot rather than silently drive nothing
+   }
+   setupSpi0Channel( BAUD_CD_REAR );
+   rearPdc_ = spiPdc( SPI0 );
 }
 
 // BUGFIX: was encoding src[] bytes in their literal stored order (raw
@@ -202,22 +294,28 @@ static void encode( const uint8_t * src, uint8_t * dst, uint16_t srcBytes ) {
 }
 
 static void waitUsartDone( Usart * usart ) { while ( usart->US_TCR != 0 ); }
+static void waitPdcDone( Pdc * pdc ) { while ( pdc->PERIPH_TCR != 0 ); }
 
 static void startUsartTx( Usart * usart, uint8_t * buf, uint16_t len ) {
    usart->US_TPR = (uint32_t)buf;
    usart->US_TCR = len;
    usart->US_PTCR = PERIPH_PTCR_TXTEN;
 }
+static void startPdcTx( Pdc * pdc, uint8_t * buf, uint16_t len ) {
+   pdc->PERIPH_TPR = (uint32_t)buf;
+   pdc->PERIPH_TCR = len;
+   pdc->PERIPH_PTCR = PERIPH_PTCR_TXTEN;
+}
 
-// call once per frame, after ropeShowLeds has been filled by
+// call once per frame, after ropeShowLeds/rearShowLeds have been filled by
 // LedUtil::convertNeoArray() exactly as before (see MagicCarpet::show())
-// -- srcRight/srcLeft are the same bytes that used to go to FastLED's
-// right/left PORTD lanes before those 2 moved here.
-static void show( const uint8_t * srcRight, const uint8_t * srcLeft ) {
+// -- srcRight/srcLeft/srcRear are the same bytes that used to go to
+// FastLED's PORTD lanes before these strands moved here.
+static void show( const uint8_t * srcRight, const uint8_t * srcLeft, const uint8_t * srcRear ) {
    // previous frame must be fully clocked out before its encode buffer is
    // overwritten or a new transfer started on the same channel -- in
    // practice this essentially never actually waits, since main-loop
-   // cadence is far longer than either of these transfers
+   // cadence is far longer than any of these transfers
    waitUsartDone( rightUsart_ );
    waitUsartDone( leftUsart_ );
 
@@ -226,6 +324,11 @@ static void show( const uint8_t * srcRight, const uint8_t * srcLeft ) {
 
    startUsartTx( rightUsart_, rightEncoded, CH_BYTES * 3 );
    startUsartTx( leftUsart_, leftEncoded, CH_BYTES * 3 );
+
+   if ( !enableRear ) return; // see enableRear's own comment
+   waitPdcDone( rearPdc_ );
+   encode( srcRear, rearEncoded, CH_BYTES_REAR );
+   startPdcTx( rearPdc_, rearEncoded, CH_BYTES_REAR * 3 );
 }
 
 } // namespace Ws281xDma
