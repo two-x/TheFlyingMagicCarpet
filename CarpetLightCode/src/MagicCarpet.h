@@ -334,6 +334,8 @@ class MagicCarpet {
    void clearRope() {
       memset( ropeLeds, 0, SIZEOF_NEO_LEDS );
       memset( ropeShowLeds, 0, SIZEOF_NEO_SHOW_LEDS );
+      memset( rightShowLeds, 0, NUM_NEO_LEDS_PER_STRIP );
+      memset( leftShowLeds, 0, NUM_NEO_LEDS_PER_STRIP );
    }
 
    // clears all the lights back to full black
