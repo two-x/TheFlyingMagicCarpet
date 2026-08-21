@@ -51,22 +51,29 @@
 // BUGFIX/HARDWARE CHANGE: the 2 long strips (right/left, 352 LEDs each)
 // moved off the PORTD bank onto their own dedicated USART DMA channels
 // (see Ws281xDma.h) -- driving them there instead of bit-banging frees up
-// real loop time and was the actual point of the physical rewiring. The
-// PORTD bank now only carries the 2 SHORT strips (front/rear), so
-// NUM_NEOPIXEL_STRIPS drops from 8 (of which only 4 were ever real, and
-// only 4 of THOSE ever actually had data written to them -- see show()'s
-// old commented-out slots 2/3) down to the 2 lanes it actually needs.
-// Do NOT "fix" this back up to 8 -- see git history for why it was ever
-// that large (a fixed hardware lane-count quirk of the old single-bank
-// approach), it no longer applies now that right/left aren't on this bank.
+// real loop time and was the actual point of the physical rewiring.
+// PHASE-1 FOLLOWUP: rear ALSO moved off the shared PORTD block driver, not
+// onto USART (that's a later phase) but onto its own independent
+// FastLED ClocklessController<> instance on the SAME physical pin (26) --
+// this was needed to give rear its own relaxed bus timing, since
+// FastLED's block driver only supports ONE shared timing config across
+// every lane it drives (see setup()'s own comment). NUM_NEOPIXEL_STRIPS
+// is now 1 -- just front, the only strand left on the actual shared
+// PORTD block driver.
 #define SIZEOF_SMALL_NEO 156 // 108
 #define SIZEOF_LARGE_NEO 352 // 145
 #define SIZEOF_SMALL_NEO_HALF 78
 #define SIZEOF_LARGE_NEO_HALF 176
 #define SIZEOF_LARGE_NEO_CORNER 33
-#define NUM_NEOPIXEL_STRIPS 2
+#define NUM_NEOPIXEL_STRIPS 1
 #define NUM_NEO_LEDS_ACTUAL ((SIZEOF_SMALL_NEO * 2) + (SIZEOF_LARGE_NEO * 2))
 #define NUM_NEO_LEDS_PER_STRIP LedUtil::resizeCRGBW( SIZEOF_LARGE_NEO )
+// front/rear's REAL physical pixel count -- see setup()'s addLeds() calls.
+// Only relevant now that front/rear each have their own independent
+// ClocklessController (no longer sharing one PORTD-block lane count with
+// right/left), so there's no more reason to pad their transmitted pixel
+// count up to NUM_NEO_LEDS_PER_STRIP (472, sized for the LARGE strands).
+#define NUM_NEO_LEDS_FRONT_REAR LedUtil::resizeCRGBW( SIZEOF_SMALL_NEO )
 #define NUM_NEO_SHOW_LEDS ( NUM_NEO_LEDS_PER_STRIP * NUM_NEOPIXEL_STRIPS )
 #define SIZEOF_NEO_STRIP ( NUM_NEO_LEDS_PER_STRIP * sizeof( CRGB ) )
 #define SIZEOF_NEO_LEDS ( NUM_NEO_LEDS_ACTUAL * sizeof( CRGBW ) )
@@ -81,33 +88,31 @@
 #define NEO1_OFFSET SIZEOF_SMALL_NEO // large (right)
 #define NEO2_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO ) // small (rear)
 #define NEO3_OFFSET ( ( SIZEOF_SMALL_NEO * 2 ) + SIZEOF_LARGE_NEO ) // large (left)
-#define NEO_PORT_BANK ( WS2811_PORTD )
-// Real, current pin assignments for all 4 physical rope strands. These are
-// the actual source of truth: change one here to match new real wiring and
-// the corresponding setup below either derives its hardware config from it
-// directly (right/left, USART-based) or is checked against it with a
-// static_assert that fails the BUILD if it no longer matches (front/rear,
-// PORTD-based -- FastLED's own WS2811_PORTD driver hardcodes its lane-to-
-// pin order internally with no parameter to reconfigure it, confirmed
-// straight from FastLED's platform source, so a define/reality mismatch
-// there can't be fixed by "reading the define" -- only caught).
+// NEO_PORT_BANK/WS2811_PORTD -- the shared, multi-lane block driver -- is
+// now fully retired from actual use. Front and rear both moved to their
+// own independent single-pin FastLED ClocklessController<> instances (see
+// setup()) once ALL FOUR strands needed the same relaxed timing, since
+// the shared block driver only supports one timing config across every
+// lane it drives. Nothing references NEO_PORT_BANK anymore; kept
+// undefined here rather than removed outright in case a future revert is
+// wanted -- see git history for the removed #define if so.
 //
-// strand#0 FRONT (156px, short) -- PORTD bank lane 0, plain bit-banged via FastLED (not USART/DMA)
+// Real, current pin assignments for all 4 physical rope strands -- the
+// actual source of truth: change one here to match new real wiring.
+// Right/left derive their hardware config from these directly
+// (Ws281xDma::setup()); front/rear's own ClocklessController<> template
+// instantiations in setup() read NEO_PIN0/NEO_PIN_REAR directly too, so
+// (unlike the old shared block driver) there's no hardcoded lane-order
+// assumption left to violate -- any real Due pin works for either.
+//
+// strand#0 FRONT (156px, short) -- its own independent FastLED ClocklessController<> instance, plain bit-banged (not USART/DMA), NOMINAL timing -- see setup().
 #define NEO_PIN0 25
-// strand#1 REAR (156px, short) -- PORTD bank lane 1, plain bit-banged via FastLED (not USART/DMA).
-// Moved here from the old right-strip pin (26), now freed by right's move to USART3 below.
+// strand#1 REAR (156px, short) -- its own independent FastLED ClocklessController<> instance, plain bit-banged (not USART/DMA), 25% RELAXED timing (confirmed fixes rear) -- see setup().
 #define NEO_PIN_REAR 26
 // strand#2 RIGHT (352px, long) -- USART3/TXD3, DMA-driven (see Ws281xDma.h). Moved here from the old rear-strip pin (14).
 #define NEO_PIN_RIGHT 14
 // strand#3 LEFT (352px, long) -- USART1/TXD1, DMA-driven (see Ws281xDma.h). Moved here from its original pin (15).
 #define NEO_PIN_LEFT 16
-// FastLED's WS2811_PORTD driver's own hardcoded 2-lane pin order (see
-// clockless_block_arm_sam.h's InlineBlockClocklessController::init() --
-// LANES=2 always drives pins 25 then 26, unconditionally). If NEO_PIN0/
-// NEO_PIN_REAR above are ever edited to anything else, this makes the
-// build fail loudly instead of silently driving the wrong physical pins.
-static_assert( NEO_PIN0 == 25 && NEO_PIN_REAR == 26,
-   "NEO_PIN0/NEO_PIN_REAR must stay 25/26 -- FastLED's WS2811_PORTD 2-lane order is hardcoded in the library, not read from these defines" );
 
 /* Positional Constants
  *
@@ -194,7 +199,14 @@ class MagicCarpet {
     * without inverting the repacking (deliberately not attempted yet, see
     * the migration plan's "phase 6").
     */
-   CRGB ropeShowLeds[ NUM_NEO_SHOW_LEDS ]; // front+rear only now, see NUM_NEOPIXEL_STRIPS's own comment
+   CRGB ropeShowLeds[ NUM_NEO_SHOW_LEDS ]; // front only now, see NUM_NEOPIXEL_STRIPS's own comment
+   // rear's own converted buffer -- driven via its own independent
+   // FastLED ClocklessController<> instance (see setup()), not part of
+   // the shared ropeShowLeds[] above anymore. Reuses NUM_NEO_LEDS_PER_STRIP
+   // (472 slots) as its size purely for consistency with rightShowLeds/
+   // leftShowLeds below -- rear's own real content only ever fills the
+   // first ~208 of those, same as it always did as PORTD lane 1.
+   CRGB rearShowLeds[ NUM_NEO_LEDS_PER_STRIP ];
    // right/left's own converted buffers -- driven via Ws281xDma::show() on
    // real hardware, not FastLED, so they're not part of ropeShowLeds above.
    CRGB rightShowLeds[ NUM_NEO_LEDS_PER_STRIP ];
@@ -245,10 +257,43 @@ class MagicCarpet {
       // add dmx leds
       dmx_init( TOTAL_DMX_SIZE );
 
-      // front+rear only now -- right/left moved to Ws281xDma (USART DMA),
-      // see NUM_NEOPIXEL_STRIPS's own comment.
-      FastLED.addLeds<NEO_PORT_BANK,NUM_NEOPIXEL_STRIPS>( ropeShowLeds,
-                                                          NUM_NEO_LEDS_PER_STRIP );
+      // Front and rear now BOTH get their own independent single-pin
+      // ClocklessController<> instance (not the shared PORTD block driver
+      // -- that only supports ONE timing config across every lane it
+      // drives, and front/rear now need DIFFERENT timings). GRB order to
+      // match WS2811_PORTD's own former default (see Ws281xDma.h's
+      // encode() comment for why that specific order matters for the
+      // RGBW packing scheme). ropeShowLeds/rearShowLeds buffers unchanged
+      // -- ropeShowLeds specifically is read directly by the
+      // WASM/visualizer bridge (web_bridge.cpp's
+      // web_getRopeShowLedsPtr()), so it keeps its name/size even though
+      // NEO_PORT_BANK/WS2811_PORTD itself is now unused.
+      //
+      // Front: REVERTED to nominal WS2811_PORTD timing (T1=320,T2=320,
+      // T3=640ns, 1280ns period) -- the 25%-relaxed timing that fixed
+      // rear made front WORSE on the real car (confirmed on-car test),
+      // so front and rear now deliberately run different timings.
+      //
+      // BUGFIX: pixel count was NUM_NEO_LEDS_PER_STRIP (472, sized for
+      // the LARGE 352-LED right/left strands) -- a leftover from when
+      // front/rear were 2 lanes of the shared PORTD block driver, which
+      // required every lane to share one pixel count. Now that each has
+      // its own independent ClocklessController, that constraint is
+      // gone, but the count here was never shrunk -- front/rear were
+      // each silently bit-banging 472 pixels/frame instead of the ~208
+      // (NUM_NEO_LEDS_FRONT_REAR) they actually have, over 2x the
+      // necessary transmission time each, real cost toward the reported
+      // per-frame sluggishness. rearShowLeds/ropeShowLeds themselves stay
+      // sized at NUM_NEO_LEDS_PER_STRIP (unchanged, ropeShowLeds is read
+      // by the WASM bridge at that size) -- only the addLeds() pixel
+      // COUNT shrinks, so only the real ~208 pixels get shifted out.
+      FastLED.addLeds( new ClocklessController<NEO_PIN0, NS(320), NS(320), NS(640), GRB>(),
+                        ropeShowLeds, NUM_NEO_LEDS_FRONT_REAR );
+      // Rear: 25% relaxed (T1=400,T2=400,T3=800ns, 1600ns period) --
+      // CONFIRMED FIXED on the real car, first time rear has ever worked
+      // cleanly this whole session.
+      FastLED.addLeds( new ClocklessController<NEO_PIN_REAR, NS(400), NS(400), NS(800), GRB>(),
+                        rearShowLeds, NUM_NEO_LEDS_FRONT_REAR );
       Ws281xDma::setup( NEO_PIN_RIGHT, NEO_PIN_LEFT );
 #endif
       // WASM: no real DMX/NeoPixel hardware to attach -- see the migration
@@ -272,15 +317,16 @@ class MagicCarpet {
       // LedUtil::reverse( ropeLeds + NEO2_OFFSET, SIZEOF_LARGE_NEO );
       LedUtil::reverse( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO, SIZEOF_SMALL_NEO );
 
-      // front -> PORTD lane 0 (p25), rear -> PORTD lane 1 (p26, its new pin
-      // -- see NEO_PIN_REAR's comment). right/left convert into their own
-      // dedicated buffers below instead -- they're driven via Ws281xDma
-      // (USART DMA), not this FastLED/PORTD path, since their move off
-      // PORTD is the entire point of the physical rewiring.
+      // front -> the shared PORTD block driver (lane 0, p25). rear ->
+      // its own independent ClocklessController<> instance on p26 (see
+      // NEO_PIN_REAR's comment) -- converts into its own rearShowLeds
+      // buffer now, not a second lane of ropeShowLeds. right/left convert
+      // into their own dedicated buffers below instead -- they're driven
+      // via Ws281xDma (USART DMA), not FastLED at all.
       LedUtil::convertNeoArray( ropeLeds, ropeShowLeds,
                                 SIZEOF_SMALL_NEO );
       LedUtil::convertNeoArray( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO,
-                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP,
+                                rearShowLeds,
                                 SIZEOF_SMALL_NEO );
       // real conversion runs on both targets now -- only the actual hardware
       // write below (Ws281xDma::show()) is WASM-excluded.
@@ -300,16 +346,17 @@ class MagicCarpet {
       // both arrays as a single big array, since they're contiguous in memory.
       dmx_send( ( uint8_t * ) megabarLeds );
 
-      FastLED.show(); // front+rear only now, see NUM_NEOPIXEL_STRIPS's own comment
+      FastLED.show(); // drives front AND rear's independent controllers in one call -- FastLED.show() iterates every registered controller regardless of type
       Ws281xDma::show( ( uint8_t * ) rightShowLeds, ( uint8_t * ) leftShowLeds );
 #endif
       // WASM: no real bus write (no hardware) -- but ropeShowLeds/
-      // rightShowLeds/leftShowLeds above are now real, populated bus-write
-      // buffers regardless of target, and megabarLeds/chinaLeds ARE the
-      // literal DMX bus buffer already (dmx_send() sends their raw memory
-      // directly, no conversion step -- see CRGBWUA's own comment), so all 5
-      // real output buffers are available to read post-show() on any
-      // target. Rendering from ropeShowLeds/right/leftShowLeds still isn't
+      // rearShowLeds/rightShowLeds/leftShowLeds above are now real,
+      // populated bus-write buffers regardless of target, and
+      // megabarLeds/chinaLeds ARE the literal DMX bus buffer already
+      // (dmx_send() sends their raw memory directly, no conversion step
+      // -- see CRGBWUA's own comment), so all 6 real output buffers are
+      // available to read post-show() on any target. Rendering from
+      // ropeShowLeds/rear/right/leftShowLeds still isn't
       // attempted (wire-order data, not directly per-fixture -- see their
       // declaration comment); the visualizer keeps rendering from
       // ropeLeds[]/megabarLeds[]/chinaLeds[] directly.
