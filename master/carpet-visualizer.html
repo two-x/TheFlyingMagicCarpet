@@ -985,7 +985,7 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ c7c0203 - 2026-08-21 05:27 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ 88b044c - 2026-08-24 19:40 UTC</span>
   <!-- Moved out of the settings menu, per request -- a rocker switch at
        the title bar's own right edge, with the (3D-only) detail dropdown
        appearing to its left exactly when 3D is selected. Same
@@ -6569,14 +6569,14 @@ initModal( {
   });
 }
 
-// The CI deploy workflow replaces master @ c7c0203 - 2026-08-21 05:27 UTC with the real
+// The CI deploy workflow replaces master @ 88b044c - 2026-08-24 19:40 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  const isLocal = el.textContent === 'master @ c7c0203 - 2026-08-21 05:27 UTC';
+  const isLocal = el.textContent === 'master @ 88b044c - 2026-08-24 19:40 UTC';
   if (isLocal) el.textContent = 'local build (not CI-deployed)';
   // Page title, so a bookmark dragged from this tab defaults to a name
   // that says which branch it's actually pointed at -- same BUILD_INFO
@@ -7076,6 +7076,18 @@ let lastTickError = null;
 // also happens to set the right local value").
 function syncShowStateFromWasm() {
   if (!wasmReady) return;
+  // BUGFIX: this whole block used to run unconditionally, every frame,
+  // even while in a config screen -- where Ctl.currMode is intentionally
+  // a placeholder ('brightness'/'audio'/'powertest'/one of AUDIO_SUB_SCREEN),
+  // not a real show name, since the real firmware's underlying show
+  // doesn't change while a config screen is up. Comparing that placeholder
+  // against WASM's real current show name always mismatched, so this
+  // forced Ctl.appMode back to 'show' every single frame -- fighting
+  // enterConfigMode() right back out again the instant it ran, which is
+  // what made entering config mode look like a freeze (not an infinite
+  // loop -- two pieces of logic fighting over the same state every frame,
+  // neither ever winning). Nothing to resync here until back in 'show'.
+  if (Ctl.appMode !== 'show') { updateInputActionTable(); return; }
   const realIdx = wasmModule.ccall('web_getCurrentShowIndex', 'number', [], []);
   const realShow = WASM_INDEX_TO_SHOW[realIdx];
   if (realShow && realShow !== Ctl.currMode) {
