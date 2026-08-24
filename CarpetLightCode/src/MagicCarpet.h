@@ -86,12 +86,12 @@
 #define NEO7_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 4 ) // small
 // The pin order for the port bank we are using is: 25,26,27,28,14,15,29,11
 #define NEO_PORT_BANK ( WS2811_PORTD )
-#define NEO_PIN0 25
-#define NEO_PIN1 26
+#define NEO_PIN0 25 // FRONT
+#define NEO_PIN1 26 // LEFT
 #define NEO_PIN2 27
 #define NEO_PIN3 28
-#define NEO_PIN4 14
-#define NEO_PIN5 15
+#define NEO_PIN4 14 // RIGHT
+#define NEO_PIN5 15 // REAR
 #define NEO_PIN6 29
 #define NEO_PIN7 11
 
@@ -270,39 +270,25 @@ class MagicCarpet {
        *       reversal
        */
       LedUtil::reverse( ropeLeds, SIZEOF_SMALL_NEO );
-      // LedUtil::reverse( ropeLeds + NEO2_OFFSET, SIZEOF_LARGE_NEO );
       LedUtil::reverse( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO, SIZEOF_SMALL_NEO );
 
       // FRONT
       LedUtil::convertNeoArray( ropeLeds, ropeShowLeds,
                                 SIZEOF_SMALL_NEO );
-
       // RIGHT
       LedUtil::convertNeoArray( ropeLeds + SIZEOF_SMALL_NEO,
-                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP,
+                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 4,
                                 SIZEOF_LARGE_NEO );
-      // LedUtil::convertNeoArray( ropeLeds + NEO2_OFFSET,
-      //                           ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 2,
-      //                           SIZEOF_LARGE_NEO );
-      // LedUtil::convertNeoArray( ropeLeds + NEO3_OFFSET,
-      //                           ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 3,
-      //                           SIZEOF_SMALL_NEO );
 
       // REAR
       LedUtil::convertNeoArray( ropeLeds + SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO,
-                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 4,
+                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 5,
                                 SIZEOF_SMALL_NEO );
 
       // LEFT
       LedUtil::convertNeoArray( ropeLeds + (SIZEOF_SMALL_NEO * 2) + SIZEOF_LARGE_NEO,
-                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 5,
+                                ropeShowLeds + NUM_NEO_LEDS_PER_STRIP,
                                 SIZEOF_LARGE_NEO );
-      // LedUtil::convertNeoArray( ropeLeds + NEO6_OFFSET,
-      //                           ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 6,
-      //                           SIZEOF_LARGE_NEO );
-      // LedUtil::convertNeoArray( ropeLeds + NEO7_OFFSET,
-      //                           ropeShowLeds + NUM_NEO_LEDS_PER_STRIP * 7,
-      //                           SIZEOF_SMALL_NEO );
 
 
       // make sure to reverse the values so the user has a consistent view
