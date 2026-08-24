@@ -985,7 +985,7 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">anders-soren57 @ e98688b - 2026-08-24 04:44 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">anders-soren57 @ 8eac017 - 2026-08-24 05:21 UTC</span>
   <!-- Moved out of the settings menu, per request -- a rocker switch at
        the title bar's own right edge, with the (3D-only) detail dropdown
        appearing to its left exactly when 3D is selected. Same
@@ -6569,14 +6569,14 @@ initModal( {
   });
 }
 
-// The CI deploy workflow replaces anders-soren57 @ e98688b - 2026-08-24 04:44 UTC with the real
+// The CI deploy workflow replaces anders-soren57 @ 8eac017 - 2026-08-24 05:21 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  const isLocal = el.textContent === 'anders-soren57 @ e98688b - 2026-08-24 04:44 UTC';
+  const isLocal = el.textContent === 'anders-soren57 @ 8eac017 - 2026-08-24 05:21 UTC';
   if (isLocal) el.textContent = 'local build (not CI-deployed)';
   // Page title, so a bookmark dragged from this tab defaults to a name
   // that says which branch it's actually pointed at -- same BUILD_INFO
