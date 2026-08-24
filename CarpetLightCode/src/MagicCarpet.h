@@ -85,7 +85,18 @@
 #define NEO6_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 3 ) // large
 #define NEO7_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 4 ) // small
 // The pin order for the port bank we are using is: 25,26,27,28,14,15,29,11
-#define NEO_PORT_BANK ( WS2811_PORTD )
+// The stock block-driver enums only offer two timings: WS2811_PORTD (800kHz,
+// 320/320/640ns) or WS2811_400_PORTD (400kHz, 800/800/900ns) -- 400kHz was
+// too slow and still flickered. Instead setup() instantiates the PORTD block
+// driver directly (InlineBlockClocklessController) with these hand-tuned
+// intermediate timings (ns) so we can relax the bus by a smaller amount. The
+// block driver shares ONE timing across all lanes, so this slows the whole
+// display -- acceptable to fix the one flickering strand. Currently ~625kHz
+// (400/400/800); nudge back toward 320/320/640 for faster, up for slower.
+// #define NEO_PORT_BANK ( WS2811_PORTD )
+#define NEO_BANK_T1 400
+#define NEO_BANK_T2 400
+#define NEO_BANK_T3 800
 #define NEO_PIN0 25 // FRONT
 #define NEO_PIN1 26 // LEFT
 #define NEO_PIN2 27
@@ -247,14 +258,20 @@ class MagicCarpet {
       // add dmx leds
       dmx_init( TOTAL_DMX_SIZE );
 
+
+      // add eight channels of rope leds via the PORTD block driver, using our
+      // own relaxed timing (NEO_BANK_T* above) instead of a stock enum. GRB
+      // matches the 2-arg block addLeds default and the CRGBW packing scheme
+      // (see Ws281xDma.h's encode() comment).
+      FastLED.addLeds( new InlineBlockClocklessController<
+                          NUM_NEOPIXEL_STRIPS, PORTD_FIRST_PIN,
+                          NS( NEO_BANK_T1 ), NS( NEO_BANK_T2 ), NS( NEO_BANK_T3 ),
+                          GRB>(),
+                       ropeShowLeds, NUM_NEO_LEDS_PER_STRIP );
 #endif
       // WASM: no real DMX/NeoPixel hardware to attach -- see the migration
       // plan's output-path design (phase 5: protocol-level output
       // simulation) for what replaces this.
-
-      // add eight channels of rope leds
-      FastLED.addLeds<NEO_PORT_BANK,NUM_NEOPIXEL_STRIPS>( ropeShowLeds,
-                                                          NUM_NEO_LEDS_PER_STRIP );
 
       clear(); // there might be stale values left in the leds, start from scratch
 
