@@ -534,8 +534,9 @@ class MagicCarpet {
    //    corner (AGCoff), middle (AGCband), or front corner (AGCfull) --
    //    a 3-position indicator, one snap point per AGCMode.
    //
-   // fullSpectrumLevel (0-255, AudioBoard::getFullSpectrum() -- already
-   // silence-gated and auto-gain-scaled if enabled) sets all megabars' blue
+   // fullSpectrumLevel (0-255, AudioBoard::getBandNormalPercent(BandFull)
+   // scaled up from percent -- already silence-aware and auto-gain-scaled
+   // if enabled, via the unified audio pipeline) sets all megabars' blue
    // brightness uniformly.
    void showAudioMeter( uint8_t trebleLevel, uint8_t midLevel, uint8_t bassLevel,
                         bool isAutoGainSubsetting, float noiseFloorPercentToShow, float peakThresholdPercentToShow,
@@ -751,7 +752,7 @@ class MagicCarpet {
    // wash across the whole rope, just to indicate this screen is active (not
    // audio-reactive itself), with a 2-pixel white marker overlaid on the
    // front strip showing the current foresight setting's position within
-   // its 0-1000ms range (0ms at one end, 1000ms at the other) -- same "meter
+   // its 0-700ms range (0ms at one end, 700ms at the other) -- same "meter
    // position reflects a SETTING, not an audio level" idea as the decay-rate
    // screen's blue dot. China stays off, same as the decay-rate screen.
    //

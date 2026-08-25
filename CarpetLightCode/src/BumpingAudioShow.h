@@ -395,7 +395,7 @@ class EqualizerShow : public LightShow {
          // own internal silence handling above; Chase/VU meter get it as a
          // post-step override on top of their own (otherwise near-dark)
          // output, same as the visualizer prototype.
-         if ( AudioBoard::silent_ ) updateSilenceFloods( time, dtSec, CRGB( 255, 0, 0 ), CRGB( 0, 0, 255 ) ); // red=bass, blue=treble, this show's own convention
+         if ( AudioBoard::isSilent() ) updateSilenceFloods( time, dtSec, CRGB( 255, 0, 0 ), CRGB( 0, 0, 255 ) ); // red=bass, blue=treble, this show's own convention
       } else {
       static const CRGBPalette256 clr( CRGB::Red, CRGB::Black );
       static uint32_t timestamp = time;
@@ -599,7 +599,7 @@ class EqualizerShow : public LightShow {
          carpet->ropeLeds[ i ].w = white;
       }
       */
-      if ( AudioBoard::silent_ ) updateSilenceFloods( time, dtSec, CRGB( 255, 0, 0 ), CRGB( 0, 0, 255 ) ); // red=bass, blue=treble, same as VU meter's override above
+      if ( AudioBoard::isSilent() ) updateSilenceFloods( time, dtSec, CRGB( 255, 0, 0 ), CRGB( 0, 0, 255 ) ); // red=bass, blue=treble, same as VU meter's override above
       } // end variation 0
 
       updateStrobe( time );
@@ -830,7 +830,7 @@ class EqualizerShow : public LightShow {
    }
 
    void updateNewStandard( uint32_t time, float dtSec, bool isSubStandard ) {
-      bool silent = AudioBoard::silent_;
+      bool silent = AudioBoard::isSilent();
       newStdSatTimeS_ += dtSec;
       if ( !silent ) newStdHueTimeS_ += dtSec;
       CRGB Bcolor, Tcolor;
@@ -1051,7 +1051,7 @@ class EqualizerShow : public LightShow {
    // color visibly reacts to each hit; territory/megabar-pick/china-flash
    // all key off whichever color currently has the turn.
    void updatePixelWar( uint32_t time, float dtSec ) {
-      bool silent = AudioBoard::silent_;
+      bool silent = AudioBoard::isSilent();
       newStdSatTimeS_ += dtSec;
       if ( !silent ) newStdHueTimeS_ += dtSec;
       CRGB Bcolor, Tcolor;

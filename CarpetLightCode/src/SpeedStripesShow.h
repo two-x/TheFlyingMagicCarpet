@@ -295,7 +295,7 @@ class SpeedStripesShow : public LightShow {
    // hits push it up to their own level (as a fraction of max), never below
    // that resting floor.
    float zebraChinaBrightnessFraction() {
-      if ( !AudioBoard::silent_ ) zebraSilenceTimer_.reset();
+      if ( !AudioBoard::isSilent() ) zebraSilenceTimer_.reset();
       if ( zebraSilenceTimer_.elapsed() >= 10000 ) return 1.0f;
       float bassFrac = AudioBoard::getBandHitPercent( BandBass ) / 100.0f;
       return max( ZEBRA_CHINA_REST_FRACTION, bassFrac );

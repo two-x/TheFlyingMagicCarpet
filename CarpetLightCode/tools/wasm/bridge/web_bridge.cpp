@@ -405,9 +405,7 @@ int web_audioGetRawPercent( int band ) { return AudioBoard::getBandRawPercent( (
 EMSCRIPTEN_KEEPALIVE
 int web_audioGetRmsPercent( int band ) { return AudioBoard::getBandRmsPercent( (AudioBand)band ); }
 EMSCRIPTEN_KEEPALIVE
-int web_audioGetOverallLevelPercent() { return AudioBoard::getOverallLevelPercent(); }
-EMSCRIPTEN_KEEPALIVE
-int web_audioIsSilent() { return AudioBoard::silent_ ? 1 : 0; }
+int web_audioIsSilent() { return AudioBoard::isSilent() ? 1 : 0; }
 
 EMSCRIPTEN_KEEPALIVE
 void web_audioSetAgcMode( int mode ) { AudioBoard::setAgcMode( (uint8_t)mode ); }
@@ -452,10 +450,8 @@ void web_audioSetAudioForesightMs( float ms ) { AudioBoard::setAudioForesightMs(
 EMSCRIPTEN_KEEPALIVE
 float web_audioGetAudioForesightMs() { return AudioBoard::getAudioForesightMs(); }
 
-EMSCRIPTEN_KEEPALIVE
-void web_audioSetHitPredictionMs( float ms ) { AudioBoard::setHitPredictionMs( ms ); }
-EMSCRIPTEN_KEEPALIVE
-float web_audioGetHitPredictionMs() { return AudioBoard::getHitPredictionMs(); }
+// no separate hit-prediction-distance setter/getter anymore -- prediction
+// always spans the whole live audioForesightMs range now, see AudioBoard.h
 
 EMSCRIPTEN_KEEPALIVE
 void web_audioSetHitPredictionStyle( int style ) { AudioBoard::setHitPredictionStyle( (uint8_t)style ); }

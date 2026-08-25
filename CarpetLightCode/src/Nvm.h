@@ -57,7 +57,7 @@ static HalFlashStorage flash;
 #else
 static DueFlashStorage flash;
 #endif
-static const uint8_t MAGIC = 0x4D; // bump this if State's layout ever changes -- bumped so peakThresholdPercent's new default (68%) actually takes effect on already-flashed boards
+static const uint8_t MAGIC = 0x4E; // bump this if State's layout ever changes -- bumped for hitPredictionMs's removal (audio-restructure Phase 1, prediction now always spans the full live foresight range)
 static const uint8_t MAX_SHOWS = 8; // headroom for future shows, no relayout needed
 
 // all brightness/threshold fields are percentages (0-100), never raw 0-255
@@ -69,7 +69,7 @@ struct State {
    uint8_t globalBrightnessPercent;    // 0-100, default 100 (unrestricted)
    uint8_t headlightBrightnessPercent; // 50-100, per-fixture, default 50 (see MagicCarpet.h)
    uint8_t chinaBrightnessPercent;     // 0-100, default 100 (unrestricted)
-   uint8_t noiseFloorPercent;          // 0-100, default 0 -- audio below this is "silence" (see AudioBoard.h)
+   uint8_t noiseFloorPercent;          // 0-100, default 18 -- audio below this is "silence" (see AudioBoard.h)
    uint8_t peakThresholdPercent;       // 0-100, default 68 -- audio above
                                         // this counts as a "hit"/peak (see AudioBoard.h::PEAK_THRESHOLD)
    uint8_t agcMode;                    // AGCoff/AGCband/AGCfull, default AGCband -- see AudioBoard.h's AGCMode
@@ -78,9 +78,8 @@ struct State {
    uint8_t testBrightness;             // 0-255, default 255
    uint8_t equalizerStrobeEnabled;     // 0/1, default 0 (off) -- see BumpingAudioShow.h's EqualizerShow
    uint16_t hitDecayMs;                // 0-1000, default 300 -- ms for a "hit" to decay from full to zero (see AudioBoard.h)
-   uint16_t audioForesightMs;          // 0-1000, default 0 -- how far back in time sampled audio is looked up (see AudioBoard.h)
-   uint16_t hitPredictionMs;           // 0-audioForesightMs, default 0 -- predictive lead-up before an upcoming hit (see AudioBoard.h)
-   uint8_t hitPredictionStyle;         // 0=disabled/1=exponential/2=pulse train, default 1 (see AudioBoard.h's HitPredictionStyle)
+   uint16_t audioForesightMs;          // 0-700, default 0 -- how far back in time sampled audio is looked up (see AudioBoard.h)
+   uint8_t hitPredictionStyle;         // 0=disabled/1=exponential/2=pulse train, default 1 -- prediction always spans the full live audioForesightMs (see AudioBoard.h's HitPredictionStyle)
    uint8_t soundReactivityEnabled;     // 0/1, default 1 (on) -- global kill switch for all sound-reactive light behavior (see AudioBoard.h)
    uint8_t autoPeakEnabled;            // 0/1, default 0 (off) -- scales peak threshold to the tracked 15s loudness ceiling (see AudioBoard.h)
 };
@@ -111,7 +110,7 @@ inline void load() {
       state.globalBrightnessPercent = 100;
       state.headlightBrightnessPercent = 50;
       state.chinaBrightnessPercent = 100;
-      state.noiseFloorPercent = 0;
+      state.noiseFloorPercent = 18;
       state.peakThresholdPercent = 68;
       state.agcMode = AGCband;
       state.testHue = 0;
@@ -120,7 +119,6 @@ inline void load() {
       state.equalizerStrobeEnabled = 0;
       state.hitDecayMs = 300;
       state.audioForesightMs = 0;
-      state.hitPredictionMs = 0;
       state.hitPredictionStyle = 1; // PredictExponential
       state.soundReactivityEnabled = 1;
       state.autoPeakEnabled = 0;
@@ -182,10 +180,6 @@ inline uint16_t loadedHitDecayMs() {
 
 inline uint16_t loadedAudioForesightMs() {
    return state.audioForesightMs;
-}
-
-inline uint16_t loadedHitPredictionMs() {
-   return state.hitPredictionMs;
 }
 
 inline uint8_t loadedHitPredictionStyle() {
@@ -268,11 +262,6 @@ inline void saveHitDecayMs( uint16_t ms ) {
 
 inline void saveAudioForesightMs( uint16_t ms ) {
    state.audioForesightMs = ms;
-   flash.write( 0, (byte *)&state, sizeof( State ) );
-}
-
-inline void saveHitPredictionMs( uint16_t ms ) {
-   state.hitPredictionMs = ms;
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 

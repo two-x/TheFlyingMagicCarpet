@@ -27,12 +27,12 @@ inline int scale( int x ) { return ( ( 255 * x ) / ADC_MAX_VALUE ); } // see Uti
 inline uint8_t rawToPercent( uint8_t raw ) { return (uint8_t)( ( (uint16_t)raw * 100 + 127 ) / 255 ); }
 
 // The MSGEQ7 chip's own 7 hardware bins, in the chip's own datasheet order
-// (FreqBin0=63Hz .. FreqBin6=16kHz) -- this is now the finest-grained unit
-// AudioBoard tracks state for (see BandLevels/binLevels_ below). AudioBand
-// (below) is a coarser, curated grouping of these bins that most callers
-// still want; a few callers (see BumpingAudioShow.h's pixel_war) need a
-// specific bin or an ad-hoc bin group instead -- see the getBinXxx()
-// getters below, distinct from the getBandXxx() ones.
+// (FreqBin0=63Hz .. FreqBin6=16kHz) -- the finest-grained unit AudioBoard
+// tracks state for. AudioBand (below) is a coarser, curated grouping of
+// these bins that most callers still want; a few callers (see
+// BumpingAudioShow.h's pixel_war) need a specific bin or an ad-hoc bin
+// group instead -- see the getBinXxx() getters below, distinct from the
+// getBandXxx() ones.
 enum AudioBin { FreqBin0 = 0, FreqBin1, FreqBin2, FreqBin3, FreqBin4, FreqBin5, FreqBin6, NumBins };
 
 // which band a getter call is asking about -- see AudioBoard's per-band
@@ -42,75 +42,81 @@ enum AudioBin { FreqBin0 = 0, FreqBin1, FreqBin2, FreqBin3, FreqBin4, FreqBin5, 
 // group of the AudioBin values above -- see BAND_BINS below for exactly
 // which bins feed which band. Band-taking getters aggregate (max) across
 // whichever bins the band covers, computed fresh on every call from each
-// bin's own independently-tracked level -- see binLevels_ below.
+// bin's own independently-tracked level.
 enum AudioBand { BandBass = 0, BandMidbass, BandMid, BandTreble, BandFull, NumFreqBands };
 
-// AGC (auto-gain) operating mode -- see updateBandLevels()'s f/g/h steps.
+// AGC (auto-gain) operating mode -- see updateBandLevels()'s AGC step.
 //   AGCoff  -- no gain applied at all, levelFilt == levelClean.
 //   AGCband -- each band boosted by its OWN independently-tracked rolling-
 //              peak gain.
 //   AGCfull -- every band boosted by the SAME gain, derived from BandFull's
 //              own rolling peak -- one shared, full-spectrum-derived gain
-//              applied uniformly (this was the only AGC behavior that
-//              existed before this file's per-band rework).
+//              applied uniformly.
 enum AGCMode { AGCoff = 0, AGCband, AGCfull, NumAGCModes };
 
 // which shape (if any) the hit-prediction lead-up follows -- see
-// AudioBoard::computePredictedRamp()/computePulseTrainValue() below.
+// AudioBoard::computePredictedRamp_()/computePulseTrainValue() below.
 enum HitPredictionStyle { PredictDisabled = 0, PredictExponential = 1, PredictPulseTrain = 2, PredictTwoPulse = 3 };
 static const uint8_t NUM_HIT_PREDICTION_STYLES = 4;
 
-class AudioBoard {
- public:
-   //Define spectrum variables
-   static int Frequencies_Mono[7];
+// which of the 5 processing stages a stored history value represents -- see
+// the big storage comment on audioData_ below.
+enum AudioLevelType { LevelRaw = 0, LevelClean, LevelFilt, LevelRMS, LevelHit, NumLevelTypes };
 
-   // --- per-bin level tracking ---
-   //
-   // Every one of the 7 hardware bins (see AudioBin above) keeps 5 values,
-   // ALL in percent (0-100) units:
-   //   levelRaw   -- straight conversion of this bin's own raw ADC reading,
-   //                 no adjustment at all. Ungated even by
-   //                 soundReactivityEnabled_ -- diagnostic screens should
-   //                 still show real signal with reactivity globally off.
-   //   levelClean -- levelRaw, floored to 0 if at or below the live noise
-   //                 floor.
-   //   levelFilt  -- levelClean, optionally AGC-boosted per the live
-   //                 AGCMode (see updateBandLevels() below) -- this is what
-   //                 every light show actually reacts to as "the current
-   //                 level."
-   //   levelHit   -- peak-hold derived from levelFilt: jumps to a flat 100
-   //                 the instant levelFilt reaches the live peak threshold,
-   //                 holds there for HIT_SUSTAIN_HOLD_MS (75ms); if the same
-   //                 hit is still ongoing past that, eases down to
-   //                 HIT_SUSTAIN_PERCENT (90%) over the next
-   //                 HIT_SUSTAIN_EASE_MS (25ms) and holds there for as long
-   //                 as the hit continues -- so a long sustained tone
-   //                 doesn't sit pinned at 100 the whole time. Once
-   //                 levelFilt actually drops back below threshold, decays
-   //                 (time-based, hitDecayMs_) from whatever levelHit
-   //                 currently holds -- 100, mid-ease, or the 90% floor, not
-   //                 always from 100 -- snapping the rest of the way to 0 as
-   //                 soon as the decaying value rejoins levelFilt, rather
-   //                 than lingering below it. Predictive lead-up (see
-   //                 computePredictedRamp()) can also push this up ahead of
-   //                 an actual crossing, peaking at 100.
-   //   levelRMS   -- root-mean-square of this bin's own levelClean history
-   //                 over the trailing PEAK_WINDOW_MS -- overall acoustic
-   //                 energy in that bin, as opposed to levelFilt's
-   //                 instantaneous reading.
-   // A getBandXxx() getter (getBandNormalPercent(BandTreble), etc.)
-   // computes its result fresh on every call, as the MAX of whichever bins'
-   // own already-processed level that band covers -- see BAND_BINS/
-   // aggregateBandF() below. Nothing is pre-aggregated or cached per-band.
-   struct BandLevels {
-      float levelRaw = 0.0f;
-      float levelClean = 0.0f;
-      float levelFilt = 0.0f;
-      float levelHit = 0.0f;
-      float levelRMS = 0.0f;
-   };
-   static BandLevels binLevels_[ NumBins ];
+class AudioBoard {
+ private:
+
+   /* --- unified audio history: storage + the two time pointers ---
+    *
+    * Replaces what used to be 3 separate, independently-bookkept ring
+    * buffers (per-bin AGC history, the foresight raw-history buffer, and
+    * the full-spectrum rolling-peak/EMA silence tracker) with ONE ring
+    * buffer and two pointers into it.
+    *
+    * audioData_[type][bin][slot] -- percent (0-100), or LEVEL_INVALID
+    * (255) if this slot hasn't been computed yet this lap. Time is the
+    * innermost/fastest-varying dimension (matching the old agcHistory_/
+    * rawHistory_ convention) since every real operation on this data scans
+    * across time for one fixed (type,bin) pair.
+    * audioTimestamps_[slot] -- millis() this slot was captured, shared by
+    * every bin/type at that slot (they're always sampled together, one
+    * poll = one slot).
+    *
+    * Two pointers, both indices into the SAME ring buffer:
+    *   - audioReadIndex_ ("audioReadTime") -- advances by 1 every poll, at
+    *     the very start, before anything else happens. Always the most
+    *     recently captured instant. INTERNAL ONLY -- no getter ever reads
+    *     here; only the pipeline itself (noise removal, AGC scan, RMS
+    *     scan, silence scan, hit lookahead) touches this index directly.
+    *   - lightsShowIndex_ ("lightsShowTime") -- recomputed every poll,
+    *     immediately after audioReadIndex_ advances, as the row whose
+    *     timestamp is nearest to audioReadIndex_'s timestamp minus the
+    *     live audioForesightMs_. EVERY external getter reads only from
+    *     this index. At audioForesightMs_==0 this equals audioReadIndex_,
+    *     which is exactly why foresight-off behavior is unchanged by this
+    *     restructure.
+    *
+    * Depth sizing: AGC's own boost calculation needs a full trailing
+    * AGC_WINDOW_MS of history measured FROM lightsShowIndex_, not from
+    * audioReadIndex_ -- and lightsShowIndex_ itself can trail
+    * audioReadIndex_ by up to FORESIGHT_BUFFER_MS. So the buffer must
+    * cover the SUM of the two (AGC_WINDOW_MS + FORESIGHT_BUFFER_MS), not
+    * just the max -- otherwise, at high foresight settings, the oldest
+    * portion of AGC's own window would already have been overwritten by
+    * audioReadIndex_'s forward progress before AGC ever got to read it.
+    */
+   static const uint16_t POLL_INTERVAL_MS = 30;
+   static const uint16_t AGC_WINDOW_MS = 4000; // trailing window for AGC boost / RMS / silence, measured back from lightsShowTime
+   static const uint16_t FORESIGHT_BUFFER_MS = 700; // max audioForesightMs_ -- must match SubAudioForesight's adjustable range in CarpetLightLogic.cpp
+   static const uint16_t AUDIO_HISTORY_MS = AGC_WINDOW_MS + FORESIGHT_BUFFER_MS;
+   static const uint16_t AUDIO_HISTORY_SIZE = ( AUDIO_HISTORY_MS + POLL_INTERVAL_MS - 1 ) / POLL_INTERVAL_MS + 2; // +2 slots margin, same convention as the old buffers
+   static const uint8_t LEVEL_INVALID = 255; // valid range is 0-100; 255 unambiguously means "not computed this lap"
+
+   static uint8_t audioData_[ NumLevelTypes ][ NumBins ][ AUDIO_HISTORY_SIZE ];
+   static uint32_t audioTimestamps_[ AUDIO_HISTORY_SIZE ];
+   static uint16_t audioReadIndex_; // "audioReadTime" -- write head, internal only
+   static uint16_t audioCount_;
+   static uint16_t lightsShowIndex_; // "lightsShowTime" -- every getter reads here
 
    // which AudioBin values each AudioBand covers -- BAND_BIN_COUNT[band] of
    // them, listed in BAND_BINS[band][0..count-1] (rows padded to 7 wide,
@@ -118,16 +124,20 @@ class AudioBoard {
    static const uint8_t BAND_BIN_COUNT[ NumFreqBands ];
    static const AudioBin BAND_BINS[ NumFreqBands ][ NumBins ];
 
-   // Aggregates one BandLevels field (picked via the getter callable, e.g.
-   // a lambda returning bl.levelFilt) across whichever bins the given band
-   // covers, returning the max. The one shared implementation every
-   // band-taking public getter below is built on.
-   template <typename F>
-   static float aggregateBandF( AudioBand band, F fieldGetter ) {
-      float m = 0.0f;
+   // returns v, or 0 if v is the LEVEL_INVALID sentinel (shouldn't happen
+   // for anything read at lightsShowIndex_ in normal operation -- every
+   // field there is always computed before any getter can run -- but kept
+   // as a defensive floor rather than ever surfacing 255% to a caller).
+   static uint8_t valOrZero_( uint8_t v ) { return ( v == LEVEL_INVALID ) ? 0 : v; }
+
+   // the one shared implementation every getBandXxx() getter is built on --
+   // max of the given levelType across whichever bins the band covers, at
+   // lightsShowIndex_.
+   static uint8_t aggregateBandType_( AudioBand band, AudioLevelType type ) {
+      uint8_t m = 0;
       uint8_t n = BAND_BIN_COUNT[ band ];
       for ( uint8_t i = 0; i < n; ++i ) {
-         float v = fieldGetter( binLevels_[ BAND_BINS[ band ][ i ] ] );
+         uint8_t v = valOrZero_( audioData_[ type ][ BAND_BINS[ band ][ i ] ][ lightsShowIndex_ ] );
          if ( v > m ) m = v;
       }
       return m;
@@ -137,50 +147,57 @@ class AudioBoard {
    static Timer hitTimer_;      // tracks dt between updateBandLevels() calls
    static bool simModeActive_;  // set true/false at the top of pollSimulated()/pollFrequencies() respectively
 
-   // edge-triggered "this bin just started a new hit" flag -- one per bin,
-   // set when THAT bin crosses from at-or-below to above the peak threshold
-   // during updateBandLevels(), consumed (cleared) by the next NewHit()
-   // call that covers it. Independent per bin -- a bass hit doesn't
-   // consume/clear treble's own pending flag or vice versa.
-   static bool newHit_[ NumBins ];
-   static bool hitWasAbove_[ NumBins ]; // per-bin edge-detection state feeding newHit_ above
+   // hit envelope's persistent value, per bin -- kept as a float separate
+   // from the rounded uint8_t stored in audioData_[LevelHit] so repeated
+   // small decay steps don't compound rounding error tick over tick. This
+   // IS what audioData_[LevelHit][bin][lightsShowIndex_] gets rounded into
+   // every poll, not a second independent source of truth.
+   static float hitPersist_[ NumBins ];
+   static uint32_t hitOnsetMs_[ NumBins ]; // timestamp (lightsShowTime's own ms) this bin's CURRENT hit began
+   static bool hitWasAbove_[ NumBins ];    // per-bin edge-detection state, evaluated once per poll at lightsShowIndex_
 
-   // returns (and clears) whether THIS bin has had a new hit since the last
-   // time this was called for it.
-   static bool NewBinHit( AudioBin bin ) {
-      bool v = newHit_[ bin ];
-      newHit_[ bin ] = false;
-      return v;
-   }
-   // band version: true if ANY bin the band covers has a pending hit --
-   // consumes (clears) every one of that band's bins' flags regardless, not
-   // just the first one found, so a bin's pending flag can't leak into a
-   // later call through a DIFFERENT band that happens to also cover it.
-   static bool NewBandHit( AudioBand band = BandFull ) {
-      bool any = false;
-      uint8_t n = BAND_BIN_COUNT[ band ];
-      for ( uint8_t i = 0; i < n; ++i ) {
-         AudioBin bin = BAND_BINS[ band ][ i ];
-         if ( newHit_[ bin ] ) any = true;
-         newHit_[ bin ] = false;
+   // this poll's "was lightsShowIndex_ a fresh hit edge for this bin" flag
+   // -- NewBinHit() below is the only thing that ever reads it, and
+   // dedupes against lastReportedHitMs_ so repeated/multiple-caller reads
+   // of the SAME lightsShowTime instant only ever report true once.
+   static bool newHitAtLightsShow_[ NumBins ];
+   static uint32_t lastReportedHitMs_[ NumBins ];
+   static bool lastReportedHitEverValid_[ NumBins ];
+
+   // per-bin AGC boost multiplier (100/that bin's own trailing rolling
+   // peak, clamped to never divide by zero) and the shared AGCfull
+   // equivalent (100/the max-across-all-bins trailing peak) -- both
+   // recomputed every poll by updateBandLevels()'s AGC step, from
+   // audioData_[LevelClean] over the trailing AGC_WINDOW_MS ending at
+   // lightsShowTime.
+   static float agcBoost_[ NumBins ];
+   static float agcBoostFull_;
+
+   // one windowed scan over a bin's LevelClean history serves AGC boost
+   // (peak), RMS (sumSquares/n), and silence (anyNonzero) all at once --
+   // these 3 used to be 3 separate full rescans every poll (the old
+   // per-bin AGC history scan, the old RMS scan, and the old full-spectrum
+   // EMA/rolling-peak tracker); one shared scan is simpler and 3x cheaper.
+   struct WindowScan_ { float peak; float sumSquares; uint16_t n; bool anyNonzero; };
+   static WindowScan_ scanCleanWindow_( uint8_t bin, uint32_t windowStart, uint32_t windowEnd ) {
+      WindowScan_ r = { 0.0f, 0.0f, 0, false };
+      // NOT excluding audioReadIndex_ here -- unlike the lightsShowTime
+      // search in updateBandLevels() (which runs BEFORE this lap's row is
+      // written), this scan runs in step F, after step E has already
+      // written this lap's LevelClean -- so it's valid, current data and
+      // belongs in the window if its timestamp falls inside it.
+      for ( uint16_t i = 0; i < audioCount_; ++i ) {
+         uint32_t ts = audioTimestamps_[ i ];
+         if ( ts < windowStart || ts > windowEnd ) continue;
+         uint8_t v = audioData_[ LevelClean ][ bin ][ i ];
+         if ( v == LEVEL_INVALID ) continue;
+         float f = (float)v;
+         if ( f > r.peak ) r.peak = f;
+         r.sumSquares += f * f;
+         ++r.n;
+         if ( v > 0 ) r.anyNonzero = true;
       }
-      return any;
-   }
-
-   // 0-audioForesightMs_ (dynamic range -- can't predict further ahead than
-   // the foresight lookahead actually gives us data for), adjustable +
-   // persisted, default 0 (no predictive lead-up at all). See
-   // computePredictedRamp() below for the actual math.
-   static float hitPredictionMs_;
-   // which shape the lead-up follows, adjustable + persisted, default
-   // PredictExponential -- see HitPredictionStyle above.
-   static uint8_t hitPredictionStyle_;
-
-   // same "now - foresight" clamp used by lookupDelayed() -- shared here so
-   // updateBandLevels()'s prediction scan and the raw lookup always agree on
-   // exactly which buffered moment counts as "the current display position"
-   static uint32_t currentDisplayMs( uint32_t nowMs ) {
-      return ( nowMs > (uint32_t)audioForesightMs_ ) ? ( nowMs - (uint32_t)audioForesightMs_ ) : 0;
+      return r;
    }
 
    // Trapezoidal "rounded square wave": timeIntoPulse 0..widthMs, ramping
@@ -196,18 +213,15 @@ class AudioBoard {
    }
 
    // PredictPulseTrain style: a drumroll of 30ms-wide pulses (rounded per
-   // shapePulse() above, peaking at 100 -- the current (100%) hit-level
-   // value, per request, not the live peak-threshold level as this used to)
-   // leading up to the predicted hit, fixed to its own 300ms lead-in
-   // regardless of hitPredictionMs_ (which only still gates how far ahead a
-   // hit can be FOUND at all -- see computePredictedRamp()) -- pulse-to-
-   // pulse spacing starts at 90ms and narrows to 30ms (touching, back-to-
-   // back) right at the hit. Pulse onset times are generated by a small
-   // (~6-iteration) integer loop walking backward from the 300ms mark,
-   // recomputing the linearly-interpolated spacing at each step (forward-
-   // Euler style) rather than solving the continuous spacing-vs-time
-   // relationship analytically (which would need a logarithm) -- cheap, and
-   // close enough at this timescale.
+   // shapePulse() above, peaking at 100) leading up to the predicted hit,
+   // fixed to its own 300ms lead-in -- pulse-to-pulse spacing starts at
+   // 90ms and narrows to 30ms (touching, back-to-back) right at the hit.
+   // Pulse onset times are generated by a small (~6-iteration) integer
+   // loop walking backward from the 300ms mark, recomputing the linearly-
+   // interpolated spacing at each step (forward-Euler style) rather than
+   // solving the continuous spacing-vs-time relationship analytically
+   // (which would need a logarithm) -- cheap, and close enough at this
+   // timescale.
    static uint8_t computePulseTrainValue( uint32_t timeUntilHit ) {
       static const uint32_t LEAD_MS = 300;
       static const uint32_t MIN_SPACING_MS = 30;
@@ -225,12 +239,11 @@ class AudioBoard {
       }
    }
 
-   // PredictTwoPulse style: just two 35ms-wide pulses (shapePulse()-rounded,
-   // peaking at 100, same as computePulseTrainValue() above), 45ms apart,
-   // anchored at min(audioForesightMs_, 400ms) before the predicted hit --
-   // capped to the live foresight setting rather than a fixed 400ms, since
-   // there's no buffered lookahead data past whatever foresight actually
-   // provides.
+   // PredictTwoPulse style: just two 35ms-wide pulses (shapePulse()-
+   // rounded, peaking at 100), 45ms apart, anchored at
+   // min(audioForesightMs_, 400ms) before the predicted hit -- capped to
+   // the live foresight setting rather than a fixed 400ms, since there's
+   // no buffered lookahead data past whatever foresight actually provides.
    static uint8_t computeTwoPulseValue( uint32_t timeUntilHit ) {
       static const uint32_t MAX_LEAD_MS = 400;
       static const uint32_t SPACING_MS = 45;
@@ -249,116 +262,101 @@ class AudioBoard {
       return 0;
    }
 
-   // Looks ahead in band's buffered history, from the current display
-   // position out to hitPredictionMs_ further into what's already been
-   // sampled but not yet displayed (bounded by audioForesightMs_, which is
-   // exactly how much "not yet displayed" data actually exists), for the
-   // EARLIEST upcoming sample that will cross the peak threshold. If found,
+   // Predictive lead-up, folded directly out of the buffer split: scans
+   // levelClean (NOT levelFilt -- rows strictly ahead of lightsShowIndex_
+   // haven't had levelFilt computed yet, that only happens once
+   // lightsShowTime itself reaches them) from just after showIdx forward
+   // through readIdx (inclusive) -- exactly the span between lightsShowTime
+   // and audioReadTime, i.e. the whole live foresight window, for the
+   // EARLIEST upcoming sample crossing the plain peak threshold. If found,
    // shapes the lead-up per hitPredictionStyle_:
    //   PredictDisabled     -- always 0, no lookahead performed at all.
    //   PredictExponential  -- a rising ramp (0-100) as a cheap-integer-math
    //     stand-in for "an exponential curve with a vertical asymptote lined
-   //     up exactly on the predicted hit": let timeUntilHit be milliseconds
-   //     from the display position to the predicted hit (hitPredictionMs_
-   //     down to ~1). ramp = 100*(hitPredictionMs_-timeUntilHit)/timeUntilHit
-   //     -- 0 at timeUntilHit==hitPredictionMs_ (the farthest predictive
-   //     point), growing without bound as timeUntilHit shrinks toward 0,
-   //     clamped to 100 -- a true vertical asymptote at the hit's own
-   //     instant, via one subtract/multiply/divide instead of expf().
+   //     up exactly on the predicted hit": ramp =
+   //     100*(audioForesightMs_-timeUntilHit)/timeUntilHit -- 0 at
+   //     timeUntilHit==audioForesightMs_ (the farthest predictive point),
+   //     growing without bound as timeUntilHit shrinks toward 0, clamped
+   //     to 100.
    //   PredictPulseTrain   -- see computePulseTrainValue() above.
    //   PredictTwoPulse     -- see computeTwoPulseValue() above.
-   // Returns 0 if no upcoming hit is found in the window (including always,
-   // when hitPredictionMs_ is 0 -- no lookahead requested). Threshold-
-   // crossing is tested against the buffered RAW-percent history directly
-   // (not a re-derived levelClean/levelFilt for that past instant, which
-   // would need the noise-floor/AGC state as it stood back then) -- a
-   // reasonable approximation, not an exact replay.
-   static uint8_t computePredictedRamp( AudioBin bin, uint32_t displayMs ) {
-      if ( hitPredictionStyle_ == PredictDisabled || hitPredictionMs_ < 1.0f ) return 0;
-      uint32_t hp = (uint32_t)hitPredictionMs_;
-      uint32_t windowEnd = displayMs + hp;
-      float threshPct = getPlainPeakThresholdPercent(); // see its own comment -- predicting the auto-peak debounce's own future state isn't attempted here
+   // No separate hitPredictionMs_ dial exists anymore -- prediction always
+   // runs over the whole live foresight span; the individual shape
+   // functions above keep their own fixed internal lead/spacing constants
+   // as timing offsets within that.
+   static uint8_t computePredictedRamp_( AudioBin bin, uint16_t showIdx, uint16_t readIdx, uint32_t showMs ) {
+      if ( hitPredictionStyle_ == PredictDisabled || showIdx == readIdx ) return 0;
+      float threshPct = getPlainPeakThresholdPercent();
       uint32_t bestHitMs = 0;
       bool found = false;
-      for ( uint16_t i = 0; i < historyCount_; ++i ) {
-         uint32_t ts = historyTimestamps_[ i ];
-         if ( ts <= displayMs || ts > windowEnd ) continue; // strictly ahead of display position, within the lookahead window
-         if ( rawHistory_[ bin ][ i ] < threshPct ) continue;
-         if ( !found || ts < bestHitMs ) { bestHitMs = ts; found = true; }
+      uint16_t i = (uint16_t)( ( showIdx + 1 ) % AUDIO_HISTORY_SIZE );
+      while ( true ) {
+         uint8_t clean = audioData_[ LevelClean ][ bin ][ i ];
+         if ( clean != LEVEL_INVALID && (float)clean >= threshPct ) {
+            bestHitMs = audioTimestamps_[ i ];
+            found = true;
+            break; // walking forward chronologically -- first crossing found is the earliest
+         }
+         if ( i == readIdx ) break;
+         i = (uint16_t)( ( i + 1 ) % AUDIO_HISTORY_SIZE );
       }
       if ( !found ) return 0;
-      uint32_t timeUntilHit = bestHitMs - displayMs; // 1..hp
+      uint32_t timeUntilHit = ( bestHitMs > showMs ) ? ( bestHitMs - showMs ) : 0;
+      if ( timeUntilHit == 0 ) return 100;
       if ( hitPredictionStyle_ == PredictPulseTrain ) return computePulseTrainValue( timeUntilHit );
       if ( hitPredictionStyle_ == PredictTwoPulse ) return computeTwoPulseValue( timeUntilHit );
+      uint32_t hp = (uint32_t)audioForesightMs_;
+      if ( hp < 1 || timeUntilHit >= hp ) return 0;
       uint32_t ramp = ( 100UL * ( hp - timeUntilHit ) ) / timeUntilHit;
       return (uint8_t)( ramp > 100 ? 100 : ramp );
    }
 
-   // Every one of these comes in two distinctly-named forms (not an
-   // overload pair) -- getBandXxx(AudioBand) aggregates (max) across
-   // whichever bins that band covers; getBinXxx(AudioBin) reads exactly one
-   // bin, no aggregation. Per request, so a call site is always explicit
-   // about which granularity it means, rather than leaving it to whichever
-   // overload argument-type resolution happens to pick.
-   static uint8_t getBinRawPercent( AudioBin bin ) { return (uint8_t)( binLevels_[ bin ].levelRaw + 0.5f ); }
-   static uint8_t getBandRawPercent( AudioBand band = BandFull ) { return (uint8_t)( aggregateBandF( band, []( const BandLevels & bl ) { return bl.levelRaw; } ) + 0.5f ); }
-   static bool getBinRawNonzero( AudioBin bin ) { return binLevels_[ bin ].levelRaw > 0.0f; }
-   static bool getBandRawNonzero( AudioBand band = BandFull ) { return aggregateBandF( band, []( const BandLevels & bl ) { return bl.levelRaw; } ) > 0.0f; }
-   // BUGFIX: these 4 getters are what every light show actually reacts to
-   // (raw above stays ungated -- diagnostic screens like the noise-floor
-   // bin readout should still show real signal even with reactivity
-   // globally off). Gating here, once, centrally, means the global disable
-   // (see soundReactivityEnabled_ below) doesn't need to be checked
-   // separately inside every single show. (soundReactivityEnabled_ is also
-   // baked into levelFilt/levelHit themselves inside updateBandLevels(), so
-   // this is a belt-and-suspenders check, not the only place it's applied.)
-   static uint8_t getBinNormalPercent( AudioBin bin ) { return soundReactivityEnabled_ ? (uint8_t)( binLevels_[ bin ].levelFilt + 0.5f ) : 0; }
-   static uint8_t getBandNormalPercent( AudioBand band = BandFull ) { return soundReactivityEnabled_ ? (uint8_t)( aggregateBandF( band, []( const BandLevels & bl ) { return bl.levelFilt; } ) + 0.5f ) : 0; }
-   static bool getBinNormalNonzero( AudioBin bin ) { return soundReactivityEnabled_ && binLevels_[ bin ].levelFilt > 0.0f; }
-   static bool getBandNormalNonzero( AudioBand band = BandFull ) { return soundReactivityEnabled_ && aggregateBandF( band, []( const BandLevels & bl ) { return bl.levelFilt; } ) > 0.0f; }
-   static uint8_t getBinHitPercent( AudioBin bin ) { return soundReactivityEnabled_ ? (uint8_t)( binLevels_[ bin ].levelHit + 0.5f ) : 0; }
-   static uint8_t getBandHitPercent( AudioBand band = BandFull ) { return soundReactivityEnabled_ ? (uint8_t)( aggregateBandF( band, []( const BandLevels & bl ) { return bl.levelHit; } ) + 0.5f ) : 0; }
-   // true whenever this bin/band's hit level is currently above the live
-   // peak threshold, false otherwise -- NOT a plain nonzero test (hit stays
-   // nonzero throughout its decay tail after dropping back below threshold,
-   // which shouldn't still read as "a hit" once decayed past that point).
-   static bool getBinHitNonzero( AudioBin bin ) { return soundReactivityEnabled_ && binLevels_[ bin ].levelHit > getPlainPeakThresholdPercent(); }
-   static bool getBandHitNonzero( AudioBand band = BandFull ) { return soundReactivityEnabled_ && aggregateBandF( band, []( const BandLevels & bl ) { return bl.levelHit; } ) > getPlainPeakThresholdPercent(); }
-   static uint8_t getBinRmsPercent( AudioBin bin ) { return (uint8_t)( binLevels_[ bin ].levelRMS + 0.5f ); }
-   static uint8_t getBandRmsPercent( AudioBand band = BandFull ) { return (uint8_t)( aggregateBandF( band, []( const BandLevels & bl ) { return bl.levelRMS; } ) + 0.5f ); }
-   static bool getBinRmsNonzero( AudioBin bin ) { return binLevels_[ bin ].levelRMS > 0.0f; }
-   static bool getBandRmsNonzero( AudioBand band = BandFull ) { return aggregateBandF( band, []( const BandLevels & bl ) { return bl.levelRMS; } ) > 0.0f; }
+   static bool autoGainSuppressed_;
+   // Global kill switch for all sound-reactive light behavior -- see the
+   // getters below, which gate on this centrally so no individual show
+   // needs its own check. Default true (on); persisted via Nvm, see
+   // setSoundReactivityEnabled().
+   static bool soundReactivityEnabled_;
+   static uint8_t agcMode_; // AGCoff/AGCband/AGCfull, persisted -- see AGCMode above
+   static float noiseFloorPercent_; // 0-100
+   static float peakThresholdPercent_; // 0-100
 
-   // adjustable range is 0ms (instant decay) to 1000ms (1 full second) --
-   // per request, set live via the Audio config screen's decay-rate
-   // subsetting, pot-adjusted. 0ms still behaves safely in
-   // updateBandLevels() below: 100.0f/0.0f is IEEE-754 +infinity, which
-   // immediately drives levelHit to (and clamped at) 0 on the very next
-   // update, i.e. genuinely instant decay, no divide-by-zero fault.
-   static void setHitDecayMs( float ms ) { hitDecayMs_ = constrain( ms, 0.0f, 1000.0f ); }
-   static float getHitDecayMs() { return hitDecayMs_; }
+   // --- auto-peak (per-bin hit-rate debounce -- PENDING REDEFINITION in a
+   // later phase, kept structurally as-is here, just re-pointed at
+   // hitPersist_ instead of the old binLevels_ struct) ---
+   //
+   // "decides a modified peak threshold applied to hit value calculations,"
+   // based on each bin's OWN recent hit-occurrence frequency. Rule,
+   // evaluated independently per bin: whenever this bin's level would
+   // cross the plain threshold again within AUTO_PEAK_DEBOUNCE_MS of its
+   // own last ACCEPTED hit, that new crossing is only accepted if the
+   // previous accepted hit has already begun to decay (its hit value has
+   // dropped below its flat 100 hold) -- otherwise the effective threshold
+   // for this instant is raised out of reach (see
+   // getEffectivePeakThresholdPercent(AudioBin) below), so nothing can
+   // cross it. AUTO_PEAK_HIT_WINDOW_MS bounds a bin's own last-hit
+   // bookkeeping (also guards the very first hit ever against the initial
+   // 0-timestamp/no-history state).
+   static bool autoPeakEnabled_; // persisted -- see setAutoPeakEnabled()
+   static const uint16_t AUTO_PEAK_DEBOUNCE_MS = 50;
+   static const uint16_t AUTO_PEAK_HIT_WINDOW_MS = 2000;
+   static bool autoPeakHadHit_[ NumBins ];       // has this bin ever accepted a hit yet
+   static uint32_t autoPeakLastHitMs_[ NumBins ]; // timestamp of that bin's own last ACCEPTED hit
 
-   // 0-1000ms, adjustable + persisted, default 0 (freshest sample, maximal
-   // "predictive" lead) -- see the foresight block above for what this does.
-   static void setAudioForesightMs( float ms ) {
-      audioForesightMs_ = constrain( ms, 0.0f, (float)FORESIGHT_BUFFER_MS );
-      // hitPredictionMs_'s range is capped to audioForesightMs_ (can't
-      // predict further ahead than there's buffered-but-undisplayed data
-      // for) -- re-clamp it here too in case foresight was just reduced
-      // below whatever prediction was previously set to.
-      if ( hitPredictionMs_ > audioForesightMs_ ) hitPredictionMs_ = audioForesightMs_;
-   }
-   static float getAudioForesightMs() { return audioForesightMs_; }
+   // Hit sustain envelope: a hit starts at a flat 100% (so the leading edge
+   // always reads full strength). If the SAME hit is still continuously
+   // above threshold past HIT_SUSTAIN_HOLD_MS since its own onset, ease
+   // down to HIT_SUSTAIN_PERCENT over the following HIT_SUSTAIN_EASE_MS,
+   // then hold there for as long as the hit continues -- so a long
+   // sustained tone doesn't sit pinned at 100% the whole time. Once the
+   // hit actually ends, the existing decay path takes over from whatever
+   // hitPersist_ currently holds (100, mid-ease, or the 90% sustain
+   // floor), not always from 100.
+   static const uint16_t HIT_SUSTAIN_HOLD_MS = 75;
+   static const uint16_t HIT_SUSTAIN_EASE_MS = 25;
+   static constexpr float HIT_SUSTAIN_PERCENT = 90.0f;
 
-   // 0-audioForesightMs_ (dynamic range, see hitPredictionMs_'s declaration
-   // comment), adjustable + persisted, default 0. Live-adjustable from the
-   // Audio config screen's hit-prediction subsetting, right alongside hit
-   // decay rate -- see the class comment on computePredictedRamp() above.
-   static void setHitPredictionMs( float ms ) { hitPredictionMs_ = constrain( ms, 0.0f, audioForesightMs_ ); }
-   static float getHitPredictionMs() { return hitPredictionMs_; }
-
-   static void setHitPredictionStyle( uint8_t style ) { hitPredictionStyle_ = ( style >= NUM_HIT_PREDICTION_STYLES ) ? ( NUM_HIT_PREDICTION_STYLES - 1 ) : style; }
-   static uint8_t getHitPredictionStyle() { return hitPredictionStyle_; }
+   static bool silent_; // internal only -- see isSilent() below
 
    // NOT tied to POLL_INTERVAL_MS above, deliberately -- the 200us delays
    // below are the MSGEQ7's own datasheet-mandated minimum STROBE hold/
@@ -379,7 +377,7 @@ class AudioBoard {
       // deliberately the opposite of the chip's own datasheet levels, so
       // that what actually reaches the chip is correct. See also setup().
       for ( int freq_amp = 0; freq_amp < 7 ; ++freq_amp ) {
-        // after initial reset sequence, We left  pin STROBE LOW / chip STROBE HIGH 
+        // after initial reset sequence, We left  pin STROBE LOW / chip STROBE HIGH
         digitalWrite(STROBE, HIGH); // chip STROBE LOW  // toggle pin of spectrum shield to get next bin value -- inverted: chip actually sees LOW here
         delayMicroseconds( 70 );    // chip STROBE falling edge to OUT valid  To(min) = 36 us
         Frequencies_Mono[freq_amp] = analogRead(DC_One);
@@ -393,115 +391,257 @@ class AudioBoard {
    // then rawToPercent() to 0-100).
    static uint8_t analogToPercent( int adcVal ) { return rawToPercent( (uint8_t)scale( adcVal ) ); }
 
-
-   /* --- per-bin AGC history + rolling boost multiplier ---
-    *
-    * One ring buffer PER BIN (agcHistory_, levelClean values, %), sharing
-    * one timestamp array (agcHistoryTimestamps_) since every bin is always
-    * sampled on the same poll -- same space-saving convention the foresight
-    * buffer below already uses. agcBoost_ holds each bin's most recently
-    * calculated multiplier (100/that bin's own trailing rolling peak,
-    * clamped to never divide by zero) -- see computeAgcBoostFromHistory_()
-    * and updateBandLevels()'s (d)/(e) steps. agcHistoryFull_/agcBoostFull_
-    * are the same thing again, but for the max-across-all-bins signal --
-    * AGCfull mode's single shared gain (see AGCMode above) is derived from
-    * this instead of any one bin's own history.
+   /* --- the per-poll pipeline --- runs once per real poll (~30ms), from
+    * pollFrequencies()/pollSimulated() below. Step by step:
+    *   A) advance audioReadTime (the write head), invalidate its slot
+    *   B) recompute lightsShowTime = nearest row to (nowMs - foresight)
+    *   C) capture this poll's raw % per bin at audioReadTime
+    *   D) timestamp audioReadTime's slot
+    *   E) noise removal -> levelClean at audioReadTime
+    *   F) AGC scan (per bin, over the trailing AGC_WINDOW_MS ending at
+    *      lightsShowTime) -> levelFilt at lightsShowTime; the same scan
+    *      also produces RMS and silence (see scanCleanWindow_() above)
+    *   G) hit envelope + predictive lookahead -> levelHit at lightsShowTime
+    * autoPeakEnabled_'s own debounce state doesn't need a distinct step --
+    * it's read live (not stored history) by getEffectivePeakThresholdPercent()
+    * below, called from step G.
     */
-   static const uint16_t AGC_HISTORY_SIZE = 150; // ~4s of samples at the ~30ms poll rate, with margin -- same sizing as the old whole-spectrum rollingPeak_ buffer
-   static float agcHistory_[ NumBins ][ AGC_HISTORY_SIZE ];
-   static float agcHistoryFull_[ AGC_HISTORY_SIZE ];
-   static uint32_t agcHistoryTimestamps_[ AGC_HISTORY_SIZE ];
-   static uint8_t agcHistoryHead_;
-   static uint16_t agcHistoryCount_;
-   static float agcBoost_[ NumBins ];
-   static float agcBoostFull_;
+   static void updateBandLevels( uint32_t nowMs, bool simulated, uint8_t simRawPct ) {
+      uint32_t dtMs = hitTimer_.elapsed();
+      hitTimer_.reset();
+      float noiseFloorPct = constrain( noiseFloorPercent_, 0.0f, 100.0f );
+      uint8_t effectiveAgcMode = autoGainSuppressed_ ? (uint8_t)AGCoff : agcMode_;
 
-   static const uint16_t AGC_WINDOW_MS = 4000;
+      // (A)
+      audioReadIndex_ = (uint16_t)( ( audioReadIndex_ + 1 ) % AUDIO_HISTORY_SIZE );
+      if ( audioCount_ < AUDIO_HISTORY_SIZE ) ++audioCount_;
+      for ( uint8_t t = 0; t < NumLevelTypes; ++t )
+         for ( uint8_t bin = 0; bin < NumBins; ++bin )
+            audioData_[ t ][ bin ][ audioReadIndex_ ] = LEVEL_INVALID;
 
-   // shared by every bin's own agcHistory_[bin] AND agcHistoryFull_ -- just
-   // needs whichever raw history array to scan.
-   static float computeAgcBoostFromHistory_( const float * history ) {
-      uint32_t nowMs = agcHistoryTimestamps_[ agcHistoryHead_ ]; // this poll's own timestamp -- see updateBandLevels(), which writes this before calling here
-      float peak = 0.0f;
-      for ( uint16_t i = 0; i < agcHistoryCount_; ++i ) {
-         if ( ( nowMs - agcHistoryTimestamps_[ i ] ) <= AGC_WINDOW_MS && history[ i ] > peak ) peak = history[ i ];
+      // (B) nearest-timestamp match, not exact arithmetic -- self-correcting
+      // against real poll-to-poll jitter (pollFrequencies()'s own gate
+      // isn't perfectly evenly spaced). Excludes audioReadIndex_ itself
+      // (just invalidated, not written yet this lap) -- falls back to it
+      // if nothing else valid exists yet (boot bootstrap).
+      uint32_t targetMs = ( nowMs > (uint32_t)audioForesightMs_ ) ? ( nowMs - (uint32_t)audioForesightMs_ ) : 0;
+      uint16_t bestIdx = audioReadIndex_;
+      uint32_t bestDelta = 0xFFFFFFFFu;
+      for ( uint16_t i = 0; i < audioCount_; ++i ) {
+         if ( i == audioReadIndex_ ) continue;
+         uint32_t ts = audioTimestamps_[ i ];
+         uint32_t delta = ( ts > targetMs ) ? ( ts - targetMs ) : ( targetMs - ts );
+         if ( delta < bestDelta ) { bestDelta = delta; bestIdx = i; }
       }
-      if ( peak <= 0.0f ) return 1.0f; // nothing to normalize against yet -- no boost, matches the old rollingPeak_==0 behavior
-      return 100.0f / peak;
+      lightsShowIndex_ = bestIdx;
+
+      // (C)
+      if ( simulated ) {
+         for ( int bin = 0; bin < NumBins; ++bin ) audioData_[ LevelRaw ][ bin ][ audioReadIndex_ ] = simRawPct;
+      } else {
+         Read_Frequencies();
+         for ( int bin = 0; bin < NumBins; ++bin ) audioData_[ LevelRaw ][ bin ][ audioReadIndex_ ] = analogToPercent( Frequencies_Mono[ bin ] );
+      }
+
+      // (D)
+      audioTimestamps_[ audioReadIndex_ ] = nowMs;
+
+      // (E)
+      for ( int bin = 0; bin < NumBins; ++bin ) {
+         uint8_t raw = audioData_[ LevelRaw ][ bin ][ audioReadIndex_ ];
+         audioData_[ LevelClean ][ bin ][ audioReadIndex_ ] = ( (float)raw <= noiseFloorPct ) ? (uint8_t)0 : raw;
+      }
+
+      // (F) AGC + RMS + silence, one shared scan per bin, over the trailing
+      // AGC_WINDOW_MS ending at lightsShowTime (NOT audioReadTime -- this
+      // is exactly why the buffer is sized AGC_WINDOW_MS+FORESIGHT_BUFFER_MS deep)
+      uint32_t showMs = audioTimestamps_[ lightsShowIndex_ ];
+      uint32_t winStart = ( showMs > AGC_WINDOW_MS ) ? ( showMs - AGC_WINDOW_MS ) : 0;
+      float fullPeak = 0.0f;
+      bool anySoundInWindow = false;
+      for ( int bin = 0; bin < NumBins; ++bin ) {
+         WindowScan_ sc = scanCleanWindow_( (uint8_t)bin, winStart, showMs );
+         agcBoost_[ bin ] = ( sc.peak <= 0.0f ) ? 1.0f : ( 100.0f / sc.peak );
+         float rms = ( sc.n == 0 ) ? 0.0f : sqrtf( sc.sumSquares / (float)sc.n );
+         audioData_[ LevelRMS ][ bin ][ lightsShowIndex_ ] = (uint8_t)( rms + 0.5f );
+         if ( sc.peak > fullPeak ) fullPeak = sc.peak;
+         if ( sc.anyNonzero ) anySoundInWindow = true;
+      }
+      agcBoostFull_ = ( fullPeak <= 0.0f ) ? 1.0f : ( 100.0f / fullPeak );
+      // silent only once a full window of real history has actually
+      // accumulated -- avoids spuriously reporting silence right after
+      // boot before there's been time to see any sound at all
+      silent_ = ( showMs >= AGC_WINDOW_MS || audioCount_ >= AUDIO_HISTORY_SIZE ) ? !anySoundInWindow : false;
+
+      for ( int bin = 0; bin < NumBins; ++bin ) {
+         uint8_t clean = audioData_[ LevelClean ][ bin ][ lightsShowIndex_ ];
+         float filt;
+         if ( !soundReactivityEnabled_ ) filt = 0.0f;
+         else if ( effectiveAgcMode == AGCfull ) filt = min( 100.0f, (float)clean * agcBoostFull_ );
+         else if ( effectiveAgcMode == AGCband ) filt = min( 100.0f, (float)clean * agcBoost_[ bin ] );
+         else filt = (float)clean;
+         audioData_[ LevelFilt ][ bin ][ lightsShowIndex_ ] = (uint8_t)( filt + 0.5f );
+      }
+
+      // (G)
+      for ( int bin = 0; bin < NumBins; ++bin ) {
+         uint8_t filt = audioData_[ LevelFilt ][ bin ][ lightsShowIndex_ ];
+         float threshPct = getEffectivePeakThresholdPercent( (AudioBin)bin );
+         bool isAbove = soundReactivityEnabled_ && (float)filt >= threshPct;
+         bool freshEdge = isAbove && !hitWasAbove_[ bin ];
+         newHitAtLightsShow_[ bin ] = freshEdge;
+         if ( freshEdge ) {
+            hitOnsetMs_[ bin ] = showMs;
+            autoPeakLastHitMs_[ bin ] = showMs;
+            autoPeakHadHit_[ bin ] = true;
+         }
+         hitWasAbove_[ bin ] = isAbove;
+
+         float hitVal;
+         if ( isAbove ) {
+            uint32_t heldMs = showMs - hitOnsetMs_[ bin ];
+            if ( heldMs <= HIT_SUSTAIN_HOLD_MS ) {
+               hitVal = 100.0f;
+            } else if ( heldMs <= (uint32_t)HIT_SUSTAIN_HOLD_MS + HIT_SUSTAIN_EASE_MS ) {
+               float f = (float)( heldMs - HIT_SUSTAIN_HOLD_MS ) / (float)HIT_SUSTAIN_EASE_MS;
+               hitVal = 100.0f - f * ( 100.0f - HIT_SUSTAIN_PERCENT );
+            } else {
+               hitVal = HIT_SUSTAIN_PERCENT;
+            }
+         } else {
+            hitVal = hitPersist_[ bin ];
+            if ( hitVal > 0.0f ) {
+               hitVal -= ( 100.0f / hitDecayMs_ ) * (float)dtMs;
+               if ( hitVal < 0.0f ) hitVal = 0.0f;
+               if ( hitVal <= (float)filt ) hitVal = 0.0f;
+            }
+         }
+
+         uint8_t predicted = computePredictedRamp_( (AudioBin)bin, lightsShowIndex_, audioReadIndex_, showMs );
+         if ( (float)predicted > hitVal ) hitVal = (float)predicted;
+
+         hitPersist_[ bin ] = hitVal;
+         audioData_[ LevelHit ][ bin ][ lightsShowIndex_ ] = (uint8_t)( hitVal + 0.5f );
+      }
    }
 
-   // RMS of a levelClean history over the same trailing window
-   // computeAgcBoostFromHistory_() uses -- "an appropriate algorithm" per
-   // request; sqrtf() here is real cost on this FPU-less board (same
-   // concern the old getRmsPercent() was written to avoid by only computing
-   // on-demand), but per request this now runs proactively every poll, for
-   // every bin.
-   static float computeRmsFromHistory_( const float * history ) {
-      uint32_t nowMs = agcHistoryTimestamps_[ agcHistoryHead_ ];
-      float sumSquares = 0.0f;
-      uint16_t n = 0;
-      for ( uint16_t i = 0; i < agcHistoryCount_; ++i ) {
-         if ( ( nowMs - agcHistoryTimestamps_[ i ] ) > AGC_WINDOW_MS ) continue;
-         float v = history[ i ];
-         sumSquares += v * v;
-         ++n;
+ public:
+   //Define spectrum variables
+   static int Frequencies_Mono[7];
+
+   // returns (and clears) whether THIS bin has had a new hit since the
+   // last time this was checked FOR THIS SAME lightsShowTime instant --
+   // dedupes by timestamp (not raw index, which can be reused across ring-
+   // buffer wraps) so calling this more than once, or from more than one
+   // caller, while lightsShowTime sits on the same row never reports a
+   // second true for that one edge.
+   static bool NewBinHit( AudioBin bin ) {
+      uint32_t rowMs = audioTimestamps_[ lightsShowIndex_ ];
+      if ( lastReportedHitEverValid_[ bin ] && lastReportedHitMs_[ bin ] == rowMs ) return false;
+      bool edge = newHitAtLightsShow_[ bin ];
+      if ( edge ) {
+         lastReportedHitMs_[ bin ] = rowMs;
+         lastReportedHitEverValid_[ bin ] = true;
       }
-      if ( n == 0 ) return 0.0f;
-      return sqrtf( sumSquares / (float)n );
+      return edge;
+   }
+   // band version: true if ANY bin the band covers has a pending hit --
+   // consumes (dedupes) every one of that band's bins regardless, not just
+   // the first one found, so a bin's pending edge can't leak into a later
+   // call through a DIFFERENT band that happens to also cover it.
+   static bool NewBandHit( AudioBand band = BandFull ) {
+      bool any = false;
+      uint8_t n = BAND_BIN_COUNT[ band ];
+      for ( uint8_t i = 0; i < n; ++i ) {
+         if ( NewBinHit( BAND_BINS[ band ][ i ] ) ) any = true;
+      }
+      return any;
    }
 
-   static bool autoGainSuppressed_;
-   // Global kill switch for all sound-reactive light behavior -- see
-   // getNormalPercent()/getHitPercent()/etc. above, which gate on this
-   // centrally so no individual show needs its own check. Default true
-   // (on); persisted via Nvm, see setSoundReactivityEnabled().
-   static bool soundReactivityEnabled_;
-   static uint8_t agcMode_; // AGCoff/AGCband/AGCfull, persisted -- see AGCMode above
-   static float noiseFloorPercent_; // 0-100
-   static float peakThresholdPercent_; // 0-100
+   // true once BandFull's levelClean has been entirely zero (i.e. at/below
+   // the live noise floor, across every bin) continuously for the full
+   // trailing AGC_WINDOW_MS ending at lightsShowTime -- computed
+   // automatically as part of the per-poll pipeline (see updateBandLevels()'s
+   // step F), leveraging the same real history AGC/RMS already scan.
+   // Internal state (silent_) is private; this is the only way to read it
+   // externally now.
+   static bool isSilent() { return silent_; }
 
-   // --- auto-peak (per-request rework: was a 15s-tracked-loudness-ceiling
-   // scale, now a per-bin hit-rate debounce) ---
-   //
-   // Still "decides a modified peak threshold applied to hit value
-   // calculations," but the modified value is now based on each bin's OWN
-   // recent hit-occurrence frequency rather than a single tracked loudness
-   // ceiling shared by everything. Rule, evaluated independently per bin:
-   // whenever this bin's level would cross the plain threshold again
-   // within AUTO_PEAK_DEBOUNCE_MS of its own last ACCEPTED hit, that new
-   // crossing is only accepted if the previous accepted hit has already
-   // begun to decay (its levelHit has dropped below its flat 100 hold) --
-   // otherwise the effective threshold for this instant is raised out of
-   // reach (see getEffectivePeakThresholdPercent(AudioBin) below), so nothing
-   // can cross it. AUTO_PEAK_HIT_WINDOW_MS is the "moving 2s window" bound
-   // from that request: a bin's own last-hit bookkeeping older than this is
-   // treated as if it never happened (also guards the very first hit ever
-   // against the initial 0-timestamp/no-history state).
-   //
-   // This only ever gates whether a NEW edge (hitWasAbove_[bin] currently
-   // false) gets accepted -- an already-accepted, still-continuously-above-
-   // threshold hit is never interrupted by this, so a single genuinely
-   // sustained hit's own natural duration is untouched.
-   static bool autoPeakEnabled_; // persisted -- see setAutoPeakEnabled()
-   static const uint16_t AUTO_PEAK_DEBOUNCE_MS = 50;
-   static const uint16_t AUTO_PEAK_HIT_WINDOW_MS = 2000;
-   static bool autoPeakHadHit_[ NumBins ];       // has this bin ever accepted a hit yet
-   static uint32_t autoPeakLastHitMs_[ NumBins ]; // timestamp of that bin's own last ACCEPTED hit
+   // Every one of these comes in two distinctly-named forms (not an
+   // overload pair) -- getBandXxx(AudioBand) aggregates (max) across
+   // whichever bins that band covers; getBinXxx(AudioBin) reads exactly one
+   // bin, no aggregation. Both always read from lightsShowIndex_ ("what the
+   // user is currently hearing"), never audioReadIndex_.
+   static uint8_t getBinRawPercent( AudioBin bin ) { return valOrZero_( audioData_[ LevelRaw ][ bin ][ lightsShowIndex_ ] ); }
+   static uint8_t getBandRawPercent( AudioBand band = BandFull ) { return aggregateBandType_( band, LevelRaw ); }
+   static bool getBinRawNonzero( AudioBin bin ) { return getBinRawPercent( bin ) > 0; }
+   static bool getBandRawNonzero( AudioBand band = BandFull ) { return getBandRawPercent( band ) > 0; }
+   // BUGFIX: these 4 getters are what every light show actually reacts to
+   // (raw above stays ungated -- diagnostic screens like the noise-floor
+   // bin readout should still show real signal even with reactivity
+   // globally off). Gating here, once, centrally, means the global disable
+   // (see soundReactivityEnabled_ above) doesn't need to be checked
+   // separately inside every single show.
+   static uint8_t getBinNormalPercent( AudioBin bin ) { return soundReactivityEnabled_ ? valOrZero_( audioData_[ LevelFilt ][ bin ][ lightsShowIndex_ ] ) : 0; }
+   static uint8_t getBandNormalPercent( AudioBand band = BandFull ) { return soundReactivityEnabled_ ? aggregateBandType_( band, LevelFilt ) : 0; }
+   // preview variant: recomputes normal level under an EXPLICIT AGCMode,
+   // not the committed agcMode_ -- lets the Audio config screen's AGC-mode
+   // subsetting preview a live, not-yet-committed mode choice without
+   // mutating (and needing to revert) agcMode_ itself. Cheap: agcBoost_/
+   // agcBoostFull_ are already recomputed every poll regardless of which
+   // mode is actually selected, this just picks a different final branch.
+   static uint8_t getBandNormalPercentPreview( AudioBand band, uint8_t agcModeOverride ) {
+      if ( !soundReactivityEnabled_ ) return 0;
+      uint8_t m = 0;
+      uint8_t n = BAND_BIN_COUNT[ band ];
+      for ( uint8_t i = 0; i < n; ++i ) {
+         AudioBin bin = BAND_BINS[ band ][ i ];
+         uint8_t clean = valOrZero_( audioData_[ LevelClean ][ bin ][ lightsShowIndex_ ] );
+         float filt;
+         if ( agcModeOverride == AGCfull ) filt = min( 100.0f, (float)clean * agcBoostFull_ );
+         else if ( agcModeOverride == AGCband ) filt = min( 100.0f, (float)clean * agcBoost_[ bin ] );
+         else filt = (float)clean;
+         uint8_t v = (uint8_t)( filt + 0.5f );
+         if ( v > m ) m = v;
+      }
+      return m;
+   }
+   static bool getBinNormalNonzero( AudioBin bin ) { return getBinNormalPercent( bin ) > 0; }
+   static bool getBandNormalNonzero( AudioBand band = BandFull ) { return getBandNormalPercent( band ) > 0; }
+   static uint8_t getBinHitPercent( AudioBin bin ) { return soundReactivityEnabled_ ? valOrZero_( audioData_[ LevelHit ][ bin ][ lightsShowIndex_ ] ) : 0; }
+   static uint8_t getBandHitPercent( AudioBand band = BandFull ) { return soundReactivityEnabled_ ? aggregateBandType_( band, LevelHit ) : 0; }
+   // true whenever this bin/band's hit level is currently above the live
+   // peak threshold, false otherwise -- NOT a plain nonzero test (hit stays
+   // nonzero throughout its decay tail after dropping back below threshold,
+   // which shouldn't still read as "a hit" once decayed past that point).
+   static bool getBinHitNonzero( AudioBin bin ) { return soundReactivityEnabled_ && (float)getBinHitPercent( bin ) > getPlainPeakThresholdPercent(); }
+   static bool getBandHitNonzero( AudioBand band = BandFull ) { return soundReactivityEnabled_ && (float)getBandHitPercent( band ) > getPlainPeakThresholdPercent(); }
+   static uint8_t getBinRmsPercent( AudioBin bin ) { return valOrZero_( audioData_[ LevelRMS ][ bin ][ lightsShowIndex_ ] ); }
+   static uint8_t getBandRmsPercent( AudioBand band = BandFull ) { return aggregateBandType_( band, LevelRMS ); }
+   static bool getBinRmsNonzero( AudioBin bin ) { return getBinRmsPercent( bin ) > 0; }
+   static bool getBandRmsNonzero( AudioBand band = BandFull ) { return getBandRmsPercent( band ) > 0; }
 
-   // Hit sustain envelope: a hit starts at a flat 100% (so the leading edge
-   // always reads full strength -- unrelated to auto-peak, which only ever
-   // gates whether the edge is accepted in the first place). If the SAME
-   // hit is still continuously above threshold past HIT_SUSTAIN_HOLD_MS
-   // since its own onset, ease down to HIT_SUSTAIN_PERCENT over the
-   // following HIT_SUSTAIN_EASE_MS, then hold there for as long as the hit
-   // continues -- so a long sustained tone doesn't sit pinned at 100% the
-   // whole time. Once the hit actually ends (isAbove goes false), the
-   // existing decay path takes over from whatever levelHit currently holds
-   // (100, mid-ease, or the 90% sustain floor), not always from 100.
-   static const uint16_t HIT_SUSTAIN_HOLD_MS = 75;
-   static const uint16_t HIT_SUSTAIN_EASE_MS = 25;
-   static constexpr float HIT_SUSTAIN_PERCENT = 90.0f;
-   static uint32_t hitOnsetMs_[ NumBins ]; // timestamp this bin's CURRENT hit (if any) began
+   // adjustable range is 0ms (instant decay) to 1000ms (1 full second) --
+   // set live via the Audio config screen's decay-rate subsetting, pot-
+   // adjusted. 0ms still behaves safely: 100.0f/0.0f is IEEE-754
+   // +infinity, which immediately drives the hit value to (and clamped at)
+   // 0 on the very next update, i.e. genuinely instant decay, no divide-
+   // by-zero fault.
+   static void setHitDecayMs( float ms ) { hitDecayMs_ = constrain( ms, 0.0f, 1000.0f ); }
+   static float getHitDecayMs() { return hitDecayMs_; }
+
+   // 0-FORESIGHT_BUFFER_MS, adjustable + persisted, default 0 (freshest
+   // sample, maximal "predictive" lead). Prediction (see
+   // computePredictedRamp_() above) always runs over this whole span --
+   // there's no separate, independently-adjustable prediction-distance
+   // setting anymore.
+   static void setAudioForesightMs( float ms ) { audioForesightMs_ = constrain( ms, 0.0f, (float)FORESIGHT_BUFFER_MS ); }
+   static float getAudioForesightMs() { return audioForesightMs_; }
+
+   static void setHitPredictionStyle( uint8_t style ) { hitPredictionStyle_ = ( style >= NUM_HIT_PREDICTION_STYLES ) ? ( NUM_HIT_PREDICTION_STYLES - 1 ) : style; }
+   static uint8_t getHitPredictionStyle() { return hitPredictionStyle_; }
+   static float audioForesightMs_; // 0-FORESIGHT_BUFFER_MS, adjustable + persisted, default 0
+   static uint8_t hitPredictionStyle_; // adjustable + persisted, default PredictExponential -- see HitPredictionStyle above
 
    static void setAgcMode( uint8_t mode ) { agcMode_ = ( mode >= NumAGCModes ) ? ( NumAGCModes - 1 ) : mode; }
    static uint8_t getAgcMode() { return agcMode_; }
@@ -510,288 +650,22 @@ class AudioBoard {
    // without touching the persisted setting itself -- dialing either of
    // those in against a live auto-gained signal is confusing (the gain
    // constantly renormalizes what you're trying to measure against a fixed
-   // floor/threshold). agcHistory_/agcBoost_ keep tracking in the
-   // background regardless, so auto-gain picks back up smoothly (no jump)
-   // once this is cleared.
+   // floor/threshold). The AGC scan keeps running in the background
+   // regardless, so auto-gain picks back up smoothly (no jump) once this
+   // is cleared.
    static void setAutoGainSuppressed( bool suppressed ) { autoGainSuppressed_ = suppressed; }
 
-   /* --- Step 6 of the audio-refactor spec: the per-poll per-bin pipeline.
-    * Runs directly after each fresh set of ADC values are read
-    * (Read_Frequencies()), looping over all 7 hardware bins (see AudioBin
-    * above) and, for each: (b) raw %, (c) noise-floor-clean %, (d) push
-    * clean into this bin's own AGC history ring buffer, (e) recalculate
-    * this bin's AGC boost multiplier from that history, (f/g/h) derive the
-    * filtered level per the live AGCMode, (i) recalculate this bin's RMS
-    * from its own history, (j) detect a new-hit edge (sets that bin's own
-    * newHit_ flag), (k) update the hit level (100 flat on/through a hit,
-    * decaying from 100 once the filtered level drops back below threshold,
-    * snapping to 0 once decay rejoins the filtered level, with predictive
-    * lead-up blended on top, peaking at 100). Band-taking callers (getters,
-    * shows) never see bins directly -- see BAND_BINS/aggregateBandF() above.
-    *
-    * Two passes over the 7 bins, not one: the first computes every bin's
-    * levelClean AND folds it into fullClean (this poll's max-across-all-
-    * bins value, feeding agcHistoryFull_/agcBoostFull_ -- AGCfull mode's
-    * single shared gain). The second computes levelFilt using that now-
-    * fully-known agcBoostFull_. (The old per-band version of this function
-    * used one pass and read a POLL-STALE agcBoost_[BandFull] for whichever
-    * bands got processed before BandFull in enum order -- harmless at ~30ms
-    * of lag on a slow-moving gain figure, but the two-pass version costs
-    * one more trivial 7-iteration loop and removes the staleness entirely.)
-    */
-   static void updateBandLevels( uint32_t nowMs ) {
-      uint32_t dtMs = hitTimer_.elapsed();
-      hitTimer_.reset();
-      float noiseFloorPct = constrain( noiseFloorPercent_, 0.0f, 100.0f );
-      uint32_t displayMs = currentDisplayMs( nowMs );
-      uint8_t effectiveAgcMode = autoGainSuppressed_ ? (uint8_t)AGCoff : agcMode_;
+   static void setSoundReactivityEnabled( bool enabled ) { soundReactivityEnabled_ = enabled; }
+   static bool getSoundReactivityEnabled() { return soundReactivityEnabled_; }
 
-      // this poll's own AGC-history slot, written before the per-bin loops
-      // so computeAgcBoostFromHistory_()/computeRmsFromHistory_() (which
-      // scan the whole buffer, including this slot) see a valid timestamp
-      agcHistoryTimestamps_[ agcHistoryHead_ ] = nowMs;
-      if ( agcHistoryCount_ < AGC_HISTORY_SIZE ) ++agcHistoryCount_;
+   static void setNoiseFloorPercent( float percent ) { noiseFloorPercent_ = constrain( percent, 0.0f, 100.0f ); }
+   static float getNoiseFloorPercent() { return noiseFloorPercent_; }
+   // same 0-100% -> 0-255 conversion used internally
+   static uint8_t getNoiseFloorRaw() { return (uint8_t)( constrain( noiseFloorPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f ); }
 
-      float fullClean = 0.0f;
-      for ( int bin = 0; bin < NumBins; ++bin ) {
-         BandLevels & bl = binLevels_[ bin ];
-         bl.levelRaw = analogToPercent( Frequencies_Mono[ bin ] );                   // b
-         bl.levelClean = ( bl.levelRaw <= noiseFloorPct ) ? 0.0f : bl.levelRaw;       // c
-         if ( bl.levelClean > fullClean ) fullClean = bl.levelClean;
-         agcHistory_[ bin ][ agcHistoryHead_ ] = bl.levelClean;                      // d
-         agcBoost_[ bin ] = computeAgcBoostFromHistory_( agcHistory_[ bin ] );        // e
-      }
-      agcHistoryFull_[ agcHistoryHead_ ] = fullClean;
-      agcBoostFull_ = computeAgcBoostFromHistory_( agcHistoryFull_ );
-
-      for ( int bin = 0; bin < NumBins; ++bin ) {
-         BandLevels & bl = binLevels_[ bin ];
-
-         if ( !soundReactivityEnabled_ ) {
-            bl.levelFilt = 0.0f;
-         } else if ( effectiveAgcMode == AGCfull ) {
-            bl.levelFilt = min( 100.0f, bl.levelClean * agcBoostFull_ );             // f
-         } else if ( effectiveAgcMode == AGCband ) {
-            bl.levelFilt = min( 100.0f, bl.levelClean * agcBoost_[ bin ] );          // g
-         } else {
-            bl.levelFilt = bl.levelClean;                                           // h
-         }
-
-         bl.levelRMS = computeRmsFromHistory_( agcHistory_[ bin ] );                 // i
-
-         float threshPct = getEffectivePeakThresholdPercent( (AudioBin)bin );
-         bool isAbove = soundReactivityEnabled_ && bl.levelFilt >= threshPct;
-         bool freshEdge = isAbove && !hitWasAbove_[ bin ];
-         if ( freshEdge ) {                                                         // j
-            newHit_[ bin ] = true;
-            hitOnsetMs_[ bin ] = nowMs; // this hit's own start -- see the hold/ease/sustain envelope below
-            autoPeakLastHitMs_[ bin ] = nowMs; // this bin's own newest ACCEPTED hit -- see the auto-peak debounce rule above
-            autoPeakHadHit_[ bin ] = true;
-         }
-         hitWasAbove_[ bin ] = isAbove;
-
-         if ( isAbove ) {                                                           // k
-            uint32_t heldMs = nowMs - hitOnsetMs_[ bin ];
-            if ( heldMs <= HIT_SUSTAIN_HOLD_MS ) {
-               bl.levelHit = 100.0f;
-            } else if ( heldMs <= (uint32_t)HIT_SUSTAIN_HOLD_MS + HIT_SUSTAIN_EASE_MS ) {
-               float f = (float)( heldMs - HIT_SUSTAIN_HOLD_MS ) / (float)HIT_SUSTAIN_EASE_MS; // 0..1
-               bl.levelHit = 100.0f - f * ( 100.0f - HIT_SUSTAIN_PERCENT );
-            } else {
-               bl.levelHit = HIT_SUSTAIN_PERCENT;
-            }
-         } else if ( bl.levelHit > 0.0f ) {
-            bl.levelHit -= ( 100.0f / hitDecayMs_ ) * (float)dtMs; // decays from whatever levelHit currently holds (100, mid-ease, or the 90% sustain floor) -- see the hold/ease/sustain envelope above
-            if ( bl.levelHit < 0.0f ) bl.levelHit = 0.0f;
-            if ( bl.levelHit <= bl.levelFilt ) bl.levelHit = 0.0f;
-         }
-         uint8_t predicted = computePredictedRamp( (AudioBin)bin, displayMs );
-         if ( (float)predicted > bl.levelHit ) bl.levelHit = predicted;
-      }
-
-      agcHistoryHead_ = ( agcHistoryHead_ + 1 ) % AGC_HISTORY_SIZE; // advance AFTER both loops, once every bin has written its slot
-   }
-
-   /* --- full-spectrum level, rolling peak, rolling average / noise-floor
-    * silence detection --
-    *
-    * Distinct from (and NOT touched by) the per-band AGC rework above --
-    * "full spectrum" here is the max of all 7 raw hardware bins scaled to
-    * 0-255, used only by getFullSpectrum() (the audio-screen's megabar
-    * glow) and the silence detector (silent_, which many light shows check
-    * directly). rollingPeak_ is its own rolling-4s-peak, kept only for
-    * getFullSpectrum()'s own optional auto-gain preview -- unrelated to
-    * agcBoost_[]/AGCMode above.
-    *
-    * Silence detection: a separate EMA average (also ~4s time constant)
-    * tracks a running level. If that average stays below the noise floor
-    * for a full 4s straight, silent_ becomes true until the average rises
-    * back above the floor (which un-silences immediately, no delay). The
-    * noise floor is compared against the RAW average, not any gained value.
-    */
-   static const uint16_t PEAK_WINDOW_MS = 4000;
-   static const uint8_t PEAK_BUFFER_SIZE = 150; // ~4s of samples at the ~30ms poll rate, with margin
-
-   static uint8_t peakSamples_[ PEAK_BUFFER_SIZE ];
-   static uint32_t peakTimestamps_[ PEAK_BUFFER_SIZE ];
-   static uint8_t peakHead_;
-   static uint8_t peakCount_;
-   static uint8_t rollingPeak_;
-
-   static float emaAverage_;
-   static Timer pollTimer_; // tracks dt between updateFullSpectrumAndSilence() calls
-   static Timer silenceTimer_; // time spent continuously below the noise floor
-   static bool silent_;
-
-   static uint8_t rawFullSpectrum() {
-      uint16_t maxVal = 0;
-      for ( int i = 0; i < 7; ++i ) {
-         if ( (uint16_t)Frequencies_Mono[ i ] > maxVal ) maxVal = Frequencies_Mono[ i ];
-      }
-      return (uint8_t)scale( maxVal );
-   }
-
-   static void updateFullSpectrumAndSilence( uint32_t nowMs ) {
-      uint8_t raw = rawFullSpectrum();
-
-      // rolling peak: sliding 4s window max, via a timestamped ring buffer
-      peakSamples_[ peakHead_ ] = raw;
-      peakTimestamps_[ peakHead_ ] = nowMs;
-      peakHead_ = ( peakHead_ + 1 ) % PEAK_BUFFER_SIZE;
-      if ( peakCount_ < PEAK_BUFFER_SIZE ) peakCount_++;
-      uint8_t peak = 0;
-      for ( uint8_t i = 0; i < peakCount_; ++i ) {
-         if ( nowMs - peakTimestamps_[ i ] <= PEAK_WINDOW_MS && peakSamples_[ i ] > peak ) {
-            peak = peakSamples_[ i ];
-         }
-      }
-      rollingPeak_ = peak;
-
-      // rolling average via EMA, tuned for a ~4s time constant regardless of
-      // the actual (slightly variable) interval between polls
-      uint32_t dt = pollTimer_.elapsed();
-      pollTimer_.reset();
-      float alpha = (float)dt / ( (float)PEAK_WINDOW_MS + (float)dt );
-      emaAverage_ = emaAverage_ + alpha * ( (float)raw - emaAverage_ );
-
-      // noise-floor silence detection, on the RAW (un-gained) average
-      uint8_t noiseFloorRaw = (uint8_t)( constrain( noiseFloorPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f );
-      if ( emaAverage_ >= noiseFloorRaw ) {
-         silenceTimer_.reset();
-         silent_ = false;
-      } else if ( silenceTimer_.elapsed() >= PEAK_WINDOW_MS ) {
-         silent_ = true;
-      }
-   }
-
- public:
-
-   static void pollFrequencies( uint32_t time ) {
-     static uint32_t timestamp;
-     // TODO: fiddle around with this value to find the right tuning
-     if ( time - timestamp > POLL_INTERVAL_MS ) {
-        timestamp = time;
-        simModeActive_ = false;
-        Read_Frequencies();
-        updateFullSpectrumAndSilence( time );
-
-        // foresight history: every bin's just-measured raw % is buffered
-        // (timestamped) as it's read -- see the foresight block below for
-        // why lookups happen at "now - audioForesightMs_" rather than using
-        // the fresh sample directly.
-        for ( int bin = 0; bin < NumBins; ++bin ) {
-           pushRawHistorySample( (AudioBin)bin, analogToPercent( Frequencies_Mono[ bin ] ), time );
-        }
-
-        updateBandLevels( time );
-     }
-   }
-
-   // alternative to pollFrequencies() for the Audio config screen's decay-
-   // rate and hit-prediction subsettings while showing the simulated signal
-   // (see updateSimulatedBand() below) instead of real audio -- feeds the
-   // same eased square wave into all bands, through the exact same history-
-   // buffer/foresight-lookup/updateBandLevels() pipeline real audio uses,
-   // so both the decay behavior AND the predictive lead-up being tuned here
-   // are the real code paths, not a separate mock. Gated at the same ~30ms
-   // cadence as pollFrequencies() so both settings are exercised under the
-   // same real poll-rate the hardware uses. Caller is responsible for
-   // calling this INSTEAD OF pollFrequencies() while the simulated signal
-   // is active, never both.
-   static void pollSimulated( uint32_t time ) {
-      static uint32_t timestamp;
-      if ( time - timestamp > POLL_INTERVAL_MS ) {
-         timestamp = time;
-         simModeActive_ = true;
-         uint8_t simRawAdc = updateSimulatedBand(); // 0-255 domain (see its own comment) -- convert to the % domain this file now uses throughout
-         uint8_t simRawPct = rawToPercent( simRawAdc );
-         for ( int bin = 0; bin < NumBins; ++bin ) pushRawHistorySample( (AudioBin)bin, simRawPct, time );
-         updateBandLevels( time );
-      }
-   }
-
-   // "current full-spectrum audio level" -- silence-gated, and auto-gained
-   // if enabled (raw otherwise). This is what drives the audio-screen's
-   // megabar glow, and is the intended general-purpose "how loud is it
-   // right now" call. Distinct from, and unaffected by, the per-band
-   // AGCMode/agcBoost_ system above -- see updateFullSpectrumAndSilence()'s
-   // own comment.
-   static uint8_t getFullSpectrum() {
-      return getFullSpectrum( agcMode_ != AGCoff );
-   }
-
-   // same, but with auto-gain explicitly overridden rather than using the
-   // committed agcMode_, so the config screen can preview auto-gain
-   // on/off without mutating any committed state
-   static uint8_t getFullSpectrum( bool useAutoGain ) {
-      if ( silent_ ) return 0;
-      uint8_t raw = rawFullSpectrum();
-      if ( !useAutoGain || rollingPeak_ == 0 ) return raw;
-      float gained = (float)raw * ( 255.0f / (float)rollingPeak_ );
-      if ( gained > 255.0f ) gained = 255.0f; // clip prevention
-      return (uint8_t)( gained + 0.5f );
-   }
-
-   // best-effort estimate, in percent, of the source's own volume-knob
-   // position -- NOT "how loud is it right now" (that's getFullSpectrum(),
-   // which swings with the music's own dynamics regardless of the knob).
-   // Uses the rolling 4s peak (rollingPeak_) rather than the instantaneous
-   // level or the EMA average, since the loudest moments in a trailing
-   // window track a knob's ceiling far more reliably than any single
-   // instant does. Currently unused by anything; exists as a general-
-   // purpose accessor for later use.
-   static uint8_t getOverallLevelPercent() {
-      return (uint8_t)( ( (uint16_t)rollingPeak_ * 100 + 127 ) / 255 );
-   }
-
-   static void setSoundReactivityEnabled( bool enabled ) {
-      soundReactivityEnabled_ = enabled;
-   }
-   static bool getSoundReactivityEnabled() {
-      return soundReactivityEnabled_;
-   }
-
-   static void setNoiseFloorPercent( float percent ) {
-      noiseFloorPercent_ = constrain( percent, 0.0f, 100.0f );
-   }
-   static float getNoiseFloorPercent() {
-      return noiseFloorPercent_;
-   }
-   // same 0-100% -> 0-255 conversion used internally by
-   // updateFullSpectrumAndSilence()
-   static uint8_t getNoiseFloorRaw() {
-      return (uint8_t)( constrain( noiseFloorPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f );
-   }
-
-   static void setPeakThresholdPercent( float percent ) {
-      peakThresholdPercent_ = constrain( percent, 0.0f, 100.0f );
-   }
-   static float getPeakThresholdPercent() {
-      return peakThresholdPercent_;
-   }
-   static uint8_t getPeakThresholdRaw() {
-      return (uint8_t)( constrain( peakThresholdPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f );
-   }
+   static void setPeakThresholdPercent( float percent ) { peakThresholdPercent_ = constrain( percent, 0.0f, 100.0f ); }
+   static float getPeakThresholdPercent() { return peakThresholdPercent_; }
+   static uint8_t getPeakThresholdRaw() { return (uint8_t)( constrain( peakThresholdPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f ); }
 
    static void setAutoPeakEnabled( bool enabled ) { autoPeakEnabled_ = enabled; }
    static bool getAutoPeakEnabled() { return autoPeakEnabled_; }
@@ -812,27 +686,22 @@ class AudioBoard {
       bool tooSoonAndStillFresh = autoPeakHadHit_[ bin ]
             && ( millis() - autoPeakLastHitMs_[ bin ] ) < AUTO_PEAK_DEBOUNCE_MS
             && ( millis() - autoPeakLastHitMs_[ bin ] ) < AUTO_PEAK_HIT_WINDOW_MS
-            && binLevels_[ bin ].levelHit >= 100.0f;
+            && hitPersist_[ bin ] >= 100.0f;
       return tooSoonAndStillFresh ? 101.0f : base;
    }
    // Plain (non-auto-peak) threshold -- used by every getter/scan below
    // that ISN'T the real-time hit-acceptance decision above (predictive
-   // lookahead, and the simple "is levelHit still fresh" nonzero checks):
-   // levelHit itself already reflects whatever the debounce rule above
-   // decided at the moment it was actually set, so re-deriving that same
-   // per-bin debounce state here (which would need a timestamp these
-   // callers don't have) would be redundant at best.
+   // lookahead, and the simple "is the hit level still fresh" nonzero
+   // checks): the stored hit value itself already reflects whatever the
+   // debounce rule above decided at the moment it was actually set,
+   // re-deriving that same per-bin debounce state here would be redundant.
    static float getPlainPeakThresholdPercent() { return constrain( peakThresholdPercent_, 0.0f, 100.0f ); }
 
    // Display/preview versions of the rule above, clamped back into 0-100
    // (the internal 101 "currently unreachable" sentinel would just read as
    // pinned at the very top of a meter, so clamp it there directly) --
    // NOT used for any real hit decision, only for showing where auto-peak
-   // currently has a bin/band's threshold pinned. getBinAutoScaledPeakThresholdPercent()
-   // reflects that ONE bin; getBandAutoScaledPeakThresholdPercent() is
-   // pinned at 100 if ANY bin the band covers is currently pinned, the
-   // plain setting otherwise (matching how getBandHitPercent() etc.
-   // already aggregate across a band's bins).
+   // currently has a bin/band's threshold pinned.
    static float getBinAutoScaledPeakThresholdPercent( AudioBin bin ) {
       return min( 100.0f, getEffectivePeakThresholdPercent( bin ) );
    }
@@ -845,73 +714,47 @@ class AudioBoard {
       return constrain( peakThresholdPercent_, 0.0f, 100.0f );
    }
 
-   // --- audio foresight ---
-   //
-   // The MSGEQ7/DSP pipeline "sees" a waveform before that same sound
-   // actually reaches the speakers -- audioForesightMs_ is how many
-   // milliseconds ahead of the audible output our reading currently is.
-   // Every band's raw sample (%, this file's domain throughout) is buffered
-   // into a short per-band ring buffer (history, timestamped) as it's
-   // measured; what pollFrequencies()/pollSimulated() then feed into
-   // updateBandLevels() as this poll's raw reading is looked up from that
-   // history at "now - audioForesightMs_" rather than the just-measured
-   // value directly -- i.e. holding our own reaction back so it lines up
-   // with when the sound is actually heard, instead of reacting the instant
-   // we merely see it. Default 0ms (use the freshest sample) keeps the
-   // natural "lights react slightly before the beat is heard" effect that
-   // comes for free from the DSP's own inherent look-ahead; dialing
-   // foresight UP trades that predictive lead away for tighter sync with
-   // the true acoustic output. Only what feeds updateBandLevels() is
-   // delayed this way -- updateFullSpectrumAndSilence()'s own internal AGC/
-   // silence tracking deliberately keeps working off the true instantaneous
-   // signal, since that's a control loop, not something a person perceives
-   // directly, and delaying it too would just add unnecessary lag to the
-   // gain/silence response.
-   static const uint16_t POLL_INTERVAL_MS = 30;
-   static const uint16_t FORESIGHT_BUFFER_MS = 1000; // must cover the full 0-1000ms adjustable range
-   static const uint16_t FORESIGHT_BUFFER_SIZE = ( FORESIGHT_BUFFER_MS + POLL_INTERVAL_MS - 1 ) / POLL_INTERVAL_MS + 2;
-   static uint8_t rawHistory_[ NumBins ][ FORESIGHT_BUFFER_SIZE ]; // bin-major, values in %; all bins share one timestamp array below since they're always sampled together
-   static uint32_t historyTimestamps_[ FORESIGHT_BUFFER_SIZE ];
-   static uint16_t historyHead_;
-   static uint16_t historyCount_;
-   static float audioForesightMs_; // 0-1000, adjustable + persisted, default 0
+   static void pollFrequencies( uint32_t time ) {
+     static uint32_t timestamp;
+     // TODO: fiddle around with this value to find the right tuning
+     if ( time - timestamp > POLL_INTERVAL_MS ) {
+        timestamp = time;
+        simModeActive_ = false;
+        updateBandLevels( time, false, 0 );
+     }
+   }
 
-   // pushes one bin's just-measured raw %-sample into the shared-timestamp
-   // ring buffer; caller loops this once per bin per poll (see
-   // pollFrequencies()/pollSimulated())
-   static void pushRawHistorySample( AudioBin bin, uint8_t rawPct, uint32_t nowMs ) {
-      rawHistory_[ bin ][ historyHead_ ] = rawPct;
-      if ( bin == FreqBin6 ) { // last bin pushed each poll (see the calling loops) -- advance head/count and stamp the shared timestamp once, not once per bin
-         historyTimestamps_[ historyHead_ ] = nowMs;
-         historyHead_ = ( historyHead_ + 1 ) % FORESIGHT_BUFFER_SIZE;
-         if ( historyCount_ < FORESIGHT_BUFFER_SIZE ) historyCount_++;
+   // alternative to pollFrequencies() for the Audio config screen's decay-
+   // rate subsetting while showing the simulated signal (see
+   // updateSimulatedBand() below) instead of real audio -- feeds the same
+   // eased square wave into all bands, through the exact same pipeline
+   // real audio uses, so the decay behavior being tuned here is the real
+   // code path, not a separate mock. Gated at the same ~30ms cadence as
+   // pollFrequencies() so both settings are exercised under the same real
+   // poll-rate the hardware uses. Caller is responsible for calling this
+   // INSTEAD OF pollFrequencies() while the simulated signal is active,
+   // never both.
+   static void pollSimulated( uint32_t time ) {
+      static uint32_t timestamp;
+      if ( time - timestamp > POLL_INTERVAL_MS ) {
+         timestamp = time;
+         simModeActive_ = true;
+         uint8_t simRawAdc = updateSimulatedBand(); // 0-255 domain (see its own comment)
+         uint8_t simRawPct = rawToPercent( simRawAdc );
+         updateBandLevels( time, true, simRawPct );
       }
    }
 
-   // returns whichever buffered %-sample's timestamp is closest to
-   // "nowMs - audioForesightMs_"
-   static uint8_t lookupDelayed( AudioBin bin, uint32_t nowMs ) {
-      uint32_t targetMs = ( nowMs > (uint32_t)audioForesightMs_ ) ? ( nowMs - (uint32_t)audioForesightMs_ ) : 0;
-      uint16_t bestIdx = 0;
-      uint32_t bestDelta = 0xFFFFFFFFu;
-      for ( uint16_t i = 0; i < historyCount_; ++i ) {
-         uint32_t ts = historyTimestamps_[ i ];
-         uint32_t delta = ( ts > targetMs ) ? ( ts - targetMs ) : ( targetMs - ts );
-         if ( delta < bestDelta ) { bestDelta = delta; bestIdx = i; }
-      }
-      return rawHistory_[ bin ][ bestIdx ];
-   }
-
-   // simulated single-band waveform for the Audio config screen's decay-rate
-   // subsetting (see CarpetLightLogic.cpp) -- lets the decay behavior be
-   // tuned without needing real audio. Alternates high/low phases, holding
-   // each phase's duration for 10 seconds before switching between 40ms and
-   // 80ms phases. Only advances while actively polled (updateSimulatedBand()
-   // must be called every frame the decay-rate screen is showing the
-   // simulated signal) -- not run continuously in the background. Returns
-   // 0-255 (this is the one place in the file still in that domain, purely
-   // as a synthetic waveform generator -- pollSimulated() converts it to %
-   // immediately, see above).
+   // simulated single-band waveform for the Audio config screen's decay-
+   // rate subsetting (see CarpetLightLogic.cpp) -- lets the decay behavior
+   // be tuned without needing real audio. Alternates high/low phases,
+   // holding each phase's duration for 10 seconds before switching between
+   // 40ms and 80ms phases. Only advances while actively polled
+   // (updateSimulatedBand() must be called every frame the decay-rate
+   // screen is showing the simulated signal) -- not run continuously in
+   // the background. Returns 0-255 (this is the one place in the file
+   // still in that domain, purely as a synthetic waveform generator --
+   // pollSimulated() converts it to % immediately, see above).
    //
    // The waveform's SHAPE (not just its phase duration) depends on which
    // phase length is currently active, both built from the same fixed 40ms
@@ -984,7 +827,7 @@ class AudioBoard {
       digitalWrite(RESET, LOW);   // chip RESET  HIGH (ext inverter)
       delayMicroseconds(100);     // chip Strb pulse width Ts(min) = 18 us
       digitalWrite(STROBE, HIGH); // chip STROBE LOW  (ext inverter)
-      delayMicroseconds(100);     // chip Rst pulse width  Tr(min) = 100 us 
+      delayMicroseconds(100);     // chip Rst pulse width  Tr(min) = 100 us
       digitalWrite(STROBE, LOW);  // chip STROBE HIGH (ext inverter)
       // delayMicroseconds(100);
       digitalWrite(RESET, HIGH);  // chip RESET  LOW  (ext inverter)
@@ -994,7 +837,12 @@ class AudioBoard {
 
 int AudioBoard::Frequencies_Mono[7];
 
-AudioBoard::BandLevels AudioBoard::binLevels_[ NumBins ];
+uint8_t AudioBoard::audioData_[ NumLevelTypes ][ NumBins ][ AudioBoard::AUDIO_HISTORY_SIZE ]; // static storage, sentinel 0 at boot is fine (immediately overwritten before ever read externally)
+uint32_t AudioBoard::audioTimestamps_[ AudioBoard::AUDIO_HISTORY_SIZE ] = { 0 };
+uint16_t AudioBoard::audioReadIndex_ = 0;
+uint16_t AudioBoard::audioCount_ = 0;
+uint16_t AudioBoard::lightsShowIndex_ = 0;
+
 const uint8_t AudioBoard::BAND_BIN_COUNT[ NumFreqBands ] = { 1, 1, 2, 3, 7 };
 const AudioBin AudioBoard::BAND_BINS[ NumFreqBands ][ NumBins ] = {
    { FreqBin0 },                                                                    // BandBass
@@ -1006,43 +854,31 @@ const AudioBin AudioBoard::BAND_BINS[ NumFreqBands ][ NumBins ] = {
 float AudioBoard::hitDecayMs_ = 300.0f; // overwritten by Nvm at boot
 Timer AudioBoard::hitTimer_;
 bool AudioBoard::simModeActive_ = false;
-bool AudioBoard::newHit_[ NumBins ] = { false };
+
+float AudioBoard::hitPersist_[ NumBins ] = { 0.0f };
+uint32_t AudioBoard::hitOnsetMs_[ NumBins ] = { 0 };
 bool AudioBoard::hitWasAbove_[ NumBins ] = { false };
-float AudioBoard::hitPredictionMs_ = 0.0f; // overwritten by Nvm at boot
+bool AudioBoard::newHitAtLightsShow_[ NumBins ] = { false };
+uint32_t AudioBoard::lastReportedHitMs_[ NumBins ] = { 0 };
+bool AudioBoard::lastReportedHitEverValid_[ NumBins ] = { false };
+
 uint8_t AudioBoard::hitPredictionStyle_ = PredictExponential; // overwritten by Nvm at boot
 
-float AudioBoard::agcHistory_[ NumBins ][ AudioBoard::AGC_HISTORY_SIZE ] = { { 0.0f } };
-float AudioBoard::agcHistoryFull_[ AudioBoard::AGC_HISTORY_SIZE ] = { 0.0f };
-uint32_t AudioBoard::agcHistoryTimestamps_[ AudioBoard::AGC_HISTORY_SIZE ] = { 0 };
-uint8_t AudioBoard::agcHistoryHead_ = 0;
-uint16_t AudioBoard::agcHistoryCount_ = 0;
 float AudioBoard::agcBoost_[ NumBins ] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
 float AudioBoard::agcBoostFull_ = 1.0f;
 
-uint8_t AudioBoard::peakSamples_[ AudioBoard::PEAK_BUFFER_SIZE ];
-uint32_t AudioBoard::peakTimestamps_[ AudioBoard::PEAK_BUFFER_SIZE ];
-uint8_t AudioBoard::peakHead_ = 0;
-uint8_t AudioBoard::peakCount_ = 0;
-uint8_t AudioBoard::rollingPeak_ = 0;
 bool AudioBoard::autoGainSuppressed_ = false;
 bool AudioBoard::soundReactivityEnabled_ = true;
 uint8_t AudioBoard::agcMode_ = AGCoff; // overwritten by Nvm at boot
-float AudioBoard::noiseFloorPercent_ = 0.0f;
+float AudioBoard::noiseFloorPercent_ = 18.0f; // overwritten by Nvm at boot
 float AudioBoard::peakThresholdPercent_ = 31.0f; // approx. the old hardcoded 80/255, overwritten by Nvm at boot
 
 bool AudioBoard::autoPeakEnabled_ = false; // overwritten by Nvm at boot
 bool AudioBoard::autoPeakHadHit_[ NumBins ] = { false };
 uint32_t AudioBoard::autoPeakLastHitMs_[ NumBins ] = { 0 };
-uint32_t AudioBoard::hitOnsetMs_[ NumBins ] = { 0 };
-float AudioBoard::emaAverage_ = 0.0f;
-Timer AudioBoard::pollTimer_;
-Timer AudioBoard::silenceTimer_;
+
 bool AudioBoard::silent_ = false;
 
-uint8_t AudioBoard::rawHistory_[ NumBins ][ AudioBoard::FORESIGHT_BUFFER_SIZE ] = { { 0 } };
-uint32_t AudioBoard::historyTimestamps_[ AudioBoard::FORESIGHT_BUFFER_SIZE ] = { 0 };
-uint16_t AudioBoard::historyHead_ = 0;
-uint16_t AudioBoard::historyCount_ = 0;
 float AudioBoard::audioForesightMs_ = 0.0f; // overwritten by Nvm at boot
 
 uint32_t AudioBoard::simPhaseMs_ = 40;
