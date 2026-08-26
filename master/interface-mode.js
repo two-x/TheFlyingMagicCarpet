@@ -894,12 +894,13 @@ function zebraStripeColor(k) {
   return hsv(hue, Math.round(zebraSatFraction() * 255), 255);
 }
 // Black stripes: pot sets their width, 0ft (off) to 40ft; the gap between
-// consecutive black stripes equals that same width, so the pattern is a
-// simple 50/50 alternation of colored/black cells, period = 2x width. Per
-// request this rides on top of the hue progression as a pure overlay
-// (computed from the same absolute scroll position, not from the hue
-// stripe index k), so cutting in a black stripe never shifts or pauses the
-// rainbow's own advance.
+// consecutive black stripes is always 2x that width, so the occurrence
+// period (one black stripe's start to the next) is always exactly 3x the
+// black width -- wider stripes come proportionally less often, rather than
+// width and spacing scaling independently. Per request this rides on top
+// of the hue progression as a pure overlay (computed from the same
+// absolute scroll position, not from the hue stripe index k), so cutting
+// in a black stripe never shifts or pauses the rainbow's own advance.
 //
 // BUGFIX: this used to compute the black/colored cell purely from the
 // CURRENT pot value at whatever position was being queried -- so turning
@@ -922,7 +923,6 @@ function resetZebraSchedule() {
   zebraSchedule = [];
   zebraFrontierPos = null;
 }
-const ZEBRA_MIN_GAP_FT = 5; // colored gap between black stripes never shrinks below this, however low the pot sets the black stripe width itself
 const ZEBRA_MIN_BLACK_WIDTH_FT = 0.5; // smallest black-stripe width the pot will ever produce, once it's producing any at all
 // BUGFIX: pot used to map linearly straight to width (0-40ft), and any
 // result under 0.5ft got treated as "off" -- so the whole 0%-1.25% range
@@ -938,7 +938,7 @@ function zebraEnsureScheduleTo(neededPos) {
     if (potWidth < ZEBRA_MIN_BLACK_WIDTH_FT) { zebraFrontierPos = neededPos; break; } // no black stripes right now -- nothing to schedule, stays colored by default
     const lastWasBlack = zebraSchedule.length ? zebraSchedule[zebraSchedule.length - 1].isBlack : false;
     const isBlack = !lastWasBlack;
-    const width = isBlack ? potWidth : Math.max(potWidth, ZEBRA_MIN_GAP_FT);
+    const width = isBlack ? potWidth : 2 * potWidth;
     const start = zebraFrontierPos, end = start + width;
     zebraSchedule.push({ startPos: start, endPos: end, width, isBlack });
     zebraFrontierPos = end;
@@ -1039,16 +1039,9 @@ function showSpeedStripes(nowMs, dtMs) {
 let lhAngle1 = 0, lhAngle2 = 180, lhHue1 = 0;
 let lhVel1 = 72, lhVel2 = -180; // deg/s, current post-random-walk value
 const lhVelWalk1 = makeRandomWalk(), lhVelWalk2 = makeRandomWalk(), lhHueRateWalk = makeRandomWalk(), lhSatWalk = makeRandomWalk();
-// china-react variation (Ctl.variation===2) state -- same pairing/swap
-// mechanic as EqualizerShow's pixel_war, see LighthouseShow.h
-const LH_CHINA_PAIRS = [[0, 1], [2, 3], [4, 5], [6, 7]];
-let lhChinaPairIsBass = [true, true, false, false];
-let lhChinaHitCount = 0;
-let lhChinaPairFlashUntilMs = [0, 0, 0, 0];
-let lhPrevBassPct = 0, lhPrevTreblePct = 0;
 function resetLighthouseState() {
   lhAngle1 = 0; lhAngle2 = 180; lhHue1 = 0;
-  lhHueRateWalk.initialized = false; lhSatWalk.initialized = false;
+  lhHueRateWalk.initialized = false;
   lhVel1 = 72; lhVel2 = -180;
   // seed each beam's initial rotation speed directly (randomWalkValue()
   // would otherwise auto-init both to the range midpoint, 0deg/s) -- beam 1
@@ -1058,14 +1051,11 @@ function resetLighthouseState() {
   const nowMs0 = performance.now();
   lhVelWalk1.initialized = true; lhVelWalk1.rampStart = lhVelWalk1.rampTarget = 72; lhVelWalk1.tickT0 = nowMs0; lhVelWalk1.tickDur = 800 + Math.random() * 400;
   lhVelWalk2.initialized = true; lhVelWalk2.rampStart = lhVelWalk2.rampTarget = -180; lhVelWalk2.tickT0 = nowMs0; lhVelWalk2.tickDur = 800 + Math.random() * 400;
+  // seed saturation's start explicitly too (randomWalkValue() would
+  // otherwise auto-init to the new range's midpoint, 85%, not the
+  // requested 80%), matching LighthouseShow.h's start()
+  lhSatWalk.initialized = true; lhSatWalk.rampStart = lhSatWalk.rampTarget = 0.80; lhSatWalk.tickT0 = nowMs0; lhSatWalk.tickDur = 800 + Math.random() * 400;
   lhStrobeActive = false; lhHadHit = false; lhSuppressionPeak = 0; lhStrobeLastMs = 0;
-  const idxs = [0, 1, 2, 3];
-  for (let i = idxs.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [idxs[i], idxs[j]] = [idxs[j], idxs[i]]; }
-  lhChinaPairIsBass = [false, false, false, false];
-  lhChinaPairIsBass[idxs[0]] = true; lhChinaPairIsBass[idxs[1]] = true;
-  lhChinaHitCount = 0;
-  lhChinaPairFlashUntilMs = [0, 0, 0, 0];
-  lhPrevBassPct = 0; lhPrevTreblePct = 0;
 }
 
 // China bass-strobe: same triple-pulse timing/suppression as EqualizerShow's
@@ -1107,19 +1097,35 @@ function updateLighthouseStrobe(nowMs) {
   return false;
 }
 
-// Per spec: each cone is CONE_FULL_WIDTH_DEG (45deg) wide, leading to
-// trailing edge -- full brightness inside that window, plus an additional
-// fade zone on each side (25% of the cone's own width) easing to black.
-// ONE shared shape for rope/megabar/china alike -- see LighthouseShow.h's
-// class comment for why (this used to be 3 different width models, which
-// was the actual cause of "neopixel segment widths don't match the floods").
-const LH_CONE_FULL_WIDTH_DEG = 45, LH_CONE_HALF_WIDTH_DEG = LH_CONE_FULL_WIDTH_DEG / 2, LH_CONE_FADE_DEG = LH_CONE_FULL_WIDTH_DEG * 0.25;
+// Cone width: sized so at least 2 real megabars always fall within the
+// guaranteed core at ANY beam angle -- see LighthouseShow.h's
+// CONE_HALF_WIDTH_DEG comment for the full derivation (computed from
+// CarpetGeometry's real megabar ground-spot angles, not nominal 30deg
+// spacing; exact worst-case threshold 32.4855deg, +1.5deg margin -> 34).
+// ONE shared shape for rope/megabar/china alike, same as firmware.
+const LH_CONE_HALF_WIDTH_DEG = 34, LH_CONE_FULL_WIDTH_DEG = LH_CONE_HALF_WIDTH_DEG * 2, LH_CONE_FADE_DEG = LH_CONE_FULL_WIDTH_DEG * 0.25;
+const LH_CORE_FLOOR_BRIGHTNESS = 128; // brightness at the guaranteed core's own outer edge -- never flat, never black within the guarantee
+const LH_MIN_BEAM_SEPARATION_DEG = LH_CONE_FULL_WIDTH_DEG + 2; // keeps the 2 beams' cores from ever touching -- see LighthouseShow.h
 function lhCircDelta(a, b) { let d = (b - a + 180) % 360; if (d < 0) d += 360; return d - 180; }
+// Smooth ease 255->0 across t=0..1, flat tangent at both ends -- matches
+// LighthouseShow.h's smoothstep8() shape (here in plain float, not
+// integer-quantized, since this JS renderer has no FPU-avoidance need).
+function lhSmoothstep(t) { const x = 1 - t; return x * x * (3 - 2 * x); }
+// Per spec: full brightness at dead center, easing (not flat) down to
+// LH_CORE_FLOOR_BRIGHTNESS at the guaranteed core's own edge, then
+// continuing to ease from that floor down to black over the further fade
+// zone -- gives the 2 always-guaranteed megabars on each side of a beam a
+// smooth, analog brightness change as the beam sweeps past, and keeps the
+// worst-case-farthest guaranteed megabar always clearly lit (never black)
+// within the guarantee itself. See LighthouseShow.h's coneBrightnessAt().
 function lhConeBrightnessAt(d) {
-  if (d <= LH_CONE_HALF_WIDTH_DEG) return 255;
-  const outer = LH_CONE_HALF_WIDTH_DEG + LH_CONE_FADE_DEG;
-  if (d >= outer) return 0;
-  return Math.round(255 * (1 - (d - LH_CONE_HALF_WIDTH_DEG) / LH_CONE_FADE_DEG));
+  if (d >= LH_CONE_HALF_WIDTH_DEG + LH_CONE_FADE_DEG) return 0;
+  if (d <= LH_CONE_HALF_WIDTH_DEG) {
+    const eased = lhSmoothstep(d / LH_CONE_HALF_WIDTH_DEG); // 255-ish(1)->0 as d 0->half
+    return Math.round(LH_CORE_FLOOR_BRIGHTNESS + eased * (255 - LH_CORE_FLOOR_BRIGHTNESS));
+  }
+  const eased = lhSmoothstep((d - LH_CONE_HALF_WIDTH_DEG) / LH_CONE_FADE_DEG);
+  return Math.round(eased * LH_CORE_FLOOR_BRIGHTNESS);
 }
 function lhBeamBrightnessAt(pointAngle, beamAngle) {
   const d1 = Math.abs(lhCircDelta(pointAngle, beamAngle));
@@ -1130,24 +1136,20 @@ function lhBeamBrightnessAt(pointAngle, beamAngle) {
 // terrible"): used to sum both beams' hues together wherever their
 // falloffs overlapped (pickOverlapColor), reading as a muddy blend rather
 // than either beam's real color. Now picks the single brighter beam
-// entirely, with no blending between the two.
-function lhWinnerColorAt(pointAngle, angle1, hue1, angle2, hue2, satByte) {
+// entirely, with no blending between the two. preferBeam2OnTie: an EXACT
+// brightness tie is real and non-negligible for megabars specifically
+// (brightness is rounded to an 8-bit level, not a razor-thin float
+// coincidence) -- callers iterating the fixed megabar set alternate this
+// per-fixture so a tie never systematically favors the same beam, per
+// explicit request ("one should light for each color always" on a tie).
+// See LighthouseShow.h's winnerColorAt().
+function lhWinnerColorAt(pointAngle, angle1, hue1, angle2, hue2, satByte, preferBeam2OnTie) {
   const b1 = lhBeamBrightnessAt(pointAngle, angle1);
   const b2 = lhBeamBrightnessAt(pointAngle, angle2);
   const winBright = Math.max(b1, b2);
   if (winBright === 0) return { r: 0, g: 0, b: 0 };
-  const winHue = b1 >= b2 ? hue1 : hue2;
-  return hsv(winHue, satByte, winBright);
-}
-// Edge-triggered "new hit" detector for the china-react variation --
-// deliberately NOT AudioBoard.getHitPct() (the usual smoothly-decaying hit
-// value) per explicit request; just watches the live post-gain level cross
-// up through the same 20% threshold convention used elsewhere.
-function lhNewHitEdge(band, prevPctRef, key) {
-  const pct = AudioBoard.getNormalPct(band);
-  const edge = pct > 20 && prevPctRef[key] <= 20;
-  prevPctRef[key] = pct;
-  return edge;
+  const beam1Wins = b1 === b2 ? !preferBeam2OnTie : b1 > b2;
+  return hsv(beam1Wins ? hue1 : hue2, satByte, winBright);
 }
 function showLighthouse(nowMs, dtMs) {
   clearRope(); clearMegabars(); clearChinas();
@@ -1163,10 +1165,31 @@ function showLighthouse(nowMs, dtMs) {
   lhVel1 = rawVel1 * energyFrac; lhVel2 = rawVel2 * energyFrac;
   const MAX_HUE_RATE = 255 / 20;
   const hueRate = randomWalkValue(lhHueRateWalk, nowMs, 0, MAX_HUE_RATE, MAX_HUE_RATE * 0.1);
-  const satFraction = randomWalkValue(lhSatWalk, nowMs, 0.75, 1.0, 0.013);
+  const satFraction = randomWalkValue(lhSatWalk, nowMs, 0.70, 1.0, 0.013);
 
   lhAngle1 = wrap360(lhAngle1 + lhVel1 * dtSec);
   lhAngle2 = wrap360(lhAngle2 + lhVel2 * dtSec);
+
+  // Prevent the 2 beams' cones from ever overlapping -- see
+  // LighthouseShow.h's MIN_BEAM_SEPARATION_DEG comment. Both beams' random-
+  // walked velocities are free to share sign (both CW or both CCW), so
+  // they can drift arbitrarily close; when they'd cross the minimum
+  // effective separation (reduced 0..90 by each beam's own 180deg
+  // antipodal symmetry), push them apart symmetrically by the shortfall
+  // instead -- a soft per-frame "bounce", not a velocity restriction.
+  {
+    const rawDelta = lhCircDelta(lhAngle1, lhAngle2); // -180..180, signed, angle1->angle2
+    const absDelta = Math.abs(rawDelta);
+    const effSep = Math.min(absDelta, 180 - absDelta); // 0..90
+    if (effSep < LH_MIN_BEAM_SEPARATION_DEG) {
+      const shortfall = LH_MIN_BEAM_SEPARATION_DEG - effSep;
+      const sign = rawDelta >= 0 ? 1 : -1;
+      const pushDelta = absDelta <= 90 ? sign * shortfall : -sign * shortfall;
+      lhAngle1 = wrap360(lhAngle1 - pushDelta * 0.5);
+      lhAngle2 = wrap360(lhAngle2 + pushDelta * 0.5);
+    }
+  }
+
   lhHue1 = (lhHue1 + hueRate * dtSec) % 256;
   const angle1 = lhAngle1, angle2 = lhAngle2;
   const hue1 = Math.round(lhHue1), hue2 = (hue1 + 128) % 256;
@@ -1177,74 +1200,43 @@ function showLighthouse(nowMs, dtMs) {
   // per-show angle derivation.
   for (let i = 0; i < NUM_NEO; i++) {
     const a = CarpetGeometry.getNeoGeom(i).angleFromForwardDeg;
-    ropeLeds[i] = lhWinnerColorAt(a, angle1, hue1, angle2, hue2, satByte);
+    ropeLeds[i] = lhWinnerColorAt(a, angle1, hue1, angle2, hue2, satByte, false);
   }
   // Megabars: SAME falloff function as the rope, at each megabar's own
-  // real position angle (CarpetGeometry) -- no more discrete nearest-
-  // neighbor bracket (that was the actual cause of "segment widths don't
-  // match the floods").
+  // real position angle (CarpetGeometry). Alternates the exact-tie
+  // tie-break by megabar index -- see lhWinnerColorAt()'s own comment.
   for (let m = 0; m < NUM_MEGABAR; m++) {
     const a = CarpetGeometry.getMegabarPosition(m).positionAngleDeg; // same field china uses below -- numerically == beamAngleDeg for megabars, but positionAngleDeg is the semantically correct one to ask for here
-    megabarLeds[m] = lhWinnerColorAt(a, angle1, hue1, angle2, hue2, satByte);
+    megabarLeds[m] = lhWinnerColorAt(a, angle1, hue1, angle2, hue2, satByte, (m % 2) !== 0);
   }
 
-  // China: variation-dependent.
-  if (Ctl.variation === 2) {
-    // China React: rope/megabar still sweep the 2 beams as normal (above);
-    // chinas switch to a discrete, non-continuous audio response instead
-    // -- 2 of 4 pairs assigned to bass, 2 to treble (same pairing/swap-
-    // every-4-hits mechanic as pixel_war), both bands WHITE (not the
-    // beams' own colors), edge-triggered: on each qualifying leading edge
-    // a pair jumps straight to 10% global max, holds 40ms, then drops
-    // straight to black -- no fade either direction.
-    const prevPct = { bass: lhPrevBassPct, treble: lhPrevTreblePct };
-    const bassEdge = lhNewHitEdge(BAND_LOW, prevPct, 'bass');
-    const trebleEdge = lhNewHitEdge(BAND_HIGH, prevPct, 'treble');
-    lhPrevBassPct = prevPct.bass; lhPrevTreblePct = prevPct.treble;
-    if (bassEdge || trebleEdge) {
-      lhChinaHitCount++;
-      for (let p = 0; p < 4; p++) {
-        if ((lhChinaPairIsBass[p] && bassEdge) || (!lhChinaPairIsBass[p] && trebleEdge)) lhChinaPairFlashUntilMs[p] = nowMs + 40;
-      }
-    }
-    if (lhChinaHitCount >= 4) {
-      lhChinaHitCount -= 4;
-      const grabbed = Math.floor(Math.random() * 4);
-      const opposite = [0, 1, 2, 3].filter(p => lhChinaPairIsBass[p] !== lhChinaPairIsBass[grabbed]);
-      if (opposite.length) {
-        const other = opposite[Math.floor(Math.random() * opposite.length)];
-        const tmp = lhChinaPairIsBass[grabbed]; lhChinaPairIsBass[grabbed] = lhChinaPairIsBass[other]; lhChinaPairIsBass[other] = tmp;
-      }
-    }
-    const FLASH_BRIGHTNESS = 26; // 10% of 255
-    for (let p = 0; p < 4; p++) {
-      const lit = nowMs < lhChinaPairFlashUntilMs[p];
-      const clr = lit ? { r: FLASH_BRIGHTNESS, g: FLASH_BRIGHTNESS, b: FLASH_BRIGHTNESS } : { r: 0, g: 0, b: 0 };
-      for (const c of LH_CHINA_PAIRS[p]) chinaLeds[c] = clr;
-    }
-  } else if (Ctl.variation === 1) {
-    // BUGFIX/UNDO: china-beam-crossing was originally requested as its OWN
-    // separate variation (replacing the old "no china" one), not as an
-    // addition to Default -- an earlier pass here mistakenly added it to
-    // Default too. Default goes back to leaving china off except for the
-    // bass-hit strobe below (its original behavior); only this variation
-    // (No Strobe) carries the beam-crossing china effect, at each china's
-    // own POSITION angle (not its aim direction -- see CarpetGeometry's
-    // own china caveat comment), read from CarpetGeometry's precomputed
-    // positionAngleDeg rather than a live atan2 here.
-    for (let c = 0; c < NUM_CHINA; c++) {
-      const a = CarpetGeometry.getChinaPosition(c).positionAngleDeg;
-      chinaLeds[c] = lhWinnerColorAt(a, angle1, hue1, angle2, hue2, satByte);
-    }
-  } else {
-    clearChinas(); // Default -- china off except the strobe below
+  // China: both variations now share the same beam-crossing effect as
+  // rope/megabar (at each china's own POSITION angle, not its aim
+  // direction -- see CarpetGeometry's own china caveat comment) -- per
+  // explicit request. Default additionally layers a bass-hit white
+  // strobe on top (below).
+  for (let c = 0; c < NUM_CHINA; c++) {
+    const a = CarpetGeometry.getChinaPosition(c).positionAngleDeg;
+    chinaLeds[c] = lhWinnerColorAt(a, angle1, hue1, angle2, hue2, satByte, false);
   }
 
   // bass-hit china strobe -- Default only (No Strobe drops it per its own
-  // name/request; China React's own china behavior takes priority there
-  // instead).
+  // name/request). APPROXIMATION: real firmware drives this on china's
+  // independent White channel (RGBW hardware) so it superimposes on top
+  // of the beam-crossing RGB color without touching it at all -- this JS
+  // renderer's chinaLeds[] models only 3 channels (no W), so there's no
+  // exact equivalent. Closest available: an additive (not overwriting)
+  // brighten-toward-white, capped well below full saturation (150, a
+  // deliberately-chosen visualizer approximation, not a real W-diode
+  // calibration) so the underlying beam color still visibly shows through
+  // -- the qualitative "superimposed, not replaced" effect, even though
+  // this can't be a precise stand-in for genuinely independent channels.
   if (Ctl.variation === 0 && updateLighthouseStrobe(nowMs)) {
-    for (let c = 0; c < NUM_CHINA; c++) chinaLeds[c] = { r: 255, g: 255, b: 255 };
+    const STROBE_ADD = 150;
+    for (let c = 0; c < NUM_CHINA; c++) {
+      const cur = chinaLeds[c];
+      chinaLeds[c] = { r: Math.min(255, cur.r + STROBE_ADD), g: Math.min(255, cur.g + STROBE_ADD), b: Math.min(255, cur.b + STROBE_ADD) };
+    }
   }
 }
 
@@ -1442,19 +1434,17 @@ function cfgReactivityScreen(nowMs) {
   for (let c = 0; c < NUM_CHINA; c++) chinaLeds[c] = lit ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
 }
 
-// Auto-peak toggle screen (SubAudioAutoPeak) -- mirrors MagicCarpet::
-// showAutoPeakToggle() exactly: front edge's own neos (indices
-// [0, SIZEOF_SMALL_NEO), matching the real FW's ropeLeds[] index range for
-// this same physical strip) light up half at a time -- left half lit when
-// disabled, right half when enabled. SIZEOF_SMALL_NEO/2 here is this file's
-// own equivalent of the real FW's FRONT constant (SIZEOF_SMALL_NEO_HALF) --
-// both agree low index = left, high index = right within the front strip.
+// Auto-peak mode screen (SubAudioAutoPeak) -- mirrors MagicCarpet::
+// showAutoPeakToggle() exactly: 3-state now (AutoPeakOff/AutoPeakFull/
+// AutoPeakBin), front edge's own neos (indices [0, SIZEOF_SMALL_NEO),
+// matching the real FW's ropeLeds[] index range for this same physical
+// strip) split into 3 equal thirds, one lit per mode value.
 function cfgAutoPeakScreen() {
   clearRope(); clearMegabars(); clearChinas();
-  const enabled = AudioBoard.autoPeakEnabled;
-  const mid = SIZEOF_SMALL_NEO / 2;
-  const start = enabled ? mid : 0;
-  const end = enabled ? SIZEOF_SMALL_NEO : mid;
+  const mode = AudioBoard.autoPeakMode;
+  const segLen = Math.floor(SIZEOF_SMALL_NEO / 3);
+  const start = mode * segLen;
+  const end = mode >= 2 ? SIZEOF_SMALL_NEO : start + segLen;
   for (let i = start; i < end; i++) ropeLeds[i] = { r: 255, g: 255, b: 255 };
 }
 
