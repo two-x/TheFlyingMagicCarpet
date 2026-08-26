@@ -31,17 +31,27 @@
  *    front/rear megabars and china preview a stripe approaching before it
  *    reaches the carpet, and show it receding after it leaves:
  *
- *      - Front 3 megabars (the headlight and its neighbors) show the next
- *        stripe, sampled one stripe-width (4ft) ahead of the front
- *        megabar's own real Y -- a preview, well before it arrives.
- *      - Front china aimed along the front edge show that same stripe,
- *        sampled 1ft ahead of their own real Y -- picks it up just as
- *        it's about to cross onto the carpet.
+ *      - Front 3 megabars (the headlight and its neighbors) each preview
+ *        the stripe one stripe-width (4ft) ahead of THEIR OWN real Y --
+ *        every megabar in the trio samples its own individual real
+ *        CarpetGeometry dimY plus that same 4ft lead, not a single
+ *        shared reference point. BUGFIX: this used to compute one color
+ *        from only the cardinal (headlight) megabar's own Y and copy it
+ *        onto its 2 neighbors, which silently ignored that those
+ *        neighbors sit at a materially different real Y than the
+ *        headlight (they only match EACH OTHER's Y, by real mirror
+ *        symmetry) -- visibly, all 3 changed color in lockstep regardless
+ *        of the headlight's own Y actually leading them.
+ *      - Front china aimed along the front edge each preview that same
+ *        stripe, sampled 1ft ahead of THEIR OWN real Y (same per-fixture
+ *        fix as above) -- picks it up just as it's about to cross onto
+ *        the carpet.
  *      - Rear megabars/china mirror the above symmetrically for the
  *        stripe exiting the rear.
  *      - Every side china and side megabar samples its OWN independent
- *        real dimY directly -- no shared/approximated position, no
- *        grouping beyond the explicit front/rear preview trios above.
+ *        real dimY directly, no lead offset -- no shared/approximated
+ *        position anywhere in this show, front/rear preview groups
+ *        included.
  *
  *    Position is real feet throughout (car-center-relative, Y+=front,
  *    same convention as CarpetGeometry) fed through one continuous,
@@ -161,17 +171,42 @@ class SpeedStripesShow : public LightShow {
    static const uint8_t ZEBRA_HUE_STEP = 11; // hue units (0-255) per stripe -- ~23 stripes (~207ft) per full rainbow cycle
    static constexpr float ZEBRA_STRIPE_WIDTH_FT = 6.0f;
    static constexpr float ZEBRA_FADE_FT = 3.0f;          // stripe-to-stripe and black-overlay border cross-fade width
-   static constexpr float ZEBRA_MIN_BLACK_WIDTH_FT = 0.5f; // smallest black-stripe width the pot will ever produce, once producing any at all
+   // Pot-percent dead zone at the bottom of the pot's travel, below which
+   // black-stripe width is exactly 0 (no stripes at all) -- matches this
+   // codebase's own established real-world pot-noise assumption
+   // (LedController.h's Potentiometer::NOISE_FLOOR_RAW, ~2% of raw ADC
+   // range, used there for the identical reason: ordinary pot jitter near
+   // a rest position). BUGFIX ("flickering to black when pot is at
+   // minimum"): width used to be computed as
+   // `potPercent<=0 ? 0 : ZEBRA_MIN_BLACK_WIDTH_FT + ...` -- a HARD
+   // discontinuity between 0 (at exactly 0%) and an instant jump to
+   // ZEBRA_MIN_BLACK_WIDTH_FT (0.5ft) at any reading above 0%, however
+   // tiny. Real pots don't hold exactly 0.00% at rest, and ordinary ADC
+   // noise added more jitter on top -- so a pot sitting at its physical
+   // minimum could read anywhere in a small band straddling that cliff,
+   // popping stripes fully in and out every time it crossed. Width is now
+   // a flat, provable 0 across this whole dead zone (immune to any noise
+   // within it, not just usually-near-zero), then ramps CONTINUOUSLY
+   // (zero jump at the boundary) from 0 up to 40ft at 100% -- see
+   // zebraEnsureScheduleTo().
+   static constexpr float ZEBRA_WIDTH_DEADZONE_PERCENT = 2.0f;
+   // Separate from the dead zone above -- purely a practical floor so the
+   // fixed-size schedule ring buffer below can't be asked to generate an
+   // unbounded number of segments as width shrinks toward (but stays
+   // above) the dead zone. Below this, a stretch is treated the same as
+   // "no stripes" rather than generating vanishingly-thin ones. See
+   // ZEBRA_SCHEDULE_MAX's own comment for the sizing math this drives.
+   static constexpr float ZEBRA_MIN_GENERATE_WIDTH_FT = 0.25f;
    static constexpr float ZEBRA_SCHEDULE_LOOKAHEAD_FT = 30.0f; // comfortably past any fixture's own |pos| offset
    static constexpr float ZEBRA_CHINA_REST_FRACTION = 0.70f;   // china's resting brightness fraction of global max while there's been recent sound
 
    float zebraPosFt_ = 0.0f; // feet, monotonically grows while moving -- this variation's own scrolling position
 
    struct ZebraSeg { float startPos, endPos, width; bool isBlack; };
-   // worst case is min-width black+gap alternating (period = 3 *
-   // ZEBRA_MIN_BLACK_WIDTH_FT = 1.5ft) across 2x lookahead (60ft) -- ~40
+   // worst case is min-generatable-width black+gap alternating (period = 4 *
+   // ZEBRA_MIN_GENERATE_WIDTH_FT = 1.0ft) across 2x lookahead (60ft) -- 60
    // segments -- sized with margin above that
-   static const int ZEBRA_SCHEDULE_MAX = 48;
+   static const int ZEBRA_SCHEDULE_MAX = 80;
    ZebraSeg zebraSchedule_[ ZEBRA_SCHEDULE_MAX ];
    int zebraScheduleHead_ = 0, zebraScheduleCount_ = 0;
    float zebraFrontierPos_ = 0.0f;
@@ -235,22 +270,23 @@ class SpeedStripesShow : public LightShow {
    // incrementally-extended schedule -- each cell, once generated,
    // permanently keeps the width it was given at that moment; turning the
    // pot only changes what gets generated for territory not yet reached.
-   // Pot mapping is dead-zone-free: pot=0% is the only fully-off point,
-   // any turn above that immediately produces at least
-   // ZEBRA_MIN_BLACK_WIDTH_FT and scales up to 40ft at 100%. Occurrence
-   // period (one black stripe's start to the next) is always exactly 3x
-   // the current black width -- i.e. the colored gap is always 2x the
-   // black width -- so wider stripes also come proportionally less often,
-   // rather than width and spacing scaling independently.
+   // Pot mapping: flat 0 (guaranteed, see ZEBRA_WIDTH_DEADZONE_PERCENT's
+   // own comment) through the bottom dead zone, then a continuous ramp
+   // (no jump at the boundary) up to 40ft at 100%. Occurrence period (one
+   // black stripe's start to the next) is always exactly 4x the current
+   // black width -- i.e. the colored gap is always 3x the black width --
+   // so wider stripes also come proportionally less often, rather than
+   // width and spacing scaling independently.
    void zebraEnsureScheduleTo( float neededPos ) {
       if ( !zebraFrontierValid_ ) { zebraFrontierPos_ = neededPos; zebraFrontierValid_ = true; }
       float potPercent = carpet->pot->readPercent();
-      float potWidth = potPercent <= 0.0f ? 0.0f : ZEBRA_MIN_BLACK_WIDTH_FT + ( potPercent / 100.0f ) * ( 40.0f - ZEBRA_MIN_BLACK_WIDTH_FT );
+      float potWidth = potPercent <= ZEBRA_WIDTH_DEADZONE_PERCENT ? 0.0f
+         : ( potPercent - ZEBRA_WIDTH_DEADZONE_PERCENT ) / ( 100.0f - ZEBRA_WIDTH_DEADZONE_PERCENT ) * 40.0f;
       while ( zebraFrontierPos_ < neededPos ) {
-         if ( potWidth < ZEBRA_MIN_BLACK_WIDTH_FT ) { zebraFrontierPos_ = neededPos; break; }
+         if ( potWidth < ZEBRA_MIN_GENERATE_WIDTH_FT ) { zebraFrontierPos_ = neededPos; break; }
          bool lastWasBlack = zebraScheduleCount_ ? zebraScheduleAt( zebraScheduleCount_ - 1 ).isBlack : false;
          bool isBlack = !lastWasBlack;
-         float width = isBlack ? potWidth : 2.0f * potWidth;
+         float width = isBlack ? potWidth : 3.0f * potWidth;
          float start = zebraFrontierPos_, end = start + width;
          zebraSchedulePush( start, end, width, isBlack );
          zebraFrontierPos_ = end;
@@ -348,8 +384,7 @@ class SpeedStripesShow : public LightShow {
       // response now. zebraPosFt_ is already a car-center-relative,
       // Y+=front feet coordinate -- each fixture's own real
       // CarpetGeometry dimY is directly addable to it.
-      float frontMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar0deg ).dimY;
-      CRGB frontLeadClr = zebraColorAt( zebraPosFt_ + frontMegabarY + ZEBRA_STRIPE_WIDTH_FT, satFraction );
+      //
       // BUGFIX: these were ByYFt (nearest-Y search) on a fixture whose ID
       // was already known -- real megabar Y values are NOT unique (every
       // left/right mirror pair shares Y, e.g. Megabar30deg/Megabar330deg
@@ -360,24 +395,32 @@ class SpeedStripesShow : public LightShow {
       // construction -- use it whenever the fixture is already known,
       // reserve ByYFt/ByAngleDeg for genuine "find whichever fixture is
       // nearest X" searches. Same fix applied everywhere in this file.
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar330deg } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar0deg } ); // headlight -- brightness still governed separately, see MagicCarpet
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar30deg } );
-      float rearMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar180deg ).dimY;
-      CRGB rearLeadClr = zebraColorAt( zebraPosFt_ + rearMegabarY - ZEBRA_STRIPE_WIDTH_FT, satFraction );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar150deg } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar180deg } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar210deg } );
-      // Every fixture below samples its OWN independent real dimY -- no
-      // sharing between fixtures, china or megabar alike (2 fixtures at
-      // the same real Y, e.g. the front-left/front-right pair, legitimately
-      // get the same color because their real geometry actually is
-      // symmetric, not because the code reuses one value for both).
-      auto zebraAt = [&]( float dimY ) { return zebraColorAt( zebraPosFt_ + dimY, satFraction ); };
-      auto setMegabarZebra = [&]( CarpetGeometry::MegabarName m ) {
+      //
+      // BUGFIX ("megabar0/30/330 all change color at the exact same
+      // instant, despite megabar0's real Y differing materially from its
+      // two neighbors"): the front/rear "preview" trio used to compute
+      // ONE shared color from only the cardinal fixture's own Y
+      // (Megabar0deg/Megabar180deg) and copy it onto the other 2
+      // fixtures in the group, silently ignoring their own different
+      // real Y (Megabar30deg/Megabar330deg share a Y with each other by
+      // real mirror symmetry, but NOT with Megabar0deg). leadFt
+      // (optional, default 0) is the same "preview, sampled some
+      // distance ahead of/behind this fixture's own real Y" concept as
+      // before -- now applied per-fixture instead of computed once and
+      // copy-pasted, so 2 fixtures only ever land on the same color when
+      // their real geometry actually ties, never because the code reused
+      // one shared value.
+      auto zebraAt = [&]( float dimY, float leadFt = 0.0f ) { return zebraColorAt( zebraPosFt_ + dimY + leadFt, satFraction ); };
+      auto setMegabarZebra = [&]( CarpetGeometry::MegabarName m, float leadFt = 0.0f ) {
          float y = CarpetGeometry::getMegabar( m ).dimY;
-         LightSetters::setColor( carpet, LightSetters::TargetMegabar, zebraAt( y ), LightSetters::ByID{ (uint8_t)m } );
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, zebraAt( y, leadFt ), LightSetters::ByID{ (uint8_t)m } );
       };
+      setMegabarZebra( CarpetGeometry::Megabar330deg, ZEBRA_STRIPE_WIDTH_FT );
+      setMegabarZebra( CarpetGeometry::Megabar0deg, ZEBRA_STRIPE_WIDTH_FT ); // headlight -- brightness still governed separately, see MagicCarpet
+      setMegabarZebra( CarpetGeometry::Megabar30deg, ZEBRA_STRIPE_WIDTH_FT );
+      setMegabarZebra( CarpetGeometry::Megabar150deg, -ZEBRA_STRIPE_WIDTH_FT );
+      setMegabarZebra( CarpetGeometry::Megabar180deg, -ZEBRA_STRIPE_WIDTH_FT );
+      setMegabarZebra( CarpetGeometry::Megabar210deg, -ZEBRA_STRIPE_WIDTH_FT );
       setMegabarZebra( CarpetGeometry::Megabar60deg );
       setMegabarZebra( CarpetGeometry::Megabar90deg );
       setMegabarZebra( CarpetGeometry::Megabar120deg );
@@ -624,12 +667,11 @@ class SpeedStripesShow : public LightShow {
 
       static const float EDGE_APPROACH_FT = 1.0f; // china "about 1ft from edge" pickup point
 
-      // front: megabars preview a stripe-width (4ft) out from their own real
-      // ground-spot Y; china pick it up right at the 1ft-from-edge mark from
-      // theirs -- base position is each fixture's own real CarpetGeometry
-      // dimY. Written via LightSetters::ByID -- BUGFIX: this used to be
-      // ByYFt (nearest-Y search) even though the fixture was already known;
-      // real megabar/china Y values are NOT unique across left/right mirror
+      // Every fixture below samples its OWN independent real dimY --
+      // never shared between fixtures, china or megabar alike. Written
+      // via LightSetters::ByID -- BUGFIX: this used to be ByYFt (nearest-
+      // Y search) even though the fixture was already known; real
+      // megabar/china Y values are NOT unique across left/right mirror
       // pairs (e.g. Megabar30deg/Megabar330deg share Y), so a self-
       // referential ByYFt search silently redirected the higher-id member
       // of every tied pair onto its lower-id twin, leaving it permanently
@@ -646,43 +688,51 @@ class SpeedStripesShow : public LightShow {
       // fixture ID -> that fixture's own real dimY), and every write is
       // ByID. A getter that can return "ambiguous, no unique answer" is
       // only a problem for code that actually calls it.
-      float frontMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar0deg ).dimY;
-      CRGB frontLeadClr = sampleWave( frontMegabarY + STRIPE_WIDTH_FT_ + scrollOffsetFt_, satFraction, meanderOffset );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar330deg } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar0deg } ); // headlight -- brightness still governed separately, see MagicCarpet
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, frontLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar30deg } );
-      float frontChinaY = CarpetGeometry::getChina( CarpetGeometry::ChinaFrontRight ).dimY;
-      CRGB frontEdgeClr = sampleWave( frontChinaY + EDGE_APPROACH_FT + scrollOffsetFt_, satFraction, meanderOffset );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaFrontRight } );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, frontEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaFrontLeft } );
+      //
+      // BUGFIX ("megabar0/30/330 all change color at the exact same
+      // instant, despite megabar0's real Y differing materially from its
+      // two neighbors"): the front/rear "preview" trio/pair below used to
+      // compute ONE shared color from only the cardinal fixture's own Y
+      // (Megabar0deg/Megabar180deg/ChinaFrontRight/ChinaRearLeft) and
+      // copy it onto the other fixtures in the group, silently ignoring
+      // their own different real Y (Megabar30deg/Megabar330deg share a Y
+      // with each other by real mirror symmetry, but NOT with
+      // Megabar0deg). leadFt (optional, default 0) is the same "preview,
+      // sampled some distance ahead of/behind this fixture's own real Y"
+      // concept as before -- now applied per-fixture instead of computed
+      // once and copy-pasted, so 2 fixtures only ever land on the same
+      // color when their real geometry actually ties, never because the
+      // code reused one shared value. Also fixes the same latent issue
+      // for china's front/rear pair, and matches the class comment's own
+      // stated principle for the side fixtures below (previously true
+      // only for those, not the front/rear groups).
+      auto sideColorAt = [&]( float dimY, float leadFt = 0.0f ) { return sampleWave( dimY + leadFt + scrollOffsetFt_, satFraction, meanderOffset ); };
+      auto setChinaBySide = [&]( CarpetGeometry::ChinaName c, float leadFt = 0.0f ) {
+         float y = CarpetGeometry::getChina( c ).dimY;
+         LightSetters::setColor( carpet, LightSetters::TargetChina, sideColorAt( y, leadFt ), LightSetters::ByID{ (uint8_t)c } );
+      };
+      auto setMegabarBySide = [&]( CarpetGeometry::MegabarName m, float leadFt = 0.0f ) {
+         float y = CarpetGeometry::getMegabar( m ).dimY;
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, sideColorAt( y, leadFt ), LightSetters::ByID{ (uint8_t)m } );
+      };
+
+      // front: megabars preview a stripe-width (4ft) out from their own
+      // real Y; china pick it up right at the 1ft-from-edge mark from
+      // theirs.
+      setMegabarBySide( CarpetGeometry::Megabar330deg, STRIPE_WIDTH_FT_ );
+      setMegabarBySide( CarpetGeometry::Megabar0deg, STRIPE_WIDTH_FT_ ); // headlight -- brightness still governed separately, see MagicCarpet
+      setMegabarBySide( CarpetGeometry::Megabar30deg, STRIPE_WIDTH_FT_ );
+      setChinaBySide( CarpetGeometry::ChinaFrontRight, EDGE_APPROACH_FT );
+      setChinaBySide( CarpetGeometry::ChinaFrontLeft, EDGE_APPROACH_FT );
 
       // rear: mirror of the above, behind the rear corner
-      float rearMegabarY = CarpetGeometry::getMegabar( CarpetGeometry::Megabar180deg ).dimY;
-      CRGB rearLeadClr = sampleWave( rearMegabarY - STRIPE_WIDTH_FT_ + scrollOffsetFt_, satFraction, meanderOffset );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar150deg } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar180deg } );
-      LightSetters::setColor( carpet, LightSetters::TargetMegabar, rearLeadClr, LightSetters::ByID{ CarpetGeometry::Megabar210deg } );
-      float rearChinaY = CarpetGeometry::getChina( CarpetGeometry::ChinaRearLeft ).dimY;
-      CRGB rearEdgeClr = sampleWave( rearChinaY - EDGE_APPROACH_FT + scrollOffsetFt_, satFraction, meanderOffset );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaRearLeft } );
-      LightSetters::setColor( carpet, LightSetters::TargetChina, rearEdgeClr, LightSetters::ByID{ CarpetGeometry::ChinaRearRight } );
+      setMegabarBySide( CarpetGeometry::Megabar150deg, -STRIPE_WIDTH_FT_ );
+      setMegabarBySide( CarpetGeometry::Megabar180deg, -STRIPE_WIDTH_FT_ );
+      setMegabarBySide( CarpetGeometry::Megabar210deg, -STRIPE_WIDTH_FT_ );
+      setChinaBySide( CarpetGeometry::ChinaRearLeft, -EDGE_APPROACH_FT );
+      setChinaBySide( CarpetGeometry::ChinaRearRight, -EDGE_APPROACH_FT );
 
-      // side positions: every fixture samples its OWN independent real
-      // dimY -- no sharing between china and megabar (an earlier version
-      // of this code had china and its geometrically-nearest side megabar
-      // share one sampled value; that was never something asked for --
-      // it was a holdover from the old pre-geometry code, which happened
-      // to reuse one hand-tuned fraction constant for both simply because
-      // that's what the old approximation had on hand).
-      auto sideColorAt = [&]( float dimY ) { return sampleWave( dimY + scrollOffsetFt_, satFraction, meanderOffset ); };
-      auto setChinaBySide = [&]( CarpetGeometry::ChinaName c ) {
-         float y = CarpetGeometry::getChina( c ).dimY;
-         LightSetters::setColor( carpet, LightSetters::TargetChina, sideColorAt( y ), LightSetters::ByID{ (uint8_t)c } );
-      };
-      auto setMegabarBySide = [&]( CarpetGeometry::MegabarName m ) {
-         float y = CarpetGeometry::getMegabar( m ).dimY;
-         LightSetters::setColor( carpet, LightSetters::TargetMegabar, sideColorAt( y ), LightSetters::ByID{ (uint8_t)m } );
-      };
+      // side positions: no lead offset, straight at each fixture's own real Y.
       setChinaBySide( CarpetGeometry::ChinaRightFront );
       setChinaBySide( CarpetGeometry::ChinaRightRear );
       setChinaBySide( CarpetGeometry::ChinaLeftFront );
