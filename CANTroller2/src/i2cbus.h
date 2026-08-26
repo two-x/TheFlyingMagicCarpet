@@ -7,6 +7,7 @@ inline uint8_t known_i2c_addr[(int)NumI2CSlaves] = { 0x38, 0x69, 0x28, 0x18 };
 class I2C {
   private:
     bool disabled = false;
+    bool _verbose = false;
     int _sda_pin, _scl_pin, _devicecount = 0;
     uint8_t _detaddrs[10];  // addresses detected, unordered
     uint8_t _devaddrs[NumI2CSlaves];  // addresses of known devices, ordered per enum
@@ -72,7 +73,7 @@ class I2C {
     // ends of the protocol and can just check Wire.endTransmission()'s result on its regular sends. No separate periodic probing needed:
     // if a send ACKs, it's there; if not, it isn't - "who cares" why, it'll be picked up again next time something is sent.
     void set_detected(int device, bool state) {
-        if (state != _detected[device])
+        if (_verbose && state != _detected[device])
             ezread.squintf(state ? ezread.gladcolor : ezread.sadcolor, "%s %sdetected at 0x%02x\n", i2ccard[device].c_str(), state ? "" : "no longer ", _devaddrs[device]);
         _detected[device] = state;
     }
