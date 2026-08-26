@@ -24,19 +24,14 @@ GLOBAL BUTTONS (any show)
   Pot: flood Hz
   china flash on bass
 
-2 Flame (4 var)
+2 Flame (2 var)
   ▸ waterflames
   ▸ flames
-  ▸ shifting hues
-  ▸ hue to white
   All: Pot = energy
-  (fire-sim speed +
-  hue-drift rate)
+  (fire-sim speed)
 
-3 Equalizer (5 var)
-  ▸ chase
+3 Equalizer (3 var)
   ▸ VU meter
-  ▸ sub_standard
   Pot: peak thresh
   ▸ new_standard
   ▸ pixel_war
@@ -94,7 +89,7 @@ CONFIG MENU NAV (from L)
   R-half lit=on
 
 -----
-Generated: 2026-08-25 07:08 PM PDT (Pacific)
+Generated: 2026-08-26 03:15 AM PDT (Pacific)
 
 HOW TO FORMAT THIS FOR PRINT (one-time, before each new print run):
 1. Select all text above (down to but not including this "-----" footer)

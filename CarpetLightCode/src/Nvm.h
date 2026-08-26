@@ -78,7 +78,7 @@ struct State {
    uint8_t testBrightness;             // 0-255, default 255
    uint8_t equalizerStrobeEnabled;     // 0/1, default 0 (off) -- see BumpingAudioShow.h's EqualizerShow
    uint16_t hitDecayMs;                // 0-1000, default 300 -- ms for a "hit" to decay from full to zero (see AudioBoard.h)
-   uint16_t audioForesightMs;          // 0-700, default 0 -- how far back in time sampled audio is looked up (see AudioBoard.h)
+   uint16_t audioForesightMs;          // 0-700, default 340 -- how far back in time sampled audio is looked up (see AudioBoard.h)
    uint8_t hitPredictionStyle;         // 0=disabled/1=exponential/2=pulse train, default 1 -- prediction always spans the full live audioForesightMs (see AudioBoard.h's HitPredictionStyle)
    uint8_t soundReactivityEnabled;     // 0/1, default 1 (on) -- global kill switch for all sound-reactive light behavior (see AudioBoard.h)
    uint8_t autoPeakMode;               // AutoPeakOff/AutoPeakFull/AutoPeakBin, default AutoPeakBin -- see AudioBoard.h's AutoPeakMode
@@ -96,8 +96,12 @@ inline void resetShowVariationToDefaults() {
    // Equalizer (show index 2 -- see CarpetLightLogic.cpp's ShowMode enum;
    // can't reference it by name here, that enum's defined after this
    // header gets included) defaults to new_standard (EqualizerShow's
-   // VarNewStandard, also index 2) instead of Chase, per request.
-   state.variation[ 2 ] = 2;
+   // VarNewStandard, index 1 -- Chase/sub_standard both deleted, VU
+   // meter/new_standard/pixel_war renumbered 0/1/2), per request.
+   state.variation[ 2 ] = 1;
+   // SpeedStripes (show index 3) defaults to zebra (SpeedStripesShow's
+   // VarZebra, index 1), per request.
+   state.variation[ 3 ] = 1;
 }
 
 // call once at boot, before reading any loaded*() value
@@ -118,7 +122,7 @@ inline void load() {
       state.testBrightness = 255;
       state.equalizerStrobeEnabled = 0;
       state.hitDecayMs = 300;
-      state.audioForesightMs = 0;
+      state.audioForesightMs = 340;
       state.hitPredictionStyle = 1; // PredictExponential
       state.soundReactivityEnabled = 1;
       state.autoPeakMode = AutoPeakBin;

@@ -70,8 +70,8 @@
  *    just holds in place exactly as it was. After a further 10 continuous
  *    seconds stopped, each stripe's own hue pair starts slowly, randomly
  *    meandering (meanderHue_/meanderRateWalk_ -- same RandomWalk-based
- *    technique as LighthouseShow's beam hue and FlameShow's shifting hues,
- *    duplicated here per this codebase's per-show-helper convention) -- one
+ *    technique as LighthouseShow's beam hue, duplicated here per this
+ *    codebase's per-show-helper convention) -- one
  *    shared drifting offset added to every stripe's own hash-derived base
  *    hue pair, so they all evolve together while still looking distinct
  *    (their bases differ). Resets to a fresh start every time a new stop

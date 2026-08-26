@@ -730,7 +730,7 @@ class AudioBoard {
 
    static void setHitPredictionStyle( uint8_t style ) { hitPredictionStyle_ = ( style >= NUM_HIT_PREDICTION_STYLES ) ? ( NUM_HIT_PREDICTION_STYLES - 1 ) : style; }
    static uint8_t getHitPredictionStyle() { return hitPredictionStyle_; }
-   static float audioForesightMs_; // 0-FORESIGHT_BUFFER_MS, adjustable + persisted, default 0
+   static float audioForesightMs_; // 0-FORESIGHT_BUFFER_MS, adjustable + persisted, default 340
    static uint8_t hitPredictionStyle_; // adjustable + persisted, default PredictExponential -- see HitPredictionStyle above
 
    static void setAgcMode( uint8_t mode ) { agcMode_ = ( mode >= NumAGCModes ) ? ( NumAGCModes - 1 ) : mode; }

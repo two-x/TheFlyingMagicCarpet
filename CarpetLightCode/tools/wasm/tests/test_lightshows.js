@@ -83,8 +83,8 @@ const ShowMode = { Nightrider: 0, Flame: 1, Equalizer: 2, SpeedStripes: 3, Light
 // bare index at each call site); the actual selection still goes through
 // the real web_setCurrentVariation(), never re-simulating show logic.
 const VARIATION_INDEX = {
-  [ShowMode.Flame]: { waterflames: 0, flames: 1, 'shifting hues': 2, 'hue to white': 3 },
-  [ShowMode.Equalizer]: { chase: 0, 'VU meter': 1, new_standard: 2, pixel_war: 3, sub_standard: 4 },
+  [ShowMode.Flame]: { waterflames: 0, flames: 1 },
+  [ShowMode.Equalizer]: { 'VU meter': 0, new_standard: 1, pixel_war: 2 },
   [ShowMode.SpeedStripes]: { default: 0, zebra: 1 },
   [ShowMode.Lighthouse]: { default: 0, 'no strobe': 1 },
 };
@@ -158,7 +158,7 @@ async function testFlame() {
   ctx.selectShow(ShowMode.Flame);
   check('show name is Flame', ctx.showName() === 'Flame', ctx.showName());
 
-  for (const variationName of ['waterflames', 'flames', 'shifting hues', 'hue to white']) {
+  for (const variationName of ['waterflames', 'flames']) {
     ctx.selectVariationByName(variationName);
     ctx.silence();
     ctx.tick(10);
@@ -186,15 +186,6 @@ async function testEqualizer() {
   const ctx = makeCtx(await freshBoot());
   ctx.selectShow(ShowMode.Equalizer);
   check('show name starts with Equalizer', ctx.showName().startsWith('Equalizer'), ctx.showName());
-
-  // --- Chase: no sound needed, just time ---
-  ctx.selectVariationByName('chase');
-  ctx.silence();
-  ctx.tick(5);
-  const chaseBefore = ctx.snapshot('rope');
-  ctx.tick(20);
-  const chaseAfter = ctx.snapshot('rope');
-  check('[chase] rope chases over time', snapshotsDiffer(chaseBefore, chaseAfter));
 
   // --- VU meter: bass/treble should visibly grow the meter from silence ---
   ctx.selectVariationByName('VU meter');
@@ -234,20 +225,6 @@ async function testEqualizer() {
   }
   const pwAfter = ctx.snapshot('rope');
   check('[pixel_war] rope territory shifts over several bass hits', snapshotsDiffer(pwBefore, pwAfter));
-
-  // --- sub_standard: same shared machinery as new_standard, megabars should react ---
-  ctx.selectVariationByName('sub_standard');
-  ctx.silence();
-  ctx.tick(10);
-  const subBefore = ctx.snapshot('megabar');
-  for (let i = 0; i < 8; i++) {
-    ctx.setBins([ctx.adcMax(), 0, 0, 0, 0, 0, 0]);
-    ctx.tick(3);
-    ctx.silence();
-    ctx.tick(3);
-  }
-  const subAfter = ctx.snapshot('megabar');
-  check('[sub_standard] megabars react over several bass hits', snapshotsDiffer(subBefore, subAfter));
 }
 
 // ---------------------------------------------------------------------

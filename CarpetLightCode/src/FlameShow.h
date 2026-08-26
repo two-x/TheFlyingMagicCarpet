@@ -26,10 +26,10 @@ static const CRGBPalette256 waterflames(
       CRGB::Blue,
       CRGB::Aqua,
       CRGB::White );
-  
+
 // X-macro list: single source of truth for both the enum below and
 // variationName() -- see LightShow.h's own comment on the pattern.
-#define FLAME_VARIATIONS(X) X(VarWaterflames) X(VarFlames) X(VarShiftingHues) X(VarHueToWhite)
+#define FLAME_VARIATIONS(X) X(VarWaterflames) X(VarFlames)
 
 class FlameShow : public LightShow {
  private:
@@ -38,53 +38,7 @@ class FlameShow : public LightShow {
    // TODO: tune this
    static const uint8_t baseCoolingRate = 10;
    static const uint8_t baseSparkingRate = 15; // maybe set this based on music?
-   static const uint8_t numModes_ = 4;
-
-   // variations 2/3 ("shifting hues" / "hue to white"): smoothly ramps
-   // toward a freshly-randomized target every ~0.8-1.2s rather than jumping
-   // -- same technique as LighthouseShow's beam hue rate, duplicated here
-   // rather than shared (this codebase's convention: small per-show
-   // helpers, not a shared header). Built on Timer rather than raw
-   // millis()-diffing.
-   struct RandomWalk {
-      float rampStart = 0.0f;
-      float rampTarget = 0.0f;
-      Timer tickTimer;
-      bool initialized = false;
-
-      float value( float minVal, float maxVal, float maxStep ) {
-         if ( !initialized ) {
-            initialized = true;
-            tickTimer.set( 800 + random( 400 ) );
-            rampStart = rampTarget = minVal + ( maxVal - minVal ) * 0.5f;
-         }
-         if ( tickTimer.expired() ) {
-            rampStart = rampTarget;
-            float step = ( (float)random( -1000, 1001 ) / 1000.0f ) * maxStep;
-            rampTarget = constrain( rampStart + step, minVal, maxVal );
-            tickTimer.set( 800 + random( 400 ) );
-         }
-         float frac = (float)tickTimer.elapsed() / (float)tickTimer.timeout();
-         if ( frac > 1.0f ) frac = 1.0f;
-         return rampStart + ( rampTarget - rampStart ) * frac;
-      }
-   };
-   RandomWalk hueRateWalk_;
-   float shiftHue_ = 0.0f;   // 0-255, only ever increases (same "always one direction" rule as Lighthouse)
-   Timer hueFrameTimer_;     // tracks dt between update() calls for the hue drift
-   // Floods (megabar/china) used to share the rope's own shiftHue_/
-   // shiftingPalette_ outright -- per request, their hue drift is now a
-   // separate, independently-tracked value advancing at exactly 1/3 the
-   // rope's rate (reusing the SAME per-frame hueRate, just divided by 3, so
-   // it still speeds up/slows down proportionally with the pot exactly like
-   // the rope's own drift does -- "same as the neos, just 3x slower").
-   float floodShiftHue_ = 0.0f;
-   CRGBPalette16 floodShiftingPalette_;
-   // variation 2's saturation random-walks 87%-100%, same range/technique as
-   // LighthouseShow's satWalk_ -- duplicated here per this codebase's
-   // convention rather than shared.
-   RandomWalk satWalk_;
-   CRGBPalette16 shiftingPalette_;  // rebuilt once per update() call, not per-LED -- see paletteColor()
+   static const uint8_t numModes_ = 2;
 
    uint8_t currTemperature[ NUM_NEO_LEDS_ACTUAL ] = { 0 };
    uint8_t prevTemperature[ NUM_NEO_LEDS_ACTUAL ] = { 0 };
@@ -142,9 +96,9 @@ class FlameShow : public LightShow {
       }
    }
 
-   // sparkle cadence + variations 2/3's hue-rate ceiling both driven by the
-   // shared energy setting (see LightShow.h) -- adjusting it here also
-   // becomes the new starting point for NightriderShow and LighthouseShow
+   // sparkle cadence driven by the shared energy setting (see LightShow.h)
+   // -- adjusting it here also becomes the new starting point for
+   // NightriderShow and LighthouseShow
    PotEnergyTakeover energyTakeover_;
 
  public:
@@ -163,42 +117,18 @@ class FlameShow : public LightShow {
    }
    #undef FLAME_VARIATIONS // X-macro's job is done, keep the namespace clean
 
-   // mode_==0/1 use the fixed 256-entry palettes above. mode_==2/3 use
-   // shiftingPalette_ (full saturation, fixed -- "as it is now"), rebuilt
-   // once per update() call in update() itself, not here, so this stays
-   // cheap to call per-LED:
-   //   mode_==2: a 4-stop dark->bright glow all sharing one
-   //             continuously-drifting hue.
-   //   mode_==3: the same continuously-drifting hue at one end, fading to
-   //             fixed white at the other -- "one color travels the hue
-   //             spectrum... the other is always white".
+   // Both remaining variations use one of the 2 fixed 256-entry palettes
+   // above. Floods share the exact same palette lookup as the rope now --
+   // there's no independent drift left to track separately (that only
+   // existed for the deleted shifting-hue variations).
    CRGB paletteColor( uint8_t index ) {
-      if ( mode_ == VarWaterflames ) return ColorFromPalette( waterflames, index );
-      if ( mode_ == VarFlames ) return ColorFromPalette( flames, index );
-      return ColorFromPalette( shiftingPalette_, index );
-   }
-   // Floods' own version -- identical to paletteColor() for modes 0/1 (no
-   // drift to slow down there, the palette's fixed), but modes 2/3 read
-   // from floodShiftingPalette_ (the independently, 3x-slower-drifting
-   // hue) instead of the rope's own shiftingPalette_.
-   CRGB floodPaletteColor( uint8_t index ) {
-      if ( mode_ == VarWaterflames ) return ColorFromPalette( waterflames, index );
-      if ( mode_ == VarFlames ) return ColorFromPalette( flames, index );
-      return ColorFromPalette( floodShiftingPalette_, index );
+      return ( mode_ == VarWaterflames ) ? ColorFromPalette( waterflames, index ) : ColorFromPalette( flames, index );
    }
 
    void start() {
       CRGB clr = ColorFromPalette( flames, 0 );
       LightSetters::setColor( carpet, LightSetters::TargetNeo, clr, LightSetters::NeoByCircumferenceID{ 0 }, LightSetters::NeoByCircumferenceID{ (int32_t)NUM_NEO_LEDS_ACTUAL - 1 } );
       energyTakeover_.reset( carpet );
-
-      // seed saturation's start explicitly (same reasoning as
-      // LighthouseShow's velocity walks -- RandomWalk::value() would
-      // otherwise auto-init to the range midpoint, 87.5%, not the
-      // requested 90%)
-      satWalk_.rampStart = satWalk_.rampTarget = 0.90f;
-      satWalk_.initialized = true;
-      satWalk_.tickTimer.set( 800 + random( 400 ) );
 
       // floods: real china front/rear roles, initial random per-fixture
       // idle color pick, initial china bass/treble swap timer -- see the
@@ -221,68 +151,10 @@ class FlameShow : public LightShow {
          mode_ = (uint8_t)newMode;
       }
 
-
-      // shared energy setting drives both the sparkle-cycle delay (as
-      // before) AND variations 2/3's max hue rate (new) -- 100% (pot fully
-      // up) = fastest cadence + fastest max hue drift, 0% = slowest of both.
-      // (Fixes a real inversion bug found here during this refactor: the
-      // old potFrac-from-potval math had the hue-rate ceiling backwards
-      // -- pot UP used to give the LOWER 50% ceiling, contradicting both
-      // this project's "pot=energy, up=hyper" convention and this file's
-      // own README description, even though the cadence half was already
-      // correct.)
+      // shared energy setting drives the sparkle-cycle delay -- 100% (pot
+      // fully up) = fastest cadence, 0% = slowest.
       float energyFrac = energyTakeover_.update( carpet ) / 100.0f; // 0..1, 1=hyper
       uint16_t potval = (uint16_t)( 255.0f * ( 1.0f - energyFrac ) + 0.5f ); // inverted: hyper -> less delay
-
-      // variations 2/3's hue drift -- advances every call (not just
-      // rate-gated fire-sim cycles) so it stays smooth regardless of the
-      // sparkle cadence. Energy scales the max rate: 0% -> 50% of the base
-      // max, 100% -> 100% -- direction and the random-walk mechanism are
-      // unchanged, only the ceiling it wanders within.
-      float hueDtSec = (float)hueFrameTimer_.elapsed() / 1000.0f;
-      hueFrameTimer_.reset();
-      static const float BASE_MAX_HUE_RATE = 255.0f / 20.0f; // full spectrum in as little as 20s, same as LighthouseShow
-      float maxHueRate = BASE_MAX_HUE_RATE * ( 0.5f + 0.5f * energyFrac );
-      float hueRate = hueRateWalk_.value( 0.0f, maxHueRate, maxHueRate * 0.1f ); // never negative -- always one direction
-      shiftHue_ += hueRate * hueDtSec;
-      while ( shiftHue_ >= 256.0f ) shiftHue_ -= 256.0f;
-      uint8_t shiftHueByte = (uint8_t)shiftHue_;
-      // floods' own drift -- exactly 1/3 the rope's rate, see this member's
-      // own comment above.
-      floodShiftHue_ += ( hueRate / 3.0f ) * hueDtSec;
-      while ( floodShiftHue_ >= 256.0f ) floodShiftHue_ -= 256.0f;
-      uint8_t floodShiftHueByte = (uint8_t)floodShiftHue_;
-      if ( mode_ == VarHueToWhite || mode_ == VarShiftingHues ) {
-         // shared by both hue-shifting variations: saturation random-walks
-         // 75%-100% (widened from a fixed/87%-100% range -- was reading as
-         // too saturated all the time), starting at 90%, same range/
-         // technique as LighthouseShow's satWalk_.
-         uint8_t satByte = (uint8_t)( satWalk_.value( 0.75f, 1.0f, 0.013f ) * 255.0f + 0.5f );
-         if ( mode_ == VarHueToWhite ) {
-            // one color (the drifting hue) fading to the other (fixed white)
-            CRGB driftClr = CHSV( shiftHueByte, satByte, 255 );
-            shiftingPalette_ = CRGBPalette16( driftClr, driftClr, CRGB::White, CRGB::White );
-            CRGB floodDriftClr = CHSV( floodShiftHueByte, satByte, 255 );
-            floodShiftingPalette_ = CRGBPalette16( floodDriftClr, floodDriftClr, CRGB::White, CRGB::White );
-         } else {
-            // two complementary colors, both full brightness -- one drifting
-            // hue (shiftHueByte, same rotation as before) and its complement
-            // (+128), sharing the same random-walked saturation. Previously
-            // this was a single hue ramped only through 4 brightness levels
-            // (60/140/220/255), which read as dim/washed-out at the low end
-            // -- replaced with an actual 2-color contrast instead of a
-            // brightness ramp.
-            CRGB colorA = CHSV( shiftHueByte, satByte, 255 );
-            CRGB colorB = CHSV( (uint8_t)( shiftHueByte + 128 ), satByte, 255 );
-            shiftingPalette_ = CRGBPalette16( colorA, colorA, colorB, colorB );
-            CRGB floodColorA = CHSV( floodShiftHueByte, satByte, 255 );
-            CRGB floodColorB = CHSV( (uint8_t)( floodShiftHueByte + 128 ), satByte, 255 );
-            floodShiftingPalette_ = CRGBPalette16( floodColorA, floodColorA, floodColorB, floodColorB );
-         }
-      } else {
-         shiftingPalette_ = CRGBPalette16( CHSV( shiftHueByte, 255, 60 ), CHSV( shiftHueByte, 255, 140 ),
-                                           CHSV( shiftHueByte, 255, 220 ), CHSV( shiftHueByte, 255, 255 ) );
-      }
 
       // uint8_t coolingRate = baseCoolingRate + potval;
       // uint8_t sparkingRate = baseSparkingRate + potval;
@@ -422,11 +294,11 @@ class FlameShow : public LightShow {
          // max channel up to 255 BEFORE the hit-percent dimmer is applied, so
          // a full hit reaches true full intensity on both bands regardless
          // of which palette hue each one happens to be.
-         CRGB bassClr = floodPaletteColor( FLOOD_LO_INDEX );
+         CRGB bassClr = paletteColor( FLOOD_LO_INDEX );
          bassClr.maximizeBrightness();
          bassClr.nscale8( (uint8_t)( bassHitPercent / 100.0f * 255.0f + 0.5f ) );
          LedUtil::gammaCorrect( bassClr );
-         CRGB trebleClr = floodPaletteColor( FLOOD_HI_INDEX );
+         CRGB trebleClr = paletteColor( FLOOD_HI_INDEX );
          trebleClr.maximizeBrightness();
          trebleClr.nscale8( (uint8_t)( trebleHitPercent / 100.0f * 255.0f + 0.5f ) );
          LedUtil::gammaCorrect( trebleClr );
@@ -444,18 +316,18 @@ class FlameShow : public LightShow {
          // above), blended with its own spark heat on top -- 0 stays the
          // base color, 255 is a fully bright spark, so a pulse rises and
          // fades smoothly instead of snapping on/off.
-         CRGB loColor = floodPaletteColor( FLOOD_LO_INDEX );
-         CRGB hiColor = floodPaletteColor( FLOOD_HI_INDEX );
+         CRGB loColor = paletteColor( FLOOD_LO_INDEX );
+         CRGB hiColor = paletteColor( FLOOD_HI_INDEX );
          for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) {
             CRGB base = megabarColorPick_[ i ] ? loColor : hiColor;
-            CRGB sparkClr = floodPaletteColor( megabarHeat[ i ] );
+            CRGB sparkClr = paletteColor( megabarHeat[ i ] );
             CRGB clr = blend( base, sparkClr, megabarHeat[ i ] );
             LedUtil::gammaCorrect( clr );
             LightSetters::setColor( carpet, LightSetters::TargetMegabar, clr, LightSetters::ByID{ (uint8_t)i } );
          }
          for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) {
             CRGB base = chinaColorPick_[ c ] ? loColor : hiColor;
-            CRGB sparkClr = floodPaletteColor( chinaHeat[ c ] );
+            CRGB sparkClr = paletteColor( chinaHeat[ c ] );
             CRGB clr = blend( base, sparkClr, chinaHeat[ c ] );
             LedUtil::gammaCorrect( clr );
             LightSetters::setColor( carpet, LightSetters::TargetChina, clr, LightSetters::ByID{ (uint8_t)c } );

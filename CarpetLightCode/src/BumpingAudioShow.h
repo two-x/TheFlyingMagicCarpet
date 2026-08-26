@@ -1,17 +1,18 @@
 /* EqualizerShow.h
  *
- * A basic version of the Nightrider light effect, which is just a simple chase that
- * starts in the corners and bounces off the middles. Lame, but it lights up the
- * carpet and doesn't rely on the sound.
+ * Audio-reactive light show, 3 variations (VU meter / new_standard /
+ * pixel_war) -- see variationName() and each variation's own update
+ * logic below for what they do. Defaults to new_standard on boot (see
+ * Nvm.h's resetShowVariationToDefaults()).
  *
- * Variation 1: a dual VU meter along the two side rope runs -- bass grows from
- * the rear corner toward the front (red), treble grows from the front corner
- * toward the rear (blue), reusing this show's own red=bass/blue=treble
- * convention from variation 0's megabar tinting. Each meter's 100%-level reach
- * is 15% of the true-corner-to-center half-length past center (RIGHT/LEFT are
- * already the exact side midpoints -- see MagicCarpet.h's positional
- * constants), so maxed-out bass and treble simultaneously cross by about that
- * much right around the middle of the car, per request.
+ * Variation 0 (VU meter): a dual VU meter along the two side rope runs --
+ * bass grows from the rear corner toward the front (red), treble grows
+ * from the front corner toward the rear (blue). Each meter's 100%-level
+ * reach is 15% of the true-corner-to-center half-length past center
+ * (RIGHT/LEFT are already the exact side midpoints -- see MagicCarpet.h's
+ * positional constants), so maxed-out bass and treble simultaneously
+ * cross by about that much right around the middle of the car, per
+ * request.
  *
  * Author: Anders Linn
  * Date: August 2017
@@ -21,26 +22,6 @@
 #include "CarpetGeometry.h"
 #include "LightSetters.h"
 #include <math.h>
-
-const CRGB topC[] {
-   CRGB( 0, 255, 127), // summer day
-   CRGB( 178, 118, 50), // end summer day
-   CRGB( 178, 102, 9), // deep dark night
-   CRGB( 0, 255, 72), // desert afternoon
-   CRGB( 43, 123, 93), //under the sea
-   CRGB( 236, 84, 81), // beach party
-   CRGB( 248, 182, 124)
-};
-
-const CRGB bottomC[] {
- CRGB( 0, 201, 100 ),
- CRGB( 254, 181, 97 ),
- CRGB( 0, 68, 101 ),
- CRGB( 76, 255, 127 ),
- CRGB( 50, 199, 143 ),
- CRGB( 182, 35, 99 ),
- CRGB( 248, 247, 5 ),
-};
 
 // BUGFIX (mandate): the front/rear-vs-left/right megabar grouping and
 // front/rear-vs-side china grouping used to be hardcoded literal index
@@ -56,19 +37,19 @@ const CRGB bottomC[] {
 class EqualizerShow : public LightShow {
  private:
    // NOT using the LightShow.h X-macro/humanizeEnumName_() pattern the
-   // other 4 shows use -- 4 of these 5 real display names genuinely don't
-   // fit that mechanical "strip Var, lowercase, space before each cap"
-   // rule: "VU meter" keeps VU as a real uppercase acronym (not "vu
-   // meter"), and new_standard/pixel_war/sub_standard use an underscore
-   // convention that matches how they're referred to throughout this
-   // file's own code/comments (not "new standard" etc). Forcing the
-   // mechanical rule here would silently change established display names
-   // that are also used as jargon elsewhere in this file. variationName()
-   // below stays a plain hand-written switch instead -- still real FW
-   // code the visualizer reads via getCurrentVariationName(), just not
-   // mechanically re-derivable from the enum text for this one show.
-   enum Variation { VarChase = 0, VarVuMeter = 1, VarNewStandard = 2, VarPixelWar = 3, VarSubStandard = 4 };
-   static const uint8_t numVariations_ = 5;
+   // other 4 shows use -- these display names genuinely don't fit that
+   // mechanical "strip Var, lowercase, space before each cap" rule: "VU
+   // meter" keeps VU as a real uppercase acronym (not "vu meter"), and
+   // new_standard/pixel_war use an underscore convention that matches how
+   // they're referred to throughout this file's own code/comments (not
+   // "new standard" etc). Forcing the mechanical rule here would silently
+   // change established display names that are also used as jargon
+   // elsewhere in this file. variationName() below stays a plain
+   // hand-written switch instead -- still real FW code the visualizer
+   // reads via getCurrentVariationName(), just not mechanically
+   // re-derivable from the enum text for this one show.
+   enum Variation { VarVuMeter = 0, VarNewStandard = 1, VarPixelWar = 2 };
+   static const uint8_t numVariations_ = 3;
    uint8_t variation_;
    Timer eqFrameTimer_; // tracks dt between update() calls, for the 2 variations below
 
@@ -82,11 +63,9 @@ class EqualizerShow : public LightShow {
    static const uint8_t NEWSTD_HUE_RED = 0, NEWSTD_HUE_YELLOW = 42, NEWSTD_HUE_TREBLE = 160; // blue, constant
    float newStdHueTimeS_ = 0.0f, newStdSatTimeS_ = 0.0f; // hue time freezes during silence, sat time never does
 
-   // Drives which option china/megabars are currently showing, for both
-   // new_standard and sub_standard (which shares all of new_standard's logic
-   // except megabars get a 4th option -- see updateNewStandard()'s
-   // isSubStandard parameter). Replaces the old fixed-8000ms-timer advance:
-   // per request, the option now changes on the START of the (X*4)th next
+   // Drives which option china/megabars are currently showing, for
+   // new_standard. Replaces the old fixed-8000ms-timer advance: per
+   // request, the option now changes on the START of the (X*4)th next
    // BASS hit since the last change (X an integer, re-rolled 2-4 each time
    // this fires), and the newly-chosen option is picked at RANDOM from the
    // available count rather than round-robin-incremented. China and
@@ -103,9 +82,10 @@ class EqualizerShow : public LightShow {
       }
       // call once per bass-hit edge, passing the CURRENT pot-controlled
       // cycle length in beats (see EqualizerShow::cycleBeats_/
-      // potToCycleBeats()) -- returns true if the option just changed.
-      // Used to internally random-reroll its own 8/12/16 threshold; that's
-      // now a single shared, deterministic, pot-adjustable value instead.
+      // potToCycleBeats() below) -- returns true if the option just
+      // changed. Used to internally random-reroll its own 8/12/16
+      // threshold; that's now a single shared, deterministic,
+      // pot-adjustable value instead.
       bool onBassEdge( int cycleBeats ) {
          if ( ++hitsSinceChange < cycleBeats ) return false;
          hitsSinceChange = 0;
@@ -113,7 +93,7 @@ class EqualizerShow : public LightShow {
          return true;
       }
    };
-   // VU meter (variation 1) floods -- ported from the visualizer's own JS
+   // VU meter (variation 0) floods -- ported from the visualizer's own JS
    // mirror (showEqualizer()'s variation-1 branch in carpet-visualizer.html),
    // whose own comment on this exact spot says it plumbly: "not in the real
    // firmware yet ... added per request so the floods aren't dark during
@@ -135,17 +115,16 @@ class EqualizerShow : public LightShow {
       }
    }
 
-   // new_standard/sub_standard's own front/rear-vs-side china grouping --
-   // computed live from real CarpetGeometry angles, same pattern as
+   // new_standard's own front/rear-vs-side china grouping -- computed live
+   // from real CarpetGeometry angles, same pattern as
    // classifyVuFloodsFromGeometry() above (see this file's top-of-file
    // BUGFIX comment for what this replaced). China (unlike megabars) isn't
    // evenly 30deg-spaced, so there's no clean "step by angle" loop for it
    // the way megabars get below -- classified once per fixture instead.
-   // Megabar patterns (front/rear-vs-left/right, cardinal-vs-corner,
-   // opposite-pairs) are now computed directly inline, stepping by real
-   // 30deg multiples, at each use site below -- no cached per-index
-   // classification needed there, per explicit request ("handled within
-   // the lightshow").
+   // Megabar patterns (front/rear-vs-left/right, cardinal-vs-corner) are
+   // computed directly inline, stepping by real 30deg multiples, at each
+   // use site below -- no cached per-index classification needed there,
+   // per explicit request ("handled within the lightshow").
    static float angDist_( float a, float b ) {
       float d = fabsf( a - b );
       return ( d > 180.0f ) ? 360.0f - d : d;
@@ -176,16 +155,11 @@ class EqualizerShow : public LightShow {
    // bass's own pick count re-rolls (2-4) on every bass hit; treble's pick
    // count is always ceil(that/2) of whatever bass most recently rolled --
    // remembered here since bass/treble hits land on independent edges (see
-   // updateNewStandard()'s two separate NewHit() checks below).
+   // the new_standard branch's two separate NewHit() checks below).
    uint8_t newStdLastBassPickCount_ = 2;
    float newStdMegabarHeat_[ NUM_MEGABAR_LEDS ] = { 0.0f }; // cycle 2 only
-   // sub_standard megabar option 3 (opposite-pair-swap) -- reshuffled on
-   // EVERY bass hit while this option is active (a per-hit shuffle, distinct
-   // from megabarCycler_'s own much-slower option-change cadence above), per
-   // request: 3 of the 6 SUBSTD_MEGABAR_PAIRS are bass, the other 3 treble.
-   bool subPairIsBass_[ 6 ] = { true, true, true, false, false, false };
 
-   // Shared "no sound" flood behavior (all 4 variations, per request):
+   // Shared "no sound" flood behavior (all 3 variations, per request):
    // floods sit at a dim 15% baseline, and every 100-500ms a random flood
    // swaps its color assignment with a random flood of the other color,
    // spiking to full brightness then easing to 80% over ~200ms.
@@ -266,10 +240,10 @@ class EqualizerShow : public LightShow {
    Timer lastHitTimer_;      // timeout armed to SILENCE_RESET_MS on the first hit
    int suppressionPeak_ = 0;
 
-   // pot adjusts AudioBoard's shared peak threshold while Chase/VU meter/
-   // sub_standard are active -- soft takeover, same convention as config
-   // mode's livePercentFor(): holds at the last-committed value until the
-   // pot actually moves since this show became active, so it doesn't jump.
+   // pot adjusts AudioBoard's shared peak threshold while VU meter is
+   // active -- soft takeover, same convention as config mode's
+   // livePercentFor(): holds at the last-committed value until the pot
+   // actually moves since this show became active, so it doesn't jump.
    // Reverted back to the committed value on leaving this show (see
    // CarpetLightLogic.cpp's show-change block), so casual live tweaking here
    // never overwrites what's saved to flash. new_standard/pixel_war no
@@ -306,11 +280,9 @@ class EqualizerShow : public LightShow {
    uint8_t numVariations() { return numVariations_; }
 
    const char * variationName() {
-      if ( variation_ == VarChase ) return "chase";
       if ( variation_ == VarVuMeter ) return "VU meter";
       if ( variation_ == VarNewStandard ) return "new_standard";
-      if ( variation_ == VarPixelWar ) return "pixel_war";
-      return "sub_standard";
+      return "pixel_war";
    }
 
    bool getStrobeEnabled() {
@@ -332,11 +304,10 @@ class EqualizerShow : public LightShow {
 
       newStdHueTimeS_ = 0.0f; newStdSatTimeS_ = 0.0f;
       chinaCycler_.reset( 3 );
-      megabarCycler_.reset( variation_ == VarSubStandard ? 4 : 3 );
+      megabarCycler_.reset( 3 );
       megabarOptionTimer_.reset();
       for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) { newStdMegabarHeat_[ m ] = 0.0f; newStdMegabarIsBass_[ m ] = false; }
       newStdLastBassPickCount_ = 2;
-      for ( int p = 0; p < 6; ++p ) subPairIsBass_[ p ] = ( p < 3 );
       for ( int i = 0; i < NEWSTD_NUM_FLOODS; ++i ) { newStdFloodIsB_[ i ] = ( i % 2 == 0 ); newStdFloodBrightness_[ i ] = 0.15f; }
       newStdSwapArmed_ = false;
       for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) newStdLastChinaColor_[ c ] = CRGB::Black;
@@ -383,237 +354,284 @@ class EqualizerShow : public LightShow {
       }
 
       if ( variation_ == VarNewStandard ) {
-         updateNewStandard( time, dtSec, false );
-      } else if ( variation_ == VarSubStandard ) {
-         updateNewStandard( time, dtSec, true );
+         // Inlined directly here (per explicit request) rather than a
+         // separately-dispatched private method -- new_standard is the
+         // only variation that ever used this logic now that sub_standard
+         // (its only other former caller) is gone, so the extra function
+         // boundary no longer served any sharing purpose.
+         bool silent = AudioBoard::isSilent();
+         newStdSatTimeS_ += dtSec;
+         if ( !silent ) newStdHueTimeS_ += dtSec;
+         CRGB Bcolor, Tcolor;
+         newStdColors( Bcolor, Tcolor );
+         uint8_t bassHit = AudioBoard::getBandHitPercent( BandBass ), trebleHit = AudioBoard::getBandHitPercent( BandTreble );
+
+         // ROPE: per explicit request, matches the floodlight color scheme
+         // below (Bcolor/Tcolor) rather than a separate fixed palette --
+         // still the bouncing 2-segment animation (a "big" segment per
+         // long side, a "little" one per short side, each independently
+         // reflecting off its own end), just recolored. Own local statics
+         // (position/direction/timestamp).
+         static uint32_t timestamp = time;
+         static const uint32_t rate = 300;
+         static uint8_t bigPos = 0;
+         static uint8_t littlePos = 0;
+         static uint8_t bigPosDir = 1;
+         static uint8_t littlePosDir = 1;
+
+         uint32_t diff = time - timestamp;
+         if ( true || diff > rate ) {
+            timestamp = time;
+            diff = 0;
+            if ( bigPos == SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER - 1 ) {
+               bigPosDir = 0;
+            } else if ( bigPos == 0 && bigPosDir == 0 ) {
+               bigPosDir = 1;
+            }
+            if ( littlePos == SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER - 1 ) {
+               littlePosDir = 0;
+            } else if ( littlePos == 0 && littlePosDir == 0 ) {
+               littlePosDir = 1;
+            }
+            if ( bigPosDir ) {
+               ++bigPos;
+            } else {
+               --bigPos;
+            }
+            if ( littlePosDir ) {
+               ++littlePos;
+            } else {
+               --littlePos;
+            }
+         }
+
+         for ( int i = FRONT; i < FRONT_RIGHT; ++i ) {
+            int i_adj = i - FRONT;
+            int val = scaleTo255( abs( littlePos - i_adj ), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+            LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( Bcolor, Tcolor, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
+         }
+         for ( int i = FRONT_RIGHT; i < RIGHT; ++i ) {
+            int i_adj = i - FRONT_RIGHT;
+            int val = scaleTo255( abs( bigPos - i_adj ), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
+            LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( Bcolor, Tcolor, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
+         }
+         for ( int i = RIGHT; i < REAR_RIGHT; ++i ) {
+            int i_adj = i - RIGHT;
+            int val = scaleTo255( abs( bigPos - i_adj ), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
+            LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( Bcolor, Tcolor, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
+         }
+         for ( int i = REAR_RIGHT; i < REAR; ++i ) {
+            int i_adj = i - REAR_RIGHT;
+            int val = scaleTo255( abs( littlePos - i_adj ), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+            LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( Bcolor, Tcolor, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
+         }
+         for ( int i = REAR; i < REAR_LEFT; ++i ) {
+            int i_adj = i - REAR;
+            int val = scaleTo255( abs( littlePos - i_adj ), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+            LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( Bcolor, Tcolor, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
+         }
+         for ( int i = REAR_LEFT; i < LEFT; ++i ) {
+            int i_adj = i - REAR_LEFT;
+            int val = scaleTo255( abs( bigPos - i_adj ), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
+            LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( Bcolor, Tcolor, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
+         }
+         for ( int i = LEFT; i < FRONT_LEFT; ++i ) {
+            int i_adj = i - LEFT;
+            int val = scaleTo255( abs( bigPos - i_adj ), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
+            LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( Bcolor, Tcolor, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
+         }
+         for ( int i = FRONT_LEFT; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
+            int i_adj = i - FRONT_LEFT;
+            int val = scaleTo255( abs( littlePos - i_adj ), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+            LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( Bcolor, Tcolor, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
+         }
+         for ( int i = 0; i < FRONT; ++i ) {
+            int i_adj = i + SIZEOF_LARGE_NEO_CORNER;
+            int val = scaleTo255( abs( littlePos - i_adj ), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
+            LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( Bcolor, Tcolor, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
+         }
+
+         LedUtil::reverse( carpet->ropeLeds + FRONT, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
+         LedUtil::reverse( carpet->ropeLeds + REAR, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
+         LedUtil::reverse( carpet->ropeLeds + RIGHT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
+         LedUtil::reverse( carpet->ropeLeds + LEFT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
+
+         if ( silent ) {
+            updateSilenceFloods( time, dtSec, Bcolor, Tcolor );
+            for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdLastMegabarColor_[ m ] = carpet->megabarLeds[ m ];
+            for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) newStdLastChinaColor_[ c ] = carpet->chinaLeds[ c ];
+         } else {
+
+         // Shared bass/treble edge, used below both to drive china/megabar's
+         // OptionCycler (bass edges only, per request) and cycle-2's own
+         // per-hit heat mechanics. Uses the real FW edge flag
+         // (AudioBoard::NewBandHit(), computed against the live peak
+         // threshold at the true ~30ms audio poll rate) rather than a hand-
+         // rolled ">20% and was <=20%" check sampled once per render frame --
+         // BUGFIX ("megabars sometimes don't respond to a hit even though
+         // chinas do"): the old check missed any hit whose predecessor hadn't
+         // yet decayed back below the hardcoded 20% mark by the time the next
+         // hit rose (common at faster tempos / slower hit-decay settings),
+         // since china's own per-frame amplitude-based render still visibly
+         // brightened even on a missed edge while megabar's edge-gated pick
+         // logic silently did nothing. NewHit() can't miss a hit this way --
+         // it's set the instant updateBandLevels() sees the real crossing,
+         // independent of render-frame timing.
+         bool bassEdge = AudioBoard::NewBandHit( BandBass );
+         bool trebleEdge = AudioBoard::NewBandHit( BandTreble );
+
+         bool chinaChanged = false, megabarChanged = false;
+         if ( bassEdge ) {
+            chinaChanged = chinaCycler_.onBassEdge( cycleBeats_ );
+            megabarChanged = megabarCycler_.onBassEdge( cycleBeats_ );
+         }
+
+         // CHINA: 3 options (collapsed from the old 4-count cycle, whose
+         // indices 2/3 rendered identically anyway), option chosen at random by
+         // chinaCycler_ above rather than round-robin.
+         if ( chinaChanged ) {
+            for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) newStdChinaFadeFrom_[ c ] = newStdLastChinaColor_[ c ];
+            newStdChinaFadeStartMs_ = time;
+         }
+         CRGB bassChina = Bcolor, trebleChina = Tcolor;
+         bassChina.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
+         trebleChina.nscale8( (uint8_t)( (uint16_t)trebleHit * 255 / 100 ) );
+         if ( chinaCycler_.option == 0 ) {
+            for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, chinaIsFrontRear_[ c ] ? bassChina : trebleChina, LightSetters::ByID{ c } );
+         } else if ( chinaCycler_.option == 1 ) {
+            for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, bassChina, LightSetters::ByID{ c } );
+         } else {
+            for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, trebleChina, LightSetters::ByID{ c } );
+         }
+         if ( time - newStdChinaFadeStartMs_ < NEWSTD_FADE_MS ) {
+            uint8_t fadeF = (uint8_t)( 255.0f * (float)( time - newStdChinaFadeStartMs_ ) / (float)NEWSTD_FADE_MS );
+            for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, blend( newStdChinaFadeFrom_[ c ], carpet->chinaLeds[ c ], fadeF ), LightSetters::ByID{ c } );
+         }
+         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
+            newStdLastChinaColor_[ c ] = carpet->chinaLeds[ c ];
+            LightSetters::setWhite( carpet, LightSetters::TargetChina, 0, LightSetters::ByID{ c } );
+         }
+
+         // MEGABARS: 3 options, option chosen at random by megabarCycler_
+         // above. Each option's own random sub-state is re-rolled fresh on
+         // ENTRY to that option (i.e. the frame megabarChanged is true AND
+         // that's the option just landed on) -- previously this reroll
+         // happened inline with the round-robin advance itself; now it has
+         // to be looked up by option number since the next option isn't a
+         // fixed +1 anymore.
+         if ( megabarChanged ) {
+            for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdMegabarFadeFrom_[ m ] = newStdLastMegabarColor_[ m ];
+            newStdMegabarFadeStartMs_ = time;
+            megabarOptionTimer_.reset();
+            if ( megabarCycler_.option == 0 ) newStdCycle1TrebleIsMod3_ = random( 2 ) == 0;
+            if ( megabarCycler_.option == 1 ) newStdCycle2FrontRearIsBass_ = random( 2 ) == 0;
+            if ( megabarCycler_.option == 2 ) {
+               for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdMegabarHeat_[ m ] = 0.0f;
+            }
+         }
+         CRGB bassMb = Bcolor, trebleMb = Tcolor;
+         bassMb.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
+         trebleMb.nscale8( (uint8_t)( (uint16_t)trebleHit * 255 / 100 ) );
+         if ( megabarCycler_.option == 0 ) {
+            // cardinal (0/90/180/270deg) vs corner megabars -- stepped by real
+            // angle (every 30deg), not DMX-order index, per explicit request.
+            for ( int step = 0; step < 12; ++step ) {
+               float angle = (float)step * 30.0f;
+               bool isMod3 = ( step % 3 == 0 );
+               CRGB clr = ( isMod3 == newStdCycle1TrebleIsMod3_ ) ? trebleMb : bassMb;
+               LightSetters::setColor( carpet, LightSetters::TargetMegabar, clr, LightSetters::ByAngleDeg{ angle } );
+            }
+         } else if ( megabarCycler_.option == 1 ) {
+            // front/rear vs left/right -- stepped by real angle; classified
+            // inline (nearest to the front-rear axis vs the left-right axis)
+            // rather than a precomputed per-index table.
+            int swapNum = (int)( megabarOptionTimer_.elapsed() / 2000 ); // every 2s
+            bool frontRearIsBass = ( swapNum % 2 == 0 ) ? newStdCycle2FrontRearIsBass_ : !newStdCycle2FrontRearIsBass_;
+            for ( int step = 0; step < 12; ++step ) {
+               float angle = (float)step * 30.0f;
+               float dFrontRear = min( angDist_( angle, 0.0f ), angDist_( angle, 180.0f ) );
+               float dLeftRight = min( angDist_( angle, 90.0f ), angDist_( angle, 270.0f ) );
+               bool isFrontRear = ( dFrontRear <= dLeftRight );
+               bool wantsBass = isFrontRear ? frontRearIsBass : !frontRearIsBass;
+               LightSetters::setColor( carpet, LightSetters::TargetMegabar, wantsBass ? bassMb : trebleMb, LightSetters::ByAngleDeg{ angle } );
+            }
+         } else {
+            // Few-random-floods phase. On each qualifying BASS edge, a fresh
+            // 2-4 (re-rolled every hit, per request) currently-black megabars
+            // light up in Bcolor; on each qualifying TREBLE edge, ceil(that
+            // bass count/2) currently-black megabars light up in Tcolor --
+            // each band's own pool is picked independently, at THAT band's own
+            // hit, and the megabar's color is set right then (fixing the old
+            // "picked megabar shows the wrong band's color" mismatch -- see
+            // newStdMegabarIsBass_'s own comment above). Falls back to the N
+            // dimmest if fewer than N are fully black.
+            auto pickAndLight = [&]( int numToPick, bool isBass ) {
+               int black[ NUM_MEGABAR_LEDS ], blackCount = 0;
+               for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) if ( newStdMegabarHeat_[ m ] <= 0.02f ) black[ blackCount++ ] = m;
+               int pick[ 4 ] = { -1, -1, -1, -1 }; // 4 = max possible numToPick (bass's own 2-4 range)
+               if ( blackCount >= numToPick ) {
+                  for ( int n = 0; n < numToPick; ++n ) {
+                     int j = random( blackCount );
+                     pick[ n ] = black[ j ];
+                     black[ j ] = black[ --blackCount ];
+                  }
+               } else {
+                  // N dimmest -- simple selection over 12 entries
+                  int order[ NUM_MEGABAR_LEDS ]; for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) order[ m ] = m;
+                  for ( int a = 0; a < NUM_MEGABAR_LEDS - 1; ++a )
+                     for ( int b = a + 1; b < NUM_MEGABAR_LEDS; ++b )
+                        if ( newStdMegabarHeat_[ order[ b ] ] < newStdMegabarHeat_[ order[ a ] ] ) { int t = order[ a ]; order[ a ] = order[ b ]; order[ b ] = t; }
+                  for ( int n = 0; n < numToPick; ++n ) pick[ n ] = order[ n ];
+               }
+               for ( int n = 0; n < numToPick; ++n ) if ( pick[ n ] >= 0 ) {
+                  newStdMegabarHeat_[ pick[ n ] ] = 1.0f;
+                  newStdMegabarIsBass_[ pick[ n ] ] = isBass;
+               }
+            };
+            if ( bassEdge ) {
+               newStdLastBassPickCount_ = 2 + random( 3 ); // 2-4
+               pickAndLight( newStdLastBassPickCount_, true );
+            }
+            if ( trebleEdge ) {
+               int numTreble = ( newStdLastBassPickCount_ + 1 ) / 2; // ceil(bass/2)
+               pickAndLight( numTreble, false );
+            }
+            for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
+               newStdMegabarHeat_[ m ] = max( 0.0f, newStdMegabarHeat_[ m ] - dtSec / 0.4f );
+               CRGB base = newStdMegabarIsBass_[ m ] ? Bcolor : Tcolor;
+               base.nscale8( (uint8_t)( newStdMegabarHeat_[ m ] * 255.0f + 0.5f ) );
+               LightSetters::setColor( carpet, LightSetters::TargetMegabar, base, LightSetters::ByID{ (uint8_t)m } );
+            }
+         }
+         if ( time - newStdMegabarFadeStartMs_ < NEWSTD_FADE_MS ) {
+            uint8_t fadeF = (uint8_t)( 255.0f * (float)( time - newStdMegabarFadeStartMs_ ) / (float)NEWSTD_FADE_MS );
+            for ( uint8_t m = 0; m < NUM_MEGABAR_LEDS; ++m ) LightSetters::setColor( carpet, LightSetters::TargetMegabar, blend( newStdMegabarFadeFrom_[ m ], carpet->megabarLeds[ m ], fadeF ), LightSetters::ByID{ m } );
+         }
+         for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdLastMegabarColor_[ m ] = carpet->megabarLeds[ m ];
+         } // end !silent
       } else if ( variation_ == VarPixelWar ) {
          updatePixelWar( time, dtSec );
-      } else if ( variation_ == VarVuMeter ) {
+      } else { // VarVuMeter
          updateVuMeter( time );
-         // Per request, all 4 variations go dark-with-nothing-to-react-to
-         // the same way during silence -- new_standard/pixel_war have their
-         // own internal silence handling above; Chase/VU meter get it as a
-         // post-step override on top of their own (otherwise near-dark)
+         // Per request, every variation goes dark-with-nothing-to-react-to
+         // the same way during silence -- new_standard/pixel_war have
+         // their own internal silence handling above; VU meter gets it as
+         // a post-step override on top of its own (otherwise near-dark)
          // output, same as the visualizer prototype.
          if ( AudioBoard::isSilent() ) updateSilenceFloods( time, dtSec, CRGB( 255, 0, 0 ), CRGB( 0, 0, 255 ) ); // red=bass, blue=treble, this show's own convention
-      } else {
-      static const CRGBPalette256 clr( CRGB::Red, CRGB::Black );
-      static uint32_t timestamp = time;
-      static const uint32_t rate = 300; // move the lights every 200ms
-      static const uint32_t littleRate = rate;
-      static const uint32_t bigRate = ( littleRate * SIZEOF_LARGE_NEO ) / SIZEOF_SMALL_NEO;
-      static uint8_t bigPos = 0;
-      static uint8_t littlePos = 0;
-      static uint8_t bigPosDir = 1;
-      static uint8_t littlePosDir = 1;
-
-      uint32_t diff = time - timestamp;
-      if ( true || diff > rate ) {
-         timestamp = time;
-         diff = 0;
-         if ( bigPos == SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER - 1 ) {
-            bigPosDir = 0;
-         } else if ( bigPos == 0 && bigPosDir == 0 ) {
-            bigPosDir = 1;
-         }
-         if ( littlePos == SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER - 1 ) {
-            littlePosDir = 0;
-         } else if ( littlePos == 0 && littlePosDir == 0 ) {
-            littlePosDir = 1;
-         }
-         if ( bigPosDir ) {
-            ++bigPos;
-         } else {
-            --bigPos;
-         }
-         if ( littlePosDir ) {
-            ++littlePos;
-         } else {
-            --littlePos;
-         }
       }
-
-      //const uint8_t val1 = carpet->pot->read() / 4;
-      //const uint8_t val2 = ( val1 + 128 ) % 255;
-      //const CRGB clr1 = CHSV( val1, 255, 255 );
-      //const CRGB clr2 = CHSV( val2, 255, 255 );;
-      float satFraction = currentSatFraction( time );
-      CRGB clr1 = desaturate( CRGB(0,0,255), satFraction );
-      CRGB clr2 = desaturate( CRGB(255,0,0), satFraction );
-      // CRGB clr3 = CRGB(0,255,0);
-      // Serial.println( "potval" );
-      // Serial.println( val1 );
-      //const CRGBW clr1 = topC[val1];
-      //const CRGBW clr2 = bottomC[val1];
-      // Serial.println( "CRGB1" );
-      // Serial.println( clr1.r );
-      // Serial.println( clr1.g );
-      // Serial.println( clr1.b );
-      // Serial.println( clr1.w );
-      // Serial.println( "CRGB2" );
-      // Serial.println( clr2.r );
-      // Serial.println( clr2.g );
-      // Serial.println( clr2.b );
-      // Serial.println( clr2.w );
-      // int diffIndex = scaleTo255( diff, rate, 0 );
-
-      for ( int i = FRONT; i < FRONT_RIGHT; ++i ) {
-         int i_adj = i - FRONT;
-        int val = scaleTo255( abs(littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
-         // carpet->ropeLeds[i] = CRGB::Red;
-      }
-      for ( int i = FRONT_RIGHT; i < RIGHT; ++i ) {
-         int i_adj = i - FRONT_RIGHT;
-         int val = scaleTo255( abs( bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
-         // carpet->ropeLeds[i] = CRGB::Green;
-      }
-      for ( int i = RIGHT; i < REAR_RIGHT; ++i ) {
-         int i_adj = i - RIGHT;
-         int val = scaleTo255( abs(bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
-         // carpet->ropeLeds[i] = CRGB::Blue;
-      }
-      for ( int i = REAR_RIGHT; i < REAR; ++i ) {
-         int i_adj = i - REAR_RIGHT;
-        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
-         // carpet->ropeLeds[i] = CRGB::Yellow;
-      }
-      for ( int i = REAR; i < REAR_LEFT; ++i ) {
-         int i_adj = i - REAR;
-        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
-         // carpet->ropeLeds[i] = CRGB::Orange;
-      }
-      for ( int i = REAR_LEFT; i < LEFT; ++i ) {
-         int i_adj = i - REAR_LEFT;
-         int val = scaleTo255( abs( bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
-         // carpet->ropeLeds[i] = CRGB::Purple;
-      }
-      for ( int i = LEFT; i < FRONT_LEFT; ++i ) {
-         int i_adj = i - LEFT;
-         int val = scaleTo255( abs(bigPos - i_adj), SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER, 0 );
-         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
-         // carpet->ropeLeds[i] = CRGB::Pink;
-      }
-      for ( int i = FRONT_LEFT; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-         int i_adj = i - FRONT_LEFT;
-        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
-         // carpet->ropeLeds[i] = CRGB::Grey;
-      }
-      for ( int i = 0; i < FRONT; ++i ) {
-         int i_adj = i + SIZEOF_LARGE_NEO_CORNER;
-        int val = scaleTo255( abs( littlePos - i_adj), SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER, 0 );
-         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( clr1, clr2, val ), LightSetters::NeoByCircumferenceID{ CarpetGeometry::rawIndexToNeoId( i ) } );
-         // carpet->ropeLeds[i] = CRGB::Grey;
-      }
-
-
-      // Reversing already-written pixels in place, not writing a NEW color
-      // by position -- outside what LightSetters' position-addressed
-      // setters model, so this stays direct raw-array access on purpose.
-      LedUtil::reverse( carpet->ropeLeds + FRONT, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
-       LedUtil::reverse( carpet->ropeLeds + REAR, SIZEOF_SMALL_NEO_HALF + SIZEOF_LARGE_NEO_CORNER );
-      LedUtil::reverse( carpet->ropeLeds + RIGHT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
-      LedUtil::reverse( carpet->ropeLeds + LEFT, SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER );
-
-      // switched to the shared hit value (attack/decay peak-hold now lives
-      // in AudioBoard, tunable via the Audio config screen's decay-rate
-      // subsetting) instead of this show's own ad-hoc lastlow tracking --
-      // per request, all EqualizerShow variations use hit instead of level.
-      // Cardinal megabars (0/90/180/270deg) get treble; the other 8
-      // (every other 30deg step) get bass -- stepped by real angle, not
-      // DMX-order index, so the geometric intent (cardinal vs. non-
-      // cardinal) stays obvious/robust in code, same reasoning as
-      // NightriderShow's own 30deg-stepped flood loop.
-      uint8_t lastlow = (uint8_t)( (uint16_t)AudioBoard::getBandHitPercent( BandBass ) * 255 / 100 );
-      CRGB bassClr = blend( CRGB::Black, clr2, lastlow );
-      int highval = (int)( (uint16_t)AudioBoard::getBandHitPercent( BandTreble ) * 255 / 100 );
-      CRGB trebleClr = blend( CRGB::Black, clr1, highval );
-      for ( int step = 0; step < 12; ++step ) {
-         float angle = (float)step * 30.0f;
-         bool isCardinal = ( step % 3 == 0 );
-         LightSetters::setColor( carpet, LightSetters::TargetMegabar, isCardinal ? trebleClr : bassClr, LightSetters::ByAngleDeg{ angle } );
-      }
-
-
-
-      //CRGB dmxclr = blend( clr1, clr2, lowval);
-      //dmxclr = blend( clr2, clr3, highval);
-      //dmxclr = CRGB(lowval,highval,30);
-
-
-
-      /*int midval = AudioBoard::getMid();
-      int highval = AudioBoard::getHigh();
-      static int maxlow = 0;
-      static int minlow = 255;
-      maxlow = max(maxlow, lowval);
-      Serial.println("maxlow");
-      Serial.println(maxlow);
-      minlow = min(minlow, lowval);
-      Serial.println("minlow");
-      Serial.println(minlow);
-      // lowval = lowval > 75 ? lowval - 75 : 0;
-      // midval = midval > 75 ? midval - 75 : 0;
-     //  highval = highval > 75 ? highval - 75 : 0;
-      // CRGB dmxclr = (lowval > midval && lowval >= highval) ? CRGB::Red :(highval > midval) ? CRGB::Green : CRGB::Blue;
-      float avg = lowval + midval + highval;
-      int dmxred = (255 * ( ((float) lowval) / avg));
-      int dmxblue = (255 * ( ((float) midval) / avg));
-      int dmxgreen = (255 * ( ((float) highval) / avg));
-      Serial.println("dmxred:");
-      Serial.println(dmxred);
-      Serial.println("dmxblue:");
-      Serial.println(dmxblue);
-      Serial.println("dmxgreen:");
-      Serial.println(dmxgreen);
-      //CRGB dmxclr(dmxred, 0, dmxgreen);
-      Serial.println("low: ");
-      Serial.println(lowval);
-      Serial.println("mid");
-      Serial.println(midval);
-      Serial.println("high");
-      Serial.println(highval);*/
-      // CRGB dmxclr(lowval, midval, highval);
-      //LedUtil::fill( carpet->megabarLeds, dmxclr, NUM_MEGABAR_LEDS );
-      //LedUtil::fill( carpet->chinaLeds, dmxclr, NUM_CHINA_LEDS );
-
-      // disabled: button now drives global show-cycling, not this show's white glow
-      /*
-      static uint8_t white = 0;
-      if ( carpet->encoder->button.isDown() ) {
-         if ( white < 255 ) {
-            ++white;
-         }
-      } else {
-         if ( white > 0 ) {
-            --white;
-         }
-      }
-      for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-         carpet->ropeLeds[ i ].w = white;
-      }
-      */
-      if ( AudioBoard::isSilent() ) updateSilenceFloods( time, dtSec, CRGB( 255, 0, 0 ), CRGB( 0, 0, 255 ) ); // red=bass, blue=treble, same as VU meter's override above
-      } // end variation 0
 
       updateStrobe( time );
    }
 
  private:
-   // variation 1: dual VU meter. Bass (AudioBoard::getLow()) is based across
+   // variation 0: dual VU meter. Bass (AudioBoard::getLow()) is based across
    // the WHOLE rear of the car -- the rear edge rope is always part of it,
    // not just the two rear corners -- and grows forward from there along
    // both sides, red. Treble (getHigh()) mirrors this from the whole front
-   // edge, growing rearward along both sides, blue -- same red=bass/blue=
-   // treble convention as variation 0's megabar tinting above. Both meters
-   // use the same attack/decay peak-hold ballistics as variation 0's lowval/
-   // lastlow (jump up fast past a threshold, fall back 15/frame otherwise),
+   // edge, growing rearward along both sides, blue. Both meters
+   // use the same attack/decay peak-hold ballistics as hit's own
+   // (jump up fast past a threshold, fall back 15/frame otherwise),
    // just kept as separate state. Brightness of each meter (base edge and
    // side fill alike) scales directly with its current level -- a quiet
    // signal shows a dim meter, not just a short one.
@@ -621,11 +639,10 @@ class EqualizerShow : public LightShow {
    // RIGHT/LEFT are already the exact midpoints of each side run (see
    // MagicCarpet.h's positional constants), and FRONT_RIGHT/REAR_RIGHT (resp.
    // FRONT_LEFT/REAR_LEFT) the true corners -- so halfLen_ below is exactly
-   // the true-corner-to-center distance, reusing the same geometry as
-   // variation 0's "big" segments (SIZEOF_LARGE_NEO_HALF - SIZEOF_LARGE_NEO_CORNER).
-   // Each meter's 100%-level reach is halfLen_ plus 15% of halfLen_, so maxed
-   // bass and treble together cross by about 15% of half the car's length,
-   // right around the middle -- per request.
+   // the true-corner-to-center distance. Each meter's 100%-level reach is
+   // halfLen_ plus 15% of halfLen_, so maxed bass and treble together cross
+   // by about 15% of half the car's length, right around the middle --
+   // per request.
    void updateVuMeter( uint32_t time ) {
       // hit already implements this meter's attack/decay ballistics (see
       // AudioBoard::updateBandLevels(), tunable via the Audio config
@@ -641,7 +658,7 @@ class EqualizerShow : public LightShow {
       // brightness follows level directly -- a quiet meter is a dim meter
       float satFraction = currentSatFraction( time );
       CRGB bassClr = desaturate( CRGB( 255, 0, 0 ), satFraction );   // red, per request
-      CRGB trebleClr = desaturate( CRGB( 0, 0, 255 ), satFraction ); // blue, matching variation 0's high=blue convention
+      CRGB trebleClr = desaturate( CRGB( 0, 0, 255 ), satFraction ); // blue, matching this show's high=blue convention
       bassClr.nscale8( (uint8_t)vuLastBass );
       trebleClr.nscale8( (uint8_t)vuLastTreble );
 
@@ -706,7 +723,7 @@ class EqualizerShow : public LightShow {
       }
    }
 
-   // slow rolling desaturation applied to every base color used in both
+   // slow rolling desaturation applied to every base color used across
    // variations: saturation drifts from 100% down to 85% and back over a
    // 30-second period (smooth sine, not a hard bounce). satFraction is
    // 1.0-0.85, the fraction of full saturation currently in effect.
@@ -756,10 +773,10 @@ class EqualizerShow : public LightShow {
       Tcolor = CHSV( NEWSTD_HUE_TREBLE, satByte, 255 );
    }
 
-   // Shared "no sound" flood behavior, used by all 4 variations -- see the
+   // Shared "no sound" flood behavior, used by all 3 variations -- see the
    // class member comment above. colorB/colorT are whichever two base
    // colors the calling variation uses (Bcolor/Tcolor for new_standard/
-   // pixel_war, bass-red/treble-blue for Chase/VU meter).
+   // pixel_war, bass-red/treble-blue for VU meter).
    void updateSilenceFloods( uint32_t time, float dtSec, const CRGB & colorB, const CRGB & colorT ) {
       if ( !newStdSwapArmed_ || time >= newStdNextSwapMs_ ) {
          newStdSwapArmed_ = true;
@@ -827,220 +844,6 @@ class EqualizerShow : public LightShow {
       float f = 0.5f - 0.5f * ( nearestD / halfFade );
       uint8_t f255 = (uint8_t)( f * 255.0f + 0.5f );
       return inB ? blend( Bcolor, Tcolor, f255 ) : blend( Tcolor, Bcolor, f255 );
-   }
-
-   void updateNewStandard( uint32_t time, float dtSec, bool isSubStandard ) {
-      bool silent = AudioBoard::isSilent();
-      newStdSatTimeS_ += dtSec;
-      if ( !silent ) newStdHueTimeS_ += dtSec;
-      CRGB Bcolor, Tcolor;
-      newStdColors( Bcolor, Tcolor );
-      uint8_t bassHit = AudioBoard::getBandHitPercent( BandBass ), trebleHit = AudioBoard::getBandHitPercent( BandTreble );
-
-      // sub_standard's only difference from new_standard: megabars get a 4th
-      // cycle option (see below). If the numOptions just changed (variation
-      // switched live via encoder), clamp option_ back into range rather
-      // than leaving it pointing at an option that no longer exists.
-      uint8_t megabarNumOptions = isSubStandard ? 4 : 3;
-      if ( megabarCycler_.numOptions != megabarNumOptions ) {
-         megabarCycler_.numOptions = megabarNumOptions;
-         if ( megabarCycler_.option >= megabarNumOptions ) megabarCycler_.option = 0;
-      }
-
-      // ROPE: the default variation's single traveling segment, plus 3 more
-      // evenly spaced (a quarter of the loop) apart, all in Bcolor.
-      float chasePos = fmodf( (float)time / 1000.0f * 60.0f, (float)NUM_NEO_LEDS_ACTUAL );
-      float quarter = (float)NUM_NEO_LEDS_ACTUAL / 4.0f;
-      for ( int i = 0; i < NUM_NEO_LEDS_ACTUAL; ++i ) {
-         float nearest = 1e9f;
-         for ( int s = 0; s < 4; ++s ) {
-            float segPos = fmodf( chasePos + s * quarter, (float)NUM_NEO_LEDS_ACTUAL );
-            float d = min( fabsf( (float)i - segPos ), (float)NUM_NEO_LEDS_ACTUAL - fabsf( (float)i - segPos ) );
-            if ( d < nearest ) nearest = d;
-         }
-         uint8_t amt = (uint8_t)max( 0.0f, 255.0f - nearest * 4.0f );
-         int32_t neoId = CarpetGeometry::rawIndexToNeoId( i );
-         LightSetters::setColor( carpet, LightSetters::TargetNeo, blend( CRGB::Black, Bcolor, amt ), LightSetters::NeoByCircumferenceID{ neoId } );
-         LightSetters::setWhite( carpet, LightSetters::TargetNeo, 0, LightSetters::NeoByCircumferenceID{ neoId } );
-      }
-
-      if ( silent ) {
-         updateSilenceFloods( time, dtSec, Bcolor, Tcolor );
-         for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdLastMegabarColor_[ m ] = carpet->megabarLeds[ m ];
-         for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) newStdLastChinaColor_[ c ] = carpet->chinaLeds[ c ];
-         return;
-      }
-
-      // Shared bass/treble edge, used below both to drive china/megabar's
-      // OptionCycler (bass edges only, per request) and cycle-2/sub_standard-
-      // option-3's own per-hit heat/pair-reshuffle mechanics. Uses the real
-      // FW edge flag (AudioBoard::NewBandHit(), computed against the live peak
-      // threshold at the true ~30ms audio poll rate) rather than a hand-
-      // rolled ">20% and was <=20%" check sampled once per render frame --
-      // BUGFIX ("megabars sometimes don't respond to a hit even though
-      // chinas do"): the old check missed any hit whose predecessor hadn't
-      // yet decayed back below the hardcoded 20% mark by the time the next
-      // hit rose (common at faster tempos / slower hit-decay settings),
-      // since china's own per-frame amplitude-based render still visibly
-      // brightened even on a missed edge while megabar's edge-gated pick
-      // logic silently did nothing. NewHit() can't miss a hit this way --
-      // it's set the instant updateBandLevels() sees the real crossing,
-      // independent of render-frame timing.
-      bool bassEdge = AudioBoard::NewBandHit( BandBass );
-      bool trebleEdge = AudioBoard::NewBandHit( BandTreble );
-
-      bool chinaChanged = false, megabarChanged = false;
-      if ( bassEdge ) {
-         chinaChanged = chinaCycler_.onBassEdge( cycleBeats_ );
-         megabarChanged = megabarCycler_.onBassEdge( cycleBeats_ );
-      }
-
-      // CHINA: 3 options (collapsed from the old 4-count cycle, whose
-      // indices 2/3 rendered identically anyway), option chosen at random by
-      // chinaCycler_ above rather than round-robin.
-      if ( chinaChanged ) {
-         for ( int c = 0; c < NUM_CHINA_LEDS; ++c ) newStdChinaFadeFrom_[ c ] = newStdLastChinaColor_[ c ];
-         newStdChinaFadeStartMs_ = time;
-      }
-      CRGB bassChina = Bcolor, trebleChina = Tcolor;
-      bassChina.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
-      trebleChina.nscale8( (uint8_t)( (uint16_t)trebleHit * 255 / 100 ) );
-      if ( chinaCycler_.option == 0 ) {
-         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, chinaIsFrontRear_[ c ] ? bassChina : trebleChina, LightSetters::ByID{ c } );
-      } else if ( chinaCycler_.option == 1 ) {
-         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, bassChina, LightSetters::ByID{ c } );
-      } else {
-         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, trebleChina, LightSetters::ByID{ c } );
-      }
-      if ( time - newStdChinaFadeStartMs_ < NEWSTD_FADE_MS ) {
-         uint8_t fadeF = (uint8_t)( 255.0f * (float)( time - newStdChinaFadeStartMs_ ) / (float)NEWSTD_FADE_MS );
-         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) LightSetters::setColor( carpet, LightSetters::TargetChina, blend( newStdChinaFadeFrom_[ c ], carpet->chinaLeds[ c ], fadeF ), LightSetters::ByID{ c } );
-      }
-      for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
-         newStdLastChinaColor_[ c ] = carpet->chinaLeds[ c ];
-         LightSetters::setWhite( carpet, LightSetters::TargetChina, 0, LightSetters::ByID{ c } );
-      }
-
-      // MEGABARS: 3 options (new_standard) or 4 (sub_standard), option
-      // chosen at random by megabarCycler_ above. Each option's own random
-      // sub-state is re-rolled fresh on ENTRY to that option (i.e. the frame
-      // megabarChanged is true AND that's the option just landed on) --
-      // previously this reroll happened inline with the round-robin advance
-      // itself; now it has to be looked up by option number since the next
-      // option isn't a fixed +1 anymore.
-      if ( megabarChanged ) {
-         for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdMegabarFadeFrom_[ m ] = newStdLastMegabarColor_[ m ];
-         newStdMegabarFadeStartMs_ = time;
-         megabarOptionTimer_.reset();
-         if ( megabarCycler_.option == 0 ) newStdCycle1TrebleIsMod3_ = random( 2 ) == 0;
-         if ( megabarCycler_.option == 1 ) newStdCycle2FrontRearIsBass_ = random( 2 ) == 0;
-         if ( megabarCycler_.option == 2 ) {
-            for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdMegabarHeat_[ m ] = 0.0f;
-         }
-         if ( megabarCycler_.option == 3 ) {
-            for ( int p = 0; p < 6; ++p ) subPairIsBass_[ p ] = ( p < 3 ); // reshuffled for real on the next bass hit anyway -- see option 3's own render block
-         }
-      }
-      CRGB bassMb = Bcolor, trebleMb = Tcolor;
-      bassMb.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
-      trebleMb.nscale8( (uint8_t)( (uint16_t)trebleHit * 255 / 100 ) );
-      if ( megabarCycler_.option == 0 ) {
-         // cardinal (0/90/180/270deg) vs corner megabars -- stepped by real
-         // angle (every 30deg), not DMX-order index, per explicit request.
-         for ( int step = 0; step < 12; ++step ) {
-            float angle = (float)step * 30.0f;
-            bool isMod3 = ( step % 3 == 0 );
-            CRGB clr = ( isMod3 == newStdCycle1TrebleIsMod3_ ) ? trebleMb : bassMb;
-            LightSetters::setColor( carpet, LightSetters::TargetMegabar, clr, LightSetters::ByAngleDeg{ angle } );
-         }
-      } else if ( megabarCycler_.option == 1 ) {
-         // front/rear vs left/right -- stepped by real angle; classified
-         // inline (nearest to the front-rear axis vs the left-right axis)
-         // rather than a precomputed per-index table.
-         int swapNum = (int)( megabarOptionTimer_.elapsed() / 2000 ); // every 2s
-         bool frontRearIsBass = ( swapNum % 2 == 0 ) ? newStdCycle2FrontRearIsBass_ : !newStdCycle2FrontRearIsBass_;
-         for ( int step = 0; step < 12; ++step ) {
-            float angle = (float)step * 30.0f;
-            float dFrontRear = min( angDist_( angle, 0.0f ), angDist_( angle, 180.0f ) );
-            float dLeftRight = min( angDist_( angle, 90.0f ), angDist_( angle, 270.0f ) );
-            bool isFrontRear = ( dFrontRear <= dLeftRight );
-            bool wantsBass = isFrontRear ? frontRearIsBass : !frontRearIsBass;
-            LightSetters::setColor( carpet, LightSetters::TargetMegabar, wantsBass ? bassMb : trebleMb, LightSetters::ByAngleDeg{ angle } );
-         }
-      } else if ( megabarCycler_.option == 2 ) {
-         // Few-random-floods phase. On each qualifying BASS edge, a fresh
-         // 2-4 (re-rolled every hit, per request) currently-black megabars
-         // light up in Bcolor; on each qualifying TREBLE edge, ceil(that
-         // bass count/2) currently-black megabars light up in Tcolor --
-         // each band's own pool is picked independently, at THAT band's own
-         // hit, and the megabar's color is set right then (fixing the old
-         // "picked megabar shows the wrong band's color" mismatch -- see
-         // newStdMegabarIsBass_'s own comment above). Falls back to the N
-         // dimmest if fewer than N are fully black.
-         auto pickAndLight = [&]( int numToPick, bool isBass ) {
-            int black[ NUM_MEGABAR_LEDS ], blackCount = 0;
-            for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) if ( newStdMegabarHeat_[ m ] <= 0.02f ) black[ blackCount++ ] = m;
-            int pick[ 4 ] = { -1, -1, -1, -1 }; // 4 = max possible numToPick (bass's own 2-4 range)
-            if ( blackCount >= numToPick ) {
-               for ( int n = 0; n < numToPick; ++n ) {
-                  int j = random( blackCount );
-                  pick[ n ] = black[ j ];
-                  black[ j ] = black[ --blackCount ];
-               }
-            } else {
-               // N dimmest -- simple selection over 12 entries
-               int order[ NUM_MEGABAR_LEDS ]; for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) order[ m ] = m;
-               for ( int a = 0; a < NUM_MEGABAR_LEDS - 1; ++a )
-                  for ( int b = a + 1; b < NUM_MEGABAR_LEDS; ++b )
-                     if ( newStdMegabarHeat_[ order[ b ] ] < newStdMegabarHeat_[ order[ a ] ] ) { int t = order[ a ]; order[ a ] = order[ b ]; order[ b ] = t; }
-               for ( int n = 0; n < numToPick; ++n ) pick[ n ] = order[ n ];
-            }
-            for ( int n = 0; n < numToPick; ++n ) if ( pick[ n ] >= 0 ) {
-               newStdMegabarHeat_[ pick[ n ] ] = 1.0f;
-               newStdMegabarIsBass_[ pick[ n ] ] = isBass;
-            }
-         };
-         if ( bassEdge ) {
-            newStdLastBassPickCount_ = 2 + random( 3 ); // 2-4
-            pickAndLight( newStdLastBassPickCount_, true );
-         }
-         if ( trebleEdge ) {
-            int numTreble = ( newStdLastBassPickCount_ + 1 ) / 2; // ceil(bass/2)
-            pickAndLight( numTreble, false );
-         }
-         for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
-            newStdMegabarHeat_[ m ] = max( 0.0f, newStdMegabarHeat_[ m ] - dtSec / 0.4f );
-            CRGB base = newStdMegabarIsBass_[ m ] ? Bcolor : Tcolor;
-            base.nscale8( (uint8_t)( newStdMegabarHeat_[ m ] * 255.0f + 0.5f ) );
-            LightSetters::setColor( carpet, LightSetters::TargetMegabar, base, LightSetters::ByID{ (uint8_t)m } );
-         }
-      } else {
-         // sub_standard-only option 3: 12 megabars paired into 6
-         // opposite-pairs, each pair stepped by real angle (p*30deg and
-         // its real 180deg-opposite, p*30+180 -- the setter's own
-         // nearest-match resolves that directly, no precomputed opposite
-         // table needed); at the start of EVERY bass hit (not just on
-         // megabarCycler_'s own much-slower option-change cadence), 3
-         // pairs are freshly randomized to treble, the other 3 to bass --
-         // a per-hit reshuffle, per request.
-         if ( bassEdge ) {
-            int idxs[ 6 ] = { 0, 1, 2, 3, 4, 5 };
-            for ( int i = 5; i > 0; --i ) { int j = random( i + 1 ); int t = idxs[ i ]; idxs[ i ] = idxs[ j ]; idxs[ j ] = t; }
-            for ( int p = 0; p < 6; ++p ) subPairIsBass_[ p ] = false;
-            for ( int i = 0; i < 3; ++i ) subPairIsBass_[ idxs[ i ] ] = true; // 3 random pairs -> bass, other 3 -> treble
-         }
-         for ( uint8_t p = 0; p < 6; ++p ) {
-            float angle = (float)p * 30.0f;
-            CRGB clr = subPairIsBass_[ p ] ? bassMb : trebleMb;
-            LightSetters::setColor( carpet, LightSetters::TargetMegabar, clr, LightSetters::ByAngleDeg{ angle } );
-            LightSetters::setColor( carpet, LightSetters::TargetMegabar, clr, LightSetters::ByAngleDeg{ angle + 180.0f } );
-         }
-      }
-      if ( time - newStdMegabarFadeStartMs_ < NEWSTD_FADE_MS ) {
-         uint8_t fadeF = (uint8_t)( 255.0f * (float)( time - newStdMegabarFadeStartMs_ ) / (float)NEWSTD_FADE_MS );
-         for ( uint8_t m = 0; m < NUM_MEGABAR_LEDS; ++m ) LightSetters::setColor( carpet, LightSetters::TargetMegabar, blend( newStdMegabarFadeFrom_[ m ], carpet->megabarLeds[ m ], fadeF ), LightSetters::ByID{ m } );
-      }
-      for ( int m = 0; m < NUM_MEGABAR_LEDS; ++m ) newStdLastMegabarColor_[ m ] = carpet->megabarLeds[ m ];
    }
 
    // Restored per request to the original, simpler "war" concept: BOTH

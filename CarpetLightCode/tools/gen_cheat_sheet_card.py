@@ -60,19 +60,14 @@ CELLS = [
         "  Pot: flood Hz",
         "  china flash on bass",
     ]),
-    ("2 Flame (4 var)", [
+    ("2 Flame (2 var)", [
         "▸ waterflames",
         "▸ flames",
-        "▸ shifting hues",
-        "▸ hue to white",
         "All: Pot = energy",
-        "  (fire-sim speed +",
-        "  hue-drift rate)",
+        "  (fire-sim speed)",
     ]),
-    ("3 Equalizer (5 var)", [
-        "▸ chase",
+    ("3 Equalizer (3 var)", [
         "▸ VU meter",
-        "▸ sub_standard",
         "  Pot: peak thresh",
         "▸ new_standard",
         "▸ pixel_war",

@@ -284,107 +284,86 @@ const VU_BACK_LEFT = LEFT + SIZEOF_LARGE_NEO_CORNER;
 const VU_FRONT_LEFT = NUM_NEO - SIZEOF_LARGE_NEO_CORNER;
 
 function showEqualizer(nowMs, dtMs) {
-  if (Ctl.variation === 2) { showEqualizerNewStandard(nowMs, dtMs); return; }
-  if (Ctl.variation === 3) { showEqualizerPixelWar(nowMs, dtMs); return; }
+  if (Ctl.variation === 1) { showEqualizerNewStandard(nowMs, dtMs); return; }
+  if (Ctl.variation === 2) { showEqualizerPixelWar(nowMs, dtMs); return; }
+  // VU meter (variation 0) -- the only variation left here now that Chase
+  // and sub_standard have both been removed from the real firmware.
   clearRope(); clearChinas();
-  const t = (nowMs - showT0) / 1000;
   const c1 = { r: 0, g: 0, b: 255 }, c2 = { r: 255, g: 0, b: 0 };
-  if (Ctl.variation === 1) {
-    // dual VU meter, faithful port of the real firmware: bass (red) is
-    // based across the WHOLE back edge and grows forward along both sides;
-    // treble (blue) is based across the WHOLE front edge and grows
-    // backward along both sides -- symmetric on both sides by construction
-    // (same VU_HALFLEN/VU_MAX_REACH used for left and right), fixing the
-    // previous asymmetric/uneven-height bug. Brightness tracks level
-    // directly (dim meter for a quiet signal, not just a short one).
-    const bassHitPct = AudioBoard.getHitPct(BAND_LOW), trebleHitPct = AudioBoard.getHitPct(BAND_HIGH);
-    // Meter LENGTH along the rope stays driven by the true, uncompensated
-    // hit% (it's meant to represent the actual audio level spatially).
-    const bassLitCount = (bassHitPct / 100) * VU_MAX_REACH;
-    const trebleLitCount = (trebleHitPct / 100) * VU_MAX_REACH;
-    // Meter COLOR/brightness gets the same perceptual boost as the chase
-    // variant above (pure blue reads dimmer than pure red on-screen at
-    // equal channel values -- sRGB perceptual-luminance weighting), so red
-    // and blue floods read equally bright at equal hit%.
-    const trebleColorPct = Math.min(100, trebleHitPct * 1.6);
-    const bassClr = scale255(c2, Math.round(bassHitPct/100*255));
-    const trebleClr = scale255(c1, Math.round(trebleColorPct/100*255));
-    for (let i = REAR; i < LEFT; i++) ropeLeds[i] = bassClr;   // rear edge: always bass base, full width
-    for (let i = 0; i < RIGHT; i++) ropeLeds[i] = trebleClr;   // front edge: always treble base, full width
-    // refBack/refFront: the meter's own corner-to-center reference points
-    // (VU_HALFLEN/VU_MAX_REACH are calibrated from these, NOT the physical
-    // strand ends -- matches the real firmware's identical corner-inset
-    // convention). loopStart/loopEnd: the actual LED range to paint, which
-    // covers this side's ENTIRE physical strand (true corner to true
-    // corner), not just the reference span -- so the ~33-LED zone between
-    // the true corner and the inset reference point is filled by this same
-    // side-local distance logic (naturally reading as "always lit,
-    // proportional to level" there, since it's past the reference point in
-    // BOTH functions' math), never by reaching into a neighboring strand's
-    // own front/back edge logic. Each side stays self-contained.
-    function vuSide(refBack, refFront, loopStart, loopEnd, dir) {
-      for (let i = loopStart; dir > 0 ? i <= loopEnd : i >= loopEnd; i += dir) {
-        const distFromBack = dir > 0 ? (i - refBack) : (refBack - i);
-        const distFromFront = dir > 0 ? (refFront - i) : (i - refFront);
-        const bassLit = distFromBack < bassLitCount, trebleLit = distFromFront < trebleLitCount;
-        if (bassLit && trebleLit) ropeLeds[i] = (Math.random() < 0.5) ? bassClr : trebleClr; // crossing zone: equal contributors, random pick instead of blending
-        else if (bassLit) ropeLeds[i] = bassClr;
-        else if (trebleLit) ropeLeds[i] = trebleClr;
-        else ropeLeds[i] = {r:0,g:0,b:0};
-      }
+  // dual VU meter, faithful port of the real firmware: bass (red) is
+  // based across the WHOLE back edge and grows forward along both sides;
+  // treble (blue) is based across the WHOLE front edge and grows
+  // backward along both sides -- symmetric on both sides by construction
+  // (same VU_HALFLEN/VU_MAX_REACH used for left and right), fixing the
+  // previous asymmetric/uneven-height bug. Brightness tracks level
+  // directly (dim meter for a quiet signal, not just a short one).
+  const bassHitPct = AudioBoard.getHitPct(BAND_LOW), trebleHitPct = AudioBoard.getHitPct(BAND_HIGH);
+  // Meter LENGTH along the rope stays driven by the true, uncompensated
+  // hit% (it's meant to represent the actual audio level spatially).
+  const bassLitCount = (bassHitPct / 100) * VU_MAX_REACH;
+  const trebleLitCount = (trebleHitPct / 100) * VU_MAX_REACH;
+  // Meter COLOR/brightness gets a perceptual brightness boost (pure blue
+  // reads dimmer than pure red on-screen at equal channel values -- sRGB
+  // perceptual-luminance weighting), so red and blue floods read equally
+  // bright at equal hit%.
+  const trebleColorPct = Math.min(100, trebleHitPct * 1.6);
+  const bassClr = scale255(c2, Math.round(bassHitPct/100*255));
+  const trebleClr = scale255(c1, Math.round(trebleColorPct/100*255));
+  for (let i = REAR; i < LEFT; i++) ropeLeds[i] = bassClr;   // rear edge: always bass base, full width
+  for (let i = 0; i < RIGHT; i++) ropeLeds[i] = trebleClr;   // front edge: always treble base, full width
+  // refBack/refFront: the meter's own corner-to-center reference points
+  // (VU_HALFLEN/VU_MAX_REACH are calibrated from these, NOT the physical
+  // strand ends -- matches the real firmware's identical corner-inset
+  // convention). loopStart/loopEnd: the actual LED range to paint, which
+  // covers this side's ENTIRE physical strand (true corner to true
+  // corner), not just the reference span -- so the ~33-LED zone between
+  // the true corner and the inset reference point is filled by this same
+  // side-local distance logic (naturally reading as "always lit,
+  // proportional to level" there, since it's past the reference point in
+  // BOTH functions' math), never by reaching into a neighboring strand's
+  // own front/back edge logic. Each side stays self-contained.
+  function vuSide(refBack, refFront, loopStart, loopEnd, dir) {
+    for (let i = loopStart; dir > 0 ? i <= loopEnd : i >= loopEnd; i += dir) {
+      const distFromBack = dir > 0 ? (i - refBack) : (refBack - i);
+      const distFromFront = dir > 0 ? (refFront - i) : (i - refFront);
+      const bassLit = distFromBack < bassLitCount, trebleLit = distFromFront < trebleLitCount;
+      if (bassLit && trebleLit) ropeLeds[i] = (Math.random() < 0.5) ? bassClr : trebleClr; // crossing zone: equal contributors, random pick instead of blending
+      else if (bassLit) ropeLeds[i] = bassClr;
+      else if (trebleLit) ropeLeds[i] = trebleClr;
+      else ropeLeds[i] = {r:0,g:0,b:0};
     }
-    vuSide(VU_BACK_RIGHT, VU_FRONT_RIGHT, REAR - 1, RIGHT, -1);      // right strand: true back corner -> true front corner
-    vuSide(VU_BACK_LEFT, VU_FRONT_LEFT, LEFT, NUM_NEO - 1, 1);       // left strand: true back corner -> true front corner
-    // Floods (megabar + china) reproduce the same meter, split by their own
-    // physical front/back position -- not in the real firmware yet (which
-    // only drives the rope here), added per request so the floods aren't
-    // dark during this variation.
-    clearMegabars();
-    for (let m = 0; m < NUM_MEGABAR; m++) {
-      megabarLeds[m] = (megabarPos(m).y < CAR_Y) ? trebleClr : bassClr;
-    }
-    for (let c = 0; c < NUM_CHINA; c++) {
-      chinaLeds[c] = (CHINA_POS[c].y < CAR_Y) ? trebleClr : bassClr;
-    }
-  } else {
-    const pos = (t * 60) % NUM_NEO;
-    for (let i = 0; i < NUM_NEO; i++) {
-      const d = Math.min(Math.abs(i - pos), NUM_NEO - Math.abs(i - pos));
-      ropeLeds[i] = blend(c1, c2, Math.max(0, 255 - d * 4));
-    }
-    const lowHit = AudioBoard.getHitPct(BAND_LOW)/100*255;
-    // BUGFIX (visualizer display, not data/code): the treble megabars
-    // (m%3===0) blend toward pure blue (c1) while the bass ones blend
-    // toward pure red (c2) -- at EQUAL hit percentages this produces
-    // numerically-symmetric RGB values, but pure blue reads noticeably
-    // dimmer than pure red on a screen (sRGB/rec709 perceptual-luminance
-    // weighting: red contributes ~5x more to perceived brightness than
-    // blue at the same channel value). The underlying hit percentages
-    // themselves are computed identically for both bands -- this is a
-    // display-only compensation, not a change to any audio-reactivity
-    // data, so it's scoped to just this chase variant's rendering.
-    const highHit = Math.min(255, AudioBoard.getHitPct(BAND_HIGH)/100*255 * 1.6);
-    for (let m = 0; m < NUM_MEGABAR; m++) {
-      megabarLeds[m] = (m % 3 === 0) ? blend({r:0,g:0,b:0}, c1, highHit) : blend({r:0,g:0,b:0}, c2, lowHit);
-    }
+  }
+  vuSide(VU_BACK_RIGHT, VU_FRONT_RIGHT, REAR - 1, RIGHT, -1);      // right strand: true back corner -> true front corner
+  vuSide(VU_BACK_LEFT, VU_FRONT_LEFT, LEFT, NUM_NEO - 1, 1);       // left strand: true back corner -> true front corner
+  // Floods (megabar + china) reproduce the same meter, split by their own
+  // physical front/back position -- not in the real firmware yet (which
+  // only drives the rope here), added per request so the floods aren't
+  // dark during this variation.
+  clearMegabars();
+  for (let m = 0; m < NUM_MEGABAR; m++) {
+    megabarLeds[m] = (megabarPos(m).y < CAR_Y) ? trebleClr : bassClr;
+  }
+  for (let c = 0; c < NUM_CHINA; c++) {
+    chinaLeds[c] = (CHINA_POS[c].y < CAR_Y) ? trebleClr : bassClr;
   }
   if (AudioBoard.silent) {
     // same floodlight swap-flash behavior as new_standard/pixel_war during
     // silence, per request -- overrides just the megabar/china output
     // computed above (which would otherwise sit near-dark with no sound to
-    // react to); rope is left as whatever the variation above already drew.
+    // react to); rope is left as whatever the meter above already drew.
     showEqSilenceFloods(nowMs, dtMs, c2, c1); // c2=bass/red, c1=treble/blue, this show's own convention
   }
 }
 
 /* ---- Equalizer variation: new_standard ----------------------------------
    Whole-show 2-color palette (Bcolor/Tcolor), auto-cycling china/megabar
-   patterns (8s per cycle each, independent cycle counts), 4 rope chase
-   segments, and a distinct silence behavior. See the per-section comments
-   below for each piece; this is a best-effort literal implementation of a
-   long, detailed spec -- a few genuinely underspecified corners (noted
-   inline) were resolved with a reasonable, clearly-flagged judgment call
-   rather than left unbuilt. */
+   patterns (8s per cycle each, independent cycle counts), a single
+   traveling rope segment (the deleted Chase variation's own animation
+   shape, recolored to Bcolor/Tcolor), and a distinct silence behavior.
+   See the per-section comments below for each piece; this is a
+   best-effort literal implementation of a long, detailed spec -- a few
+   genuinely underspecified corners (noted inline) were resolved with a
+   reasonable, clearly-flagged judgment call rather than left unbuilt. */
 const NEWSTD_HUE_PERIOD_S = 20; // 10s red->yellow, 10s back -- full cycle
 const NEWSTD_SAT_PERIOD_S = 14; // 7/10 of the hue period, per request
 const NEWSTD_HUE_RED = 0, NEWSTD_HUE_YELLOW = 42, NEWSTD_HUE_TREBLE = 160; // blue, constant
@@ -494,18 +473,16 @@ function showEqualizerNewStandard(nowMs, dtMs) {
   const { Bcolor, Tcolor } = newStdColors();
   const bassHit = AudioBoard.getHitPct(BAND_LOW), trebleHit = AudioBoard.getHitPct(BAND_HIGH);
 
-  // ROPE: the default variation's single traveling segment, plus 3 more
-  // evenly spaced (90 = a quarter of the loop) apart, all in Bcolor.
-  const chasePos = (nowMs / 1000 * 60) % NUM_NEO;
-  const quarter = NUM_NEO / 4;
-  for (let i = 0; i < NUM_NEO; i++) {
-    let nearest = Infinity;
-    for (let s = 0; s < 4; s++) {
-      const segPos = (chasePos + s * quarter) % NUM_NEO;
-      const d = Math.min(Math.abs(i - segPos), NUM_NEO - Math.abs(i - segPos));
-      if (d < nearest) nearest = d;
+  // ROPE: a single traveling segment (the deleted Chase variation's own
+  // animation shape), recolored per explicit request to match this
+  // variation's own floodlight color scheme (Bcolor/Tcolor) instead of
+  // retaining Chase's fixed blue/red.
+  {
+    const pos = (nowMs / 1000 * 60) % NUM_NEO;
+    for (let i = 0; i < NUM_NEO; i++) {
+      const d = Math.min(Math.abs(i - pos), NUM_NEO - Math.abs(i - pos));
+      ropeLeds[i] = blend(Bcolor, Tcolor, Math.max(0, 255 - d * 4));
     }
-    ropeLeds[i] = blend({r:0,g:0,b:0}, Bcolor, Math.max(0, 255 - nearest * 4));
   }
 
   if (silent) {
