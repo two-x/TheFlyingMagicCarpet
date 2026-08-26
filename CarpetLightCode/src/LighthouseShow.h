@@ -2,71 +2,74 @@
  *
  *    Two independent rotating "lighthouse" beams, each a pair of opposite-
  *    facing (180deg apart) cones, point at the car's own center, expanding
- *    outward. Rewritten to be based on real angle math throughout (was
- *    previously "patched together": megabars used a discrete nearest-
- *    neighbor snap instead of the rope's own continuous falloff, cone
- *    width didn't match spec, and overlapping beams summed hues together,
- *    which reads as a muddy wash rather than either beam's real color) --
- *    see the class's own per-section comments below for exactly what
- *    changed and why.
- *
- *    THE ALGORITHM (per explicit spec): each beam is 2 cones, fixed
- *    180deg apart, cone tips at the origin. Each cone's leading/trailing
- *    edges are a fixed CONE_FULL_WIDTH_DEG (25.3deg) apart -- a light at
- *    some angle is lit at full brightness whenever it's within that
- *    25.3deg window, with an additional angle-based fade zone
- *    (CONE_FADE_DEG, 25% of the cone's own width) on each side easing
- *    down to black. This ONE falloff function (coneBrightnessAt()) is now
- *    used identically for rope, megabars, AND china -- evaluated at each
- *    fixture's own real physical angle (from CarpetGeometry, the
- *    project's shared centralized geometry source), not a per-fixture-
- *    type bespoke shape. That's what was actually causing "neopixel
- *    segment widths don't match the floods": megabars and rope were
- *    using two different width models entirely.
+ *    outward. Real angle math throughout: rope/megabar/china all evaluate
+ *    the SAME falloff function (coneBrightnessAt()) at each fixture's own
+ *    real physical angle (from CarpetGeometry) -- no per-fixture-type
+ *    bespoke shape.
  *
  *    Where the 2 beams' cones overlap: NO additive color mixing (reads as
- *    a muddy wash) -- per explicit correction, only the brighter of the 2
- *    beams shows at all, using that beam's own exact color, at that
- *    beam's own computed brightness.
+ *    a muddy wash) -- only the brighter of the 2 beams shows at all, using
+ *    that beam's own exact color, at that beam's own computed brightness
+ *    (winnerColorAt()). Megabars specifically break an exact brightness
+ *    tie by alternating winner by megabar index (see winnerColorAt()'s
+ *    preferBeam2OnTie param) rather than always favoring beam 1 -- per
+ *    explicit request, so a tie can never systematically starve one
+ *    color's megabar coverage.
  *
  *    Rotation/color: each beam's angular velocity (deg/s, range +/-360 =
  *    +/-1Hz) is its own independent random walk -- see RandomWalk below --
- *    that can drift through zero and reverse direction over time, per
- *    request; angles themselves stay full float precision throughout,
- *    never quantized. Beam 1's hue always increases (never reverses --
- *    "always clockwise" per request), at a rate that itself random-walks
- *    between 0 (frozen) and a max of 1 full spectrum cycle per 20
- *    seconds. Saturation random-walks between 75% and 100%, same
- *    mechanism. Beam 2 shares beam 1's saturation exactly and uses the
- *    complementary hue (+128), and has its own independent rotation
- *    random walk, but no independent hue/sat walks of its own.
+ *    that can drift through zero and reverse direction over time; angles
+ *    themselves stay full float precision throughout, never quantized.
+ *    Beam 1's hue always increases (never reverses -- "always clockwise"),
+ *    at a rate that itself random-walks between 0 (frozen) and a max of 1
+ *    full spectrum cycle per 20 seconds. Saturation random-walks between
+ *    70% and 100% (starts at 80%), same mechanism -- shared exactly by
+ *    both beams (not independent per-beam saturation). Beam 2 shares
+ *    beam 1's saturation and uses the complementary hue (+128), and has
+ *    its own independent rotation random walk, but no independent hue/sat
+ *    walks of its own.
+ *
+ *    Beam cone width (CONE_HALF_WIDTH_DEG/CONE_FULL_WIDTH_DEG below) is
+ *    sized so that AT ANY beam angle, at least 2 real megabars always fall
+ *    within its guaranteed-coverage core -- derived from the real,
+ *    measured megabar ground-spot angles (CarpetGeometry's mbSpotXY),
+ *    not the nominal 30deg-apart naming. See CONE_HALF_WIDTH_DEG's own
+ *    comment for the exact derivation and worst-case proof. Independently,
+ *    MIN_BEAM_SEPARATION_DEG keeps the 2 beams' cores from ever touching,
+ *    so one beam's guaranteed megabar coverage can never be contested/
+ *    stolen by the other beam's winner-take-all comparison, even though
+ *    both beams' rotation velocities are free to be the same sign (i.e.
+ *    both CW or both CCW) and could otherwise drift arbitrarily close
+ *    together. See the MIN_BEAM_SEPARATION_DEG enforcement block in
+ *    update() for the mechanism (a soft, symmetric angular "push-apart",
+ *    not a velocity restriction).
+ *
+ *    Within a beam's own guaranteed-coverage core, brightness is NOT flat
+ *    -- it eases smoothly from full (255, dead center) down to a floor
+ *    (CORE_FLOOR_BRIGHTNESS) at the core's own outer edge, then continues
+ *    easing from that floor down to black over the further CONE_FADE_DEG
+ *    zone beyond the guarantee. Per explicit request: this gives the 2
+ *    always-guaranteed megabars on each side of a beam a smooth, "analog"
+ *    brightness change as the beam sweeps past (nearer to dead-center =
+ *    brighter), rather than snapping between a flat plateau and off. The
+ *    floor keeps the worst-case-farthest guaranteed megabar always
+ *    clearly, visibly lit -- never fading toward black within the
+ *    guarantee itself.
  *
  *    Variations:
- *      0 Default   -- rope+megabar join both beams; china stays off except
- *                      for the bass-hit strobe.
- *      1 No Strobe -- rope+megabar as Default, but china ALSO joins both
- *                      beams (same beam-crossing effect as rope/megabar,
- *                      at each china's own position angle) instead of
- *                      strobing -- this variation used to mean "no china
- *                      at all"; per request that's now Default's job
- *                      (unchanged from its original behavior) and THIS
- *                      variation is the one where china contributes to
- *                      the beam effect.
- *      2 China React -- rope+megabar still sweep the 2 beams as normal;
- *                      chinas switch entirely to a discrete, non-
- *                      continuous audio response instead (see
- *                      updateChinaReact() below) -- 2 of the 4 china
- *                      pairs assigned to bass, 2 to treble (same pairing/
- *                      swap-every-4-hits mechanic as EqualizerShow's
- *                      pixel_war variation), both bands rendered in WHITE
- *                      (not the beams' own colors), using a dedicated
- *                      edge-triggered flash (newHitEdge()) instead of the
- *                      usual smooth hit-percent value: on each qualifying
- *                      leading edge a pair jumps STRAIGHT to 10% of
- *                      global max, holds CHINA_REACT_HOLD_MS (110ms), then
- *                      decays back to black over 1/4 of AudioBoard's own
- *                      configured hit-decay duration (i.e. 4x faster than
- *                      a normal hit's own decay).
+ *      0 Default   -- rope+megabar+china all join both beams (the same
+ *                      beam-crossing color effect everywhere); on top of
+ *                      that, china ALSO gets a bass-hit white strobe --
+ *                      applied to the White channel only (LightSetters::
+ *                      setWhite()), never touching the RGB channel a
+ *                      china's own beam-crossing color already occupies,
+ *                      so the two effects genuinely superimpose (the
+ *                      white element can strobe without interrupting the
+ *                      RGB beam color underneath it) instead of one
+ *                      overwriting the other.
+ *      1 No Strobe -- identical rope/megabar/china beam-crossing effect as
+ *                      Default, just without the white strobe layered on
+ *                      top of china.
  *
  *    Perf note: this show iterates over all 1016 rope LEDs every frame,
  *    and (per SpeedStripesShow's hard-learned lesson) the Due's SAM3X8E
@@ -86,12 +89,12 @@
 
 // X-macro list: single source of truth for both the enum below and
 // variationName() -- see LightShow.h's own comment on the pattern.
-#define LIGHTHOUSE_VARIATIONS(X) X(VarDefault) X(VarNoStrobe) X(VarChinaReact)
+#define LIGHTHOUSE_VARIATIONS(X) X(VarDefault) X(VarNoStrobe)
 
 class LighthouseShow : public LightShow {
  private:
    enum Variation { LIGHTHOUSE_VARIATIONS(LIGHTSHOW_ENUM_ENTRY) };
-   static const uint8_t numVariations_ = 3;
+   static const uint8_t numVariations_ = 2;
    uint8_t variation_;
 
    // smoothly ramps toward a freshly-randomized target every ~0.8-1.2s,
@@ -123,7 +126,7 @@ class LighthouseShow : public LightShow {
 
    RandomWalk velWalk1_, velWalk2_; // deg/s, range +/-(ceiling from globalEnergyPercent)
    RandomWalk hueRateWalk_;         // hue-units/sec, range 0..(255/20)
-   RandomWalk satWalk_;             // fraction, range 0.75..1.0, starts at 0.90
+   RandomWalk satWalk_;             // fraction, range 0.70..1.0, starts at 0.80
 
    float angle1_ = 0.0f, angle2_ = 180.0f; // deg, 0-360, full float precision throughout
    float vel1_ = 0.0f, vel2_ = 0.0f;       // deg/s, current (post-random-walk) value
@@ -133,14 +136,6 @@ class LighthouseShow : public LightShow {
 
    // pot -> each beam's max rotation speed ceiling -- see class comment
    PotEnergyTakeover energyTakeover_;
-
-   // --- china-react variation (VarChinaReact) state ---
-   static const int NUM_CHINA_PAIRS_ = 4;
-   static const int chinaPairs_[ NUM_CHINA_PAIRS_ ][ 2 ];
-   bool chinaPairIsBass_[ NUM_CHINA_PAIRS_ ] = { true, true, false, false };
-   int chinaHitCount_ = 0;
-   uint32_t chinaPairFlashUntilMs_[ NUM_CHINA_PAIRS_ ] = { 0, 0, 0, 0 };
-   uint8_t prevBassPct_ = 0, prevTreblePct_ = 0;
 
    static float wrap360( float deg ) {
       while ( deg < 0.0f ) deg += 360.0f;
@@ -168,22 +163,66 @@ class LighthouseShow : public LightShow {
       return (uint8_t)smooth;
    }
 
-   // Per spec: each cone is CONE_FULL_WIDTH_DEG (25.3deg) wide, leading to
-   // trailing edge -- full brightness inside that window, then an
-   // additional fade zone on each side (25% of the cone's own width) easing
-   // to black, nothing beyond that. ONE shared shape for rope/megabar/china
-   // alike (see class comment) -- no more separately-tuned per-fixture-type
-   // widths.
-   static constexpr float CONE_FULL_WIDTH_DEG = 25.3125f;                          // 33.75 * 0.75 -- another 25% narrower per follow-up request (was 45 originally)
-   static constexpr float CONE_HALF_WIDTH_DEG = CONE_FULL_WIDTH_DEG / 2.0f;       // 12.65625
-   static constexpr float CONE_FADE_DEG = CONE_FULL_WIDTH_DEG * 0.25f;            // 6.328125, each side
-   static const uint32_t CHINA_REACT_HOLD_MS = 220; // doubled per request -- VarChinaReact's full-brightness hold before its trailing decay kicks in, see updateChinaReact()
+   // CONE_HALF_WIDTH_DEG derivation (per explicit request: "widen the
+   // beams to barely enough to include 2 megabars, confirm now at no time
+   // is it possible for either beam to ever not have at least one megabar
+   // lit"): computed offline from CarpetGeometry's real mbSpotXY ground-
+   // spot table (NOT the nominal 30deg-apart naming) via
+   // angleFromForward_(x,y) for all 12 megabars, giving real angles
+   // {0, 28.685, 57.5145, 90, 122.4855, 151.315, 180, 208.685, 237.5145,
+   // 270, 302.4855, 331.315}. For a symmetric window of half-width h
+   // centered anywhere on the circle to guarantee >=2 of these points
+   // fall within it at EVERY possible center position, the binding
+   // (worst-case) constraint is a window centered EXACTLY ON a megabar
+   // whose two neighbors are its own maximum single-gap distance away
+   // (NOT half that gap -- centering between two points is the easier
+   // case) -- verified by a fine-grained numerical sweep (0.005deg step)
+   // over all 12 real megabar angles, every possible center position, and
+   // both variations of a binary search on h: the exact threshold is
+   // h=32.4855deg (equal to the real largest adjacent-megabar gap, which
+   // is also, not coincidentally, exactly the distance from megabar[3]
+   // (90deg) to megabar[4] (122.4855deg) or its 3 rotational-symmetry
+   // equivalents). Set here with a +1.5deg safety margin above that exact
+   // threshold (float-precision robustness, not part of the real
+   // guarantee) -- rounds to 34deg.
+   static constexpr float CONE_HALF_WIDTH_DEG = 34.0f;
+   static constexpr float CONE_FULL_WIDTH_DEG = CONE_HALF_WIDTH_DEG * 2.0f;    // 68deg
+   static constexpr float CONE_FADE_DEG = CONE_FULL_WIDTH_DEG * 0.25f;        // 17deg, beyond the guaranteed core
+   // Brightness floor at the guaranteed core's own outer edge (not 0) --
+   // see class comment: keeps the worst-case-farthest guaranteed megabar
+   // always clearly lit even as brightness eases down from full center
+   // brightness, rather than the old flat-255 plateau.
+   static const uint8_t CORE_FLOOR_BRIGHTNESS = 128;
+   // Minimum angular separation enforced between the 2 beams' cone
+   // centers (see update()'s enforcement block) -- CONE_FULL_WIDTH_DEG
+   // (so the 2 beams' guaranteed cores can just barely never touch) plus
+   // a 2deg margin so a worst-case contested point can never land on an
+   // exact brightness tie between "beam A's own core edge" (=
+   // CORE_FLOOR_BRIGHTNESS) and "beam B's fade zone at the same
+   // distance" -- confirmed via simulation (fine sweep over all valid
+   // beam-angle-pairs honoring this minimum): worst-case guaranteed
+   // winning brightness for each beam's own each-side megabar is ~197,
+   // comfortably above CORE_FLOOR_BRIGHTNESS, let alone 0.
+   static constexpr float MIN_BEAM_SEPARATION_DEG = CONE_FULL_WIDTH_DEG + 2.0f; // 70deg (max possible is 90deg -- 20deg of slack)
+
+   // Per spec: full brightness at dead center, easing down to
+   // CORE_FLOOR_BRIGHTNESS at the guaranteed core's own edge
+   // (CONE_HALF_WIDTH_DEG), then continuing to ease from that floor down
+   // to black over the further CONE_FADE_DEG zone. Both segments use the
+   // same smoothstep8 shape and meet with matching (zero) tangent at the
+   // join, so the combined curve has no visible kink. ONE shared shape
+   // for rope/megabar/china alike (see class comment) -- no more
+   // separately-tuned per-fixture-type widths.
    static uint8_t coneBrightnessAt( float d ) {
-      if ( d <= CONE_HALF_WIDTH_DEG ) return 255;
-      float outer = CONE_HALF_WIDTH_DEG + CONE_FADE_DEG;
-      if ( d >= outer ) return 0;
+      if ( d >= CONE_HALF_WIDTH_DEG + CONE_FADE_DEG ) return 0;
+      if ( d <= CONE_HALF_WIDTH_DEG ) {
+         float frac = d / CONE_HALF_WIDTH_DEG; // 0..1
+         uint8_t eased = smoothstep8( (uint8_t)( frac * 255.0f + 0.5f ) ); // 255->0 as frac 0->1
+         return (uint8_t)( CORE_FLOOR_BRIGHTNESS + ( (uint32_t)eased * ( 255 - CORE_FLOOR_BRIGHTNESS ) ) / 255 );
+      }
       float fadeFrac = ( d - CONE_HALF_WIDTH_DEG ) / CONE_FADE_DEG; // 0..1
-      return smoothstep8( (uint8_t)( fadeFrac * 255.0f + 0.5f ) );
+      uint8_t eased = smoothstep8( (uint8_t)( fadeFrac * 255.0f + 0.5f ) ); // 255->0 as fadeFrac 0->1
+      return (uint8_t)( ( (uint32_t)eased * CORE_FLOOR_BRIGHTNESS ) / 255 );
    }
 
    // One beam's brightness contribution at a given point angle -- nearest
@@ -194,81 +233,41 @@ class LighthouseShow : public LightShow {
       return coneBrightnessAt( min( d1, d2 ) );
    }
 
-   // BUGFIX (per explicit correction -- "no additive mixing, that looks
-   // terrible"): this used to sum both beams' hues together wherever
-   // their falloffs overlapped, which reads as a muddy blend rather than
-   // either beam's real color. Now picks the single brighter beam
-   // entirely -- its own hue, at its own computed brightness -- with no
-   // blending of any kind between the two. Returns CHSV, not CRGB -- stays
-   // in HSV space until the actual write (see LightSetters.h); RGB
-   // conversion happens exactly once, at that point, via FastLED's
-   // integer-only hsv2rgb_rainbow().
-   static CHSV winnerColorAt( float pointAngle, float angle1, uint8_t hue1, float angle2, uint8_t hue2, uint8_t satByte ) {
+   // No additive mixing where the 2 beams' cones overlap -- picks the
+   // single brighter beam entirely, its own hue at its own computed
+   // brightness. preferBeam2OnTie: per explicit request, an EXACT
+   // brightness tie (real and non-negligible for megabars specifically,
+   // since brightness is uint8_t-quantized to 256 levels -- not a
+   // razor-thin float coincidence) must not always resolve to the same
+   // beam; callers that iterate a small, fixed set of fixtures (megabars)
+   // alternate this per-fixture so a tie always still lets each color
+   // "win" somewhere rather than one color systematically losing every
+   // tie. Defaults false (beam 1 wins ties) for rope/china, unchanged
+   // from prior behavior -- alternation is opted into per-call, not
+   // global. Returns CHSV, not CRGB -- stays in HSV space until the
+   // actual write (see LightSetters.h); RGB conversion happens exactly
+   // once, at that point, via FastLED's integer-only hsv2rgb_rainbow().
+   static CHSV winnerColorAt( float pointAngle, float angle1, uint8_t hue1, float angle2, uint8_t hue2, uint8_t satByte, bool preferBeam2OnTie = false ) {
       uint8_t b1 = beamBrightnessAt( pointAngle, angle1 );
       uint8_t b2 = beamBrightnessAt( pointAngle, angle2 );
       uint8_t winBright = max( b1, b2 );
       if ( winBright == 0 ) return CHSV( 0, 0, 0 );
-      uint8_t winHue = ( b1 >= b2 ) ? hue1 : hue2;
+      bool beam1Wins = ( b1 == b2 ) ? !preferBeam2OnTie : ( b1 > b2 );
+      uint8_t winHue = beam1Wins ? hue1 : hue2;
       return CHSV( winHue, satByte, winBright );
    }
 
-   // Edge-triggered "new hit" detector for VarChinaReact -- deliberately
-   // NOT AudioBoard::getBandHitPercent() (the usual smoothly-decaying hit
-   // value every other show uses) per explicit request; this just watches
-   // the live post-gain level cross up through the same 20% threshold
-   // convention used elsewhere in this codebase for edge detection.
-   static bool newHitEdge( AudioBand band, uint8_t & prevPct ) {
-      uint8_t pct = AudioBoard::getBandNormalPercent( band );
-      bool edge = pct > 20 && prevPct <= 20;
-      prevPct = pct;
-      return edge;
-   }
-
-   void updateChinaReact( uint32_t time ) {
-      bool bassEdge = newHitEdge( BandBass, prevBassPct_ );
-      bool trebleEdge = newHitEdge( BandTreble, prevTreblePct_ );
-      if ( bassEdge || trebleEdge ) ++chinaHitCount_;
-      if ( bassEdge || trebleEdge ) {
-         for ( int p = 0; p < NUM_CHINA_PAIRS_; ++p ) {
-            if ( ( chinaPairIsBass_[ p ] && bassEdge ) || ( !chinaPairIsBass_[ p ] && trebleEdge ) ) {
-               chinaPairFlashUntilMs_[ p ] = time + CHINA_REACT_HOLD_MS; // straight to 10% global max, holds this long, then decays -- see the render loop below
-            }
-         }
-      }
-      if ( chinaHitCount_ >= 4 ) {
-         chinaHitCount_ -= 4;
-         int grabbed = random( NUM_CHINA_PAIRS_ );
-         int opposite[ NUM_CHINA_PAIRS_ ], oppositeCount = 0;
-         for ( int p = 0; p < NUM_CHINA_PAIRS_; ++p ) if ( chinaPairIsBass_[ p ] != chinaPairIsBass_[ grabbed ] ) opposite[ oppositeCount++ ] = p;
-         if ( oppositeCount > 0 ) {
-            int other = opposite[ random( oppositeCount ) ];
-            bool tmp = chinaPairIsBass_[ grabbed ];
-            chinaPairIsBass_[ grabbed ] = chinaPairIsBass_[ other ];
-            chinaPairIsBass_[ other ] = tmp;
-         }
-      }
-      static const uint8_t FLASH_BRIGHTNESS = 26; // 10% of 255
-      for ( int p = 0; p < NUM_CHINA_PAIRS_; ++p ) {
-         uint8_t bright = 0;
-         if ( time < chinaPairFlashUntilMs_[ p ] ) {
-            bright = FLASH_BRIGHTNESS; // instant attack straight to full, holds at CHINA_REACT_HOLD_MS, per request
-         } else {
-            // trailing decay, per request: same shape as AudioBoard's own
-            // hit-decay ramp, but at 1/4 its currently configured duration
-            // (i.e. 4x faster) -- a quick snappy tail rather than a lingering
-            // one, distinct from the instant-cutoff this used to have.
-            float decayMs = AudioBoard::getHitDecayMs() / 4.0f;
-            float elapsedMs = (float)( time - chinaPairFlashUntilMs_[ p ] );
-            if ( decayMs > 0.0f && elapsedMs < decayMs ) {
-               bright = (uint8_t)( (float)FLASH_BRIGHTNESS * ( 1.0f - elapsedMs / decayMs ) + 0.5f );
-            }
-         }
-         CHSV clr = CHSV( 0, 0, bright ); // grayscale -- sat=0 means hue is irrelevant
-         for ( int k = 0; k < 2; ++k ) {
-            uint8_t c = (uint8_t)chinaPairs_[ p ][ k ];
-            LightSetters::setColor( carpet, LightSetters::TargetChina, clr, LightSetters::ByID{ c } );
-            LightSetters::setWhite( carpet, LightSetters::TargetChina, 0, LightSetters::ByID{ c } );
-         }
+   // Shared china render: same beam-crossing color effect as rope/
+   // megabar, at each china's own real position angle -- used by BOTH
+   // variations now (see class comment).
+   void renderChinaBeams_( uint8_t hue1Byte, uint8_t hue2Byte, uint8_t satByte ) {
+      for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
+         // dimAngleDeg (precomputed once in CarpetGeometry::begin(), not a
+         // live atan2f here) -- ground-spot angle, not aim; see
+         // CarpetGeometry.h's file header for why those two differ
+         float a = CarpetGeometry::getChina( c ).dimAngleDeg;
+         LightSetters::setColor( carpet, LightSetters::TargetChina, winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte ), LightSetters::ByAngleDeg{ a } );
+         LightSetters::setWhite( carpet, LightSetters::TargetChina, 0, LightSetters::ByAngleDeg{ a } );
       }
    }
 
@@ -305,18 +304,10 @@ class LighthouseShow : public LightShow {
 
       // seed saturation's start explicitly too (same reasoning as the
       // velocity walks above -- RandomWalk::value() would otherwise
-      // auto-init to the range midpoint, 87.5%, not the requested 90%)
-      satWalk_.rampStart = satWalk_.rampTarget = 0.90f;
+      // auto-init to the range midpoint, 85%, not the requested 80%)
+      satWalk_.rampStart = satWalk_.rampTarget = 0.80f;
       satWalk_.initialized = true;
       satWalk_.tickTimer.set( 800 + random( 400 ) );
-
-      int idxs[ NUM_CHINA_PAIRS_ ] = { 0, 1, 2, 3 };
-      for ( int i = NUM_CHINA_PAIRS_ - 1; i > 0; --i ) { int j = random( i + 1 ); int t = idxs[ i ]; idxs[ i ] = idxs[ j ]; idxs[ j ] = t; }
-      for ( int p = 0; p < NUM_CHINA_PAIRS_; ++p ) chinaPairIsBass_[ p ] = false;
-      chinaPairIsBass_[ idxs[ 0 ] ] = true; chinaPairIsBass_[ idxs[ 1 ] ] = true;
-      chinaHitCount_ = 0;
-      prevBassPct_ = 0; prevTreblePct_ = 0;
-      for ( int p = 0; p < NUM_CHINA_PAIRS_; ++p ) chinaPairFlashUntilMs_[ p ] = 0;
    }
 
    void update( uint32_t time ) {
@@ -348,10 +339,41 @@ class LighthouseShow : public LightShow {
       vel2_ = rawVel2 * energyFrac;
       static const float MAX_HUE_RATE = 255.0f / 20.0f; // full spectrum in as little as 20s
       float hueRate = hueRateWalk_.value( 0.0f, MAX_HUE_RATE, MAX_HUE_RATE * 0.1f ); // never negative -- always "clockwise"
-      float satFraction = satWalk_.value( 0.75f, 1.0f, 0.013f );
+      float satFraction = satWalk_.value( 0.70f, 1.0f, 0.013f );
 
       angle1_ = wrap360( angle1_ + vel1_ * dtSec );
       angle2_ = wrap360( angle2_ + vel2_ * dtSec );
+
+      // Prevent the 2 beams' cones from ever overlapping -- see class
+      // comment and MIN_BEAM_SEPARATION_DEG's own comment. Each beam has
+      // 2 antipodal cones, so the distance that matters is the CLOSEST of
+      // all 4 possible cone-pairings: reduce the raw signed angle1/angle2
+      // delta into 0..90 by that antipodal symmetry (effSep). If it's
+      // ever below the minimum, push the 2 angles apart symmetrically
+      // (50/50 split -- neither beam unilaterally "wins" position) by
+      // exactly the shortfall. This is a soft, continuous per-frame
+      // correction, not a velocity restriction -- both beams stay free to
+      // random-walk to the same sign (both CW or both CCW) and drift
+      // toward each other; when they'd cross the minimum, they instead
+      // "bounce off" it smoothly, since each frame's shortfall is small
+      // (bounded by one frame's worth of relative angular motion).
+      {
+         float rawDelta = circularDelta( angle1_, angle2_ ); // -180..180, signed, angle1->angle2
+         float absDelta = fabsf( rawDelta );
+         float effSep = min( absDelta, 180.0f - absDelta );  // 0..90
+         if ( effSep < MIN_BEAM_SEPARATION_DEG ) {
+            float shortfall = MIN_BEAM_SEPARATION_DEG - effSep;
+            float sign = ( rawDelta >= 0.0f ) ? 1.0f : -1.0f;
+            // absDelta<=90: closest pairing is angle1 vs angle2 directly --
+            // widen by growing |rawDelta|. absDelta>90: closest pairing is
+            // the ANTIPODAL one (angle1 vs angle2+180) -- widen by
+            // shrinking |rawDelta| back toward 90 instead.
+            float pushDelta = ( absDelta <= 90.0f ) ? ( sign * shortfall ) : ( -sign * shortfall );
+            angle1_ = wrap360( angle1_ - pushDelta * 0.5f );
+            angle2_ = wrap360( angle2_ + pushDelta * 0.5f );
+         }
+      }
+
       hue1_ += hueRate * dtSec;
       while ( hue1_ >= 256.0f ) hue1_ -= 256.0f;
 
@@ -369,7 +391,7 @@ class LighthouseShow : public LightShow {
       // PER pixel here (~1M comparisons/frame on a no-FPU MCU) for a
       // result already known for free. The color COMPUTATION itself is
       // 100% angle-based (winnerColorAt only ever sees real angles) --
-      // only this array-addressing step is by ID. Confirmed with the user.
+      // only this array-addressing step is by ID.
       for ( uint16_t raw = 0; raw < NUM_NEO_LEDS_ACTUAL; ++raw ) {
          float a = CarpetGeometry::getNeoGeom( raw ).angleFromForwardDeg;
          CHSV color = winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte );
@@ -379,44 +401,28 @@ class LighthouseShow : public LightShow {
       }
 
       // --- megabars: SAME falloff function as the rope, evaluated at each
-      // megabar's own real position angle (CarpetGeometry) -- no more
-      // separate discrete nearest-neighbor snap (that was the actual cause
-      // of "neopixel segment widths don't match the floods").
+      // megabar's own real position angle (CarpetGeometry). Alternates
+      // the exact-tie tie-break by megabar index (preferBeam2OnTie) --
+      // see winnerColorAt()'s own comment.
       for ( uint8_t m = 0; m < NUM_MEGABAR_LEDS; ++m ) {
          float a = CarpetGeometry::getMegabar( m ).dimAngleDeg; // ground-spot angle -- the only geometry a real show should ever consult
-         LightSetters::setColor( carpet, LightSetters::TargetMegabar, winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte ), LightSetters::ByAngleDeg{ a } );
+         bool preferBeam2OnTie = ( m % 2 ) != 0;
+         LightSetters::setColor( carpet, LightSetters::TargetMegabar, winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte, preferBeam2OnTie ), LightSetters::ByAngleDeg{ a } );
       }
 
-      // --- china: variation-dependent (see class comment) ---
-      // BUGFIX/UNDO: china-beam-crossing was originally requested as its
-      // OWN separate variation (replacing the old "no chinas" one), not as
-      // an addition to Default -- an earlier pass here mistakenly added it
-      // to Default too. Default now goes back to leaving china off except
-      // for the bass-hit strobe below (its original behavior); only
-      // VarNoStrobe carries the beam-crossing china effect.
-      if ( variation_ == VarChinaReact ) {
-         updateChinaReact( time );
-      } else if ( variation_ == VarNoStrobe ) {
-         for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
-            // dimAngleDeg (precomputed once in CarpetGeometry::begin(),
-            // not a live atan2f here) -- ground-spot angle, not aim; see
-            // CarpetGeometry.h's file header for why those two differ
-            float a = CarpetGeometry::getChina( c ).dimAngleDeg;
-            LightSetters::setColor( carpet, LightSetters::TargetChina, winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte ), LightSetters::ByAngleDeg{ a } );
-            LightSetters::setWhite( carpet, LightSetters::TargetChina, 0, LightSetters::ByAngleDeg{ a } );
-         }
-      } else { // VarDefault -- china off except the strobe below
-         carpet->clearChinas();
-      }
-
-      // bass-hit china strobe -- Default only (VarNoStrobe drops it per
-      // its own name/request; VarChinaReact's own china behavior takes
-      // priority there instead)
+      // --- china: both variations now share the same beam-crossing
+      // effect (see class comment) -- Default layers a white strobe on
+      // top of it, VarNoStrobe doesn't.
+      renderChinaBeams_( hue1Byte, hue2Byte, satByte );
       if ( variation_ == VarDefault ) updateStrobe_( time );
    }
 
  private:
-   // triple-strobe on bass hits: 3 pulses, 30ms on/20ms gap.
+   // triple-strobe on bass hits: 3 pulses, 30ms on/20ms gap. White-channel
+   // only (see class comment) -- never touches china's RGB color, which
+   // renderChinaBeams_() above has already set to that china's own
+   // beam-crossing color this same frame; the two effects superimpose
+   // instead of one overwriting the other.
    // BUGFIX ("only strobes a couple times then stops"): this used to
    // additionally require each new hit's level to EXCEED the previous
    // strobing hit's own level (suppressionPeak_), or a full 3s of silence,
@@ -443,11 +449,8 @@ class LighthouseShow : public LightShow {
       bool lit = false;
       for ( int p = 0; p < 3; ++p ) if ( elapsed >= pulseStart[ p ] && elapsed < pulseStart[ p ] + onMs ) { lit = true; break; }
       if ( !lit ) return;
-      LightSetters::setColor( carpet, LightSetters::TargetChina, CHSV( 0, 0, 255 ), LightSetters::ByAngleDeg{ 0.0f }, LightSetters::ByAngleDeg{ 359.999f } ); // full range -- every china
-      LightSetters::setWhite( carpet, LightSetters::TargetChina, 255, LightSetters::ByAngleDeg{ 0.0f }, LightSetters::ByAngleDeg{ 359.999f } );
+      LightSetters::setWhite( carpet, LightSetters::TargetChina, 255, LightSetters::ByAngleDeg{ 0.0f }, LightSetters::ByAngleDeg{ 359.999f } ); // full range -- every china
    }
 };
-
-const int LighthouseShow::chinaPairs_[ LighthouseShow::NUM_CHINA_PAIRS_ ][ 2 ] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 } };
 
 #endif

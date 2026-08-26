@@ -50,10 +50,9 @@ GLOBAL BUTTONS (any show)
   ▸ zebra
   Pot: stripe width
 
-5 Lighthouse (3 var)
+5 Lighthouse (2 var)
   ▸ default
   ▸ no strobe
-  ▸ china react
   All: Pot = rotation
   speed
 
@@ -95,7 +94,7 @@ CONFIG MENU NAV (from L)
   R-half lit=on
 
 -----
-Generated: 2026-08-16 11:27 PM PDT (Pacific)
+Generated: 2026-08-25 07:08 PM PDT (Pacific)
 
 HOW TO FORMAT THIS FOR PRINT (one-time, before each new print run):
 1. Select all text above (down to but not including this "-----" footer)

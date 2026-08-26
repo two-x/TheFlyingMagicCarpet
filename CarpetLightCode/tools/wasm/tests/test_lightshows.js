@@ -86,7 +86,7 @@ const VARIATION_INDEX = {
   [ShowMode.Flame]: { waterflames: 0, flames: 1, 'shifting hues': 2, 'hue to white': 3 },
   [ShowMode.Equalizer]: { chase: 0, 'VU meter': 1, new_standard: 2, pixel_war: 3, sub_standard: 4 },
   [ShowMode.SpeedStripes]: { default: 0, zebra: 1 },
-  [ShowMode.Lighthouse]: { default: 0, 'no strobe': 1, 'china react': 2 },
+  [ShowMode.Lighthouse]: { default: 0, 'no strobe': 1 },
 };
 
 function makeCtx(M) {
@@ -289,7 +289,7 @@ async function testLighthouse() {
   // PotEnergyTakeover), so a "beams rotate over time" assertion here is
   // only meaningful once a pot injector exists again. Testing the parts
   // that don't depend on it instead.
-  for (const variationName of ['default', 'no strobe', 'china react']) {
+  for (const variationName of ['default', 'no strobe']) {
     ctx.selectVariationByName(variationName);
     ctx.tick(5);
     const snap = { rope: ctx.snapshot('rope'), megabar: ctx.snapshot('megabar'), china: ctx.snapshot('china') };
@@ -297,15 +297,18 @@ async function testLighthouse() {
     check(`[${variationName}] rope values stay in valid byte range`, allValuesInRange(snap.rope));
   }
 
-  // china-react: bass/treble edges should visibly flash china white.
-  ctx.selectVariationByName('china react');
+  // default: a bass hit should visibly strobe china's White channel (the
+  // raw snapshot buffer is CRGBW-sized, see web_sizeofChinaLed(), so a
+  // White-only change still shows up as a byte diff here) on top of
+  // whatever beam-crossing RGB color china already has.
+  ctx.selectVariationByName('default');
   ctx.silence();
   ctx.tick(10);
   const quiet = ctx.snapshot('china');
   ctx.setBins([ctx.adcMax(), 0, 0, 0, 0, 0, 0]);
   ctx.tick(5);
   const afterHit = ctx.snapshot('china');
-  check('[china react] china reacts to a bass edge', snapshotsDiffer(quiet, afterHit));
+  check('[default] china strobes on a bass edge', snapshotsDiffer(quiet, afterHit));
 }
 
 // ---------------------------------------------------------------------

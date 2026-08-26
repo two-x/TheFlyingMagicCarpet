@@ -86,10 +86,9 @@ CELLS = [
         "▸ zebra",
         "  Pot: stripe width",
     ]),
-    ("5 Lighthouse (3 var)", [
+    ("5 Lighthouse (2 var)", [
         "▸ default",
         "▸ no strobe",
-        "▸ china react",
         "All: Pot = rotation",
         "  speed",
     ]),
