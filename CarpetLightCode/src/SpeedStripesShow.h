@@ -162,14 +162,16 @@ class SpeedStripesShow : public LightShow {
    static constexpr float ZEBRA_STRIPE_WIDTH_FT = 6.0f;
    static constexpr float ZEBRA_FADE_FT = 3.0f;          // stripe-to-stripe and black-overlay border cross-fade width
    static constexpr float ZEBRA_MIN_BLACK_WIDTH_FT = 0.5f; // smallest black-stripe width the pot will ever produce, once producing any at all
-   static constexpr float ZEBRA_MIN_GAP_FT = 5.0f;         // colored gap between black stripes never shrinks below this
    static constexpr float ZEBRA_SCHEDULE_LOOKAHEAD_FT = 30.0f; // comfortably past any fixture's own |pos| offset
    static constexpr float ZEBRA_CHINA_REST_FRACTION = 0.70f;   // china's resting brightness fraction of global max while there's been recent sound
 
    float zebraPosFt_ = 0.0f; // feet, monotonically grows while moving -- this variation's own scrolling position
 
    struct ZebraSeg { float startPos, endPos, width; bool isBlack; };
-   static const int ZEBRA_SCHEDULE_MAX = 24; // generous fixed ring-buffer size -- worst case (min width+gap alternating) across 2x lookahead is well under this
+   // worst case is min-width black+gap alternating (period = 3 *
+   // ZEBRA_MIN_BLACK_WIDTH_FT = 1.5ft) across 2x lookahead (60ft) -- ~40
+   // segments -- sized with margin above that
+   static const int ZEBRA_SCHEDULE_MAX = 48;
    ZebraSeg zebraSchedule_[ ZEBRA_SCHEDULE_MAX ];
    int zebraScheduleHead_ = 0, zebraScheduleCount_ = 0;
    float zebraFrontierPos_ = 0.0f;
@@ -235,7 +237,11 @@ class SpeedStripesShow : public LightShow {
    // pot only changes what gets generated for territory not yet reached.
    // Pot mapping is dead-zone-free: pot=0% is the only fully-off point,
    // any turn above that immediately produces at least
-   // ZEBRA_MIN_BLACK_WIDTH_FT and scales up to 40ft at 100%.
+   // ZEBRA_MIN_BLACK_WIDTH_FT and scales up to 40ft at 100%. Occurrence
+   // period (one black stripe's start to the next) is always exactly 3x
+   // the current black width -- i.e. the colored gap is always 2x the
+   // black width -- so wider stripes also come proportionally less often,
+   // rather than width and spacing scaling independently.
    void zebraEnsureScheduleTo( float neededPos ) {
       if ( !zebraFrontierValid_ ) { zebraFrontierPos_ = neededPos; zebraFrontierValid_ = true; }
       float potPercent = carpet->pot->readPercent();
@@ -244,7 +250,7 @@ class SpeedStripesShow : public LightShow {
          if ( potWidth < ZEBRA_MIN_BLACK_WIDTH_FT ) { zebraFrontierPos_ = neededPos; break; }
          bool lastWasBlack = zebraScheduleCount_ ? zebraScheduleAt( zebraScheduleCount_ - 1 ).isBlack : false;
          bool isBlack = !lastWasBlack;
-         float width = isBlack ? potWidth : max( potWidth, ZEBRA_MIN_GAP_FT );
+         float width = isBlack ? potWidth : 2.0f * potWidth;
          float start = zebraFrontierPos_, end = start + width;
          zebraSchedulePush( start, end, width, isBlack );
          zebraFrontierPos_ = end;
@@ -430,19 +436,20 @@ class SpeedStripesShow : public LightShow {
    // integer divide, so this is a genuine speedup, not a lateral move. The
    // one unavoidable float op is the single pos->fixed-point conversion at
    // the top, converting once rather than doing float division repeatedly.
-   // BUGFIX ("megabars should always be on, never black" -- confirmed not
-   // true at any point in this show's real history, going back to its very
-   // first commit, so not something a revert could fix; this is the actual
-   // mechanism responsible): this used to ALSO multiply the hue-blended
-   // result by a separate sine-derived "brightness" pulse (amplified 2x
-   // then hard-clamped to [0,255], intended as a stripe-boundary contrast
-   // effect) -- the clamping forced a genuine, sustained flat-black
-   // plateau at every stripe boundary, not just a dip. Removed entirely:
-   // the hue blend below (leadClr->trailClr across each stripe's own
-   // width) is already a smooth, continuous transition between two always-
-   // fully-saturated CHSV(_,255,255) colors, which can never itself
-   // produce black -- no separate brightness modulation is needed for
-   // stripe boundaries to read as smoothed rather than hard-cut.
+   // BUGFIX history: an earlier version multiplied the hue-blended result
+   // by a sine-derived "brightness" pulse amplified 2x then hard-clamped
+   // to [0,255], meant as a brief stripe-boundary contrast dip -- the
+   // clamping forced a sustained flat-black plateau far wider than a dip.
+   // That was fixed by deleting the brightness step entirely, which
+   // over-corrected: it silently made this variation incapable of ever
+   // going dark at all, contradicting this file's own class comment
+   // ("4 alternating lit/dark bands" via a "smoothed square wave" /
+   // FADE_CONTRAST) and leaving it as a continuous hue wash with no actual
+   // stripes -- confirmed by the user as "wrecked" against zebra (which
+   // does alternate lit/black) as the reference for correct behavior.
+   // Restored below with FastLED's safe nscale8() instead of a manual
+   // amplify+clamp, so a real half-period black band is a deliberate,
+   // bounded scale, not a saturating multiply that can overshoot.
    // pos is real feet, car-center-relative, Y+=front (same convention as
    // CarpetGeometry) -- NOT LED/pixel units; the fixed-point math below is
    // purely an internal optimization (avoids float modulo), agnostic to
@@ -477,7 +484,23 @@ class SpeedStripesShow : public LightShow {
       // existing RGB-domain crossfade rather than change this show's
       // already-tuned stripe-boundary look.
       CRGB leadClr = leadHsv, trailClr = trailHsv;
-      return blend( trailClr, leadClr, phase8 );
+      CRGB result = blend( trailClr, leadClr, phase8 );
+
+      // smoothed-square-wave brightness envelope over the period: bright
+      // through the first half (phase8 0-127, the lit band), black
+      // through the second half (128-255, the dark band). sin8(phase8)
+      // already peaks at phase8=64 (mid lit-band) and troughs at
+      // phase8=192 (mid dark-band); FADE_CONTRAST steepens that smooth
+      // sine into a flat-top/flat-bottom shape (higher = harder-edged
+      // transition, lower = softer), bounded to int16_t range before
+      // nscale8() applies it -- no unbounded amplify-then-clamp.
+      static const int16_t FADE_CONTRAST = 6;
+      int16_t centered = (int16_t)sin8( phase8 ) - 128;
+      int16_t steepened = centered * FADE_CONTRAST;
+      if ( steepened > 127 ) steepened = 127;
+      if ( steepened < -128 ) steepened = -128;
+      result.nscale8( (uint8_t)( steepened + 128 ) );
+      return result;
    }
 
    // Sweeps every real neopixel on one side, sampling the wave at ITS OWN

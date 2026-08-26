@@ -353,34 +353,51 @@ class CarpetGeometry {
    // the lower id.
    static MegabarName getMegabarByAngle( float angleDeg ) { return (MegabarName)nearestByAngle_( FixtureMegabar, NumMegabars, angleDeg ); }
    static ChinaName   getChinaByAngle( float angleDeg )   { return (ChinaName)nearestByAngle_( FixtureChina, NumChinas, angleDeg ); }
-   // BUGFIX: ByX/ByY used to silently return a single "winner" even when
-   // the query was a genuine tie -- fixtures repeat X across the front/
-   // rear mirror line and repeat Y across the left/right mirror line (e.g.
-   // Megabar30deg and Megabar150deg share the same dimX; Megabar30deg and
-   // Megabar330deg share the same dimY), so "nearest fixture to X=6.8ft"
-   // has a real 2-way tie between fixtures on opposite sides of the car --
-   // whichever the loop happened to see first silently won, which is
-   // wrong for a caller that can't tell it happened.
+   // BUGFIX, revised: ByX/ByY used to silently return a single "winner"
+   // even when the query was a genuine tie -- fixtures repeat X across the
+   // front/rear mirror line and repeat Y across the left/right mirror line
+   // (e.g. Megabar30deg and Megabar150deg share the same dimX; Megabar30deg
+   // and Megabar330deg share the same dimY), so "nearest fixture to
+   // X=6.8ft" had a real 2-way tie between fixtures on opposite sides of
+   // the car -- whichever the loop happened to see first silently won.
    //
-   // No caller-supplied side/half argument is used to route around this --
-   // deliberately, per explicit request: a side argument only papers over
-   // ambiguity for QUERIES that fall inside the mirrored zone; it would
-   // incorrectly reject (or misroute) a query that isn't actually
-   // ambiguous just because it happens to land nearest a fixture "on the
-   // wrong side" of whatever half the caller guessed. Instead the tie
-   // check is performed directly on the real query result: every fixture
-   // of the type is scanned (nearestXyChecked_ below), tracking both the
-   // single closest match AND whether a second fixture ties it (within a
-   // small float epsilon -- these coordinates are compile-time literals,
-   // so a real tie compares bit-exact in practice, but non-literal/derived
-   // values could exist in the future). A genuine tie returns the
-   // out-of-range sentinel (MegabarName)NumMegabars / (ChinaName)NumChinas
-   // (one past the last real index -- mirrors getNeoBy{X,Y}Ft's own
-   // INT32_MIN sentinel below); anything with a single unique nearest
-   // fixture returns it correctly, tie-prone dimension or not. Callers
-   // that pass the result through directly to an array index must check
-   // for the sentinel first; LightSetters (which builds its setters on
-   // top of these) already does.
+   // side (CarSide) is now REQUIRED -- per explicit request, reversing an
+   // earlier version of this fix that deliberately omitted it (a side
+   // argument was judged to risk misrouting a query that wasn't actually
+   // ambiguous). With side required, only the fixtures on that side are
+   // ever candidates: for ByX, side must be CarSideFront/CarSideRear,
+   // filtering on each fixture's OWN dimY sign (>=0 counts as Front, <=0
+   // as Rear -- inclusive both ways, so a fixture sitting exactly on the
+   // line, e.g. Megabar90deg/Megabar270deg at dimY==0, is reachable from
+   // either side rather than falling into a dead zone); ByY mirrors this
+   // on dimX/CarSideLeft/CarSideRight. This removes the mirror-line tie
+   // entirely for every query that supplies the correct side.
+   //
+   // Tie-detection STILL runs, defensively, WITHIN whichever side was
+   // requested -- not removed just because a side is now mandatory. The
+   // real risk a side argument can't rule out is a FUTURE geometry change
+   // (fixture repositioning) introducing a same-side collision no one
+   // intended; if that ever happens, this still refuses to guess rather
+   // than silently pick one. Confirmed, by checking every current fixture
+   // position by hand: no such same-side tie exists today, for either
+   // fixture type, on either axis, even counting the two on-the-line
+   // megabars in both their buckets. CPU cost of the check itself is
+   // negligible -- same O(count) linear scan as before (<=12 fixtures),
+   // with one extra float comparison per fixture for the side filter.
+   //
+   // Two distinct error conditions, BOTH logged (rate-limited, see
+   // nospam_printf in Utilities.h, naming the getter/side/value and which
+   // light show triggered it) before returning the out-of-range sentinel
+   // (MegabarName)NumMegabars / (ChinaName)NumChinas -- one past the last
+   // real index, mirrors getNeoBy{X,Y}Ft's own INT32_MIN sentinel below:
+   //   - a genuine tie (2+ fixtures on the requested side equally close)
+   //   - an invalid side/axis pairing (e.g. CarSideLeft passed to ByX) --
+   //     unlike getNeoByXFt/getNeoByYFt's own SILENT sentinel return for
+   //     this same case, this one logs -- a real caller-code bug, worth
+   //     surfacing on the console rather than just failing quietly.
+   // Callers that pass the result through directly to an array index must
+   // check for the sentinel first; LightSetters (which builds its setters
+   // on top of these) already does.
    //
    // Efficiency: a full linear scan (12 megabars / 8 china) on every call
    // is trivial on this MCU and happens at most once per setColor/setWhite
@@ -388,10 +405,10 @@ class CarpetGeometry {
    // caller pattern made this a real hot path, a tie-lookup table could be
    // precomputed once in begin() instead; not done here since nothing
    // currently justifies the added complexity.
-   static MegabarName getMegabarByX( float xFt ) { uint8_t id = nearestXChecked_( FixtureMegabar, NumMegabars, xFt ); return (id == TIE_SENTINEL_) ? (MegabarName)NumMegabars : (MegabarName)id; }
-   static ChinaName   getChinaByX( float xFt )   { uint8_t id = nearestXChecked_( FixtureChina, NumChinas, xFt );     return (id == TIE_SENTINEL_) ? (ChinaName)NumChinas     : (ChinaName)id; }
-   static MegabarName getMegabarByY( float yFt ) { uint8_t id = nearestYChecked_( FixtureMegabar, NumMegabars, yFt ); return (id == TIE_SENTINEL_) ? (MegabarName)NumMegabars : (MegabarName)id; }
-   static ChinaName   getChinaByY( float yFt )   { uint8_t id = nearestYChecked_( FixtureChina, NumChinas, yFt );     return (id == TIE_SENTINEL_) ? (ChinaName)NumChinas     : (ChinaName)id; }
+   static MegabarName getMegabarByX( CarSide side, float xFt ) { uint8_t id = nearestXChecked_( FixtureMegabar, NumMegabars, side, xFt ); return (id == TIE_SENTINEL_) ? (MegabarName)NumMegabars : (MegabarName)id; }
+   static ChinaName   getChinaByX( CarSide side, float xFt )   { uint8_t id = nearestXChecked_( FixtureChina, NumChinas, side, xFt );     return (id == TIE_SENTINEL_) ? (ChinaName)NumChinas     : (ChinaName)id; }
+   static MegabarName getMegabarByY( CarSide side, float yFt ) { uint8_t id = nearestYChecked_( FixtureMegabar, NumMegabars, side, yFt ); return (id == TIE_SENTINEL_) ? (MegabarName)NumMegabars : (MegabarName)id; }
+   static ChinaName   getChinaByY( CarSide side, float yFt )   { uint8_t id = nearestYChecked_( FixtureChina, NumChinas, side, yFt );     return (id == TIE_SENTINEL_) ? (ChinaName)NumChinas     : (ChinaName)id; }
    // getMegabarByDist/getChinaByDist -- COMMENTED OUT, per explicit request
    // (confirmed unused by any real light show, ARM/WASM build clean without
    // them): distance-from-center is ambiguous even as a plain GETTER, not
@@ -457,25 +474,33 @@ class CarpetGeometry {
    // the NeoID is exactly known), for callers that already have a raw
    // pixel-index (e.g. a scrolling animation's own array offset).
    static int32_t getNeoByAngleDeg( float angleDeg ) { return rawIndexToNeoId( (uint16_t)nearestNeoGlobalByAngle_( angleDeg ) ); }
-   // Unlike the flood ByX/ByY getters above, side here isn't optional --
-   // it selects which physical STRAND to search at all (X is genuinely
-   // meaningless as a search key on the left/right strands, whose X is
-   // pinned constant the whole way; same for Y on front/rear), so there's
-   // no way to answer "nearest by X" without first knowing which strand.
-   // An invalid axis/side pairing (e.g. getNeoByYFt(CarSideFront,...) --
-   // Front doesn't disambiguate Y at all) is a programming error, not a
-   // legitimate query -- returns the out-of-range sentinel INT32_MIN
-   // (never a valid NeoID; mirrors the flood getters' own NumMegabars/
-   // NumChinas sentinel above) rather than silently searching whichever
-   // strand Front happens to map to. Callers that pass the result through
-   // directly to an array index must check for it first; LightSetters
-   // (which builds its setters on top of these) already does.
+   // Side here isn't optional -- it selects which physical STRAND to
+   // search at all (X is genuinely meaningless as a search key on the
+   // left/right strands, whose X is pinned constant the whole way; same
+   // for Y on front/rear), so there's no way to answer "nearest by X"
+   // without first knowing which strand. An invalid axis/side pairing
+   // (e.g. getNeoByYFt(CarSideFront,...) -- Front doesn't disambiguate Y
+   // at all) is a programming error, not a legitimate query -- logged (see
+   // nospam_printf in Utilities.h, same treatment the flood ByX/ByY
+   // getters' own invalid-side/tie cases get) and returns the out-of-range
+   // sentinel INT32_MIN (never a valid NeoID; mirrors the flood getters'
+   // own NumMegabars/NumChinas sentinel above) rather than silently
+   // searching whichever strand Front happens to map to. Callers that pass
+   // the result through directly to an array index must check for it
+   // first; LightSetters (which builds its setters on top of these)
+   // already does.
    static int32_t getNeoByXFt( CarSide side, float xFt ) {
-      if ( side != CarSideFront && side != CarSideRear ) return INT32_MIN; // invalid side/axis pairing
+      if ( side != CarSideFront && side != CarSideRear ) {
+         nospam_printf( "AMBIG getNeoByXFt side=%d(need F/R) x=%.2f show=%s\n", (int)side, xFt, g_currentShowName );
+         return INT32_MIN;
+      }
       return nearestNeoOnStrand_( strandForSide_( side ), xFt, /*useX*/true );
    }
    static int32_t getNeoByYFt( CarSide side, float yFt ) {
-      if ( side != CarSideLeft && side != CarSideRight ) return INT32_MIN; // invalid side/axis pairing
+      if ( side != CarSideLeft && side != CarSideRight ) {
+         nospam_printf( "AMBIG getNeoByYFt side=%d(need L/R) y=%.2f show=%s\n", (int)side, yFt, g_currentShowName );
+         return INT32_MIN;
+      }
       return nearestNeoOnStrand_( strandForSide_( side ), yFt, /*useX*/false );
    }
    static int32_t getNeoByXPixel( CarSide side, float xPixel ) { return getNeoByXFt( side, xPixel / pixelsPerFootForSide_( side ) ); }
@@ -555,23 +580,49 @@ class CarpetGeometry {
    // compares bit-exact in practice and this rarely even matters.
    static const uint8_t TIE_SENTINEL_ = 255;
    static constexpr float TIE_EPSILON_FT_ = 1e-4f;
-   static uint8_t nearestXChecked_( FixtureType type, uint8_t count, float queryXFt ) {
+   // Messages are kept short (character count, not information) -- each
+   // still names the exact getter, side, query value, show, and (for a
+   // tie) the tie count; distinct literal per (type,axis) so each of the
+   // 4 real getters keeps its own independent nospam_printf cooldown.
+   static uint8_t nearestXChecked_( FixtureType type, uint8_t count, CarSide side, float queryXFt ) {
+      if ( side != CarSideFront && side != CarSideRear ) {
+         if ( type == FixtureMegabar ) nospam_printf( "AMBIG getMegabarByX side=%d(need F/R) x=%.2f show=%s\n", (int)side, queryXFt, g_currentShowName );
+         else nospam_printf( "AMBIG getChinaByX side=%d(need F/R) x=%.2f show=%s\n", (int)side, queryXFt, g_currentShowName );
+         return TIE_SENTINEL_;
+      }
       uint8_t best = 0; float bestDelta = 1e9f; uint8_t tieCount = 0;
       for ( uint8_t i = 0; i < count; ++i ) {
+         float y = getFlood( type, i ).dimY;
+         if ( ( side == CarSideFront ) ? ( y < 0.0f ) : ( y > 0.0f ) ) continue; // not on the requested side
          float d = fabsf( getFlood( type, i ).dimX - queryXFt );
          if ( d < bestDelta - TIE_EPSILON_FT_ ) { bestDelta = d; best = i; tieCount = 1; }
          else if ( fabsf( d - bestDelta ) <= TIE_EPSILON_FT_ ) { ++tieCount; }
       }
-      return ( tieCount > 1 ) ? TIE_SENTINEL_ : best;
+      if ( tieCount > 1 ) {
+         if ( type == FixtureMegabar ) nospam_printf( "AMBIG getMegabarByX side=%d x=%.2f tie=%d show=%s\n", (int)side, queryXFt, tieCount, g_currentShowName );
+         else nospam_printf( "AMBIG getChinaByX side=%d x=%.2f tie=%d show=%s\n", (int)side, queryXFt, tieCount, g_currentShowName );
+      }
+      return ( tieCount == 1 ) ? best : TIE_SENTINEL_; // tieCount==0 (no fixture on this side -- can't currently happen) also falls through to the sentinel, silently
    }
-   static uint8_t nearestYChecked_( FixtureType type, uint8_t count, float queryYFt ) {
+   static uint8_t nearestYChecked_( FixtureType type, uint8_t count, CarSide side, float queryYFt ) {
+      if ( side != CarSideLeft && side != CarSideRight ) {
+         if ( type == FixtureMegabar ) nospam_printf( "AMBIG getMegabarByY side=%d(need L/R) y=%.2f show=%s\n", (int)side, queryYFt, g_currentShowName );
+         else nospam_printf( "AMBIG getChinaByY side=%d(need L/R) y=%.2f show=%s\n", (int)side, queryYFt, g_currentShowName );
+         return TIE_SENTINEL_;
+      }
       uint8_t best = 0; float bestDelta = 1e9f; uint8_t tieCount = 0;
       for ( uint8_t i = 0; i < count; ++i ) {
+         float x = getFlood( type, i ).dimX;
+         if ( ( side == CarSideRight ) ? ( x < 0.0f ) : ( x > 0.0f ) ) continue; // not on the requested side
          float d = fabsf( getFlood( type, i ).dimY - queryYFt );
          if ( d < bestDelta - TIE_EPSILON_FT_ ) { bestDelta = d; best = i; tieCount = 1; }
          else if ( fabsf( d - bestDelta ) <= TIE_EPSILON_FT_ ) { ++tieCount; }
       }
-      return ( tieCount > 1 ) ? TIE_SENTINEL_ : best;
+      if ( tieCount > 1 ) {
+         if ( type == FixtureMegabar ) nospam_printf( "AMBIG getMegabarByY side=%d y=%.2f tie=%d show=%s\n", (int)side, queryYFt, tieCount, g_currentShowName );
+         else nospam_printf( "AMBIG getChinaByY side=%d y=%.2f tie=%d show=%s\n", (int)side, queryYFt, tieCount, g_currentShowName );
+      }
+      return ( tieCount == 1 ) ? best : TIE_SENTINEL_; // tieCount==0 (no fixture on this side -- can't currently happen) also falls through to the sentinel, silently
    }
    // nearestByDist_ -- COMMENTED OUT along with getMegabarByDist/
    // getChinaByDist above (see that comment); no longer called anywhere.

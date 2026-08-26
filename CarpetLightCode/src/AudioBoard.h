@@ -992,7 +992,7 @@ uint8_t AudioBoard::autoPeakMode_ = AutoPeakBin; // overwritten by Nvm at boot
 
 bool AudioBoard::silent_ = false;
 
-float AudioBoard::audioForesightMs_ = 0.0f; // overwritten by Nvm at boot
+float AudioBoard::audioForesightMs_ = 340.0f; // overwritten by Nvm at boot
 
 uint32_t AudioBoard::simPhaseMs_ = 40;
 Timer AudioBoard::simStateTimer_( 10000 );

@@ -523,6 +523,7 @@ void loop() {
    static uint32_t clock;
    clock = millis();
    LoopTime::update( clock ); // must run before AudioBoard::pollFrequencies()/pollSimulated() below -- they read the EMA this produces
+   g_currentShowName = showName( currMode ); // see Utilities.h's own comment -- lets low-level diagnostics (CarpetGeometry.h) report which show was active
 
    // Suppress auto-gain while dialing in noise floor/peak threshold --
    // reading either of those against a live-renormalizing signal is

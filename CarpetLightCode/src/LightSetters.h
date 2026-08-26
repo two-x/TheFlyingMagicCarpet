@@ -80,16 +80,23 @@ class LightSetters {
    // getter, not just as a would-be setter target here, so there was
    // nothing safe left to expose.
    //
-   // ByXFt/ByYFt below have NO side/CarSide field -- unlike the neo tags
-   // further down, flood X/Y ambiguity is a property of the query VALUE,
-   // not of a fixed half of the car (see CarpetGeometry::getMegabarByX's
-   // own comment), so CarpetGeometry itself detects genuine ties and
-   // returns its out-of-range sentinel; forEachFloodLinear_ below checks
-   // for that sentinel and silently sets nothing rather than writing to a
-   // wrong/undefined fixture.
+   // ByXFt/ByYFt now carry a CarSide field, same shape as the neo tags
+   // further down -- per explicit request, required rather than optional.
+   // Scopes BOTH the single-match form (start only, end omitted) and the
+   // range form (start+end both given) to fixtures on that one side --
+   // for a range query, only start.side is consulted, end.side is unused
+   // (both structs must share a type, but a range is one coherent query on
+   // one side; a show wanting both sides for a range makes 2 calls, same
+   // as the single-match form already requires). CarpetGeometry still
+   // detects genuine same-side ties defensively (see its own comment) and
+   // logs+returns its out-of-range sentinel; forEachFloodLinear_ below
+   // checks for that sentinel and silently sets nothing rather than
+   // writing to a wrong/undefined fixture. An invalid side/axis pairing is
+   // logged the same way (see nospam_printf, Utilities.h) before this also
+   // sets nothing.
    struct ByAngleDeg { float deg; };
-   struct ByXFt      { float ft; };
-   struct ByYFt      { float ft; };
+   struct ByXFt      { CarpetGeometry::CarSide side; float ft; }; // side must be CarSideFront/CarSideRear
+   struct ByYFt      { CarpetGeometry::CarSide side; float ft; }; // side must be CarSideLeft/CarSideRight
    struct ByID       { uint8_t id; }; // exact fixture -- no nearest-match, no range form (an ID range has no obvious "between" geometry)
 
    // ---- neo position tags: global AngleDeg, or (CarSide, value) in ft/pixel, or CircumferenceID ----
@@ -115,11 +122,11 @@ class LightSetters {
    static void setColor( MagicCarpet * carpet, Target target, CHSV color, ByAngleDeg start, ByAngleDeg end = ByAngleDeg{ NAN } ) {
       forEachFloodAngle_( target, start.deg, end.deg, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodColor_( carpet, t, id, color ); } );
    }
-   static void setColor( MagicCarpet * carpet, Target target, CHSV color, ByXFt start, ByXFt end = ByXFt{ NAN } ) {
-      forEachFloodLinear_( target, start.ft, end.ft, DimX_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodColor_( carpet, t, id, color ); } );
+   static void setColor( MagicCarpet * carpet, Target target, CHSV color, ByXFt start, ByXFt end = ByXFt{ CarpetGeometry::CarSideFront, NAN } ) {
+      forEachFloodLinear_( target, start.side, start.ft, end.ft, DimX_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodColor_( carpet, t, id, color ); } );
    }
-   static void setColor( MagicCarpet * carpet, Target target, CHSV color, ByYFt start, ByYFt end = ByYFt{ NAN } ) {
-      forEachFloodLinear_( target, start.ft, end.ft, DimY_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodColor_( carpet, t, id, color ); } );
+   static void setColor( MagicCarpet * carpet, Target target, CHSV color, ByYFt start, ByYFt end = ByYFt{ CarpetGeometry::CarSideLeft, NAN } ) {
+      forEachFloodLinear_( target, start.side, start.ft, end.ft, DimY_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodColor_( carpet, t, id, color ); } );
    }
    static void setColor( MagicCarpet * carpet, Target target, CHSV color, ByID single ) {
       writeFloodColor_( carpet, floodTypeOf_( target ), single.id, color );
@@ -127,11 +134,11 @@ class LightSetters {
    static void setWhite( MagicCarpet * carpet, Target target, uint8_t whiteVal, ByAngleDeg start, ByAngleDeg end = ByAngleDeg{ NAN } ) {
       forEachFloodAngle_( target, start.deg, end.deg, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodWhite_( carpet, t, id, whiteVal ); } );
    }
-   static void setWhite( MagicCarpet * carpet, Target target, uint8_t whiteVal, ByXFt start, ByXFt end = ByXFt{ NAN } ) {
-      forEachFloodLinear_( target, start.ft, end.ft, DimX_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodWhite_( carpet, t, id, whiteVal ); } );
+   static void setWhite( MagicCarpet * carpet, Target target, uint8_t whiteVal, ByXFt start, ByXFt end = ByXFt{ CarpetGeometry::CarSideFront, NAN } ) {
+      forEachFloodLinear_( target, start.side, start.ft, end.ft, DimX_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodWhite_( carpet, t, id, whiteVal ); } );
    }
-   static void setWhite( MagicCarpet * carpet, Target target, uint8_t whiteVal, ByYFt start, ByYFt end = ByYFt{ NAN } ) {
-      forEachFloodLinear_( target, start.ft, end.ft, DimY_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodWhite_( carpet, t, id, whiteVal ); } );
+   static void setWhite( MagicCarpet * carpet, Target target, uint8_t whiteVal, ByYFt start, ByYFt end = ByYFt{ CarpetGeometry::CarSideLeft, NAN } ) {
+      forEachFloodLinear_( target, start.side, start.ft, end.ft, DimY_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodWhite_( carpet, t, id, whiteVal ); } );
    }
    static void setWhite( MagicCarpet * carpet, Target target, uint8_t whiteVal, ByID single ) {
       writeFloodWhite_( carpet, floodTypeOf_( target ), single.id, whiteVal );
@@ -195,11 +202,11 @@ class LightSetters {
    static void setColor( MagicCarpet * carpet, Target target, CRGB color, ByAngleDeg start, ByAngleDeg end = ByAngleDeg{ NAN } ) {
       forEachFloodAngle_( target, start.deg, end.deg, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodColorRGB_( carpet, t, id, color ); } );
    }
-   static void setColor( MagicCarpet * carpet, Target target, CRGB color, ByXFt start, ByXFt end = ByXFt{ NAN } ) {
-      forEachFloodLinear_( target, start.ft, end.ft, DimX_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodColorRGB_( carpet, t, id, color ); } );
+   static void setColor( MagicCarpet * carpet, Target target, CRGB color, ByXFt start, ByXFt end = ByXFt{ CarpetGeometry::CarSideFront, NAN } ) {
+      forEachFloodLinear_( target, start.side, start.ft, end.ft, DimX_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodColorRGB_( carpet, t, id, color ); } );
    }
-   static void setColor( MagicCarpet * carpet, Target target, CRGB color, ByYFt start, ByYFt end = ByYFt{ NAN } ) {
-      forEachFloodLinear_( target, start.ft, end.ft, DimY_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodColorRGB_( carpet, t, id, color ); } );
+   static void setColor( MagicCarpet * carpet, Target target, CRGB color, ByYFt start, ByYFt end = ByYFt{ CarpetGeometry::CarSideLeft, NAN } ) {
+      forEachFloodLinear_( target, start.side, start.ft, end.ft, DimY_, [&]( CarpetGeometry::FixtureType t, uint8_t id ) { writeFloodColorRGB_( carpet, t, id, color ); } );
    }
    static void setColor( MagicCarpet * carpet, Target target, CRGB color, ByID single ) {
       writeFloodColorRGB_( carpet, floodTypeOf_( target ), single.id, color );
@@ -284,20 +291,39 @@ class LightSetters {
       }
    }
    template < typename Fn >
-   static void forEachFloodLinear_( Target target, float startVal, float endVal, FloodDim_ dim, Fn fn ) {
+   static void forEachFloodLinear_( Target target, CarpetGeometry::CarSide side, float startVal, float endVal, FloodDim_ dim, Fn fn ) {
       CarpetGeometry::FixtureType type = floodTypeOf_( target );
       uint8_t count = floodCount_( target );
       if ( isnan( endVal ) ) {
          uint8_t id;
-         if ( dim == DimX_ ) id = ( type == CarpetGeometry::FixtureChina ) ? (uint8_t)CarpetGeometry::getChinaByX( startVal ) : (uint8_t)CarpetGeometry::getMegabarByX( startVal );
-         else id = ( type == CarpetGeometry::FixtureChina ) ? (uint8_t)CarpetGeometry::getChinaByY( startVal ) : (uint8_t)CarpetGeometry::getMegabarByY( startVal );
-         if ( id >= count ) return; // CarpetGeometry returned its out-of-range tie sentinel -- no single unambiguous fixture to write to
+         if ( dim == DimX_ ) id = ( type == CarpetGeometry::FixtureChina ) ? (uint8_t)CarpetGeometry::getChinaByX( side, startVal ) : (uint8_t)CarpetGeometry::getMegabarByX( side, startVal );
+         else id = ( type == CarpetGeometry::FixtureChina ) ? (uint8_t)CarpetGeometry::getChinaByY( side, startVal ) : (uint8_t)CarpetGeometry::getMegabarByY( side, startVal );
+         if ( id >= count ) return; // CarpetGeometry returned its out-of-range tie/invalid-side sentinel (already logged there) -- nothing unambiguous to write to
          fn( type, id );
+         return;
+      }
+      // range mode -- bypasses the CarpetGeometry getters entirely (no
+      // single-match/tie concept applies to a range), so the same
+      // side/axis validity they check internally is checked once here,
+      // logged the same way (see nospam_printf, Utilities.h)
+      bool sideOk = ( dim == DimX_ ) ? ( side == CarpetGeometry::CarSideFront || side == CarpetGeometry::CarSideRear )
+                                     : ( side == CarpetGeometry::CarSideLeft  || side == CarpetGeometry::CarSideRight );
+      if ( !sideOk ) {
+         const char * dimName = ( dim == DimX_ ) ? "ByXFt" : "ByYFt";
+         const char * needSide = ( dim == DimX_ ) ? "F/R" : "L/R";
+         const char * targetName = ( type == CarpetGeometry::FixtureChina ) ? "China" : "Megabar";
+         nospam_printf( "AMBIG set*(%s %s range) side=%d(need %s) [%.2f,%.2f] show=%s\n",
+                         targetName, dimName, (int)side, needSide, startVal, endVal, g_currentShowName );
          return;
       }
       float lo = min( startVal, endVal ), hi = max( startVal, endVal );
       for ( uint8_t id = 0; id < count; ++id ) {
          const CarpetGeometry::FloodGeometry & f = CarpetGeometry::getFlood( type, id );
+         float otherCoord = ( dim == DimX_ ) ? f.dimY : f.dimX;
+         bool onSide = ( dim == DimX_ )
+            ? ( ( side == CarpetGeometry::CarSideFront ) ? ( otherCoord >= 0.0f ) : ( otherCoord <= 0.0f ) )
+            : ( ( side == CarpetGeometry::CarSideRight ) ? ( otherCoord >= 0.0f ) : ( otherCoord <= 0.0f ) );
+         if ( !onSide ) continue;
          float v = ( dim == DimX_ ) ? f.dimX : f.dimY;
          if ( v >= lo && v <= hi ) fn( type, id );
       }
@@ -328,7 +354,14 @@ class LightSetters {
       // a Y query) can't be resolved by silently picking a strand anyway.
       bool sideValid = useX ? ( side == CarpetGeometry::CarSideFront || side == CarpetGeometry::CarSideRear )
                             : ( side == CarpetGeometry::CarSideLeft  || side == CarpetGeometry::CarSideRight );
-      if ( !sideValid ) return;
+      if ( !sideValid ) {
+         const char * axisName = useX ? "X" : "Y";
+         const char * unitName = pixelUnits ? "Pixel" : "Ft";
+         const char * needSide = useX ? "F/R" : "L/R";
+         nospam_printf( "AMBIG set*(NeoBy%s%s) side=%d(need %s) [%.2f,%.2f] show=%s\n",
+                         axisName, unitName, (int)side, needSide, startVal, endVal, g_currentShowName );
+         return;
+      }
       float ppf = pixelUnits ? CarpetGeometry::pixelsPerFootForSide_( side ) : 1.0f;
       float startFt = pixelUnits ? startVal / ppf : startVal;
       float endFt = pixelUnits ? endVal / ppf : endVal; // NAN / ppf is still NAN
