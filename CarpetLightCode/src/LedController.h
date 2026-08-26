@@ -117,7 +117,12 @@ class Potentiometer {
    Timer fadeTimer_;
 };
 
-enum ButtonPress { PressNone = 0, PressShort = 1, PressMedium = 2, PressLong = 3, PressExtraLong = 4, PressDouble = 5 };
+// PressLeft/PressRight: fired when the encoder is rotated WHILE the button
+// is held (and hasn't already resolved to extra-long or double) -- see
+// PushButton::handleRotationDuringHold() below. Cancels whatever
+// short/medium/long/extra-long/double classification was in progress for
+// that hold, permanently, for the rest of that same hold.
+enum ButtonPress { PressNone = 0, PressShort = 1, PressMedium = 2, PressLong = 3, PressExtraLong = 4, PressDouble = 5, PressLeft = 6, PressRight = 7 };
 
 // Polled, not interrupt-driven: press timing thresholds are coarse (hundreds of
 // ms), so a per-loop update() is plenty responsive. Medium/long are classified
@@ -283,6 +288,43 @@ class PushButton {
       return ret;
    }
 
+   // returns true once per PressLeft/PressRight event (see
+   // handleRotationDuringHold() below); clears the flag unless autoreset is
+   // false
+   bool pressleft( bool autoreset = true ) {
+      bool ret = ( action_ == PressLeft );
+      if ( ret && autoreset ) action_ = PressNone;
+      return ret;
+   }
+   bool pressright( bool autoreset = true ) {
+      bool ret = ( action_ == PressRight );
+      if ( ret && autoreset ) action_ = PressNone;
+      return ret;
+   }
+
+   // Called from Encoder::update() (the only place both this button's hold
+   // state and live rotation are in scope together) whenever the encoder
+   // has rotated at all. If the button is currently held, and hasn't
+   // already resolved to extra-long or double BEFORE any rotation happened
+   // this same hold, this cancels whatever press-tier was in progress and
+   // latches PressLeft/PressRight instead -- returns true so the caller
+   // knows to consume (reset) the rotation delta it just handled. Repeated
+   // rotation during the SAME hold keeps firing further events (that's
+   // exactly what rotationCancelledThisHold_ is for: once true, it's the
+   // ONLY thing gating further calls, not liveActionFired_ itself, since
+   // WE are the ones who set liveActionFired_ the first time).
+   bool handleRotationDuringHold( bool rotatedRight ) {
+      if ( !down_ ) return false;
+      if ( liveActionFired_ && !rotationCancelledThisHold_ ) return false; // already resolved to extra-long/double before any rotation -- too late
+      liveActionFired_ = true;
+      rotationCancelledThisHold_ = true;
+      awaitingSecondPress_ = false;
+      crossedMediumFlag_ = false;
+      crossedLongFlag_ = false;
+      action_ = rotatedRight ? PressRight : PressLeft;
+      return true;
+   }
+
    // one-shot: true for a single update() call, right as a held press crosses
    // the medium-press threshold. meant for live UI feedback (e.g. a flash).
    bool crossedMediumThreshold( bool autoreset = true ) {
@@ -328,6 +370,7 @@ class PushButton {
          mediumThresholdFired_ = false;
          longThresholdFired_ = false;
          liveActionFired_ = false;
+         rotationCancelledThisHold_ = false;
 
          if ( awaitingSecondPress_ && ( atMillis - secondPressWindowStartMillis_ ) <= doublePressWindowMillis_ ) {
             // this is press #2 of a potential double -- valid immediately
@@ -372,6 +415,7 @@ class PushButton {
    bool awaitingSecondPress_ = false; // watching for a second press after a short release
    bool liveActionFired_ = false;     // extra-long or double already fired live this hold --
                                        // locks out every other press event until release
+   bool rotationCancelledThisHold_ = false; // this hold's press-tier was cancelled by rotation -- see handleRotationDuringHold()
    uint32_t secondPressWindowStartMillis_ = 0;
    uint32_t mediumPressMillis_ = 300;       // held at least this long (ms) -> medium press
    uint32_t longPressMillis_ = 1500;        // held at least this long (ms) -> long press
@@ -427,6 +471,16 @@ class Encoder {
    // rotation is handled by the A/B interrupts and needs no polling.
    void update() {
       button.update();
+      // PressLeft/PressRight: rotation while the button is held cancels
+      // whatever press-tier was in progress -- see
+      // PushButton::handleRotationDuringHold()'s own comment. Only consume
+      // (reset) the rotation delta when it's actually intercepted here;
+      // otherwise leave it untouched so a show's own normal
+      // readPositionDelta()/resetPositionDelta() pair still sees it.
+      int delta = EncoderImpl::pos_;
+      if ( delta != 0 && button.handleRotationDuringHold( delta > 0 ) ) {
+         EncoderImpl::resetPosition();
+      }
    }
 
  private:

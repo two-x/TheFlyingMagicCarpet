@@ -1442,19 +1442,17 @@ function cfgReactivityScreen(nowMs) {
   for (let c = 0; c < NUM_CHINA; c++) chinaLeds[c] = lit ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
 }
 
-// Auto-peak toggle screen (SubAudioAutoPeak) -- mirrors MagicCarpet::
-// showAutoPeakToggle() exactly: front edge's own neos (indices
-// [0, SIZEOF_SMALL_NEO), matching the real FW's ropeLeds[] index range for
-// this same physical strip) light up half at a time -- left half lit when
-// disabled, right half when enabled. SIZEOF_SMALL_NEO/2 here is this file's
-// own equivalent of the real FW's FRONT constant (SIZEOF_SMALL_NEO_HALF) --
-// both agree low index = left, high index = right within the front strip.
+// Auto-peak mode screen (SubAudioAutoPeak) -- mirrors MagicCarpet::
+// showAutoPeakToggle() exactly: 3-state now (AutoPeakOff/AutoPeakFull/
+// AutoPeakBin), front edge's own neos (indices [0, SIZEOF_SMALL_NEO),
+// matching the real FW's ropeLeds[] index range for this same physical
+// strip) split into 3 equal thirds, one lit per mode value.
 function cfgAutoPeakScreen() {
   clearRope(); clearMegabars(); clearChinas();
-  const enabled = AudioBoard.autoPeakEnabled;
-  const mid = SIZEOF_SMALL_NEO / 2;
-  const start = enabled ? mid : 0;
-  const end = enabled ? SIZEOF_SMALL_NEO : mid;
+  const mode = AudioBoard.autoPeakMode;
+  const segLen = Math.floor(SIZEOF_SMALL_NEO / 3);
+  const start = mode * segLen;
+  const end = mode >= 2 ? SIZEOF_SMALL_NEO : start + segLen;
   for (let i = start; i < end; i++) ropeLeds[i] = { r: 255, g: 255, b: 255 };
 }
 

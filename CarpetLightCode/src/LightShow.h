@@ -337,6 +337,15 @@ class LightShow {
    // web_getNumVariations()). Shows without meaningful variations can
    // leave this as the default.
    virtual uint8_t numVariations() { return 1; }
+   // PressLeft/PressRight (see LedController.h's ButtonPress/
+   // handleRotationDuringHold()) -- fired when the encoder is rotated
+   // while its button is held, cancelling whatever press-tier was in
+   // progress. Default (unoverridden, both return false): CarpetLightLogic.cpp
+   // applies its own global default (nudge the peak threshold +-1%/detent).
+   // A show wanting custom behavior instead should override and return
+   // true, to suppress that default.
+   virtual bool onPressLeft() { return false; }
+   virtual bool onPressRight() { return false; }
    virtual ~LightShow() {}
 };
 

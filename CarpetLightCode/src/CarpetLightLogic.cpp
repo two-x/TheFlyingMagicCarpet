@@ -9,6 +9,7 @@
 #include "MagicCarpet.h"
 
 #include "AudioBoard.h"
+#include "LoopTime.h"
 
 // light shows
 #include "DemoShow.h"
@@ -60,6 +61,12 @@ enum PowerTestSubsetting { SubPowerTestHue = 0, SubPowerTestSat = 1, SubPowerTes
 static uint8_t configSubsetting = 0;
 static float noiseFloorPercent = 0.0f; // committed value; audio below this is "silence" -- see AudioBoard.h
 static float peakThresholdPercent = 0.0f; // committed value; audio above this is a "hit"/peak -- see AudioBoard.h
+// PressLeft/PressRight's default peak-thresh nudge (see loop()) applies to
+// AudioBoard immediately but debounces the actual flash write -- same
+// "don't hammer flash on rapid repeated input" idea as SettlePrinter
+// (LightShow.h), just without the print.
+static Timer peakThreshSaveDebounce_( 1000 );
+static bool peakThreshSaveDirty_ = false;
 // which of noiseFloorPercent/peakThresholdPercent the pot currently targets
 // within SubAudioThreshold -- toggled by short press, always starts false
 // (noise floor) on a fresh visit to the subsetting (see cycleSubsetting()).
@@ -74,7 +81,13 @@ const char * agcModeName( uint8_t mode ) {
    return "Full"; // AGCfull
 }
 static bool liveSoundReactivityEnabled = true; // live (not-yet-committed) global reactivity toggle, Audio subsetting SubAudioReactivityEnable
-static bool liveAutoPeakEnabled = false; // live (not-yet-committed) auto-peak toggle, Audio subsetting SubAudioAutoPeak -- see AudioBoard::autoPeakEnabled_
+static uint8_t liveAutoPeakMode = AutoPeakBin; // live (not-yet-committed) auto-peak mode, Audio subsetting SubAudioAutoPeak -- see AudioBoard.h's AutoPeakMode
+// same fixed-width-with-trailing-space convention as agcModeName() above
+const char * autoPeakModeName( uint8_t mode ) {
+   if ( mode == AutoPeakOff ) return "Off ";
+   if ( mode == AutoPeakFull ) return "Full";
+   return "Bin "; // AutoPeakBin
+}
 static float committedHitDecayMs = 300.0f; // committed value; ms for a "hit" to decay from full to zero -- see AudioBoard.h
 static const float HIT_DECAY_RANGE_MS = 1000.0f; // adjustable range is 0-1000ms, per request
 // SubAudioHitDecay's sim/live test setup (square-wave signal, VU-meter
@@ -153,13 +166,14 @@ void resetTakeoverState() {
    liveAgcMode = AudioBoard::getAgcMode();
    liveHitPredictionStyle = AudioBoard::getHitPredictionStyle();
    liveSoundReactivityEnabled = AudioBoard::getSoundReactivityEnabled();
-   liveAutoPeakEnabled = AudioBoard::getAutoPeakEnabled();
+   liveAutoPeakMode = AudioBoard::getAutoPeakMode();
 }
 
 void enterConfigMode( AppMode mode ) {
    appMode = mode;
    configSubsetting = 0;
    resetTakeoverState();
+   carpet->clear(); // blackout on every config screen change, same as show/variation changes
    if ( mode == ModeConfigPowerTest ) {
       // fresh visit -- start editing from the last committed color
       liveTestHue = committedTestHue;
@@ -172,6 +186,7 @@ void enterConfigMode( AppMode mode ) {
 void cycleSubsetting() {
    configSubsetting = ( configSubsetting + 1 ) % numSubsettingsFor( appMode );
    resetTakeoverState();
+   carpet->clear(); // blackout on every subsetting change, same as show/variation changes
    if ( appMode == ModeConfigAudio && configSubsetting == SubAudioThreshold ) {
       // fresh visit always starts targeting noise floor -- see
       // adjustingPeakThreshold's declaration comment
@@ -281,7 +296,7 @@ void printSettingValue( AppMode mode, uint8_t subsetting, float livePercent, boo
    } else if ( mode == ModeConfigAudio && subsetting == SubAudioReactivityEnable ) {
       Serial.print( liveSoundReactivityEnabled ? "Ena" : "Dis" ); // already fixed-width
    } else if ( mode == ModeConfigAudio && subsetting == SubAudioAutoPeak ) {
-      Serial.print( liveAutoPeakEnabled ? "Ena" : "Dis" ); // already fixed-width
+      Serial.print( autoPeakModeName( liveAutoPeakMode ) ); // "Off"/"Full"/"Bin"
    } else if ( mode == ModeConfigAudio && subsetting == SubAudioHitDecay ) {
       int v = (int)( livePercent + 0.5f );
       if ( pad ) printPad4( v ); else Serial.print( v );
@@ -324,7 +339,7 @@ void printEnteringSetting( AppMode mode, uint8_t subsetting ) {
       } else if ( subsetting == SubAudioReactivityEnable ) {
          Serial.println( AudioBoard::getSoundReactivityEnabled() ? "Ena" : "Dis" );
       } else if ( subsetting == SubAudioAutoPeak ) {
-         Serial.println( AudioBoard::getAutoPeakEnabled() ? "Ena" : "Dis" );
+         Serial.println( autoPeakModeName( AudioBoard::getAutoPeakMode() ) );
       } else if ( subsetting == SubAudioHitDecay ) {
          Serial.print( (int)( committedHitDecayMs + 0.5f ) );
          Serial.println( "ms" );
@@ -479,7 +494,7 @@ void setup() {
    AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
    AudioBoard::setAgcMode( Nvm::loadedAgcMode() );
    AudioBoard::setSoundReactivityEnabled( Nvm::loadedSoundReactivityEnabled() );
-   AudioBoard::setAutoPeakEnabled( Nvm::loadedAutoPeakEnabled() );
+   AudioBoard::setAutoPeakMode( Nvm::loadedAutoPeakMode() );
    committedHitDecayMs = Nvm::loadedHitDecayMs();
    AudioBoard::setHitDecayMs( committedHitDecayMs );
    committedAudioForesightMs = Nvm::loadedAudioForesightMs();
@@ -492,6 +507,9 @@ void setup() {
 
    currLightShow = makeShow( currMode, currVariation[ currMode ] );
    currLightShow->start();
+   AudioBoard::clearAutoPeakInclusion();
+   carpet->clear(); // blackout -- boot, show change, variation change, and every config screen/subsetting change all do this, see their own call sites
+   LoopTime::markSetupDone( millis() );
 
    // give CANTroller2 a moment to send its first speed packet (it ticks
    // roughly every 250ms) so the boot banner can report whether the host is
@@ -504,6 +522,7 @@ void setup() {
 void loop() {
    static uint32_t clock;
    clock = millis();
+   LoopTime::update( clock ); // must run before AudioBoard::pollFrequencies()/pollSimulated() below -- they read the EMA this produces
 
    // Suppress auto-gain while dialing in noise floor/peak threshold --
    // reading either of those against a live-renormalizing signal is
@@ -539,6 +558,28 @@ void loop() {
    bool didLong = carpet->encoder->button.longpress();
    bool didExtraLong = carpet->encoder->button.extralongpress();
    bool didDouble = carpet->encoder->button.doublepress();
+   bool didLeft = carpet->encoder->button.pressleft();
+   bool didRight = carpet->encoder->button.pressright();
+
+   // PressLeft/PressRight (see LedController.h): default, in normal show
+   // mode only, nudges the global peak threshold +-1%/detent -- a show may
+   // override via LightShow::onPressLeft()/onPressRight() instead (return
+   // true to suppress this default). Applied live immediately; the actual
+   // flash write is debounced (see peakThreshSaveDebounce_ below) so rapid
+   // repeated detents don't hammer flash.
+   if ( appMode == ModeShow && ( didLeft || didRight ) ) {
+      bool overridden = didLeft ? currLightShow->onPressLeft() : currLightShow->onPressRight();
+      if ( !overridden ) {
+         peakThresholdPercent = constrain( peakThresholdPercent + ( didRight ? 1.0f : -1.0f ), 0.0f, 100.0f );
+         AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
+         peakThreshSaveDebounce_.reset();
+         peakThreshSaveDirty_ = true;
+      }
+   }
+   if ( peakThreshSaveDirty_ && peakThreshSaveDebounce_.expired() ) {
+      Nvm::savePeakThreshold( (uint8_t)( peakThresholdPercent + 0.5f ) );
+      peakThreshSaveDirty_ = false;
+   }
 
    if ( appMode == ModeConfigBrightness || appMode == ModeConfigAudio || appMode == ModeConfigPowerTest ) {
       // these 3 screens take over the whole visual with a live preview
@@ -570,7 +611,10 @@ void loop() {
          int delta = carpet->encoder->readPositionDelta();
          if ( delta != 0 ) {
             carpet->encoder->resetPositionDelta();
-            liveAutoPeakEnabled = ( delta > 0 ); // same direct-pick convention as SndReact above
+            // cycles Off -> Full -> Bin, clamped at both ends, same
+            // convention as AGC mode above
+            int newMode = (int)liveAutoPeakMode + ( delta > 0 ? 1 : -1 );
+            liveAutoPeakMode = (uint8_t)constrain( newMode, 0, (int)NumAutoPeakModes - 1 );
          }
       } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioForesight ) {
          // pot (below) adjusts foresight's own ms amount; encoder rotation
@@ -643,7 +687,7 @@ void loop() {
          // consequence as directly).
          carpet->showSoundReactivityToggle( liveSoundReactivityEnabled );
       } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioAutoPeak ) {
-         carpet->showAutoPeakToggle( liveAutoPeakEnabled );
+         carpet->showAutoPeakToggle( liveAutoPeakMode );
       } else if ( appMode == ModeConfigAudio ) {
          // reference (committed) position for whichever of the two isn't
          // being actively adjusted right now -- both are always shown at
@@ -709,8 +753,8 @@ void loop() {
             AudioBoard::setSoundReactivityEnabled( liveSoundReactivityEnabled );
             Nvm::saveSoundReactivityEnabled( liveSoundReactivityEnabled );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioAutoPeak ) {
-            AudioBoard::setAutoPeakEnabled( liveAutoPeakEnabled );
-            Nvm::saveAutoPeakEnabled( liveAutoPeakEnabled );
+            AudioBoard::setAutoPeakMode( liveAutoPeakMode );
+            Nvm::saveAutoPeakMode( liveAutoPeakMode );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
             committedHitDecayMs = livePercent;
             Nvm::saveHitDecayMs( (uint16_t)( committedHitDecayMs + 0.5f ) );
@@ -736,6 +780,7 @@ void loop() {
          printCommitted( appMode, configSubsetting, livePercent );
          carpet->flashRope( 1 ); // confirms the setting was committed
          appMode = ModeShow;
+         carpet->clear(); // blackout on leaving config mode, same as entering/cycling it
       } else if ( didMedium ) {
          revertAudioLivePreview();
          carpet->flashRope( 2 ); // confirms advancing to the next config setting
@@ -782,6 +827,7 @@ void loop() {
       } else if ( didLong ) {
          revertAudioLivePreview();
          appMode = ModeShow; // cancel, no save
+         carpet->clear(); // blackout on leaving config mode, same as entering/cycling it
       }
 
    } else {
@@ -815,6 +861,8 @@ void loop() {
          delete currLightShow;
          currLightShow = makeShow( currMode, currVariation[ currMode ] );
          currLightShow->start();
+         AudioBoard::clearAutoPeakInclusion();
+         carpet->clear();
          prevMode = currMode;
          blacklightOn = false; // a show change disables blacklight if it was left on
          Serial.print( "show:" ); Serial.println( showName( currMode ) ); // abbreviated, on selection
@@ -831,6 +879,8 @@ void loop() {
       if ( variation != currVariation[ currMode ] ) {
          currVariation[ currMode ] = variation;
          Nvm::saveVariation( currMode, variation );
+         AudioBoard::clearAutoPeakInclusion();
+         carpet->clear();
          Serial.print( showName( currMode ) ); Serial.print( ":" ); Serial.println( currLightShow->variationName() );
       }
 

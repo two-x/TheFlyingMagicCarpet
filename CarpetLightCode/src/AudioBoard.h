@@ -8,6 +8,7 @@
 #define __AUDIO_BOARD_H
 
 #include "Utilities.h"
+#include "LoopTime.h"
 #include <math.h>
 
 //****************TUNABLE SYSTEM PARAMTERS************************
@@ -47,10 +48,9 @@ enum AudioBand { BandBass = 0, BandMidbass, BandMid, BandTreble, BandFull, NumFr
 
 // AGC (auto-gain) operating mode -- see updateBandLevels()'s AGC step.
 //   AGCoff  -- no gain applied at all, levelFilt == levelClean.
-//   AGCband -- each band boosted by its OWN independently-tracked rolling-
-//              peak gain.
+//   AGCband -- each band boosted by its OWN independently-tracked gain.
 //   AGCfull -- every band boosted by the SAME gain, derived from BandFull's
-//              own rolling peak -- one shared, full-spectrum-derived gain
+//              own signal -- one shared, full-spectrum-derived gain
 //              applied uniformly.
 enum AGCMode { AGCoff = 0, AGCband, AGCfull, NumAGCModes };
 
@@ -62,6 +62,21 @@ static const uint8_t NUM_HIT_PREDICTION_STYLES = 4;
 // which of the 5 processing stages a stored history value represents -- see
 // the big storage comment on audioData_ below.
 enum AudioLevelType { LevelRaw = 0, LevelClean, LevelFilt, LevelRMS, LevelHit, NumLevelTypes };
+
+// Auto-peak operating mode -- see getEffectivePeakThresholdPercent()'s own
+// comment for the full rule. Named/shaped to mirror AGCMode exactly:
+//   AutoPeakOff  -- disabled. Every bin uses the plain global threshold,
+//                   nothing excluded.
+//   AutoPeakFull -- every INCLUDED bin shares the SAME single effective
+//                   threshold, derived from the whole included group's own
+//                   collective loudness (like AGCfull: one shared value,
+//                   not per-bin differentiated).
+//   AutoPeakBin  -- each INCLUDED bin gets its OWN effective threshold,
+//                   scaled relative to the loudest currently-included bin
+//                   (like AGCband: per-bin differentiated).
+// Excluded bins (see autoPeakIncluded_ below) always read hit=0, in both
+// Full and Bin modes.
+enum AutoPeakMode { AutoPeakOff = 0, AutoPeakFull = 1, AutoPeakBin = 2, NumAutoPeakModes };
 
 class AudioBoard {
  private:
@@ -91,25 +106,24 @@ class AudioBoard {
     *   - lightsShowIndex_ ("lightsShowTime") -- recomputed every poll,
     *     immediately after audioReadIndex_ advances, as the row whose
     *     timestamp is nearest to audioReadIndex_'s timestamp minus the
-    *     live audioForesightMs_. EVERY external getter reads only from
-    *     this index. At audioForesightMs_==0 this equals audioReadIndex_,
-    *     which is exactly why foresight-off behavior is unchanged by this
-    *     restructure.
+    *     live audioForesightMs_ minus the current EMA loop time (see
+    *     LoopTime.h -- corrects for the main loop's own render-to-photon
+    *     delay, a separate real contributor to sync error on top of
+    *     foresight, present even when foresight is 0). EVERY external
+    *     getter reads only from this index.
     *
-    * Depth sizing: AGC's own boost calculation needs a full trailing
-    * AGC_WINDOW_MS of history measured FROM lightsShowIndex_, not from
-    * audioReadIndex_ -- and lightsShowIndex_ itself can trail
-    * audioReadIndex_ by up to FORESIGHT_BUFFER_MS. So the buffer must
-    * cover the SUM of the two (AGC_WINDOW_MS + FORESIGHT_BUFFER_MS), not
-    * just the max -- otherwise, at high foresight settings, the oldest
-    * portion of AGC's own window would already have been overwritten by
-    * audioReadIndex_'s forward progress before AGC ever got to read it.
+    * Depth: covers AGC_WINDOW_MS (4.0s) of history FLAT -- foresight eats
+    * into this same fixed budget rather than extending it, so
+    * audioReadIndex_ always wraps cleanly with zero special-casing
+    * relative to lightsShowIndex_. AGC's own boost calc doesn't need a
+    * trailing-window carve-out anymore anyway (see scanWholeBuffer_()
+    * below) -- it uses the ENTIRE buffer, so there's nothing to lose by
+    * foresight eating into the budget at high settings.
     */
    static const uint16_t POLL_INTERVAL_MS = 30;
-   static const uint16_t AGC_WINDOW_MS = 4000; // trailing window for AGC boost / RMS / silence, measured back from lightsShowTime
+   static const uint16_t AGC_WINDOW_MS = 4000; // total buffer depth -- foresight eats into this, doesn't extend it
    static const uint16_t FORESIGHT_BUFFER_MS = 700; // max audioForesightMs_ -- must match SubAudioForesight's adjustable range in CarpetLightLogic.cpp
-   static const uint16_t AUDIO_HISTORY_MS = AGC_WINDOW_MS + FORESIGHT_BUFFER_MS;
-   static const uint16_t AUDIO_HISTORY_SIZE = ( AUDIO_HISTORY_MS + POLL_INTERVAL_MS - 1 ) / POLL_INTERVAL_MS + 2; // +2 slots margin, same convention as the old buffers
+   static const uint16_t AUDIO_HISTORY_SIZE = ( AGC_WINDOW_MS + POLL_INTERVAL_MS - 1 ) / POLL_INTERVAL_MS + 2; // +2 slots margin, same convention as the old buffers
    static const uint8_t LEVEL_INVALID = 255; // valid range is 0-100; 255 unambiguously means "not computed this lap"
 
    static uint8_t audioData_[ NumLevelTypes ][ NumBins ][ AUDIO_HISTORY_SIZE ];
@@ -129,6 +143,24 @@ class AudioBoard {
    // field there is always computed before any getter can run -- but kept
    // as a defensive floor rather than ever surfacing 255% to a caller).
    static uint8_t valOrZero_( uint8_t v ) { return ( v == LEVEL_INVALID ) ? 0 : v; }
+
+   // --- auto-peak per-bin inclusion (see AutoPeakMode above) ---
+   //
+   // A bin becomes "included" automatically, as a side effect, the moment
+   // ANY hit-family getter is called for it (getBinHitPercent/
+   // getBandHitPercent/+Nonzero/NewBinHit/NewBandHit) -- no light show
+   // configures this explicitly. It stays included until
+   // clearAutoPeakInclusion() runs, which happens automatically on boot
+   // and on every show/variation change (see CarpetLightLogic.cpp), and
+   // may also be called explicitly by a show for its own reasons. No
+   // persistence needed -- this is purely transient, rebuilt fresh every
+   // time a show starts querying its own bands again.
+   static bool autoPeakIncluded_[ NumBins ];
+   static void markIncluded_( AudioBin bin ) { autoPeakIncluded_[ bin ] = true; }
+   static void markBandIncluded_( AudioBand band ) {
+      uint8_t n = BAND_BIN_COUNT[ band ];
+      for ( uint8_t i = 0; i < n; ++i ) markIncluded_( BAND_BINS[ band ][ i ] );
+   }
 
    // the one shared implementation every getBandXxx() getter is built on --
    // max of the given levelType across whichever bins the band covers, at
@@ -164,31 +196,31 @@ class AudioBoard {
    static uint32_t lastReportedHitMs_[ NumBins ];
    static bool lastReportedHitEverValid_[ NumBins ];
 
-   // per-bin AGC boost multiplier (100/that bin's own trailing rolling
-   // peak, clamped to never divide by zero) and the shared AGCfull
-   // equivalent (100/the max-across-all-bins trailing peak) -- both
-   // recomputed every poll by updateBandLevels()'s AGC step, from
-   // audioData_[LevelClean] over the trailing AGC_WINDOW_MS ending at
-   // lightsShowTime.
+   // Per-bin AGC boost multiplier, and the shared AGCfull equivalent --
+   // now a genuinely STATEFUL envelope follower (not recomputed from
+   // scratch each poll): instant-down the moment a louder sample appears
+   // ANYWHERE in the buffer (including foresight-buffered future rows --
+   // see scanWholeBuffer_() below, this is what makes AGC proactive
+   // whenever foresight is nonzero), continuous fixed-rate rise otherwise.
+   // Classic fast-attack/slow-release compressor envelope shape.
    static float agcBoost_[ NumBins ];
    static float agcBoostFull_;
 
-   // one windowed scan over a bin's LevelClean history serves AGC boost
-   // (peak), RMS (sumSquares/n), and silence (anyNonzero) all at once --
-   // these 3 used to be 3 separate full rescans every poll (the old
-   // per-bin AGC history scan, the old RMS scan, and the old full-spectrum
-   // EMA/rolling-peak tracker); one shared scan is simpler and 3x cheaper.
-   struct WindowScan_ { float peak; float sumSquares; uint16_t n; bool anyNonzero; };
-   static WindowScan_ scanCleanWindow_( uint8_t bin, uint32_t windowStart, uint32_t windowEnd ) {
-      WindowScan_ r = { 0.0f, 0.0f, 0, false };
-      // NOT excluding audioReadIndex_ here -- unlike the lightsShowTime
-      // search in updateBandLevels() (which runs BEFORE this lap's row is
-      // written), this scan runs in step F, after step E has already
-      // written this lap's LevelClean -- so it's valid, current data and
-      // belongs in the window if its timestamp falls inside it.
+   // one full-buffer scan over a bin's LevelClean history serves AGC boost
+   // (peak), RMS (sumSquares/n), and silence (anyNonzero) all at once.
+   // NOT time-windowed -- the ring buffer's own fixed depth (AGC_WINDOW_MS,
+   // flat) already IS the window, so every currently-valid slot
+   // unconditionally belongs in it; no per-entry timestamp comparison
+   // needed. Includes audioReadIndex_'s own just-written row (valid by the
+   // time this runs, in step F, after step E already wrote it) -- and,
+   // whenever foresight > 0, everything captured-but-not-yet-"shown" ahead
+   // of lightsShowTime too, which is the whole point: a loud sample sitting
+   // in that buffered future already pulls the scan's peak up (and this
+   // bin's boost down) before it's actually the displayed instant.
+   struct WholeScan_ { float peak; float sumSquares; uint16_t n; bool anyNonzero; };
+   static WholeScan_ scanWholeBuffer_( uint8_t bin ) {
+      WholeScan_ r = { 0.0f, 0.0f, 0, false };
       for ( uint16_t i = 0; i < audioCount_; ++i ) {
-         uint32_t ts = audioTimestamps_[ i ];
-         if ( ts < windowStart || ts > windowEnd ) continue;
          uint8_t v = audioData_[ LevelClean ][ bin ][ i ];
          if ( v == LEVEL_INVALID ) continue;
          float f = (float)v;
@@ -318,30 +350,53 @@ class AudioBoard {
    // setSoundReactivityEnabled().
    static bool soundReactivityEnabled_;
    static uint8_t agcMode_; // AGCoff/AGCband/AGCfull, persisted -- see AGCMode above
-   static float noiseFloorPercent_; // 0-100
+   static float noiseFloorPercent_; // 0-100, the GLOBAL setting -- see binNoiseFloorPercent_ below for the derived per-bin values actually used
    static float peakThresholdPercent_; // 0-100
 
-   // --- auto-peak (per-bin hit-rate debounce -- PENDING REDEFINITION in a
-   // later phase, kept structurally as-is here, just re-pointed at
-   // hitPersist_ instead of the old binLevels_ struct) ---
-   //
-   // "decides a modified peak threshold applied to hit value calculations,"
-   // based on each bin's OWN recent hit-occurrence frequency. Rule,
-   // evaluated independently per bin: whenever this bin's level would
-   // cross the plain threshold again within AUTO_PEAK_DEBOUNCE_MS of its
-   // own last ACCEPTED hit, that new crossing is only accepted if the
-   // previous accepted hit has already begun to decay (its hit value has
-   // dropped below its flat 100 hold) -- otherwise the effective threshold
-   // for this instant is raised out of reach (see
-   // getEffectivePeakThresholdPercent(AudioBin) below), so nothing can
-   // cross it. AUTO_PEAK_HIT_WINDOW_MS bounds a bin's own last-hit
-   // bookkeeping (also guards the very first hit ever against the initial
-   // 0-timestamp/no-history state).
-   static bool autoPeakEnabled_; // persisted -- see setAutoPeakEnabled()
-   static const uint16_t AUTO_PEAK_DEBOUNCE_MS = 50;
-   static const uint16_t AUTO_PEAK_HIT_WINDOW_MS = 2000;
-   static bool autoPeakHadHit_[ NumBins ];       // has this bin ever accepted a hit yet
-   static uint32_t autoPeakLastHitMs_[ NumBins ]; // timestamp of that bin's own last ACCEPTED hit
+   /* --- per-bin noise floor, from measured self-noise voltages ---
+    *
+    * Scoped self-noise differs consistently per bin (measured with the
+    * phone muted): bins 0-4 ~0.17V, bin 5 ~0.280V, bin 6 (highest freq)
+    * ~0.56V. BIN_NOISE_VOLTAGE holds these raw scope readings (volts, not
+    * pre-converted percent, so a future re-measurement can be hand-edited
+    * in directly) -- only the RATIO between bins ever matters downstream,
+    * which is identical whether stored as volts or as %-of-max.
+    * binNoiseFloorPercent_[] is derived from it: the bin with the highest
+    * voltage (bin6) gets the global noiseFloorPercent_ setting directly;
+    * every other bin's floor scales down proportionally to its own
+    * voltage ratio against that max. Recomputed whenever
+    * setNoiseFloorPercent() is called (see recomputeBinNoiseFloors_()).
+    */
+   static const float BIN_NOISE_VOLTAGE[ NumBins ];
+   static float binNoiseFloorPercent_[ NumBins ];
+   static void recomputeBinNoiseFloors_() {
+      float maxV = 0.0f;
+      for ( uint8_t bin = 0; bin < NumBins; ++bin ) if ( BIN_NOISE_VOLTAGE[ bin ] > maxV ) maxV = BIN_NOISE_VOLTAGE[ bin ];
+      for ( uint8_t bin = 0; bin < NumBins; ++bin ) {
+         binNoiseFloorPercent_[ bin ] = ( maxV <= 0.0f ) ? noiseFloorPercent_ : ( noiseFloorPercent_ * ( BIN_NOISE_VOLTAGE[ bin ] / maxV ) );
+      }
+   }
+
+   // --- auto-peak (per-bin threshold scaling -- see AutoPeakMode above) ---
+   static uint8_t autoPeakMode_; // persisted -- see setAutoPeakMode()
+   // Bin mode only: an included bin whose own RMS is below this fraction
+   // of the loudest currently-included bin's RMS gets hit=0 too (too quiet
+   // RIGHT NOW relative to the rest of the included group to be worth
+   // reacting to) -- compile-time for now.
+   static constexpr float AUTO_PEAK_MIN_INCLUSION_LEVEL = 50.0f;
+
+   // max RMS (at lightsShowIndex_) among currently-included bins, or 0 if
+   // none included/all silent -- the shared reference both AutoPeakFull
+   // and AutoPeakBin scale against.
+   static float maxIncludedRms_() {
+      float m = 0.0f;
+      for ( uint8_t bin = 0; bin < NumBins; ++bin ) {
+         if ( !autoPeakIncluded_[ bin ] ) continue;
+         float rms = (float)valOrZero_( audioData_[ LevelRMS ][ bin ][ lightsShowIndex_ ] );
+         if ( rms > m ) m = rms;
+      }
+      return m;
+   }
 
    // Hit sustain envelope: a hit starts at a flat 100% (so the leading edge
    // always reads full strength). If the SAME hit is still continuously
@@ -394,22 +449,21 @@ class AudioBoard {
    /* --- the per-poll pipeline --- runs once per real poll (~30ms), from
     * pollFrequencies()/pollSimulated() below. Step by step:
     *   A) advance audioReadTime (the write head), invalidate its slot
-    *   B) recompute lightsShowTime = nearest row to (nowMs - foresight)
+    *   B) recompute lightsShowTime = nearest row to (nowMs - foresight -
+    *      EMA loop time)
     *   C) capture this poll's raw % per bin at audioReadTime
     *   D) timestamp audioReadTime's slot
-    *   E) noise removal -> levelClean at audioReadTime
-    *   F) AGC scan (per bin, over the trailing AGC_WINDOW_MS ending at
-    *      lightsShowTime) -> levelFilt at lightsShowTime; the same scan
-    *      also produces RMS and silence (see scanCleanWindow_() above)
-    *   G) hit envelope + predictive lookahead -> levelHit at lightsShowTime
-    * autoPeakEnabled_'s own debounce state doesn't need a distinct step --
-    * it's read live (not stored history) by getEffectivePeakThresholdPercent()
-    * below, called from step G.
+    *   E) noise removal (per-bin floors, global all-below gate) ->
+    *      levelClean at audioReadTime
+    *   F) AGC envelope (whole-buffer scan, instant-down/continuous-rise)
+    *      -> levelFilt at lightsShowTime; the same scan also produces RMS
+    *      and silence (see scanWholeBuffer_() above)
+    *   G) hit envelope + predictive lookahead -> levelHit at lightsShowTime,
+    *      gated by auto-peak inclusion/mode
     */
    static void updateBandLevels( uint32_t nowMs, bool simulated, uint8_t simRawPct ) {
       uint32_t dtMs = hitTimer_.elapsed();
       hitTimer_.reset();
-      float noiseFloorPct = constrain( noiseFloorPercent_, 0.0f, 100.0f );
       uint8_t effectiveAgcMode = autoGainSuppressed_ ? (uint8_t)AGCoff : agcMode_;
 
       // (A)
@@ -420,11 +474,13 @@ class AudioBoard {
             audioData_[ t ][ bin ][ audioReadIndex_ ] = LEVEL_INVALID;
 
       // (B) nearest-timestamp match, not exact arithmetic -- self-correcting
-      // against real poll-to-poll jitter (pollFrequencies()'s own gate
-      // isn't perfectly evenly spaced). Excludes audioReadIndex_ itself
+      // against real poll-to-poll jitter. Excludes audioReadIndex_ itself
       // (just invalidated, not written yet this lap) -- falls back to it
-      // if nothing else valid exists yet (boot bootstrap).
-      uint32_t targetMs = ( nowMs > (uint32_t)audioForesightMs_ ) ? ( nowMs - (uint32_t)audioForesightMs_ ) : 0;
+      // if nothing else valid exists yet (boot bootstrap). Target pulls
+      // back by BOTH the live foresight setting AND the current EMA loop
+      // time (see LoopTime.h) -- the latter applies even at foresight=0.
+      uint32_t backMs = (uint32_t)audioForesightMs_ + (uint32_t)LoopTime::getEmaMs();
+      uint32_t targetMs = ( nowMs > backMs ) ? ( nowMs - backMs ) : 0;
       uint16_t bestIdx = audioReadIndex_;
       uint32_t bestDelta = 0xFFFFFFFFu;
       for ( uint16_t i = 0; i < audioCount_; ++i ) {
@@ -446,28 +502,44 @@ class AudioBoard {
       // (D)
       audioTimestamps_[ audioReadIndex_ ] = nowMs;
 
-      // (E)
+      // (E) global gate: only pass raw through as clean if AT LEAST ONE
+      // bin is above ITS OWN per-bin floor -- otherwise every bin's clean
+      // is 0 this poll, even one sitting just above its own floor. The
+      // per-bin floors exist to correctly calibrate "is THIS bin real
+      // signal or just its own self-noise"; the all-below test is the
+      // right way to combine those per-bin tests into one "is anything
+      // real happening at all" global gate.
+      bool anyAboveFloor = false;
       for ( int bin = 0; bin < NumBins; ++bin ) {
-         uint8_t raw = audioData_[ LevelRaw ][ bin ][ audioReadIndex_ ];
-         audioData_[ LevelClean ][ bin ][ audioReadIndex_ ] = ( (float)raw <= noiseFloorPct ) ? (uint8_t)0 : raw;
+         if ( (float)audioData_[ LevelRaw ][ bin ][ audioReadIndex_ ] > binNoiseFloorPercent_[ bin ] ) { anyAboveFloor = true; break; }
+      }
+      for ( int bin = 0; bin < NumBins; ++bin ) {
+         audioData_[ LevelClean ][ bin ][ audioReadIndex_ ] = anyAboveFloor ? audioData_[ LevelRaw ][ bin ][ audioReadIndex_ ] : (uint8_t)0;
       }
 
-      // (F) AGC + RMS + silence, one shared scan per bin, over the trailing
-      // AGC_WINDOW_MS ending at lightsShowTime (NOT audioReadTime -- this
-      // is exactly why the buffer is sized AGC_WINDOW_MS+FORESIGHT_BUFFER_MS deep)
+      // (F) AGC envelope + RMS + silence, one whole-buffer scan per bin
       uint32_t showMs = audioTimestamps_[ lightsShowIndex_ ];
-      uint32_t winStart = ( showMs > AGC_WINDOW_MS ) ? ( showMs - AGC_WINDOW_MS ) : 0;
       float fullPeak = 0.0f;
       bool anySoundInWindow = false;
+      // ceiling = 100/noiseFloor is inherent (smallest nonzero clean value
+      // is always > the (highest, bin6) noise floor), so the rise rate is
+      // naturally bounded without a separate clamp
+      float ceilNoiseFloor = ( noiseFloorPercent_ > 0.1f ) ? noiseFloorPercent_ : 0.1f;
+      float maxBoost = 100.0f / ceilNoiseFloor;
+      float riseRatePerMs = ( maxBoost - 1.0f ) / (float)AGC_WINDOW_MS; // full range top-to-bottom takes exactly one buffer-length
       for ( int bin = 0; bin < NumBins; ++bin ) {
-         WindowScan_ sc = scanCleanWindow_( (uint8_t)bin, winStart, showMs );
-         agcBoost_[ bin ] = ( sc.peak <= 0.0f ) ? 1.0f : ( 100.0f / sc.peak );
+         WholeScan_ sc = scanWholeBuffer_( (uint8_t)bin );
+         float target = ( sc.peak <= 0.0f ) ? 1.0f : ( 100.0f / sc.peak );
+         if ( target < agcBoost_[ bin ] ) agcBoost_[ bin ] = target; // instant attack
+         else agcBoost_[ bin ] = min( target, agcBoost_[ bin ] + riseRatePerMs * (float)dtMs ); // continuous release, never overshoots target
          float rms = ( sc.n == 0 ) ? 0.0f : sqrtf( sc.sumSquares / (float)sc.n );
          audioData_[ LevelRMS ][ bin ][ lightsShowIndex_ ] = (uint8_t)( rms + 0.5f );
          if ( sc.peak > fullPeak ) fullPeak = sc.peak;
          if ( sc.anyNonzero ) anySoundInWindow = true;
       }
-      agcBoostFull_ = ( fullPeak <= 0.0f ) ? 1.0f : ( 100.0f / fullPeak );
+      float fullTarget = ( fullPeak <= 0.0f ) ? 1.0f : ( 100.0f / fullPeak );
+      if ( fullTarget < agcBoostFull_ ) agcBoostFull_ = fullTarget;
+      else agcBoostFull_ = min( fullTarget, agcBoostFull_ + riseRatePerMs * (float)dtMs );
       // silent only once a full window of real history has actually
       // accumulated -- avoids spuriously reporting silence right after
       // boot before there's been time to see any sound at all
@@ -485,16 +557,22 @@ class AudioBoard {
 
       // (G)
       for ( int bin = 0; bin < NumBins; ++bin ) {
+         // auto-peak exclusion: forced hit=0, skip the rest of this bin's
+         // envelope entirely -- not a decay, an immediate hard zero
+         if ( autoPeakMode_ != AutoPeakOff && !autoPeakIncluded_[ bin ] ) {
+            hitPersist_[ bin ] = 0.0f;
+            audioData_[ LevelHit ][ bin ][ lightsShowIndex_ ] = 0;
+            hitWasAbove_[ bin ] = false;
+            newHitAtLightsShow_[ bin ] = false;
+            continue;
+         }
+
          uint8_t filt = audioData_[ LevelFilt ][ bin ][ lightsShowIndex_ ];
          float threshPct = getEffectivePeakThresholdPercent( (AudioBin)bin );
          bool isAbove = soundReactivityEnabled_ && (float)filt >= threshPct;
          bool freshEdge = isAbove && !hitWasAbove_[ bin ];
          newHitAtLightsShow_[ bin ] = freshEdge;
-         if ( freshEdge ) {
-            hitOnsetMs_[ bin ] = showMs;
-            autoPeakLastHitMs_[ bin ] = showMs;
-            autoPeakHadHit_[ bin ] = true;
-         }
+         if ( freshEdge ) hitOnsetMs_[ bin ] = showMs;
          hitWasAbove_[ bin ] = isAbove;
 
          float hitVal;
@@ -529,13 +607,26 @@ class AudioBoard {
    //Define spectrum variables
    static int Frequencies_Mono[7];
 
+   // clears every bin's auto-peak inclusion (back to fully excluded) --
+   // called automatically on boot and on every show/variation change (see
+   // CarpetLightLogic.cpp); a show may also call this explicitly for its
+   // own reasons (e.g. resetting inclusion mid-show before switching which
+   // of its own effects are currently active).
+   static void clearAutoPeakInclusion() {
+      for ( uint8_t bin = 0; bin < NumBins; ++bin ) autoPeakIncluded_[ bin ] = false;
+   }
+
    // returns (and clears) whether THIS bin has had a new hit since the
    // last time this was checked FOR THIS SAME lightsShowTime instant --
    // dedupes by timestamp (not raw index, which can be reused across ring-
    // buffer wraps) so calling this more than once, or from more than one
    // caller, while lightsShowTime sits on the same row never reports a
-   // second true for that one edge.
+   // second true for that one edge. Also auto-includes this bin in
+   // auto-peak (see clearAutoPeakInclusion() above) -- any code asking for
+   // a bin's hit-edge state is implicitly declaring it cares about that
+   // bin's own hit behavior.
    static bool NewBinHit( AudioBin bin ) {
+      markIncluded_( bin );
       uint32_t rowMs = audioTimestamps_[ lightsShowIndex_ ];
       if ( lastReportedHitEverValid_[ bin ] && lastReportedHitMs_[ bin ] == rowMs ) return false;
       bool edge = newHitAtLightsShow_[ bin ];
@@ -559,12 +650,11 @@ class AudioBoard {
    }
 
    // true once BandFull's levelClean has been entirely zero (i.e. at/below
-   // the live noise floor, across every bin) continuously for the full
-   // trailing AGC_WINDOW_MS ending at lightsShowTime -- computed
-   // automatically as part of the per-poll pipeline (see updateBandLevels()'s
-   // step F), leveraging the same real history AGC/RMS already scan.
-   // Internal state (silent_) is private; this is the only way to read it
-   // externally now.
+   // each bin's own noise floor, across every bin) continuously for the
+   // full buffer depth -- computed automatically as part of the per-poll
+   // pipeline (see updateBandLevels()'s step F), leveraging the same real
+   // history AGC/RMS already scan. Internal state (silent_) is private;
+   // this is the only way to read it externally now.
    static bool isSilent() { return silent_; }
 
    // Every one of these comes in two distinctly-named forms (not an
@@ -608,14 +698,14 @@ class AudioBoard {
    }
    static bool getBinNormalNonzero( AudioBin bin ) { return getBinNormalPercent( bin ) > 0; }
    static bool getBandNormalNonzero( AudioBand band = BandFull ) { return getBandNormalPercent( band ) > 0; }
-   static uint8_t getBinHitPercent( AudioBin bin ) { return soundReactivityEnabled_ ? valOrZero_( audioData_[ LevelHit ][ bin ][ lightsShowIndex_ ] ) : 0; }
-   static uint8_t getBandHitPercent( AudioBand band = BandFull ) { return soundReactivityEnabled_ ? aggregateBandType_( band, LevelHit ) : 0; }
+   static uint8_t getBinHitPercent( AudioBin bin ) { markIncluded_( bin ); return soundReactivityEnabled_ ? valOrZero_( audioData_[ LevelHit ][ bin ][ lightsShowIndex_ ] ) : 0; }
+   static uint8_t getBandHitPercent( AudioBand band = BandFull ) { markBandIncluded_( band ); return soundReactivityEnabled_ ? aggregateBandType_( band, LevelHit ) : 0; }
    // true whenever this bin/band's hit level is currently above the live
    // peak threshold, false otherwise -- NOT a plain nonzero test (hit stays
    // nonzero throughout its decay tail after dropping back below threshold,
    // which shouldn't still read as "a hit" once decayed past that point).
-   static bool getBinHitNonzero( AudioBin bin ) { return soundReactivityEnabled_ && (float)getBinHitPercent( bin ) > getPlainPeakThresholdPercent(); }
-   static bool getBandHitNonzero( AudioBand band = BandFull ) { return soundReactivityEnabled_ && (float)getBandHitPercent( band ) > getPlainPeakThresholdPercent(); }
+   static bool getBinHitNonzero( AudioBin bin ) { markIncluded_( bin ); return soundReactivityEnabled_ && (float)getBinHitPercent( bin ) > getPlainPeakThresholdPercent(); }
+   static bool getBandHitNonzero( AudioBand band = BandFull ) { markBandIncluded_( band ); return soundReactivityEnabled_ && (float)getBandHitPercent( band ) > getPlainPeakThresholdPercent(); }
    static uint8_t getBinRmsPercent( AudioBin bin ) { return valOrZero_( audioData_[ LevelRMS ][ bin ][ lightsShowIndex_ ] ); }
    static uint8_t getBandRmsPercent( AudioBand band = BandFull ) { return aggregateBandType_( band, LevelRMS ); }
    static bool getBinRmsNonzero( AudioBin bin ) { return getBinRmsPercent( bin ) > 0; }
@@ -650,7 +740,7 @@ class AudioBoard {
    // without touching the persisted setting itself -- dialing either of
    // those in against a live auto-gained signal is confusing (the gain
    // constantly renormalizes what you're trying to measure against a fixed
-   // floor/threshold). The AGC scan keeps running in the background
+   // floor/threshold). The AGC envelope keeps running in the background
    // regardless, so auto-gain picks back up smoothly (no jump) once this
    // is cleared.
    static void setAutoGainSuppressed( bool suppressed ) { autoGainSuppressed_ = suppressed; }
@@ -658,7 +748,10 @@ class AudioBoard {
    static void setSoundReactivityEnabled( bool enabled ) { soundReactivityEnabled_ = enabled; }
    static bool getSoundReactivityEnabled() { return soundReactivityEnabled_; }
 
-   static void setNoiseFloorPercent( float percent ) { noiseFloorPercent_ = constrain( percent, 0.0f, 100.0f ); }
+   static void setNoiseFloorPercent( float percent ) {
+      noiseFloorPercent_ = constrain( percent, 0.0f, 100.0f );
+      recomputeBinNoiseFloors_();
+   }
    static float getNoiseFloorPercent() { return noiseFloorPercent_; }
    // same 0-100% -> 0-255 conversion used internally
    static uint8_t getNoiseFloorRaw() { return (uint8_t)( constrain( noiseFloorPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f ); }
@@ -667,34 +760,49 @@ class AudioBoard {
    static float getPeakThresholdPercent() { return peakThresholdPercent_; }
    static uint8_t getPeakThresholdRaw() { return (uint8_t)( constrain( peakThresholdPercent_, 0.0f, 100.0f ) / 100.0f * 255.0f + 0.5f ); }
 
-   static void setAutoPeakEnabled( bool enabled ) { autoPeakEnabled_ = enabled; }
-   static bool getAutoPeakEnabled() { return autoPeakEnabled_; }
+   static void setAutoPeakMode( uint8_t mode ) { autoPeakMode_ = ( mode >= NumAutoPeakModes ) ? ( NumAutoPeakModes - 1 ) : mode; }
+   static uint8_t getAutoPeakMode() { return autoPeakMode_; }
 
-   // THE common getter for actually deciding "is this bin's level a hit
-   // right now" -- see the class-level auto-peak comment above for the
-   // full rule. Returns a value that can never be crossed (101, just above
-   // the 0-100 domain everything else here lives in) while this bin's own
-   // last accepted hit is both within AUTO_PEAK_DEBOUNCE_MS and hasn't
-   // begun to decay yet; the plain committed setting otherwise. Only ever
-   // used for the real hit-ACCEPTANCE decision in updateBandLevels() --
-   // display/preview getters use getBinAutoScaledPeakThresholdPercent()/
-   // getBandAutoScaledPeakThresholdPercent() below instead (same idea,
-   // clamped back into 0-100 for showing on a meter).
+   /* THE common getter for actually deciding "is this bin's level a hit
+    * right now" -- full rule:
+    *   AutoPeakOff  -- plain global threshold, every bin.
+    *   AutoPeakFull -- excluded bins: 101 (unreachable). Included bins:
+    *     ALL share ONE threshold, globalThresh * (groupRms/100), where
+    *     groupRms is the max RMS among currently-included bins -- the
+    *     whole included set is treated like one shared band, the same
+    *     way AGCfull derives one shared gain from BandFull rather than
+    *     differentiating per bin.
+    *   AutoPeakBin  -- excluded bins: 101. Included bins each get their
+    *     OWN threshold, globalThresh * (thisBinRms/maxIncludedRms) --
+    *     differentiated per bin, the same way AGCband differentiates per
+    *     bin instead of sharing one gain. A bin whose own RMS is below
+    *     AUTO_PEAK_MIN_INCLUSION_LEVEL of the group's max also reads 101
+    *     (too quiet RIGHT NOW relative to the rest of the included group).
+    * Only ever used for the real hit-ACCEPTANCE decision in
+    * updateBandLevels() -- display/preview getters use
+    * getBinAutoScaledPeakThresholdPercent()/
+    * getBandAutoScaledPeakThresholdPercent() below instead (same idea,
+    * clamped back into 0-100 for showing on a meter).
+    */
    static float getEffectivePeakThresholdPercent( AudioBin bin ) {
       float base = constrain( peakThresholdPercent_, 0.0f, 100.0f );
-      if ( !autoPeakEnabled_ || hitWasAbove_[ bin ] ) return base; // only a NEW edge (bin not already reading above) is ever gated -- see class comment
-      bool tooSoonAndStillFresh = autoPeakHadHit_[ bin ]
-            && ( millis() - autoPeakLastHitMs_[ bin ] ) < AUTO_PEAK_DEBOUNCE_MS
-            && ( millis() - autoPeakLastHitMs_[ bin ] ) < AUTO_PEAK_HIT_WINDOW_MS
-            && hitPersist_[ bin ] >= 100.0f;
-      return tooSoonAndStillFresh ? 101.0f : base;
+      if ( autoPeakMode_ == AutoPeakOff ) return base;
+      if ( !autoPeakIncluded_[ bin ] ) return 101.0f;
+      float groupRms = maxIncludedRms_();
+      if ( groupRms <= 0.0f ) return 101.0f;
+      if ( autoPeakMode_ == AutoPeakFull ) return base * ( groupRms / 100.0f );
+      // AutoPeakBin
+      float thisRms = (float)valOrZero_( audioData_[ LevelRMS ][ bin ][ lightsShowIndex_ ] );
+      float ratio = thisRms / groupRms;
+      if ( ratio * 100.0f < AUTO_PEAK_MIN_INCLUSION_LEVEL ) return 101.0f;
+      return base * ratio;
    }
    // Plain (non-auto-peak) threshold -- used by every getter/scan below
    // that ISN'T the real-time hit-acceptance decision above (predictive
    // lookahead, and the simple "is the hit level still fresh" nonzero
    // checks): the stored hit value itself already reflects whatever the
-   // debounce rule above decided at the moment it was actually set,
-   // re-deriving that same per-bin debounce state here would be redundant.
+   // auto-peak rule above decided at the moment it was actually set,
+   // re-deriving that same per-bin state here would be redundant.
    static float getPlainPeakThresholdPercent() { return constrain( peakThresholdPercent_, 0.0f, 100.0f ); }
 
    // Display/preview versions of the rule above, clamped back into 0-100
@@ -706,7 +814,7 @@ class AudioBoard {
       return min( 100.0f, getEffectivePeakThresholdPercent( bin ) );
    }
    static float getBandAutoScaledPeakThresholdPercent( AudioBand band = BandFull ) {
-      if ( !autoPeakEnabled_ ) return constrain( peakThresholdPercent_, 0.0f, 100.0f );
+      if ( autoPeakMode_ == AutoPeakOff ) return constrain( peakThresholdPercent_, 0.0f, 100.0f );
       uint8_t n = BAND_BIN_COUNT[ band ];
       for ( uint8_t i = 0; i < n; ++i ) {
          if ( getEffectivePeakThresholdPercent( BAND_BINS[ band ][ i ] ) > 100.0f ) return 100.0f;
@@ -855,6 +963,8 @@ float AudioBoard::hitDecayMs_ = 300.0f; // overwritten by Nvm at boot
 Timer AudioBoard::hitTimer_;
 bool AudioBoard::simModeActive_ = false;
 
+bool AudioBoard::autoPeakIncluded_[ NumBins ] = { false };
+
 float AudioBoard::hitPersist_[ NumBins ] = { 0.0f };
 uint32_t AudioBoard::hitOnsetMs_[ NumBins ] = { 0 };
 bool AudioBoard::hitWasAbove_[ NumBins ] = { false };
@@ -870,12 +980,15 @@ float AudioBoard::agcBoostFull_ = 1.0f;
 bool AudioBoard::autoGainSuppressed_ = false;
 bool AudioBoard::soundReactivityEnabled_ = true;
 uint8_t AudioBoard::agcMode_ = AGCoff; // overwritten by Nvm at boot
-float AudioBoard::noiseFloorPercent_ = 18.0f; // overwritten by Nvm at boot
+float AudioBoard::noiseFloorPercent_ = 19.5f; // overwritten by Nvm at boot
 float AudioBoard::peakThresholdPercent_ = 31.0f; // approx. the old hardcoded 80/255, overwritten by Nvm at boot
 
-bool AudioBoard::autoPeakEnabled_ = false; // overwritten by Nvm at boot
-bool AudioBoard::autoPeakHadHit_[ NumBins ] = { false };
-uint32_t AudioBoard::autoPeakLastHitMs_[ NumBins ] = { 0 };
+// measured (scope, phone muted), volts -- see binNoiseFloorPercent_'s own
+// comment. Hand-edit these if re-measured.
+const float AudioBoard::BIN_NOISE_VOLTAGE[ NumBins ] = { 0.17f, 0.17f, 0.17f, 0.17f, 0.17f, 0.280f, 0.56f };
+float AudioBoard::binNoiseFloorPercent_[ NumBins ] = { 19.5f, 19.5f, 19.5f, 19.5f, 19.5f, 19.5f, 19.5f }; // recomputed for real before first poll, see setNoiseFloorPercent()
+
+uint8_t AudioBoard::autoPeakMode_ = AutoPeakBin; // overwritten by Nvm at boot
 
 bool AudioBoard::silent_ = false;
 

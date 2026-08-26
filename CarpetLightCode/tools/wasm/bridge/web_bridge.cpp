@@ -423,9 +423,9 @@ EMSCRIPTEN_KEEPALIVE
 float web_audioGetPeakThresholdPercent() { return AudioBoard::getPeakThresholdPercent(); }
 
 EMSCRIPTEN_KEEPALIVE
-void web_audioSetAutoPeakEnabled( int enabled ) { AudioBoard::setAutoPeakEnabled( enabled != 0 ); }
+void web_audioSetAutoPeakMode( int mode ) { AudioBoard::setAutoPeakMode( (uint8_t)mode ); }
 EMSCRIPTEN_KEEPALIVE
-int web_audioGetAutoPeakEnabled() { return AudioBoard::getAutoPeakEnabled() ? 1 : 0; }
+int web_audioGetAutoPeakMode() { return AudioBoard::getAutoPeakMode(); }
 // slider dot: always BandFull, per request (the default arg)
 EMSCRIPTEN_KEEPALIVE
 float web_audioGetAutoScaledPeakThresholdPercent() { return AudioBoard::getBandAutoScaledPeakThresholdPercent(); }

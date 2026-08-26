@@ -57,7 +57,7 @@ static HalFlashStorage flash;
 #else
 static DueFlashStorage flash;
 #endif
-static const uint8_t MAGIC = 0x4E; // bump this if State's layout ever changes -- bumped for hitPredictionMs's removal (audio-restructure Phase 1, prediction now always spans the full live foresight range)
+static const uint8_t MAGIC = 0x4F; // bump this if State's layout ever changes -- bumped for Phase 2's new defaults (AGCfull, AutoPeakBin, 19.5% noise floor) actually taking effect on already-flashed boards
 static const uint8_t MAX_SHOWS = 8; // headroom for future shows, no relayout needed
 
 // all brightness/threshold fields are percentages (0-100), never raw 0-255
@@ -69,10 +69,10 @@ struct State {
    uint8_t globalBrightnessPercent;    // 0-100, default 100 (unrestricted)
    uint8_t headlightBrightnessPercent; // 50-100, per-fixture, default 50 (see MagicCarpet.h)
    uint8_t chinaBrightnessPercent;     // 0-100, default 100 (unrestricted)
-   uint8_t noiseFloorPercent;          // 0-100, default 18 -- audio below this is "silence" (see AudioBoard.h)
+   uint8_t noiseFloorPercent;          // 0-100, default 19.5 -- the GLOBAL setting; see AudioBoard.h's per-bin binNoiseFloorPercent_ for what's actually compared against
    uint8_t peakThresholdPercent;       // 0-100, default 68 -- audio above
                                         // this counts as a "hit"/peak (see AudioBoard.h::PEAK_THRESHOLD)
-   uint8_t agcMode;                    // AGCoff/AGCband/AGCfull, default AGCband -- see AudioBoard.h's AGCMode
+   uint8_t agcMode;                    // AGCoff/AGCband/AGCfull, default AGCfull -- see AudioBoard.h's AGCMode
    uint8_t testHue;                    // 0-255, default 0 -- power-saving test color (see CarpetLightLogic.cpp)
    uint8_t testSat;                    // 0-255, default 255
    uint8_t testBrightness;             // 0-255, default 255
@@ -81,7 +81,7 @@ struct State {
    uint16_t audioForesightMs;          // 0-700, default 0 -- how far back in time sampled audio is looked up (see AudioBoard.h)
    uint8_t hitPredictionStyle;         // 0=disabled/1=exponential/2=pulse train, default 1 -- prediction always spans the full live audioForesightMs (see AudioBoard.h's HitPredictionStyle)
    uint8_t soundReactivityEnabled;     // 0/1, default 1 (on) -- global kill switch for all sound-reactive light behavior (see AudioBoard.h)
-   uint8_t autoPeakEnabled;            // 0/1, default 0 (off) -- scales peak threshold to the tracked 15s loudness ceiling (see AudioBoard.h)
+   uint8_t autoPeakMode;               // AutoPeakOff/AutoPeakFull/AutoPeakBin, default AutoPeakBin -- see AudioBoard.h's AutoPeakMode
 };
 
 static State state;
@@ -110,9 +110,9 @@ inline void load() {
       state.globalBrightnessPercent = 100;
       state.headlightBrightnessPercent = 50;
       state.chinaBrightnessPercent = 100;
-      state.noiseFloorPercent = 18;
+      state.noiseFloorPercent = 20; // requested default is 19.5%, but this field is a whole-percent uint8_t (see its own comment) -- nearest achievable
       state.peakThresholdPercent = 68;
-      state.agcMode = AGCband;
+      state.agcMode = AGCfull;
       state.testHue = 0;
       state.testSat = 255;
       state.testBrightness = 255;
@@ -121,7 +121,7 @@ inline void load() {
       state.audioForesightMs = 0;
       state.hitPredictionStyle = 1; // PredictExponential
       state.soundReactivityEnabled = 1;
-      state.autoPeakEnabled = 0;
+      state.autoPeakMode = AutoPeakBin;
       flash.write( 0, (byte *)&state, sizeof( State ) );
    }
 }
@@ -190,8 +190,8 @@ inline bool loadedSoundReactivityEnabled() {
    return state.soundReactivityEnabled != 0;
 }
 
-inline bool loadedAutoPeakEnabled() {
-   return state.autoPeakEnabled != 0;
+inline uint8_t loadedAutoPeakMode() {
+   return state.autoPeakMode;
 }
 
 inline void saveShow( uint8_t show ) {
@@ -275,8 +275,8 @@ inline void saveSoundReactivityEnabled( bool enabled ) {
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 
-inline void saveAutoPeakEnabled( bool enabled ) {
-   state.autoPeakEnabled = enabled ? 1 : 0;
+inline void saveAutoPeakMode( uint8_t mode ) {
+   state.autoPeakMode = mode;
    flash.write( 0, (byte *)&state, sizeof( State ) );
 }
 
