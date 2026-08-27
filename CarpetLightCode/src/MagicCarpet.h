@@ -76,10 +76,29 @@
 #define SIZEOF_NEO_STRIP ( NUM_NEO_LEDS_PER_STRIP * sizeof( CRGB ) )
 #define SIZEOF_NEO_LEDS ( NUM_NEO_LEDS_ACTUAL * sizeof( CRGBW ) )
 #define SIZEOF_NEO_SHOW_LEDS ( NUM_NEOPIXEL_STRIPS * SIZEOF_NEO_STRIP )
-#define NEO0_OFFSET 0 // small
-#define NEO1_OFFSET SIZEOF_SMALL_NEO // large
-#define NEO2_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO ) // large
-#define NEO3_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO * 2 ) // small
+// BUGFIX ("whole segments of the neopixels are simply never lit" on the
+// left side, in every show that addresses rope pixels by side/Y position
+// -- SpeedStripesShow's renderSide()/renderZebraSide(), and the NEO3_OFFSET
+// clear loops in NightriderShow::start()/BumpingAudioShow::start()):
+// NEO0-3_OFFSET are the logical Front/Right/Rear/Left strand-start offsets
+// into ropeLeds[] (see CarpetGeometry.h's buildStrandInfo_(), the only
+// place that ties these 4 to their CarSide meaning). NEO0/NEO1/NEO2 happen
+// to land correctly by arithmetic coincidence, but NEO3 (Left's start) was
+// computed as if Rear (the strand immediately before Left) were
+// SIZEOF_LARGE_NEO, a leftover assumption from an old 8-lane PORTD
+// topology this project no longer has -- Rear is actually SIZEOF_SMALL_NEO,
+// same as Front. That put Left's local index 0 exactly
+// (SIZEOF_LARGE_NEO - SIZEOF_SMALL_NEO) = 196 pixels too far into the
+// array, so every Left-side show loop (which iterates exactly
+// SIZEOF_LARGE_NEO local indices) silently orphaned the first 196 real
+// Left-strand pixels (never addressed by any local index at all) while
+// wrapping its last 196 local indices around onto Front's own raw range
+// instead. Right is unaffected (its own true start, SIZEOF_SMALL_NEO,
+// doesn't depend on Rear's size at all).
+#define NEO0_OFFSET 0 // small -- Front
+#define NEO1_OFFSET SIZEOF_SMALL_NEO // large -- Right
+#define NEO2_OFFSET ( SIZEOF_SMALL_NEO + SIZEOF_LARGE_NEO ) // small -- Rear
+#define NEO3_OFFSET ( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO ) // large -- Left
 #define NEO4_OFFSET ( SIZEOF_SMALL_NEO * 2 + SIZEOF_LARGE_NEO * 2 ) // small
 #define NEO5_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 2 ) // large
 #define NEO6_OFFSET ( SIZEOF_SMALL_NEO * 3 + SIZEOF_LARGE_NEO * 3 ) // large

@@ -132,6 +132,29 @@ class LighthouseShow : public LightShow {
    float vel1_ = 0.0f, vel2_ = 0.0f;       // deg/s, current (post-random-walk) value
    float hue1_ = 0.0f;                     // 0-255 float for precision; only ever increases
 
+   // BUGFIX ("beams end up going the same speed in the same direction"):
+   // the MIN_BEAM_SEPARATION_DEG enforcement below corrects the FULL
+   // shortfall every single frame it triggers, snapping effSep to exactly
+   // the minimum -- not merely "soft", as its own comment claims. Given
+   // the guaranteed-free corridor is only 20deg wide (90 max - 70 min) and
+   // each beam's raw velocity can reach 360deg/s, two independently
+   // walking beams typically close that 20deg in well under a second, then
+   // stay pinned: from that point on, ANY further net closing tendency in
+   // vel1_/vel2_ gets fully cancelled every frame, which forces the two
+   // beams' EFFECTIVE angular rates to become equal (moving together at
+   // their shared average) for as long as that tendency persists -- which,
+   // since vel1_/vel2_ themselves only drift slowly (+/-10deg/s per ~1s
+   // random-walk tick), can be many seconds. The position clamp itself is
+   // correct and stays untouched (it's what keeps the hard "2 megabars
+   // always covered" guarantee -- see class comment -- genuinely
+   // unconditional). What's missing is a real bounce: a decaying velocity
+   // bias injected on every collision, so the pair visibly separates again
+   // afterward instead of staying rigidly pinned, while the underlying
+   // random walks keep evolving independently underneath it.
+   float bounceVel1_ = 0.0f, bounceVel2_ = 0.0f; // deg/s, decays toward 0
+   static constexpr float BOUNCE_DECAY_TAU_SEC = 1.5f;
+   static constexpr float BOUNCE_KICK_DEG_PER_SEC = 40.0f;
+
    Timer frameTimer_; // tracks dt between update() calls
 
    // pot -> each beam's max rotation speed ceiling -- see class comment
@@ -205,6 +228,15 @@ class LighthouseShow : public LightShow {
    // comfortably above CORE_FLOOR_BRIGHTNESS, let alone 0.
    static constexpr float MIN_BEAM_SEPARATION_DEG = CONE_FULL_WIDTH_DEG + 2.0f; // 70deg (max possible is 90deg -- 20deg of slack)
 
+   // Rope-only cone width -- 25% narrower than the width above, per
+   // explicit request. Megabars/china keep the full CONE_HALF_WIDTH_DEG:
+   // that width is a hard geometric guarantee (see its own derivation
+   // comment) -- shrinking it there would break "at least 2 megabars
+   // always lit". Rope has no such guarantee to protect, so it's free to
+   // be narrower purely for visual effect.
+   static constexpr float ROPE_CONE_HALF_WIDTH_DEG = CONE_HALF_WIDTH_DEG * 0.75f;
+   static constexpr float ROPE_CONE_FADE_DEG = CONE_FADE_DEG * 0.75f;
+
    // Per spec: full brightness at dead center, easing down to
    // CORE_FLOOR_BRIGHTNESS at the guaranteed core's own edge
    // (CONE_HALF_WIDTH_DEG), then continuing to ease from that floor down
@@ -213,24 +245,27 @@ class LighthouseShow : public LightShow {
    // join, so the combined curve has no visible kink. ONE shared shape
    // for rope/megabar/china alike (see class comment) -- no more
    // separately-tuned per-fixture-type widths.
-   static uint8_t coneBrightnessAt( float d ) {
-      if ( d >= CONE_HALF_WIDTH_DEG + CONE_FADE_DEG ) return 0;
-      if ( d <= CONE_HALF_WIDTH_DEG ) {
-         float frac = d / CONE_HALF_WIDTH_DEG; // 0..1
+   static uint8_t coneBrightnessAt( float d, float halfWidth = CONE_HALF_WIDTH_DEG, float fadeDeg = CONE_FADE_DEG ) {
+      if ( d >= halfWidth + fadeDeg ) return 0;
+      if ( d <= halfWidth ) {
+         float frac = d / halfWidth; // 0..1
          uint8_t eased = smoothstep8( (uint8_t)( frac * 255.0f + 0.5f ) ); // 255->0 as frac 0->1
          return (uint8_t)( CORE_FLOOR_BRIGHTNESS + ( (uint32_t)eased * ( 255 - CORE_FLOOR_BRIGHTNESS ) ) / 255 );
       }
-      float fadeFrac = ( d - CONE_HALF_WIDTH_DEG ) / CONE_FADE_DEG; // 0..1
+      float fadeFrac = ( d - halfWidth ) / fadeDeg; // 0..1
       uint8_t eased = smoothstep8( (uint8_t)( fadeFrac * 255.0f + 0.5f ) ); // 255->0 as fadeFrac 0->1
       return (uint8_t)( ( (uint32_t)eased * CORE_FLOOR_BRIGHTNESS ) / 255 );
    }
 
    // One beam's brightness contribution at a given point angle -- nearest
-   // of its 2 opposite (180deg apart) cones.
-   static uint8_t beamBrightnessAt( float pointAngle, float beamAngle ) {
+   // of its 2 opposite (180deg apart) cones. halfWidth/fadeDeg default to
+   // the megabar/china-guaranteeing width; the rope loop passes its own
+   // narrower ROPE_CONE_* constants instead (see their declaration
+   // comment).
+   static uint8_t beamBrightnessAt( float pointAngle, float beamAngle, float halfWidth = CONE_HALF_WIDTH_DEG, float fadeDeg = CONE_FADE_DEG ) {
       float d1 = fabsf( circularDelta( pointAngle, beamAngle ) );
       float d2 = fabsf( circularDelta( pointAngle, wrap360( beamAngle + 180.0f ) ) );
-      return coneBrightnessAt( min( d1, d2 ) );
+      return coneBrightnessAt( min( d1, d2 ), halfWidth, fadeDeg );
    }
 
    // No additive mixing where the 2 beams' cones overlap -- picks the
@@ -247,9 +282,9 @@ class LighthouseShow : public LightShow {
    // global. Returns CHSV, not CRGB -- stays in HSV space until the
    // actual write (see LightSetters.h); RGB conversion happens exactly
    // once, at that point, via FastLED's integer-only hsv2rgb_rainbow().
-   static CHSV winnerColorAt( float pointAngle, float angle1, uint8_t hue1, float angle2, uint8_t hue2, uint8_t satByte, bool preferBeam2OnTie = false ) {
-      uint8_t b1 = beamBrightnessAt( pointAngle, angle1 );
-      uint8_t b2 = beamBrightnessAt( pointAngle, angle2 );
+   static CHSV winnerColorAt( float pointAngle, float angle1, uint8_t hue1, float angle2, uint8_t hue2, uint8_t satByte, bool preferBeam2OnTie = false, float halfWidth = CONE_HALF_WIDTH_DEG, float fadeDeg = CONE_FADE_DEG ) {
+      uint8_t b1 = beamBrightnessAt( pointAngle, angle1, halfWidth, fadeDeg );
+      uint8_t b2 = beamBrightnessAt( pointAngle, angle2, halfWidth, fadeDeg );
       uint8_t winBright = max( b1, b2 );
       if ( winBright == 0 ) return CHSV( 0, 0, 0 );
       bool beam1Wins = ( b1 == b2 ) ? !preferBeam2OnTie : ( b1 > b2 );
@@ -341,8 +376,15 @@ class LighthouseShow : public LightShow {
       float hueRate = hueRateWalk_.value( 0.0f, MAX_HUE_RATE, MAX_HUE_RATE * 0.1f ); // never negative -- always "clockwise"
       float satFraction = satWalk_.value( 0.70f, 1.0f, 0.013f );
 
-      angle1_ = wrap360( angle1_ + vel1_ * dtSec );
-      angle2_ = wrap360( angle2_ + vel2_ * dtSec );
+      // decay any active bounce bias (see its own declaration comment)
+      // before applying it this frame -- exponential, time-constant
+      // BOUNCE_DECAY_TAU_SEC, frame-rate independent.
+      float bounceDecay = expf( -dtSec / BOUNCE_DECAY_TAU_SEC );
+      bounceVel1_ *= bounceDecay;
+      bounceVel2_ *= bounceDecay;
+
+      angle1_ = wrap360( angle1_ + ( vel1_ + bounceVel1_ ) * dtSec );
+      angle2_ = wrap360( angle2_ + ( vel2_ + bounceVel2_ ) * dtSec );
 
       // Prevent the 2 beams' cones from ever overlapping -- see class
       // comment and MIN_BEAM_SEPARATION_DEG's own comment. Each beam has
@@ -351,12 +393,11 @@ class LighthouseShow : public LightShow {
       // delta into 0..90 by that antipodal symmetry (effSep). If it's
       // ever below the minimum, push the 2 angles apart symmetrically
       // (50/50 split -- neither beam unilaterally "wins" position) by
-      // exactly the shortfall. This is a soft, continuous per-frame
-      // correction, not a velocity restriction -- both beams stay free to
-      // random-walk to the same sign (both CW or both CCW) and drift
-      // toward each other; when they'd cross the minimum, they instead
-      // "bounce off" it smoothly, since each frame's shortfall is small
-      // (bounded by one frame's worth of relative angular motion).
+      // exactly the shortfall, so the hard guarantee holds every single
+      // frame, unconditionally. On top of that hard correction, also
+      // inject a decaying outward bounceVel kick (see its own declaration
+      // comment) so the pair actually separates again afterward instead
+      // of staying rigidly pinned at the boundary.
       {
          float rawDelta = circularDelta( angle1_, angle2_ ); // -180..180, signed, angle1->angle2
          float absDelta = fabsf( rawDelta );
@@ -371,6 +412,10 @@ class LighthouseShow : public LightShow {
             float pushDelta = ( absDelta <= 90.0f ) ? ( sign * shortfall ) : ( -sign * shortfall );
             angle1_ = wrap360( angle1_ - pushDelta * 0.5f );
             angle2_ = wrap360( angle2_ + pushDelta * 0.5f );
+
+            float kickSign = ( absDelta <= 90.0f ) ? sign : -sign; // matches pushDelta's own sign convention
+            bounceVel1_ -= kickSign * BOUNCE_KICK_DEG_PER_SEC;
+            bounceVel2_ += kickSign * BOUNCE_KICK_DEG_PER_SEC;
          }
       }
 
@@ -394,7 +439,7 @@ class LighthouseShow : public LightShow {
       // only this array-addressing step is by ID.
       for ( uint16_t raw = 0; raw < NUM_NEO_LEDS_ACTUAL; ++raw ) {
          float a = CarpetGeometry::getNeoGeom( raw ).angleFromForwardDeg;
-         CHSV color = winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte );
+         CHSV color = winnerColorAt( a, angle1_, hue1Byte, angle2_, hue2Byte, satByte, false, ROPE_CONE_HALF_WIDTH_DEG, ROPE_CONE_FADE_DEG );
          int32_t neoId = CarpetGeometry::rawIndexToNeoId( raw );
          LightSetters::setColor( carpet, LightSetters::TargetNeo, color, LightSetters::NeoByCircumferenceID{ neoId } );
          LightSetters::setWhite( carpet, LightSetters::TargetNeo, 0, LightSetters::NeoByCircumferenceID{ neoId } );

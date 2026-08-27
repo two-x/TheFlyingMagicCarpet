@@ -81,6 +81,14 @@ class FlameShow : public LightShow {
    // SpeedStripesShow.h/BumpingAudioShow.h's china grouping.
    static const uint32_t HIT_REACTIVE_WINDOW_MS = 3000;
    static const uint8_t FLOOD_LO_INDEX = 40, FLOOD_HI_INDEX = 230; // palette reference points, matches the JS mirror
+   // idle-mode base-color coin flip (megabarColorPick_/chinaColorPick_
+   // below) -- per explicit request, weighted so a flood is more often
+   // sitting at the dim/base reference color than the bright one, rather
+   // than a plain 50/50 flip. Still a real coin flip (not a fixed
+   // population split) -- each fixture rerolls independently on its own
+   // spark, same mechanism as before, just re-weighted.
+   static const uint8_t BASE_COLOR_PICK_PERCENT = 65;
+   static bool pickBaseColor() { return random8( 100 ) < BASE_COLOR_PICK_PERCENT; }
    Timer lastHitTimer_;
    bool everHit_ = false; // starts idle at boot, same as the JS mirror's flameLastHitMs=-99999
    bool megabarColorPick_[ NUM_MEGABAR_LEDS ]; // idle mode: true=lo, false=hi -- this fixture's current base color
@@ -134,8 +142,8 @@ class FlameShow : public LightShow {
       // idle color pick, initial china bass/treble swap timer -- see the
       // member comment above.
       classifyChinaFromGeometry();
-      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) megabarColorPick_[ i ] = random8( 2 ) == 0;
-      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) chinaColorPick_[ i ] = random8( 2 ) == 0;
+      for ( int i = 0; i < NUM_MEGABAR_LEDS; ++i ) megabarColorPick_[ i ] = pickBaseColor();
+      for ( int i = 0; i < NUM_CHINA_LEDS; ++i ) chinaColorPick_[ i ] = pickBaseColor();
       chinaSwapTimer_.set( 2000 + random( 5000 ) );
    }
 
@@ -237,12 +245,12 @@ class FlameShow : public LightShow {
          for ( int s = 0; s < megabarSparkCount; ++s ) {
             uint8_t idx = random8( NUM_MEGABAR_LEDS );
             megabarHeat[ idx ] = qadd8( megabarHeat[ idx ], random8( 160, 255 ) );
-            megabarColorPick_[ idx ] = random8( 2 ) == 0; // re-roll idle base color on each spark, matches JS mirror
+            megabarColorPick_[ idx ] = pickBaseColor(); // re-roll idle base color on each spark
          }
          for ( int s = 0; s < chinaSparkCount; ++s ) {
             uint8_t idx = random8( NUM_CHINA_LEDS );
             chinaHeat[ idx ] = qadd8( chinaHeat[ idx ], random8( 160, 255 ) );
-            chinaColorPick_[ idx ] = random8( 2 ) == 0;
+            chinaColorPick_[ idx ] = pickBaseColor();
          }
 
          // assign color
