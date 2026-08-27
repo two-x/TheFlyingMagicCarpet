@@ -43,10 +43,11 @@ applies the patches in `tools/wasm/patches/` (see below) via
 `#include`s the real `src/CarpetLightLogic.cpp` directly -- Arduino
 sketches have no `main()` of their own, the framework calls `setup()`/
 `loop()`, and this bridge does the same) plus FastLED's portable pixel-math
-sources, (4) base64-inlines the resulting `.wasm` into the `.js` glue with a
-small `Module.instantiateWasm` shim (see below), output to
-`tools/visualizer/wasm/carpet_fw.js` (~140KB as of this writing -- a single
-file, no separate `.wasm` to fetch).
+sources (`colorutils.cpp`, `hsv2rgb.cpp`, `lib8tion.cpp` -- see below for why
+this list is shorter than you might expect), (4) base64-inlines the
+resulting `.wasm` into the `.js` glue with a small `Module.instantiateWasm`
+shim (see below), output to `tools/visualizer/wasm/carpet_fw.js` (~180KB as
+of this writing -- a single file, no separate `.wasm` to fetch).
 
 ### Why the `.wasm` is base64-inlined into the `.js` (the `file://` problem)
 
@@ -79,74 +80,93 @@ fetched, so this loads identically under `file://` and `http://`.
 
 ## Why FastLED needs patching for this build (the real story)
 
-FastLED already ships its own `__EMSCRIPTEN__` platform support -- but it's
-built for FastLED's *own* sketch-compiler/web-player pipeline
-(`platforms/wasm/`: `js_bindings.cpp`, `active_strip_data.cpp`, `ui.cpp`,
-etc. -- their own `uv run ci/wasm_compile.py` + Docker toolchain), not a
-general-purpose "compile arbitrary Arduino-shaped C++ with a custom JS
-bridge" target. We don't use that pipeline (see the migration plan's
-build-tooling discussion for why); we `#include` FastLED's headers directly
-via a standalone `em++` invocation instead. That surfaces two distinct,
-unrelated problems:
+**Important, and easy to get wrong if you go looking at FastLED's own
+GitHub source while debugging this:** the `fastled/FastLED@3.6.0` package
+PlatformIO actually installs (`.pio/libdeps/.../FastLED/src`) is an older,
+plainer layout than the current FastLED `main` branch/newer releases --
+`uint8_t`/`uint16_t` types throughout (not the `fl::u8`/`fl::u16` namespace
+wrapper newer FastLED uses), and **no `platforms/wasm/` or `platforms/stub/`
+directories at all** -- `grep -r EMSCRIPTEN .pio/libdeps/.../FastLED/src`
+comes back completely empty. This installed release simply predates
+FastLED's own WASM/emscripten platform support; it was never a case of us
+opting out of FastLED's own WASM compat layer, because for this version
+there isn't one to opt out of. (This has already changed once during this
+project's life -- the very patches this section used to describe assumed a
+newer FastLED tree that *did* have `platforms/wasm/`/`platforms/stub/`, and
+broke when this file's own history diverged from whatever the registry
+serves. If a future FastLED version bump changes any of this again, the
+right move is to `grep -r EMSCRIPTEN` the freshly-vendored copy again and
+re-diagnose from there, not to assume anything below is still accurate.)
 
-**1. `chipsets.h`'s `FASTLED_CLOCKLESS_CONTROLLER` macro doesn't resolve.**
-It expands to a bare `ClocklessController`, but this FastLED version's WASM
-platform (`platforms/stub/clockless_stub.h`'s `__EMSCRIPTEN__` branch,
-which redirects to `platforms/wasm/clockless.h`) only ever defines
-`fl::ClocklessController`. **Moot for us**: we never instantiate any
-FastLED hardware-controller class at all (`MagicCarpet::setup()`'s
-`FastLED.addLeds<NEO_PORT_BANK,...>()` and `MagicCarpet::show()`'s
-`FastLED.show()` are both excluded under `__EMSCRIPTEN__`, see
-`MagicCarpet.h`) -- so instead of fixing the macro, our patched `FastLED.h`
-skips `platforms.h`/`chipsets.h`/`fastspi.h` entirely, and replaces the
-`CFastLED` class (normally ~500 lines of per-chipset `addLeds<>()`
-overloads) with a minimal stub exposing just the handful of methods our own
-code actually calls from paths that stay compiled on every target
-(`FastLED.delay()`, used by `DemoShow.h` and `MagicCarpet::error()` -- both
-present in the build but not reached in normal operation).
+Since there's no WASM branch, `em++`-compiling this code with `__EMSCRIPTEN__`
+defined hits FastLED's *hardware*-platform dispatch with nothing matching,
+which goes one of two ways depending on the file:
 
-**2. FastLED's own WASM-Arduino-compat shim collides with ours.** The
-moment `__EMSCRIPTEN__` is defined, FastLED unconditionally pulls in its
-own `millis()`/`micros()`/`min()`/`max()`/`constrain()`/`analogRead()`/
-`digitalWrite()`/`Serial` emulation (`platforms/wasm/js.h`,
-`platforms/stub/Arduino.h`, `platforms/stub/time_stub.h`,
-`platforms/stub/led_sysdefs_stub_generic.h` -- reached via at least three
-independent include paths, since several of FastLED's own files do
-self-referential `#include "FastLED.h"`/`#include "..."` that always
-resolve to their own colocated directory regardless of `-I` search order,
-which is why a simple shadow-header trick doesn't work here and these files
-needed direct, in-place patches instead). This is a **real, unrelated**
-Arduino-compat layer FastLED provides for *its own* purposes -- but our
-project already has one (`src/HalShim.h`), with **injectable** behavior
-(JS-controlled `millis()`, ADC values, pin state) instead of FastLED's
-fixed one (real wall-clock `millis()`, `random()`-backed `analogRead()`,
-no-op `digitalWrite()`). Having both visible in the same translation unit
-is a hard conflict (declaration with different language linkage,
-redefinition errors) -- not a matter of picking whose version is "correct."
+- **`platforms.h`'s dispatch has a silent `#else` -- real AVR headers.** An
+  unrecognized platform (which `__EMSCRIPTEN__` is, to this file) falls all
+  the way through to `#include "platforms/avr/fastled_avr.h"`, pulling in
+  real `avr/io.h`-style hardware register access that can't compile for a
+  wasm32 target.
+- **`led_sysdefs.h`'s dispatch has an explicit `#error`.** Same shape of
+  dispatch, but its `#else` is `#error "This platform isn't recognized by
+  FastLED... yet."` -- a hard compile failure instead of a silent wrong
+  include.
+- **`fastpin.h` needs `RwReg`/`RoReg` pin-register typedefs** that only a
+  real platform's `led_sysdefs_*.h` (the file the above dispatch would have
+  selected) defines -- so once real platform headers are off the table,
+  `fastpin.h` itself won't compile either.
+- **`fastspi.h`/`chipsets.h` define FastLED's real hardware-chipset
+  controller classes** (`ClocklessController` and friends) -- not something
+  that fails to compile outright, but pulling them in is pointless *and*
+  drags in more platform-specific assumptions than necessary, since we
+  never instantiate any of them (`MagicCarpet::setup()`'s
+  `FastLED.addLeds<NEO_PORT_BANK,...>()` and `MagicCarpet::show()`'s
+  `FastLED.show()` are both excluded under `__EMSCRIPTEN__`, see
+  `MagicCarpet.h`).
 
 **The fix, all gated behind one flag (`-DFASTLED_SKIP_WASM_ARDUINO_COMPAT`,
-only ever passed by our own `build.sh` -- real hardware and FastLED's own
-normal WASM usage are completely unaffected):** every file above gets a
-small patch (see `tools/wasm/patches/*.patch`, applied fresh to a vendored
-copy every build -- never hand-edit `tools/wasm/vendor/`, it's regenerated
-and gitignored) wrapping its competing declarations in
-`#ifndef FASTLED_SKIP_WASM_ARDUINO_COMPAT`. One additional patch to
-`FastLED.h` re-adds `using namespace fl;` at global scope, since disabling
-`platforms/stub/Arduino.h`'s body also disables its
-`FASTLED_USING_NAMESPACE` invocation, which is what normally makes
-`fl::CRGB`/`fl::CHSV`/etc. usable as bare `CRGB`/`CHSV` (our project's code,
-like most FastLED users' code, refers to them unqualified).
+only ever passed by our own `build.sh` -- real hardware is completely
+unaffected):** small patches (see `tools/wasm/patches/*.patch`, applied
+fresh to a vendored copy every build -- never hand-edit
+`tools/wasm/vendor/`, it's regenerated and gitignored) that:
 
-**One more wrinkle, unrelated to any of the above:** FastLED's separately-
-compiled `.cpp` sources (`fl/colorutils.cpp`, `hsv2rgb.cpp`, `lib8tion.cpp`,
-`crgb.cpp`, `fl/fill.cpp` -- linked directly into the build, providing
-`blend()`/`hsv2rgb_rainbow()`/`fill_gradient_RGB()`/etc.) are their own
-translation units that never see our project's `Utilities.h`/`HalShim.h`
-at all, so `-include src/HalShim.h` is passed to the *entire* `em++`
-invocation (applies to every `.cpp` on the command line, including these),
-ensuring `millis()`/`micros()` resolve consistently to our own injectable
-versions everywhere, not just in the files that happen to `#include`
-`Utilities.h` themselves.
+1. Skip `platforms.h`'s `#include` from `FastLED.h` entirely.
+2. Skip `fastpin.h`'s `#include` from `FastLED.h` entirely -- nothing in
+   our actual build (`colorutils.cpp`/`hsv2rgb.cpp`/`lib8tion.cpp`,
+   `CarpetLightLogic.cpp`'s own `#include` chain) touches FastLED's
+   `Pin`/`OutputPin` classes; we drive pins through our own
+   `src/HalShim.h` instead.
+3. Skip `fastspi.h`/`chipsets.h`'s `#include` from `FastLED.h` entirely.
+4. Add an `#elif defined(__EMSCRIPTEN__) && defined(FASTLED_SKIP_WASM_ARDUINO_COMPAT)`
+   branch to `led_sysdefs.h`'s platform dispatch, ahead of its `#error`,
+   that includes nothing (none of the real per-platform defines it would
+   normally provide are needed once (1)-(3) above are in effect).
+5. Replace `FastLED.h`'s real `CFastLED` class (normally ~500 lines of
+   per-chipset `addLeds<>()` overloads) with a minimal stub exposing just
+   the handful of methods our own code actually calls from paths that stay
+   compiled on every target (`FastLED.delay()`, used by `DemoShow.h` and
+   `MagicCarpet::error()` -- both present in the build but not reached in
+   normal operation), and make the global `FastLED` instance a C++17
+   `inline` variable (its real definition normally lives in `FastLED.cpp`,
+   which we don't compile).
+
+Our own `src/HalShim.h` (`millis()`, ADC values, pin state -- all
+JS-injectable) remains the *only* Arduino-compat layer in the build; there's
+no competing one from FastLED to reconcile it with in this FastLED release,
+and no `fl::` namespace to bridge back to bare `CRGB`/`CHSV` either (this
+layout's `pixeltypes.h` already declares them as bare global types).
+
+**One more wrinkle:** this FastLED layout keeps `colorutils.cpp`/
+`hsv2rgb.cpp`/`lib8tion.cpp` directly under `src/` (no `fl/` subdirectory),
+has no separate `crgb.cpp` (`CRGB`'s methods are header-only, inline in
+`pixeltypes.h`), and no separate `fill.cpp` (`fill_solid()`/`fill_rainbow()`/
+etc. already live inside `colorutils.cpp`) -- `build.sh`'s compiled-sources
+list reflects that. These are their own translation units that never see
+our project's `Utilities.h`/`HalShim.h` at all, so `-include src/HalShim.h`
+is passed to the *entire* `em++` invocation (applies to every `.cpp` on the
+command line, including these), ensuring `millis()`/`micros()` resolve
+consistently to our own injectable versions everywhere, not just in the
+files that happen to `#include` `Utilities.h` themselves.
 
 None of this required editing PlatformIO's own managed FastLED copy under
 `.pio/libdeps/` (which it can silently regenerate) -- everything lives in

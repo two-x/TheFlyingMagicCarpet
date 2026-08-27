@@ -61,12 +61,16 @@ enum PowerTestSubsetting { SubPowerTestHue = 0, SubPowerTestSat = 1, SubPowerTes
 static uint8_t configSubsetting = 0;
 static float noiseFloorPercent = 0.0f; // committed value; audio below this is "silence" -- see AudioBoard.h
 static float peakThresholdPercent = 0.0f; // committed value; audio above this is a "hit"/peak -- see AudioBoard.h
-// PressLeft/PressRight's default peak-thresh nudge (see loop()) applies to
-// AudioBoard immediately but debounces the actual flash write -- same
-// "don't hammer flash on rapid repeated input" idea as SettlePrinter
-// (LightShow.h), just without the print.
+// PressPot's default peak-thresh set (see loop()) applies to AudioBoard
+// immediately but debounces the actual flash write -- same "don't hammer
+// flash on rapid repeated input" idea as SettlePrinter (LightShow.h), just
+// without the print. Primary flush trigger is PressPot going inactive
+// (release) -- a clean, precise "definitely done adjusting" signal, no
+// guessing needed; the timer is a defensive backup only, for the
+// pathological case of a hold that never releases.
 static Timer peakThreshSaveDebounce_( 1000 );
 static bool peakThreshSaveDirty_ = false;
+static bool pressPotWasActive_ = false; // edge-detects PressPot's active->inactive transition, see loop()
 // which of noiseFloorPercent/peakThresholdPercent the pot currently targets
 // within SubAudioThreshold -- toggled by short press, always starts false
 // (noise floor) on a fresh visit to the subsetting (see cycleSubsetting()).
@@ -545,6 +549,7 @@ void loop() {
    }
 
    carpet->encoder->update(); // refresh button short/medium/long/extra-long/double press state
+   carpet->encoder->button.updatePressPot( carpet->pot->readPercent() ); // refresh PressPot state -- see LedController.h
 
    // press-hold feedback: single flash live the instant a hold crosses the
    // long-press threshold -- no feedback for crossing medium, by request
@@ -561,24 +566,41 @@ void loop() {
    bool didDouble = carpet->encoder->button.doublepress();
    bool didLeft = carpet->encoder->button.pressleft();
    bool didRight = carpet->encoder->button.pressright();
+   // PressLeft/PressRight no longer have a default action (see below --
+   // that moved to PressPot), but a show may still want them for its own
+   // purposes, so the override hook still fires either way; the return
+   // value has nothing left to suppress.
+   if ( appMode == ModeShow && didLeft ) currLightShow->onPressLeft();
+   if ( appMode == ModeShow && didRight ) currLightShow->onPressRight();
 
-   // PressLeft/PressRight (see LedController.h): default, in normal show
-   // mode only, nudges the global peak threshold +-1%/detent -- a show may
-   // override via LightShow::onPressLeft()/onPressRight() instead (return
-   // true to suppress this default). Applied live immediately; the actual
-   // flash write is debounced (see peakThreshSaveDebounce_ below) so rapid
-   // repeated detents don't hammer flash.
-   if ( appMode == ModeShow && ( didLeft || didRight ) ) {
-      bool overridden = didLeft ? currLightShow->onPressLeft() : currLightShow->onPressRight();
-      if ( !overridden ) {
-         peakThresholdPercent = constrain( peakThresholdPercent + ( didRight ? 1.0f : -1.0f ), 0.0f, 100.0f );
-         AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
-         peakThreshSaveDebounce_.reset();
-         peakThreshSaveDirty_ = true;
-      }
+   // PressPot (see LedController.h): default, in normal show mode only,
+   // sets the global peak threshold directly to the live pot value while
+   // active -- replaces the old PressLeft/PressRight +-1%/detent nudge.
+   // Applied live immediately; the actual flash write is debounced (see
+   // peakThreshSaveDebounce_ above).
+   bool pressPotActive = carpet->encoder->button.PressPotIsActive();
+   if ( appMode == ModeShow && pressPotActive ) {
+      peakThresholdPercent = carpet->encoder->button.PressPotValue();
+      AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
+      peakThreshSaveDebounce_.reset();
+      peakThreshSaveDirty_ = true;
    }
+   if ( pressPotWasActive_ && !pressPotActive && peakThreshSaveDirty_ ) {
+      // flush right on release rather than waiting out the timer below --
+      // once released, no further change can happen until pressed again,
+      // so there's nothing left to "give time" for.
+      uint8_t v = (uint8_t)( peakThresholdPercent + 0.5f );
+      if ( Nvm::loadedPeakThreshold() != v ) Nvm::savePeakThreshold( v );
+      peakThreshSaveDirty_ = false;
+   }
+   pressPotWasActive_ = pressPotActive;
    if ( peakThreshSaveDirty_ && peakThreshSaveDebounce_.expired() ) {
-      Nvm::savePeakThreshold( (uint8_t)( peakThresholdPercent + 0.5f ) );
+      // defensive backup only -- the release-triggered flush above already
+      // handles the normal case; this only fires if the button is somehow
+      // still held this long after the last pot change (e.g. a hold that
+      // never releases)
+      uint8_t v = (uint8_t)( peakThresholdPercent + 0.5f );
+      if ( Nvm::loadedPeakThreshold() != v ) Nvm::savePeakThreshold( v );
       peakThreshSaveDirty_ = false;
    }
 
@@ -729,54 +751,68 @@ void loop() {
       if ( liveValuePrintTimer_.expireset() ) printLiveValue( appMode, configSubsetting, livePercent );
 
       if ( didDouble ) {
-         // commit whichever subsetting is currently showing
+         // commit whichever subsetting is currently showing. Every save
+         // below reads the currently-flashed value first and skips the
+         // actual write if it's already equal -- these only fire on an
+         // explicit double-press commit (never spammed per-tick during
+         // live adjustment, so no time debounce is needed here), but a
+         // commit can still land on an unchanged value (dial it up then
+         // back down before double-pressing), which would otherwise be a
+         // real, avoidable flash write.
          if ( appMode == ModeConfigBrightness && configSubsetting == SubBrightnessGlobal ) {
             carpet->setGlobalBrightness( livePercent );
-            Nvm::saveGlobalBrightness( (uint8_t)( livePercent + 0.5f ) );
+            uint8_t v = (uint8_t)( livePercent + 0.5f );
+            if ( Nvm::loadedGlobalBrightness() != v ) Nvm::saveGlobalBrightness( v );
          } else if ( appMode == ModeConfigBrightness && configSubsetting == SubBrightnessHeadlight ) {
             carpet->setHeadlightBrightness( livePercent );
-            Nvm::saveHeadlightBrightness( (uint8_t)( livePercent + 0.5f ) );
+            uint8_t v = (uint8_t)( livePercent + 0.5f );
+            if ( Nvm::loadedHeadlightBrightness() != v ) Nvm::saveHeadlightBrightness( v );
          } else if ( appMode == ModeConfigBrightness ) { // SubBrightnessChina
             carpet->setChinaBrightness( livePercent );
-            Nvm::saveChinaBrightness( (uint8_t)( livePercent + 0.5f ) );
+            uint8_t v = (uint8_t)( livePercent + 0.5f );
+            if ( Nvm::loadedChinaBrightness() != v ) Nvm::saveChinaBrightness( v );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioThreshold && !adjustingPeakThreshold ) {
             noiseFloorPercent = livePercent;
-            Nvm::saveNoiseFloor( (uint8_t)( noiseFloorPercent + 0.5f ) );
+            uint8_t v = (uint8_t)( noiseFloorPercent + 0.5f );
+            if ( Nvm::loadedNoiseFloor() != v ) Nvm::saveNoiseFloor( v );
             AudioBoard::setNoiseFloorPercent( noiseFloorPercent );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioThreshold ) { // adjustingPeakThreshold
             peakThresholdPercent = livePercent;
-            Nvm::savePeakThreshold( (uint8_t)( peakThresholdPercent + 0.5f ) );
+            uint8_t v = (uint8_t)( peakThresholdPercent + 0.5f );
+            if ( Nvm::loadedPeakThreshold() != v ) Nvm::savePeakThreshold( v );
             AudioBoard::setPeakThresholdPercent( peakThresholdPercent );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioAutoGain ) {
             AudioBoard::setAgcMode( liveAgcMode );
-            Nvm::saveAgcMode( liveAgcMode );
+            if ( Nvm::loadedAgcMode() != liveAgcMode ) Nvm::saveAgcMode( liveAgcMode );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioReactivityEnable ) {
             AudioBoard::setSoundReactivityEnabled( liveSoundReactivityEnabled );
-            Nvm::saveSoundReactivityEnabled( liveSoundReactivityEnabled );
+            if ( Nvm::loadedSoundReactivityEnabled() != liveSoundReactivityEnabled ) Nvm::saveSoundReactivityEnabled( liveSoundReactivityEnabled );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioAutoPeak ) {
             AudioBoard::setAutoPeakMode( liveAutoPeakMode );
-            Nvm::saveAutoPeakMode( liveAutoPeakMode );
+            if ( Nvm::loadedAutoPeakMode() != liveAutoPeakMode ) Nvm::saveAutoPeakMode( liveAutoPeakMode );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioHitDecay ) {
             committedHitDecayMs = livePercent;
-            Nvm::saveHitDecayMs( (uint16_t)( committedHitDecayMs + 0.5f ) );
+            uint16_t v = (uint16_t)( committedHitDecayMs + 0.5f );
+            if ( Nvm::loadedHitDecayMs() != v ) Nvm::saveHitDecayMs( v );
             AudioBoard::setHitDecayMs( committedHitDecayMs );
          } else if ( appMode == ModeConfigAudio && configSubsetting == SubAudioForesight ) {
             // commits both the pot-driven ms amount and the encoder-driven
             // prediction style together, same as PowerTest's hue/sat/
             // brightness triple
             committedAudioForesightMs = livePercent;
-            Nvm::saveAudioForesightMs( (uint16_t)( committedAudioForesightMs + 0.5f ) );
+            uint16_t vMs = (uint16_t)( committedAudioForesightMs + 0.5f );
+            if ( Nvm::loadedAudioForesightMs() != vMs ) Nvm::saveAudioForesightMs( vMs );
             AudioBoard::setAudioForesightMs( committedAudioForesightMs );
             committedHitPredictionStyle = liveHitPredictionStyle;
-            Nvm::saveHitPredictionStyle( committedHitPredictionStyle );
+            if ( Nvm::loadedHitPredictionStyle() != committedHitPredictionStyle ) Nvm::saveHitPredictionStyle( committedHitPredictionStyle );
             AudioBoard::setHitPredictionStyle( committedHitPredictionStyle );
          } else if ( appMode == ModeConfigPowerTest ) { // commits the whole hue/sat/brightness triple at once
             committedTestHue = liveTestHue;
             committedTestSat = liveTestSat;
             committedTestBrightness = liveTestBrightness;
-            Nvm::saveTestHue( committedTestHue );
-            Nvm::saveTestSat( committedTestSat );
-            Nvm::saveTestBrightness( committedTestBrightness );
+            if ( Nvm::loadedTestHue() != committedTestHue ) Nvm::saveTestHue( committedTestHue );
+            if ( Nvm::loadedTestSat() != committedTestSat ) Nvm::saveTestSat( committedTestSat );
+            if ( Nvm::loadedTestBrightness() != committedTestBrightness ) Nvm::saveTestBrightness( committedTestBrightness );
          }
          printCommitted( appMode, configSubsetting, livePercent );
          carpet->flashRope( 1 ); // confirms the setting was committed
@@ -842,7 +878,7 @@ void loop() {
             EqualizerShow * eq = static_cast<EqualizerShow *>( currLightShow );
             bool newState = !eq->getStrobeEnabled();
             eq->setStrobeEnabled( newState );
-            Nvm::saveEqualizerStrobeEnabled( newState );
+            if ( Nvm::loadedEqualizerStrobeEnabled() != newState ) Nvm::saveEqualizerStrobeEnabled( newState );
          } else {
             blacklightOn = !blacklightOn; // china UV channel, full on/off -- see MagicCarpet::setBlacklight()
          }
@@ -850,7 +886,7 @@ void loop() {
       if ( didLong ) enterConfigMode( ModeConfigBrightness );
       if ( didShort ) {
          currMode = (ShowMode)( ( (uint8_t)currMode + 1 ) % numModes );
-         Nvm::saveShow( currMode );
+         if ( Nvm::loadedShow() != (uint8_t)currMode ) Nvm::saveShow( currMode );
       }
 
       if ( currMode != prevMode ) {
@@ -879,7 +915,7 @@ void loop() {
       uint8_t variation = currLightShow->variation();
       if ( variation != currVariation[ currMode ] ) {
          currVariation[ currMode ] = variation;
-         Nvm::saveVariation( currMode, variation );
+         if ( Nvm::loadedVariation( currMode ) != variation ) Nvm::saveVariation( currMode, variation );
          AudioBoard::clearAutoPeakInclusion();
          carpet->clear();
          Serial.print( showName( currMode ) ); Serial.print( ":" ); Serial.println( currLightShow->variationName() );

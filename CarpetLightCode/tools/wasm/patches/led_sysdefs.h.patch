@@ -1,0 +1,17 @@
+--- a/led_sysdefs.h
++++ b/led_sysdefs.h
+@@ -46,6 +46,14 @@
+ #elif defined(ARDUINO_ARCH_APOLLO3)
+ // Apollo3 platforms (e.g. the Ambiq Micro Apollo3 Blue as used by the SparkFun Artemis platforms)
+ #include "platforms/apollo3/led_sysdefs_apollo3.h"
++#elif defined(__EMSCRIPTEN__) && defined(FASTLED_SKIP_WASM_ARDUINO_COMPAT)
++// PATCHED for CarpetLightCode's WASM build (tools/wasm/README.md) -- this
++// installed FastLED release has no WASM/emscripten branch here at all, so
++// it would otherwise fall through to the #error below. We don't need any
++// of the real per-platform defines this header would normally provide
++// (pin register types, FASTLED_ALLOW_INTERRUPTS, etc) -- our project
++// never pulls in fastpin.h/fastspi.h/chipsets.h under this build (see
++// FastLED.h's own patch), so nothing downstream depends on them.
+ #else
+ //
+ // We got here because we don't recognize the platform that you're

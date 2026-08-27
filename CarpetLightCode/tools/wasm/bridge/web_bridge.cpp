@@ -31,24 +31,20 @@ int web_getNumMegabarLeds() { return NUM_MEGABAR_LEDS; }
 EMSCRIPTEN_KEEPALIVE
 int web_getNumChinaLeds() { return NUM_CHINA_LEDS; }
 
-// Real, post-convertNeoArray() bus-write buffers -- the exact bytes show()
+// Real, post-convertNeoArray() bus-write buffer -- the exact bytes show()
 // hands to FastLED/Ws281xDma each frame (WS281x wire-protocol RGBW->RGB
 // repacking, see LedUtil::convertNeoArray()'s comment and MagicCarpet.h's
-// ropeShowLeds declaration comment). Raw wire-order data, not directly
-// renderable per-fixture -- exposed for inspection/diffing, not rendering.
-// DMX needs no equivalent export: megabarLeds/chinaLeds (already exposed
-// above) ARE the literal DMX bus buffer, dmx_send() sends their raw memory
-// directly with no conversion step.
+// ropeShowLeds declaration comment). One combined buffer covering all 4
+// strip banks (front/right/rear/left packed at different offsets, see
+// MagicCarpet::show()) -- raw wire-order data, not directly renderable
+// per-fixture -- exposed for inspection/diffing, not rendering. DMX needs
+// no equivalent export: megabarLeds/chinaLeds (already exposed above) ARE
+// the literal DMX bus buffer, dmx_send() sends their raw memory directly
+// with no conversion step.
 EMSCRIPTEN_KEEPALIVE
-uint8_t * web_getRopeShowLedsPtr() { return (uint8_t *)carpet->ropeShowLeds; }
-EMSCRIPTEN_KEEPALIVE
-uint8_t * web_getRightShowLedsPtr() { return (uint8_t *)carpet->rightShowLeds; }
-EMSCRIPTEN_KEEPALIVE
-uint8_t * web_getLeftShowLedsPtr() { return (uint8_t *)carpet->leftShowLeds; }
+uint8_t * web_getRopeShowLedsPtr() { return (uint8_t *)carpet->getRopeShowLedsPtr(); }
 EMSCRIPTEN_KEEPALIVE
 int web_getNumRopeShowLeds() { return NUM_NEO_SHOW_LEDS; }
-EMSCRIPTEN_KEEPALIVE
-int web_getNumSideShowLeds() { return NUM_NEO_LEDS_PER_STRIP; }
 
 // Real fixture GROUND-SPOT positions, straight from CarpetGeometry.h --
 // the visualizer reads these instead of maintaining its own position
@@ -411,6 +407,11 @@ EMSCRIPTEN_KEEPALIVE
 void web_audioSetAgcMode( int mode ) { AudioBoard::setAgcMode( (uint8_t)mode ); }
 EMSCRIPTEN_KEEPALIVE
 int web_audioGetAgcMode() { return AudioBoard::getAgcMode(); }
+// real FW enum-value name (agcModeName(), CarpetLightLogic.cpp) -- so the
+// visualizer's AGC button label is never a hand-typed guess at what the
+// real names are
+EMSCRIPTEN_KEEPALIVE
+const char * web_audioGetAgcModeName() { return agcModeName( AudioBoard::getAgcMode() ); }
 
 EMSCRIPTEN_KEEPALIVE
 void web_audioSetNoiseFloorPercent( float pct ) { AudioBoard::setNoiseFloorPercent( pct ); }
@@ -426,6 +427,10 @@ EMSCRIPTEN_KEEPALIVE
 void web_audioSetAutoPeakMode( int mode ) { AudioBoard::setAutoPeakMode( (uint8_t)mode ); }
 EMSCRIPTEN_KEEPALIVE
 int web_audioGetAutoPeakMode() { return AudioBoard::getAutoPeakMode(); }
+// real FW enum-value name (autoPeakModeName(), CarpetLightLogic.cpp) --
+// see web_audioGetAgcModeName()'s own comment
+EMSCRIPTEN_KEEPALIVE
+const char * web_audioGetAutoPeakModeName() { return autoPeakModeName( AudioBoard::getAutoPeakMode() ); }
 // slider dot: always BandFull, per request (the default arg)
 EMSCRIPTEN_KEEPALIVE
 float web_audioGetAutoScaledPeakThresholdPercent() { return AudioBoard::getBandAutoScaledPeakThresholdPercent(); }

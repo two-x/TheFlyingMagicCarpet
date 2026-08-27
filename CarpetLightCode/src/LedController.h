@@ -124,6 +124,26 @@ class Potentiometer {
 // that hold, permanently, for the rest of that same hold.
 enum ButtonPress { PressNone = 0, PressShort = 1, PressMedium = 2, PressLong = 3, PressExtraLong = 4, PressDouble = 5, PressLeft = 6, PressRight = 7 };
 
+// PressPot: a distinct UI control mechanism, NOT one of the ButtonPress
+// values above -- it's a continuous live value (0-100%), not a one-shot
+// discrete event, so it doesn't fit the action_/ButtonPress state machine
+// PressLeft/PressRight use. Inactive at boot. Becomes active the instant
+// the button is held, the hold hasn't yet reached the extra-long
+// threshold, and the pot has moved more than PRESSPOT_THRESHOLD_PERCENT
+// from wherever it was when the button went down -- see
+// PushButton::updatePressPot() below. Once active it stays active
+// (regardless of further pot movement, even back within the threshold)
+// until the button is released -- release is the only way out. Becoming
+// active cancels whatever press-tier was in progress for that hold, same
+// as PressLeft/PressRight, and (by leaving rotationCancelledThisHold_
+// alone) also blocks PressLeft/PressRight from firing for the rest of
+// that same hold -- once PressPot claims a hold, that hold's purpose is
+// "follow the pot," not "rotate the encoder." Any accessor (a show or a
+// config screen) polls PressPotIsActive()/PressPotValue() directly --
+// no override/suppression hook exists for it, unlike onPressLeft()/
+// onPressRight(), since nothing currently needs one.
+static constexpr float PRESSPOT_THRESHOLD_PERCENT = 2.0f;
+
 // Polled, not interrupt-driven: press timing thresholds are coarse (hundreds of
 // ms), so a per-loop update() is plenty responsive. Medium/long are classified
 // only at release, by how long the timer had been running.
@@ -325,6 +345,38 @@ class PushButton {
       return true;
    }
 
+   // Call once per main loop iteration, unconditionally (not gated to any
+   // particular appMode -- PressPot is meant to be usable "from within
+   // lightshows or configs", so it just always tracks real button+pot
+   // state; a caller decides for itself whether/when to act on
+   // PressPotIsActive()). See PRESSPOT_THRESHOLD_PERCENT's own comment
+   // for the full activation rule.
+   void updatePressPot( float potPercent ) {
+      lastPotPercent_ = potPercent;
+      if ( !down_ ) { pressPotActive_ = false; return; }
+      if ( !pressPotBaselineValid_ ) {
+         pressPotBaselinePercent_ = potPercent;
+         pressPotBaselineValid_ = true;
+      }
+      if ( pressPotActive_ ) return; // already claimed this hold -- stays active until release, no further threshold checks needed
+      uint32_t heldMillis = millis() - pressStartMillis_;
+      if ( heldMillis >= extraLongPressMillis_ ) return; // XL timer already reached -- too late
+      if ( fabsf( potPercent - pressPotBaselinePercent_ ) <= PRESSPOT_THRESHOLD_PERCENT ) return;
+      // activate -- cancel whatever press-tier was in progress, same as
+      // handleRotationDuringHold() above, but deliberately leave
+      // rotationCancelledThisHold_ alone so a subsequent rotation this
+      // same hold can't re-claim it back from PressPot (see this
+      // mechanism's own class-level comment).
+      pressPotActive_ = true;
+      liveActionFired_ = true;
+      action_ = PressNone;
+      awaitingSecondPress_ = false;
+      crossedMediumFlag_ = false;
+      crossedLongFlag_ = false;
+   }
+   bool PressPotIsActive() { return pressPotActive_; }
+   float PressPotValue() { return pressPotActive_ ? lastPotPercent_ : NAN; }
+
    // one-shot: true for a single update() call, right as a held press crosses
    // the medium-press threshold. meant for live UI feedback (e.g. a flash).
    bool crossedMediumThreshold( bool autoreset = true ) {
@@ -371,6 +423,8 @@ class PushButton {
          longThresholdFired_ = false;
          liveActionFired_ = false;
          rotationCancelledThisHold_ = false;
+         pressPotActive_ = false;
+         pressPotBaselineValid_ = false;
 
          if ( awaitingSecondPress_ && ( atMillis - secondPressWindowStartMillis_ ) <= doublePressWindowMillis_ ) {
             // this is press #2 of a potential double -- valid immediately
@@ -416,6 +470,10 @@ class PushButton {
    bool liveActionFired_ = false;     // extra-long or double already fired live this hold --
                                        // locks out every other press event until release
    bool rotationCancelledThisHold_ = false; // this hold's press-tier was cancelled by rotation -- see handleRotationDuringHold()
+   bool pressPotActive_ = false;            // see PressPotIsActive()/updatePressPot()
+   bool pressPotBaselineValid_ = false;     // has pressPotBaselinePercent_ been captured yet this hold
+   float pressPotBaselinePercent_ = 0.0f;   // pot reading at the moment this hold began
+   float lastPotPercent_ = 0.0f;            // most recent live pot reading, cached from updatePressPot()'s own argument
    uint32_t secondPressWindowStartMillis_ = 0;
    uint32_t mediumPressMillis_ = 300;       // held at least this long (ms) -> medium press
    uint32_t longPressMillis_ = 1500;        // held at least this long (ms) -> long press

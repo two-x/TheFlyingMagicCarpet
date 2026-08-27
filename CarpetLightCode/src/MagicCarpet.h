@@ -360,6 +360,13 @@ class MagicCarpet {
       clearRope();
    }
 
+#ifdef __EMSCRIPTEN__
+   // debug/inspection readback only (see ropeShowLeds' own declaration
+   // comment) -- real hardware never needs this, ropeShowLeds stays
+   // private there.
+   CRGB * getRopeShowLedsPtr() { return ropeShowLeds; }
+#endif
+
    // flashes the perimeter rope LEDs white `count` times, as button-hold
    // feedback. each flash is 55ms, padded by 15ms of black before and after;
    // multiple flashes are separated by an additional 85ms. blocking, since

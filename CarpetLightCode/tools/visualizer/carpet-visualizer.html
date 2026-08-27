@@ -738,7 +738,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   color: var(--text-halfdim); /* dimmed halfway toward the description text next to it, per request */
   transition: color 0.08s;
 }
-.action-cell:not(#actPot):hover b {
+.action-cell:not(#actPot):not(#actPressPot):hover b {
   color: #fff; /* per request: turns white on hover of its own hitbox */
 }
 .action-cell.flash b {
@@ -753,8 +753,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   color: var(--green);
   text-shadow: 0 0 6px rgba(107, 220, 143, 0.7);
 }
-.action-cell:not(#actPot) {
-  cursor: pointer; /* every action-cell except Pot is clickable -- see wireActionCellClicks() */
+.action-cell:not(#actPot):not(#actPressPot) {
+  cursor: pointer; /* every action-cell except Pot/PressPot is clickable -- see wireActionCellClicks() */
 }
 
 .hint {
@@ -1207,6 +1207,7 @@ Directions (front/rear/left/right) are relative to the carpet's own direction of
 - [Vehicle speed link and SpeedStripesShow](#vehicle-speed-link-and-speedstripesshow)
   - [Low power mode](#low-power-mode)
 - [Timing convention](#timing-convention)
+- [Nonvolatile flash writing](#nonvolatile-flash-writing)
 - [Future direction](#future-direction)
 
 ## Browser visualizer
@@ -1384,6 +1385,8 @@ The rope perimeter flashes white as UI feedback (`MagicCarpet::flashRope()` — 
 - **Double press**: toggles blacklight (china's UV channel, `CRGBWUA::u` — see "China lights" above) full on/off, independent of the active show — **except while Equalizer is active**, where double press instead toggles its own triple-strobe setting (see "Equalizer show variations" below); blacklight isn't reachable by double press during Equalizer. Blacklight is intentionally volatile — always boots **off**, never persisted, force-reset to off on every show change (short press), not just rig-off. The Equalizer strobe toggle is a separate, ordinary persisted setting (`Nvm::saveEqualizerStrobeEnabled()`) — survives power cycles like any other config value, unaffected by the blacklight reset-on-show-change rule.
 - **Long press**: enters configuration mode (see below).
 - **Encoder rotation**: per-show, selects that show's own variation (not global) -- see the show/variation selector's own dropdown for the current real list and count for every show (built dynamically from the compiled firmware at launch, never hardcoded here -- see `enumerateShowsFromWasm()`). Each show's variation persists per-show, so switching shows and back recalls where you left it. Selecting a show or variation prints an abbreviated console line (`showName()`, each show's own `LightShow::variationName()` — see `LightShow.h`), e.g. `show:Flame` or `Flame:flames`.
+- **PressLeft / PressRight** (`LedController.h`'s `PushButton::handleRotationDuringHold()`): rotating the encoder WHILE its button is held cancels whatever press-tier was in progress (short/medium/long/extra-long/double all voided for the rest of that hold) and fires this instead, immediately, repeatably for further rotation in the same hold. No default action anymore (the peak-threshold adjustment that used to live here moved to PressPot, below) — a show may still act on it via `LightShow::onPressLeft()`/`onPressRight()`, but none currently do, so by itself this currently does nothing.
+- **PressPot** (`LedController.h`'s `PushButton::updatePressPot()`/`PressPotIsActive()`/`PressPotValue()`): a distinct mechanism from PressLeft/PressRight — becomes active the instant the button is held, the hold hasn't yet reached the extra-long threshold, and the pot has moved more than 2% from wherever it was when the button went down; once active it stays active (regardless of further pot movement) until release, and — like PressLeft/PressRight — cancels whatever press-tier was in progress. `PressPotIsActive()`/`PressPotValue()` (0-100%, `NAN` when inactive) are available to any accessor (show or config code), not gated behind an override hook. Default (normal mode only): while active, sets the committed peak threshold directly to the live pot value, applied live and flash-saved on release (debounced further as a defensive backup — see "Nonvolatile flash writing" below).
 - **Pot**: meaning depends on the active show's variation (live hue, animation speed, palette rate — see each show's code). Where the pot represents overall show *energy* specifically, it's a **shared global setting** — see below.
 
 **Global energy setting** (`globalEnergyPercent`, `PotEnergyTakeover` struct — `LightShow.h`): `NightriderShow`'s auto-cycle variation, `FlameShow`'s sparkle cadence + hue-drift ceiling (all 4 variations), and `LighthouseShow`'s rotation-speed ceiling all read one shared 0-100% value instead of each having an independent pot binding — adjusting the pot in *any one* updates the value for all, so they track together instead of drifting apart. `NightriderShow`'s manual-hue variation and `EqualizerShow`'s peak-threshold binding are deliberately **not** part of this group (not "energy" — a color pick and a detection threshold, respectively).
@@ -1545,7 +1548,7 @@ Tracking is **per-bin** first, per-band second: each of the MSGEQ7's 7 raw hardw
 - **Sound reactivity** (persisted, default **on**, subsetting 2e): global kill switch every `normal`/`hit` getter checks centrally. `raw`/`RMS` stay ungated.
 - **Per-bin noise floor**: each bin's own self-noise voltage differs (bins 0-4 ~0.17V, bin 5 ~0.280V, bin 6 ~0.56V, scoped w/ phone muted). The global noise-floor setting (default **19.5%**, stored as a whole-percent, so ~20% on real hardware) applies directly to bin 6 (highest voltage); every other bin's own floor scales down proportionally. `clean` is all-bins-or-nothing: only zeroes when EVERY bin is at/below its own floor.
 - **AGCfull is the default** at first boot; it, auto-peak (`AutoPeakBin`), noise floor, peak threshold (default **68%**), sound reactivity, hit decay rate, and audio foresight all persist (`Nvm.h`).
-- **Peak threshold** (default **68%**) is the shared "this counts as a hit" level — see Configuration mode above. Auto-peak can raise the *effective* threshold above this per-bin, per-instant; never lowers it.
+- **Peak threshold** (default **68%**) is the shared "this counts as a hit" level — see Configuration mode above. Auto-peak can raise the *effective* threshold above this per-bin, per-instant; never lowers it. Also adjustable live in normal show mode via **PressPot** — see "Encoder and button UI" above.
 - **Outside this file, every level/hit is percent** (0-100), never raw 0-255 — `NightriderShow`/`FlameShow` convert back to their own internal 0-255 scale right at the call site, localized rather than threaded through their internals.
 
 ## Vehicle speed link and SpeedStripesShow
@@ -1602,6 +1605,13 @@ Two spots deliberately still use raw `millis()` math, since `Timer` only models 
 
 - **`PushButtonEdge`'s edge queue / `PushButton::processEdge()`** (`LedController.h`) — edges are timestamped in an interrupt the instant they happen, then replayed later using that recorded (possibly stale) timestamp, not "now." A `Timer` can't be reset to an arbitrary past moment.
 - **`AudioBoard`'s rolling-peak ring buffer** (`peakTimestamps_[]`) — independently-timestamped samples compared against the *current* time to find which are still inside the trailing 4s window, not a single running duration.
+
+## Nonvolatile flash writing
+
+The Due has no real EEPROM (see `Nvm.h`'s own file comment) — persisted settings ride on `DueFlashStorage`, which has finite write endurance and a real, measurable write cost. Two rules apply everywhere a value gets written to flash:
+
+- **Read the currently-flashed value before writing, and skip the write if it's already equal.** Every `Nvm::saveXxx()` call site in `CarpetLightLogic.cpp` checks its matching `Nvm::loadedXxx()` first (cheap — `loadedXxx()` just returns from the RAM-resident `State` struct `load()` populated at boot, never a real flash read) and only calls `saveXxx()` if the value actually changed. This catches the case where a value is nudged away and back before being committed (e.g. dial a setting up then back down to its already-saved value before double-pressing to commit) — a real, avoidable write otherwise.
+- **Debounce anything driven by a live pot/encoder twist**, so a continuous adjustment doesn't write on every tick. Most settings are already safe by construction — they only ever save once, on an explicit commit gesture (double press) — so the equality check above is their only real protection. The one setting that used to save *continuously* during live adjustment is peak threshold via PressPot (see "Encoder and button UI" above): `peakThreshSaveDebounce_`/`peakThreshSaveDirty_` (`CarpetLightLogic.cpp`) mark the value dirty and apply it live to `AudioBoard` immediately, but the actual flash write waits — primarily for PressPot to go *inactive* (release is a clean, precise "definitely done adjusting" signal, no arbitrary delay needed), with the debounce timer itself kept only as a defensive backup for the pathological case of a hold that never releases.
 
 ## Future direction
 
@@ -1666,6 +1676,14 @@ None of that abstraction exists in code yet — this doc records the raw hardwar
           <div class="action-cell" id="actDouble"><b>Double:</b> <span></span></div>
           <div class="action-cell" id="actPressLeft"><b>PressL:</b> <span></span></div>
           <div class="action-cell" id="actPressRight"><b>PressR:</b> <span></span></div>
+          <!-- Nonclickable, no gesture a mouse pointer can simulate (hold
+               the encoder button AND drag the pot at once) -- descriptive
+               only, positioned under Pot per request (grid-column forces
+               it into that same column since it's an 11th item in an
+               otherwise-even 2-col grid). Fixed text, not per-show: the
+               peak-threshold PressPot behavior is global across every
+               show, same category as Short/Med/Long/XL/Double above. -->
+          <div class="action-cell" id="actPressPot" style="grid-column: 2;"><b>PressPot:</b> pk thresh</div>
         </div>
       </div>
     </div>
@@ -2628,22 +2646,17 @@ function readLedsFromWasm() {
    this data previously didn't exist at all under WASM.
    ===================================================================== */
 let wasmBusWritePtrs = null;
-let busWriteBuffers = { rope: null, right: null, left: null };
+let busWriteBuffers = { rope: null };
 function readBusWriteBuffersFromWasm() {
   if (!wasmBusWritePtrs) {
     wasmBusWritePtrs = {
       rope: wasmModule.ccall('web_getRopeShowLedsPtr', 'number', [], []),
-      right: wasmModule.ccall('web_getRightShowLedsPtr', 'number', [], []),
-      left: wasmModule.ccall('web_getLeftShowLedsPtr', 'number', [], []),
       numRope: wasmModule.ccall('web_getNumRopeShowLeds', 'number', [], []) * 3,
-      numSide: wasmModule.ccall('web_getNumSideShowLeds', 'number', [], []) * 3,
     };
   }
   const heap = wasmModule.HEAPU8;
   const p = wasmBusWritePtrs;
   busWriteBuffers.rope = heap.slice(p.rope, p.rope + p.numRope);
-  busWriteBuffers.right = heap.slice(p.right, p.right + p.numSide);
-  busWriteBuffers.left = heap.slice(p.left, p.left + p.numSide);
 }
 
 /* =====================================================================
@@ -2770,6 +2783,9 @@ const AudioBoard = {
 
   get agcMode() { return wasmReady ? wasmModule.ccall('web_audioGetAgcMode', 'number', [], []) : 0; },
   set agcMode(v) { if (wasmReady) wasmModule.ccall('web_audioSetAgcMode', null, ['number'], [v]); },
+  // real FW enum-value name string (agcModeName(), CarpetLightLogic.cpp) --
+  // never a hand-typed guess at what the real names are
+  get agcModeName() { return wasmReady ? wasmModule.ccall('web_audioGetAgcModeName', 'string', [], []) : ''; },
 
   get noiseFloorPct() { return wasmReady ? wasmModule.ccall('web_audioGetNoiseFloorPercent', 'number', [], []) : 8; },
   set noiseFloorPct(v) { if (wasmReady) wasmModule.ccall('web_audioSetNoiseFloorPercent', null, ['number'], [v]); },
@@ -2781,6 +2797,8 @@ const AudioBoard = {
   // own 3-state shape -- see AudioBoard.h's AutoPeakMode.
   get autoPeakMode() { return wasmReady ? wasmModule.ccall('web_audioGetAutoPeakMode', 'number', [], []) : 2; },
   set autoPeakMode(v) { if (wasmReady) wasmModule.ccall('web_audioSetAutoPeakMode', null, ['number'], [v]); },
+  // real FW enum-value name string (autoPeakModeName(), CarpetLightLogic.cpp)
+  get autoPeakModeName() { return wasmReady ? wasmModule.ccall('web_audioGetAutoPeakModeName', 'string', [], []) : ''; },
   // live preview of what auto-peak's scaled threshold currently is -- kept
   // updating regardless of autoPeakMode so the UI can show it even while
   // auto-peak itself is off (see AudioBoard::getBandAutoScaledPeakThresholdPercent()).
@@ -6007,9 +6025,14 @@ function currentSubsettingValueText() {
       case 0: return Ctl.adjustingPeakThreshold ? ('peak thresh ' + AudioBoard.peakThresholdPct.toFixed(1) + '%') : ('noise floor ' + AudioBoard.noiseFloorPct.toFixed(1) + '%');
       case 1: return AudioBoard.hitDecayMs + 'ms';
       case 2: return AudioBoard.audioForesightMs + 'ms';
-      case 3: return ['off', 'band', 'full'][AudioBoard.agcMode];
+      // BUGFIX (mandate): both of these used to be hardcoded JS arrays
+      // indexed by the real FW enum value -- now read the real name
+      // straight from the compiled firmware (see updateAgcButtonUI()/
+      // updateAutoPeakButtonUI()'s own comments), just cosmetically
+      // lowercased/trimmed to match this status line's own convention.
+      case 3: return AudioBoard.agcModeName.trim().toLowerCase();
       case 4: return AudioBoard.soundReactivityEnabled ? 'on' : 'off';
-      case 5: return ['off', 'full', 'bin'][AudioBoard.autoPeakMode];
+      case 5: return AudioBoard.autoPeakModeName.trim().toLowerCase();
     }
   }
   if (Ctl.appMode === 'powertest') {
@@ -6104,12 +6127,13 @@ function describeInputActions() {
   }
   a.xl = Ctl.globalBr > 0 ? 'lights off' : 'lights on';
   // PressLeft/PressRight (see LedController.h): rotating the encoder WHILE
-  // its button is held. Default, show mode only: nudge peak thresh
-  // +-1%/detent; a show may override instead (see LightShow::onPressLeft()/
-  // onPressRight()) -- this visualizer always shows the DEFAULT text since
-  // it doesn't run the real C++ show classes to know if one overrides it.
-  a.pressLeft = ( Ctl.appMode === 'show' ) ? 'pk thresh -1%' : 'no effect';
-  a.pressRight = ( Ctl.appMode === 'show' ) ? 'pk thresh +1%' : 'no effect';
+  // its button is held. No default action anymore -- peak-threshold
+  // adjustment moved to PressPot (see the actPressPot cell) -- only a
+  // show's own LightShow::onPressLeft()/onPressRight() override can make
+  // these do anything now, and this visualizer doesn't run the real C++
+  // show classes to know if one does.
+  a.pressLeft = 'no effect';
+  a.pressRight = 'no effect';
   return a;
 }
 function updateInputActionTable() {
@@ -6762,7 +6786,7 @@ function encoderCenterBtnDown() {
     if (heldMs >= ENC_BTN_XLONG_MS) { clearInterval(encBtnHoldTimer); flashActionCellGreen('actXL'); }
   }, 20);
 }
-// Per request: every action-cell except Pot is clickable, firing that
+// Per request: every action-cell except Pot/PressPot is clickable, firing that
 // exact event -- a hitbox over the existing text/layout, no visual change
 // otherwise (see the :not(#actPot) cursor:pointer rule above).
 function wireActionCellClicks() {
@@ -6789,12 +6813,16 @@ function wireActionCellClicks() {
 // LightShow::onPressLeft()/onPressRight() falls back to when it doesn't
 // override, but a show THAT DOES override won't be reflected here. A
 // real, narrower gap -- flagged, not hidden.
+// BUGFIX (mandate): PressLeft/PressRight's peak-threshold default moved to
+// PressPot (see actPressPot) -- this used to still apply the OLD
+// +-1%/detent nudge here regardless, which no longer matches what the
+// real firmware does at all. No default action remains for PressLeft/
+// PressRight (a show's own onPressLeft()/onPressRight() override is the
+// only thing that could do anything, and none currently does) -- this is
+// now just the flash, an honest "this gesture fires, does nothing by
+// default" simulation instead of a wrong pretend effect.
 function firePressLeftRight(dir) {
-  if (Ctl.appMode !== 'show') return; // default behavior only applies in show mode, see describeInputActions()
-  AudioBoard.peakThresholdPct = Math.round(Math.max(0, Math.min(100, AudioBoard.peakThresholdPct + dir)) * 10) / 10;
-  syncSlider('peakThreshSlider', 'peakThreshVal', AudioBoard.peakThresholdPct, '%', 1);
   flashActionCell(dir < 0 ? 'actPressLeft' : 'actPressRight');
-  updateInputActionTable();
 }
 wireActionCellClicks();
 function encoderCenterBtnUp() {
@@ -6892,12 +6920,18 @@ bindSlider('chinaBrSlider', 'chinaBrVal', v => v+'%', v => { Ctl.chinaBr = v; if
 // AGC is 3-state (Off/Band/Full, matching firmware's AGCMode), not a plain
 // on/off toggle, so it isn't bindToggleButton()'d -- click cycles to the
 // next state (wrapping around, unlike the encoder's clamped-at-both-ends
-// behavior above), always showing the current state as its own label
-// ("AGCoff"/"AGCband"/"AGCfull", matching AudioBoard.h's AGCMode names
-// exactly, per request), orange (.active) for either non-Off state.
+// behavior above), orange (.active) for either non-Off state.
+// BUGFIX (mandate): label used to be a hardcoded ['AGCoff','AGCband',
+// 'AGCfull'] JS array -- a real lightshow-config-enum-name-keyed... er,
+// -indexed table living in executable JS, which would silently go stale
+// the moment AGCMode's real names changed. Now reads the real name string
+// straight from the compiled firmware (agcModeName(), CarpetLightLogic.cpp,
+// exposed via web_audioGetAgcModeName()) every time -- the button's own
+// label IS the setting's real enum-value name, always, with nothing
+// hand-typed in between.
 function updateAgcButtonUI() {
   const btn = document.getElementById('btnAgc');
-  btn.textContent = ['AGCoff', 'AGCband', 'AGCfull'][AudioBoard.agcMode];
+  btn.textContent = AudioBoard.agcModeName;
   btn.classList.toggle('active', AudioBoard.agcMode !== 0);
 }
 document.getElementById('btnAgc').addEventListener('click', () => {
@@ -6907,10 +6941,13 @@ document.getElementById('btnAgc').addEventListener('click', () => {
 });
 // AutoPk -- 3-state now (AutoPeakOff/AutoPeakFull/AutoPeakBin, see
 // AudioBoard.h's AutoPeakMode), same click-cycles-and-wraps pattern as
-// btnAgc above, abbreviated labels per request.
+// btnAgc above. BUGFIX (mandate, same as btnAgc's own fix above): label
+// used to be a hardcoded ['AutoPkOff','AutoPkFull','AutoPkBin'] JS array;
+// now reads the real name straight from the compiled firmware
+// (autoPeakModeName(), web_audioGetAutoPeakModeName()).
 function updateAutoPeakButtonUI() {
   const btn = document.getElementById('btnAutoPeak');
-  btn.textContent = ['AutoPkOff', 'AutoPkFull', 'AutoPkBin'][AudioBoard.autoPeakMode];
+  btn.textContent = AudioBoard.autoPeakModeName;
   btn.classList.toggle('active', AudioBoard.autoPeakMode !== 0);
 }
 document.getElementById('btnAutoPeak').addEventListener('click', () => {
