@@ -738,7 +738,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   color: var(--text-halfdim); /* dimmed halfway toward the description text next to it, per request */
   transition: color 0.08s;
 }
-.action-cell:not(#actPot):hover b {
+.action-cell:not(#actPot):not(#actPressPot):hover b {
   color: #fff; /* per request: turns white on hover of its own hitbox */
 }
 .action-cell.flash b {
@@ -753,8 +753,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   color: var(--green);
   text-shadow: 0 0 6px rgba(107, 220, 143, 0.7);
 }
-.action-cell:not(#actPot) {
-  cursor: pointer; /* every action-cell except Pot is clickable -- see wireActionCellClicks() */
+.action-cell:not(#actPot):not(#actPressPot) {
+  cursor: pointer; /* every action-cell except Pot/PressPot is clickable -- see wireActionCellClicks() */
 }
 
 .hint {
@@ -985,7 +985,7 @@ footer {
        this placeholder text for a local file:// open or a non-deployed
        copy (e.g. a Claude Artifact), since there's no git context
        available client-side in a static page. -->
-  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ 3dcbb46 - 2026-08-26 04:33 UTC</span>
+  <span class="build-info" id="buildInfo" title="Branch @ commit - deploy time">master @ 63252da - 2026-08-27 11:02 UTC</span>
   <!-- Moved out of the settings menu, per request -- a rocker switch at
        the title bar's own right edge, with the (3D-only) detail dropdown
        appearing to its left exactly when 3D is selected. Same
@@ -1054,8 +1054,8 @@ footer {
         <li><strong>Call the real firmware's tick function</strong> (<code>web_tick()</code>, a thin wrapper around real <code>loop()</code>) — the exact code path hardware runs.</li>
         <li><strong>Read back the firmware's own output</strong> — the LED arrays it just computed (<code>ropeLeds[]</code>, <code>megabarLeds[]</code>, <code>chinaLeds[]</code>) — and draw them onto the on-screen car.</li>
       </ol>
-      <p>No show's color, timing, or audio-reactivity logic is duplicated in JavaScript for Dev Tool role — this was violated for a stretch of this project's history (all 5 shows were silently JS-reimplemented, not just one), found, and fixed: light output (every show, every config screen) now reads real WASM LED buffers (<code>readLedsFromWasm()</code>) with zero exceptions. If a show looks wrong here, it's wrong in real firmware too — that's the whole point of this design. See <code>claude_dev_prompts.md</code>'s prompt 6 for the standing rule that exists specifically to keep this from regressing a third time.</p>
-      <p><strong>Known gap:</strong> input injection is partially wired. Audio (7 MSGEQ7 bins) is fully real end-to-end. Pot/encoder/button injectors exist in the bridge (<code>web_injectPotPercent</code>/<code>web_injectEncoderDelta</code>/<code>web_injectButtonDown</code>/<code>Up</code>) but aren't called from this page's UI yet, so dragging the pot or pressing the encoder doesn't drive the real firmware yet — whatever show/config-screen the firmware booted into or was last saved on is what you'll see, regardless of what the on-screen controls show locally. A known, tracked gap, not a design choice.</p>
+      <p>No show's color, timing, or audio-reactivity logic is duplicated in JavaScript for Dev Tool role — this was violated for a stretch of this project's history (all 5 shows were silently JS-reimplemented, not just one), found, and fixed: light output (every show, every config screen) now reads real WASM LED buffers (<code>readLedsFromWasm()</code>) with zero exceptions. Nor is show/variation <em>selection</em> — the dropdown and variation buttons are populated entirely by querying the compiled firmware at launch (<code>web_getNumShows()</code>/<code>web_getCurrentShowName()</code>/<code>web_getNumVariations()</code>/<code>web_getCurrentVariationName()</code>, see <code>enumerateShowsFromWasm()</code>), never a hand-typed list — and clicking one calls the real <code>web_setCurrentShow()</code>/<code>web_setCurrentVariation()</code> injectors, with <code>syncShowStateFromWasm()</code> reading the real result back every frame. This has been violated twice more since (a hardcoded show-cycling order array plus a family of dead local press-tier handlers that duplicated real firmware button/show logic, both found and deleted; a separate radio-link-mode file that re-implemented every show's own rendering algorithm from scratch, deleted entirely). If a show looks wrong here, it's wrong in real firmware too — that's the whole point of this design. See <code>claude_dev_prompts.md</code>'s prompt 6 for the standing rule that exists specifically to keep this from regressing again.</p>
+      <p>Input injection is now fully real: pot (<code>web_injectPotPercent</code>, every frame), encoder rotation (<code>web_injectEncoderDelta</code>, on each detent), and encoder button (<code>web_injectButtonDown</code>/<code>Up</code>, on press/release) all drive the actual firmware state machine — nothing about a press tier, a variation change, or a show change is decided in JavaScript.</p>
 
       <h3 id="help-categories">3. What's real FW vs. a visualizer shortcut vs. simulated audio</h3>
       <p>Every control here falls into one of three categories:</p>
@@ -1117,9 +1117,9 @@ footer {
       <table>
         <tr><th>Show</th><th>Variations</th><th>Pot role</th></tr>
         <tr><td>Nightrider</td><td>manual hue &middot; auto hue cycle &middot; auto with sound</td><td>manual hue: sets hue. Both auto variations: flood sin/cos frequency (0.25-2Hz)</td></tr>
-        <tr><td>Flame</td><td>waterflames &middot; flames &middot; shifting hues &middot; hue to white</td><td>All: "energy" — fire-sim cadence + hue-drift ceiling (shared with Nightrider/Lighthouse's own energy setting)</td></tr>
-        <tr><td>Equalizer</td><td>chase &middot; VU meter &middot; sub_standard &middot; new_standard (default) &middot; pixel_war</td><td>chase/VU meter/sub_standard: live peak threshold. new_standard/pixel_war: effects-cycle length (2-128 bass beats, log-spaced)</td></tr>
-        <tr><td>SpeedStripes</td><td>default &middot; zebra</td><td>default: no effect. zebra: black-stripe width (0-40ft; gap = 2x width, so occurrence period is always 3x width)</td></tr>
+        <tr><td>Flame</td><td>waterflames &middot; flames</td><td>All: "energy" — fire-sim cadence (shared with Nightrider/Lighthouse's own energy setting)</td></tr>
+        <tr><td>Equalizer</td><td>VU meter &middot; new_standard (default) &middot; pixel_war</td><td>VU meter: live peak threshold. new_standard/pixel_war: effects-cycle length (2-128 bass beats, log-spaced)</td></tr>
+        <tr><td>SpeedStripes</td><td>default &middot; zebra</td><td>default: no effect. zebra: black-stripe width (0 below 2% pot, ramping to 40ft at 100%; gap = 3x width, so occurrence period is always 4x width)</td></tr>
         <tr><td>Lighthouse</td><td>default &middot; no strobe</td><td>All: rotation speed (shared energy setting)</td></tr>
       </table>
       <p>Encoder rotate cycles variations within whichever show is selected, same on every show. See <code>cheat_sheet_card.txt</code> (repo root) for a print-ready quick-reference card covering this same map plus the full button/config layout, generated from <code>tools/gen_cheat_sheet_card.py</code>.</p>
@@ -1207,11 +1207,12 @@ Directions (front/rear/left/right) are relative to the carpet's own direction of
 - [Vehicle speed link and SpeedStripesShow](#vehicle-speed-link-and-speedstripesshow)
   - [Low power mode](#low-power-mode)
 - [Timing convention](#timing-convention)
+- [Nonvolatile flash writing](#nonvolatile-flash-writing)
 - [Future direction](#future-direction)
 
 ## Browser visualizer
 
-A self-contained single-file HTML/JS/Canvas simulator, built so a remote developer can debug firmware, add shows, and tune existing ones from `src/*.h` alone — no physical car needed. **Not an independent creative sandbox**: its light-show logic is not a JS port of anything — the real firmware (`src/*.h`, every real show, `CarpetGeometry.h`, `AudioBoard.h`'s math, config-mode navigation, all of it) is compiled to WebAssembly and run directly in-browser, unmodified, and the visualizer reads its real LED output back out of WASM memory to draw. There is nothing to "keep in sync": a bug in real firmware shows up here because it's the same compiled code, not a copy of it. Legitimate JS-only content is limited to simulating things *external* to firmware — audio input (mic/tab/file/synthetic tone standing in for the real MSGEQ7 chip), the vehicle speed SpeedLink would deliver, and the pot/encoder/button inputs themselves — plus a separate, structurally unreachable "Interface" role (`interface-mode.js`) for a future low-bandwidth radio-link mode that can't stream real LED bytes and so deliberately re-implements rendering; that mode is dormant until Project B's radio link exists. Renders a schematic top-down view with every fixture (rope, megabars, china) responding as on real hardware.
+A self-contained single-file HTML/JS/Canvas simulator, built so a remote developer can debug firmware, add shows, and tune existing ones from `src/*.h` alone — no physical car needed. **Not an independent creative sandbox**: its light-show logic is not a JS port of anything — the real firmware (`src/*.h`, every real show, `CarpetGeometry.h`, `AudioBoard.h`'s math, config-mode navigation, all of it) is compiled to WebAssembly and run directly in-browser, unmodified, and the visualizer reads its real LED output back out of WASM memory to draw. There is nothing to "keep in sync": a bug in real firmware shows up here because it's the same compiled code, not a copy of it. Legitimate JS-only content is limited to simulating things *external* to firmware — audio input (mic/tab/file/synthetic tone standing in for the real MSGEQ7 chip), the vehicle speed SpeedLink would deliver, and the pot/encoder/button inputs themselves. No mode of this tool ever re-implements a light show's own logic in JS, under any circumstance — a hypothetical future low-bandwidth link that can't stream real LED bytes still must not duplicate show logic; that's a real constraint on any such feature's design, not a reason to carve out an exception. Renders a schematic top-down view with every fixture (rope, megabars, china) responding as on real hardware.
 
 ### Access it live
 
@@ -1266,7 +1267,9 @@ Separately from the GitHub Pages URLs above, this file also gets published as a 
 
 ## Perimeter rope lights
 
-Only **4 continuous physical strips** exist. `NEO0_OFFSET`..`NEO3_OFFSET` (reading from `ropeLeds[]`) are the ones in use; `NEO4_OFFSET`..`NEO7_OFFSET` are leftover offsets from a never-wired 8-strip plan, removed from code.
+Only **4 continuous physical strips** exist. `NEO0_OFFSET`..`NEO3_OFFSET` (reading from `ropeLeds[]`) are the ones in use; `NEO4_OFFSET`..`NEO7_OFFSET` are leftover, unused offsets from a never-wired 8-strip plan.
+
+**Bugfix ("whole segments of the neopixels are simply never lit" on the left side)**: `NEO3_OFFSET` (Left's logical start offset) was computed as if Rear — the strand immediately before Left in the Front→Right→Rear→Left loop — were `SIZEOF_LARGE_NEO`, a leftover assumption from the old 8-lane topology this project no longer has; Rear is actually `SIZEOF_SMALL_NEO`, same as Front. That put Left's local index 0 exactly `SIZEOF_LARGE_NEO - SIZEOF_SMALL_NEO` (196) pixels too far into the array, so every show that addresses rope pixels by side/Y position (`SpeedStripesShow`'s `renderSide()`/`renderZebraSide()`, plus the `NEO3_OFFSET` clear loops in `NightriderShow::start()`/`BumpingAudioShow::start()`) silently orphaned the first 196 real Left-strand pixels — never addressed by any local index — while wrapping its last 196 local indices around onto Front's own raw range instead. `NEO0`/`NEO1`/`NEO2_OFFSET` were unaffected (their own true starts don't depend on Rear's size).
 
 `NUM_NEOPIXEL_STRIPS` stays at **8** in code despite only 4 strips being wired — don't "fix" this to 4. `MagicCarpet::show()`'s 4 active `convertNeoArray()` calls write into the `ropeShowLeds` FastLED output buffer at strip-slots **0, 1, 4, and 5** (not 0-3), so the buffer must stay sized for 6 slots or those slot-4/5 writes run off the end. Also **not confirmed**: which physical pins (of `NEO_PIN0`-`NEO_PIN7`) the 2 "extra" strips are wired to — don't assume "the first 4 pins."
 
@@ -1383,7 +1386,9 @@ The rope perimeter flashes white as UI feedback (`MagicCarpet::flashRope()` — 
 - **Extra-long press**: toggles the whole rig on/off. Always boots **on** — intentionally *not* persisted.
 - **Double press**: toggles blacklight (china's UV channel, `CRGBWUA::u` — see "China lights" above) full on/off, independent of the active show — **except while Equalizer is active**, where double press instead toggles its own triple-strobe setting (see "Equalizer show variations" below); blacklight isn't reachable by double press during Equalizer. Blacklight is intentionally volatile — always boots **off**, never persisted, force-reset to off on every show change (short press), not just rig-off. The Equalizer strobe toggle is a separate, ordinary persisted setting (`Nvm::saveEqualizerStrobeEnabled()`) — survives power cycles like any other config value, unaffected by the blacklight reset-on-show-change rule.
 - **Long press**: enters configuration mode (see below).
-- **Encoder rotation**: per-show, selects that show's own variation (not global) -- see the show/variation selector's own dropdown for the current real list and count for every show (built dynamically from the compiled firmware at launch, never hardcoded here -- see `enumerateShowsFromWasm()`). Each show's variation persists per-show, so switching shows and back recalls where you left it. Selecting a show or variation prints an abbreviated console line (`showName()`, each show's own `LightShow::variationName()` — see `LightShow.h`), e.g. `show:Flame` or `Flame:hue to white`.
+- **Encoder rotation**: per-show, selects that show's own variation (not global) -- see the show/variation selector's own dropdown for the current real list and count for every show (built dynamically from the compiled firmware at launch, never hardcoded here -- see `enumerateShowsFromWasm()`). Each show's variation persists per-show, so switching shows and back recalls where you left it. Selecting a show or variation prints an abbreviated console line (`showName()`, each show's own `LightShow::variationName()` — see `LightShow.h`), e.g. `show:Flame` or `Flame:flames`.
+- **PressLeft / PressRight** (`LedController.h`'s `PushButton::handleRotationDuringHold()`): rotating the encoder WHILE its button is held cancels whatever press-tier was in progress (short/medium/long/extra-long/double all voided for the rest of that hold) and fires this instead, immediately, repeatably for further rotation in the same hold. No default action anymore (the peak-threshold adjustment that used to live here moved to PressPot, below) — a show may still act on it via `LightShow::onPressLeft()`/`onPressRight()`, but none currently do, so by itself this currently does nothing.
+- **PressPot** (`LedController.h`'s `PushButton::updatePressPot()`/`PressPotIsActive()`/`PressPotValue()`): a distinct mechanism from PressLeft/PressRight — becomes active the instant the button is held, the hold hasn't yet reached the extra-long threshold, and the pot has moved more than 2% from wherever it was when the button went down; once active it stays active (regardless of further pot movement) until release, and — like PressLeft/PressRight — cancels whatever press-tier was in progress. `PressPotIsActive()`/`PressPotValue()` (0-100%, `NAN` when inactive) are available to any accessor (show or config code), not gated behind an override hook. Default (normal mode only): while active, sets the committed peak threshold directly to the live pot value, applied live and flash-saved on release (debounced further as a defensive backup — see "Nonvolatile flash writing" below).
 - **Pot**: meaning depends on the active show's variation (live hue, animation speed, palette rate — see each show's code). Where the pot represents overall show *energy* specifically, it's a **shared global setting** — see below.
 
 **Global energy setting** (`globalEnergyPercent`, `PotEnergyTakeover` struct — `LightShow.h`): `NightriderShow`'s auto-cycle variation, `FlameShow`'s sparkle cadence + hue-drift ceiling (all 4 variations), and `LighthouseShow`'s rotation-speed ceiling all read one shared 0-100% value instead of each having an independent pot binding — adjusting the pot in *any one* updates the value for all, so they track together instead of drifting apart. `NightriderShow`'s manual-hue variation and `EqualizerShow`'s peak-threshold binding are deliberately **not** part of this group (not "energy" — a color pick and a detection threshold, respectively).
@@ -1451,7 +1456,7 @@ Noise floor and peak threshold's live values *are* temporarily applied to `Audio
 - **Live mode visual**: front strip shows 3 separate VU meters (treble/mid/bass order), each driven by that band's hit value in blue/green/red — threshold dots always red. Megabars repeat a 3-position pattern — treble (blue), mid (green), bass (red) — around all 12, each showing that band's hit value.
 - **Blue decay-position dot**: on every VU meter in both modes, positioned purely by the decay-rate *setting* (0ms one end, 1000ms the other) — unrelated to audio level, just a readout of where the setting sits.
 
-**Audio foresight screen (2c)** (`MagicCarpet::showForesightAdjust()`): tunes the shared audio-foresight delay (0-700ms, pot-adjusted, soft takeover, default 0ms — see "Audio processing" below). Always live audio — no meaningful synthetic stand-in for real acoustic latency. Hit-prediction's *style* rides along on this same screen (there's no separate prediction-*distance* subsetting anymore — prediction always spans this whole live foresight range):
+**Audio foresight screen (2c)** (`MagicCarpet::showForesightAdjust()`): tunes the shared audio-foresight delay (0-700ms, pot-adjusted, soft takeover, default 340ms — see "Audio processing" below). Always live audio — no meaningful synthetic stand-in for real acoustic latency. Hit-prediction's *style* rides along on this same screen (there's no separate prediction-*distance* subsetting anymore — prediction always spans this whole live foresight range):
 
 - **Rope**: solid dim blue across ~1016 LEDs, a "you're on this screen" indicator, not audio-reactive. Front strip also gets a 2-pixel white marker positioned by the foresight *setting* (0ms one end, 700ms other) — same idea as the decay screen's blue dot.
 - **Megabars**: live audio-reactive, same repeating 3-position pattern as the decay screen's live mode — treble (blue)/mid (green)/bass (red) every third megabar, each showing that band's **hit** value (already delayed by the foresight being adjusted, applied upstream of every getter) — so a flash syncs to the beat once foresight is dialed in. Each megabar keeps a 15% brightness floor in its band color so fixture-to-frequency mapping stays visible between hits.
@@ -1474,10 +1479,11 @@ Two independent rotating "lighthouse" beams, each a pair of opposite-facing (180
 - **No additive mixing**: where the 2 beams' cones overlap, only the brighter beam shows at all — its own exact color at its own computed brightness. No hue blending. Megabars specifically break an *exact* brightness tie (real and non-negligible, since brightness is quantized to a uint8, not a razor-thin float coincidence) by alternating the winner by megabar index, rather than always favoring beam 1 — so a tie can never systematically starve one color's megabar coverage.
 - **Cone width**: sized so at least 2 real megabars always fall within a beam's guaranteed-coverage core, at *any* beam angle — derived from `CarpetGeometry`'s real measured megabar ground-spot angles (not the nominal 30°-apart naming, which differs from the real throw-corrected positions). The exact worst-case threshold is 32.4855° (computed from the real angle table); `CONE_HALF_WIDTH_DEG` is set to 34° for a small float-precision margin.
 - **Brightness within the guaranteed core is not flat**: it eases smoothly (via `smoothstep8()`) from full (255) at dead center down to a floor (`CORE_FLOOR_BRIGHTNESS`, 128) at the core's own outer edge, then keeps easing from that floor to black over a further fade zone beyond the guarantee — a smooth, "analog" brightness change as a beam sweeps past a megabar (nearer to center = brighter), while the floor keeps the worst-case-farthest guaranteed megabar always clearly, visibly lit.
-- **Minimum beam separation**: the 2 beams' rotation velocities are independent random walks and can share sign (both drifting clockwise, or both counterclockwise), so nothing stops them drifting arbitrarily close together on their own. A per-frame enforcement keeps the 2 beams' guaranteed cores from ever touching (pushing the 2 angles apart symmetrically, 50/50, whenever they'd close past the minimum) — a soft "bounce," not a velocity restriction — so one beam's guaranteed megabar coverage can never be contested/stolen by the other beam's winner-take-all comparison.
+- **Minimum beam separation**: the 2 beams' rotation velocities are independent random walks and can share sign (both drifting clockwise, or both counterclockwise), so nothing stops them drifting arbitrarily close together on their own. A per-frame enforcement keeps the 2 beams' guaranteed cores from ever touching (pushing the 2 angles apart symmetrically, 50/50, whenever they'd close past the minimum) — this position correction is a hard, exact snap every frame it triggers (never a soft velocity restriction; needed to keep the megabar guarantee genuinely unconditional), so one beam's guaranteed megabar coverage can never be contested/stolen by the other beam's winner-take-all comparison.
+  - **Bugfix ("beams go the same speed in the same direction" for extended stretches)**: with only ~20° of free room between the 70°-minimum-separation boundary and the max possible 90° separation, and each beam able to random-walk up to 360°/s, the 2 beams typically closed that 20° in well under a second and then stayed pinned — the hard position snap above absorbed 100% of any further net-closing velocity every single frame, forcing the pair's *effective* angular rate to equal their shared average for as long as that tendency persisted (which, since the raw walk itself only drifts ±10°/s per ~1s tick, could be many seconds). Fixed by injecting a real, decaying "bounce" velocity bias on every collision (1.5s exponential decay, 40°/s kick) on top of the raw walks, so the pair genuinely separates again afterward instead of staying rigidly coupled — the hard position snap itself is untouched, so the megabar guarantee stays exactly as unconditional as before.
 - **Rotation**: each beam's angular velocity is its own independent random walk (`LighthouseShow::RandomWalk`) — ramps toward a fresh random target (±10°/s step) roughly every second, drifting through zero and reversing over time. Beam 1 starts +72°/s (5s/rotation); beam 2 starts -180°/s (2s/rotation). The walk wanders within a fixed ±360°/s ceiling; the **shared global energy setting** attenuates the raw output afterward instead of narrowing that range (0% = stopped, 100% = unchanged).
 - **Color**: beam 1's hue always increases (never reverses) at a random-walking rate, 0 (frozen) to 1 full cycle/20s. Saturation random-walks 70-100%, starting at 80%, shared exactly by both beams (not independent per-beam). Beam 2 uses beam 1's saturation exactly plus the complementary hue (+128) — independent rotation only, no independent color.
-- **Rope**: same falloff/winner-take-all as megabars, evaluated at each of ~1016 cached LED angular positions instead of 12 fixed ones.
+- **Rope**: same falloff/winner-take-all as megabars, evaluated at each of ~1016 cached LED angular positions instead of 12 fixed ones — but 25% narrower (`ROPE_CONE_HALF_WIDTH_DEG`/`ROPE_CONE_FADE_DEG`, per request), since rope has no megabar-style coverage guarantee to protect. Megabars/china keep the full guaranteed width.
 - **Variations** (2, cycled by encoder rotation):
   - **Default**: rope+megabar+china all join both beams (the same beam-crossing effect everywhere); china additionally gets a bass-hit white triple-strobe (3 pulses, 30ms on/20ms gap) layered on top, on the White channel only (`LightSetters::setWhite()`) — never touching the RGB channel a china's beam-crossing color already occupies, so the white strobe and the RGB beam color genuinely superimpose instead of one overwriting the other.
   - **No Strobe**: identical rope/megabar/china beam-crossing effect as Default, just without the white strobe on china.
@@ -1485,30 +1491,31 @@ Two independent rotating "lighthouse" beams, each a pair of opposite-facing (180
 
 ## Flame show variations
 
-The rope runs a classic Fire2012-style heat simulation (cool → disperse → spark → assign-color-from-palette). 4 variations, cycled by encoder rotation:
+The rope runs a classic Fire2012-style heat simulation (cool → disperse → spark → assign-color-from-palette). 2 variations, cycled by encoder rotation (shifting hues/hue to white have been removed):
 
-- **Variation 0/1** ("waterflames"/"flames"): the two original fixed 256-entry palettes (`DarkBlue→Blue→Aqua→White` / `DarkRed→Red→Orange→Yellow`).
-- **Variation 2** ("shifting hues"): **two complementary colors**, both full brightness — one continuously-drifting hue (never reverses, rate random-walks, technique duplicated from `LighthouseShow`'s beam hue rate) and its complement (+128), sharing one random-walked saturation. Replaces an earlier single-hue/4-brightness-level design that read as dim/washed-out at the low end.
-- **Variation 3** ("hue to white"): the same drifting hue, fading to fixed white at the hot end instead of a brighter version of itself.
-- Variations 2/3 share one random-walked saturation (75-100%, starting at 90%, widened from a fixed 87-100% range that read too saturated). Variation 3's drifting-hue end used to be hardcoded to full saturation; now breathes the same as variation 2's.
-- The **shared global energy setting** does two jobs across all 4 variations: controls sparkle/fire-sim cadence (`delay(potval)`, inverted so 100% energy = fastest), and in variations 2/3 also scales max hue-drift rate — 0% = 50% of base max (full cycle in 40s instead of 20s), 100% = 100%. Only the ceiling shifts, not the walk mechanism. (Also fixed a real bug: this ceiling used to be wired backwards, pot-up giving the *lower* 50% ceiling.)
+- **Variation 0/1** ("waterflames"/"flames"): the two fixed 256-entry palettes (`DarkBlue→Blue→Aqua→White` / `DarkRed→Red→Orange→Yellow`).
+- The **shared global energy setting** controls sparkle/fire-sim cadence (`delay(potval)`, inverted so 100% energy = fastest).
 
 **Floodlight sparkle**: the rope's random "spark" pulses (bright, brief, cooling) now match on floodlights — china treated like megabars. Each fixture gets its own independent "heat" with fresh random sparks at the rope's own cool/spark cadence (same pot-adjustable delay), cooling at **twice the rope's rate** (shorter flashes, by request — the rope's own rate read as too lingering). Fixture count sparkling per cycle is proportional: fraction of floodlights = fraction of rope LEDs sparkling (`sparkingRate/255`), rounded to nearest fixture, chosen at random. Rendered as a blend on top of the audio-tinted base color using heat as the blend fraction, so sparks rise/fade smoothly rather than snapping.
 
+**Idle (no-sound) base color**: outside `HIT_REACTIVE_WINDOW_MS` (3s since the last real bass/treble hit), each floodlight sits at one of the palette's two reference colors (`FLOOD_LO_INDEX`/`FLOOD_HI_INDEX`) — re-rolled independently on each of that fixture's own sparks, still a real coin flip (not a fixed population split), but weighted **65% toward the dim/base color, 35% toward the bright one** (`FlameShow::pickBaseColor()`, `BASE_COLOR_PICK_PERCENT`), per request — was an even 50/50 flip.
+
 ## Equalizer show variations
 
-2 variations, cycled by encoder rotation. Both react to `AudioBoard`'s shared **hit** value (`getBandHitPercent(Band)`/`getBandHitNonzero(Band)`, see "Audio processing" below) instead of each rolling its own peak-hold logic — decay behavior is uniform and tunable from Audio config subsetting 2b.
+3 variations, cycled by encoder rotation, defaulting to new_standard on boot (Chase and sub_standard have both been removed). All three react to `AudioBoard`'s shared **hit** value (`getBandHitPercent(Band)`/`getBandHitNonzero(Band)`, see "Audio processing" below) instead of each rolling its own peak-hold logic — decay behavior is uniform and tunable from Audio config subsetting 2b.
 
-- **Variation 0** (default): the original bouncing-chase pattern (unrelated to audio) on the rope, megabars tinted by bass (red, low band's hit) and treble (blue, high band's hit).
-- **Variation 1**: a dual VU meter across the whole front/rear rather than one corner. Bass is based on the *entire rear edge* (always lit) and grows forward along both sides as it rises (red); treble is based on the entire front edge and grows rearward (blue) — same red=bass/blue=treble convention, both driven by hit. `RIGHT`/`LEFT` are the exact midpoints of each side run, so each meter's 100%-reach is 15% of the true-corner-to-center half-length past that midpoint — maxed bass/treble simultaneously cross near the car's middle, blending 50/50 where they overlap. Brightness scales with level, not just reach — a quiet meter is dim, not just short. Megabars/china off.
+- **Variation 0** (VU meter): a dual VU meter across the whole front/rear rather than one corner. Bass is based on the *entire rear edge* (always lit) and grows forward along both sides as it rises (red); treble is based on the entire front edge and grows rearward (blue) — same red=bass/blue=treble convention, both driven by hit. `RIGHT`/`LEFT` are the exact midpoints of each side run, so each meter's 100%-reach is 15% of the true-corner-to-center half-length past that midpoint — maxed bass/treble simultaneously cross near the car's middle, blending 50/50 where they overlap. Brightness scales with level, not just reach — a quiet meter is dim, not just short. Megabars/china join the same meter, split by each fixture's own real front/rear position.
   - **Bugfix**: `FRONT_RIGHT`/`REAR_RIGHT`/`REAR_LEFT`/`FRONT_LEFT` are inset `SIZEOF_LARGE_NEO_CORNER` (33) LEDs in from each side's true physical corner — the per-side loop used to run only between those inset points, leaving the ~33-LED zone at each true corner permanently dark. Fixed by widening each side's loop to its full physical strand while keeping the reference points (and meter calibration) unchanged; past a reference point the same distance math correctly reads as "always lit, proportional to level." Deliberately does **not** reach into the front/rear channels' own logic (an earlier draft did, incorrectly — each side stays self-contained).
-- **Pot** (either variation): live-adjusts the shared peak threshold (`PkThresh`, 0-100% full pot, prints `PkThresh:<percent>%` 1s after settling) — soft takeover. Deliberately *not* part of the global energy group (a threshold isn't "energy"); unlike that group it *is* tied to a persisted value — leaving the show reverts it to whatever's saved, so casual tweaking never silently overwrites the committed setting.
+  - **Pot**: live-adjusts the shared peak threshold (`PkThresh`, 0-100% full pot, prints `PkThresh:<percent>%` 1s after settling) — soft takeover. Deliberately *not* part of the global energy group (a threshold isn't "energy"); unlike that group it *is* tied to a persisted value — leaving the show reverts it to whatever's saved, so casual tweaking never silently overwrites the committed setting.
+- **Variation 1** (new_standard, boot default): a whole-show 2-color palette (`Bcolor`/`Tcolor`) that continuously drifts hue (10s red→yellow, 10s back) and saturation (75-100% over a 14s cycle). Rope: a bouncing 2-segment animation (a "big" segment per long side, a "little" one per short side, each independently reflecting off its own end), colored `Bcolor`/`Tcolor` (matches the floodlight color scheme, per explicit request — not a separate fixed palette). China/megabars each independently cycle between a handful of bass/treble patterns, advancing on a random 2-4-bass-hit schedule (`OptionCycler`), cross-fading 200ms on each change.
+- **Variation 2** (pixel_war): a simpler "territory war" — the rope's colored boundary is pushed by each qualifying bass hit (an immediate impulse, partially given back ~150ms later), while turns trade between the 2 colors every `cycleBeats_` hits. Megabars/china flash in bass/treble pools.
+- **Pot** (new_standard/pixel_war): sets the effects-cycle length in bass beats (`cycleBeats_`, 2-128, log-spaced, 15 discrete steps) — shared between the two.
 
-**Triple-strobe** (either variation): toggled by double press while Equalizer is active — nonvolatile. When enabled, a qualifying bass hit (`AudioBoard::getBandHitNonzero(BandBass)`) flashes all 8 china and the 8 corner-adjacent megabars (all except headlight/left/rear/right cardinals, index `0`/`3`/`6`/`9`) full white for 3 pulses, 30ms on/20ms gap.
+**Triple-strobe** (any variation): toggled by double press while Equalizer is active — nonvolatile. When enabled, a qualifying bass hit (`AudioBoard::getBandHitNonzero(BandBass)`) flashes all 8 china and the 8 corner-adjacent megabars (all except headlight/left/rear/right cardinals, index `0`/`3`/`6`/`9`) full white for 3 pulses, 30ms on/20ms gap.
 
 Hit suppression prevents machine-gunning during a sustained loud passage: the triggering hit's level is remembered, and any further hit not exceeding it is suppressed within 3s of the last qualifying hit. A 3+s gap with no qualifying hits clears the memory, so the next hit always strobes fresh.
 
-**Slow desaturation cycle** (both variations): every base color (`clr1`/`clr2` in variation 0, `bassClr`/`trebleClr` in variation 1) drifts saturation 100%→85%→100% over a smooth 30s sine (`currentSatFraction()`) — a subtle "breathing." `desaturate()` holds hue/value fixed, raising only the minimum channel — exact for these fully-saturated colors, a no-op on anything already less saturated.
+**Slow desaturation cycle** (VU meter): base colors (`bassClr`/`trebleClr`) drift saturation 100%→85%→100% over a smooth 30s sine (`currentSatFraction()`) — a subtle "breathing." `desaturate()` holds hue/value fixed, raising only the minimum channel — exact for these fully-saturated colors, a no-op on anything already less saturated. (new_standard/pixel_war run their own independent hue/sat drift instead, see above.)
 
 ## Audio processing
 
@@ -1535,7 +1542,7 @@ Tracking is **per-bin** first, per-band second: each of the MSGEQ7's 7 raw hardw
 - **Unified audio history, and the audioReadTime/lightsShowTime split**: every poll writes one row into a single ring buffer (`audioData_[levelType][bin][slot]` + a shared `audioTimestamps_[slot]`), sized to hold a flat `AGC_WINDOW_MS` (4s). Foresight eats into this same fixed budget rather than extending it, so `audioReadTime` always wraps cleanly, and AGC's scan covers the whole buffer every poll. Two pointers into that same buffer:
   - **`audioReadTime`** (internal only, no getter reaches it) — the write head, advances by 1 every poll, always the just-captured instant.
   - **`lightsShowTime`** — recomputed every poll as the row nearest to `audioReadTime`'s timestamp minus the live foresight setting **minus the current EMA loop time** (`LoopTime.h`) -- the latter corrects for the gap between "this poll computed `hit`" and "the LEDs actually finished transmitting," present even at 0ms foresight. **Every external getter reads only from this pointer.**
-- **Audio foresight** (0-700ms, default 0, subsetting 2c): the DSP pipeline "sees" a waveform before it reaches the speakers — this is how far `lightsShowTime` trails `audioReadTime`, i.e. how far ahead of the audible output the freshest capture currently sits. Default 0ms uses the freshest sample, keeping the DSP's free predictive lead; dialing up trades lead for tighter sync with true acoustic output.
+- **Audio foresight** (0-700ms, default 340, subsetting 2c): the DSP pipeline "sees" a waveform before it reaches the speakers — this is how far `lightsShowTime` trails `audioReadTime`, i.e. how far ahead of the audible output the freshest capture currently sits. 0ms uses the freshest sample, keeping the DSP's full predictive lead; dialing up trades lead for tighter sync with true acoustic output.
 - **Hit prediction style** (adjustable via the encoder on the Foresight subsetting 2c — no separate prediction-*distance* dial anymore, prediction always spans the whole live foresight range): the rows between `lightsShowTime` and `audioReadTime` are real future-relative samples not yet "displayed" — `computePredictedRamp_()` scans that span's `normal`-stage history (not `hit` — those rows haven't had AGC/hit processing applied yet, that only happens once `lightsShowTime` itself reaches them) for the earliest sample crossing the plain threshold, blending a rising lead-up into `hit` (whichever of normal tracking or predicted lead-up is higher). Three styles (`HitPredictionStyle`), default **Exponential rise**:
   - **Off** (`PredictDisabled`) — no lookahead, always returns 0.
   - **Exponential rise** (`PredictExponential`) — cheap-integer stand-in for an exponential curve asymptotic at the predicted hit: `ramp = 100*(foresightMs-timeUntilHit)/timeUntilHit`, clamped to 100.
@@ -1546,7 +1553,7 @@ Tracking is **per-bin** first, per-band second: each of the MSGEQ7's 7 raw hardw
 - **Sound reactivity** (persisted, default **on**, subsetting 2e): global kill switch every `normal`/`hit` getter checks centrally. `raw`/`RMS` stay ungated.
 - **Per-bin noise floor**: each bin's own self-noise voltage differs (bins 0-4 ~0.17V, bin 5 ~0.280V, bin 6 ~0.56V, scoped w/ phone muted). The global noise-floor setting (default **19.5%**, stored as a whole-percent, so ~20% on real hardware) applies directly to bin 6 (highest voltage); every other bin's own floor scales down proportionally. `clean` is all-bins-or-nothing: only zeroes when EVERY bin is at/below its own floor.
 - **AGCfull is the default** at first boot; it, auto-peak (`AutoPeakBin`), noise floor, peak threshold (default **68%**), sound reactivity, hit decay rate, and audio foresight all persist (`Nvm.h`).
-- **Peak threshold** (default **68%**) is the shared "this counts as a hit" level — see Configuration mode above. Auto-peak can raise the *effective* threshold above this per-bin, per-instant; never lowers it.
+- **Peak threshold** (default **68%**) is the shared "this counts as a hit" level — see Configuration mode above. Auto-peak can raise the *effective* threshold above this per-bin, per-instant; never lowers it. Also adjustable live in normal show mode via **PressPot** — see "Encoder and button UI" above.
 - **Outside this file, every level/hit is percent** (0-100), never raw 0-255 — `NightriderShow`/`FlameShow` convert back to their own internal 0-255 scale right at the call site, localized rather than threaded through their internals.
 
 ## Vehicle speed link and SpeedStripesShow
@@ -1573,7 +1580,7 @@ Only runs while `ModeShow` is active — config screens read the pot live via `P
 
 **`SpeedStripesShow`**: the two long side rope strips are the only fixtures running front-to-rear along the car's 16ft length (front/rear edges don't, stay off). Each side strip (352 LEDs) divides into 4 bands of 88 LEDs (4ft each) alternating lit/dark with a smoothed transition. The pattern scrolls front-to-rear at a rate proportional to live speed (`SpeedLink::mphToFtPerSec()`, real feet/sec — not a hand-tuned LED-count rate), giving a sense of motion.
 
-**`VarZebra`** (2nd variation): deterministic rainbow-hue stripes with an optional periodic black-stripe overlay, pot-driven. The pot sets the black stripe's own width, 0ft (pot=0%, no stripes) to 40ft (pot=100%); the colored gap between consecutive black stripes is always exactly 2x that width, so the occurrence period (one black stripe's start to the next) is always exactly 3x the black width — e.g. a 2ft-wide stripe recurs every 6ft. Wider stripes therefore also come proportionally less often, rather than width and spacing scaling independently.
+**`VarZebra`** (2nd variation): deterministic rainbow-hue stripes with an optional periodic black-stripe overlay, pot-driven. Below 2% pot (a dead zone matching this codebase's own real-world pot-noise assumption, `Potentiometer::NOISE_FLOOR_RAW`), black-stripe width is a flat, guaranteed 0 — no stripes, immune to pot jitter right at the minimum, not just usually-near-zero (fixes a real "flickering to black when pot is at minimum" bug: the old formula jumped straight from 0 to a fixed 0.5ft floor at the slightest reading above 0%). Above that dead zone, width ramps continuously (no jump at the boundary) up to 40ft at 100% pot. The colored gap between consecutive black stripes is always exactly 3x the black width, so the occurrence period (one black stripe's start to the next) is always exactly 4x the black width — e.g. a 2ft-wide stripe recurs every 8ft. Wider stripes therefore also come proportionally less often, rather than width and spacing scaling independently.
 
 **Color**: each stripe (one lit band) gets its own 2-color gradient, leading to trailing edge, rather than one shared hue. Which pair a stripe shows is deterministic from its period-cycle (`floor(pos/period)` through a Knuth multiplicative hash), so a physical stripe keeps a stable identity while scrolling without per-instance state. The same slow desaturation cycle as `EqualizerShow` (100%→85%→100% over 30s) breathes on top.
 
@@ -1583,17 +1590,17 @@ Every other fixture with a meaningful along-length position samples the same scr
 
 | Fixture(s) | Position sampled |
 | --- | --- |
-| Megabars `[11,0,1]` (front 3, incl. headlight) | 4ft ahead of the front corner — a preview, well before the stripe arrives |
-| China `[1,2]` (aimed along the front edge) | 1ft ahead of the front corner — picks the same stripe up just as it's about to cross onto the carpet |
-| Megabars `[5,6,7]` (rear 3) | 4ft behind the rear corner — mirrors the front, for the stripe that just left |
-| China `[5,6]` (aimed along the rear edge) | 1ft behind the rear corner — mirrors the front |
+| Megabars `[11,0,1]` (front 3, incl. headlight) | 4ft ahead of **each fixture's own real Y** — a preview, well before the stripe arrives. Not a single shared "front corner" position: `[11]`/`[1]` sit at a different real Y than `[0]` (the headlight), so each samples its own +4ft, not the headlight's (see BUGFIX in the class comment — this used to share one value across all 3) |
+| China `[1,2]` (aimed along the front edge) | 1ft ahead of **each fixture's own real Y** — picks the same stripe up just as it's about to cross onto the carpet |
+| Megabars `[5,6,7]` (rear 3) | 4ft behind **each fixture's own real Y** — mirrors the front, for the stripe that just left |
+| China `[5,6]` (aimed along the rear edge) | 1ft behind **each fixture's own real Y** — mirrors the front |
 | China `[0]`/`[3]` (front-right/front-left, aimed along a side edge) | 1/3 of the way rear from the front |
 | China `[7]`/`[4]` (rear-right/rear-left, aimed along a side edge) | 2/3 of the way rear from the front |
 | Megabars `[2,10]` / `[3,9]` / `[4,8]` (remaining 3 per side) | Same 1/3, 1/2, 2/3 partition by angle — `[2]`/`[10]` line up with the 1/3 china, `[4]`/`[8]` with the 2/3 china |
 
 All of the above (16ft/12ft carpet dimensions, 4ft/1ft preview distances, fade steepness) are hardcoded per user-measured values in `SpeedStripesShow.h` — adjust there if dimensions change.
 
-**Stopped mode**: at speed 0, or when `SpeedLink` hasn't heard from the vehicle in 4s (stricter than `isFresh()`'s 2s default), the pattern **freezes** — `scrollOffset_` stops advancing, so every fixture (all deriving position from it) holds exactly where it was. After a further **10s** stopped, each stripe's hue pair starts slowly meandering — one shared drifting offset (`meanderHue_`, `RandomWalk`-based, same technique as `LighthouseShow`/`FlameShow`) adds on top of each stripe's hash-derived base hue, so they evolve together while staying distinct. A fresh stop always restarts this from scratch.
+**Stopped mode**: at speed 0, or when `SpeedLink` hasn't heard from the vehicle in 4s (stricter than `isFresh()`'s 2s default), the pattern **freezes** — `scrollOffset_` stops advancing, so every fixture (all deriving position from it) holds exactly where it was. After a further **10s** stopped, each stripe's hue pair starts slowly meandering — one shared drifting offset (`meanderHue_`, `RandomWalk`-based, same technique as `LighthouseShow`) adds on top of each stripe's hash-derived base hue, so they evolve together while staying distinct. A fresh stop always restarts this from scratch.
 
 ## Timing convention
 
@@ -1603,6 +1610,13 @@ Two spots deliberately still use raw `millis()` math, since `Timer` only models 
 
 - **`PushButtonEdge`'s edge queue / `PushButton::processEdge()`** (`LedController.h`) — edges are timestamped in an interrupt the instant they happen, then replayed later using that recorded (possibly stale) timestamp, not "now." A `Timer` can't be reset to an arbitrary past moment.
 - **`AudioBoard`'s rolling-peak ring buffer** (`peakTimestamps_[]`) — independently-timestamped samples compared against the *current* time to find which are still inside the trailing 4s window, not a single running duration.
+
+## Nonvolatile flash writing
+
+The Due has no real EEPROM (see `Nvm.h`'s own file comment) — persisted settings ride on `DueFlashStorage`, which has finite write endurance and a real, measurable write cost. Two rules apply everywhere a value gets written to flash:
+
+- **Read the currently-flashed value before writing, and skip the write if it's already equal.** Every `Nvm::saveXxx()` call site in `CarpetLightLogic.cpp` checks its matching `Nvm::loadedXxx()` first (cheap — `loadedXxx()` just returns from the RAM-resident `State` struct `load()` populated at boot, never a real flash read) and only calls `saveXxx()` if the value actually changed. This catches the case where a value is nudged away and back before being committed (e.g. dial a setting up then back down to its already-saved value before double-pressing to commit) — a real, avoidable write otherwise.
+- **Debounce anything driven by a live pot/encoder twist**, so a continuous adjustment doesn't write on every tick. Most settings are already safe by construction — they only ever save once, on an explicit commit gesture (double press) — so the equality check above is their only real protection. The one setting that used to save *continuously* during live adjustment is peak threshold via PressPot (see "Encoder and button UI" above): `peakThreshSaveDebounce_`/`peakThreshSaveDirty_` (`CarpetLightLogic.cpp`) mark the value dirty and apply it live to `AudioBoard` immediately, but the actual flash write waits — primarily for PressPot to go *inactive* (release is a clean, precise "definitely done adjusting" signal, no arbitrary delay needed), with the debounce timer itself kept only as a defensive backup for the pathological case of a hold that never releases.
 
 ## Future direction
 
@@ -1667,6 +1681,14 @@ None of that abstraction exists in code yet — this doc records the raw hardwar
           <div class="action-cell" id="actDouble"><b>Double:</b> <span></span></div>
           <div class="action-cell" id="actPressLeft"><b>PressL:</b> <span></span></div>
           <div class="action-cell" id="actPressRight"><b>PressR:</b> <span></span></div>
+          <!-- Nonclickable, no gesture a mouse pointer can simulate (hold
+               the encoder button AND drag the pot at once) -- descriptive
+               only, positioned under Pot per request (grid-column forces
+               it into that same column since it's an 11th item in an
+               otherwise-even 2-col grid). Fixed text, not per-show: the
+               peak-threshold PressPot behavior is global across every
+               show, same category as Short/Med/Long/XL/Double above. -->
+          <div class="action-cell" id="actPressPot" style="grid-column: 2;"><b>PressPot:</b> pk thresh</div>
         </div>
       </div>
     </div>
@@ -2584,9 +2606,17 @@ CarpetFirmware().then((M) => {
    6): no show is JS-reimplemented for this role anymore, not even
    Nightrider. Byte layout matches each array's real C++ struct exactly
    (src/CRGBW.h): ropeLeds=CRGBW [R,G,B,W], megabarLeds=CRGB [R,G,B],
-   chinaLeds=CRGBWUA [R,G,B,W,A,U] -- only R/G/B are read here since
-   that's all draw()'s canvas rendering ever consumes. Pointers/strides
-   are queried once and cached (they're static FW globals, never move).
+   chinaLeds=CRGBWUA [R,G,B,W,A,U]. Pointers/strides are queried once and
+   cached (they're static FW globals, never move).
+
+   Rope/china also fold their real W (white) byte additively into R/G/B
+   here -- clamped to 255, since on real hardware W is a genuinely
+   separate white LED die physically co-located with the RGB ones, so its
+   light adds to whatever color is showing rather than replacing it. This
+   used to only read R/G/B (a documented simplification), which made any
+   show's white-channel effects -- e.g. LighthouseShow's china bass-hit
+   strobe -- real in the firmware but invisible here. Megabars have no
+   white channel (see LightSetters.h), nothing to fold there.
    ===================================================================== */
 let wasmLedPtrs = null;
 function readLedsFromWasm() {
@@ -2609,9 +2639,19 @@ function readLedsFromWasm() {
       led.r = heap[o]; led.g = heap[o + 1]; led.b = heap[o + 2];
     }
   };
-  copyRgb(ropeLeds, wasmLedPtrs.rope, wasmLedPtrs.ropeStride);
+  const copyRgbw = (destArr, basePtr, stride) => {
+    for (let i = 0; i < destArr.length; i++) {
+      const o = basePtr + i * stride;
+      const led = destArr[i];
+      const w = heap[o + 3];
+      led.r = Math.min(255, heap[o] + w);
+      led.g = Math.min(255, heap[o + 1] + w);
+      led.b = Math.min(255, heap[o + 2] + w);
+    }
+  };
+  copyRgbw(ropeLeds, wasmLedPtrs.rope, wasmLedPtrs.ropeStride);
   copyRgb(megabarLeds, wasmLedPtrs.megabar, wasmLedPtrs.megabarStride);
-  copyRgb(chinaLeds, wasmLedPtrs.china, wasmLedPtrs.chinaStride);
+  copyRgbw(chinaLeds, wasmLedPtrs.china, wasmLedPtrs.chinaStride);
   readBusWriteBuffersFromWasm();
 }
 
@@ -2629,22 +2669,17 @@ function readLedsFromWasm() {
    this data previously didn't exist at all under WASM.
    ===================================================================== */
 let wasmBusWritePtrs = null;
-let busWriteBuffers = { rope: null, right: null, left: null };
+let busWriteBuffers = { rope: null };
 function readBusWriteBuffersFromWasm() {
   if (!wasmBusWritePtrs) {
     wasmBusWritePtrs = {
       rope: wasmModule.ccall('web_getRopeShowLedsPtr', 'number', [], []),
-      right: wasmModule.ccall('web_getRightShowLedsPtr', 'number', [], []),
-      left: wasmModule.ccall('web_getLeftShowLedsPtr', 'number', [], []),
       numRope: wasmModule.ccall('web_getNumRopeShowLeds', 'number', [], []) * 3,
-      numSide: wasmModule.ccall('web_getNumSideShowLeds', 'number', [], []) * 3,
     };
   }
   const heap = wasmModule.HEAPU8;
   const p = wasmBusWritePtrs;
   busWriteBuffers.rope = heap.slice(p.rope, p.rope + p.numRope);
-  busWriteBuffers.right = heap.slice(p.right, p.right + p.numSide);
-  busWriteBuffers.left = heap.slice(p.left, p.left + p.numSide);
 }
 
 /* =====================================================================
@@ -2771,6 +2806,9 @@ const AudioBoard = {
 
   get agcMode() { return wasmReady ? wasmModule.ccall('web_audioGetAgcMode', 'number', [], []) : 0; },
   set agcMode(v) { if (wasmReady) wasmModule.ccall('web_audioSetAgcMode', null, ['number'], [v]); },
+  // real FW enum-value name string (agcModeName(), CarpetLightLogic.cpp) --
+  // never a hand-typed guess at what the real names are
+  get agcModeName() { return wasmReady ? wasmModule.ccall('web_audioGetAgcModeName', 'string', [], []) : ''; },
 
   get noiseFloorPct() { return wasmReady ? wasmModule.ccall('web_audioGetNoiseFloorPercent', 'number', [], []) : 8; },
   set noiseFloorPct(v) { if (wasmReady) wasmModule.ccall('web_audioSetNoiseFloorPercent', null, ['number'], [v]); },
@@ -2782,6 +2820,8 @@ const AudioBoard = {
   // own 3-state shape -- see AudioBoard.h's AutoPeakMode.
   get autoPeakMode() { return wasmReady ? wasmModule.ccall('web_audioGetAutoPeakMode', 'number', [], []) : 2; },
   set autoPeakMode(v) { if (wasmReady) wasmModule.ccall('web_audioSetAutoPeakMode', null, ['number'], [v]); },
+  // real FW enum-value name string (autoPeakModeName(), CarpetLightLogic.cpp)
+  get autoPeakModeName() { return wasmReady ? wasmModule.ccall('web_audioGetAutoPeakModeName', 'string', [], []) : ''; },
   // live preview of what auto-peak's scaled threshold currently is -- kept
   // updating regardless of autoPeakMode so the UI can show it even while
   // auto-peak itself is off (see AudioBoard::getBandAutoScaledPeakThresholdPercent()).
@@ -3493,66 +3533,6 @@ function useTone() {
 const ropeLeds = new Array(NUM_NEO).fill(0).map(() => ({r:0,g:0,b:0}));
 const megabarLeds = new Array(NUM_MEGABAR).fill(0).map(() => ({r:0,g:0,b:0}));
 const chinaLeds = new Array(NUM_CHINA).fill(0).map(() => ({r:0,g:0,b:0}));
-function clearRope() { for (const p of ropeLeds) { p.r=0; p.g=0; p.b=0; } }
-function clearMegabars() { for (const p of megabarLeds) { p.r=0; p.g=0; p.b=0; } }
-function clearChinas() { for (const p of chinaLeds) { p.r=0; p.g=0; p.b=0; } }
-function blend(c1, c2, frac) { // frac 0-255
-  const f = frac / 255;
-  return { r: c1.r + (c2.r - c1.r) * f, g: c1.g + (c2.g - c1.g) * f, b: c1.b + (c2.b - c1.b) * f };
-}
-// Where two independent light "contributions" land on the same fixture
-// (e.g. two Lighthouse beam clusters overlapping), summing their hues
-// together reads as a muddy/washed-out blend. Per request: whichever
-// contributor is brightest wins outright; on an exact tie, one is picked
-// at random rather than mixed. contributors: [{hue, brightness}, ...].
-// Returns {hue, brightness} of the winner, or null if none contributed.
-// Generic port of the RandomWalk helper duplicated across SpeedStripesShow.h/
-// LighthouseShow.h/FlameShow.h: ramps smoothly toward a freshly-randomized
-// target every ~0.8-1.2s rather than jumping.
-function makeRandomWalk() { return { rampStart: 0, rampTarget: 0, tickT0: 0, tickDur: 1000, initialized: false }; }
-function randomWalkValue(w, nowMs, minVal, maxVal, maxStep) {
-  if (!w.initialized) {
-    w.initialized = true;
-    w.tickT0 = nowMs; w.tickDur = 800 + Math.random() * 400;
-    w.rampStart = w.rampTarget = minVal + (maxVal - minVal) * 0.5;
-  }
-  if (nowMs - w.tickT0 >= w.tickDur) {
-    w.rampStart = w.rampTarget;
-    const step = (Math.random() * 2 - 1) * maxStep;
-    w.rampTarget = Math.max(minVal, Math.min(maxVal, w.rampStart + step));
-    w.tickT0 = nowMs; w.tickDur = 800 + Math.random() * 400;
-  }
-  let frac = (nowMs - w.tickT0) / w.tickDur;
-  if (frac > 1) frac = 1;
-  return w.rampStart + (w.rampTarget - w.rampStart) * frac;
-}
-function pickOverlapColor(contributors) {
-  let bestB = -1, ties = [];
-  for (const c of contributors) {
-    if (c.brightness <= 0) continue;
-    if (c.brightness > bestB) { bestB = c.brightness; ties = [c]; }
-    else if (c.brightness === bestB) { ties.push(c); }
-  }
-  if (ties.length === 0) return null;
-  const winner = ties[Math.floor(Math.random() * ties.length)];
-  return { hue: winner.hue, brightness: bestB };
-}
-function hsv(h, s, v) { // h 0-255, s 0-255, v 0-255 -> {r,g,b} 0-255
-  h = (h % 256 + 256) % 256;
-  const hh = h / 256 * 6, sf = s / 255, vf = v / 255;
-  const i = Math.floor(hh), f = hh - i;
-  const p = vf * (1 - sf), q = vf * (1 - sf * f), t = vf * (1 - sf * (1 - f));
-  let r, g, b;
-  switch (i % 6) {
-    case 0: r=vf; g=t; b=p; break;
-    case 1: r=q; g=vf; b=p; break;
-    case 2: r=p; g=vf; b=t; break;
-    case 3: r=p; g=q; b=vf; break;
-    case 4: r=t; g=p; b=vf; break;
-    default: r=vf; g=p; b=q; break;
-  }
-  return { r: r*255, g: g*255, b: b*255 };
-}
 function scale255(c, amt) { const f = amt/255; return {r:c.r*f, g:c.g*f, b:c.b*f}; }
 // Boosts brightness up to maxMult x, but never past the point where the
 // brightest channel would hit 255 -- unlike scale255 (a flat per-channel
@@ -3580,14 +3560,21 @@ const Ctl = {
   chinaBr: 100,
   blacklight: false,
   speedMph: 5,
-  currMode: 'nightrider',
+  // currMode/prevShowMode: empty placeholder, not a real show key -- no
+  // lightshow name belongs in this file's source. Real value comes from
+  // WASM the instant it's ready (syncShowStateFromWasm()'s
+  // `realShow !== Ctl.currMode` check treats an empty string same as any
+  // other mismatch, so this self-corrects on the very first frame; every
+  // real dereference of Ctl.currMode as a key -- VARIATIONS[Ctl.currMode]
+  // -- already defends with `|| []` for exactly this brief pre-WASM window).
+  currMode: '',
   variation: 0,
   // config-mode navigation: 'show' means normal light-show operation;
   // otherwise one of 'brightness'/'audio'/'powertest', matching the
   // real controller's top-level config screens.
   appMode: 'show',
   configSubsetting: 0,
-  prevShowMode: 'nightrider', // real show to return to on exiting config
+  prevShowMode: '', // real show to return to on exiting config -- see currMode's own comment above
   adjustingPeakThreshold: false, // audio subsetting 0's short-press toggle: noise floor vs peak threshold
   testHue: 0, testSat: 255, testBrightness: 255, // PowerTest screen's HSV test color
   zoomFt: 32, // viewer distance from car center, 20-100ft -- also the 3D orbit camera's distance, same value/control either way
@@ -3608,32 +3595,6 @@ const Ctl = {
   detailLevel: 'medium', // curved-surface polygon count, see detailN() below -- 3D-only, no 2D equivalent
 };
 
-</script>
-<script src="interface-mode.js"></script>
-<script>
-// Resumes the main inline script -- interface-mode.js (just loaded
-// above) defined renderInterfaceMode() and everything it calls; this
-// continuation defines the dispatch point that decides whether to
-// ever call it, per the Dev-Tool-mode isolation this split exists for
-// (see interface-mode.js's own header comment).
-
-// visualizerRole: 'dev' (Dev Tool, the only role reachable today -- the
-// Interface role's UI toggle is a separate, not-yet-built piece, see
-// ~/.claude/plans/quiet-watching-cherny.md) or 'interface'. Dev Tool MUST
-// call readLedsFromWasm() only, never renderInterfaceMode() (now in
-// interface-mode.js, a separate file, precisely so Dev Tool mode's own
-// code can't reach it even by accident) -- see claude_dev_prompts.md
-// prompt 6, the zero-duplication mandate this split exists to enforce
-// structurally, not just by convention.
-let visualizerRole = 'dev';
-
-function renderCurrent(nowMs, dtMs) {
-  if (visualizerRole === 'interface') {
-    renderInterfaceMode(nowMs, dtMs);
-  } else {
-    readLedsFromWasm();
-  }
-}
 
 
 /* =====================================================================
@@ -4279,7 +4240,7 @@ function draw() {
   // both clipped to outside the deck.
   // Headlight (m0) is physically TWO lamps combining their light into one
   // forward wash/spot -- megabarLeds[0]'s STORED color is the PER-LAMP
-  // brightness (headlightBr 50-100% of global, see renderCurrent()),
+  // brightness (headlightBr 50-100% of global, applied by real FW),
   // correct as-is for the 2-dot marker rendering below (each dot really is
   // that dim on its own), but wrong to feed directly into the ground
   // ellipse/wash here.
@@ -5873,8 +5834,6 @@ document.getElementById('showSelect').addEventListener('change', (e) => {
     }
   }
   Ctl.currMode = v;
-  showT0 = performance.now();
-  resetLighthouseState(); resetSpeedStripesState(); resetFlameState(); resetNewStandardState(); resetPixelWarState();
   Ctl.blacklight = false; // volatile, force-reset off on every show change -- see btnShort's handler for details
   document.getElementById('blacklightCheck').checked = false;
   refreshVariationRow();
@@ -6089,9 +6048,14 @@ function currentSubsettingValueText() {
       case 0: return Ctl.adjustingPeakThreshold ? ('peak thresh ' + AudioBoard.peakThresholdPct.toFixed(1) + '%') : ('noise floor ' + AudioBoard.noiseFloorPct.toFixed(1) + '%');
       case 1: return AudioBoard.hitDecayMs + 'ms';
       case 2: return AudioBoard.audioForesightMs + 'ms';
-      case 3: return ['off', 'band', 'full'][AudioBoard.agcMode];
+      // BUGFIX (mandate): both of these used to be hardcoded JS arrays
+      // indexed by the real FW enum value -- now read the real name
+      // straight from the compiled firmware (see updateAgcButtonUI()/
+      // updateAutoPeakButtonUI()'s own comments), just cosmetically
+      // lowercased/trimmed to match this status line's own convention.
+      case 3: return AudioBoard.agcModeName.trim().toLowerCase();
       case 4: return AudioBoard.soundReactivityEnabled ? 'on' : 'off';
-      case 5: return ['off', 'full', 'bin'][AudioBoard.autoPeakMode];
+      case 5: return AudioBoard.autoPeakModeName.trim().toLowerCase();
     }
   }
   if (Ctl.appMode === 'powertest') {
@@ -6134,14 +6098,17 @@ function describeInputActions() {
     const opts = VARIATIONS[Ctl.currMode] || [];
     if (opts.length >= 2) { a.left = 'prev var'; a.right = 'next var'; }
     else { a.left = a.right = 'no effect'; }
-    const potByShow = {
-      nightrider: Ctl.variation === 0 ? 'set hue' : Ctl.variation === 2 ? 'no effect' : 'cycle spd',
-      lighthouse: 'rotate spd',
-      flame: 'hue spd',
-      equalizer: 'no effect',
-      speedstripes: 'no effect',
-    };
-    a.pot = potByShow[Ctl.currMode] || 'no effect';
+    // BUGFIX (mandate): this used to be a hardcoded object keyed by real
+    // show name ('nightrider'/'lighthouse'/etc), describing what the pot
+    // does in each one -- a real lightshow-name-keyed table living in
+    // executable JS, which a FW show rename or addition would silently
+    // leave stale or wrong (a renamed/new show falls through a lookup
+    // like this with no warning). What the pot does per show is genuine
+    // C++ show logic with no WASM-exposed string form to query instead,
+    // so rather than hand-maintain a table that can drift, this cell just
+    // says it varies -- always true, never stale, no show name anywhere
+    // in this file.
+    a.pot = 'varies by show';
   } else if (Ctl.appMode === 'audio' && Ctl.configSubsetting === 3) {
     a.left = a.right = 'toggle AGC';
     a.pot = 'no effect';
@@ -6183,12 +6150,13 @@ function describeInputActions() {
   }
   a.xl = Ctl.globalBr > 0 ? 'lights off' : 'lights on';
   // PressLeft/PressRight (see LedController.h): rotating the encoder WHILE
-  // its button is held. Default, show mode only: nudge peak thresh
-  // +-1%/detent; a show may override instead (see LightShow::onPressLeft()/
-  // onPressRight()) -- this visualizer always shows the DEFAULT text since
-  // it doesn't run the real C++ show classes to know if one overrides it.
-  a.pressLeft = ( Ctl.appMode === 'show' ) ? 'pk thresh -1%' : 'no effect';
-  a.pressRight = ( Ctl.appMode === 'show' ) ? 'pk thresh +1%' : 'no effect';
+  // its button is held. No default action anymore -- peak-threshold
+  // adjustment moved to PressPot (see the actPressPot cell) -- only a
+  // show's own LightShow::onPressLeft()/onPressRight() override can make
+  // these do anything now, and this visualizer doesn't run the real C++
+  // show classes to know if one does.
+  a.pressLeft = 'no effect';
+  a.pressRight = 'no effect';
   return a;
 }
 function updateInputActionTable() {
@@ -6205,14 +6173,11 @@ function enterConfigMode() {
   Ctl.configSubsetting = 0;
   Ctl.adjustingPeakThreshold = false;
   Ctl.currMode = configCurrModeFor('brightness', 0);
-  showT0 = performance.now();
   updateStatusPanel();
 }
 function exitConfigMode() {
   Ctl.appMode = 'show';
   Ctl.currMode = Ctl.prevShowMode;
-  showT0 = performance.now();
-  resetLighthouseState(); resetSpeedStripesState(); resetFlameState(); resetNewStandardState(); resetPixelWarState();
   document.getElementById('showSelect').value = Ctl.currMode;
   refreshVariationRow();
   updateStatusPanel();
@@ -6576,14 +6541,14 @@ initModal( {
   });
 }
 
-// The CI deploy workflow replaces master @ 3dcbb46 - 2026-08-26 04:33 UTC with the real
+// The CI deploy workflow replaces master @ 63252da - 2026-08-27 11:02 UTC with the real
 // branch/short-SHA/push-time -- if it's STILL that literal text, this
 // wasn't loaded from a CI-deployed Pages URL (a local file:// open, or a
 // copy pasted somewhere else, e.g. a Claude Artifact), so swap in a
 // friendlier fallback instead of showing raw placeholder text.
 {
   const el = document.getElementById('buildInfo');
-  const isLocal = el.textContent === 'master @ 3dcbb46 - 2026-08-26 04:33 UTC';
+  const isLocal = el.textContent === 'master @ 63252da - 2026-08-27 11:02 UTC';
   if (isLocal) el.textContent = 'local build (not CI-deployed)';
   // Page title, so a bookmark dragged from this tab defaults to a name
   // that says which branch it's actually pointed at -- same BUILD_INFO
@@ -6685,12 +6650,19 @@ function setEncoderArrowPressed(dir, pressed) {
 // same convention across every multi-variation show. This visualizer port
 // only ever wired the encoder to CONFIG-mode adjustments (appMode !== 'show'
 // below), leaving show-mode variation cycling entirely unimplemented.
+// BUGFIX (mandate): this used to compute the next variation index itself
+// (modular arithmetic on VARIATIONS[Ctl.currMode].length) and then invoke
+// the real button's click handler -- a real injection at the end, but the
+// index math replicated what LightShow::update()'s own
+// `(variation_ + varDelta) % numVariations_` already does for real.
+// web_injectEncoderDelta() (bridge function, previously wired to nothing)
+// now does the exact real thing a hardware A/B interrupt would -- the real
+// firmware's own update() reads it and picks the next/prev variation
+// itself; syncShowStateFromWasm() (already running every frame) reflects
+// whatever it lands on. This function no longer has any opinion about how
+// many variations a show has or what happens when it wraps.
 function cycleShowVariation(dir) {
-  const opts = VARIATIONS[Ctl.currMode] || [];
-  if (opts.length < 2) return;
-  const buttons = document.getElementById('variationRow').children;
-  const newIdx = ((Ctl.variation + dir) % opts.length + opts.length) % opts.length;
-  buttons[newIdx].click(); // reuses the real click handler, so highlight + Ctl.variation stay in sync
+  if (wasmReady) wasmModule.ccall('web_injectEncoderDelta', null, ['number'], [dir]);
 }
 function doEncoderStep(dir) {
   Ctl.encoderPos += dir;
@@ -6767,12 +6739,11 @@ let encBtnAwaitingSecondPress = false, encBtnSecondPressWindowStartMs = 0, encBt
 // while held past a threshold.
 let encBtnMediumFlashed = false, encBtnLongFlashed = false;
 const ENC_BTN_ACTION_TO_CELL = { short: 'actShort', medium: 'actMed', long: 'actLong', xlong: 'actXL', double: 'actDouble' };
-const ENC_BTN_ACTION_FN = { short: doShortPress, medium: doMediumPress, long: doLongPress, xlong: doXLongPress, double: doDoublePress };
 // BUGFIX ("clicking the action-cell text still uses the old local
-// classification"): this used to call ENC_BTN_ACTION_FN[type]() --
-// doShortPress()/doMediumPress()/etc, the SAME dead local-JS classification
-// encoderCenterBtnDown/Up's own BUGFIX comment already replaced for the
-// real encoder button -- so clicking a text shortcut (e.g. "Short:") never
+// classification"): this used to call a local doShortPress()/
+// doMediumPress()/etc dispatch table -- dead local-JS press-tier
+// classification (deleted; see encoderCenterBtnDown/Up's own comment for
+// the real path) -- so clicking a text shortcut (e.g. "Short:") never
 // reached the real firmware at all, unlike actually holding the encoder
 // button. Fixed the same way: inject a real button-down, then a real
 // button-up after a REAL elapsed delay matching that tier's own threshold
@@ -6838,7 +6809,7 @@ function encoderCenterBtnDown() {
     if (heldMs >= ENC_BTN_XLONG_MS) { clearInterval(encBtnHoldTimer); flashActionCellGreen('actXL'); }
   }, 20);
 }
-// Per request: every action-cell except Pot is clickable, firing that
+// Per request: every action-cell except Pot/PressPot is clickable, firing that
 // exact event -- a hitbox over the existing text/layout, no visual change
 // otherwise (see the :not(#actPot) cursor:pointer rule above).
 function wireActionCellClicks() {
@@ -6853,21 +6824,28 @@ function wireActionCellClicks() {
 // PressLeft/PressRight -- real hardware fires these by rotating the
 // encoder WHILE holding its button down, a gesture a single mouse pointer
 // can't reproduce (can't click two places on the knob at once), hence
-// these dedicated buttons instead, per request. NOT a genuine FW
-// press+rotate state-machine injection (that would need real encoder-delta
-// injection wired in first -- see the page's own "Known gap" note; rotation
-// today is still a local-JS simulation, unlike the button-press tiers,
-// which already inject real edges). Applies the real DEFAULT behavior
-// directly instead (nudge the real, committed peak threshold via the same
-// bridge setter the slider itself uses) -- the part that actually matters
-// for testing/visualization purposes even though the gesture itself isn't
-// literally simulated end-to-end.
+// these dedicated buttons instead, per request. STILL NOT a genuine FW
+// press+rotate state-machine injection, even though both
+// web_injectButtonDown/Up and web_injectEncoderDelta are now real and
+// wired elsewhere on this page -- injecting them back-to-back here hasn't
+// been verified to land in the same real-FW update() cycle the way an
+// actual simultaneous hold+rotate would, so it's deliberately NOT done
+// speculatively. Applies the real DEFAULT behavior directly instead
+// (nudge the real, committed peak threshold via the same bridge setter
+// the slider itself uses) -- matches what every show's own
+// LightShow::onPressLeft()/onPressRight() falls back to when it doesn't
+// override, but a show THAT DOES override won't be reflected here. A
+// real, narrower gap -- flagged, not hidden.
+// BUGFIX (mandate): PressLeft/PressRight's peak-threshold default moved to
+// PressPot (see actPressPot) -- this used to still apply the OLD
+// +-1%/detent nudge here regardless, which no longer matches what the
+// real firmware does at all. No default action remains for PressLeft/
+// PressRight (a show's own onPressLeft()/onPressRight() override is the
+// only thing that could do anything, and none currently does) -- this is
+// now just the flash, an honest "this gesture fires, does nothing by
+// default" simulation instead of a wrong pretend effect.
 function firePressLeftRight(dir) {
-  if (Ctl.appMode !== 'show') return; // default behavior only applies in show mode, see describeInputActions()
-  AudioBoard.peakThresholdPct = Math.round(Math.max(0, Math.min(100, AudioBoard.peakThresholdPct + dir)) * 10) / 10;
-  syncSlider('peakThreshSlider', 'peakThreshVal', AudioBoard.peakThresholdPct, '%', 1);
   flashActionCell(dir < 0 ? 'actPressLeft' : 'actPressRight');
-  updateInputActionTable();
 }
 wireActionCellClicks();
 function encoderCenterBtnUp() {
@@ -6889,54 +6867,6 @@ function encoderCenterBtnUp() {
   }
 }
 
-const showOrder = ['nightrider','lighthouse','flame','equalizer','speedstripes'];
-// These 5 used to be onclick handlers on real buttons -- now plain
-// functions, since the "Short/Med/Long/XL/Double" row is a read-only
-// action-description table (see the .action-cell markup / updateInputAction
-// Table() below). Still triggered the same way: the encoder's own center
-// push-button (see the ENC_BTN_* state machine above), classified into
-// these 5 by hold duration, same as always.
-function doShortPress() {
-  if (Ctl.appMode === 'show') {
-    const idx = (showOrder.indexOf(Ctl.currMode) + 1) % showOrder.length;
-    Ctl.currMode = showOrder[idx];
-    Ctl.prevShowMode = Ctl.currMode;
-    document.getElementById('showSelect').value = Ctl.currMode;
-    showT0 = performance.now();
-    resetLighthouseState(); resetSpeedStripesState(); resetFlameState(); resetNewStandardState(); resetPixelWarState();
-    // blacklight is volatile and force-reset off on every show change (real
-    // firmware rule, README.md) -- was previously never reset in the
-    // visualizer at all, a real gap (blacklight also isn't persisted
-    // anywhere in this tool -- no localStorage/save mechanism exists here,
-    // so it's already volatile in that sense; this fixes the OTHER half,
-    // the reset-on-show-change behavior).
-    Ctl.blacklight = false;
-    document.getElementById('blacklightCheck').checked = false;
-    refreshVariationRow();
-    updateStatusPanel();
-  } else {
-    cycleConfigSubsetting();
-  }
-}
-function doMediumPress() {
-  if (Ctl.appMode !== 'show') advanceConfigScreen();
-}
-function doLongPress() {
-  if (Ctl.appMode === 'show') enterConfigMode(); else exitConfigMode();
-}
-function doDoublePress() {
-  if (Ctl.appMode === 'show') {
-    Ctl.blacklight = !Ctl.blacklight;
-    document.getElementById('blacklightCheck').checked = Ctl.blacklight;
-  } else {
-    exitConfigMode(); // commit -- this sim applies every change live already, so commit and cancel both just return to ModeShow
-  }
-}
-function doXLongPress() {
-  Ctl.globalBr = Ctl.globalBr > 0 ? 0 : 100;
-  document.getElementById('globalBrSlider').value = Ctl.globalBr;
-  document.getElementById('globalBrVal').textContent = Ctl.globalBr + '%';
-}
 // The bold first word of an action-cell lights up orange for 150ms --
 // mirrors the old physical buttons' own press-flash, now driven only by
 // the encoder's center push-button (for Short/Med/Long/XL/Double) or by
@@ -7002,24 +6932,29 @@ document.getElementById('inputCapSlider').addEventListener('input', applyInputCa
 document.getElementById('tonePatternSelect').addEventListener('change', (e) => { toneSettings.pattern = e.target.value; });
 // Quick Adjust brightness sliders -- a real, always-live shortcut to the
 // SAME state the Brightness config screens adjust (see claude_dev_prompts.md's
-// help-fw-io/help-shortcuts distinction). Dev Tool role: call the real
+// help-fw-io/help-shortcuts distinction). Calls the real
 // web_set*Brightness() injectors (added for the zero-duplication mandate
 // fix, prompt 6) so real MagicCarpet::applyBrightnessCeiling() actually
 // scales what readLedsFromWasm() reads back -- Ctl.globalBr/etc. are kept
-// in sync too since Interface role's renderInterfaceMode() still reads
-// them locally (see that function's own comment).
+// in sync too, purely so this slider's own on-screen value reflects it.
 bindSlider('globalBrSlider', 'globalBrVal', v => v+'%', v => { Ctl.globalBr = v; if (wasmReady) wasmModule.ccall('web_setGlobalBrightness', null, ['number'], [v]); });
 bindSlider('headlightBrSlider', 'headlightBrVal', v => v+'%', v => { Ctl.headlightBr = v; if (wasmReady) wasmModule.ccall('web_setHeadlightBrightness', null, ['number'], [v]); });
 bindSlider('chinaBrSlider', 'chinaBrVal', v => v+'%', v => { Ctl.chinaBr = v; if (wasmReady) wasmModule.ccall('web_setChinaBrightness', null, ['number'], [v]); });
 // AGC is 3-state (Off/Band/Full, matching firmware's AGCMode), not a plain
 // on/off toggle, so it isn't bindToggleButton()'d -- click cycles to the
 // next state (wrapping around, unlike the encoder's clamped-at-both-ends
-// behavior above), always showing the current state as its own label
-// ("AGCoff"/"AGCband"/"AGCfull", matching AudioBoard.h's AGCMode names
-// exactly, per request), orange (.active) for either non-Off state.
+// behavior above), orange (.active) for either non-Off state.
+// BUGFIX (mandate): label used to be a hardcoded ['AGCoff','AGCband',
+// 'AGCfull'] JS array -- a real lightshow-config-enum-name-keyed... er,
+// -indexed table living in executable JS, which would silently go stale
+// the moment AGCMode's real names changed. Now reads the real name string
+// straight from the compiled firmware (agcModeName(), CarpetLightLogic.cpp,
+// exposed via web_audioGetAgcModeName()) every time -- the button's own
+// label IS the setting's real enum-value name, always, with nothing
+// hand-typed in between.
 function updateAgcButtonUI() {
   const btn = document.getElementById('btnAgc');
-  btn.textContent = ['AGCoff', 'AGCband', 'AGCfull'][AudioBoard.agcMode];
+  btn.textContent = AudioBoard.agcModeName;
   btn.classList.toggle('active', AudioBoard.agcMode !== 0);
 }
 document.getElementById('btnAgc').addEventListener('click', () => {
@@ -7029,10 +6964,13 @@ document.getElementById('btnAgc').addEventListener('click', () => {
 });
 // AutoPk -- 3-state now (AutoPeakOff/AutoPeakFull/AutoPeakBin, see
 // AudioBoard.h's AutoPeakMode), same click-cycles-and-wraps pattern as
-// btnAgc above, abbreviated labels per request.
+// btnAgc above. BUGFIX (mandate, same as btnAgc's own fix above): label
+// used to be a hardcoded ['AutoPkOff','AutoPkFull','AutoPkBin'] JS array;
+// now reads the real name straight from the compiled firmware
+// (autoPeakModeName(), web_audioGetAutoPeakModeName()).
 function updateAutoPeakButtonUI() {
   const btn = document.getElementById('btnAutoPeak');
-  btn.textContent = ['AutoPkOff', 'AutoPkFull', 'AutoPkBin'][AudioBoard.autoPeakMode];
+  btn.textContent = AudioBoard.autoPeakModeName;
   btn.classList.toggle('active', AudioBoard.autoPeakMode !== 0);
 }
 document.getElementById('btnAutoPeak').addEventListener('click', () => {
@@ -7099,8 +7037,6 @@ function syncShowStateFromWasm() {
     Ctl.currMode = realShow;
     Ctl.appMode = 'show';
     document.getElementById('showSelect').value = realShow;
-    showT0 = performance.now();
-    resetLighthouseState(); resetSpeedStripesState(); resetFlameState(); resetNewStandardState(); resetPixelWarState();
     Ctl.blacklight = false; // volatile, force-reset off on every show change -- see btnShort's handler for details
     document.getElementById('blacklightCheck').checked = false;
     refreshVariationRow();
@@ -7122,6 +7058,7 @@ function syncShowStateFromWasm() {
   updateInputActionTable();
 }
 
+let lastFrameT = performance.now(); // real frame-to-frame dt for tick()'s own timing, not show-specific state
 function tick(now) {
   try {
     const dtMs = now - lastFrameT;
@@ -7150,10 +7087,8 @@ function tick(now) {
     if (wasmReady) wasmModule.ccall('web_injectPotPercent', null, ['number'], [Ctl.pot]);
 
     syncShowStateFromWasm();
-    renderCurrent(now, dtMs);
-    // Dispatch, not a branch inside one draw() -- same "structurally can't
-    // silently fall back" pattern already used for the Dev-Tool-vs-
-    // Interface-role split (see renderCurrent() above): 2D mode's draw()
+    readLedsFromWasm();
+    // Dispatch, not a branch inside one draw() function: 2D mode's draw()
     // gets zero edits for this feature, so it stays provably pixel-
     // identical to before regardless of what draw3D() does.
     if (Ctl.mode3D) draw3D(); else draw();
