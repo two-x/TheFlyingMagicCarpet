@@ -332,13 +332,14 @@ class SpeedStripesShow : public LightShow {
       return hueColor;
    }
    // China-only (megabars are excluded per request -- always global max, see
-   // updateZebra()) sound-reactive brightness: full global max after 10s+
-   // of silence, otherwise ZEBRA_CHINA_REST_FRACTION of max, except bass
-   // hits push it up to their own level (as a fraction of max), never below
-   // that resting floor.
+   // updateZebra()) sound-reactive brightness: full global max after
+   // ZEBRA_CHINA_SILENCE_MS of silence, otherwise ZEBRA_CHINA_REST_FRACTION
+   // of max, except bass hits push it up to their own level (as a fraction
+   // of max), never below that resting floor.
+   static const uint32_t ZEBRA_CHINA_SILENCE_MS = 750; // was 10000, per request ("shows that change light behavior after silence is detected" should do it sooner)
    float zebraChinaBrightnessFraction() {
       if ( !AudioBoard::isSilent() ) zebraSilenceTimer_.reset();
-      if ( zebraSilenceTimer_.elapsed() >= 10000 ) return 1.0f;
+      if ( zebraSilenceTimer_.elapsed() >= ZEBRA_CHINA_SILENCE_MS ) return 1.0f;
       float bassFrac = AudioBoard::getBandHitPercent( BandBass ) / 100.0f;
       return max( ZEBRA_CHINA_REST_FRACTION, bassFrac );
    }

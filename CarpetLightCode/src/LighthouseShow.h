@@ -154,6 +154,25 @@ class LighthouseShow : public LightShow {
    float bounceVel1_ = 0.0f, bounceVel2_ = 0.0f; // deg/s, decays toward 0
    static constexpr float BOUNCE_DECAY_TAU_SEC = 1.5f;
    static constexpr float BOUNCE_KICK_DEG_PER_SEC = 40.0f;
+   // BUGFIX ("both beams always end up going counterclockwise, not one
+   // CW/one CCW"): the kick above was being re-applied every single frame
+   // the collision condition stayed true, not once per collision. A
+   // single 40deg/s kick is small next to the beams' combined closing
+   // rate (up to 720deg/s), so it typically took many consecutive frames
+   // to actually separate -- and since kickSign's sign stays the same for
+   // as long as the same 2 beams keep approaching from the same side,
+   // those repeated kicks all landed in the same direction on both
+   // bounceVel1_/bounceVel2_ each frame, growing essentially unbounded
+   // (a real per-frame impulse vs. a decay rate ~180x slower) until the
+   // accumulated bias dwarfed the raw random-walked vel1_/vel2_ entirely
+   // and dictated the beams' apparent rotation itself, rather than merely
+   // nudging them apart. Fixed by making the kick edge-triggered -- once
+   // per collision EPISODE (the frame separation first drops under the
+   // minimum), not once per frame the beams happen to still be touching
+   // it -- a real single bounce impulse, not a ratcheting force. The
+   // position clamp itself still runs every frame regardless (unchanged,
+   // keeps the megabar guarantee unconditional).
+   bool wasColliding_ = false;
 
    Timer frameTimer_; // tracks dt between update() calls
 
@@ -402,7 +421,8 @@ class LighthouseShow : public LightShow {
          float rawDelta = circularDelta( angle1_, angle2_ ); // -180..180, signed, angle1->angle2
          float absDelta = fabsf( rawDelta );
          float effSep = min( absDelta, 180.0f - absDelta );  // 0..90
-         if ( effSep < MIN_BEAM_SEPARATION_DEG ) {
+         bool nowColliding = effSep < MIN_BEAM_SEPARATION_DEG;
+         if ( nowColliding ) {
             float shortfall = MIN_BEAM_SEPARATION_DEG - effSep;
             float sign = ( rawDelta >= 0.0f ) ? 1.0f : -1.0f;
             // absDelta<=90: closest pairing is angle1 vs angle2 directly --
@@ -413,10 +433,16 @@ class LighthouseShow : public LightShow {
             angle1_ = wrap360( angle1_ - pushDelta * 0.5f );
             angle2_ = wrap360( angle2_ + pushDelta * 0.5f );
 
-            float kickSign = ( absDelta <= 90.0f ) ? sign : -sign; // matches pushDelta's own sign convention
-            bounceVel1_ -= kickSign * BOUNCE_KICK_DEG_PER_SEC;
-            bounceVel2_ += kickSign * BOUNCE_KICK_DEG_PER_SEC;
+            // one-shot impulse, only on the frame this collision episode
+            // began -- see wasColliding_'s own comment for why re-kicking
+            // every frame while still touching was the actual bug.
+            if ( !wasColliding_ ) {
+               float kickSign = ( absDelta <= 90.0f ) ? sign : -sign; // matches pushDelta's own sign convention
+               bounceVel1_ -= kickSign * BOUNCE_KICK_DEG_PER_SEC;
+               bounceVel2_ += kickSign * BOUNCE_KICK_DEG_PER_SEC;
+            }
          }
+         wasColliding_ = nowColliding;
       }
 
       hue1_ += hueRate * dtSec;

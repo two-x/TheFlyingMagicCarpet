@@ -207,8 +207,8 @@ class EqualizerShow : public LightShow {
    float pwMegabarHeat_[ NUM_MEGABAR_LEDS ] = { 0.0f };
    // which color source a megabar renders while lit, set at PICK time (per
    // request, "always use the right color for its freq band, like china") --
-   // 0=bass (activeColor, respects the war's current turn), 1=treble
-   // (Tcolor, fixed -- doesn't participate in turn-trading). See
+   // 0=bass (Bcolor, fixed), 1=treble (Tcolor, fixed) -- neither
+   // participates in the rope's own turn-trading. See
    // PW_BASS_PICK/PW_TREBLE_PICK below.
    enum PwColorSrc { PwSrcBass = 0, PwSrcTreble = 1 };
    uint8_t pwMegabarColorSrc_[ NUM_MEGABAR_LEDS ] = { PwSrcBass };
@@ -224,6 +224,42 @@ class EqualizerShow : public LightShow {
    int pwLastPicked_[ PW_MAX_PICK ] = { -1, -1, -1 };
    bool pwTurnIsB_ = true;  // whose turn it currently is
    int pwTurnHitCount_ = 0; // bass hits so far this turn, vs cycleBeats_
+
+   // CHINA bass/treble split, per request: paired with ONE of its two
+   // real ANGULAR neighbors (either direction), not a fixed corner
+   // grouping -- sometimes that lands on the 2 chinas sharing a corner
+   // bracket, sometimes the 2 aimed along the same edge (e.g. "the two
+   // back chinas"), depending on which neighbor direction gets picked.
+   // PW_CHINA_CW_ORDER_ lists every china ID in real clockwise angular
+   // order (computed offline from CarpetGeometry.h's chDimXY table --
+   // position i's clockwise neighbor is position i+1, counterclockwise is
+   // i-1, both mod NUM_CHINA_LEDS); position+4 (mod 8) is always that
+   // position's real diagonal opposite, since the order follows true
+   // angle around the full circle. Every pwChinaTrebleEveryHits_ bass
+   // hits (itself re-randomized to a fresh 1 or 2 on each reroll, per
+   // request), pwRerollChinaTreble_() picks a random position and a
+   // random direction; that adjacent-by-angle pair AND the pair 4
+   // positions away (its real diagonal opposite) go treble, the other 2
+   // pairs stay bass -- always exactly 2 treble / 2 bass pairs at any
+   // time, independent of the war's own turn-tracking (activeColor stays
+   // turn-dependent for the ROPE only, same as the megabar pools above).
+   static const uint8_t PW_CHINA_CW_ORDER_[ NUM_CHINA_LEDS ]; // defined out-of-class below, see its own values there
+   uint8_t pwChinaBassHitCount_ = 0;
+   uint8_t pwChinaTrebleEveryHits_ = 1; // re-randomized to 1 or 2 on each reroll
+   bool pwChinaIsTreble_[ NUM_CHINA_LEDS ] = { false };
+
+   void pwRerollChinaTreble_() {
+      uint8_t posA = random8( NUM_CHINA_LEDS );
+      uint8_t posB = ( random8( 2 ) == 0 ) ? ( posA + 1 ) % NUM_CHINA_LEDS : ( posA + NUM_CHINA_LEDS - 1 ) % NUM_CHINA_LEDS;
+      uint8_t posC = ( posA + NUM_CHINA_LEDS / 2 ) % NUM_CHINA_LEDS; // A's diagonal opposite
+      uint8_t posD = ( posB + NUM_CHINA_LEDS / 2 ) % NUM_CHINA_LEDS; // B's diagonal opposite
+      for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) pwChinaIsTreble_[ c ] = false;
+      pwChinaIsTreble_[ PW_CHINA_CW_ORDER_[ posA ] ] = true;
+      pwChinaIsTreble_[ PW_CHINA_CW_ORDER_[ posB ] ] = true;
+      pwChinaIsTreble_[ PW_CHINA_CW_ORDER_[ posC ] ] = true;
+      pwChinaIsTreble_[ PW_CHINA_CW_ORDER_[ posD ] ] = true;
+      pwChinaTrebleEveryHits_ = ( random8( 2 ) == 0 ) ? 1 : 2;
+   }
 
    // triple-strobe on bass hits (see updateStrobe()) -- nonvolatile, toggled
    // by a double press while this show is active (see CarpetLightLogic.cpp)
@@ -321,6 +357,8 @@ class EqualizerShow : public LightShow {
       for ( int n = 0; n < PW_MAX_PICK; ++n ) pwLastPicked_[ n ] = -1;
       pwTurnIsB_ = true;
       pwTurnHitCount_ = 0;
+      pwChinaBassHitCount_ = 0;
+      pwRerollChinaTreble_();
    }
 
    void update( uint32_t time ) {
@@ -881,8 +919,11 @@ class EqualizerShow : public LightShow {
             pwTurnHitCount_ = 0;
             pwTurnIsB_ = !pwTurnIsB_;
          }
+         if ( ++pwChinaBassHitCount_ >= pwChinaTrebleEveryHits_ ) {
+            pwChinaBassHitCount_ = 0;
+            pwRerollChinaTreble_();
+         }
       }
-      CRGB activeColor = pwTurnIsB_ ? Bcolor : Tcolor;
 
       // ROPE: territory war -- every qualifying bass hit pushes territory
       // toward whichever color currently has the turn immediately (the
@@ -922,9 +963,9 @@ class EqualizerShow : public LightShow {
       // WAR's turn -- Bcolor or Tcolor, alternating) instead of a fixed
       // Bcolor, so during T's turn a genuine bass hit would render
       // identically to a treble hit, indistinguishable from each other.
-      // activeColor stays turn-dependent for the ROPE/CHINA (that's the
-      // actual "war" visual, unchanged) -- only the megabar flash pool's
-      // bass color is now fixed, same as treble always was, so each pool's
+      // The rope stays turn-dependent (that's the actual "war" visual,
+      // unchanged) -- only the megabar flash pool's bass color is now
+      // fixed, same as treble always was, so each pool's
       // color always identifies which band triggered it, like china's own
       // bass/treble split does.
       // wasLastPicked avoidance is shared across both pools (one combined
@@ -962,13 +1003,19 @@ class EqualizerShow : public LightShow {
          LightSetters::setColor( carpet, LightSetters::TargetMegabar, base, LightSetters::ByID{ (uint8_t)m } );
       }
 
-      // CHINA: all 8 flash together in the ACTIVE color, brightness
-      // tracking the live bass hit level -- simpler than the old 2-band
-      // pair-split, since there's no treble input left to split against.
-      CRGB chinaLit = activeColor;
-      chinaLit.nscale8( (uint8_t)( (uint16_t)bassHit * 255 / 100 ) );
+      // CHINA: back to a bass/treble split, per request -- see
+      // pwChinaIsTreble_/pwRerollChinaTreble_()'s own comments for the
+      // pairing/rotation scheme. Each pair's color is fixed to its own
+      // band (not the war's turn-dependent activeColor -- same "always
+      // use the right color for its freq band" convention as the megabar
+      // pools above), brightness tracking that band's own live hit level.
+      uint8_t trebleHit = AudioBoard::getBandHitPercent( BandTreble );
       for ( uint8_t c = 0; c < NUM_CHINA_LEDS; ++c ) {
-         LightSetters::setColor( carpet, LightSetters::TargetChina, chinaLit, LightSetters::ByID{ c } );
+         bool isTreble = pwChinaIsTreble_[ c ];
+         CRGB clr = isTreble ? Tcolor : Bcolor;
+         uint8_t level = isTreble ? trebleHit : bassHit;
+         clr.nscale8( (uint8_t)( (uint16_t)level * 255 / 100 ) );
+         LightSetters::setColor( carpet, LightSetters::TargetChina, clr, LightSetters::ByID{ c } );
          LightSetters::setWhite( carpet, LightSetters::TargetChina, 0, LightSetters::ByID{ c } );
       }
    }
@@ -1041,3 +1088,11 @@ class EqualizerShow : public LightShow {
    }
 };
 const uint8_t EqualizerShow::CYCLE_BEATS_TABLE[ 15 ] = { 2, 4, 6, 8, 10, 14, 18, 22, 28, 36, 46, 60, 78, 100, 128 };
+// china IDs in real clockwise angular order -- see PW_CHINA_CW_ORDER_'s
+// own (in-class) declaration comment for the derivation and how it's used.
+const uint8_t EqualizerShow::PW_CHINA_CW_ORDER_[ NUM_CHINA_LEDS ] = {
+   CarpetGeometry::ChinaFrontRight, CarpetGeometry::ChinaRightFront,
+   CarpetGeometry::ChinaRightRear,  CarpetGeometry::ChinaRearRight,
+   CarpetGeometry::ChinaRearLeft,   CarpetGeometry::ChinaLeftRear,
+   CarpetGeometry::ChinaLeftFront,  CarpetGeometry::ChinaFrontLeft,
+};

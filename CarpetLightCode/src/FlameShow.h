@@ -79,7 +79,7 @@ class FlameShow : public LightShow {
    // lists -- china only has 2 distinct real ground-spot positions
    // (front/rear, no "side" case), same fix already applied to
    // SpeedStripesShow.h/BumpingAudioShow.h's china grouping.
-   static const uint32_t HIT_REACTIVE_WINDOW_MS = 3000;
+   static const uint32_t HIT_REACTIVE_WINDOW_MS = 750; // was 3000, per request ("shows that change light behavior after silence is detected" should do it sooner)
    static const uint8_t FLOOD_LO_INDEX = 40, FLOOD_HI_INDEX = 230; // palette reference points, matches the JS mirror
    // idle-mode base-color coin flip (megabarColorPick_/chinaColorPick_
    // below) -- per explicit request, weighted so a flood is more often

@@ -207,19 +207,23 @@ class AudioBoard {
    static float agcBoostFull_;
 
    // one full-buffer scan over a bin's LevelClean history serves AGC boost
-   // (peak), RMS (sumSquares/n), and silence (anyNonzero) all at once.
-   // NOT time-windowed -- the ring buffer's own fixed depth (AGC_WINDOW_MS,
-   // flat) already IS the window, so every currently-valid slot
-   // unconditionally belongs in it; no per-entry timestamp comparison
-   // needed. Includes audioReadIndex_'s own just-written row (valid by the
-   // time this runs, in step F, after step E already wrote it) -- and,
-   // whenever foresight > 0, everything captured-but-not-yet-"shown" ahead
-   // of lightsShowTime too, which is the whole point: a loud sample sitting
-   // in that buffered future already pulls the scan's peak up (and this
-   // bin's boost down) before it's actually the displayed instant.
-   struct WholeScan_ { float peak; float sumSquares; uint16_t n; bool anyNonzero; };
+   // (peak) and RMS (sumSquares/n) at once. NOT time-windowed -- the ring
+   // buffer's own fixed depth (AGC_WINDOW_MS, flat) already IS the window,
+   // so every currently-valid slot unconditionally belongs in it; no
+   // per-entry timestamp comparison needed. Includes audioReadIndex_'s own
+   // just-written row (valid by the time this runs, in step F, after step
+   // E already wrote it) -- and, whenever foresight > 0, everything
+   // captured-but-not-yet-"shown" ahead of lightsShowTime too, which is
+   // the whole point: a loud sample sitting in that buffered future
+   // already pulls the scan's peak up (and this bin's boost down) before
+   // it's actually the displayed instant. Silence detection used to piggy-
+   // back on this scan too (an `anyNonzero` flag) -- moved to its own,
+   // much shorter, decoupled timer (see lastSoundMs_'s own comment), since
+   // this buffer's necessarily-long AGC-tuned depth made a poor fit for
+   // "has sound just stopped."
+   struct WholeScan_ { float peak; float sumSquares; uint16_t n; };
    static WholeScan_ scanWholeBuffer_( uint8_t bin ) {
-      WholeScan_ r = { 0.0f, 0.0f, 0, false };
+      WholeScan_ r = { 0.0f, 0.0f, 0 };
       for ( uint16_t i = 0; i < audioCount_; ++i ) {
          uint8_t v = audioData_[ LevelClean ][ bin ][ i ];
          if ( v == LEVEL_INVALID ) continue;
@@ -227,7 +231,6 @@ class AudioBoard {
          if ( f > r.peak ) r.peak = f;
          r.sumSquares += f * f;
          ++r.n;
-         if ( v > 0 ) r.anyNonzero = true;
       }
       return r;
    }
@@ -412,6 +415,21 @@ class AudioBoard {
    static constexpr float HIT_SUSTAIN_PERCENT = 90.0f;
 
    static bool silent_; // internal only -- see isSilent() below
+   // per request ("shows that change light behavior after silence is
+   // detected should do it sooner"): isSilent() used to require a FULL
+   // AGC_WINDOW_MS (4s) of the whole ring buffer's history to contain zero
+   // signal -- correct for what that buffer was built for (AGC boost
+   // smoothing needs real depth), but a genuinely poor fit for "has sound
+   // just stopped," which real listeners judge in well under a second.
+   // Decoupled from AGC_WINDOW_MS entirely (that stays untouched -- still
+   // governs the AGC boost release rate, unrelated to this): lastSoundMs_
+   // tracks the timestamp of the most recent poll where ANY bin cleared
+   // its own noise floor (updateBandLevels()'s existing anyAboveFloor
+   // check, already computed there for an unrelated reason -- reused, not
+   // duplicated), and isSilent() reports true once SILENCE_DETECT_MS has
+   // passed since then, with no other buffer-depth dependency.
+   static const uint16_t SILENCE_DETECT_MS = 750;
+   static uint32_t lastSoundMs_;
 
    // NOT tied to POLL_INTERVAL_MS above, deliberately -- the 200us delays
    // below are the MSGEQ7's own datasheet-mandated minimum STROBE hold/
@@ -513,6 +531,7 @@ class AudioBoard {
       for ( int bin = 0; bin < NumBins; ++bin ) {
          if ( (float)audioData_[ LevelRaw ][ bin ][ audioReadIndex_ ] > binNoiseFloorPercent_[ bin ] ) { anyAboveFloor = true; break; }
       }
+      if ( anyAboveFloor ) lastSoundMs_ = nowMs; // see lastSoundMs_'s own comment -- isSilent()'s real, decoupled timer
       for ( int bin = 0; bin < NumBins; ++bin ) {
          audioData_[ LevelClean ][ bin ][ audioReadIndex_ ] = anyAboveFloor ? audioData_[ LevelRaw ][ bin ][ audioReadIndex_ ] : (uint8_t)0;
       }
@@ -520,7 +539,6 @@ class AudioBoard {
       // (F) AGC envelope + RMS + silence, one whole-buffer scan per bin
       uint32_t showMs = audioTimestamps_[ lightsShowIndex_ ];
       float fullPeak = 0.0f;
-      bool anySoundInWindow = false;
       // ceiling = 100/noiseFloor is inherent (smallest nonzero clean value
       // is always > the (highest, bin6) noise floor), so the rise rate is
       // naturally bounded without a separate clamp
@@ -535,15 +553,13 @@ class AudioBoard {
          float rms = ( sc.n == 0 ) ? 0.0f : sqrtf( sc.sumSquares / (float)sc.n );
          audioData_[ LevelRMS ][ bin ][ lightsShowIndex_ ] = (uint8_t)( rms + 0.5f );
          if ( sc.peak > fullPeak ) fullPeak = sc.peak;
-         if ( sc.anyNonzero ) anySoundInWindow = true;
       }
       float fullTarget = ( fullPeak <= 0.0f ) ? 1.0f : ( 100.0f / fullPeak );
       if ( fullTarget < agcBoostFull_ ) agcBoostFull_ = fullTarget;
       else agcBoostFull_ = min( fullTarget, agcBoostFull_ + riseRatePerMs * (float)dtMs );
-      // silent only once a full window of real history has actually
-      // accumulated -- avoids spuriously reporting silence right after
-      // boot before there's been time to see any sound at all
-      silent_ = ( showMs >= AGC_WINDOW_MS || audioCount_ >= AUDIO_HISTORY_SIZE ) ? !anySoundInWindow : false;
+      // see lastSoundMs_'s own comment -- a real, decoupled timer, not
+      // tied to the AGC buffer's own necessarily-long depth
+      silent_ = ( nowMs - lastSoundMs_ ) >= SILENCE_DETECT_MS;
 
       for ( int bin = 0; bin < NumBins; ++bin ) {
          uint8_t clean = audioData_[ LevelClean ][ bin ][ lightsShowIndex_ ];
@@ -991,6 +1007,7 @@ float AudioBoard::binNoiseFloorPercent_[ NumBins ] = { 19.5f, 19.5f, 19.5f, 19.5
 uint8_t AudioBoard::autoPeakMode_ = AutoPeakBin; // overwritten by Nvm at boot
 
 bool AudioBoard::silent_ = false;
+uint32_t AudioBoard::lastSoundMs_ = 0;
 
 float AudioBoard::audioForesightMs_ = 340.0f; // overwritten by Nvm at boot
 
