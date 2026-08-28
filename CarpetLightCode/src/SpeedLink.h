@@ -63,8 +63,41 @@ class SpeedLink {
  public:
    static void setup() {
 #ifndef __EMSCRIPTEN__
-      Wire.begin( LIGHTBOX_I2C_ADDR );
-      Wire.onReceive( onReceive );
+      // MITIGATION ("loops start taking ~1s when the lightbox is wired to
+      // the I2C bus but CANTroller2 is powered down"): believed root
+      // cause (not confirmed on a scope -- no hardware access to verify)
+      // is that a device which lost power but stayed wired to the bus can
+      // hold SDA or SCL low (leakage through ESD-protection diodes, a
+      // floating unconfigured pin), which the Due's TWI hardware then
+      // sees as a permanently "busy" bus. A healthy, idle I2C bus has
+      // BOTH lines pulled HIGH by their pull-ups with nothing driving
+      // them low -- this checks that, read-only, before Wire ever
+      // touches the pins, and simply never starts the peripheral if it
+      // doesn't hold. Polls for up to 100ms (not a single instantaneous
+      // read) so a normal brief transient -- e.g. CANTroller2 driving the
+      // bus for its own init at the same moment this boots -- isn't
+      // mistaken for a genuinely stuck bus; a real stuck-low condition
+      // from an unpowered device stays low far longer than that. Safe by
+      // construction: on a healthy bus both lines are already HIGH, so
+      // this whole block is a no-op pass-through to the exact same
+      // Wire.begin() call as before. If skipped, every getter below
+      // already defaults to a safe "no link" value (0 speed,
+      // RUNMODE_UNKNOWN, isFresh()==false) with nothing else to change --
+      // there's no separate "disabled" flag to thread through, disabling
+      // amounts to just never starting the peripheral.
+      pinMode( PIN_WIRE_SDA, INPUT_PULLUP );
+      pinMode( PIN_WIRE_SCL, INPUT_PULLUP );
+      bool busIdle = false;
+      Timer busSettleTimer( 100 );
+      do {
+         if ( digitalRead( PIN_WIRE_SDA ) == HIGH && digitalRead( PIN_WIRE_SCL ) == HIGH ) { busIdle = true; break; }
+      } while ( !busSettleTimer.expired() );
+      if ( busIdle ) {
+         Wire.begin( LIGHTBOX_I2C_ADDR );
+         Wire.onReceive( onReceive );
+      } else {
+         Serial.println( "I2C bus stuck low at boot (SpeedLink) -- disabled for this session" );
+      }
 #endif
       // WASM: no real I2C bus -- the visualizer injects speed/runmode
       // directly via injectSpeedHundredthsMph()/injectRunmode() below

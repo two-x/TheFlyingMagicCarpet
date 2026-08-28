@@ -444,6 +444,8 @@ CANTroller2 only ever transmits 12 bits of speed (top nibble of its 16-bit inter
 
 `SpeedLink` also tracks runmode packets (`0x1R`, sent only on change) via `getRunmode()`/`isLowPower()`. Runmode `1` is `LowPower` (CANTroller2's `globals.h`: `Basic=0, LowPower=1, Standby=2, Stall=3, Hold=4, Fly=5, Cruise=6, Cal=7`).
 
+**Boot-time stuck-bus check**: a device left wired to the I2C bus after losing its own power can hold `SDA`/`SCL` low (leakage through ESD-protection diodes, a floating unconfigured pin) — believed the actual cause of a real, reported issue ("loops start taking ~1s when the lightbox is wired to the bus but CANTroller2 is powered down"), though not confirmed on a scope. `SpeedLink::setup()` checks for this before ever touching the bus: on a healthy, idle bus both lines are pulled HIGH with nothing driving them low, so it polls `digitalRead()` on both pins (up to 100ms, not a single instantaneous read, so a normal brief transient like CANTroller2 initializing its own I2C at the same moment isn't mistaken for a stuck bus) and simply never calls `Wire.begin()` if they don't settle high — every `SpeedLink` getter already defaults to a safe "no link" value (0 speed, `RUNMODE_UNKNOWN`, `isFresh()==false`), so skipping `Wire.begin()` is the entire mitigation, nothing else to disable separately. Stays disabled until the next reboot; prints one line to the console (`Serial`) if it trips.
+
 ### Low power mode
 
 Every show derives behavior from the live pot reading (`carpet->pot->readPercent()`), so rather than teaching each show about low power, the simulation lives one layer down in `LedControl::Potentiometer` (`LedController.h`) — every show gets it free, no show-file changes:
