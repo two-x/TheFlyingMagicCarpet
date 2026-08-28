@@ -25,6 +25,8 @@ Directions (front/rear/left/right) are relative to the carpet's own direction of
   - [Perimeter flash feedback](#perimeter-flash-feedback)
   - [Normal mode](#normal-mode)
   - [Configuration mode](#configuration-mode)
+- [Light show order](#light-show-order)
+- [Config menu structure](#config-menu-structure)
 - [Lighthouse show](#lighthouse-show)
 - [FlameSparkle show variations](#flamesparkle-show-variations)
 - [Equalizer show variations](#equalizer-show-variations)
@@ -65,7 +67,8 @@ open tools/visualizer/carpet-visualizer.html
 - **Config-mode screens**: Noise/Peak meter, Hit decay meter, Foresight adjust (hit-prediction style rides along on this same screen) — the same audio-tuning screens as the real controller, navigable identically (see Controls below).
 - **Audio-reactive**, from 4 sources: **Mic**; **System** (shared browser tab, or whole-screen audio on Windows — plays speaker output directly, no OS loopback tool needed); **File** (any local audio file); or **Tone** (synthetic generator with genre patterns — simple, house, trap, boom-bap/hip-hop, chris (bass music), lo-fi — for testing without real music). Trap/boom-bap/chris/house synthesize bass + treble only, no midrange, by request.
 - **Landscape/portrait viewport** toggle (top-left) — landscape (default) rotates the car 90° so front points right, suited to a wide monitor; portrait matches the car's true top-down aspect.
-- Scrollable/pinchable **zoom** (20–100ft simulated viewer distance), capped so you can't zoom out past the point the ground already fills the view.
+- Pinch-to-zoom, or left-click-hold + scroll (**zoom**, 20–100ft simulated viewer distance), capped so you can't zoom out past the point the ground already fills the view.
+- **3D mode** (Settings menu rocker): orbit camera around the car. "Always render fixtures" (Settings menu, 3D only, default off) — when off, the flood/car/wheel *physical models* only draw while the camera's pitch is within 8° of fully side-on (near-overhead pitches skip them, matching 2D's own top-down aesthetic); the flood light cones (the real LED data) always draw regardless.
 - A **Quick Adjust** panel — direct, always-live overrides (brightness levels, hit decay/foresight (plus hit-prediction style), blacklight, fixture-dot coloring), alongside (not replacing) the config-mode path to the same values.
 - A live 4-band (bass/mid/treble/full) audio level meter, doubling as the tone generator's expand/collapse control.
 
@@ -298,6 +301,49 @@ The rig splits into a left/right half, a sideways U (rope's left side + left hal
 - **Right half** — rope's right side, right half of both front/rear edges, china `[0,1,6,7]` (front-right/rear-right pairs) — renders the **power-saving translation**: take `min(r,g,b)`, subtract from each of r/g/b (smallest channel bottoms at 0), add that amount to white instead. Same apparent hue/brightness, less from the color LEDs.
 
 **Bugfix**: the rope's left/right split had the same front/rear-direction bug as `LighthouseShow`'s `ropeAngleDeg()` (below) — front/rear halves were swapped, most visible where the front edge meets the right-side strip's corner-wrap. Fixed the same way: `i < FRONT` + `i >= REAR` now form the left half in one simplified check, `[FRONT,REAR)` the right half.
+
+## Light show order
+
+Real boot/cycling order (`SHOW_MODES` X-macro, `CarpetLightLogic.cpp`) — **S** (short press) advances 1→2→3→4→5→1; **Enc right/left** (encoder rotate) advances/retreats the current show's own variation, wrapping. Direction is per the code's own stated convention — **not yet confirmed against real hardware wiring** (`readPositionDelta()`'s sign is unverified; flip if backwards in practice). Also mirrored, print-ready, in [`cheat_sheet_card.txt`/`.docx`](cheat_sheet_card.txt) and [`lightshow_config_reference.txt`/`.docx`](lightshow_config_reference.txt).
+
+- Global (any show, any variation): **S** next show — **M** no effect — **L** enter config — **XL** lights on/off — **D** UV on/off (Equalizer: triple-strobe toggle instead) — **Enc right** next variation, **Enc left** previous
+- 1 Nightrider (3 variations)
+  - ManualHue — Pot sets hue directly
+  - AutoHueCycle — Pot sets flood auto-hue-cycle rate, 0.25-2Hz
+  - AutoWithSound — Pot sets flood auto-hue-cycle rate; china flashes on bass hits
+- 2 Flame (2 variations)
+  - Waterflames — Pot sets fire-sim speed
+  - Flames — Pot sets fire-sim speed
+- 3 Equalizer (3 variations)
+  - VU meter — Pot sets live peak threshold; **D** toggles triple-strobe
+  - new_standard — Pot sets effects-cycle length, 2-128 bass beats log-spaced; **D** toggles triple-strobe
+  - pixel_war — Pot sets effects-cycle length, 2-128 bass beats log-spaced; **D** toggles triple-strobe
+- 4 SpeedStripes (2 variations)
+  - default — Pot has no effect
+  - zebra — Pot sets black-stripe width, 0-40ft
+- 5 Lighthouse (2 variations)
+  - default — Pot sets rotation-speed ceiling; china gets a bass-hit white strobe
+  - No Strobe — Pot sets rotation-speed ceiling; no china strobe
+
+## Config menu structure
+
+Real navigation (`CarpetLightLogic.cpp`'s `nextConfigMode()`/`cycleSubsetting()`/`numSubsettingsFor()`) — **L** enters config, always landing on ① Brightness; **M** advances to the next top-level screen, wrapping ①→②→③→①; **S** advances to the next subsetting within a screen; **D** saves + exits; **L** (while in config) cancels with no save. Encoder-right/left directions below are per the code's own stated convention — **not yet confirmed against real hardware wiring** (`readPositionDelta()`'s sign is unverified; flip if backwards in practice).
+
+- ① Brightness (3 subsettings) — Pot adjusts each screen's live value
+  - Global — 0-100%
+  - Headlight — 50-100%
+  - China — 0-100%
+- ② Audio (6 subsettings)
+  - NoiseFloor/PeakThreshold — **S** swaps which one Pot adjusts
+  - HitDecay — Pot sets 0-1000ms
+  - Foresight — Pot sets 0-1000ms; **Enc right** next hit-prediction style, **Enc left** previous (off→exponential→machine-gun→drum, wraps), rides the same screen
+  - AGC — **Enc right** advances Off→Band→Full (clamps at Full), **Enc left** goes back toward Off (clamps at Off); Pot no effect
+  - SndReact — **Enc right** = on, **Enc left** = off (direct pick, not a cycle); Pot no effect
+  - AutoPk — **Enc right** advances Off→Full→Bin (clamps at Bin), **Enc left** goes back toward Off (clamps at Off); Pot no effect
+- ③ PowerTest (3 subsettings) — **Enc** adjusts each; Pot no effect
+  - Hue
+  - Saturation
+  - Brightness
 
 ## Lighthouse show
 

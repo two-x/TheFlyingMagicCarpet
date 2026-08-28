@@ -1,0 +1,47 @@
+CARPET LIGHT — SHOW ORDER & CONFIG MENU REFERENCE
+
+LIGHT SHOW ORDER
+  S advances 1->2->3->4->5->1. Enc right/left advances/retreats the show's own variation, wrapping. Enc right/left below is per the code's own convention -- NOT yet verified against real wiring (flip if backwards).
+  - Global (any show, any variation)
+      - S next show -- M no effect -- L enter config -- XL lights on/off
+      - D UV on/off (Equalizer: triple-strobe toggle instead)
+      - Enc right next variation, Enc left previous
+  - 1 Nightrider (3 variations)
+      - ManualHue -- Pot sets hue directly
+      - AutoHueCycle -- Pot sets flood auto-hue rate, 0.25-2Hz
+      - AutoWithSound -- Pot sets flood auto-hue rate; china flashes on bass hits
+  - 2 Flame (2 variations)
+      - Waterflames -- Pot sets fire-sim speed
+      - Flames -- Pot sets fire-sim speed
+  - 3 Equalizer (3 variations)
+      - VU meter -- Pot sets live peak threshold; D toggles triple-strobe
+      - new_standard -- Pot sets cycle length, 2-128 bass beats (log); D toggles triple-strobe
+      - pixel_war -- Pot sets cycle length, 2-128 bass beats (log); D toggles triple-strobe
+  - 4 SpeedStripes (2 variations)
+      - default -- Pot has no effect
+      - zebra -- Pot sets black-stripe width, 0-40ft
+  - 5 Lighthouse (2 variations)
+      - default -- Pot sets rotation-speed ceiling; china bass-hit white strobe
+      - No Strobe -- Pot sets rotation-speed ceiling; no china strobe
+
+CONFIG MENU STRUCTURE
+  L enters config (always @ ① Brightness). M advances screen, wraps ①->②->③->①. S advances subsetting. D saves+exits. L cancels, no save. Enc right/left below is per the code's own convention -- NOT yet verified against real wiring (flip if backwards).
+  - ① Brightness (3 sub) -- Pot adjusts each live value
+      - Global -- 0-100%
+      - Headlight -- 50-100%
+      - China -- 0-100%
+  - ② Audio (6 sub)
+      - NoiseFloor/PeakThreshold -- S swaps which Pot adjusts
+      - HitDecay -- Pot sets 0-1000ms
+      - Foresight -- Pot 0-1000ms; Enc R/L next/prev hit-predict style (off/exp/machine-gun/drum, wraps)
+      - AGC -- Enc R advances Off->Band->Full, Enc L back toward Off (clamped); Pot n/a
+      - SndReact -- Enc R = on, Enc L = off (direct pick); Pot n/a
+      - AutoPk -- Enc R advances Off->Full->Bin, Enc L back toward Off (clamped); Pot n/a
+  - ③ PowerTest (3 sub) -- Enc adjusts each; Pot n/a
+      - Hue
+      - Saturation
+      - Brightness
+
+-----
+Generated: 2026-08-27 06:44 PM PDT (Pacific)
+Source of truth: tools/gen_lightshow_config_reference.py -- edit SECTIONS there and re-run, mirroring the same edit into README.md's "Light show order"/"Config menu structure" sections.

@@ -70,26 +70,27 @@ CONFIG MENU NAV (from L)
   Enc adjusts each
   (Pot: no effect)
 
-② Audio (7 sub, in order)
+② Audio (6 sub, in order)
   NoiseFlr ⇄ PkThresh
   (S swaps target)
   HitDecay  0-1000ms
-  HitPredict 0-Foresight
-  Enc: style (off/exp/
-  machine-gun/drum)
   Foresight  0-1000ms
+  +HitPredict style
+  (off/exp/mg/drum,
+  rides same screen)
 
 ② Audio (cont'd)
   AGC       Enc:Off/
   Band/Full
   SndReact  Enc: on/off
-  AutoPk    Enc: on/off
+  AutoPk    Enc:Off/
+  Full/Bin
   front-edge neo:
   L-half lit=off,
   R-half lit=on
 
 -----
-Generated: 2026-08-26 03:15 AM PDT (Pacific)
+Generated: 2026-08-27 06:40 PM PDT (Pacific)
 
 HOW TO FORMAT THIS FOR PRINT (one-time, before each new print run):
 1. Select all text above (down to but not including this "-----" footer)
