@@ -13,7 +13,7 @@ inline float temp_lims_f[NumTempCategories][NumMotorVals] {
     // alarm value is where idiot lights light up 
     {  40.0f,  77.0f, 135.0f, 120.0f, NAN, -67.0f, 257.0f, 2.0f },  // [CatUnknown] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
     {  40.0f,  77.0f, 135.0f, 120.0f, NAN, -67.0f, 257.0f, 2.0f },  // [CatAmbient] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
-    {  40.0f, 178.0f, 218.0f, 205.0f, NAN, -67.0f, 257.0f, 2.0f },  //  [CatEngine] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
+    {  40.0f, 178.0f, 218.0f, 215.0f, NAN, -67.0f, 257.0f, 2.0f },  //  [CatEngine] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin] // CHANGED alarm 205->215 playa 2026
     {  40.0f,  77.0f, 170.0f, 145.0f, NAN, -67.0f, 257.0f, 2.0f },  //   [CatWheel] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin] (applies to all wheels)
     {  45.0f,  77.0f, 165.0f, 130.0f, NAN, -67.0f, 257.0f, 2.0f },  //   [CatBrake] [OpMin/Cent/OpMax/Alarm/Filt/AbsMin/AbsMax/Margin]
 };  // float* degf[(int)loc::NumTempLocatio  ns][NumMotorVals];

@@ -180,7 +180,7 @@ bool allow_openloop_panicstop = true;   // if brake in openloop mode, do we stil
 
 // global tunable variables
 int operational_framerate_limit_fps = 100; // max display frame rate to enforce while driving whenever limit_framerate == true
-float wheeldifferr = 35.0f;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel before idiot light
+float wheeldifferr = 50.0f; // 35.0f;             // how much hotter the hottest wheel is allowed to exceed the coldest wheel before idiot light // CHANGED TO 50F playa-2026
 constexpr float float_conversion_zero = 0.001f;
 constexpr int unlikely_int = -92935762; // random ass unlikely value for detecting unintended arguments
 int sprite_color_depth = 8;
