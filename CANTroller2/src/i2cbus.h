@@ -294,7 +294,9 @@ inline float FS3000::readMilesPerHour() { return readMetersPerSecond() * 2.23693
 // code: 0x2H,0xLL = speedometer value update. 12-bit value contained in HLL is speed in hundredths-of-mph
 class LightingBox {  // represents the lighting controller i2c slave endpoint
   private:
-    Timer send_timer{250000};
+    static constexpr int send_interval_us = 250000;        // poll rate while the box is responding
+    static constexpr int send_interval_undetected_us = 5000000;  // poll rate while it's not - see update() below
+    Timer send_timer{send_interval_us};
     int runmode_last = Standby;
     uint8_t status_nibble_last;
     I2C* i2c;
@@ -308,12 +310,19 @@ class LightingBox {  // represents the lighting controller i2c slave endpoint
     // probe, which was tried once before and reverted because a NACK'd probe could occasionally trigger a slow ESP32 i2c-driver recovery
     // path that stalled the whole bus for the better part of a second - back when touch used its own independent, uncoordinated i2c driver
     // stack, a stall here could corrupt touch's concurrent reads. Now that touch and Wire share one driver stack fully serialized by
-    // I2C::_busmutex (see i2cbus.h), a slow recovery here can only make other i2c consumers briefly wait on the mutex, not get corrupted.
+    // I2C::_busmutex (see i2cbus.h), a slow recovery here can't corrupt anything - but it does still make any other i2c consumer that's
+    // waiting on the mutex block for that same "better part of a second". Touchscreen::update() takes that mutex every single loop()
+    // iteration, so at the normal 250ms send rate a powered-off/disconnected lightbox was triggering that slow recovery ~4x/sec, which
+    // was enough to make the whole main control loop (throttle/brake/steer, all of it) visibly stutter/lock up. So: back off to a much
+    // slower retry rate whenever the last attempt wasn't detected, to keep the eventual-reconnect behavior while sharply cutting how
+    // often a NACK can trigger that stall. Still checked every update() call regardless of runmode, so it starts fast again the moment
+    // the box reappears (next real send after that gets ACK'd, which flips detected back to true and the interval back to fast).
     void update(float speed) {
         if (send_timer.expireset()) {
             bool sent = sendstatus();  // send status if it changed since last time
             sent |= sendrunmode(runmode);  // send runmode if it changed since last time
             if (!sent) sendspeed(speed);  // if neither of above was sent, then send speed (to prevent long bus use) - always transmits, doubling as the detection heartbeat
+            send_timer.set(i2c->detected(I2CLightbox) ? send_interval_us : send_interval_undetected_us);
         }
     }
     void setup() {
